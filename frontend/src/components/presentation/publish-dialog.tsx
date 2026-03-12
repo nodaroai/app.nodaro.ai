@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useEffect } from "react"
 import { Rocket, Copy, Check, Loader2, ExternalLink, ChevronDown, ChevronRight, X, Store } from "lucide-react"
 import type { WorkflowNode } from "@/types/nodes"
 import { getNodeLabel } from "@/lib/presentation-utils"
@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
-import { publishApp } from "@/lib/api"
+import { publishApp, getAppByWorkflow } from "@/lib/api"
 import { getNodeResult, getOutputType } from "@/lib/presentation-utils"
 import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-workflow-store"
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
@@ -42,6 +42,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
   const [publishedSlug, setPublishedSlug] = useState<string | null>(null)
   const [publishCopied, setPublishCopied] = useState(false)
   const [thumbnailNodeId, setThumbnailNodeId] = useState<string>("__none__")
+  const [loadingExisting, setLoadingExisting] = useState(false)
 
   // Marketplace settings
   const [showMarketplace, setShowMarketplace] = useState(false)
@@ -51,6 +52,42 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState("")
   const [supportsRemix, setSupportsRemix] = useState(false)
+
+  // Reset all form state when dialog opens so we get a fresh fetch
+  // (prevents stale publishedSlug from a prior publish from lingering)
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    if (nextOpen) {
+      setPublishedSlug(null)
+      setPublishCopied(false)
+      setPublishing(false)
+    }
+    setOpen(nextOpen)
+  }, [])
+
+  // Pre-fill from existing published app when dialog opens
+  useEffect(() => {
+    if (!open || !workflowId) return
+    let cancelled = false
+    setLoadingExisting(true)
+    getAppByWorkflow(workflowId).then((app) => {
+      if (cancelled) return
+      if (!app) { setLoadingExisting(false); return }
+      setPublishName(app.name)
+      setPublishSlug(app.slug)
+      setPublishDesc(app.description || "")
+      setThumbnailNodeId(app.thumbnailNodeId || "__none__")
+      setIsListed(app.isListed)
+      setCategory(app.category || "other")
+      setOutputTypes(app.outputTypes || [])
+      setTags(app.tags || [])
+      setSupportsRemix(app.supportsRemix)
+      if (app.isListed || app.category !== "other" || (app.tags && app.tags.length > 0)) {
+        setShowMarketplace(true)
+      }
+      setLoadingExisting(false)
+    })
+    return () => { cancelled = true }
+  }, [open, workflowId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePublish = useCallback(async () => {
     if (!publishName.trim()) {
@@ -190,7 +227,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
   }, [])
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Rocket className="h-4 w-4 mr-1" />
@@ -207,7 +244,11 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
             Publish as a standalone mini-app with its own URL, persistent run history, and versioning.
           </p>
 
-          {publishedSlug ? (
+          {loadingExisting ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : publishedSlug ? (
             <>
               <div className="flex gap-2">
                 <Input value={publishedUrl} readOnly className="text-xs" />

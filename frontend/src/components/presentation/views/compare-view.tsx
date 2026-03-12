@@ -34,6 +34,14 @@ export function CompareView({
   const [rightId, setRightId] = useState<string>(initialRight ?? "")
   const [isFullscreen, setIsFullscreen] = useState(false)
 
+  // Sync when defaults change (e.g. settings loaded after mount)
+  useEffect(() => {
+    if (initialLeft && !leftId) setLeftId(initialLeft)
+  }, [initialLeft]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (initialRight && !rightId) setRightId(initialRight)
+  }, [initialRight]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Persist selection changes — use refs to avoid stale closures
   const leftIdRef = useRef(leftId)
   const rightIdRef = useRef(rightId)
@@ -390,7 +398,7 @@ function CompareItemDisplay({ item }: { item: CompareItem }) {
         {item.title}
       </span>
       {item.outputType === "image" && item.url ? (
-        <CachedImage src={item.url} alt={item.title} thumbnail className="w-full rounded-lg" />
+        <CachedImage src={item.url} alt={item.title} className="w-full rounded-lg" />
       ) : item.outputType === "video" && item.url ? (
         <video src={item.url} controls className="w-full rounded-lg" />
       ) : item.outputType === "audio" && item.url ? (

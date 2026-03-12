@@ -11,6 +11,7 @@ import { getModelIdentifier } from "@/components/editor/config-panels/helpers";
 import type { GeneratedResult } from "@/types/nodes";
 import {
   NODE_CREDIT_COSTS,
+  MAX_CONSECUTIVE_POLL_FAILURES,
   isExecutableNode,
   getFanOutMultiplier,
   type ExecutionContext,
@@ -461,7 +462,10 @@ function applyRestoredJobCompletion(
 }
 
 // ---------------------------------------------------------------------------
-// Stream backend execution updates via SSE (with polling fallback)
+// Stream backend execution updates via SSE with parallel polling safety net.
+// SSE provides near-real-time updates, but reverse proxies (Caddy, Vite)
+// can buffer text/event-stream responses. Polling ensures the UI always
+// updates even when SSE is silently buffered.
 // ---------------------------------------------------------------------------
 
 export function streamBackendExecution(
@@ -472,18 +476,19 @@ export function streamBackendExecution(
 ): void {
   setIsRunning(true);
   const abortController = new AbortController();
+  let finished = false;
 
   // Track the abort controller so it gets cleaned up on workflow switch
-  const fakeInterval = ctx.trackInterval(
+  const staleCheck = ctx.trackInterval(
     setInterval(() => {
-      // No-op — just used so ctx.untrackInterval can abort on stale workflow
       if (ctx.isWorkflowStale()) {
         abortController.abort();
-        ctx.untrackInterval(fakeInterval);
+        cleanup();
       }
     }, 5000),
   );
 
+  // --- SSE path (best-effort real-time updates) ---
   streamWorkflowExecution(
     executionId,
     {
@@ -491,38 +496,94 @@ export function streamBackendExecution(
         syncNodeStatesToStore(nodeStates);
       },
       onCompleted: () => {
+        if (finished) return;
         cleanup();
-        onExecutionEnded?.();
         toast.success("Backend execution completed");
       },
       onFailed: (data) => {
+        if (finished) return;
         cleanup();
-        onExecutionEnded?.();
         toast.error("Backend execution failed", {
           description: (data.errorMessage as string) ?? undefined,
         });
       },
       onCancelled: () => {
+        if (finished) return;
         cleanup();
-        onExecutionEnded?.();
         toast.info("Backend execution cancelled");
       },
     },
     abortController.signal,
   ).catch((err) => {
-    // On SSE failure (network error, abort), fall back to polling
-    if (err instanceof DOMException && err.name === "AbortError") {
-      cleanup();
-      return;
-    }
-    console.warn("[SSE] Streaming failed, falling back to polling:", err);
-    cleanup();
-    restorePollingForBackendExecution(executionId, ctx, setIsRunning, onExecutionEnded);
+    if (err instanceof DOMException && err.name === "AbortError") return;
+    console.warn("[SSE] Streaming connection lost, polling still active:", err);
   });
 
+  // --- Polling safety net (runs in parallel with SSE) ---
+  let pollFailures = 0;
+  const pollOnce = async () => {
+    if (finished || ctx.isWorkflowStale()) return;
+
+    try {
+      const exec = await getWorkflowExecution(executionId);
+      pollFailures = 0;
+
+      const nodeStates = (exec.nodeStates ?? {}) as Record<
+        string,
+        NodeExecutionState
+      >;
+      syncNodeStatesToStore(nodeStates);
+
+      if (
+        exec.status === "completed" ||
+        exec.status === "failed" ||
+        exec.status === "cancelled" ||
+        exec.status === "timed_out"
+      ) {
+        if (finished) return;
+        cleanup();
+        if (exec.status === "completed") {
+          toast.success("Backend execution completed");
+        } else if (exec.status === "failed") {
+          toast.error("Backend execution failed", {
+            description: exec.errorMessage,
+          });
+        } else if (exec.status === "cancelled") {
+          toast.info("Backend execution cancelled");
+        } else {
+          toast.error("Backend execution timed out");
+        }
+        return;
+      }
+    } catch {
+      pollFailures++;
+      if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES && !finished) {
+        cleanup();
+        toast.error("Lost connection to backend execution");
+        return;
+      }
+    }
+  };
+
+  // First poll after 1s, then every 3s
+  const pollTimeout1 = setTimeout(() => {
+    if (finished) return;
+    pollOnce();
+  }, 1000);
+  const pollInterval = ctx.trackInterval(
+    setInterval(() => {
+      if (!finished) pollOnce();
+    }, 3000),
+  );
+
   function cleanup() {
+    if (finished) return;
+    finished = true;
     abortController.abort();
-    ctx.untrackInterval(fakeInterval);
+    clearTimeout(pollTimeout1);
+    ctx.untrackInterval(staleCheck);
+    ctx.untrackInterval(pollInterval);
+    onExecutionEnded?.();
   }
 }
 
@@ -670,71 +731,3 @@ function syncNodeStatesToStore(
   }
 }
 
-export function restorePollingForBackendExecution(
-  executionId: string,
-  ctx: ExecutionContext,
-  setIsRunning: (v: boolean) => void,
-  onExecutionEnded?: () => void,
-): void {
-  setIsRunning(true);
-  let pollFailures = 0;
-  let stopped = false;
-
-  const pollOnce = async () => {
-    if (ctx.isWorkflowStale()) {
-      ctx.untrackInterval(poll);
-      stopped = true;
-      return;
-    }
-
-    try {
-      const exec = await getWorkflowExecution(executionId);
-      pollFailures = 0;
-
-      const nodeStates = (exec.nodeStates ?? {}) as Record<
-        string,
-        NodeExecutionState
-      >;
-      syncNodeStatesToStore(nodeStates);
-
-      // Check if the entire execution is done
-      if (
-        exec.status === "completed" ||
-        exec.status === "failed" ||
-        exec.status === "cancelled" ||
-        exec.status === "timed_out"
-      ) {
-        ctx.untrackInterval(poll);
-        stopped = true;
-        onExecutionEnded?.();
-        if (exec.status === "completed") {
-          toast.success("Backend execution completed");
-        } else if (exec.status === "failed") {
-          toast.error("Backend execution failed", {
-            description: exec.errorMessage,
-          });
-        } else if (exec.status === "cancelled") {
-          toast.info("Backend execution cancelled");
-        } else {
-          toast.error("Backend execution timed out");
-        }
-      }
-    } catch {
-      pollFailures++;
-      if (pollFailures >= 5) {
-        ctx.untrackInterval(poll);
-        stopped = true;
-        onExecutionEnded?.();
-        toast.error("Lost connection to backend execution");
-      }
-    }
-  };
-
-  // Fire immediately, then poll every 2s
-  pollOnce();
-  const poll = ctx.trackInterval(
-    setInterval(() => {
-      if (!stopped) pollOnce();
-    }, 2000),
-  );
-}

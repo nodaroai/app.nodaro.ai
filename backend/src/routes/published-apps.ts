@@ -519,6 +519,33 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     return reply.send(result)
   })
 
+  // GET /v1/apps/by-workflow/:workflowId — Get latest published app for a workflow (owner only)
+  app.get("/v1/apps/by-workflow/:workflowId", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+
+    const { workflowId } = req.params as { workflowId: string }
+
+    const { data: appRow, error } = await supabase
+      .from("published_apps")
+      .select("*")
+      .eq("workflow_id", workflowId)
+      .eq("creator_id", userId)
+      .eq("is_active", true)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) {
+      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to fetch app" } })
+    }
+    if (!appRow) {
+      return reply.status(404).send({ error: { code: "not_found", message: "No published app found" } })
+    }
+
+    return reply.send(toCamelCase(appRow as Record<string, unknown>))
+  })
+
   // PATCH /v1/apps/:appId — Update app metadata
   app.patch("/v1/apps/:appId", async (req, reply) => {
     const userId = req.userId
