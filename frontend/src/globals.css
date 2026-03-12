@@ -515,8 +515,11 @@ html, body {
 
 /* TagTextarea inside text-prompt canvas nodes */
 .text-prompt-tag-textarea {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(30, 41, 59, 0.8);
   height: 100%;
+}
+.dark .text-prompt-tag-textarea {
+  color: rgba(255, 255, 255, 0.8);
 }
 .text-prompt-tag-textarea .tag-textarea-container {
   height: 100%;
@@ -527,9 +530,15 @@ html, body {
   line-height: inherit;
 }
 .text-prompt-tag-textarea .tag-textarea-input {
+  caret-color: rgba(30, 41, 59, 0.8) !important;
+}
+.dark .text-prompt-tag-textarea .tag-textarea-input {
   caret-color: rgba(255, 255, 255, 0.8) !important;
 }
 .text-prompt-tag-textarea .tag-textarea-input::placeholder {
+  color: rgba(30, 41, 59, 0.25) !important;
+}
+.dark .text-prompt-tag-textarea .tag-textarea-input::placeholder {
   color: rgba(255, 255, 255, 0.25) !important;
 }
 /* NodeResizer: ensure resize handles stay interactive above card content */

@@ -364,24 +364,50 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     try {
       const supabase = createClient()
 
-      // Get or create a project for the user
-      const { data: projects } = await supabase
+      // Get or create a "Remixed Apps" project for this user
+      const REMIX_PROJECT_NAME = "Remixed Apps"
+      const { data: existing } = await supabase
         .from("projects")
         .select("id")
-        .order("created_at", { ascending: true })
+        .eq("user_id", user.id)
+        .eq("name", REMIX_PROJECT_NAME)
         .limit(1)
 
       let projectId: string
-      if (projects && projects.length > 0) {
-        projectId = projects[0].id
+      if (existing && existing.length > 0) {
+        projectId = existing[0].id
       } else {
         const { data: newProject, error: projErr } = await supabase
           .from("projects")
-          .insert({ user_id: user.id, name: "My Project" })
+          .insert({ user_id: user.id, name: REMIX_PROJECT_NAME })
           .select("id")
           .single()
         if (projErr || !newProject) throw new Error("Failed to create project")
         projectId = newProject.id
+      }
+
+      // Derive a thumbnail from the app's data
+      let thumbnailUrl: string | null = appData.previewMediaUrl ?? null
+      if (!thumbnailUrl) {
+        const snapshotNodes = appData.snapshotNodes as Array<{ id: string; type?: string; data?: Record<string, unknown> }>
+        // Prefer the designated thumbnail node
+        const thumbNode = appData.thumbnailNodeId
+          ? snapshotNodes.find((n) => n.id === appData.thumbnailNodeId)
+          : null
+        if (thumbNode?.data) {
+          const result = getNodeResult(thumbNode.data)
+          if (result.url) thumbnailUrl = result.url
+        }
+        // Fallback: first node with an image/video result
+        if (!thumbnailUrl) {
+          for (const n of snapshotNodes) {
+            const otype = getOutputType(n.type)
+            if ((otype === "image" || otype === "video") && n.data) {
+              const result = getNodeResult(n.data)
+              if (result.url) { thumbnailUrl = result.url; break }
+            }
+          }
+        }
       }
 
       // Create workflow from app snapshot (JSON round-trip satisfies Supabase Json type)
@@ -394,6 +420,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           nodes: JSON.parse(JSON.stringify(appData.snapshotNodes)),
           edges: JSON.parse(JSON.stringify(appData.snapshotEdges)),
           settings: JSON.parse(JSON.stringify(appData.snapshotSettings)),
+          thumbnail_url: thumbnailUrl,
         })
         .select("id")
         .single()

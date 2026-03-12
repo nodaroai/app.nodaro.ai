@@ -17,9 +17,17 @@ import {
   Heart,
   User,
   SlidersHorizontal,
+  Pencil,
+  Workflow,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   Select,
   SelectContent,
@@ -27,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { getMyApps, updateApp, deactivateApp, type PublishedApp } from "@/lib/api"
@@ -123,6 +132,30 @@ export default function AppsPage() {
       qc.invalidateQueries({ queryKey: ["app-marketplace"] })
     },
   })
+
+  // Edit dialog state
+  const [editApp, setEditApp] = useState<PublishedApp | null>(null)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+
+  const editMutation = useMutation({
+    mutationFn: async ({ appId, data }: { appId: string; data: Record<string, unknown> }) => {
+      await updateApp(appId, data)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-apps"] })
+      qc.invalidateQueries({ queryKey: ["app-marketplace"] })
+      setEditDialogOpen(false)
+      toast.success("App updated")
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to update app")
+    },
+  })
+
+  const handleEdit = useCallback((app: PublishedApp) => {
+    setEditApp(app)
+    setEditDialogOpen(true)
+  }, [])
 
   const handleCopyUrl = useCallback((slug: string) => {
     navigator.clipboard.writeText(`${window.location.origin}/app/${slug}`)
@@ -354,14 +387,24 @@ export default function AppsPage() {
         )
       ) : (
         /* My Apps grid */
-        <MyAppsGrid
-          apps={myApps}
-          onCopyUrl={handleCopyUrl}
-          onCopyEmbed={handleCopyEmbed}
-          onToggle={(appId, isActive) => toggleMutation.mutate({ appId, isActive })}
-          onUpdateOrigins={(appId, origins) => originsMutation.mutate({ appId, origins })}
-          onToggleListed={(appId, isListed) => listToggleMutation.mutate({ appId, isListed })}
-        />
+        <>
+          <MyAppsGrid
+            apps={myApps}
+            onCopyUrl={handleCopyUrl}
+            onCopyEmbed={handleCopyEmbed}
+            onToggle={(appId, isActive) => toggleMutation.mutate({ appId, isActive })}
+            onUpdateOrigins={(appId, origins) => originsMutation.mutate({ appId, origins })}
+            onToggleListed={(appId, isListed) => listToggleMutation.mutate({ appId, isListed })}
+            onEdit={handleEdit}
+          />
+          <EditAppDialog
+            app={editApp}
+            open={editDialogOpen}
+            onOpenChange={setEditDialogOpen}
+            onSave={(appId, data) => editMutation.mutate({ appId, data })}
+            isSaving={editMutation.isPending}
+          />
+        </>
       )}
     </div>
   )
@@ -378,6 +421,7 @@ function MyAppsGrid({
   onToggle,
   onUpdateOrigins,
   onToggleListed,
+  onEdit,
 }: {
   apps: PublishedApp[] | undefined
   onCopyUrl: (slug: string) => void
@@ -385,6 +429,7 @@ function MyAppsGrid({
   onToggle: (appId: string, isActive: boolean) => void
   onUpdateOrigins: (appId: string, origins: string[]) => void
   onToggleListed: (appId: string, isListed: boolean) => void
+  onEdit: (app: PublishedApp) => void
 }) {
   if (!apps || apps.length === 0) {
     return (
@@ -415,6 +460,7 @@ function MyAppsGrid({
               onToggle={(isActive) => onToggle(app.id, isActive)}
               onUpdateOrigins={(origins) => onUpdateOrigins(app.id, origins)}
               onToggleListed={(isListed) => onToggleListed(app.id, isListed)}
+              onEdit={() => onEdit(app)}
             />
           ))}
         </div>
@@ -433,6 +479,7 @@ function MyAppsGrid({
                 onToggle={(isActive) => onToggle(app.id, isActive)}
                 onUpdateOrigins={(origins) => onUpdateOrigins(app.id, origins)}
                 onToggleListed={(isListed) => onToggleListed(app.id, isListed)}
+                onEdit={() => onEdit(app)}
               />
             ))}
           </div>
@@ -449,6 +496,7 @@ function MyAppCard({
   onToggle,
   onUpdateOrigins,
   onToggleListed,
+  onEdit,
 }: {
   app: PublishedApp
   onCopyUrl: (slug: string) => void
@@ -456,6 +504,7 @@ function MyAppCard({
   onToggle: (isActive: boolean) => void
   onUpdateOrigins: (origins: string[]) => void
   onToggleListed: (isListed: boolean) => void
+  onEdit: () => void
 }) {
   const [showEmbed, setShowEmbed] = useState(false)
   const [newOrigin, setNewOrigin] = useState("")
@@ -555,6 +604,14 @@ function MyAppCard({
             Open
           </Button>
         </a>
+        {app.projectId && (
+          <Link to={`/projects/${app.projectId}/workflows/${app.workflowId}`}>
+            <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
+              <Workflow className="h-3 w-3 mr-1" />
+              Workflow
+            </Button>
+          </Link>
+        )}
         <Button
           variant="outline"
           size="sm"
@@ -580,6 +637,16 @@ function MyAppCard({
             Analytics
           </Button>
         </Link>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={onEdit}
+          title="Edit app settings"
+        >
+          <Pencil className="h-3 w-3 mr-1" />
+          Edit
+        </Button>
         <Button
           variant="ghost"
           size="sm"
@@ -660,5 +727,253 @@ function MyAppCard({
         </div>
       )}
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Edit App Dialog
+// ---------------------------------------------------------------------------
+
+function detectMediaType(url: string): "video" | "image" | null {
+  if (!url) return null
+  const lower = url.toLowerCase()
+  if (lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".mov")) return "video"
+  return "image"
+}
+
+function EditAppDialog({
+  app,
+  open,
+  onOpenChange,
+  onSave,
+  isSaving,
+}: {
+  app: PublishedApp | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSave: (appId: string, data: Record<string, unknown>) => void
+  isSaving: boolean
+}) {
+  const [name, setName] = useState("")
+  const [description, setDescription] = useState("")
+  const [category, setCategory] = useState("other")
+  const [outputTypes, setOutputTypes] = useState<string[]>([])
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState("")
+  const [previewMediaUrl, setPreviewMediaUrl] = useState("")
+  const [supportsRemix, setSupportsRemix] = useState(false)
+  const [isListed, setIsListed] = useState(false)
+
+  // Re-populate form when app changes or dialog opens
+  useEffect(() => {
+    if (app && open) {
+      setName(app.name ?? "")
+      setDescription(app.description ?? "")
+      setCategory(app.category ?? "other")
+      setOutputTypes(app.outputTypes ?? [])
+      setTags(app.tags ?? [])
+      setTagInput("")
+      setPreviewMediaUrl(app.previewMediaUrl ?? "")
+      setSupportsRemix(app.supportsRemix ?? false)
+      setIsListed(app.isListed ?? false)
+    }
+  }, [app, open])
+
+  const handleAddTag = useCallback(() => {
+    const trimmed = tagInput.trim().toLowerCase()
+    if (!trimmed || tags.includes(trimmed) || tags.length >= 10) return
+    setTags([...tags, trimmed])
+    setTagInput("")
+  }, [tagInput, tags])
+
+  const handleRemoveTag = useCallback((tag: string) => {
+    setTags(tags.filter((t) => t !== tag))
+  }, [tags])
+
+  const handleToggleOutputType = useCallback((type: string) => {
+    setOutputTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
+    )
+  }, [])
+
+  const handleSave = useCallback(() => {
+    if (!app) return
+    if (!name.trim()) {
+      toast.error("Name is required")
+      return
+    }
+    const mediaUrl = previewMediaUrl.trim() || null
+    onSave(app.id, {
+      name: name.trim(),
+      description: description.trim(),
+      category,
+      outputTypes,
+      tags,
+      previewMediaUrl: mediaUrl,
+      previewMediaType: mediaUrl ? detectMediaType(mediaUrl) : null,
+      supportsRemix,
+      isListed,
+    })
+  }, [app, name, description, category, outputTypes, tags, previewMediaUrl, supportsRemix, isListed, onSave])
+
+  if (!app) return null
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit App</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Name */}
+          <div>
+            <label className="text-sm font-medium mb-1 block">Name *</label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="App name"
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="text-sm font-medium mb-1 block">Description</label>
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What does this app do?"
+            />
+          </div>
+
+          {/* Category */}
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Category</label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="w-full h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {APP_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Output types */}
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Output types</label>
+            <div className="flex items-center gap-2 flex-wrap">
+              {OUTPUT_TYPES.map((ot) => (
+                <label
+                  key={ot.value}
+                  className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border cursor-pointer transition-colors ${
+                    outputTypes.includes(ot.value)
+                      ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
+                      : "text-muted-foreground border-border hover:border-zinc-400"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={outputTypes.includes(ot.value)}
+                    onChange={() => handleToggleOutputType(ot.value)}
+                  />
+                  {ot.label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">
+              Tags <span className="text-xs text-muted-foreground font-normal">({tags.length}/10)</span>
+            </label>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-1.5">
+                {tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 text-[11px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground"
+                  >
+                    {tag}
+                    <button type="button" onClick={() => handleRemoveTag(tag)} className="hover:text-destructive">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-1.5">
+              <Input
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                placeholder="Add a tag..."
+                className="h-8 text-xs flex-1"
+                maxLength={30}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddTag() } }}
+                disabled={tags.length >= 10}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2 text-xs"
+                onClick={handleAddTag}
+                disabled={!tagInput.trim() || tags.length >= 10}
+              >
+                Add
+              </Button>
+            </div>
+          </div>
+
+          {/* Preview media URL */}
+          <div>
+            <label className="text-sm font-medium mb-1 block">Preview media URL</label>
+            <Input
+              value={previewMediaUrl}
+              onChange={(e) => setPreviewMediaUrl(e.target.value)}
+              placeholder="https://..."
+              className="text-xs"
+            />
+            {previewMediaUrl.trim() && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Detected type: {detectMediaType(previewMediaUrl.trim()) ?? "image"}
+              </p>
+            )}
+          </div>
+
+          {/* Supports remix toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Supports remix</p>
+              <p className="text-xs text-muted-foreground">Users can customize and remix this app</p>
+            </div>
+            <Switch checked={supportsRemix} onCheckedChange={setSupportsRemix} />
+          </div>
+
+          {/* Listed on marketplace toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Listed on marketplace</p>
+              <p className="text-xs text-muted-foreground">Make discoverable in the Apps browse page</p>
+            </div>
+            <Switch checked={isListed} onCheckedChange={setIsListed} />
+          </div>
+
+          {/* Save button */}
+          <Button
+            onClick={handleSave}
+            disabled={isSaving || !name.trim()}
+            className="w-full text-white hover:opacity-90"
+            style={{ backgroundColor: "#ff0073" }}
+          >
+            {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save Changes
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

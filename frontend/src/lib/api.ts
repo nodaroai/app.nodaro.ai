@@ -3538,6 +3538,7 @@ export interface AppVersion {
 export interface PublishedApp {
   id: string
   workflowId: string
+  projectId: string | null
   creatorId: string
   version: number
   slug: string

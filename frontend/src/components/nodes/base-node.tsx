@@ -165,7 +165,7 @@ function BaseNodeComponent({
     >
       <NodeToolbar align="end" isVisible={isHovered} position={Position.Top} offset={4}>
         <div
-          className="bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl px-1 py-1 flex items-center gap-1"
+          className="bg-white border border-border dark:bg-[#1a1a1a] dark:border-white/10 rounded-lg shadow-xl px-1 py-1 flex items-center gap-1"
           onMouseEnter={() => {
             if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
             setIsHovered(true)
@@ -175,7 +175,7 @@ function BaseNodeComponent({
           }}
         >
           <button
-            className="hover:bg-white/10 rounded px-2 py-1 text-white/70 hover:text-white"
+            className="hover:bg-black/5 dark:hover:bg-white/10 rounded px-2 py-1 text-foreground/70 hover:text-foreground dark:text-white/70 dark:hover:text-white"
             onClick={handleDuplicate}
             aria-label="Duplicate node"
           >
