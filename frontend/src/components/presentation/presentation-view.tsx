@@ -7,7 +7,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
-import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, LogOut, RotateCcw, Maximize2, Minimize2, Sparkles } from "lucide-react"
+import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, LogOut, RotateCcw, Maximize2, Minimize2, Sparkles, LayoutGrid, Copy } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
   KeyboardSensor,
@@ -46,6 +46,7 @@ import {
 } from "@/lib/presentation-utils"
 import { EXECUTABLE_TYPES, estimateNodeCredits } from "@/components/editor/workflow-editor/types"
 import { shareWorkflow } from "@/lib/api"
+import { createClient } from "@/lib/supabase"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import { toast } from "sonner"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -124,6 +125,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const [isOpeningNewTab, setIsOpeningNewTab] = useState(false)
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false)
   const [showGetCreditsModal, setShowGetCreditsModal] = useState(false)
+  const [isRemixing, setIsRemixing] = useState(false)
 
   // Native fullscreen toggle (browser Fullscreen API)
   const toggleNativeFullscreen = useCallback(() => {
@@ -347,6 +349,64 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     },
     [updateNodeData],
   )
+
+  // Remix: create a workflow from the app's snapshot and open in a new tab
+  const handleRemix = useCallback(async () => {
+    if (!user) {
+      localStorage.setItem(AUTH_REDIRECT_KEY, window.location.pathname + window.location.search)
+      navigate("/login")
+      return
+    }
+    const appData = useAppRunnerStore.getState().app
+    if (!appData) return
+
+    setIsRemixing(true)
+    try {
+      const supabase = createClient()
+
+      // Get or create a project for the user
+      const { data: projects } = await supabase
+        .from("projects")
+        .select("id")
+        .order("created_at", { ascending: true })
+        .limit(1)
+
+      let projectId: string
+      if (projects && projects.length > 0) {
+        projectId = projects[0].id
+      } else {
+        const { data: newProject, error: projErr } = await supabase
+          .from("projects")
+          .insert({ user_id: user.id, name: "My Project" })
+          .select("id")
+          .single()
+        if (projErr || !newProject) throw new Error("Failed to create project")
+        projectId = newProject.id
+      }
+
+      // Create workflow from app snapshot (JSON round-trip satisfies Supabase Json type)
+      const { data: wf, error: wfErr } = await supabase
+        .from("workflows")
+        .insert({
+          project_id: projectId,
+          user_id: user.id,
+          name: `${appData.name} (Remix)`,
+          nodes: JSON.parse(JSON.stringify(appData.snapshotNodes)),
+          edges: JSON.parse(JSON.stringify(appData.snapshotEdges)),
+          settings: JSON.parse(JSON.stringify(appData.snapshotSettings)),
+        })
+        .select("id")
+        .single()
+
+      if (wfErr || !wf) throw new Error("Failed to create workflow")
+
+      window.open(`/projects/${projectId}/workflows/${wf.id}`, "_blank")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remix app")
+    } finally {
+      setIsRemixing(false)
+    }
+  }, [user, navigate])
 
   // O(1) node lookup map for tab mode
   const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes])
@@ -594,7 +654,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           {/* Mobile-only: compact right-side controls */}
           <div className="flex items-center gap-1.5 md:hidden shrink-0">
             {isFullscreen && <ThemeToggle />}
-            {user && hasCredits() && <CreditBalance userId={user.id} />}
+            {user && hasCredits() && <CreditBalance userId={user.id} onClick={isAppRunner ? () => setShowGetCreditsModal(true) : undefined} />}
             {user && hasCredits() && isAppRunner && <AppCreditsIndicator userId={user.id} estimatedCost={estimatedCost} />}
             {user && isAppRunner && (
               <TooltipProvider delayDuration={0}>
@@ -623,7 +683,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
 
         {/* App runner: action buttons — stacked below title on mobile, centered on desktop */}
         {isAppRunner && (
-          <div className="flex items-center gap-2 pb-2 md:pb-0 md:absolute md:left-1/2 md:-translate-x-1/2">
+          <div className="flex flex-wrap items-center gap-2 pb-2 md:pb-0 md:absolute md:left-1/2 md:-translate-x-1/2">
             <button
               type="button"
               onClick={onNewRun}
@@ -670,6 +730,32 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 )
               )
             )}
+
+            {/* Divider */}
+            <div className="w-px h-5 bg-border hidden md:block" />
+
+            {/* Remix: create editable copy */}
+            <button
+              type="button"
+              onClick={handleRemix}
+              disabled={isRemixing}
+              title="Remix this app"
+              className="h-9 md:h-8 px-2.5 md:px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 disabled:opacity-50 touch-manipulation"
+            >
+              {isRemixing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+              <span className="hidden md:inline">Remix</span>
+            </button>
+
+            {/* More Apps */}
+            <button
+              type="button"
+              onClick={() => window.open("/apps", "_blank")}
+              title="Explore more apps"
+              className="h-9 md:h-8 px-2.5 md:px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 touch-manipulation"
+            >
+              <LayoutGrid className="h-4 w-4" />
+              <span className="hidden md:inline">More Apps</span>
+            </button>
           </div>
         )}
 
@@ -687,7 +773,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             </Button>
           )}
           {isFullscreen && <ThemeToggle />}
-          {user && hasCredits() && <CreditBalance userId={user.id} />}
+          {user && hasCredits() && <CreditBalance userId={user.id} onClick={isAppRunner ? () => setShowGetCreditsModal(true) : undefined} />}
           {user && hasCredits() && isAppRunner && <AppCreditsIndicator userId={user.id} estimatedCost={estimatedCost} />}
           {user && isAppRunner && (
             <TooltipProvider delayDuration={0}>

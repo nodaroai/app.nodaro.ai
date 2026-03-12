@@ -3553,9 +3553,39 @@ export interface PublishedApp {
   allowedOrigins: string[]
   estimatedCredits: number
   thumbnailNodeId: string | null
+  category: string
+  outputTypes: string[]
+  tags: string[]
+  previewMediaUrl: string | null
+  previewMediaType: string | null
+  supportsRemix: boolean
+  creatorDisplayName: string | null
+  totalRunCount: number
+  favoriteCount: number
   createdAt: string
   runCount?: number
   versions?: AppVersion[]
+}
+
+/** Slim card type returned by /v1/apps/browse (no snapshot data) */
+export interface AppBrowseCard {
+  id: string
+  slug: string
+  name: string
+  description: string
+  iconUrl: string | null
+  estimatedCredits: number
+  category: string
+  outputTypes: string[]
+  tags: string[]
+  previewMediaUrl: string | null
+  previewMediaType: string | null
+  supportsRemix: boolean
+  creatorId: string
+  creatorDisplayName: string | null
+  totalRunCount: number
+  favoriteCount: number
+  createdAt: string
 }
 
 export interface AppRun {
@@ -3596,6 +3626,13 @@ export async function publishApp(data: {
   description?: string
   iconUrl?: string
   thumbnailNodeId?: string | null
+  category?: string
+  outputTypes?: string[]
+  tags?: string[]
+  previewMediaUrl?: string
+  previewMediaType?: string
+  supportsRemix?: boolean
+  isListed?: boolean
 }): Promise<PublishedApp> {
   return apiRequest<PublishedApp>(
     "/v1/apps/publish",
@@ -3621,6 +3658,12 @@ export async function updateApp(appId: string, data: {
   isEmbeddable?: boolean
   allowedOrigins?: string[]
   thumbnailNodeId?: string | null
+  category?: string
+  outputTypes?: string[]
+  tags?: string[]
+  previewMediaUrl?: string | null
+  previewMediaType?: string | null
+  supportsRemix?: boolean
 }): Promise<PublishedApp> {
   return apiRequest<PublishedApp>(
     `/v1/apps/${encodeURIComponent(appId)}`,
@@ -3636,6 +3679,53 @@ export async function deactivateApp(appId: string): Promise<void> {
     "Failed to deactivate app",
     { method: "DELETE" },
   )
+}
+
+/** Browse marketplace apps (public). */
+export async function browseApps(params: {
+  cursor?: string
+  limit?: number
+  category?: string
+  outputType?: string
+  tag?: string
+  search?: string
+  sort?: "popular" | "newest" | "most-favorited"
+  creatorId?: string
+  favoritesOnly?: boolean
+}): Promise<{ data: AppBrowseCard[]; nextCursor: string | null }> {
+  const qs = new URLSearchParams()
+  if (params.cursor) qs.set("cursor", params.cursor)
+  if (params.limit) qs.set("limit", String(params.limit))
+  if (params.category) qs.set("category", params.category)
+  if (params.outputType) qs.set("outputType", params.outputType)
+  if (params.tag) qs.set("tag", params.tag)
+  if (params.search) qs.set("search", params.search)
+  if (params.sort) qs.set("sort", params.sort)
+  if (params.creatorId) qs.set("creatorId", params.creatorId)
+  if (params.favoritesOnly) qs.set("favoritesOnly", "true")
+  const qsStr = qs.toString()
+  const headers: Record<string, string> = params.favoritesOnly ? await getAuthHeaders() : {}
+  const res = await fetch(`/v1/apps/browse${qsStr ? `?${qsStr}` : ""}`, { headers })
+  if (!res.ok) throw new Error("Failed to browse apps")
+  return res.json()
+}
+
+/** Toggle favorite on a marketplace app. */
+export async function toggleAppFavorite(appId: string): Promise<{ favorited: boolean }> {
+  return apiRequest<{ favorited: boolean }>(
+    "/v1/apps/favorite",
+    "Failed to toggle favorite",
+    { method: "POST", body: { appId } },
+  )
+}
+
+/** Get user's favorited app IDs. */
+export async function getAppFavorites(): Promise<string[]> {
+  const json = await apiRequest<{ data: string[] }>(
+    "/v1/apps/favorites",
+    "Failed to fetch favorites",
+  )
+  return json.data
 }
 
 /** Load a published app by slug (public). Optionally load a specific version. */

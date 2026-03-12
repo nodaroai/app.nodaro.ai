@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef, useEffect, useMemo } from "react"
 import { Link } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
@@ -13,18 +13,87 @@ import {
   Shield,
   Plus,
   X,
+  Search,
+  Heart,
+  User,
+  SlidersHorizontal,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 import { getMyApps, updateApp, deactivateApp, type PublishedApp } from "@/lib/api"
+import { useAuth } from "@/hooks/use-auth"
+import { APP_CATEGORIES, OUTPUT_TYPES, CATEGORY_COLORS } from "@/lib/app-categories"
+import {
+  useAppBrowseInfinite,
+  useAppFavorites,
+  useToggleAppFavoriteMutation,
+  type AppBrowseParams,
+} from "@/hooks/queries/use-app-marketplace-queries"
+import { AppMarketplaceCard, AppMarketplaceCardSkeleton } from "@/components/apps/app-marketplace-card"
+
+type ViewMode = "browse" | "my-apps" | "favorites"
 
 export default function AppsPage() {
+  const { user } = useAuth()
   const qc = useQueryClient()
 
-  const { data: apps, isLoading } = useQuery({
+  // Browse state
+  const [viewMode, setViewMode] = useState<ViewMode>("browse")
+  const [searchInput, setSearchInput] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState<string | undefined>()
+  const [selectedOutputType, setSelectedOutputType] = useState<string | undefined>()
+  const [sortBy, setSortBy] = useState<"popular" | "newest" | "most-favorited">("popular")
+  const sentinelRef = useRef<HTMLDivElement>(null)
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchInput), 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
+  // Browse params
+  const browseParams: AppBrowseParams = useMemo(() => ({
+    search: debouncedSearch || undefined,
+    category: selectedCategory,
+    outputType: selectedOutputType,
+    sort: sortBy,
+    favoritesOnly: viewMode === "favorites" ? true : undefined,
+  }), [debouncedSearch, selectedCategory, selectedOutputType, sortBy, viewMode])
+
+  // Browse query
+  const {
+    data: browseData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: browseLoading,
+  } = useAppBrowseInfinite(browseParams)
+
+  const browseItems = useMemo(
+    () => browseData?.pages.flatMap((p) => p.data) ?? [],
+    [browseData],
+  )
+
+  // Favorites
+  const { data: favoriteIds = [] } = useAppFavorites()
+  const favSet = useMemo(() => new Set(favoriteIds), [favoriteIds])
+  const favMutation = useToggleAppFavoriteMutation()
+
+  // My apps
+  const { data: myApps, isLoading: myAppsLoading } = useQuery({
     queryKey: ["my-apps"],
     queryFn: getMyApps,
+    enabled: viewMode === "my-apps",
   })
 
   const toggleMutation = useMutation({
@@ -35,17 +104,23 @@ export default function AppsPage() {
         await deactivateApp(appId)
       }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["my-apps"] })
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["my-apps"] }) },
   })
 
   const originsMutation = useMutation({
     mutationFn: async ({ appId, origins }: { appId: string; origins: string[] }) => {
       await updateApp(appId, { allowedOrigins: origins })
     },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["my-apps"] }) },
+  })
+
+  const listToggleMutation = useMutation({
+    mutationFn: async ({ appId, isListed }: { appId: string; isListed: boolean }) => {
+      await updateApp(appId, { isListed })
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-apps"] })
+      qc.invalidateQueries({ queryKey: ["app-marketplace"] })
     },
   })
 
@@ -60,93 +135,332 @@ export default function AppsPage() {
     toast.success("Embed code copied")
   }, [])
 
-  if (isLoading) {
+  // Infinite scroll observer
+  useEffect(() => {
+    if (viewMode !== "browse" && viewMode !== "favorites") return
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage()
+        }
+      },
+      { rootMargin: "800px" },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [viewMode, hasNextPage, isFetchingNextPage, fetchNextPage])
+
+  const showBrowse = viewMode === "browse" || viewMode === "favorites"
+  const isLoading = showBrowse ? browseLoading : myAppsLoading
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Apps</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Discover and run AI-powered apps, or manage your own
+          </p>
+        </div>
+      </div>
+
+      {/* View mode tabs + search */}
+      <div className="space-y-4 mb-6">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* View mode pills */}
+          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/50 rounded-lg p-1">
+            <button
+              type="button"
+              className={cn(
+                "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                viewMode === "browse"
+                  ? "bg-white dark:bg-zinc-700 text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => setViewMode("browse")}
+            >
+              Browse
+            </button>
+            {user && (
+              <>
+                <button
+                  type="button"
+                  className={cn(
+                    "px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5",
+                    viewMode === "my-apps"
+                      ? "bg-white dark:bg-zinc-700 text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setViewMode("my-apps")}
+                >
+                  <User className="h-3.5 w-3.5" />
+                  My Apps
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5",
+                    viewMode === "favorites"
+                      ? "bg-white dark:bg-zinc-700 text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setViewMode("favorites")}
+                >
+                  <Heart className="h-3.5 w-3.5" />
+                  Favorites
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Search (browse/favorites only) */}
+          {showBrowse && (
+            <div className="relative flex-1 min-w-[200px] max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search apps..."
+                className="pl-9 h-9"
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setSearchInput("")}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Sort (browse/favorites only) */}
+          {showBrowse && (
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="popular">Popular</SelectItem>
+                <SelectItem value="newest">Newest</SelectItem>
+                <SelectItem value="most-favorited">Most Favorited</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* Category + output type pills (browse/favorites only) */}
+        {showBrowse && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Category pills */}
+            <button
+              type="button"
+              className={cn(
+                "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                !selectedCategory
+                  ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
+                  : "text-muted-foreground border-border hover:text-foreground hover:border-zinc-400",
+              )}
+              onClick={() => setSelectedCategory(undefined)}
+            >
+              All
+            </button>
+            {APP_CATEGORIES.map((cat) => (
+              <button
+                key={cat.value}
+                type="button"
+                className={cn(
+                  "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                  selectedCategory === cat.value
+                    ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
+                    : "text-muted-foreground border-border hover:text-foreground hover:border-zinc-400",
+                )}
+                onClick={() => setSelectedCategory(selectedCategory === cat.value ? undefined : cat.value)}
+              >
+                {cat.label}
+              </button>
+            ))}
+
+            {/* Separator */}
+            <div className="w-px h-5 bg-border mx-1" />
+
+            {/* Output type pills */}
+            {OUTPUT_TYPES.map((ot) => (
+              <button
+                key={ot.value}
+                type="button"
+                className={cn(
+                  "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                  selectedOutputType === ot.value
+                    ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
+                    : "text-muted-foreground border-border hover:text-foreground hover:border-zinc-400",
+                )}
+                onClick={() => setSelectedOutputType(selectedOutputType === ot.value ? undefined : ot.value)}
+              >
+                {ot.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Content area */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <AppMarketplaceCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : showBrowse ? (
+        /* Browse / Favorites grid */
+        browseItems.length === 0 ? (
+          <div className="text-center py-16">
+            <Rocket className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+            <h2 className="text-lg font-semibold text-foreground mb-2">
+              {viewMode === "favorites" ? "No favorites yet" : "No apps found"}
+            </h2>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              {viewMode === "favorites"
+                ? "Heart apps you like to save them here."
+                : debouncedSearch || selectedCategory || selectedOutputType
+                  ? "Try adjusting your search or filters."
+                  : "Be the first to publish an app to the marketplace!"}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {browseItems.map((app) => (
+                <AppMarketplaceCard
+                  key={app.id}
+                  app={app}
+                  isFavorited={favSet.has(app.id)}
+                  onToggleFavorite={(id) => favMutation.mutate({ appId: id })}
+                />
+              ))}
+              {isFetchingNextPage &&
+                Array.from({ length: 4 }).map((_, i) => (
+                  <AppMarketplaceCardSkeleton key={`skel-${i}`} />
+                ))}
+            </div>
+            <div ref={sentinelRef} className="h-1" />
+          </>
+        )
+      ) : (
+        /* My Apps grid */
+        <MyAppsGrid
+          apps={myApps}
+          onCopyUrl={handleCopyUrl}
+          onCopyEmbed={handleCopyEmbed}
+          onToggle={(appId, isActive) => toggleMutation.mutate({ appId, isActive })}
+          onUpdateOrigins={(appId, origins) => originsMutation.mutate({ appId, origins })}
+          onToggleListed={(appId, isListed) => listToggleMutation.mutate({ appId, isListed })}
+        />
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// My Apps Grid (creator management)
+// ---------------------------------------------------------------------------
+
+function MyAppsGrid({
+  apps,
+  onCopyUrl,
+  onCopyEmbed,
+  onToggle,
+  onUpdateOrigins,
+  onToggleListed,
+}: {
+  apps: PublishedApp[] | undefined
+  onCopyUrl: (slug: string) => void
+  onCopyEmbed: (slug: string) => void
+  onToggle: (appId: string, isActive: boolean) => void
+  onUpdateOrigins: (appId: string, origins: string[]) => void
+  onToggleListed: (appId: string, isListed: boolean) => void
+}) {
+  if (!apps || apps.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="text-center py-16">
+        <Rocket className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+        <h2 className="text-lg font-semibold text-foreground mb-2">No published apps yet</h2>
+        <p className="text-sm text-muted-foreground max-w-md mx-auto">
+          Publish a workflow as a mini-app from the presentation mode share dialog.
+          Apps get their own URL, persistent run history, and analytics.
+        </p>
       </div>
     )
   }
 
-  const activeApps = (apps ?? []).filter((a) => a.isActive !== false)
-  const inactiveApps = (apps ?? []).filter((a) => a.isActive === false)
+  const activeApps = apps.filter((a) => a.isActive !== false)
+  const inactiveApps = apps.filter((a) => a.isActive === false)
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-6">
+      {activeApps.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {activeApps.map((app) => (
+            <MyAppCard
+              key={app.id}
+              app={app}
+              onCopyUrl={onCopyUrl}
+              onCopyEmbed={onCopyEmbed}
+              onToggle={(isActive) => onToggle(app.id, isActive)}
+              onUpdateOrigins={(origins) => onUpdateOrigins(app.id, origins)}
+              onToggleListed={(isListed) => onToggleListed(app.id, isListed)}
+            />
+          ))}
+        </div>
+      )}
+
+      {inactiveApps.length > 0 && (
         <div>
-          <h1 className="text-2xl font-bold text-foreground">My Apps</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Published mini-apps from your workflows
-          </p>
-        </div>
-      </div>
-
-      {(!apps || apps.length === 0) ? (
-        <div className="text-center py-16">
-          <Rocket className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-          <h2 className="text-lg font-semibold text-foreground mb-2">No published apps yet</h2>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            Publish a workflow as a mini-app from the presentation mode share dialog.
-            Apps get their own URL, persistent run history, and analytics.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {activeApps.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {activeApps.map((app) => (
-                <AppCard
-                  key={app.id}
-                  app={app}
-                  onCopyUrl={handleCopyUrl}
-                  onCopyEmbed={handleCopyEmbed}
-                  onToggle={(isActive) => toggleMutation.mutate({ appId: app.id, isActive })}
-                  onUpdateOrigins={(origins) => originsMutation.mutate({ appId: app.id, origins })}
-                />
-              ))}
-            </div>
-          )}
-
-          {inactiveApps.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-3">Inactive</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 opacity-60">
-                {inactiveApps.map((app) => (
-                  <AppCard
-                    key={app.id}
-                    app={app}
-                    onCopyUrl={handleCopyUrl}
-                    onCopyEmbed={handleCopyEmbed}
-                    onToggle={(isActive) => toggleMutation.mutate({ appId: app.id, isActive })}
-                    onUpdateOrigins={(origins) => originsMutation.mutate({ appId: app.id, origins })}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">Inactive</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 opacity-60">
+            {inactiveApps.map((app) => (
+              <MyAppCard
+                key={app.id}
+                app={app}
+                onCopyUrl={onCopyUrl}
+                onCopyEmbed={onCopyEmbed}
+                onToggle={(isActive) => onToggle(app.id, isActive)}
+                onUpdateOrigins={(origins) => onUpdateOrigins(app.id, origins)}
+                onToggleListed={(isListed) => onToggleListed(app.id, isListed)}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-function AppCard({
+function MyAppCard({
   app,
   onCopyUrl,
   onCopyEmbed,
   onToggle,
   onUpdateOrigins,
+  onToggleListed,
 }: {
   app: PublishedApp
   onCopyUrl: (slug: string) => void
   onCopyEmbed: (slug: string) => void
   onToggle: (isActive: boolean) => void
   onUpdateOrigins: (origins: string[]) => void
+  onToggleListed: (isListed: boolean) => void
 }) {
   const [showEmbed, setShowEmbed] = useState(false)
   const [newOrigin, setNewOrigin] = useState("")
   const origins = app.allowedOrigins ?? []
+  const categoryLabel = APP_CATEGORIES.find((c) => c.value === app.category)?.label
 
   const handleAddOrigin = () => {
     const trimmed = newOrigin.trim()
@@ -175,19 +489,62 @@ function AppCard({
           <h3 className="text-sm font-semibold text-foreground truncate">{app.name}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">/app/{app.slug}</p>
         </div>
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0 ml-2">
-          v{app.version}
-        </span>
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {/* Marketplace status badge */}
+          <span
+            className={cn(
+              "text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors",
+              app.isListed
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
+                : "bg-zinc-100 dark:bg-zinc-800 text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700",
+            )}
+            onClick={() => onToggleListed(!app.isListed)}
+            title={app.isListed ? "Click to unlist from marketplace" : "Click to list on marketplace"}
+          >
+            {app.isListed ? "Listed" : "Unlisted"}
+          </span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+            v{app.version}
+          </span>
+        </div>
       </div>
 
       {app.description && (
         <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{app.description}</p>
       )}
 
+      {/* Category + tags */}
+      {(app.category !== "other" || (app.tags && app.tags.length > 0)) && (
+        <div className="flex items-center gap-1 flex-wrap mb-3">
+          {app.category !== "other" && categoryLabel && (
+            <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", CATEGORY_COLORS[app.category] ?? "bg-zinc-500/10 text-zinc-500")}>
+              {categoryLabel}
+            </span>
+          )}
+          {app.tags?.slice(0, 2).map((tag) => (
+            <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-muted-foreground">
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Preview thumbnail */}
+      {app.previewMediaUrl && (
+        <div className="mb-3 rounded-md overflow-hidden aspect-video bg-zinc-100 dark:bg-zinc-800">
+          {app.previewMediaType === "video" ? (
+            <video src={app.previewMediaUrl} className="w-full h-full object-cover" muted />
+          ) : (
+            <img src={app.previewMediaUrl} alt="" className="w-full h-full object-cover" />
+          )}
+        </div>
+      )}
+
       {/* Stats row */}
       <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground">
-        <span>{app.runCount ?? 0} runs</span>
+        <span>{app.runCount ?? app.totalRunCount ?? 0} runs</span>
         <span>{app.estimatedCredits ?? 0} CR/run</span>
+        {app.favoriteCount > 0 && <span>{app.favoriteCount} favorites</span>}
       </div>
 
       {/* Actions */}

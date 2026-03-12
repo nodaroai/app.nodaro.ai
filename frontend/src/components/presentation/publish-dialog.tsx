@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react"
-import { Rocket, Copy, Check, Loader2, ExternalLink } from "lucide-react"
+import { Rocket, Copy, Check, Loader2, ExternalLink, ChevronDown, ChevronRight, X, Store } from "lucide-react"
 import type { WorkflowNode } from "@/types/nodes"
 import { getNodeLabel } from "@/lib/presentation-utils"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,7 @@ import { toast } from "sonner"
 import { publishApp } from "@/lib/api"
 import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-workflow-store"
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
+import { APP_CATEGORIES, OUTPUT_TYPES } from "@/lib/app-categories"
 
 interface PublishDialogProps {
   workflowId: string
@@ -41,6 +42,15 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
   const [publishCopied, setPublishCopied] = useState(false)
   const [thumbnailNodeId, setThumbnailNodeId] = useState<string>("__none__")
 
+  // Marketplace settings
+  const [showMarketplace, setShowMarketplace] = useState(false)
+  const [isListed, setIsListed] = useState(false)
+  const [category, setCategory] = useState("other")
+  const [outputTypes, setOutputTypes] = useState<string[]>([])
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState("")
+  const [supportsRemix, setSupportsRemix] = useState(false)
+
   const handlePublish = useCallback(async () => {
     if (!publishName.trim()) {
       toast.error("Name is required")
@@ -55,6 +65,12 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
         slug,
         description: publishDesc.trim() || undefined,
         thumbnailNodeId: thumbnailNodeId === "__none__" ? null : thumbnailNodeId,
+        // Marketplace fields
+        isListed,
+        category: category !== "other" ? category : undefined,
+        outputTypes: outputTypes.length > 0 ? outputTypes : undefined,
+        tags: tags.length > 0 ? tags : undefined,
+        supportsRemix: supportsRemix || undefined,
       })
       setPublishedSlug(result.slug)
       toast.success("App published!")
@@ -63,7 +79,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     } finally {
       setPublishing(false)
     }
-  }, [workflowId, publishName, publishSlug, publishDesc])
+  }, [workflowId, publishName, publishSlug, publishDesc, thumbnailNodeId, isListed, category, outputTypes, tags, supportsRemix])
 
   const publishedUrl = publishedSlug
     ? `${window.location.origin}/app/${publishedSlug}`
@@ -122,6 +138,24 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
   const showSettings = !!updatePresentationSettings && !!presentationSettings
   const showCompareSettings = showSettings && allowedSet.has("compare")
 
+  // Tag handling
+  const handleAddTag = useCallback(() => {
+    const trimmed = tagInput.trim().toLowerCase()
+    if (!trimmed || tags.includes(trimmed) || tags.length >= 10) return
+    setTags([...tags, trimmed])
+    setTagInput("")
+  }, [tagInput, tags])
+
+  const handleRemoveTag = useCallback((tag: string) => {
+    setTags(tags.filter((t) => t !== tag))
+  }, [tags])
+
+  const handleToggleOutputType = useCallback((type: string) => {
+    setOutputTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
+    )
+  }, [])
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -130,7 +164,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
           Publish
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Publish App</DialogTitle>
         </DialogHeader>
@@ -192,6 +226,127 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                   onChange={(e) => setPublishDesc(e.target.value)}
                   placeholder="What does this app do?"
                 />
+              </div>
+
+              {/* Marketplace Settings (collapsible) */}
+              <div className="border border-border rounded-lg">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-foreground hover:bg-zinc-50 dark:hover:bg-zinc-800/50 rounded-lg transition-colors"
+                  onClick={() => setShowMarketplace(!showMarketplace)}
+                >
+                  <span className="flex items-center gap-2">
+                    <Store className="h-4 w-4" />
+                    Marketplace Settings
+                  </span>
+                  {showMarketplace ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </button>
+
+                {showMarketplace && (
+                  <div className="px-3 pb-3 space-y-3 border-t border-border pt-3">
+                    {/* List on marketplace toggle */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">List on marketplace</p>
+                        <p className="text-xs text-muted-foreground">Make discoverable in the Apps browse page</p>
+                      </div>
+                      <Switch checked={isListed} onCheckedChange={setIsListed} />
+                    </div>
+
+                    {/* Category */}
+                    <div>
+                      <p className="text-sm font-medium mb-1.5">Category</p>
+                      <Select value={category} onValueChange={setCategory}>
+                        <SelectTrigger className="w-full h-9 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {APP_CATEGORIES.map((cat) => (
+                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Output types (multi-select checkboxes) */}
+                    <div>
+                      <p className="text-sm font-medium mb-1.5">Output types</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {OUTPUT_TYPES.map((ot) => (
+                          <label
+                            key={ot.value}
+                            className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border cursor-pointer transition-colors ${
+                              outputTypes.includes(ot.value)
+                                ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
+                                : "text-muted-foreground border-border hover:border-zinc-400"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="sr-only"
+                              checked={outputTypes.includes(ot.value)}
+                              onChange={() => handleToggleOutputType(ot.value)}
+                            />
+                            {ot.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Tags */}
+                    <div>
+                      <p className="text-sm font-medium mb-1.5">Tags <span className="text-xs text-muted-foreground font-normal">({tags.length}/10)</span></p>
+                      {tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-1.5">
+                          {tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="inline-flex items-center gap-1 text-[11px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground"
+                            >
+                              {tag}
+                              <button type="button" onClick={() => handleRemoveTag(tag)} className="hover:text-destructive">
+                                <X className="h-3 w-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-1.5">
+                        <Input
+                          value={tagInput}
+                          onChange={(e) => setTagInput(e.target.value)}
+                          placeholder="Add a tag..."
+                          className="h-8 text-xs flex-1"
+                          maxLength={30}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddTag() } }}
+                          disabled={tags.length >= 10}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-2 text-xs"
+                          onClick={handleAddTag}
+                          disabled={!tagInput.trim() || tags.length >= 10}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* RemX support toggle */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">Supports RemX</p>
+                        <p className="text-xs text-muted-foreground">Users can customize and remix this app</p>
+                      </div>
+                      <Switch checked={supportsRemix} onCheckedChange={setSupportsRemix} />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* View mode settings */}
