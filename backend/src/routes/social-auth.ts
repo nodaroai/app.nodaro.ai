@@ -256,11 +256,11 @@ function getErrorHint(platform: string, errorMessage: string): string | undefine
     return `<h3>How to fix this</h3>
 <p>Instagram requires a <strong>Professional account</strong> (Business or Creator) to connect. It's free and takes 30 seconds:</p>
 <ol>
-  <li>Open the Instagram app</li>
-  <li>Go to <strong>Settings → Account type and tools</strong></li>
+  <li>Open the Instagram app or go to <a href="https://www.instagram.com/accounts/edit/" target="_blank" rel="noopener">Instagram Settings</a></li>
+  <li>Go to <strong>Settings &rarr; Account type and tools</strong></li>
   <li>Tap <strong>Switch to Professional account</strong></li>
   <li>Choose <strong>Creator</strong> (recommended)</li>
-  <li>Link it to any Facebook Page (you can create a basic one)</li>
+  <li>Link it to any Facebook Page (<a href="https://www.facebook.com/pages/create" target="_blank" rel="noopener">create one here</a> if you don't have one)</li>
   <li>Come back here and try connecting again</li>
 </ol>`
   }
@@ -268,7 +268,7 @@ function getErrorHint(platform: string, errorMessage: string): string | undefine
     return `<h3>How to fix this</h3>
 <p>Facebook publishing requires a <strong>Facebook Page</strong>. To create one:</p>
 <ol>
-  <li>Go to <a href="https://www.facebook.com/pages/create" target="_blank">facebook.com/pages/create</a></li>
+  <li>Go to <a href="https://www.facebook.com/pages/create" target="_blank" rel="noopener">facebook.com/pages/create</a></li>
   <li>Choose a name and category for your Page</li>
   <li>Complete the setup</li>
   <li>Come back here and try connecting again</li>
@@ -299,7 +299,7 @@ function successHtml(platform: string, username: string): string {
 
 function errorHtml(message: string, hint?: string): string {
   const safeMessage = escapeHtml(message)
-  const safeHint = hint ? escapeHtml(hint) : ""
+  const safeHint = hint || ""
   return `<!DOCTYPE html><html><head>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 480px; margin: 60px auto; padding: 0 20px; color: #1a1a1a; }
@@ -307,6 +307,7 @@ function errorHtml(message: string, hint?: string): string {
   .hint { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 16px; margin-top: 16px; }
   .hint h3 { margin: 0 0 8px; font-size: 14px; color: #0369a1; }
   .hint ol { margin: 8px 0 0; padding-left: 20px; font-size: 14px; line-height: 1.6; }
+  .hint a { color: #0369a1; text-decoration: underline; }
 </style>
 </head><body>
 <h2>Connection Failed</h2>
