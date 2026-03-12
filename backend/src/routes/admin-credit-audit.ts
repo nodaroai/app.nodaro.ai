@@ -1,6 +1,59 @@
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { fetchKieLogs } from "../providers/kie/credit-lookup.js"
+import {
+  KIE_IMAGE_MODELS, KIE_VIDEO_MODELS, KIE_TEXT_TO_VIDEO_MODELS,
+  KIE_VIDEO_TO_VIDEO_MODELS, KIE_MOTION_TRANSFER_MODELS, KIE_VIDEO_UPSCALE_MODELS,
+  KIE_LIP_SYNC_MODELS, KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS,
+  KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS, KIE_DIALOGUE_MODELS,
+  KIE_SPEECH_TO_VIDEO_MODELS, KIE_STORYBOARD_MODELS, KIE_SPECIAL_MODELS,
+} from "../providers/kie/models.js"
+import type { KieModelConfig } from "../providers/kie/models.js"
+
+// Build reverse map: KIE model ID → { ourKey, expectedCredits, category }
+interface ModelMapping {
+  ourKey: string
+  expectedCredits: number
+  expectedCostUsd: number
+  category: string
+}
+
+function buildModelMap(): Map<string, ModelMapping[]> {
+  const map = new Map<string, ModelMapping[]>()
+
+  function addModels(models: Record<string, KieModelConfig>, category: string) {
+    for (const [key, config] of Object.entries(models)) {
+      const existing = map.get(config.model) ?? []
+      existing.push({
+        ourKey: key,
+        expectedCredits: config.credits,
+        expectedCostUsd: config.cost,
+        category,
+      })
+      map.set(config.model, existing)
+    }
+  }
+
+  addModels(KIE_IMAGE_MODELS, "image")
+  addModels(KIE_VIDEO_MODELS, "i2v")
+  addModels(KIE_TEXT_TO_VIDEO_MODELS, "t2v")
+  addModels(KIE_VIDEO_TO_VIDEO_MODELS, "v2v")
+  addModels(KIE_MOTION_TRANSFER_MODELS, "motion")
+  addModels(KIE_VIDEO_UPSCALE_MODELS, "upscale")
+  addModels(KIE_LIP_SYNC_MODELS, "lip-sync")
+  addModels(KIE_MUSIC_MODELS, "music")
+  addModels(KIE_TTS_MODELS, "tts")
+  addModels(KIE_SOUND_EFFECT_MODELS, "sfx")
+  addModels(KIE_AUDIO_ISOLATION_MODELS, "isolation")
+  addModels(KIE_STT_MODELS, "stt")
+  addModels(KIE_DIALOGUE_MODELS, "dialogue")
+  addModels(KIE_SPEECH_TO_VIDEO_MODELS, "s2v")
+  addModels(KIE_STORYBOARD_MODELS, "storyboard")
+  addModels(KIE_SPECIAL_MODELS, "special")
+
+  return map
+}
 
 export async function adminCreditAuditRoutes(app: FastifyInstance) {
   // GET /v1/admin/credit-audit - List recent audit entries
@@ -33,7 +86,6 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
 
   // GET /v1/admin/credit-audit/summary - Aggregated mismatch summary by model
   app.get("/v1/admin/credit-audit/summary", { preHandler: requireAdmin }, async (request, reply) => {
-    // Get count of mismatches per model in the last 30 days
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
     const { data, error } = await supabase
@@ -43,7 +95,6 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
 
     if (error) return reply.code(500).send({ error: error.message })
 
-    // Aggregate in-memory (simpler than custom RPC for this admin-only endpoint)
     const summary: Record<string, { total: number; mismatches: number }> = {}
     for (const row of data ?? []) {
       if (!summary[row.model_key]) {
@@ -63,5 +114,138 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
       .sort((a, b) => b.mismatches - a.mismatches)
 
     return { data: models, period: "30d" }
+  })
+
+  // POST /v1/admin/credit-audit/sync - Fetch KIE logs and compare against our pricing
+  // Body: { token, days?: number }
+  // token = authorization header from kie.ai session (changes per session)
+  // KIE_UNIQUE_ID is read from env (constant per account)
+  app.post("/v1/admin/credit-audit/sync", { preHandler: requireAdmin }, async (request, reply) => {
+    const body = request.body as Record<string, unknown>
+    const token = body.token as string
+    const days = Math.min(30, Math.max(1, Number(body.days) || 7))
+
+    if (!token) {
+      return reply.code(400).send({
+        error: "Provide session token from kie.ai/logs Network tab (authorization header value)",
+      })
+    }
+
+    const endTime = Date.now()
+    const beginTime = endTime - days * 86400_000
+
+    // Fetch all KIE logs for the time window
+    const records = await fetchKieLogs(token, beginTime, endTime)
+
+    if (records.length === 0) {
+      return { message: "No records found", days, totalRecords: 0, models: [] }
+    }
+
+    // Build our model mapping for comparison
+    const modelMap = buildModelMap()
+
+    // Group by KIE model and aggregate
+    const byModel = new Map<string, {
+      kieModel: string
+      tasks: number
+      totalCredits: number
+      minCredits: number
+      maxCredits: number
+      credits: number[]  // all values for variance detection
+    }>()
+
+    for (const record of records) {
+      if (record.state !== "success") continue
+
+      const key = record.model
+      const existing = byModel.get(key)
+      if (existing) {
+        existing.tasks++
+        existing.totalCredits += record.consumeCredits
+        existing.minCredits = Math.min(existing.minCredits, record.consumeCredits)
+        existing.maxCredits = Math.max(existing.maxCredits, record.consumeCredits)
+        existing.credits.push(record.consumeCredits)
+      } else {
+        byModel.set(key, {
+          kieModel: key,
+          tasks: 1,
+          totalCredits: record.consumeCredits,
+          minCredits: record.consumeCredits,
+          maxCredits: record.consumeCredits,
+          credits: [record.consumeCredits],
+        })
+      }
+    }
+
+    // Compare against our model configs
+    const results = []
+    for (const [kieModel, stats] of byModel) {
+      const mappings = modelMap.get(kieModel)
+      const avgCredits = stats.totalCredits / stats.tasks
+
+      if (!mappings?.length) {
+        results.push({
+          kieModel,
+          ourKey: null,
+          category: "unknown",
+          tasks: stats.tasks,
+          actualAvgCredits: Math.round(avgCredits * 100) / 100,
+          actualMinCredits: stats.minCredits,
+          actualMaxCredits: stats.maxCredits,
+          expectedCredits: null,
+          diff: null,
+          diffPercent: null,
+          status: "UNMAPPED",
+          variable: stats.minCredits !== stats.maxCredits,
+        })
+        continue
+      }
+
+      // Use first mapping (there may be multiple keys mapping to same KIE model)
+      const mapping = mappings[0]
+      const diff = avgCredits - mapping.expectedCredits
+      const diffPercent = mapping.expectedCredits > 0
+        ? Math.round((diff / mapping.expectedCredits) * 10000) / 100
+        : null
+
+      let status = "OK"
+      if (Math.abs(diff) > 0.5) {
+        status = diff > 0 ? "UNDERPRICED" : "OVERPRICED"
+      }
+
+      results.push({
+        kieModel,
+        ourKey: mappings.map(m => m.ourKey).join(", "),
+        category: mapping.category,
+        tasks: stats.tasks,
+        actualAvgCredits: Math.round(avgCredits * 100) / 100,
+        actualMinCredits: stats.minCredits,
+        actualMaxCredits: stats.maxCredits,
+        expectedCredits: mapping.expectedCredits,
+        expectedCostUsd: mapping.expectedCostUsd,
+        diff: Math.round(diff * 100) / 100,
+        diffPercent,
+        status,
+        variable: stats.minCredits !== stats.maxCredits,
+      })
+    }
+
+    // Sort: mismatches first, then by absolute diff
+    results.sort((a, b) => {
+      if (a.status !== "OK" && b.status === "OK") return -1
+      if (a.status === "OK" && b.status !== "OK") return 1
+      return Math.abs(b.diff ?? 0) - Math.abs(a.diff ?? 0)
+    })
+
+    const mismatches = results.filter(r => r.status !== "OK")
+
+    return {
+      days,
+      totalRecords: records.length,
+      successRecords: records.filter(r => r.state === "success").length,
+      uniqueModels: byModel.size,
+      mismatches: mismatches.length,
+      models: results,
+    }
   })
 }
