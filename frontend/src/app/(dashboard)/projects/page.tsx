@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react"
 import { useNavigate, Link } from "react-router-dom"
-import { Plus, Search, Loader2 } from "lucide-react"
+import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -122,6 +123,24 @@ export default function ProjectsPage() {
 
   const isSearching = search.length >= 2
 
+  type Tab = "apps" | "templates" | "tutorials" | "statistics"
+  const [activeTab, setActiveTab] = useState<Tab>("statistics")
+
+  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: "apps", label: "Apps", icon: <LayoutTemplate className="h-3.5 w-3.5" /> },
+    { id: "templates", label: "Templates", icon: <BookOpen className="h-3.5 w-3.5" /> },
+    { id: "tutorials", label: "Tutorials", icon: <BookOpen className="h-3.5 w-3.5" /> },
+    { id: "statistics", label: "Statistics", icon: <BarChart3 className="h-3.5 w-3.5" /> },
+  ]
+
+  const handleTabClick = (tab: Tab) => {
+    if (tab === "apps") {
+      navigate("/apps")
+      return
+    }
+    setActiveTab(tab)
+  }
+
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
@@ -147,8 +166,48 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      <StatsOverview className="mb-6" />
+      {/* Tabs */}
+      <div className="flex items-center gap-1 mb-6 border-b border-border">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => handleTabClick(tab.id)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px",
+              activeTab === tab.id
+                ? "border-[#ff0073] text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
+      {/* Tab content */}
+      {activeTab === "statistics" && (
+        <StatsOverview className="mb-6" />
+      )}
+
+      {activeTab === "templates" && (
+        <div className="text-center py-16 text-muted-foreground">
+          <LayoutTemplate className="h-10 w-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm font-medium">Templates coming soon</p>
+          <p className="text-xs mt-1">Preset workflow templates to get you started faster.</p>
+        </div>
+      )}
+
+      {activeTab === "tutorials" && (
+        <div className="text-center py-16 text-muted-foreground">
+          <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm font-medium">Tutorials coming soon</p>
+          <p className="text-xs mt-1">Step-by-step guides for building workflows.</p>
+        </div>
+      )}
+
+      {/* Search + Projects (always visible) */}
       <div className="relative mb-4 sm:mb-6">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -188,9 +247,7 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {isSearching && filteredProjects.length > 0 && (
-        <h2 className="text-sm font-medium text-muted-foreground mb-3">Projects</h2>
-      )}
+      <h2 className="text-sm font-medium text-muted-foreground mb-3">My Projects</h2>
 
       {loading ? (
         <div className="flex justify-center py-16">
