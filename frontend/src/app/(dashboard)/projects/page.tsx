@@ -258,9 +258,9 @@ export default function ProjectsPage() {
                 <button
                   type="button"
                   onClick={scrollAppsRight}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/60 text-white opacity-0 group-hover/apps:opacity-100 transition-opacity hover:bg-black/80"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-black/60 text-white opacity-0 group-hover/apps:opacity-100 transition-opacity hover:bg-black/80"
                 >
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="h-5 w-5" />
                 </button>
               </>
             ) : (
