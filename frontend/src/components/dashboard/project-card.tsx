@@ -52,10 +52,10 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner }: P
     <>
       <Link
         to={`/projects/${project.id}`}
-        className="group relative block rounded-xl border border-border bg-card overflow-hidden hover:border-zinc-400 dark:hover:border-zinc-600 transition-all duration-200"
+        className="group relative block rounded-xl border border-zinc-700/50 bg-card overflow-hidden hover:border-zinc-600 transition-all duration-200"
       >
         {/* Thumbnail area */}
-        <div className="relative h-36 bg-muted flex items-center justify-center">
+        <div className="relative h-36 bg-zinc-800 group-hover:bg-zinc-700 flex items-center justify-center transition-colors">
           <FolderOpen className="h-12 w-12 text-zinc-400" />
 
           {/* Three-dot menu — top-right, visible on hover */}
