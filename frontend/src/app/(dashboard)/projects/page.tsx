@@ -156,10 +156,10 @@ export default function ProjectsPage() {
   }, [])
 
   const scrollAppsLeft = useCallback(() => {
-    appsScrollRef.current?.scrollBy({ left: -240, behavior: "smooth" })
+    appsScrollRef.current?.scrollBy({ left: -210, behavior: "smooth" })
   }, [])
   const scrollAppsRight = useCallback(() => {
-    appsScrollRef.current?.scrollBy({ left: 240, behavior: "smooth" })
+    appsScrollRef.current?.scrollBy({ left: 210, behavior: "smooth" })
   }, [])
 
   return (
@@ -222,9 +222,9 @@ export default function ProjectsPage() {
         {activeTab === "apps" && (
           <div className="relative">
             {featuredAppsLoading ? (
-              <div className="flex gap-3 px-3 pb-3">
+              <div className="flex gap-2 px-2 pb-2">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="shrink-0 w-[220px] animate-pulse">
+                  <div key={i} className="shrink-0 w-[200px] animate-pulse">
                     <div className="aspect-square bg-muted rounded-lg" />
                   </div>
                 ))}
@@ -234,7 +234,7 @@ export default function ProjectsPage() {
                 <div
                   ref={appsScrollRef}
                   onScroll={updateScrollState}
-                  className="flex gap-3 px-3 pb-3 overflow-x-auto"
+                  className="flex gap-2 px-2 pb-2 overflow-x-auto"
                   style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
                 >
                   {featuredApps.map((app) => (
@@ -242,7 +242,7 @@ export default function ProjectsPage() {
                       key={app.id}
                       type="button"
                       onClick={() => navigate(`/app/${app.slug}`)}
-                      className="shrink-0 w-[220px] text-left group/thumb"
+                      className="shrink-0 w-[200px] text-left group/thumb"
                     >
                       <div className="relative aspect-square rounded-lg overflow-hidden bg-muted">
                         {app.previewMediaUrl ? (
@@ -268,7 +268,7 @@ export default function ProjectsPage() {
                   <button
                     type="button"
                     onClick={() => navigate("/apps")}
-                    className="shrink-0 w-[220px] text-left"
+                    className="shrink-0 w-[200px] text-left"
                   >
                     <div className="aspect-square rounded-lg overflow-hidden bg-muted/50 flex flex-col items-center justify-center gap-2 hover:bg-muted transition-colors">
                       <ArrowRight className="h-5 w-5 text-muted-foreground" />
