@@ -33,7 +33,8 @@ import { createClient } from "@/lib/supabase";
 import { StorageExceededError, uploadFile, setCurrentWorkflowId } from "@/lib/api";
 import { queryClient } from "@/lib/query-client";
 import { hasCredits } from "@/lib/edition";
-import { getCachedCredits } from "@/hooks/use-model-credits";
+import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits";
+import { getModelIdentifier } from "@/components/editor/config-panels/helpers";
 import { useStats } from "@/hooks/queries/use-stats-queries";
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal";
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal";
@@ -158,20 +159,32 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   useEffect(() => {
     if (!hasCredits()) return;
     const executableNodes = storeNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n));
-    const total = executableNodes.reduce((sum, node) => {
-      const data = node.data as Record<string, unknown>;
-      const provider = data.provider as string | undefined;
-      let cost: number;
-      if (provider) {
-        const cached = getCachedCredits(provider);
-        cost = cached !== undefined ? cached : estimateNodeCredits({ type: node.type, data });
-      } else {
-        cost = estimateNodeCredits({ type: node.type, data });
-      }
-      const multiplier = getFanOutMultiplier(node, storeNodes, storeEdges);
-      return sum + cost * multiplier;
-    }, 0);
-    setWorkflowCreditEstimate(total);
+
+    // Use composite model identifiers (e.g. "gpt-image:high") for accurate per-model lookup
+    const computeEstimate = () => {
+      const total = executableNodes.reduce((sum, node) => {
+        const modelId = getModelIdentifier(node);
+        const cached = getCachedCredits(modelId);
+        const cost = cached !== undefined ? cached : estimateNodeCredits({ type: node.type, data: node.data as Record<string, unknown> });
+        const multiplier = getFanOutMultiplier(node, storeNodes, storeEdges);
+        return sum + cost * multiplier;
+      }, 0);
+      setWorkflowCreditEstimate(total);
+    };
+
+    // Compute immediately with whatever is cached
+    computeEstimate();
+
+    // Prefetch any uncached model costs, then recompute with real values
+    const modelIds = [...new Set(executableNodes.map((n) => getModelIdentifier(n)).filter(Boolean))];
+    const uncached = modelIds.filter((m) => getCachedCredits(m) === undefined);
+    if (uncached.length > 0) {
+      let cancelled = false;
+      prefetchModelCredits(uncached).then(() => {
+        if (!cancelled) computeEstimate();
+      });
+      return () => { cancelled = true; };
+    }
   }, [storeNodes, storeEdges]);
 
   const { data: statsData } = useStats("user", user?.id, {
