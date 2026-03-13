@@ -146,7 +146,7 @@ export default function ProjectsPage() {
 
   const appsScrollRef = useRef<HTMLDivElement>(null)
   const scrollAppsRight = useCallback(() => {
-    appsScrollRef.current?.scrollBy({ left: 220, behavior: "smooth" })
+    appsScrollRef.current?.scrollBy({ left: 240, behavior: "smooth" })
   }, [])
 
   return (
@@ -197,25 +197,13 @@ export default function ProjectsPage() {
       {/* Tab content */}
       {activeTab === "apps" && (
         <div className="mb-6 rounded-xl border border-white/10 bg-zinc-950 overflow-hidden group/apps">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 pt-3 pb-2">
-            <h3 className="text-sm font-semibold text-white">Popular Apps</h3>
-            <button
-              type="button"
-              onClick={() => navigate("/apps")}
-              className="flex items-center gap-1 text-xs text-zinc-400 hover:text-white transition-colors"
-            >
-              See all <ArrowRight className="h-3 w-3" />
-            </button>
-          </div>
-
-          {/* Scroll area */}
+          {/* Scroll area — no header, thumbnails flush to top */}
           <div className="relative">
             {featuredAppsLoading ? (
-              <div className="flex gap-3 px-4 pb-4">
+              <div className="flex gap-3 px-3 py-3">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="shrink-0 w-[200px] animate-pulse">
-                    <div className="aspect-video bg-zinc-800 rounded-lg" />
+                  <div key={i} className="shrink-0 w-[220px] animate-pulse">
+                    <div className="aspect-square bg-zinc-800 rounded-lg" />
                   </div>
                 ))}
               </div>
@@ -223,7 +211,7 @@ export default function ProjectsPage() {
               <>
                 <div
                   ref={appsScrollRef}
-                  className="flex gap-3 px-4 pb-4 overflow-x-auto"
+                  className="flex gap-3 px-3 py-3 overflow-x-auto"
                   style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
                 >
                   {featuredApps.map((app) => (
@@ -231,9 +219,9 @@ export default function ProjectsPage() {
                       key={app.id}
                       type="button"
                       onClick={() => navigate(`/app/${app.slug}`)}
-                      className="shrink-0 w-[200px] text-left group/thumb"
+                      className="shrink-0 w-[220px] text-left group/thumb"
                     >
-                      <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-800">
+                      <div className="relative aspect-square rounded-lg overflow-hidden bg-zinc-800">
                         {app.previewMediaUrl ? (
                           app.previewMediaType === "video" ? (
                             <video src={app.previewMediaUrl} className="w-full h-full object-cover" muted playsInline />
@@ -252,6 +240,18 @@ export default function ProjectsPage() {
                       </div>
                     </button>
                   ))}
+
+                  {/* See all card */}
+                  <button
+                    type="button"
+                    onClick={() => navigate("/apps")}
+                    className="shrink-0 w-[220px] text-left"
+                  >
+                    <div className="aspect-square rounded-lg overflow-hidden bg-zinc-800/50 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition-colors">
+                      <ArrowRight className="h-5 w-5 text-zinc-400" />
+                      <p className="text-xs font-medium text-zinc-400">See all apps</p>
+                    </div>
+                  </button>
                 </div>
 
                 {/* Scroll arrow */}
