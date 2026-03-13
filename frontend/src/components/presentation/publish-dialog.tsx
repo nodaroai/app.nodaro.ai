@@ -291,7 +291,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                     className="text-xs"
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-1">Optional base slug — a random suffix is always appended for uniqueness</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Optional custom slug — leave blank to auto-generate. URL stays the same across versions.</p>
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">Description</label>

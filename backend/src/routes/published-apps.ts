@@ -41,12 +41,16 @@ function derivePreviewMedia(
   return null
 }
 
-function generateSlug(name: string): string {
-  const base = name
+function sanitizeSlugBase(name: string): string {
+  return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 40)
+}
+
+function generateSlug(name: string): string {
+  const base = sanitizeSlugBase(name)
   const suffix = Math.random().toString(36).slice(2, 8)
   return `${base}-${suffix}`
 }
@@ -357,24 +361,42 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // Compute version + deactivate old versions
     const { data: existingApps } = await supabase
       .from("published_apps")
-      .select("id, version, is_listed")
+      .select("id, version, slug, is_listed")
       .eq("workflow_id", workflowId)
       .order("version", { ascending: false })
       .limit(1)
 
-    const version = existingApps && existingApps.length > 0 ? existingApps[0].version + 1 : 1
+    const prevVersion = existingApps && existingApps.length > 0 ? existingApps[0] : null
+    const version = prevVersion ? prevVersion.version + 1 : 1
 
-    // Auto-deactivate all previous versions so only the latest is active
-    if (existingApps && existingApps.length > 0) {
-      await supabase
+    // Reuse slug from previous version so the app URL stays stable across versions
+    const inheritedSlug = prevVersion?.slug ?? null
+
+    // Auto-deactivate all previous versions and retire their slugs to free the
+    // UNIQUE constraint — new version inherits the original slug.
+    if (prevVersion) {
+      const { data: allOldVersions } = await supabase
         .from("published_apps")
-        .update({ is_active: false, is_listed: false })
+        .select("id, version, slug")
         .eq("workflow_id", workflowId)
         .eq("creator_id", userId)
+
+      if (allOldVersions) {
+        for (const old of allOldVersions) {
+          await supabase
+            .from("published_apps")
+            .update({
+              is_active: false,
+              is_listed: false,
+              slug: `${old.slug}-v${old.version}`,
+            })
+            .eq("id", old.id)
+        }
+      }
     }
 
     // Carry forward listing status from previous version if not explicitly set
-    const prevWasListed = existingApps?.[0]?.is_listed ?? false
+    const prevWasListed = prevVersion?.is_listed ?? false
     const effectiveIsListed = isListed ?? prevWasListed
 
     // Estimate credits
@@ -397,14 +419,20 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     const creatorDisplayName = await getCreatorDisplayName(userId)
 
     // Generate slug with collision retry
+    // Reuse inherited slug if the custom slug base matches (or no custom slug given).
+    // Otherwise generate a new slug from the custom slug base with a fresh random suffix.
+    const canReuseInherited = inheritedSlug && (
+      !providedSlug || inheritedSlug.startsWith(sanitizeSlugBase(providedSlug) + "-")
+    )
+
     const MAX_SLUG_RETRIES = 5
     let publishedApp: Record<string, unknown> | null = null
     let insertError: { code?: string; message?: string } | null = null
 
     for (let attempt = 0; attempt < MAX_SLUG_RETRIES; attempt++) {
-      const slug = providedSlug && attempt === 0
-        ? providedSlug
-        : generateSlug(name)
+      const slug = attempt === 0 && canReuseInherited
+        ? inheritedSlug
+        : generateSlug(attempt === 0 && providedSlug ? providedSlug : name)
 
       const result = await supabase
         .from("published_apps")
@@ -439,15 +467,10 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
         break
       }
 
-      // Unique constraint violation — retry with a new slug
-      if (result.error.code === "23505" && !providedSlug) {
+      // Unique constraint violation — retry with a new random suffix
+      if (result.error.code === "23505") {
         insertError = result.error
         continue
-      }
-
-      // User-provided slug collision — don't retry
-      if (result.error.code === "23505" && providedSlug) {
-        return reply.status(409).send({ error: { code: "conflict", message: "Slug already taken" } })
       }
 
       insertError = result.error
