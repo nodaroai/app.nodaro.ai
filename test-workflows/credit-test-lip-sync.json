@@ -1,0 +1,113 @@
+{
+  "nodes": [
+    {
+      "id": "upload_img_1",
+      "type": "upload-image",
+      "position": { "x": 50, "y": 0 },
+      "data": {
+        "label": "Portrait Image (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "upload_audio_1",
+      "type": "upload-audio",
+      "position": { "x": 50, "y": 300 },
+      "data": {
+        "label": "Audio Track (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+
+    {
+      "id": "ls_kling_720",
+      "type": "lip-sync",
+      "position": { "x": 500, "y": 0 },
+      "data": {
+        "label": "Kling Avatar 720p (13cr)",
+        "provider": "kling-avatar",
+        "resolution": "720p",
+        "prompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "ls_kling_480",
+      "type": "lip-sync",
+      "position": { "x": 500, "y": 200 },
+      "data": {
+        "label": "Kling Avatar 480p (13cr)",
+        "provider": "kling-avatar",
+        "resolution": "480p",
+        "prompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "ls_kling_pro_720",
+      "type": "lip-sync",
+      "position": { "x": 500, "y": 400 },
+      "data": {
+        "label": "Kling Avatar Pro 720p (25cr)",
+        "provider": "kling-avatar-pro",
+        "resolution": "720p",
+        "prompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "ls_kling_pro_480",
+      "type": "lip-sync",
+      "position": { "x": 500, "y": 600 },
+      "data": {
+        "label": "Kling Avatar Pro 480p (25cr)",
+        "provider": "kling-avatar-pro",
+        "resolution": "480p",
+        "prompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "ls_infinitalk_720",
+      "type": "lip-sync",
+      "position": { "x": 500, "y": 800 },
+      "data": {
+        "label": "Infinitalk 720p (19cr)",
+        "provider": "infinitalk",
+        "resolution": "720p",
+        "prompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "ls_infinitalk_480",
+      "type": "lip-sync",
+      "position": { "x": 500, "y": 1000 },
+      "data": {
+        "label": "Infinitalk 480p (19cr)",
+        "provider": "infinitalk",
+        "resolution": "480p",
+        "prompt": "",
+        "fieldMappings": {}
+      }
+    }
+  ],
+
+  "edges": [
+    { "id": "e_i1", "source": "upload_img_1",   "target": "ls_kling_720",       "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i2", "source": "upload_img_1",   "target": "ls_kling_480",       "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i3", "source": "upload_img_1",   "target": "ls_kling_pro_720",   "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i4", "source": "upload_img_1",   "target": "ls_kling_pro_480",   "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i5", "source": "upload_img_1",   "target": "ls_infinitalk_720",  "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i6", "source": "upload_img_1",   "target": "ls_infinitalk_480",  "sourceHandle": "image", "targetHandle": "image" },
+
+    { "id": "e_a1", "source": "upload_audio_1", "target": "ls_kling_720",       "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a2", "source": "upload_audio_1", "target": "ls_kling_480",       "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a3", "source": "upload_audio_1", "target": "ls_kling_pro_720",   "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a4", "source": "upload_audio_1", "target": "ls_kling_pro_480",   "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a5", "source": "upload_audio_1", "target": "ls_infinitalk_720",  "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a6", "source": "upload_audio_1", "target": "ls_infinitalk_480",  "sourceHandle": "audio", "targetHandle": "audio" }
+  ]
+}

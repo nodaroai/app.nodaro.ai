@@ -1,0 +1,97 @@
+{
+  "nodes": [
+    {
+      "id": "upload_img_1",
+      "type": "upload-image",
+      "position": { "x": 50, "y": 100 },
+      "data": {
+        "label": "Source Image (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "prompt_1",
+      "type": "text-prompt",
+      "position": { "x": 50, "y": 300 },
+      "data": {
+        "label": "Video Prompt",
+        "text": "A woman walking through a sunlit forest path with golden light filtering through the trees"
+      }
+    },
+
+    {
+      "id": "i2v_veo31",
+      "type": "image-to-video",
+      "position": { "x": 450, "y": 0 },
+      "data": {
+        "label": "VEO 3.1 source (19cr)",
+        "provider": "veo3.1",
+        "model": "",
+        "prompt": "",
+        "duration": 8,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2v_runway",
+      "type": "image-to-video",
+      "position": { "x": 450, "y": 400 },
+      "data": {
+        "label": "Runway source (4cr)",
+        "provider": "runway-kie",
+        "model": "",
+        "prompt": "",
+        "duration": 5,
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "ev_veo_fast",
+      "type": "extend-video",
+      "position": { "x": 900, "y": 0 },
+      "data": {
+        "label": "VEO Extend fast (19cr)",
+        "provider": "veo-extend",
+        "prompt": "Continue the scene with smooth natural motion",
+        "model": "fast",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "ev_veo_quality",
+      "type": "extend-video",
+      "position": { "x": 900, "y": 200 },
+      "data": {
+        "label": "VEO Extend quality (79cr)",
+        "provider": "veo-extend",
+        "prompt": "Continue the scene with smooth natural motion",
+        "model": "quality",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "ev_runway",
+      "type": "extend-video",
+      "position": { "x": 900, "y": 400 },
+      "data": {
+        "label": "Runway Extend (32cr)",
+        "provider": "runway-extend",
+        "prompt": "Continue the scene with smooth natural motion",
+        "fieldMappings": {}
+      }
+    }
+  ],
+
+  "edges": [
+    { "id": "e_img1", "source": "upload_img_1", "target": "i2v_veo31",     "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_img2", "source": "upload_img_1", "target": "i2v_runway",    "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_p1",   "source": "prompt_1",     "target": "i2v_veo31",     "sourceHandle": "text",  "targetHandle": "in" },
+    { "id": "e_p2",   "source": "prompt_1",     "target": "i2v_runway",    "sourceHandle": "text",  "targetHandle": "in" },
+
+    { "id": "e_v1", "source": "i2v_veo31",  "target": "ev_veo_fast",    "sourceHandle": "video", "targetHandle": "in" },
+    { "id": "e_v2", "source": "i2v_veo31",  "target": "ev_veo_quality", "sourceHandle": "video", "targetHandle": "in" },
+    { "id": "e_v3", "source": "i2v_runway", "target": "ev_runway",      "sourceHandle": "video", "targetHandle": "in" }
+  ]
+}

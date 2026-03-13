@@ -1,0 +1,68 @@
+{
+  "nodes": [
+    {
+      "id": "upload_img_1",
+      "type": "upload-image",
+      "position": { "x": 50, "y": 0 },
+      "data": {
+        "label": "Portrait Image (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "upload_audio_1",
+      "type": "upload-audio",
+      "position": { "x": 50, "y": 250 },
+      "data": {
+        "label": "Speech Audio (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+
+    {
+      "id": "s2v_480",
+      "type": "speech-to-video",
+      "position": { "x": 500, "y": 0 },
+      "data": {
+        "label": "480p default (4cr)",
+        "prompt": "A person speaking naturally in a well-lit room",
+        "resolution": "480p",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "s2v_580",
+      "type": "speech-to-video",
+      "position": { "x": 500, "y": 200 },
+      "data": {
+        "label": "580p (6cr)",
+        "prompt": "A person speaking naturally in a well-lit room",
+        "resolution": "580p",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "s2v_720",
+      "type": "speech-to-video",
+      "position": { "x": 500, "y": 400 },
+      "data": {
+        "label": "720p (8cr)",
+        "prompt": "A person speaking naturally in a well-lit room",
+        "resolution": "720p",
+        "fieldMappings": {}
+      }
+    }
+  ],
+
+  "edges": [
+    { "id": "e_i1", "source": "upload_img_1",   "target": "s2v_480", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i2", "source": "upload_img_1",   "target": "s2v_580", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i3", "source": "upload_img_1",   "target": "s2v_720", "sourceHandle": "image", "targetHandle": "image" },
+
+    { "id": "e_a1", "source": "upload_audio_1", "target": "s2v_480", "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a2", "source": "upload_audio_1", "target": "s2v_580", "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a3", "source": "upload_audio_1", "target": "s2v_720", "sourceHandle": "audio", "targetHandle": "audio" }
+  ]
+}
