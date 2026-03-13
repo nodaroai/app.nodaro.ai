@@ -15,6 +15,7 @@ import { useReactFlow } from "@xyflow/react"
 import { cn } from "@/lib/utils"
 const UnifiedAssetLibraryButton = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryButton })))
 import type { SceneNodeType } from "@/types/nodes"
+import { useAuth } from "@/hooks/use-auth"
 
 interface NodeOption {
   readonly type: SceneNodeType
@@ -22,6 +23,7 @@ interface NodeOption {
   readonly icon: React.ReactNode
   readonly category: string
   readonly group?: string
+  readonly adminOnly?: boolean
 }
 
 const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
@@ -90,7 +92,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "suno-convert-wav", label: "Suno Convert WAV", icon: <AudioLines className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-upload-extend", label: "Suno Upload Extend", icon: <FastForward className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   // AI — Quality
-  { type: "qa-check", label: "QA Check", icon: <ShieldCheck className="h-4 w-4" />, category: "AI", group: "Quality" },
+  { type: "qa-check", label: "QA Check", icon: <ShieldCheck className="h-4 w-4" />, category: "AI", group: "Quality", adminOnly: true },
   // Processing — Video
   { type: "combine-videos", label: "Combine Videos", icon: <Merge className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "resize-video", label: "Resize Video", icon: <Maximize className="h-4 w-4" />, category: "Processing", group: "Video" },
@@ -165,6 +167,9 @@ const CATEGORY_ICON_HOVER: Record<string, string> = {
 }
 
 function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) {
+  const { isAdmin } = useAuth()
+  const visibleNodes = NODE_OPTIONS.filter((n) => !n.adminOnly || isAdmin)
+  const categories = Array.from(new Set(visibleNodes.map((n) => n.category)))
   return (
     <>
       {/* Unified My Library - quick access to all assets */}
@@ -174,8 +179,8 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
         </span>
         <Suspense fallback={null}><UnifiedAssetLibraryButton /></Suspense>
       </div>
-      {CATEGORIES.map((cat) => {
-        const catNodes = NODE_OPTIONS.filter((n) => n.category === cat)
+      {categories.map((cat) => {
+        const catNodes = visibleNodes.filter((n) => n.category === cat)
         return (
           <div key={cat} className="flex flex-col gap-0.5 mb-4">
             <span className="font-sans text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8] dark:text-[#ff0073] mb-1.5">
