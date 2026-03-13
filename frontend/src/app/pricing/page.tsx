@@ -227,9 +227,9 @@ export default function PricingPage() {
                   <p className="mt-1 text-sm text-muted-foreground">
                     {tier.priceMonthly > 0
                       ? billingCycle === "annual"
-                        ? `$${tier.priceAnnual * 12}/yr \u00b7 Save $${savingsDollars}`
+                        ? <><span className="text-white font-medium">${tier.priceAnnual * 12}</span>/yr · <span className="text-emerald-400 font-medium">Save ${savingsDollars}</span></>
                         : "Billed monthly"
-                      : `${tier.credits} free credits (one-time)`}
+                      : <span className="text-emerald-400 font-medium">🎁 {tier.credits} free credits</span>}
                   </p>
                 </div>
 
