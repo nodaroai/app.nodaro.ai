@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react"
 import { useNavigate, Link } from "react-router-dom"
-import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate, ArrowRight } from "lucide-react"
+import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate, ArrowRight, Sparkles } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -15,8 +15,6 @@ import { WorkflowThumbnail } from "@/components/dashboard/workflow-thumbnail"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
 import { browseApps } from "@/lib/api"
-import { useAppFavorites, useToggleAppFavoriteMutation } from "@/hooks/queries/use-app-marketplace-queries"
-import { AppMarketplaceCard, AppMarketplaceCardSkeleton } from "@/components/apps/app-marketplace-card"
 
 interface WorkflowSearchResult extends WorkflowMeta {
   readonly projectName: string
@@ -145,9 +143,6 @@ export default function ProjectsPage() {
     enabled: activeTab === "apps",
   })
   const featuredApps = featuredAppsData?.data ?? []
-  const { data: favoriteIds = [] } = useAppFavorites()
-  const favSet = useMemo(() => new Set(favoriteIds), [favoriteIds])
-  const favMutation = useToggleAppFavoriteMutation()
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
@@ -198,33 +193,52 @@ export default function ProjectsPage() {
       {activeTab === "apps" && (
         <div className="mb-6">
           {featuredAppsLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="flex gap-3 overflow-hidden">
               {Array.from({ length: 6 }).map((_, i) => (
-                <AppMarketplaceCardSkeleton key={i} />
+                <div key={i} className="shrink-0 w-40 animate-pulse">
+                  <div className="aspect-video bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
+                  <div className="h-3 bg-zinc-200 dark:bg-zinc-800 rounded mt-2 w-3/4" />
+                </div>
               ))}
             </div>
           ) : featuredApps.length > 0 ? (
-            <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {featuredApps.map((app) => (
-                  <AppMarketplaceCard
-                    key={app.id}
-                    app={app}
-                    isFavorited={favSet.has(app.id)}
-                    onToggleFavorite={(id) => favMutation.mutate({ appId: id })}
-                  />
-                ))}
-              </div>
-              <div className="flex justify-center mt-4">
-                <Button variant="ghost" size="sm" onClick={() => navigate("/apps")} className="text-muted-foreground hover:text-foreground">
-                  See all apps <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                </Button>
-              </div>
-            </>
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+              {featuredApps.map((app) => (
+                <button
+                  key={app.id}
+                  type="button"
+                  onClick={() => navigate(`/app/${app.slug}`)}
+                  className="shrink-0 w-40 text-left group/thumb"
+                >
+                  <div className="aspect-video rounded-lg overflow-hidden bg-zinc-200 dark:bg-zinc-800 border border-border group-hover/thumb:border-zinc-400 dark:group-hover/thumb:border-zinc-600 transition-colors">
+                    {app.previewMediaUrl ? (
+                      app.previewMediaType === "video" ? (
+                        <video src={app.previewMediaUrl} className="w-full h-full object-cover" muted playsInline />
+                      ) : (
+                        <img src={app.previewMediaUrl} alt={app.name} className="w-full h-full object-cover" loading="lazy" />
+                      )
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Sparkles className="h-5 w-5 text-zinc-400 dark:text-zinc-600" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs font-medium text-foreground truncate mt-1.5">{app.name}</p>
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => navigate("/apps")}
+                className="shrink-0 w-40 flex flex-col items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowRight className="h-5 w-5 mb-1" />
+                <span className="text-xs font-medium">See all apps</span>
+              </button>
+            </div>
           ) : (
-            <div className="text-center py-16 text-muted-foreground">
-              <LayoutTemplate className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-medium">No apps available yet</p>
+            <div className="text-center py-10 text-muted-foreground">
+              <LayoutTemplate className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              <p className="text-xs font-medium">No apps available yet</p>
             </div>
           )}
         </div>
