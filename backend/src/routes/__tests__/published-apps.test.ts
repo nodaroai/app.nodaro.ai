@@ -310,9 +310,9 @@ describe("POST /v1/apps/publish", () => {
       if (table === "published_apps") {
         appsCallCount++
         if (appsCallCount === 1) {
-          // Return existing version 3 (with is_listed for carry-forward)
+          // Return existing version 3 (with slug + is_listed for carry-forward)
           const mockLimit = vi.fn().mockResolvedValue({
-            data: [{ id: "prev-id", version: 3, is_listed: true }],
+            data: [{ id: "prev-id", version: 3, slug: "my-app-abc123", is_listed: true }],
             error: null,
           })
           const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
@@ -320,10 +320,18 @@ describe("POST /v1/apps/publish", () => {
           const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
           return { select: mockSelect } as never
         } else if (appsCallCount === 2) {
-          // Deactivate old versions
-          const mockEq2 = vi.fn().mockResolvedValue({ error: null })
+          // Fetch all old versions for slug retirement
+          const mockEq2 = vi.fn().mockResolvedValue({
+            data: [{ id: "prev-id", version: 3, slug: "my-app-abc123" }],
+            error: null,
+          })
           const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-          const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
+          const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
+          return { select: mockSelect } as never
+        } else if (appsCallCount === 3) {
+          // Retire old version slug (update slug + deactivate)
+          const mockEq = vi.fn().mockResolvedValue({ error: null })
+          const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
           return { update: mockUpdate } as never
         } else {
           // Insert with version 4
@@ -348,7 +356,7 @@ describe("POST /v1/apps/publish", () => {
     expect(res.json().version).toBe(4)
   })
 
-  it("returns 409 on slug conflict (duplicate key error 23505)", async () => {
+  it("returns 500 after exhausting slug collision retries", async () => {
     let appsCallCount = 0
 
     vi.mocked(supabase.from).mockImplementation((table: string) => {
@@ -362,14 +370,14 @@ describe("POST /v1/apps/publish", () => {
       if (table === "published_apps") {
         appsCallCount++
         if (appsCallCount === 1) {
-          // version check
+          // version check — no existing versions
           const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
           const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
           const mockEq = vi.fn().mockReturnValue({ order: mockOrder })
           const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
           return { select: mockSelect } as never
         } else {
-          // insert fails with 23505
+          // Every insert fails with 23505 (slug collision)
           const mockSingle = vi.fn().mockResolvedValue({
             data: null,
             error: { code: "23505", message: "duplicate key" },
@@ -386,11 +394,11 @@ describe("POST /v1/apps/publish", () => {
       method: "POST",
       url: "/v1/apps/publish",
       headers: { "x-user-id": TEST_USER_ID },
-      payload: { workflowId: TEST_WORKFLOW_ID, name: "My App", slug: "taken-slug" },
+      payload: { workflowId: TEST_WORKFLOW_ID, name: "My App" },
     })
 
-    expect(res.statusCode).toBe(409)
-    expect(res.json().error.code).toBe("conflict")
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
   })
 })
 
