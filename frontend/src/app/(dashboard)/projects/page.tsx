@@ -176,17 +176,17 @@ export default function ProjectsPage() {
 
       {/* Unified container with pill tabs inside */}
       <div className="mb-6 rounded-xl bg-zinc-900 overflow-hidden group/apps">
-        {/* Pill tabs */}
-        <div className="flex items-center gap-1 px-3 pt-3 pb-2">
+        {/* Tabs */}
+        <div className="flex items-center gap-1 p-2">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1 text-sm font-medium rounded-full transition-colors",
+                "flex items-center gap-1.5 px-3 py-1 text-sm font-medium rounded-md transition-colors",
                 activeTab === tab.id
-                  ? "bg-white text-zinc-900"
+                  ? "bg-zinc-700 text-white"
                   : "text-zinc-400 hover:text-white",
               )}
             >
