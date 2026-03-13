@@ -77,9 +77,12 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite }: AppMa
         </button>
       </div>
 
-      {/* Default: name only */}
+      {/* Default: name + description */}
       <div className="p-3">
         <h3 className="text-sm font-semibold text-foreground truncate">{app.name}</h3>
+        {app.description && (
+          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{app.description}</p>
+        )}
       </div>
 
       {/* Hover overlay */}
