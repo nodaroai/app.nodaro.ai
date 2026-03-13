@@ -22,7 +22,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite }: AppMa
 
   return (
     <div
-      className="group bg-card border border-border rounded-xl overflow-hidden hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer"
+      className="group relative bg-card border border-border rounded-xl overflow-hidden hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer"
       onClick={() => navigate(`/app/${app.slug}`)}
     >
       {/* Preview media (16:9) */}
@@ -52,23 +52,43 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite }: AppMa
           </div>
         )}
 
-        {/* Overlay badges on hover */}
+        {/* RemX badge */}
         {app.supportsRemix && (
-          <span className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/90 text-white font-medium">
+          <span className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/90 text-white font-medium">
             RemX
           </span>
         )}
+
+        {/* Favorite button over image */}
+        <button
+          type="button"
+          className="absolute top-2 right-2 p-1 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleFavorite(app.id)
+          }}
+        >
+          <Heart
+            className={cn(
+              "h-4 w-4 transition-colors",
+              isFavorited ? "fill-[#ff0073] text-[#ff0073]" : "text-white",
+            )}
+          />
+        </button>
       </div>
 
-      {/* Content */}
-      <div className="p-3 space-y-2">
-        {/* Name + description */}
-        <div>
-          <h3 className="text-sm font-semibold text-foreground truncate">{app.name}</h3>
-          {app.description && (
-            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{app.description}</p>
-          )}
-        </div>
+      {/* Default: name only */}
+      <div className="p-3">
+        <h3 className="text-sm font-semibold text-foreground truncate">{app.name}</h3>
+      </div>
+
+      {/* Hover overlay */}
+      <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-3 space-y-2">
+        <h3 className="text-sm font-semibold text-white truncate">{app.name}</h3>
+
+        {app.description && (
+          <p className="text-xs text-white/70 line-clamp-2">{app.description}</p>
+        )}
 
         {/* Category + output type badges */}
         <div className="flex items-center gap-1 flex-wrap">
@@ -88,57 +108,27 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite }: AppMa
           ))}
         </div>
 
-        {/* Tags */}
-        {app.tags.length > 0 && (
-          <div className="flex items-center gap-1 flex-wrap">
-            {app.tags.slice(0, 3).map((tag) => (
-              <span
-                key={tag}
-                className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-muted-foreground"
-              >
-                {tag}
-              </span>
-            ))}
-            {app.tags.length > 3 && (
-              <span className="text-[10px] text-muted-foreground">+{app.tags.length - 3}</span>
-            )}
-          </div>
-        )}
-
-        {/* Bottom row: credits, runs, favorite */}
-        <div className="flex items-center justify-between pt-1 border-t border-border">
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        {/* Credits + runs */}
+        <div className="flex items-center gap-3 text-xs text-white/70">
+          <span className="flex items-center gap-1">
+            <Coins className="h-3 w-3" />
+            {app.estimatedCredits} CR
+          </span>
+          <span className="flex items-center gap-1">
+            <Play className="h-3 w-3" />
+            {formatCount(app.totalRunCount)}
+          </span>
+          {app.favoriteCount > 0 && (
             <span className="flex items-center gap-1">
-              <Coins className="h-3 w-3" />
-              {app.estimatedCredits} CR
+              <Heart className="h-3 w-3" />
+              {formatCount(app.favoriteCount)}
             </span>
-            <span className="flex items-center gap-1">
-              <Play className="h-3 w-3" />
-              {formatCount(app.totalRunCount)}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-[#ff0073] transition-colors"
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggleFavorite(app.id)
-            }}
-          >
-            <Heart
-              className={cn(
-                "h-3.5 w-3.5 transition-colors",
-                isFavorited && "fill-[#ff0073] text-[#ff0073]",
-              )}
-            />
-            {app.favoriteCount > 0 && <span>{formatCount(app.favoriteCount)}</span>}
-          </button>
+          )}
         </div>
 
         {/* Creator */}
         {app.creatorDisplayName && (
-          <p className="text-[10px] text-muted-foreground truncate">
+          <p className="text-[10px] text-white/50 truncate">
             by {app.creatorDisplayName}
           </p>
         )}
