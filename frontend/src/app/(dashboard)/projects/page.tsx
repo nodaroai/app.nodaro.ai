@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { useNavigate, Link } from "react-router-dom"
-import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate, ArrowRight, Sparkles, ChevronLeft, ChevronRight } from "lucide-react"
+import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate, ArrowRight, Sparkles, ChevronLeft, ChevronRight, LayoutGrid, List, ChevronDown, ChevronUp } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -124,6 +124,29 @@ export default function ProjectsPage() {
   const { results: workflowResults, loading: workflowSearchLoading } = useWorkflowSearch(search, projectMap)
 
   const isSearching = search.length >= 2
+
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [sortBy, setSortBy] = useState<"updated" | "created" | "name">("updated")
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc")
+
+  const handleSort = (col: "updated" | "created" | "name") => {
+    if (sortBy === col) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"))
+    } else {
+      setSortBy(col)
+      setSortDir("desc")
+    }
+  }
+
+  const sortedProjects = useMemo(() => {
+    return [...filteredProjects].sort((a, b) => {
+      let result = 0
+      if (sortBy === "name") result = a.name.localeCompare(b.name)
+      else if (sortBy === "created") result = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      else result = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      return sortDir === "asc" ? -result : result
+    })
+  }, [filteredProjects, sortBy, sortDir])
 
   type Tab = "apps" | "templates" | "tutorials" | "statistics"
   const [activeTab, setActiveTab] = useState<Tab>("apps")
@@ -329,16 +352,39 @@ export default function ProjectsPage() {
         )}
       </div>
 
-      {/* Search + Projects (always visible) */}
-      <div className="relative mb-4 sm:mb-6">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={showAll ? "Search projects, workflows, or users..." : "Search projects and workflows..."}
-          aria-label="Search projects and workflows"
-          className="pl-9"
-        />
+      {/* My Projects heading + view toggle + search */}
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-medium text-muted-foreground">My Projects</h2>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              className={cn("p-1 rounded transition-colors", viewMode === "grid" ? "text-foreground" : "text-muted-foreground/50 hover:text-muted-foreground")}
+              aria-label="Grid view"
+            >
+              <LayoutGrid className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={cn("p-1 rounded transition-colors", viewMode === "list" ? "text-foreground" : "text-muted-foreground/50 hover:text-muted-foreground")}
+              aria-label="List view"
+            >
+              <List className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="relative w-48">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={showAll ? "Search projects, users..." : "Search projects..."}
+              aria-label="Search projects and workflows"
+              className="pl-8 h-8 text-sm w-full"
+            />
+          </div>
+        </div>
       </div>
 
       {isSearching && workflowResults.length > 0 && (
@@ -369,13 +415,11 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      <h2 className="text-sm font-medium text-muted-foreground mb-3">My Projects</h2>
-
       {loading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      ) : filteredProjects.length === 0 && (!isSearching || workflowResults.length === 0) ? (
+      ) : sortedProjects.length === 0 && (!isSearching || workflowResults.length === 0) ? (
         <div className="text-center py-16 text-muted-foreground">
           <p className="text-sm">
             {projects.length === 0
@@ -384,18 +428,50 @@ export default function ProjectsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {filteredProjects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onDelete={deleteProject}
-              onRename={handleRenameProject}
-              showOwner={showAll}
-              isOwn={showAll && project.userId === currentUserId}
-            />
-          ))}
-        </div>
+        <>
+          {viewMode === "list" && (
+            <div className="flex items-center gap-3 px-3 mb-1 pb-1 border-b border-border">
+              <div className="w-5 flex-shrink-0" />
+              <span className="text-[11px] text-muted-foreground flex-1">Name</span>
+              <button
+                type="button"
+                onClick={() => handleSort("updated")}
+                className={cn(
+                  "w-32 text-right text-[11px] hidden sm:flex items-center justify-end gap-0.5 transition-colors",
+                  sortBy === "updated" ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Last modified
+                {sortBy === "updated" && (sortDir === "desc" ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />)}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSort("created")}
+                className={cn(
+                  "w-32 text-right text-[11px] hidden md:flex items-center justify-end gap-0.5 transition-colors",
+                  sortBy === "created" ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Created
+                {sortBy === "created" && (sortDir === "desc" ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />)}
+              </button>
+              <div className="w-7 flex-shrink-0" />
+            </div>
+          )}
+          <div className={viewMode === "grid" ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" : "flex flex-col gap-1"}>
+            {sortedProjects.map((project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                onDelete={deleteProject}
+                onRename={handleRenameProject}
+                showOwner={showAll}
+                isOwn={showAll && project.userId === currentUserId}
+                viewMode={viewMode}
+              />
+            ))}
+          </div>
+        </>
       )}
 
     </div>
