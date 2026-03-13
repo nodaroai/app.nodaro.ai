@@ -144,6 +144,20 @@ export class KieImageProvider
             input.image_input = referenceImageUrls.slice(1)
           }
         }
+
+        // Ideogram character models require additional params beyond image_url:
+        // - ideogram-edit: mask_url (inpainting mask) + reference_image_urls (character ref)
+        // - ideogram-remix: reference_image_urls (character ref)
+        // When used as generic i2i, auto-fill from the source image.
+        if (provider === "ideogram-edit" && !input.mask_url) {
+          input.mask_url = referenceImageUrls[0]
+          input.reference_image_urls = [referenceImageUrls[0]]
+        } else if (provider === "ideogram-remix" && !input.reference_image_urls) {
+          input.reference_image_urls = [referenceImageUrls[0]]
+        }
+      } else if (provider === "flux-kontext" || provider === "flux-kontext-max") {
+        // Flux Kontext uses "inputImage" (camelCase) for image editing mode
+        input.inputImage = referenceImageUrls[0]
       } else {
         // Text-to-image models use "image_input" for reference images
         input.image_input = referenceImageUrls
