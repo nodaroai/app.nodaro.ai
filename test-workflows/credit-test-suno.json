@@ -1,0 +1,381 @@
+{
+  "nodes": [
+    {
+      "id": "prompt_1",
+      "type": "text-prompt",
+      "position": { "x": 50, "y": 0 },
+      "data": {
+        "label": "Song Prompt",
+        "text": "An upbeat indie pop song about summer road trips with catchy guitar riffs"
+      }
+    },
+    {
+      "id": "upload_audio_1",
+      "type": "upload-audio",
+      "position": { "x": 50, "y": 600 },
+      "data": {
+        "label": "Audio Track 1 (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "upload_audio_2",
+      "type": "upload-audio",
+      "position": { "x": 50, "y": 900 },
+      "data": {
+        "label": "Audio Track 2 (for mashup, upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+
+    {
+      "id": "gen_v4",
+      "type": "suno-generate",
+      "position": { "x": 500, "y": 0 },
+      "data": {
+        "label": "Generate V4 (7cr)",
+        "prompt": "",
+        "model": "V4",
+        "lyrics": "",
+        "style": "indie pop",
+        "title": "Summer Road Trip",
+        "negativeStyle": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "gen_v5",
+      "type": "suno-generate",
+      "position": { "x": 500, "y": 200 },
+      "data": {
+        "label": "Generate V5 (13cr)",
+        "prompt": "",
+        "model": "V5",
+        "lyrics": "",
+        "style": "indie pop",
+        "title": "Summer Road Trip",
+        "negativeStyle": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "gen_v4_5",
+      "type": "suno-generate",
+      "position": { "x": 500, "y": 400 },
+      "data": {
+        "label": "Generate V4.5 (7cr)",
+        "prompt": "",
+        "model": "V4_5",
+        "lyrics": "",
+        "style": "lo-fi chill",
+        "title": "Chill Vibes",
+        "negativeStyle": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "gen_v4_5plus",
+      "type": "suno-generate",
+      "position": { "x": 500, "y": 600 },
+      "data": {
+        "label": "Generate V4.5+ (7cr)",
+        "prompt": "",
+        "model": "V4_5PLUS",
+        "lyrics": "",
+        "style": "electronic dance",
+        "title": "Night Drive",
+        "negativeStyle": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "gen_v5_instrumental",
+      "type": "suno-generate",
+      "position": { "x": 500, "y": 800 },
+      "data": {
+        "label": "Generate V5 instrumental (13cr)",
+        "prompt": "",
+        "model": "V5",
+        "lyrics": "",
+        "style": "ambient cinematic",
+        "title": "Ambient Score",
+        "negativeStyle": "",
+        "instrumental": true,
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "lyrics_1",
+      "type": "suno-lyrics",
+      "position": { "x": 1000, "y": 0 },
+      "data": {
+        "label": "Lyrics Generation (2cr)",
+        "prompt": "",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "style_boost_1",
+      "type": "suno-style-boost",
+      "position": { "x": 1000, "y": 200 },
+      "data": {
+        "label": "Style Boost (1cr)",
+        "content": "indie pop, summer vibes, catchy guitar",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "cover_v4",
+      "type": "suno-cover",
+      "position": { "x": 1000, "y": 400 },
+      "data": {
+        "label": "Cover V4 (7cr)",
+        "prompt": "Acoustic folk version",
+        "model": "V4",
+        "lyrics": "",
+        "style": "acoustic folk",
+        "title": "Folk Cover",
+        "negativeStyle": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "cover_v5",
+      "type": "suno-cover",
+      "position": { "x": 1000, "y": 600 },
+      "data": {
+        "label": "Cover V5 (13cr)",
+        "prompt": "Jazz piano version",
+        "model": "V5",
+        "lyrics": "",
+        "style": "jazz piano",
+        "title": "Jazz Cover",
+        "negativeStyle": "",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "extend_v4",
+      "type": "suno-extend",
+      "position": { "x": 1000, "y": 800 },
+      "data": {
+        "label": "Extend V4 (7cr)",
+        "audioId": "",
+        "defaultParamFlag": true,
+        "prompt": "Continue with a guitar solo",
+        "model": "V4",
+        "style": "",
+        "title": "",
+        "continueAt": 0,
+        "negativeStyle": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "extend_v5",
+      "type": "suno-extend",
+      "position": { "x": 1000, "y": 1000 },
+      "data": {
+        "label": "Extend V5 (13cr)",
+        "audioId": "",
+        "defaultParamFlag": true,
+        "prompt": "Build to a dramatic chorus",
+        "model": "V5",
+        "style": "",
+        "title": "",
+        "continueAt": 0,
+        "negativeStyle": "",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "separate_vocal",
+      "type": "suno-separate",
+      "position": { "x": 1500, "y": 0 },
+      "data": {
+        "label": "Separate Vocal (5cr)",
+        "type": "separate_vocal",
+        "taskId": "",
+        "audioId": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "separate_stem",
+      "type": "suno-separate",
+      "position": { "x": 1500, "y": 200 },
+      "data": {
+        "label": "Separate Stem (16cr)",
+        "type": "split_stem",
+        "taskId": "",
+        "audioId": "",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "music_video_1",
+      "type": "suno-music-video",
+      "position": { "x": 1500, "y": 400 },
+      "data": {
+        "label": "Music Video (5cr)",
+        "taskId": "",
+        "audioId": "",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "mashup_v5",
+      "type": "suno-mashup",
+      "position": { "x": 1500, "y": 600 },
+      "data": {
+        "label": "Mashup V5 (4cr)",
+        "model": "V5",
+        "customMode": false,
+        "style": "",
+        "title": "Mashup Track",
+        "negativeStyle": "",
+        "vocalGender": "",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "replace_section_1",
+      "type": "suno-replace-section",
+      "position": { "x": 1500, "y": 800 },
+      "data": {
+        "label": "Replace Section (2cr)",
+        "infillStartS": 10,
+        "infillEndS": 30,
+        "prompt": "Add a piano bridge",
+        "tags": "piano, bridge",
+        "title": "",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "add_instrumental_v5",
+      "type": "suno-add-instrumental",
+      "position": { "x": 1500, "y": 1000 },
+      "data": {
+        "label": "Add Instrumental V5 (4cr)",
+        "model": "V5",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "add_instrumental_v4_5plus",
+      "type": "suno-add-instrumental",
+      "position": { "x": 1500, "y": 1200 },
+      "data": {
+        "label": "Add Instrumental V4.5+ (4cr)",
+        "model": "V4_5PLUS",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "add_vocals_v5",
+      "type": "suno-add-vocals",
+      "position": { "x": 2000, "y": 0 },
+      "data": {
+        "label": "Add Vocals V5 (4cr)",
+        "model": "V5",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "add_vocals_v4_5plus",
+      "type": "suno-add-vocals",
+      "position": { "x": 2000, "y": 200 },
+      "data": {
+        "label": "Add Vocals V4.5+ (4cr)",
+        "model": "V4_5PLUS",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "convert_wav_1",
+      "type": "suno-convert-wav",
+      "position": { "x": 2000, "y": 400 },
+      "data": {
+        "label": "Convert WAV (1cr)",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "upload_extend_v4",
+      "type": "suno-upload-extend",
+      "position": { "x": 2000, "y": 600 },
+      "data": {
+        "label": "Upload Extend V4 (4cr)",
+        "prompt": "Add a verse with acoustic guitar",
+        "model": "V4",
+        "style": "acoustic",
+        "title": "",
+        "negativeStyle": "",
+        "vocalGender": "",
+        "continueAt": 0,
+        "defaultParamFlag": true,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "upload_extend_v5",
+      "type": "suno-upload-extend",
+      "position": { "x": 2000, "y": 800 },
+      "data": {
+        "label": "Upload Extend V5 (13cr)",
+        "prompt": "Continue into an epic finale",
+        "model": "V5",
+        "style": "epic orchestral",
+        "title": "",
+        "negativeStyle": "",
+        "vocalGender": "",
+        "continueAt": 0,
+        "defaultParamFlag": true,
+        "fieldMappings": {}
+      }
+    }
+  ],
+
+  "edges": [
+    { "id": "e_p1", "source": "prompt_1", "target": "gen_v4",              "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p2", "source": "prompt_1", "target": "gen_v5",              "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p3", "source": "prompt_1", "target": "gen_v4_5",            "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p4", "source": "prompt_1", "target": "gen_v4_5plus",        "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p5", "source": "prompt_1", "target": "gen_v5_instrumental", "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p6", "source": "prompt_1", "target": "lyrics_1",            "sourceHandle": "text", "targetHandle": "in" },
+
+    { "id": "e_a1",  "source": "upload_audio_1", "target": "cover_v4",              "sourceHandle": "audio", "targetHandle": "in" },
+    { "id": "e_a2",  "source": "upload_audio_1", "target": "cover_v5",              "sourceHandle": "audio", "targetHandle": "in" },
+    { "id": "e_a3",  "source": "upload_audio_1", "target": "extend_v4",             "sourceHandle": "audio", "targetHandle": "in" },
+    { "id": "e_a4",  "source": "upload_audio_1", "target": "extend_v5",             "sourceHandle": "audio", "targetHandle": "in" },
+    { "id": "e_a5",  "source": "upload_audio_1", "target": "separate_vocal",        "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a6",  "source": "upload_audio_1", "target": "separate_stem",         "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a7",  "source": "upload_audio_1", "target": "music_video_1",         "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a8",  "source": "upload_audio_1", "target": "replace_section_1",     "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a9",  "source": "upload_audio_1", "target": "add_instrumental_v5",   "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a10", "source": "upload_audio_1", "target": "add_instrumental_v4_5plus", "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a11", "source": "upload_audio_1", "target": "add_vocals_v5",         "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a12", "source": "upload_audio_1", "target": "add_vocals_v4_5plus",   "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a13", "source": "upload_audio_1", "target": "convert_wav_1",         "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a14", "source": "upload_audio_1", "target": "upload_extend_v4",      "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a15", "source": "upload_audio_1", "target": "upload_extend_v5",      "sourceHandle": "audio", "targetHandle": "audio" },
+
+    { "id": "e_m1", "source": "upload_audio_1", "target": "mashup_v5", "sourceHandle": "audio", "targetHandle": "audio1" },
+    { "id": "e_m2", "source": "upload_audio_2", "target": "mashup_v5", "sourceHandle": "audio", "targetHandle": "audio2" }
+  ]
+}

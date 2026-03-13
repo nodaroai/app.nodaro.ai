@@ -1,0 +1,103 @@
+{
+  "nodes": [
+    {
+      "id": "upload_img_1",
+      "type": "upload-image",
+      "position": { "x": 50, "y": 300 },
+      "data": {
+        "label": "Reference Image (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+
+    {
+      "id": "sb_10_land",
+      "type": "sora-storyboard",
+      "position": { "x": 500, "y": 0 },
+      "data": {
+        "label": "10 frames landscape (47cr)",
+        "shots": [{ "scene": "A woman walks through a sunlit garden", "duration": 5 }],
+        "nFrames": "10",
+        "aspectRatio": "landscape",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "sb_10_port",
+      "type": "sora-storyboard",
+      "position": { "x": 500, "y": 200 },
+      "data": {
+        "label": "10 frames portrait (47cr)",
+        "shots": [{ "scene": "A woman walks through a sunlit garden", "duration": 5 }],
+        "nFrames": "10",
+        "aspectRatio": "portrait",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "sb_15_land",
+      "type": "sora-storyboard",
+      "position": { "x": 500, "y": 400 },
+      "data": {
+        "label": "15 frames landscape (85cr)",
+        "shots": [{ "scene": "A woman walks through a sunlit garden", "duration": 5 }],
+        "nFrames": "15",
+        "aspectRatio": "landscape",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "sb_25_land",
+      "type": "sora-storyboard",
+      "position": { "x": 500, "y": 600 },
+      "data": {
+        "label": "25 frames landscape (85cr)",
+        "shots": [{ "scene": "A woman walks through a sunlit garden", "duration": 5 }],
+        "nFrames": "25",
+        "aspectRatio": "landscape",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "sb_10_multi",
+      "type": "sora-storyboard",
+      "position": { "x": 500, "y": 800 },
+      "data": {
+        "label": "10 frames multi-shot (47cr)",
+        "shots": [
+          { "scene": "Close-up of a woman smiling at the camera", "duration": 3 },
+          { "scene": "Wide shot of a city skyline at sunset", "duration": 4 },
+          { "scene": "The woman walking along a bridge with the skyline behind her", "duration": 3 }
+        ],
+        "nFrames": "10",
+        "aspectRatio": "landscape",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "sb_15_multi",
+      "type": "sora-storyboard",
+      "position": { "x": 500, "y": 1000 },
+      "data": {
+        "label": "15 frames multi-shot portrait (85cr)",
+        "shots": [
+          { "scene": "A man standing in front of a graffiti wall", "duration": 5 },
+          { "scene": "Close-up of hands painting on a canvas", "duration": 5 }
+        ],
+        "nFrames": "15",
+        "aspectRatio": "portrait",
+        "fieldMappings": {}
+      }
+    }
+  ],
+
+  "edges": [
+    { "id": "e_1", "source": "upload_img_1", "target": "sb_10_land",  "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_2", "source": "upload_img_1", "target": "sb_10_port",  "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_3", "source": "upload_img_1", "target": "sb_15_land",  "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_4", "source": "upload_img_1", "target": "sb_25_land",  "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_5", "source": "upload_img_1", "target": "sb_10_multi", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_6", "source": "upload_img_1", "target": "sb_15_multi", "sourceHandle": "image", "targetHandle": "image" }
+  ]
+}

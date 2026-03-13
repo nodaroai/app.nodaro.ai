@@ -69,6 +69,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SceneNodeType } from "@/types/nodes";
+import { useAuth } from "@/hooks/use-auth";
 
 interface NodeOption {
   readonly type: SceneNodeType;
@@ -76,6 +77,7 @@ interface NodeOption {
   readonly icon: React.ReactNode;
   readonly category: string;
   readonly group?: string;
+  readonly adminOnly?: boolean;
 }
 
 export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
@@ -473,6 +475,7 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <ShieldCheck className="h-4 w-4" />,
     category: "AI",
     group: "Quality",
+    adminOnly: true,
   },
   // Processing — Video
   {
@@ -830,29 +833,32 @@ export function AddNodePopup({
   onAddNode,
   position,
 }: AddNodePopupProps) {
+  const { isAdmin } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const popupRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const visibleNodes = useMemo(() => NODE_OPTIONS.filter((n) => !n.adminOnly || isAdmin), [isAdmin]);
+
   // Filter nodes based on search query
   const filteredNodes = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const query = searchQuery.toLowerCase();
-    return NODE_OPTIONS.filter(
+    return visibleNodes.filter(
       (node) =>
         node.label.toLowerCase().includes(query) ||
         node.type.toLowerCase().includes(query) ||
         node.category.toLowerCase().includes(query),
     );
-  }, [searchQuery]);
+  }, [searchQuery, visibleNodes]);
 
   // Get nodes for selected category
   const categoryNodes = useMemo(() => {
     if (!selectedCategory) return [];
-    return NODE_OPTIONS.filter((node) => node.category === selectedCategory);
-  }, [selectedCategory]);
+    return visibleNodes.filter((node) => node.category === selectedCategory);
+  }, [selectedCategory, visibleNodes]);
 
   // Items to display (search results, category nodes, or categories)
   const displayItems = searchQuery.trim()

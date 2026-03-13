@@ -1,0 +1,345 @@
+{
+  "nodes": [
+    {
+      "id": "upload_img_1",
+      "type": "upload-image",
+      "position": { "x": 50, "y": 600 },
+      "data": {
+        "label": "Character Image (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "upload_vid_1",
+      "type": "upload-video",
+      "position": { "x": 50, "y": 900 },
+      "data": {
+        "label": "Motion Video (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+
+    {
+      "id": "mt_kling_720_5s",
+      "type": "motion-transfer",
+      "position": { "x": 500, "y": 0 },
+      "data": {
+        "label": "Kling 2.6 720p 5s (10cr)",
+        "prompt": "",
+        "provider": "kling",
+        "characterOrientation": "video",
+        "resolution": "720p",
+        "videoDuration": 5,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_kling_720_10s",
+      "type": "motion-transfer",
+      "position": { "x": 500, "y": 200 },
+      "data": {
+        "label": "Kling 2.6 720p 10s (19cr)",
+        "prompt": "",
+        "provider": "kling",
+        "characterOrientation": "video",
+        "resolution": "720p",
+        "videoDuration": 10,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_kling_720_15s",
+      "type": "motion-transfer",
+      "position": { "x": 500, "y": 400 },
+      "data": {
+        "label": "Kling 2.6 720p 15s (29cr)",
+        "prompt": "",
+        "provider": "kling",
+        "characterOrientation": "video",
+        "resolution": "720p",
+        "videoDuration": 15,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_kling_720_30s",
+      "type": "motion-transfer",
+      "position": { "x": 500, "y": 600 },
+      "data": {
+        "label": "Kling 2.6 720p 30s (57cr)",
+        "prompt": "",
+        "provider": "kling",
+        "characterOrientation": "video",
+        "resolution": "720p",
+        "videoDuration": 30,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_kling_1080_5s",
+      "type": "motion-transfer",
+      "position": { "x": 500, "y": 800 },
+      "data": {
+        "label": "Kling 2.6 1080p 5s (15cr)",
+        "prompt": "",
+        "provider": "kling",
+        "characterOrientation": "video",
+        "resolution": "1080p",
+        "videoDuration": 5,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_kling_1080_10s",
+      "type": "motion-transfer",
+      "position": { "x": 500, "y": 1000 },
+      "data": {
+        "label": "Kling 2.6 1080p 10s (29cr)",
+        "prompt": "",
+        "provider": "kling",
+        "characterOrientation": "video",
+        "resolution": "1080p",
+        "videoDuration": 10,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_kling_1080_30s",
+      "type": "motion-transfer",
+      "position": { "x": 500, "y": 1200 },
+      "data": {
+        "label": "Kling 2.6 1080p 30s (85cr)",
+        "prompt": "",
+        "provider": "kling",
+        "characterOrientation": "video",
+        "resolution": "1080p",
+        "videoDuration": 30,
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "mt_k30_720_5s",
+      "type": "motion-transfer",
+      "position": { "x": 1000, "y": 0 },
+      "data": {
+        "label": "Kling 3.0 720p 5s (19cr)",
+        "prompt": "",
+        "provider": "kling-3.0",
+        "characterOrientation": "video",
+        "resolution": "720p",
+        "videoDuration": 5,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_k30_720_10s",
+      "type": "motion-transfer",
+      "position": { "x": 1000, "y": 200 },
+      "data": {
+        "label": "Kling 3.0 720p 10s (38cr)",
+        "prompt": "",
+        "provider": "kling-3.0",
+        "characterOrientation": "video",
+        "resolution": "720p",
+        "videoDuration": 10,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_k30_720_15s",
+      "type": "motion-transfer",
+      "position": { "x": 1000, "y": 400 },
+      "data": {
+        "label": "Kling 3.0 720p 15s (57cr)",
+        "prompt": "",
+        "provider": "kling-3.0",
+        "characterOrientation": "video",
+        "resolution": "720p",
+        "videoDuration": 15,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_k30_720_30s",
+      "type": "motion-transfer",
+      "position": { "x": 1000, "y": 600 },
+      "data": {
+        "label": "Kling 3.0 720p 30s (113cr)",
+        "prompt": "",
+        "provider": "kling-3.0",
+        "characterOrientation": "video",
+        "resolution": "720p",
+        "videoDuration": 30,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_k30_1080_5s",
+      "type": "motion-transfer",
+      "position": { "x": 1000, "y": 800 },
+      "data": {
+        "label": "Kling 3.0 1080p 5s (32cr)",
+        "prompt": "",
+        "provider": "kling-3.0",
+        "characterOrientation": "video",
+        "resolution": "1080p",
+        "videoDuration": 5,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_k30_1080_10s",
+      "type": "motion-transfer",
+      "position": { "x": 1000, "y": 1000 },
+      "data": {
+        "label": "Kling 3.0 1080p 10s (63cr)",
+        "prompt": "",
+        "provider": "kling-3.0",
+        "characterOrientation": "video",
+        "resolution": "1080p",
+        "videoDuration": 10,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_k30_1080_30s",
+      "type": "motion-transfer",
+      "position": { "x": 1000, "y": 1200 },
+      "data": {
+        "label": "Kling 3.0 1080p 30s (188cr)",
+        "prompt": "",
+        "provider": "kling-3.0",
+        "characterOrientation": "video",
+        "resolution": "1080p",
+        "videoDuration": 30,
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "mt_wan_move_480",
+      "type": "motion-transfer",
+      "position": { "x": 1500, "y": 0 },
+      "data": {
+        "label": "Wan Move 480p (2cr)",
+        "prompt": "",
+        "provider": "wan-animate-move",
+        "characterOrientation": "video",
+        "resolution": "480p",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_wan_move_580",
+      "type": "motion-transfer",
+      "position": { "x": 1500, "y": 200 },
+      "data": {
+        "label": "Wan Move 580p (3cr)",
+        "prompt": "",
+        "provider": "wan-animate-move",
+        "characterOrientation": "video",
+        "resolution": "580p",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_wan_move_720",
+      "type": "motion-transfer",
+      "position": { "x": 1500, "y": 400 },
+      "data": {
+        "label": "Wan Move 720p (4cr)",
+        "prompt": "",
+        "provider": "wan-animate-move",
+        "characterOrientation": "video",
+        "resolution": "720p",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_wan_replace_480",
+      "type": "motion-transfer",
+      "position": { "x": 1500, "y": 600 },
+      "data": {
+        "label": "Wan Replace 480p (2cr)",
+        "prompt": "",
+        "provider": "wan-animate-replace",
+        "characterOrientation": "video",
+        "resolution": "480p",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_wan_replace_580",
+      "type": "motion-transfer",
+      "position": { "x": 1500, "y": 800 },
+      "data": {
+        "label": "Wan Replace 580p (3cr)",
+        "prompt": "",
+        "provider": "wan-animate-replace",
+        "characterOrientation": "video",
+        "resolution": "580p",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "mt_wan_replace_720",
+      "type": "motion-transfer",
+      "position": { "x": 1500, "y": 1000 },
+      "data": {
+        "label": "Wan Replace 720p (4cr)",
+        "prompt": "",
+        "provider": "wan-animate-replace",
+        "characterOrientation": "video",
+        "resolution": "720p",
+        "fieldMappings": {}
+      }
+    }
+  ],
+
+  "edges": [
+    { "id": "e_i1",  "source": "upload_img_1", "target": "mt_kling_720_5s",    "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i2",  "source": "upload_img_1", "target": "mt_kling_720_10s",   "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i3",  "source": "upload_img_1", "target": "mt_kling_720_15s",   "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i4",  "source": "upload_img_1", "target": "mt_kling_720_30s",   "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i5",  "source": "upload_img_1", "target": "mt_kling_1080_5s",   "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i6",  "source": "upload_img_1", "target": "mt_kling_1080_10s",  "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i7",  "source": "upload_img_1", "target": "mt_kling_1080_30s",  "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i8",  "source": "upload_img_1", "target": "mt_k30_720_5s",      "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i9",  "source": "upload_img_1", "target": "mt_k30_720_10s",     "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i10", "source": "upload_img_1", "target": "mt_k30_720_15s",     "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i11", "source": "upload_img_1", "target": "mt_k30_720_30s",     "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i12", "source": "upload_img_1", "target": "mt_k30_1080_5s",     "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i13", "source": "upload_img_1", "target": "mt_k30_1080_10s",    "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i14", "source": "upload_img_1", "target": "mt_k30_1080_30s",    "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i15", "source": "upload_img_1", "target": "mt_wan_move_480",    "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i16", "source": "upload_img_1", "target": "mt_wan_move_580",    "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i17", "source": "upload_img_1", "target": "mt_wan_move_720",    "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i18", "source": "upload_img_1", "target": "mt_wan_replace_480", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i19", "source": "upload_img_1", "target": "mt_wan_replace_580", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_i20", "source": "upload_img_1", "target": "mt_wan_replace_720", "sourceHandle": "image", "targetHandle": "image" },
+
+    { "id": "e_v1",  "source": "upload_vid_1", "target": "mt_kling_720_5s",    "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v2",  "source": "upload_vid_1", "target": "mt_kling_720_10s",   "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v3",  "source": "upload_vid_1", "target": "mt_kling_720_15s",   "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v4",  "source": "upload_vid_1", "target": "mt_kling_720_30s",   "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v5",  "source": "upload_vid_1", "target": "mt_kling_1080_5s",   "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v6",  "source": "upload_vid_1", "target": "mt_kling_1080_10s",  "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v7",  "source": "upload_vid_1", "target": "mt_kling_1080_30s",  "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v8",  "source": "upload_vid_1", "target": "mt_k30_720_5s",      "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v9",  "source": "upload_vid_1", "target": "mt_k30_720_10s",     "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v10", "source": "upload_vid_1", "target": "mt_k30_720_15s",     "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v11", "source": "upload_vid_1", "target": "mt_k30_720_30s",     "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v12", "source": "upload_vid_1", "target": "mt_k30_1080_5s",     "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v13", "source": "upload_vid_1", "target": "mt_k30_1080_10s",    "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v14", "source": "upload_vid_1", "target": "mt_k30_1080_30s",    "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v15", "source": "upload_vid_1", "target": "mt_wan_move_480",    "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v16", "source": "upload_vid_1", "target": "mt_wan_move_580",    "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v17", "source": "upload_vid_1", "target": "mt_wan_move_720",    "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v18", "source": "upload_vid_1", "target": "mt_wan_replace_480", "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v19", "source": "upload_vid_1", "target": "mt_wan_replace_580", "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v20", "source": "upload_vid_1", "target": "mt_wan_replace_720", "sourceHandle": "video", "targetHandle": "video" }
+  ]
+}

@@ -1,0 +1,293 @@
+{
+  "nodes": [
+    {
+      "id": "prompt_1",
+      "type": "text-prompt",
+      "position": { "x": 50, "y": 0 },
+      "data": {
+        "label": "Speech / SFX Prompt",
+        "text": "Hello, welcome to the audio credit testing workflow. This text will be used for speech synthesis and other text-based audio operations."
+      }
+    },
+    {
+      "id": "upload_audio_1",
+      "type": "upload-audio",
+      "position": { "x": 50, "y": 800 },
+      "data": {
+        "label": "Audio Track (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+
+    {
+      "id": "tts_v3",
+      "type": "text-to-speech",
+      "position": { "x": 500, "y": 0 },
+      "data": {
+        "label": "TTS ElevenLabs V3 (4cr)",
+        "provider": "elevenlabs-v3",
+        "voiceId": "Rachel",
+        "voiceType": "premade",
+        "voiceDisplayName": "Rachel",
+        "language": "en",
+        "speed": 1,
+        "stability": 0.5,
+        "similarityBoost": 0.75,
+        "style": 0,
+        "languageCode": "",
+        "textSource": "connected",
+        "directText": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "tts_turbo",
+      "type": "text-to-speech",
+      "position": { "x": 500, "y": 200 },
+      "data": {
+        "label": "TTS Turbo V2.5 (4cr)",
+        "provider": "elevenlabs-turbo",
+        "voiceId": "Adam",
+        "voiceType": "premade",
+        "voiceDisplayName": "Adam",
+        "language": "en",
+        "speed": 1.2,
+        "stability": 0.4,
+        "similarityBoost": 0.8,
+        "style": 0,
+        "languageCode": "",
+        "textSource": "connected",
+        "directText": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "tts_multilingual",
+      "type": "text-to-speech",
+      "position": { "x": 500, "y": 400 },
+      "data": {
+        "label": "TTS Multilingual V2 (4cr)",
+        "provider": "elevenlabs-multilingual",
+        "voiceId": "Sarah",
+        "voiceType": "premade",
+        "voiceDisplayName": "Sarah",
+        "language": "es",
+        "speed": 1,
+        "stability": 0.6,
+        "similarityBoost": 0.7,
+        "style": 0.3,
+        "languageCode": "es",
+        "textSource": "connected",
+        "directText": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "tts_base",
+      "type": "text-to-speech",
+      "position": { "x": 500, "y": 600 },
+      "data": {
+        "label": "TTS ElevenLabs Base (4cr)",
+        "provider": "elevenlabs",
+        "voiceId": "Bella",
+        "voiceType": "premade",
+        "voiceDisplayName": "Bella",
+        "language": "en",
+        "speed": 0.9,
+        "stability": 0.7,
+        "similarityBoost": 0.6,
+        "style": 0,
+        "languageCode": "",
+        "textSource": "connected",
+        "directText": "",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "sfx_1",
+      "type": "text-to-audio",
+      "position": { "x": 500, "y": 800 },
+      "data": {
+        "label": "SFX ElevenLabs (4cr)",
+        "prompt": "Thunder rolling in the distance with light rain on a tin roof",
+        "provider": "elevenlabs-sfx",
+        "duration": 10,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "music_1",
+      "type": "generate-music",
+      "position": { "x": 500, "y": 1000 },
+      "data": {
+        "label": "Generate Music MiniMax (7cr)",
+        "prompt": "",
+        "provider": "minimax",
+        "duration": 8,
+        "genre": "ambient",
+        "mood": "calm",
+        "instrumental": true,
+        "lyrics": "",
+        "referenceAudioUrl": "",
+        "referenceYouTubeUrl": "",
+        "referenceSource": "none",
+        "modelVersion": "stereo-large",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "dialogue_1",
+      "type": "text-to-dialogue",
+      "position": { "x": 500, "y": 1200 },
+      "data": {
+        "label": "Text to Dialogue (4cr)",
+        "dialogue": [
+          { "id": "1", "text": "Hey, how are you doing today?", "voice": "Sarah" },
+          { "id": "2", "text": "I'm doing great, thanks for asking!", "voice": "Adam" }
+        ],
+        "stability": 0.5,
+        "languageCode": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "voice_remix_1",
+      "type": "voice-remix",
+      "position": { "x": 500, "y": 1400 },
+      "data": {
+        "label": "Voice Remix (4cr)",
+        "text": "This is a test of the voice remix feature",
+        "voiceDescription": "A warm, friendly female voice with a slight British accent",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "voice_design_v3",
+      "type": "voice-design",
+      "position": { "x": 500, "y": 1600 },
+      "data": {
+        "label": "Voice Design TTV V3 (5cr)",
+        "text": "Testing voice design with the latest model",
+        "voiceDescription": "A deep, authoritative male narrator voice",
+        "model": "eleven_ttv_v3",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "voice_design_multi",
+      "type": "voice-design",
+      "position": { "x": 500, "y": 1800 },
+      "data": {
+        "label": "Voice Design Multilingual V2 (5cr)",
+        "text": "Testing voice design with the multilingual model",
+        "voiceDescription": "A cheerful young female voice suitable for podcasts",
+        "model": "eleven_multilingual_ttv_v2",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "transcribe_stt",
+      "type": "transcribe",
+      "position": { "x": 1000, "y": 0 },
+      "data": {
+        "label": "Transcribe STT (4cr)",
+        "provider": "elevenlabs-stt",
+        "language": "auto",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "transcribe_diarize",
+      "type": "transcribe",
+      "position": { "x": 1000, "y": 200 },
+      "data": {
+        "label": "Transcribe + Diarize (4cr)",
+        "provider": "elevenlabs-stt",
+        "language": "en",
+        "diarize": true,
+        "tagAudioEvents": true,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "audio_isolation_1",
+      "type": "audio-isolation",
+      "position": { "x": 1000, "y": 400 },
+      "data": {
+        "label": "Voice Extractor (1cr)",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "voice_changer_1",
+      "type": "voice-changer",
+      "position": { "x": 1000, "y": 600 },
+      "data": {
+        "label": "Voice Changer (4cr)",
+        "voiceId": "Rachel",
+        "voiceLabel": "Rachel",
+        "voiceType": "premade",
+        "stability": 0.5,
+        "similarityBoost": 0.75,
+        "removeBackgroundNoise": false,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "dubbing_es",
+      "type": "dubbing",
+      "position": { "x": 1000, "y": 800 },
+      "data": {
+        "label": "Dubbing Spanish (8cr)",
+        "targetLanguage": "es",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "dubbing_ja",
+      "type": "dubbing",
+      "position": { "x": 1000, "y": 1000 },
+      "data": {
+        "label": "Dubbing Japanese (8cr)",
+        "targetLanguage": "ja",
+        "numSpeakers": 2,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "forced_alignment_1",
+      "type": "forced-alignment",
+      "position": { "x": 1000, "y": 1200 },
+      "data": {
+        "label": "Forced Alignment (3cr)",
+        "transcript": "Hello welcome to the audio credit testing workflow",
+        "fieldMappings": {}
+      }
+    }
+  ],
+
+  "edges": [
+    { "id": "e_p1",  "source": "prompt_1", "target": "tts_v3",            "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p2",  "source": "prompt_1", "target": "tts_turbo",         "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p3",  "source": "prompt_1", "target": "tts_multilingual",  "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p4",  "source": "prompt_1", "target": "tts_base",          "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p5",  "source": "prompt_1", "target": "sfx_1",             "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p6",  "source": "prompt_1", "target": "music_1",           "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p7",  "source": "prompt_1", "target": "dialogue_1",        "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p8",  "source": "prompt_1", "target": "voice_remix_1",     "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p9",  "source": "prompt_1", "target": "voice_design_v3",   "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p10", "source": "prompt_1", "target": "voice_design_multi","sourceHandle": "text", "targetHandle": "in" },
+
+    { "id": "e_a1", "source": "upload_audio_1", "target": "transcribe_stt",     "sourceHandle": "audio", "targetHandle": "in" },
+    { "id": "e_a2", "source": "upload_audio_1", "target": "transcribe_diarize", "sourceHandle": "audio", "targetHandle": "in" },
+    { "id": "e_a3", "source": "upload_audio_1", "target": "audio_isolation_1",  "sourceHandle": "audio", "targetHandle": "in" },
+    { "id": "e_a4", "source": "upload_audio_1", "target": "voice_changer_1",    "sourceHandle": "audio", "targetHandle": "in" },
+    { "id": "e_a5", "source": "upload_audio_1", "target": "dubbing_es",         "sourceHandle": "audio", "targetHandle": "in" },
+    { "id": "e_a6", "source": "upload_audio_1", "target": "dubbing_ja",         "sourceHandle": "audio", "targetHandle": "in" },
+    { "id": "e_a7", "source": "upload_audio_1", "target": "forced_alignment_1", "sourceHandle": "audio", "targetHandle": "in" }
+  ]
+}
