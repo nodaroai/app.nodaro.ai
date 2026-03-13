@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react"
 import { useNavigate, Link } from "react-router-dom"
-import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate } from "lucide-react"
+import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate, ArrowRight } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,6 +14,9 @@ import { StatsOverview } from "@/components/dashboard/stats-overview"
 import { WorkflowThumbnail } from "@/components/dashboard/workflow-thumbnail"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
+import { browseApps } from "@/lib/api"
+import { useAppFavorites, useToggleAppFavoriteMutation } from "@/hooks/queries/use-app-marketplace-queries"
+import { AppMarketplaceCard, AppMarketplaceCardSkeleton } from "@/components/apps/app-marketplace-card"
 
 interface WorkflowSearchResult extends WorkflowMeta {
   readonly projectName: string
@@ -124,7 +128,7 @@ export default function ProjectsPage() {
   const isSearching = search.length >= 2
 
   type Tab = "apps" | "templates" | "tutorials" | "statistics"
-  const [activeTab, setActiveTab] = useState<Tab>("statistics")
+  const [activeTab, setActiveTab] = useState<Tab>("apps")
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "apps", label: "Apps", icon: <LayoutTemplate className="h-3.5 w-3.5" /> },
@@ -133,13 +137,17 @@ export default function ProjectsPage() {
     { id: "statistics", label: "Statistics", icon: <BarChart3 className="h-3.5 w-3.5" /> },
   ]
 
-  const handleTabClick = (tab: Tab) => {
-    if (tab === "apps") {
-      navigate("/apps")
-      return
-    }
-    setActiveTab(tab)
-  }
+  // Featured apps for the Apps tab
+  const { data: featuredAppsData, isLoading: featuredAppsLoading } = useQuery({
+    queryKey: ["featured-apps"],
+    queryFn: () => browseApps({ sort: "popular", limit: 6 }),
+    staleTime: 60_000,
+    enabled: activeTab === "apps",
+  })
+  const featuredApps = featuredAppsData?.data ?? []
+  const { data: favoriteIds = [] } = useAppFavorites()
+  const favSet = useMemo(() => new Set(favoriteIds), [favoriteIds])
+  const favMutation = useToggleAppFavoriteMutation()
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
@@ -172,7 +180,7 @@ export default function ProjectsPage() {
           <button
             key={tab.id}
             type="button"
-            onClick={() => handleTabClick(tab.id)}
+            onClick={() => setActiveTab(tab.id)}
             className={cn(
               "flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px",
               activeTab === tab.id
@@ -187,6 +195,41 @@ export default function ProjectsPage() {
       </div>
 
       {/* Tab content */}
+      {activeTab === "apps" && (
+        <div className="mb-6">
+          {featuredAppsLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <AppMarketplaceCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : featuredApps.length > 0 ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {featuredApps.map((app) => (
+                  <AppMarketplaceCard
+                    key={app.id}
+                    app={app}
+                    isFavorited={favSet.has(app.id)}
+                    onToggleFavorite={(id) => favMutation.mutate({ appId: id })}
+                  />
+                ))}
+              </div>
+              <div className="flex justify-center mt-4">
+                <Button variant="ghost" size="sm" onClick={() => navigate("/apps")} className="text-muted-foreground hover:text-foreground">
+                  See all apps <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-16 text-muted-foreground">
+              <LayoutTemplate className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm font-medium">No apps available yet</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {activeTab === "statistics" && (
         <StatsOverview className="mb-6" />
       )}
