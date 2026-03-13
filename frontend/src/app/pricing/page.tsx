@@ -237,7 +237,11 @@ export default function PricingPage() {
                   {tier.features.map((feature) => (
                     <li key={feature} className="flex items-start gap-2 text-sm">
                       <Check className="h-4 w-4 text-[#ff0073] flex-shrink-0 mt-0.5" />
-                      <span className="text-muted-foreground">{feature}</span>
+                      <span className="text-muted-foreground">
+                        {/^\d[\d,]* credits \/ month/.test(feature)
+                          ? <><span className="text-white font-medium">{feature.replace(/ \/.*$/, '')}</span>{feature.match(/ \/.*$/)?.[0]}</>
+                          : feature}
+                      </span>
                     </li>
                   ))}
                 </ul>
