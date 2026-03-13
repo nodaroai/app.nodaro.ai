@@ -55,8 +55,8 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner }: P
         className="group relative block rounded-xl border border-border bg-card overflow-hidden hover:border-zinc-400 dark:hover:border-zinc-600 transition-all duration-200"
       >
         {/* Thumbnail area */}
-        <div className="relative aspect-[4/3] bg-muted flex items-center justify-center">
-          <FolderOpen className="h-10 w-10 text-muted-foreground/50" />
+        <div className="relative h-36 bg-muted flex items-center justify-center">
+          <FolderOpen className="h-12 w-12 text-zinc-400" />
 
           {/* Three-dot menu — top-right, visible on hover */}
           <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
