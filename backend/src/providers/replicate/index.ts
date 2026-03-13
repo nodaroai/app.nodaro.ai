@@ -38,7 +38,6 @@ const replicateInfo: ProviderInfo = {
     "image-editing": [],
     "image-to-video": [
       "minimax",
-      "veo",
       "veo3",
       "veo3.1",
       "kling",
@@ -48,7 +47,6 @@ const replicateInfo: ProviderInfo = {
     ],
     "text-to-video": [
       "minimax",
-      "veo",
       "veo3",
       "kling",
       "runway",

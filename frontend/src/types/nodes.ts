@@ -1854,7 +1854,7 @@ export type SceneNodeDataType = {
   sourceSceneIndex: number
   autoSyncWithScript: boolean
   audioAssignments: AudioAssignment[]
-  videoProvider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-3.0"
+  videoProvider: "minimax" | "veo3" | "veo3.1" | "kling" | "kling-3.0"
   generatedVideoResults: GeneratedResult[]
   activeVideoResultIndex: number
   generatedVideoUrl: string

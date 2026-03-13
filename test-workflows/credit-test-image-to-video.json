@@ -12,21 +12,6 @@
     },
 
     {
-      "id": "i2v_1",
-      "type": "image-to-video",
-      "position": { "x": 500, "y": 0 },
-      "data": {
-        "label": "veo2 (4cr)",
-        "provider": "veo",
-        "model": "",
-        "prompt": "Gentle camera push-in with soft ambient light",
-        "duration": 5,
-        "motion": "subtle",
-        "cameraMotion": "zoom-in",
-        "fieldMappings": {}
-      }
-    },
-    {
       "id": "i2v_2",
       "type": "image-to-video",
       "position": { "x": 800, "y": 0 },
@@ -497,7 +482,6 @@
   ],
 
   "edges": [
-    { "id": "e_1",  "source": "upload_1", "target": "i2v_1",  "sourceHandle": "image", "targetHandle": "image" },
     { "id": "e_2",  "source": "upload_1", "target": "i2v_2",  "sourceHandle": "image", "targetHandle": "image" },
     { "id": "e_3",  "source": "upload_1", "target": "i2v_3",  "sourceHandle": "image", "targetHandle": "image" },
     { "id": "e_4",  "source": "upload_1", "target": "i2v_4",  "sourceHandle": "image", "targetHandle": "image" },

@@ -124,7 +124,6 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "bytedance-pro",
   "bytedance-pro-fast",
   "grok-i2v",
-  "veo",
   "runway-kie",
   // Replicate disabled
   // "runway",
@@ -140,7 +139,6 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "kling",
   "kling-turbo",
   "kling-3.0",
-  "veo",
   "grok",
   "sora2-pro",
   "seedance",
