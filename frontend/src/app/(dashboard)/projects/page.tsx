@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect, useRef } from "react"
+import { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { useNavigate, Link } from "react-router-dom"
-import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate, ArrowRight, Sparkles } from "lucide-react"
+import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate, ArrowRight, Sparkles, ChevronRight } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -144,6 +144,11 @@ export default function ProjectsPage() {
   })
   const featuredApps = featuredAppsData?.data ?? []
 
+  const appsScrollRef = useRef<HTMLDivElement>(null)
+  const scrollAppsRight = useCallback(() => {
+    appsScrollRef.current?.scrollBy({ left: 220, behavior: "smooth" })
+  }, [])
+
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
@@ -191,56 +196,80 @@ export default function ProjectsPage() {
 
       {/* Tab content */}
       {activeTab === "apps" && (
-        <div className="mb-6">
-          {featuredAppsLoading ? (
-            <div className="flex gap-3 overflow-hidden">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="shrink-0 w-40 animate-pulse">
-                  <div className="aspect-video bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
-                  <div className="h-3 bg-zinc-200 dark:bg-zinc-800 rounded mt-2 w-3/4" />
-                </div>
-              ))}
-            </div>
-          ) : featuredApps.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-              {featuredApps.map((app) => (
-                <button
-                  key={app.id}
-                  type="button"
-                  onClick={() => navigate(`/app/${app.slug}`)}
-                  className="shrink-0 w-40 text-left group/thumb"
-                >
-                  <div className="aspect-video rounded-lg overflow-hidden bg-zinc-200 dark:bg-zinc-800 border border-border group-hover/thumb:border-zinc-400 dark:group-hover/thumb:border-zinc-600 transition-colors">
-                    {app.previewMediaUrl ? (
-                      app.previewMediaType === "video" ? (
-                        <video src={app.previewMediaUrl} className="w-full h-full object-cover" muted playsInline />
-                      ) : (
-                        <img src={app.previewMediaUrl} alt={app.name} className="w-full h-full object-cover" loading="lazy" />
-                      )
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Sparkles className="h-5 w-5 text-zinc-400 dark:text-zinc-600" />
-                      </div>
-                    )}
+        <div className="mb-6 rounded-xl border border-white/10 bg-zinc-950 overflow-hidden group/apps">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 pt-3 pb-2">
+            <h3 className="text-sm font-semibold text-white">Popular Apps</h3>
+            <button
+              type="button"
+              onClick={() => navigate("/apps")}
+              className="flex items-center gap-1 text-xs text-zinc-400 hover:text-white transition-colors"
+            >
+              See all <ArrowRight className="h-3 w-3" />
+            </button>
+          </div>
+
+          {/* Scroll area */}
+          <div className="relative">
+            {featuredAppsLoading ? (
+              <div className="flex gap-3 px-4 pb-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="shrink-0 w-[200px] animate-pulse">
+                    <div className="aspect-video bg-zinc-800 rounded-lg" />
                   </div>
-                  <p className="text-xs font-medium text-foreground truncate mt-1.5">{app.name}</p>
+                ))}
+              </div>
+            ) : featuredApps.length > 0 ? (
+              <>
+                <div
+                  ref={appsScrollRef}
+                  className="flex gap-3 px-4 pb-4 overflow-x-auto"
+                  style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                >
+                  {featuredApps.map((app) => (
+                    <button
+                      key={app.id}
+                      type="button"
+                      onClick={() => navigate(`/app/${app.slug}`)}
+                      className="shrink-0 w-[200px] text-left group/thumb"
+                    >
+                      <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-800">
+                        {app.previewMediaUrl ? (
+                          app.previewMediaType === "video" ? (
+                            <video src={app.previewMediaUrl} className="w-full h-full object-cover" muted playsInline />
+                          ) : (
+                            <img src={app.previewMediaUrl} alt={app.name} className="w-full h-full object-cover" loading="lazy" />
+                          )
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Sparkles className="h-5 w-5 text-zinc-600" />
+                          </div>
+                        )}
+                        {/* Name overlay */}
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2.5 pb-2 pt-6">
+                          <p className="text-xs font-medium text-white truncate">{app.name}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Scroll arrow */}
+                <button
+                  type="button"
+                  onClick={scrollAppsRight}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/60 text-white opacity-0 group-hover/apps:opacity-100 transition-opacity hover:bg-black/80"
+                >
+                  <ChevronRight className="h-4 w-4" />
                 </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => navigate("/apps")}
-                className="shrink-0 w-40 flex flex-col items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowRight className="h-5 w-5 mb-1" />
-                <span className="text-xs font-medium">See all apps</span>
-              </button>
-            </div>
-          ) : (
-            <div className="text-center py-10 text-muted-foreground">
-              <LayoutTemplate className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="text-xs font-medium">No apps available yet</p>
-            </div>
-          )}
+              </>
+            ) : (
+              <div className="text-center py-10 text-zinc-500">
+                <LayoutTemplate className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                <p className="text-xs font-medium">No apps available yet</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
