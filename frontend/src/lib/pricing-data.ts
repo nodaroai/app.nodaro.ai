@@ -36,7 +36,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     llmRequests: 20,
     storage: "1 GB",
     features: [
-      "50 credits / day cap",
+      "30 credits / day cap",
       "20 LLM requests / month",
       "1 GB storage",
       "Basic models only",

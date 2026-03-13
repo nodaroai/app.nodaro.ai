@@ -183,7 +183,7 @@ export function AppSidebar({
                   <p>{creditBalance.total} credits left</p>
                   {creditBalance.tier === "free" ? (
                     creditBalance.dailyLimit != null && (
-                      <p className="text-zinc-500 dark:text-zinc-400">Daily limit &middot; {creditBalance.dailyLimit - creditBalance.dailySpent} credits left</p>
+                      <p className="text-zinc-500 dark:text-zinc-400">Daily limit &middot; {Math.max(0, creditBalance.dailyLimit - creditBalance.dailySpent)} credits left</p>
                     )
                   ) : creditBalance.periodEnd ? (
                     <p className="text-zinc-500 dark:text-zinc-400">
@@ -240,7 +240,7 @@ export function AppSidebar({
               {creditBalance.tier === "free" ? (
                 creditBalance.dailyLimit != null && (
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Daily limit &middot; <span className="font-mono text-zinc-600 dark:text-zinc-300">{creditBalance.dailyLimit - creditBalance.dailySpent}</span> credits left
+                    Daily limit &middot; <span className="font-mono text-zinc-600 dark:text-zinc-300">{Math.max(0, creditBalance.dailyLimit - creditBalance.dailySpent)}</span> credits left
                   </p>
                 )
               ) : (

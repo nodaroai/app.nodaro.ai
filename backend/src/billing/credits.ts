@@ -741,7 +741,7 @@ export class CreditsService {
         profile.last_daily_reset ?? null
       )
 
-      if (dailySpent + pricing.creditCost > dailyCap) {
+      if (dailySpent >= dailyCap) {
         return {
           allowed: false,
           error: `Daily credit limit reached for free tier. Limit: ${dailyCap}, Spent today: ${dailySpent}. Upgrade for higher limits.`,
