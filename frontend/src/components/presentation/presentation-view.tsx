@@ -43,7 +43,10 @@ import {
   getNodeLabel,
   getNodeResult,
 } from "@/lib/presentation-utils"
-import { EXECUTABLE_TYPES, estimateNodeCredits } from "@/components/editor/workflow-editor/types"
+import { EXECUTABLE_TYPES, estimateNodeCredits, isExecutableNode, getFanOutMultiplier } from "@/components/editor/workflow-editor/types"
+import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
+import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits"
+import { isExpandedClone } from "@nodaro-shared/clone-utils"
 import { shareWorkflow } from "@/lib/api"
 import { createClient } from "@/lib/supabase"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
@@ -232,17 +235,37 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const orderedInputNodes = useMemo(() => orderNodesByIds(inputNodes, settings.inputOrder), [inputNodes, settings.inputOrder])
   const orderedOutputNodes = useMemo(() => orderNodesByIds(outputNodes, settings.outputOrder), [outputNodes, settings.outputOrder])
 
-  // Estimate credit cost
-  const tabEstimatedCost = useMemo(() => {
-    if (isFullscreen) return 0
-    let total = 0
-    for (const node of nodes) {
-      if (node.type && EXECUTABLE_TYPES.has(node.type)) {
-        total += estimateNodeCredits(node as { type: string; data?: Record<string, unknown> })
-      }
+  // Estimate credit cost — mirrors workflow-editor-main.tsx logic:
+  // uses composite model identifiers, dynamic DB costs, and fan-out multipliers
+  const [tabEstimatedCost, setTabEstimatedCost] = useState(0)
+  useEffect(() => {
+    if (isFullscreen || !hasCredits()) return
+    const executableNodes = nodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
+
+    const computeEstimate = () => {
+      const total = executableNodes.reduce((sum, node) => {
+        const modelId = getModelIdentifier(node)
+        const cached = getCachedCredits(modelId)
+        const cost = cached !== undefined ? cached : estimateNodeCredits({ type: node.type, data: node.data as Record<string, unknown> })
+        const multiplier = getFanOutMultiplier(node, nodes, edges)
+        return sum + cost * multiplier
+      }, 0)
+      setTabEstimatedCost(total)
     }
-    return total
-  }, [isFullscreen, nodes])
+
+    const modelIds = [...new Set(executableNodes.map((n) => getModelIdentifier(n)).filter(Boolean))]
+    const uncached = modelIds.filter((m) => getCachedCredits(m) === undefined)
+
+    if (uncached.length > 0) {
+      let cancelled = false
+      prefetchModelCredits(uncached).then(() => {
+        if (!cancelled) computeEstimate()
+      })
+      return () => { cancelled = true }
+    }
+
+    computeEstimate()
+  }, [isFullscreen, nodes, edges])
 
   const estimatedCost = isFullscreen ? presEstimatedCost : tabEstimatedCost
 

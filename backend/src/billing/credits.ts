@@ -1,7 +1,7 @@
 import { supabase } from "../lib/supabase.js"
 import { hasCredits } from "../lib/config.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { buildMotionCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
+import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 // ============================================================
 // Types
@@ -190,7 +190,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "kling-3.0-motion:1080p:15s": 94,  // 300 KIE cr, $1.50
   "kling-3.0-motion:1080p:30s": 188, // 600 KIE cr, $3.00
   ***REDACTED-OSS-SCRUB***
-  "motion-transfer": 19,         // 10s default: 60 KIE cr, $0.30
+  "motion-transfer": 19,         // 10s default: 60 KIE cr, $0.30 (Kling 2.6 720p)
   "kling-motion": 19,            // alias
   "motion-transfer:5s": 10,      // 30 KIE cr, $0.15
   "motion-transfer:10s": 19,     // 60 KIE cr, $0.30
@@ -221,15 +221,15 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   // Replicate disabled
   ***REDACTED-OSS-SCRUB***
-  "suno": 4,                     // 12 KIE cr, $0.06 (per generation, same for v4/v5)
-  "suno-v5": 4,                  // 12 KIE cr, $0.06
-  "suno-generate": 4,            // 12 KIE cr
-  "suno-cover": 4,               // 12 KIE cr
-  "suno-extend": 4,              // 12 KIE cr
-  ***REDACTED-OSS-SCRUB***
-  "suno-separate": 4,            // 10 KIE cr, vocal separation
+  "suno": 7,                     // 12 KIE cr, $0.06 (per generation, V4 default)
+  "suno-v5": 13,                 // 12 KIE cr, $0.06 (V5 premium)
+  "suno-generate": 7,            // 12 KIE cr (V4 default)
+  "suno-cover": 7,               // 12 KIE cr
+  "suno-extend": 7,              // 12 KIE cr
+  "suno-lyrics": 2,              // 0.4 KIE cr
+  "suno-separate": 5,            // 10 KIE cr, vocal separation
   "suno-separate-stem": 16,      // 50 KIE cr, full stem separation
-  "suno-music-video": 1,         // 2 KIE cr
+  "suno-music-video": 5,         // 2 KIE cr
   "suno-mashup": 4,              // 12 KIE cr
   "suno-replace-section": 2,     // 6 KIE cr
   "suno-style-boost": 1,         // 2 KIE cr
@@ -280,13 +280,21 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "motion-graphics": 10,         // Claude Sonnet
   "composite": 0,
   "sub-workflow": 0,
-  // ── Node types (legacy fallback for workflow estimation) ──
+  // ── Node types (additional entries for workflow estimation by node.type) ──
   "generate-script": 10,
   "generate-image": 2,
-  "image-to-video": 20,
+  "edit-image": 2,
+  "image-to-image": 2,
+  "image-to-video": 25,
   "video-to-video": 25,
-  "text-to-video": 20,
+  "text-to-video": 25,
   "text-to-speech": 4,
+  "generate-music": 7,
+  "text-to-audio": 4,
+  "lip-sync": 13,
+  "video-upscale": 19,
+  "extend-video": 40,
+  "transcribe": 4,
   "qa-check": 5,
   "combine-videos": 0,
   "merge-video-audio": 0,
@@ -299,11 +307,13 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "speed-ramp": 0,
   "loop-video": 0,
   "fade-video": 0,
-  "generate-music": 4,
-  "text-to-audio": 1,
+  "transcode-video": 0,
   "audio-isolation": 1,
-  "text-to-dialogue": 5,
+  "text-to-dialogue": 4,
   "image-to-text": 5,
+  "character": 2,
+  "object": 2,
+  "location": 2,
   "voice-changer": 4,
   "dubbing": 8,
   "voice-remix": 4,
@@ -311,6 +321,12 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "forced-alignment": 3,
   "social-media-format": 0,
   "social-publish": 1,
+  "instagram-post": 1,
+  "tiktok-post": 1,
+  "youtube-upload": 1,
+  "linkedin-post": 1,
+  "x-post": 1,
+  "facebook-post": 1,
 }
 
 // Tier order for restriction checks
@@ -1187,20 +1203,69 @@ export class CreditsService {
 
   /**
    * Estimate credits for a workflow, reading node data for variable-cost nodes.
+   * Mirrors the frontend getModelIdentifier() logic for composite model identifiers.
    */
   static estimateWorkflowCredits(nodes: ReadonlyArray<{ type: string; data?: Record<string, unknown> }>): number {
     return nodes.reduce((sum, node) => {
-      // Motion-transfer: use provider/resolution/duration for accurate estimate
-      if (node.type === "motion-transfer" && node.data) {
-        const provider = (node.data.provider as string) ?? "kling"
-        const resolution = (node.data.resolution as string) ?? "720p"
-        const videoDuration = node.data.videoDuration as number | undefined
-        const modelId = buildMotionCreditModelIdentifier(provider, resolution, videoDuration)
-        return sum + (STATIC_CREDIT_COSTS[modelId] ?? STATIC_CREDIT_COSTS["motion-transfer"] ?? 0)
-      }
-      return sum + (STATIC_CREDIT_COSTS[node.type] ?? 0)
+      const modelId = getNodeModelIdentifier(node)
+      return sum + (STATIC_CREDIT_COSTS[modelId] ?? STATIC_CREDIT_COSTS[node.type] ?? 0)
     }, 0)
   }
+}
+
+/**
+ * Compute composite model identifier from a workflow node for credit estimation.
+ * Mirrors frontend getModelIdentifier() in config-panels/helpers.ts.
+ */
+function getNodeModelIdentifier(node: { type: string; data?: Record<string, unknown> }): string {
+  const nodeType = node.type
+  const data = node.data ?? {}
+
+  // AI Writer always uses "ai-writer"
+  if (nodeType === "ai-writer") return "ai-writer"
+
+  // Suno generate/cover/extend use "model" field (V4/V5)
+  if (nodeType.startsWith("suno-") && nodeType !== "suno-lyrics" && nodeType !== "suno-separate" && nodeType !== "suno-music-video") {
+    return (data.model as string) === "V5" ? "suno-v5" : nodeType
+  }
+
+  // Suno separate: "split_stem" costs more
+  if (nodeType === "suno-separate") {
+    return (data.type as string) === "split_stem" ? "suno-separate-stem" : "suno-separate"
+  }
+
+  const provider = data.provider as string | undefined
+  if (!provider) return nodeType
+
+  // Extend-video: VEO quality costs more than fast
+  if (nodeType === "extend-video" && provider === "veo-extend" && data.model === "quality") {
+    return "veo-extend:quality"
+  }
+
+  // Motion transfer: duration-tiered pricing
+  if (nodeType === "motion-transfer") {
+    return buildMotionCreditModelIdentifier(
+      provider,
+      (data.resolution as string) ?? "720p",
+      data.videoDuration as number | undefined,
+    )
+  }
+
+  // Video nodes with duration/audio-based variable pricing
+  if (nodeType === "image-to-video" || nodeType === "text-to-video") {
+    const duration = data.duration as number | string | undefined
+    const sound = (data.sound ?? data.kling3Sound) as boolean | undefined
+    return buildVideoCreditModelIdentifier(provider, duration, sound, nodeType as "image-to-video" | "text-to-video")
+  }
+
+  // Image/edit nodes with quality/resolution variable pricing
+  return buildCreditModelIdentifier(
+    provider,
+    data.quality as string | undefined,
+    data.resolution as string | undefined,
+    data.renderingSpeed as string | undefined,
+    data.targetResolution as string | undefined,
+  )
 }
 
 // Export legacy function for backward compatibility

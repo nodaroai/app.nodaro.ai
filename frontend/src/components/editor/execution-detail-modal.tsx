@@ -237,67 +237,200 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
   const [isDeleting, setIsDeleting] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
 
+  const handleCopyJson = (json: string) => {
+    navigator.clipboard.writeText(json)
+    setCopiedJson(true)
+    setTimeout(() => setCopiedJson(false), 2000)
+  }
+
   if (!open) return null
 
   // Node-only view (no job record yet — pending, cancelled, or failed without job)
+  // Uses same full two-column layout as the job modal
   if (!job && nodeInfo) {
     const { nodeId, state } = nodeInfo
+    const nodeLabel = state.nodeType ? formatNodeType(state.nodeType) : nodeId.slice(0, 12)
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-black/50 dark:bg-black/80 backdrop-blur-sm" onClick={onClose} />
-        <div role="dialog" aria-modal="true" className="relative w-full max-w-lg bg-white dark:bg-[#121212] rounded-xl border border-gray-200 dark:border-[#2D2D2D] shadow-2xl overflow-hidden flex flex-col">
+        <div role="dialog" aria-modal="true" className="relative w-full max-w-6xl max-h-[90vh] bg-white dark:bg-[#121212] rounded-xl border border-gray-200 dark:border-[#2D2D2D] shadow-2xl overflow-hidden flex flex-col">
+          {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#1E1E1E]">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {state.nodeType ? formatNodeType(state.nodeType) : nodeId.slice(0, 12)}
-              </h2>
-              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[state.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
-                {state.status}
-              </span>
-            </div>
-            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white">
-              <X className="w-5 h-5" />
-            </Button>
-          </div>
-          <div className="p-6 space-y-4">
-            {state.error && (
-              <div className="rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 p-4">
-                <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-1">Error</p>
-                <p className="text-sm text-red-500 dark:text-red-300/70">{state.error}</p>
+            <div className="flex items-center gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{nodeLabel}</h2>
+                  <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[state.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
+                    {state.status}
+                  </span>
+                </div>
+                <div className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{nodeId}</div>
               </div>
-            )}
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              {state.startedAt && (
-                <div>
-                  <span className="text-gray-400 dark:text-[#64748B]">Started</span>
-                  <p className="text-gray-700 dark:text-[#E2E8F0] font-mono">{formatRelativeTime(state.startedAt)}</p>
-                </div>
-              )}
-              {state.completedAt && (
-                <div>
-                  <span className="text-gray-400 dark:text-[#64748B]">Completed</span>
-                  <p className="text-gray-700 dark:text-[#E2E8F0] font-mono">{formatRelativeTime(state.completedAt)}</p>
-                </div>
+            </div>
+            <div className="flex items-center gap-6">
+              {state.nodeType && (
+                <span className="text-sm text-[#ff0073] font-mono">{state.nodeType}</span>
               )}
               {state.startedAt && state.completedAt && (
-                <div>
-                  <span className="text-gray-400 dark:text-[#64748B]">Duration</span>
-                  <p className="text-gray-700 dark:text-[#E2E8F0] font-mono">{formatDuration(state.startedAt, state.completedAt)}</p>
+                <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-[#94A3B8]">
+                  <Zap className="w-4 h-4" />
+                  {formatDuration(state.startedAt, state.completedAt)}
                 </div>
               )}
               {state.creditsUsed != null && state.creditsUsed > 0 && (
-                <div>
-                  <span className="text-gray-400 dark:text-[#64748B]">Credits</span>
-                  <p className="text-gray-700 dark:text-[#E2E8F0] font-mono">{state.creditsUsed} CR</p>
+                <div className="flex items-center gap-1.5 text-sm text-[#ff0073] font-mono">
+                  <Coins className="w-4 h-4" />
+                  {state.creditsUsed} CR
                 </div>
               )}
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]">
+                <X className="w-5 h-5" />
+              </Button>
             </div>
-            {!state.error && state.status === "pending" && (
-              <p className="text-sm text-gray-400 dark:text-[#64748B]">This node has not started executing yet.</p>
-            )}
-            {!state.error && state.status === "cancelled" && (
-              <p className="text-sm text-gray-400 dark:text-[#64748B]">This node was cancelled before execution.</p>
-            )}
+          </div>
+
+          {/* Content - Two Columns */}
+          <div className="flex-1 overflow-auto bg-gray-50 dark:bg-[#121212]">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
+              {/* Left Column - Details */}
+              <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Details</h3>
+                </div>
+                <div className="p-4">
+                  {state.nodeType && (
+                    <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Type</span>
+                        <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{state.nodeType}</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
+                    <div className="flex items-start gap-3">
+                      <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Status</span>
+                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[state.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
+                        {state.status}
+                      </span>
+                    </div>
+                  </div>
+                  {state.startedAt && (
+                    <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Started</span>
+                        <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{formatRelativeTime(state.startedAt)}</span>
+                      </div>
+                    </div>
+                  )}
+                  {state.completedAt && (
+                    <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Completed</span>
+                        <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{formatRelativeTime(state.completedAt)}</span>
+                      </div>
+                    </div>
+                  )}
+                  {state.startedAt && state.completedAt && (
+                    <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Duration</span>
+                        <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{formatDuration(state.startedAt, state.completedAt)}</span>
+                      </div>
+                    </div>
+                  )}
+                  {state.creditsUsed != null && state.creditsUsed > 0 && (
+                    <div className="py-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Credits</span>
+                        <span className="text-sm text-[#ff0073] font-mono">{state.creditsUsed} CR</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column - Output */}
+              <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Output</h3>
+                  <div role="tablist" className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={outputTab === "preview"}
+                      onClick={() => setOutputTab("preview")}
+                      className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                        outputTab === "preview"
+                          ? "text-gray-900 dark:text-white border-b-2 border-[#ff0073]"
+                          : "text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white"
+                      }`}
+                    >
+                      Status
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={outputTab === "json"}
+                      onClick={() => setOutputTab("json")}
+                      className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                        outputTab === "json"
+                          ? "text-gray-900 dark:text-white border-b-2 border-[#ff0073]"
+                          : "text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white"
+                      }`}
+                    >
+                      JSON
+                    </button>
+                  </div>
+                </div>
+                <div className="p-4 max-h-[500px] overflow-auto">
+                  {outputTab === "preview" ? (
+                    <div>
+                      {state.error ? (
+                        <div className="rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 p-4">
+                          <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-1">Error</p>
+                          <p className="text-sm text-red-500 dark:text-red-300/70">{state.error}</p>
+                        </div>
+                      ) : state.status === "running" ? (
+                        <div className="flex flex-col items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
+                          <Loader2 className="w-8 h-8 animate-spin text-[#ff0073] mb-3" />
+                          <p className="text-sm text-gray-500 dark:text-[#94A3B8]">Processing...</p>
+                        </div>
+                      ) : state.status === "pending" ? (
+                        <div className="flex flex-col items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
+                          <Clock className="w-8 h-8 text-blue-400 mb-3" />
+                          <p className="text-sm text-gray-500 dark:text-[#94A3B8]">Waiting to start...</p>
+                        </div>
+                      ) : state.status === "cancelled" ? (
+                        <div className="flex flex-col items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
+                          <p className="text-sm text-gray-400 dark:text-[#64748B]">This node was cancelled.</p>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
+                          <p className="text-sm text-gray-400 dark:text-[#64748B]">No output available</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyJson(JSON.stringify(state, null, 2))}
+                        className="absolute top-2 right-2 p-1.5 rounded bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] transition-colors"
+                      >
+                        {copiedJson ? (
+                          <Check className="w-4 h-4 text-green-500 dark:text-green-400" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-gray-500 dark:text-[#94A3B8]" />
+                        )}
+                      </button>
+                      <pre className="p-4 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] text-gray-700 dark:text-[#E2E8F0] font-mono text-sm overflow-auto max-h-[450px]">
+                        {JSON.stringify(state, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -316,12 +449,6 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
     navigator.clipboard.writeText(job.id)
     setCopiedId(true)
     setTimeout(() => setCopiedId(false), 2000)
-  }
-
-  const handleCopyJson = (json: string) => {
-    navigator.clipboard.writeText(json)
-    setCopiedJson(true)
-    setTimeout(() => setCopiedJson(false), 2000)
   }
 
   const handleDownload = () => {

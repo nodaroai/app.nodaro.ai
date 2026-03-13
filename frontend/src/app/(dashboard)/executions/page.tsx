@@ -66,8 +66,24 @@ export default function ExecutionsPage() {
   const [prevCursors, setPrevCursors] = useState<string[]>([])
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
-  const closeJobModal = useCallback(() => setSelectedJobId(null), [])
-  useBackToClose(selectedJobId !== null, closeJobModal)
+  const [selectedNodeInfo, setSelectedNodeInfo] = useState<{ nodeId: string; state: NodeState } | null>(null)
+
+  const handleNodeClick = useCallback((nodeId: string, state: NodeState) => {
+    if (state.jobId) {
+      setSelectedJobId(state.jobId)
+      setSelectedNodeInfo(null)
+    } else {
+      setSelectedNodeInfo({ nodeId, state })
+      setSelectedJobId(null)
+    }
+  }, [])
+
+  const isModalOpen = selectedJobId !== null || selectedNodeInfo !== null
+  const closeModal = useCallback(() => {
+    setSelectedJobId(null)
+    setSelectedNodeInfo(null)
+  }, [])
+  useBackToClose(isModalOpen, closeModal)
 
   const { data: selectedJob } = useQuery({
     queryKey: ["job-detail", selectedJobId],
@@ -271,7 +287,7 @@ export default function ExecutionsPage() {
                       nodeEntries={nodeEntries}
                       colCount={colCount}
                       onToggle={() => setExpandedId(expandedId === exec.id ? null : exec.id)}
-                      onNodeClick={setSelectedJobId}
+                      onNodeClick={handleNodeClick}
                     />
                   )
                 })
@@ -284,7 +300,13 @@ export default function ExecutionsPage() {
       <ExecutionDetailModal
         job={selectedJob ?? null}
         open={!!selectedJobId && !!selectedJob}
-        onClose={() => setSelectedJobId(null)}
+        onClose={() => { setSelectedJobId(null); setSelectedNodeInfo(null) }}
+      />
+      <ExecutionDetailModal
+        job={null}
+        open={!!selectedNodeInfo}
+        onClose={() => setSelectedNodeInfo(null)}
+        nodeInfo={selectedNodeInfo ?? undefined}
       />
     </div>
   )
@@ -305,7 +327,7 @@ function GlobalExecutionRow({
   nodeEntries: [string, NodeState][]
   colCount: number
   onToggle: () => void
-  onNodeClick: (jobId: string) => void
+  onNodeClick: (nodeId: string, state: NodeState) => void
 }) {
   const completed = exec.completedNodes ?? 0
   const failed = exec.failedNodes ?? 0
@@ -445,14 +467,13 @@ function GlobalExecutionRow({
                 <tbody className="divide-y divide-gray-100/50 dark:divide-[#2D2D2D]/50">
                   {nodeEntries.map(([nodeId, state]) => {
                     const hasFanOut = state.jobIds && state.jobIds.length > 1
-                    const hasJob = !!state.jobId
                     const nodeName = state.nodeType ? formatNodeType(state.nodeType) : nodeId.slice(0, 12)
                     return (
                       <React.Fragment key={nodeId}>
                         {/* Main node row */}
                         <tr
-                          className={hasJob && !hasFanOut ? "hover:bg-gray-100/50 dark:hover:bg-[#1E1E1E] cursor-pointer transition-colors" : ""}
-                          onClick={hasJob && !hasFanOut ? () => onNodeClick(state.jobId!) : undefined}
+                          className={!hasFanOut ? "hover:bg-gray-100/50 dark:hover:bg-[#1E1E1E] cursor-pointer transition-colors" : ""}
+                          onClick={!hasFanOut ? () => onNodeClick(nodeId, state) : undefined}
                         >
                           <td className="px-8 py-1.5">
                             <div className="flex items-center gap-2">
@@ -504,7 +525,7 @@ function GlobalExecutionRow({
                             </td>
                           )}
                           <td className="px-3 py-1.5">
-                            {hasJob && !hasFanOut && (
+                            {!hasFanOut && (
                               <ChevronRightIcon className="w-3.5 h-3.5 text-gray-300 dark:text-[#64748B]" />
                             )}
                           </td>
@@ -514,7 +535,7 @@ function GlobalExecutionRow({
                           <tr
                             key={`${nodeId}-iter-${idx}`}
                             className="hover:bg-gray-100/50 dark:hover:bg-[#1E1E1E] cursor-pointer transition-colors"
-                            onClick={() => onNodeClick(jid)}
+                            onClick={() => onNodeClick(`${nodeId}-iter-${idx}`, { ...state, jobId: jid, jobIds: undefined })}
                           >
                             <td className="px-8 py-1 pl-14">
                               <span className="text-[11px] text-gray-400">Iteration {idx + 1}</span>
