@@ -530,6 +530,17 @@ export function executeNode(
       ancestorRefs: [],
     });
 
+    // Resolve mask from handle or painted mask
+    let maskUrl: string | undefined;
+    const maskEdge = edges.find(
+      (e) => e.target === node.id && e.targetHandle === "mask",
+    );
+    if (maskEdge) {
+      const maskNode = nodes.find((n) => n.id === maskEdge.source);
+      if (maskNode) maskUrl = extractNodeOutput(maskNode);
+    }
+    if (!maskUrl) maskUrl = i2iData.maskUrl;
+
     return runImageToImage(
       node.id,
       imageUrl,
@@ -546,6 +557,7 @@ export function executeNode(
         seed: i2iData.seed,
         renderingSpeed: i2iData.renderingSpeed,
         guidanceScale: i2iData.guidanceScale,
+        maskUrl,
       },
     );
   }

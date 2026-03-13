@@ -273,6 +273,9 @@ export const VOICE_DESIGN_MODELS = [
 ] as const
 export type VoiceDesignModel = typeof VOICE_DESIGN_MODELS[number]
 
+/** I2I providers that support mask-based inpainting */
+export const I2I_MASK_SUPPORT = new Set(["ideogram-edit"])
+
 /** I2I providers that support a strength/denoising parameter */
 export const I2I_STRENGTH_SUPPORT: Record<string, { min: number; max: number; step: number; default: number }> = {
   "ideogram-remix": { min: 0.01, max: 1, step: 0.01, default: 0.8 },

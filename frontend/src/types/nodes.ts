@@ -512,6 +512,7 @@ export type ImageToImageData = {
   renderingSpeed?: string
   guidanceScale?: number
   referenceImageUrl?: string
+  maskUrl?: string
   characterDefinitionIds?: readonly string[]
   connectedMediaOrder?: readonly string[]
   fieldMappings: FieldMappings

@@ -114,7 +114,7 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
 }
 
 const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx) {
-  const { imageUrl, referenceImageUrls, prompt, provider, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale } = job.data as {
+  const { imageUrl, referenceImageUrls, prompt, provider, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl } = job.data as {
     jobId: string
     imageUrl: string
     referenceImageUrls?: string[]
@@ -128,6 +128,7 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
     seed?: number
     renderingSpeed?: string
     guidanceScale?: number
+    maskUrl?: string
   }
   const resolvedProvider = provider ?? "nano-banana"
   // Combine main image with additional reference images (e.g., from Location/Character nodes)
@@ -143,6 +144,7 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
     ...(seed != null && { seed }),
     ...(renderingSpeed && { rendering_speed: renderingSpeed }),
     ...(guidanceScale != null && { guidance_scale: guidanceScale }),
+    ...(maskUrl && { mask_url: maskUrl }),
   }
   const hasExtraParams = Object.keys(extraParams).length > 0
   const result = await generateImage(prompt, resolvedProvider, allImages, hasExtraParams ? extraParams : undefined)

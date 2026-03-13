@@ -386,6 +386,10 @@ function routeOutput(
     routeAudioOutput(inputs, output, targetType, src.id)
     return
   }
+  if (edge.targetHandle === "mask") {
+    inputs.maskUrl = output
+    return
+  }
 
   // --- List node output mode routing (reads mode from edge data) ---
   if (srcType === "list") {

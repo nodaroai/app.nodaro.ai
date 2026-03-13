@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, Suspense, useMemo } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { X, FileText, Plus, UserPlus, Loader2, Upload, UserCircle, Package, MapPin } from "lucide-react"
+import { X, FileText, Plus, UserPlus, Loader2, Upload, UserCircle, Package, MapPin, Paintbrush } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -27,7 +27,7 @@ import type {
   CharacterDefinition,
   ManualReferenceImage,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, IMAGE_EDIT_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, I2I_STRENGTH_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "./model-options"
+import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, IMAGE_EDIT_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
 import { ReferenceImageList } from "./reference-image-list"
@@ -36,6 +36,7 @@ import type { ConfigProps } from "./types"
 import type { SelectedAsset } from "../asset-selection-modal"
 
 const AssetSelectionModal = lazy(() => import("../asset-selection-modal").then(m => ({ default: m.AssetSelectionModal })))
+const MaskPainterModal = lazy(() => import("../mask-painter-modal").then(m => ({ default: m.MaskPainterModal })))
 
 const IMAGE_SOURCE_TYPES = new Set(["upload-image", "generate-image", "edit-image", "image-to-image"])
 
@@ -821,9 +822,10 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
   const supportsSeed = SEED_SUPPORT.has(currentProvider)
   const supportsRenderingSpeed = RENDERING_SPEED_SUPPORT.has(currentProvider)
   const guidanceScaleConfig = useMemo(() => GUIDANCE_SCALE_SUPPORT[currentProvider], [currentProvider])
+  const supportsMask = I2I_MASK_SUPPORT.has(currentProvider)
 
   // When provider changes, reset aspect ratio if current value isn't valid for new provider,
-  // and clear reference image if new provider doesn't support it
+  // and clear reference image if new provider doesn't support it, and clear mask if unsupported
   useEffect(() => {
     const validValues = aspectRatioOptions.map((o) => o.value)
     const updates: Partial<ImageToImageData> = {}
@@ -832,6 +834,9 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
     }
     if (!supportsRefImage && data.referenceImageUrl) {
       updates.referenceImageUrl = undefined
+    }
+    if (!supportsMask && data.maskUrl) {
+      updates.maskUrl = undefined
     }
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
@@ -845,6 +850,7 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
   const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
   const refImageInputRef = useRef<HTMLInputElement>(null)
   const [uploadingRefImage, setUploadingRefImage] = useState(false)
+  const [showMaskPainter, setShowMaskPainter] = useState(false)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const addNode = useWorkflowStore((s) => s.addNode)
@@ -852,6 +858,15 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
   const nodes = useWorkflowStore((s) => s.nodes)
   const attachedIds = data.characterDefinitionIds ?? []
   const attachedChars = allCharDefs.filter((c) => attachedIds.includes(c.id))
+
+  // Find upstream source image for mask painter
+  const sourceImageUrl = useMemo(() => {
+    const imgSource = sources.find((s) => IMAGE_SOURCE_TYPES.has(s.type) && s.targetHandle !== "mask")
+    if (imgSource?.nodeData) {
+      return (imgSource.nodeData.generatedImageUrl as string) || (imgSource.nodeData.url as string)
+    }
+    return undefined
+  }, [sources])
 
   function detachCharacter(id: string) {
     onUpdate({ characterDefinitionIds: attachedIds.filter((cid) => cid !== id) })
@@ -1073,6 +1088,59 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
           </div>
         </div>
       </div>
+
+      {/* Mask Painter (ideogram-edit only) */}
+      {supportsMask && (
+        <div className="pt-1">
+          <Separator className="mb-3" />
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Inpainting Mask</label>
+          <div className="flex flex-col gap-2 mt-2">
+            {data.maskUrl ? (
+              <div className="flex items-center gap-2">
+                <img src={data.maskUrl} alt="Mask" className="w-16 h-16 object-cover rounded border border-[#2D2D2D]" />
+                <div className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={() => sourceImageUrl && setShowMaskPainter(true)}
+                    disabled={!sourceImageUrl}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors disabled:opacity-50"
+                  >
+                    <Paintbrush className="w-3 h-3" /> Edit Mask
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onUpdate({ maskUrl: undefined })}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-destructive/10 hover:text-destructive transition-colors"
+                  >
+                    <X className="w-3 h-3" /> Clear Mask
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => sourceImageUrl && setShowMaskPainter(true)}
+                disabled={!sourceImageUrl}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-md border border-dashed hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Paintbrush className="w-3.5 h-3.5" />
+                {sourceImageUrl ? "Paint Mask" : "Connect an image first"}
+              </button>
+            )}
+            <p className="text-[10px] text-muted-foreground">White areas in the mask will be edited, black areas preserved</p>
+          </div>
+          {sourceImageUrl && (
+            <Suspense fallback={null}>
+              <MaskPainterModal
+                isOpen={showMaskPainter}
+                onClose={() => setShowMaskPainter(false)}
+                imageUrl={sourceImageUrl}
+                onSave={(maskUrl) => onUpdate({ maskUrl })}
+              />
+            </Suspense>
+          )}
+        </div>
+      )}
 
       {/* Model-specific settings */}
       <div className="pt-1">

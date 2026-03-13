@@ -149,9 +149,9 @@ export class KieImageProvider
         // - ideogram-edit: mask_url (inpainting mask) + reference_image_urls (character ref)
         // - ideogram-remix: reference_image_urls (character ref)
         // When used as generic i2i, auto-fill from the source image.
-        if (provider === "ideogram-edit" && !input.mask_url) {
-          input.mask_url = referenceImageUrls[0]
-          input.reference_image_urls = [referenceImageUrls[0]]
+        if (provider === "ideogram-edit") {
+          if (!input.mask_url) input.mask_url = referenceImageUrls[0]
+          if (!input.reference_image_urls) input.reference_image_urls = [referenceImageUrls[0]]
         } else if (provider === "ideogram-remix" && !input.reference_image_urls) {
           input.reference_image_urls = [referenceImageUrls[0]]
         }
