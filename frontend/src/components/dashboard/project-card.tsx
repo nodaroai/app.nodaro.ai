@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
-import { MoreHorizontal, Trash2, Pencil } from "lucide-react"
+import { MoreHorizontal, Trash2, Pencil, FolderOpen } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,68 +52,76 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner }: P
     <>
       <Link
         to={`/projects/${project.id}`}
-        className="group block rounded-lg border bg-card p-4 shadow-sm hover:shadow-md transition-shadow"
+        className="group relative block rounded-xl border border-border bg-card overflow-hidden hover:border-zinc-400 dark:hover:border-zinc-600 transition-all duration-200"
       >
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <h2 className="font-medium text-sm truncate">{project.name}</h2>
-              {showOwner && isOwn && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
-                  Mine
-                </Badge>
-              )}
-            </div>
-            {showOwner && project.ownerEmail && (
-              <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                {project.ownerEmail}
-              </p>
-            )}
-            {project.description && (
-              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                {project.description}
-              </p>
+        {/* Thumbnail area */}
+        <div className="relative aspect-[4/3] bg-muted flex items-center justify-center">
+          <FolderOpen className="h-10 w-10 text-muted-foreground/50" />
+
+          {/* Three-dot menu — top-right, visible on hover */}
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 bg-background/80 hover:bg-background shadow-sm"
+                  onClick={(e) => e.preventDefault()}
+                  aria-label={`Project options for ${project.name}`}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setNewName(project.name)
+                    setRenameOpen(true)
+                  }}
+                >
+                  <Pencil className="h-3.5 w-3.5 mr-2" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    onDelete(project.id)
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Metadata */}
+        <div className="p-3">
+          <div className="flex items-center gap-1.5">
+            <h2 className="font-medium text-sm truncate">{project.name}</h2>
+            {showOwner && isOwn && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
+                Mine
+              </Badge>
             )}
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
-                onClick={(e) => e.preventDefault()}
-                aria-label={`Project options for ${project.name}`}
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.preventDefault()
-                  setNewName(project.name)
-                  setRenameOpen(true)
-                }}
-              >
-                <Pencil className="h-3.5 w-3.5 mr-2" />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="text-destructive"
-                onClick={(e) => {
-                  e.preventDefault()
-                  onDelete(project.id)
-                }}
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {showOwner && project.ownerEmail && (
+            <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+              {project.ownerEmail}
+            </p>
+          )}
+          {project.description && (
+            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+              {project.description}
+            </p>
+          )}
+          <p className="text-[10px] text-muted-foreground mt-2">
+            {new Date(project.updatedAt).toLocaleDateString()}
+          </p>
         </div>
-        <p className="text-[10px] text-muted-foreground mt-3">
-          {new Date(project.updatedAt).toLocaleDateString()}
-        </p>
       </Link>
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
