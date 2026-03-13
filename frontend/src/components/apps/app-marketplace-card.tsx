@@ -59,22 +59,6 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite }: AppMa
           </span>
         )}
 
-        {/* Favorite button over image */}
-        <button
-          type="button"
-          className="absolute top-2 right-2 p-1 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
-          onClick={(e) => {
-            e.stopPropagation()
-            onToggleFavorite(app.id)
-          }}
-        >
-          <Heart
-            className={cn(
-              "h-4 w-4 transition-colors",
-              isFavorited ? "fill-[#ff0073] text-[#ff0073]" : "text-white",
-            )}
-          />
-        </button>
       </div>
 
       {/* Default: name + description */}
@@ -136,6 +120,23 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite }: AppMa
           </p>
         )}
       </div>
+
+      {/* Favorite button — after overlay in DOM so it receives clicks on hover */}
+      <button
+        type="button"
+        className="absolute top-2 right-2 z-10 p-1 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleFavorite(app.id)
+        }}
+      >
+        <Heart
+          className={cn(
+            "h-4 w-4 transition-colors",
+            isFavorited ? "fill-[#ff0073] text-[#ff0073]" : "text-white",
+          )}
+        />
+      </button>
     </div>
   )
 }
