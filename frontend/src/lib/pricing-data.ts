@@ -36,7 +36,6 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     llmRequests: 20,
     storage: "1 GB",
     features: [
-      "150 credits (one-time)",
       "50 credits / day cap",
       "20 LLM requests / month",
       "1 GB storage",
@@ -44,7 +43,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
       "Watermarked exports",
       "60-day media retention",
     ],
-    cta: "Get Started",
+    cta: "Start Free",
   },
   {
     id: "basic",

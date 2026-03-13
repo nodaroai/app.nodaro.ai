@@ -227,9 +227,9 @@ export default function PricingPage() {
                   <p className="mt-1 text-sm text-muted-foreground">
                     {tier.priceMonthly > 0
                       ? billingCycle === "annual"
-                        ? `$${tier.priceAnnual * 12}/yr \u00b7 Save $${savingsDollars}`
+                        ? <><span className="text-white font-medium">${tier.priceAnnual * 12}</span>/yr · <span className="text-emerald-400 font-medium">Save ${savingsDollars}</span></>
                         : "Billed monthly"
-                      : `${tier.credits} free credits (one-time)`}
+                      : <span className="text-emerald-400 font-medium">🎁 {tier.credits} free credits</span>}
                   </p>
                 </div>
 
@@ -237,7 +237,11 @@ export default function PricingPage() {
                   {tier.features.map((feature) => (
                     <li key={feature} className="flex items-start gap-2 text-sm">
                       <Check className="h-4 w-4 text-[#ff0073] flex-shrink-0 mt-0.5" />
-                      <span className="text-muted-foreground">{feature}</span>
+                      <span className="text-muted-foreground">
+                        {/^\d[\d,]* credits \/ month/.test(feature)
+                          ? <><span className="text-white font-medium">{feature.replace(/ \/.*$/, '')}</span>{feature.match(/ \/.*$/)?.[0]}</>
+                          : feature}
+                      </span>
                     </li>
                   ))}
                 </ul>
