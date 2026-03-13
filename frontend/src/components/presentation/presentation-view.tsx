@@ -201,6 +201,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
 
   // Credit check for app runner "Get Credits" button (hooks must be unconditional)
   const appRunnerInsufficientCredits = useAppRunnerStore((s) => s.insufficientCredits)
+  const appSupportsRemix = useAppRunnerStore((s) => s.app?.supportsRemix ?? false)
   const { data: userCredits } = useUserCredits(user?.id)
 
   const handleViewModeChange = useCallback((newMode: PresentationViewMode) => {
@@ -782,20 +783,22 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               )
             )}
 
-            {/* Divider */}
-            <div className="w-px h-5 bg-border hidden md:block" />
-
-            {/* Remix: create editable copy */}
-            <button
-              type="button"
-              onClick={handleRemix}
-              disabled={isRemixing}
-              title="Remix this app"
-              className="h-9 md:h-8 px-2.5 md:px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 disabled:opacity-50 touch-manipulation"
-            >
-              {isRemixing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-              <span className="hidden md:inline">Remix</span>
-            </button>
+            {/* Remix: create editable copy (only when app creator enabled it) */}
+            {appSupportsRemix && (
+              <>
+                <div className="w-px h-5 bg-border hidden md:block" />
+                <button
+                  type="button"
+                  onClick={handleRemix}
+                  disabled={isRemixing}
+                  title="Remix this app"
+                  className="h-9 md:h-8 px-2.5 md:px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 disabled:opacity-50 touch-manipulation"
+                >
+                  {isRemixing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                  <span className="hidden md:inline">Remix</span>
+                </button>
+              </>
+            )}
 
             {/* More Apps */}
             <button
