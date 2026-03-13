@@ -1,0 +1,70 @@
+{
+  "nodes": [
+    {
+      "id": "upload_vid_1",
+      "type": "upload-video",
+      "position": { "x": 50, "y": 200 },
+      "data": {
+        "label": "Source Video (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "prompt_1",
+      "type": "text-prompt",
+      "position": { "x": 50, "y": 0 },
+      "data": {
+        "label": "V2V Prompt",
+        "text": "Transform this video into a cinematic scene with dramatic lighting and film grain"
+      }
+    },
+
+    {
+      "id": "v2v_wan",
+      "type": "video-to-video",
+      "position": { "x": 500, "y": 0 },
+      "data": {
+        "label": "Wan 2.6 (22cr)",
+        "prompt": "",
+        "provider": "wan",
+        "duration": 5,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "v2v_luma",
+      "type": "video-to-video",
+      "position": { "x": 500, "y": 200 },
+      "data": {
+        "label": "Luma Modify (32cr)",
+        "prompt": "",
+        "provider": "luma-modify",
+        "duration": 5,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "v2v_runway",
+      "type": "video-to-video",
+      "position": { "x": 500, "y": 400 },
+      "data": {
+        "label": "Runway Aleph (35cr)",
+        "prompt": "",
+        "provider": "runway-aleph",
+        "duration": 5,
+        "fieldMappings": {}
+      }
+    }
+  ],
+
+  "edges": [
+    { "id": "e_p1", "source": "prompt_1", "target": "v2v_wan",    "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p2", "source": "prompt_1", "target": "v2v_luma",   "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p3", "source": "prompt_1", "target": "v2v_runway",  "sourceHandle": "text", "targetHandle": "in" },
+
+    { "id": "e_v1", "source": "upload_vid_1", "target": "v2v_wan",    "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v2", "source": "upload_vid_1", "target": "v2v_luma",   "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_v3", "source": "upload_vid_1", "target": "v2v_runway",  "sourceHandle": "video", "targetHandle": "video" }
+  ]
+}

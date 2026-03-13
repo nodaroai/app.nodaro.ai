@@ -25,10 +25,6 @@ export const PROVIDERS_CONFIG: Record<ProviderCategory, Record<string, ProviderI
     },
   },
   video: {
-    veo: {
-      label: "VEO",
-      models: ["veo-2"],
-    },
     veo3: {
       label: "VEO 3",
       models: ["veo-3", "veo-3-fast"],

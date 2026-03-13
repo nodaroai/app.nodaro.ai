@@ -30,11 +30,6 @@ const VIDEO_MODEL_CONFIGS: Record<string, ReplicateVideoModelConfig> =
       // minimax doesn't support end frame
       extraInput: { prompt_optimizer: true },
     },
-    veo: {
-      model: "google/veo-2",
-      imageParam: "image",
-      // veo2 doesn't support end frame
-    },
     veo3: {
       model: "google/veo-3",
       imageParam: "image",
@@ -77,7 +72,6 @@ const VIDEO_MODEL_CONFIGS: Record<string, ReplicateVideoModelConfig> =
 
 const TEXT_TO_VIDEO_MODELS: Record<string, string> = {
   minimax: "minimax/video-01",
-  veo: "google/veo-2",
   veo3: "google/veo-3",
   kling: "kwaivgi/kling-v1.6-pro",
   runway: "runwayml/gen4-turbo",

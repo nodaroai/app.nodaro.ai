@@ -65,7 +65,6 @@ export const VIDEO_I2V_MODELS = [
   { value: "bytedance-pro", label: "Bytedance Pro", desc: "Higher quality Bytedance" },
   { value: "bytedance-pro-fast", label: "Bytedance Pro Fast", desc: "Fast pro generation" },
   { value: "grok-i2v", label: "Grok", desc: "Creative, stylized motion" },
-  { value: "veo", label: "VEO 2", desc: "Previous gen VEO" },
   { value: "runway-kie", label: "Runway (KIE)", desc: "Runway Gen-3, 5-10s, 720p/1080p" },
   // Replicate disabled
   // { value: "runway", label: "Runway", desc: "Smooth motion, via Replicate" },
@@ -79,7 +78,6 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "kling", label: "Kling", desc: "Versatile, 5-10s clips" },
   { value: "kling-turbo", label: "Kling Turbo", desc: "Fast generation, 5-10s" },
   { value: "kling-3.0", label: "Kling 3.0", desc: "Latest Kling, 3-15s variable duration" },
-  { value: "veo", label: "VEO 2", desc: "Previous gen VEO" },
   { value: "grok", label: "Grok", desc: "Creative, stylized motion" },
   { value: "sora2-pro", label: "Sora 2 Pro", desc: "Cinematic, high fidelity" },
   { value: "seedance", label: "Seedance 1.5", desc: "Bytedance, 4-12s with audio option" },

@@ -47,7 +47,7 @@ function makeSceneData(overrides: Partial<SceneNodeDataType> = {}): SceneNodeDat
     sourceSceneIndex: -1,
     autoSyncWithScript: false,
     audioAssignments: [],
-    videoProvider: "veo",
+    videoProvider: "veo3",
     generatedVideoResults: [],
     activeVideoResultIndex: -1,
     generatedVideoUrl: "",
