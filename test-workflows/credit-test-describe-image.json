@@ -1,0 +1,66 @@
+{
+  "nodes": [
+    {
+      "id": "upload_1",
+      "type": "upload-image",
+      "position": { "x": 50, "y": 200 },
+      "data": {
+        "label": "Source Image (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+
+    {
+      "id": "i2t_1",
+      "type": "image-to-text",
+      "position": { "x": 500, "y": 0 },
+      "data": {
+        "label": "Describe: brief (5cr)",
+        "detailLevel": "brief",
+        "customPrompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2t_2",
+      "type": "image-to-text",
+      "position": { "x": 500, "y": 200 },
+      "data": {
+        "label": "Describe: detailed (5cr)",
+        "detailLevel": "detailed",
+        "customPrompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2t_3",
+      "type": "image-to-text",
+      "position": { "x": 500, "y": 400 },
+      "data": {
+        "label": "Describe: structured (5cr)",
+        "detailLevel": "structured",
+        "customPrompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2t_4",
+      "type": "image-to-text",
+      "position": { "x": 500, "y": 600 },
+      "data": {
+        "label": "Describe: custom prompt (5cr)",
+        "detailLevel": "detailed",
+        "customPrompt": "List every object visible in this image as a numbered list. Include approximate colors and positions.",
+        "fieldMappings": {}
+      }
+    }
+  ],
+
+  "edges": [
+    { "id": "e_1", "source": "upload_1", "target": "i2t_1", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_2", "source": "upload_1", "target": "i2t_2", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_3", "source": "upload_1", "target": "i2t_3", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_4", "source": "upload_1", "target": "i2t_4", "sourceHandle": "image", "targetHandle": "image" }
+  ]
+}
