@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { useNavigate, Link } from "react-router-dom"
-import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate, ArrowRight, Sparkles, ChevronRight } from "lucide-react"
+import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate, ArrowRight, Sparkles, ChevronLeft, ChevronRight } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -145,6 +145,19 @@ export default function ProjectsPage() {
   const featuredApps = featuredAppsData?.data ?? []
 
   const appsScrollRef = useRef<HTMLDivElement>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(true)
+
+  const updateScrollState = useCallback(() => {
+    const el = appsScrollRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 0)
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
+  }, [])
+
+  const scrollAppsLeft = useCallback(() => {
+    appsScrollRef.current?.scrollBy({ left: -240, behavior: "smooth" })
+  }, [])
   const scrollAppsRight = useCallback(() => {
     appsScrollRef.current?.scrollBy({ left: 240, behavior: "smooth" })
   }, [])
@@ -176,24 +189,33 @@ export default function ProjectsPage() {
 
       {/* Unified container with pill tabs inside */}
       <div className="mb-6 rounded-xl bg-muted/50 overflow-hidden group/apps">
-        {/* Tabs */}
-        <div className="flex items-center gap-1 p-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1 text-sm font-medium rounded-md transition-colors",
-                activeTab === tab.id
-                  ? "bg-background text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
+        {/* Header: tabs + see all link */}
+        <div className="flex items-center justify-between p-2">
+          <div className="flex items-center gap-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1 text-sm font-medium rounded-md transition-colors",
+                  activeTab === tab.id
+                    ? "bg-background text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/apps")}
+            className="flex items-center gap-1 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            See all apps <ArrowRight className="h-3 w-3" />
+          </button>
         </div>
 
         {/* Tab content */}
@@ -211,6 +233,7 @@ export default function ProjectsPage() {
               <>
                 <div
                   ref={appsScrollRef}
+                  onScroll={updateScrollState}
                   className="flex gap-3 px-3 pb-3 overflow-x-auto"
                   style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
                 >
@@ -254,14 +277,25 @@ export default function ProjectsPage() {
                   </button>
                 </div>
 
-                {/* Scroll arrow */}
-                <button
-                  type="button"
-                  onClick={scrollAppsRight}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-background/80 text-foreground opacity-0 group-hover/apps:opacity-100 transition-opacity hover:bg-background shadow-md"
-                >
-                  <ChevronRight className="h-5 w-5" />
-                </button>
+                {/* Scroll arrows */}
+                {canScrollLeft && (
+                  <button
+                    type="button"
+                    onClick={scrollAppsLeft}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-background/80 text-foreground opacity-0 group-hover/apps:opacity-100 transition-opacity hover:bg-background shadow-md"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                )}
+                {canScrollRight && (
+                  <button
+                    type="button"
+                    onClick={scrollAppsRight}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-background/80 text-foreground opacity-0 group-hover/apps:opacity-100 transition-opacity hover:bg-background shadow-md"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                )}
               </>
             ) : (
               <div className="text-center py-10 text-muted-foreground">
