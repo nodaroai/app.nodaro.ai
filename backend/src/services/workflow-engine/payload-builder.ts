@@ -545,6 +545,7 @@ export function buildPayload(
           seed: data.seed,
           renderingSpeed: data.renderingSpeed,
           guidanceScale: data.guidanceScale,
+          maskUrl: resolvedInputs.maskUrl || (data.maskUrl as string | undefined),
           usageLogId,
         },
       }

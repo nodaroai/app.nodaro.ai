@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download } from "lucide-react"
+import { ImageIcon, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, Layers } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -14,6 +14,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { EditableNodeLabel } from "./editable-node-label"
+import { I2I_MASK_SUPPORT } from "@nodaro-shared/model-constants"
 import type { ImageToImageData } from "@/types/nodes"
 
 function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
@@ -22,6 +23,7 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const inConnectionCount = useConnectionCount(id, "image")
+  const supportsMask = !!nodeData.provider && I2I_MASK_SUPPORT.has(nodeData.provider)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -96,6 +98,7 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "image", type: "target", position: Position.Left, top: "calc(75% + 33px)", customStyle: { top: 'calc(75% + 33px)', left: '-29px' }, hideHandle: true },
+        ...(supportsMask ? [{ id: "mask", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true }] : []),
         { id: "out", type: "source", position: Position.Right, customStyle: { top: 'calc(25% - 33px)', right: '-29px' }, hideHandle: true },
       ]}
     >
@@ -193,6 +196,16 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       )}
     </div>
+    {/* Mask handle icon */}
+    {supportsMask && (
+      <div
+        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#a855f7]"
+        style={{ top: 'calc(50% - 14px)', left: '-29px' }}
+      >
+        <Layers className="w-3.5 h-3.5 text-white" />
+        <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#a855f7] text-[#a855f7] text-[8px] font-black flex items-center justify-center">+</div>
+      </div>
+    )}
     {/* Output handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"

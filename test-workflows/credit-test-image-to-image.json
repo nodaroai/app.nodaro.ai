@@ -206,6 +206,17 @@
     },
 
     {
+      "id": "mask_upload",
+      "type": "upload-image",
+      "position": { "x": 50, "y": 1000 },
+      "data": {
+        "label": "Mask Image (upload B&W mask before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+
+    {
       "id": "i2i_16",
       "type": "image-to-image",
       "position": { "x": 500, "y": 900 },
@@ -386,6 +397,10 @@
     { "id": "e_23", "source": "upload_1", "target": "i2i_23", "sourceHandle": "image", "targetHandle": "image" },
     { "id": "e_24", "source": "upload_1", "target": "i2i_24", "sourceHandle": "image", "targetHandle": "image" },
     { "id": "e_25", "source": "upload_1", "target": "i2i_25", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_26", "source": "upload_1", "target": "i2i_26", "sourceHandle": "image", "targetHandle": "image" }
+    { "id": "e_26", "source": "upload_1", "target": "i2i_26", "sourceHandle": "image", "targetHandle": "image" },
+
+    { "id": "e_mask_16", "source": "mask_upload", "target": "i2i_16", "sourceHandle": "image", "targetHandle": "mask" },
+    { "id": "e_mask_17", "source": "mask_upload", "target": "i2i_17", "sourceHandle": "image", "targetHandle": "mask" },
+    { "id": "e_mask_18", "source": "mask_upload", "target": "i2i_18", "sourceHandle": "image", "targetHandle": "mask" }
   ]
 }

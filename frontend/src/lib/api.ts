@@ -260,6 +260,7 @@ export async function imageToImage(
     seed?: number
     renderingSpeed?: string
     guidanceScale?: number
+    maskUrl?: string
   }
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl, prompt }
@@ -280,6 +281,7 @@ export async function imageToImage(
   if (options?.seed != null) body.seed = options.seed
   if (options?.renderingSpeed) body.renderingSpeed = options.renderingSpeed
   if (options?.guidanceScale != null) body.guidanceScale = options.guidanceScale
+  if (options?.maskUrl) body.maskUrl = options.maskUrl
   const res = await fetch(`${API_BASE_URL}/v1/image-to-image`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },

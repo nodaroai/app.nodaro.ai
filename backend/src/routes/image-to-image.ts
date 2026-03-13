@@ -24,6 +24,7 @@ const imageToImageBody = z.object({
   seed: z.number().int().min(0).optional(),
   renderingSpeed: z.enum(["TURBO", "BALANCED", "QUALITY"]).optional(),
   guidanceScale: z.number().min(0).max(30).optional(),
+  maskUrl: safeUrlSchema.optional(),
 })
 
 export async function imageToImageRoutes(app: FastifyInstance) {
@@ -45,7 +46,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt, provider, referenceImageUrls, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale } = parsed.data
+    const { imageUrl, prompt, provider, referenceImageUrls, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -92,6 +93,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       seed,
       renderingSpeed,
       guidanceScale,
+      maskUrl,
       usageLogId,
     })
 

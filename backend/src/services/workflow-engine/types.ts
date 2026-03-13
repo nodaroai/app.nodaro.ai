@@ -117,6 +117,7 @@ export interface ResolvedInputs {
   uploadUrlList?: string[]
   startFrameUrl?: string
   endFrameUrl?: string
+  maskUrl?: string
   kieTaskId?: string
 }
 

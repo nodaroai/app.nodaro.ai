@@ -298,6 +298,7 @@ export function runImageToImage(
     seed?: number
     renderingSpeed?: string
     guidanceScale?: number
+    maskUrl?: string
   },
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
