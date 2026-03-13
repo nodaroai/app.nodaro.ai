@@ -175,7 +175,7 @@ export default function ProjectsPage() {
       </div>
 
       {/* Unified container with pill tabs inside */}
-      <div className="mb-6 rounded-xl bg-zinc-900 overflow-hidden group/apps">
+      <div className="mb-6 rounded-xl bg-muted/50 overflow-hidden group/apps">
         {/* Tabs */}
         <div className="flex items-center gap-1 p-2">
           {tabs.map((tab) => (
@@ -186,8 +186,8 @@ export default function ProjectsPage() {
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1 text-sm font-medium rounded-md transition-colors",
                 activeTab === tab.id
-                  ? "bg-zinc-700 text-white"
-                  : "text-zinc-400 hover:text-white",
+                  ? "bg-background text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               {tab.icon}
@@ -203,7 +203,7 @@ export default function ProjectsPage() {
               <div className="flex gap-3 px-3 pb-3">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="shrink-0 w-[220px] animate-pulse">
-                    <div className="aspect-square bg-zinc-800 rounded-lg" />
+                    <div className="aspect-square bg-muted rounded-lg" />
                   </div>
                 ))}
               </div>
@@ -221,7 +221,7 @@ export default function ProjectsPage() {
                       onClick={() => navigate(`/app/${app.slug}`)}
                       className="shrink-0 w-[220px] text-left group/thumb"
                     >
-                      <div className="relative aspect-square rounded-lg overflow-hidden bg-zinc-800">
+                      <div className="relative aspect-square rounded-lg overflow-hidden bg-muted">
                         {app.previewMediaUrl ? (
                           app.previewMediaType === "video" ? (
                             <video src={app.previewMediaUrl} className="w-full h-full object-cover" muted playsInline />
@@ -230,7 +230,7 @@ export default function ProjectsPage() {
                           )
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
-                            <Sparkles className="h-5 w-5 text-zinc-600" />
+                            <Sparkles className="h-5 w-5 text-muted-foreground" />
                           </div>
                         )}
                         {/* Name overlay */}
@@ -247,9 +247,9 @@ export default function ProjectsPage() {
                     onClick={() => navigate("/apps")}
                     className="shrink-0 w-[220px] text-left"
                   >
-                    <div className="aspect-square rounded-lg overflow-hidden bg-zinc-800/50 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition-colors">
-                      <ArrowRight className="h-5 w-5 text-zinc-400" />
-                      <p className="text-xs font-medium text-zinc-400">See all apps</p>
+                    <div className="aspect-square rounded-lg overflow-hidden bg-muted/50 flex flex-col items-center justify-center gap-2 hover:bg-muted transition-colors">
+                      <ArrowRight className="h-5 w-5 text-muted-foreground" />
+                      <p className="text-xs font-medium text-muted-foreground">See all apps</p>
                     </div>
                   </button>
                 </div>
@@ -258,13 +258,13 @@ export default function ProjectsPage() {
                 <button
                   type="button"
                   onClick={scrollAppsRight}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-black/60 text-white opacity-0 group-hover/apps:opacity-100 transition-opacity hover:bg-black/80"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-background/80 text-foreground opacity-0 group-hover/apps:opacity-100 transition-opacity hover:bg-background shadow-md"
                 >
                   <ChevronRight className="h-5 w-5" />
                 </button>
               </>
             ) : (
-              <div className="text-center py-10 text-zinc-500">
+              <div className="text-center py-10 text-muted-foreground">
                 <LayoutTemplate className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p className="text-xs font-medium">No apps available yet</p>
               </div>
@@ -279,18 +279,18 @@ export default function ProjectsPage() {
         )}
 
         {activeTab === "templates" && (
-          <div className="text-center py-16 text-zinc-500">
+          <div className="text-center py-16 text-muted-foreground">
             <LayoutTemplate className="h-10 w-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm font-medium">Templates coming soon</p>
-            <p className="text-xs mt-1 text-zinc-600">Preset workflow templates to get you started faster.</p>
+            <p className="text-xs mt-1 opacity-70">Preset workflow templates to get you started faster.</p>
           </div>
         )}
 
         {activeTab === "tutorials" && (
-          <div className="text-center py-16 text-zinc-500">
+          <div className="text-center py-16 text-muted-foreground">
             <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm font-medium">Tutorials coming soon</p>
-            <p className="text-xs mt-1 text-zinc-600">Step-by-step guides for building workflows.</p>
+            <p className="text-xs mt-1 opacity-70">Step-by-step guides for building workflows.</p>
           </div>
         )}
       </div>
