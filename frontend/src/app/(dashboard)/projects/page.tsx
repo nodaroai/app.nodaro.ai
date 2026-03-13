@@ -174,33 +174,33 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 mb-6 border-b border-border">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px",
-              activeTab === tab.id
-                ? "border-[#ff0073] text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Unified container with pill tabs inside */}
+      <div className="mb-6 rounded-xl bg-zinc-900 overflow-hidden group/apps">
+        {/* Pill tabs */}
+        <div className="flex items-center gap-1 px-3 pt-3 pb-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1 text-sm font-medium rounded-full transition-colors",
+                activeTab === tab.id
+                  ? "bg-white text-zinc-900"
+                  : "text-zinc-400 hover:text-white",
+              )}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-      {/* Tab content */}
-      {activeTab === "apps" && (
-        <div className="mb-6 rounded-xl border border-white/10 bg-zinc-950 overflow-hidden group/apps">
-          {/* Scroll area — no header, thumbnails flush to top */}
+        {/* Tab content */}
+        {activeTab === "apps" && (
           <div className="relative">
             {featuredAppsLoading ? (
-              <div className="flex gap-3 px-3 py-3">
+              <div className="flex gap-3 px-3 pb-3">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="shrink-0 w-[220px] animate-pulse">
                     <div className="aspect-square bg-zinc-800 rounded-lg" />
@@ -211,7 +211,7 @@ export default function ProjectsPage() {
               <>
                 <div
                   ref={appsScrollRef}
-                  className="flex gap-3 px-3 py-3 overflow-x-auto"
+                  className="flex gap-3 px-3 pb-3 overflow-x-auto"
                   style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
                 >
                   {featuredApps.map((app) => (
@@ -270,28 +270,30 @@ export default function ProjectsPage() {
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
 
-      {activeTab === "statistics" && (
-        <StatsOverview className="mb-6" />
-      )}
+        {activeTab === "statistics" && (
+          <div className="px-3 pb-3">
+            <StatsOverview />
+          </div>
+        )}
 
-      {activeTab === "templates" && (
-        <div className="text-center py-16 text-muted-foreground">
-          <LayoutTemplate className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p className="text-sm font-medium">Templates coming soon</p>
-          <p className="text-xs mt-1">Preset workflow templates to get you started faster.</p>
-        </div>
-      )}
+        {activeTab === "templates" && (
+          <div className="text-center py-16 text-zinc-500">
+            <LayoutTemplate className="h-10 w-10 mx-auto mb-3 opacity-30" />
+            <p className="text-sm font-medium">Templates coming soon</p>
+            <p className="text-xs mt-1 text-zinc-600">Preset workflow templates to get you started faster.</p>
+          </div>
+        )}
 
-      {activeTab === "tutorials" && (
-        <div className="text-center py-16 text-muted-foreground">
-          <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p className="text-sm font-medium">Tutorials coming soon</p>
-          <p className="text-xs mt-1">Step-by-step guides for building workflows.</p>
-        </div>
-      )}
+        {activeTab === "tutorials" && (
+          <div className="text-center py-16 text-zinc-500">
+            <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
+            <p className="text-sm font-medium">Tutorials coming soon</p>
+            <p className="text-xs mt-1 text-zinc-600">Step-by-step guides for building workflows.</p>
+          </div>
+        )}
+      </div>
 
       {/* Search + Projects (always visible) */}
       <div className="relative mb-4 sm:mb-6">
