@@ -94,6 +94,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   } | null>(null);
   const [workflowCreditEstimate, setWorkflowCreditEstimate] =
     useState<number>(0);
+  const [estimateLoading, setEstimateLoading] = useState(false);
   const [showStorageExceeded, setShowStorageExceeded] = useState(false);
   const [storageExceededData, setStorageExceededData] = useState<{
     usedBytes: number;
@@ -172,19 +173,26 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       setWorkflowCreditEstimate(total);
     };
 
-    // Compute immediately with whatever is cached
-    computeEstimate();
-
-    // Prefetch any uncached model costs, then recompute with real values
+    // Collect model identifiers and check which need fetching
     const modelIds = [...new Set(executableNodes.map((n) => getModelIdentifier(n)).filter(Boolean))];
     const uncached = modelIds.filter((m) => getCachedCredits(m) === undefined);
+
     if (uncached.length > 0) {
+      // Wait for real costs before showing estimate
+      setEstimateLoading(true);
       let cancelled = false;
       prefetchModelCredits(uncached).then(() => {
-        if (!cancelled) computeEstimate();
+        if (!cancelled) {
+          computeEstimate();
+          setEstimateLoading(false);
+        }
       });
       return () => { cancelled = true; };
     }
+
+    // All costs cached — compute immediately
+    setEstimateLoading(false);
+    computeEstimate();
   }, [storeNodes, storeEdges]);
 
   const { data: statsData } = useStats("user", user?.id, {
@@ -773,13 +781,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               ) : (
                 <Button
                   size="lg"
+                  disabled={hasCredits() && estimateLoading}
                   onClick={() => handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning, onExecutionStarted, onExecutionEnded)}
                   className="rounded-full px-6 text-white hover:opacity-90"
                   style={{ backgroundColor: "#ff0073" }}
                 >
-                  <Play className="w-4 h-4 mr-2" />
+                  {hasCredits() && estimateLoading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4 mr-2" />
+                  )}
                   Execute workflow
-                  {hasCredits() && workflowCreditEstimate > 0 && (
+                  {hasCredits() && !estimateLoading && workflowCreditEstimate > 0 && (
                     <span className="ml-2 opacity-80">
                       ({workflowCreditEstimate} CR)
                     </span>
