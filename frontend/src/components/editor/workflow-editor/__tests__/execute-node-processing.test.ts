@@ -600,6 +600,8 @@ describe("extract-audio", () => {
       "mp3",
       true,
       "u1",
+      undefined,
+      undefined,
     )
   })
 })
