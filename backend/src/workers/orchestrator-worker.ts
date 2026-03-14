@@ -437,6 +437,11 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
           // for normal nodes, increment by 1 here.
           if (!result.jobIds || result.jobIds.length <= 1) {
             completedCount++
+            // Persist progress immediately so polling sees incremental updates
+            // (fire-and-forget, same pattern as fan-out callback)
+            updateExecution(executionId, {
+              completed_nodes: completedCount,
+            }).catch(() => {})
           }
           totalCredits += result.creditsUsed ?? 0
 
