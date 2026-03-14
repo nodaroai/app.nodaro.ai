@@ -648,7 +648,7 @@ export function buildPayload(
         modelIdentifier: provider,
         payload: {
           jobId,
-          videoUrl: resolvedInputs.videoUrl || resolvedInputs.imageUrl || data.videoUrl,
+          imageUrl: resolvedInputs.imageUrl || resolvedInputs.videoUrl || data.imageUrl || data.videoUrl,
           audioUrl: resolvedInputs.audioUrl || data.audioUrl,
           provider,
           usageLogId,
