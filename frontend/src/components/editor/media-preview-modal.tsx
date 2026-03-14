@@ -118,6 +118,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, currentIndex, to
             className="max-w-full max-h-[80vh] rounded-lg"
             controls
             autoPlay
+            muted
             playsInline
           />
         ) : (

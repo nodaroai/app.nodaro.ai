@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Scissors, Loader2, AlertCircle, X, Clapperboard, Film } from "lucide-react"
+import { Scissors, Loader2, AlertCircle, X, Clapperboard, Film, Maximize } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -69,14 +69,20 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
               <video
                 src={activeUrl}
                 className="w-full h-28 object-cover rounded-md bg-black"
-                autoPlay={videoAutoplay}
-                muted
-                loop={videoAutoplay}
+                controls
                 playsInline
                 onError={() => setVideoError(true)}
                 onLoadedData={() => setVideoError(false)}
               />
             )}
+            <button
+              type="button"
+              aria-label="Expand"
+              className="absolute top-1 left-1 w-6 h-6 flex items-center justify-center bg-black/30 hover:bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+            >
+              <Maximize className="w-3.5 h-3.5" />
+            </button>
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">Trimmed</div>
             {results.length > 0 && (
               <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
