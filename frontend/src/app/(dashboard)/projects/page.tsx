@@ -74,7 +74,18 @@ function useWorkflowSearch(search: string, projectMap: Map<string, string>) {
 }
 
 export default function ProjectsPage() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, user } = useAuth()
+
+  const greeting = (() => {
+    const hour = new Date().getHours()
+    if (hour < 12) return "Good morning"
+    if (hour < 18) return "Good afternoon"
+    return "Good evening"
+  })()
+
+  const displayName = user?.user_metadata?.full_name?.split(" ")[0]
+    ?? user?.email?.split("@")[0]
+    ?? ""
   const [viewAll, setViewAll] = useState(() => {
     if (!isAdmin) return false
     return localStorage.getItem("nodaro-admin-view-all-projects") === "true"
@@ -188,7 +199,9 @@ export default function ProjectsPage() {
   return (
     <div className="p-4 sm:p-6">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold">Projects</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {greeting}{displayName ? `, ${displayName}` : ""}
+        </h1>
         <div className="flex items-center gap-3">
           {isAdmin && (
             <div className="flex items-center gap-2">
