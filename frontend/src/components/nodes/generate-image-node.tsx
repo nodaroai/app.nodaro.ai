@@ -3,7 +3,7 @@
 import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Loader2, AlertCircle, X, Scissors, Settings, LayoutGrid, Expand, Download, Type } from "lucide-react"
+import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, Settings, LayoutGrid, Expand, Download, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -34,6 +34,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const rawUrl = activeResult?.url ?? nodeData.generatedImageUrl ?? (nodeData as Record<string, unknown>).url as string | undefined
   // Treat empty strings as undefined (falsy check)
   const activeUrl = rawUrl && rawUrl.trim() ? rawUrl : undefined
+  const isContentPolicy = status === "failed" && nodeData.errorMessage?.toLowerCase().includes("content policy")
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const attachedIds = nodeData.characterDefinitionIds ?? []
@@ -244,14 +245,14 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Failed state */}
         {status === "failed" && !activeUrl && (
-          <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-red-500/5 text-red-500 p-2 h-[180px]">
+          <div className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2 h-[180px] ${isContentPolicy ? "bg-amber-500/10 text-amber-500" : "bg-red-500/5 text-red-500"}`}>
             <div className="flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              {isContentPolicy ? <ShieldAlert className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+              <span className="font-medium">{isContentPolicy ? "Prohibited" : "Failed"}</span>
             </div>
-            {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
-                {nodeData.errorMessage}
+            {(isContentPolicy || nodeData.errorMessage) && (
+              <p className={`text-[10px] text-center line-clamp-2 ${isContentPolicy ? "text-amber-400" : "text-red-400"}`} title={nodeData.errorMessage}>
+                {isContentPolicy ? "Blocked by provider safety filter. Try a different prompt or image." : nodeData.errorMessage}
               </p>
             )}
           </div>
