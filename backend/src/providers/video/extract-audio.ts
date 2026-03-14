@@ -23,6 +23,8 @@ interface ExtractAudioOptions {
   readonly videoUrl: string
   readonly audioFormat?: "mp3" | "wav" | "aac"
   readonly outputSilentVideo?: boolean
+  readonly startTime?: number
+  readonly endTime?: number
 }
 
 interface ExtractAudioResult {
@@ -31,7 +33,7 @@ interface ExtractAudioResult {
 }
 
 export async function extractAudio(options: ExtractAudioOptions): Promise<ExtractAudioResult> {
-  const { videoUrl, audioFormat = "mp3", outputSilentVideo = false } = options
+  const { videoUrl, audioFormat = "mp3", outputSilentVideo = false, startTime, endTime } = options
   const workDir = await createWorkDir("extract-audio")
 
   try {
@@ -66,9 +68,14 @@ export async function extractAudio(options: ExtractAudioOptions): Promise<Extrac
     const codecMap = { mp3: "libmp3lame", wav: "pcm_s16le", aac: "aac" } as const
     const audioPath = join(workDir, `output.${audioFormat}`)
 
+    const timeArgs: string[] = []
+    if (startTime != null) timeArgs.push("-ss", String(startTime))
+    if (endTime != null) timeArgs.push("-to", String(endTime))
+
     await runFfmpeg([
       "-y",
       "-i", videoPath,
+      ...timeArgs,
       "-vn",
       "-acodec", codecMap[audioFormat],
       audioPath,
