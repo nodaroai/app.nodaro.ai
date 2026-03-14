@@ -650,7 +650,9 @@ export function buildPayload(
           jobId,
           imageUrl: resolvedInputs.imageUrl || resolvedInputs.videoUrl || data.imageUrl || data.videoUrl,
           audioUrl: resolvedInputs.audioUrl || data.audioUrl,
+          prompt: resolvedInputs.prompt || data.prompt || "",
           provider,
+          resolution: data.resolution,
           usageLogId,
         },
       }
