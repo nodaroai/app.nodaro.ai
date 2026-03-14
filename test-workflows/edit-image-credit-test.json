@@ -1,0 +1,377 @@
+{
+  "name": "Edit Image — Credit Pricing Test",
+  "nodes": [
+    {
+      "id": "upload-1",
+      "type": "upload-image",
+      "position": { "x": 50, "y": 550 },
+      "data": {
+        "label": "Test Source Image",
+        "assetId": "",
+        "url": "",
+        "r2Url": "",
+        "thumbnailUrl": "",
+        "filename": "",
+        "fileSize": 0,
+        "mimeType": "",
+        "externalUrl": "",
+        "isUploading": false,
+        "uploadError": "",
+        "metadata": {}
+      }
+    },
+    {
+      "id": "edit-recraft-upscale",
+      "type": "edit-image",
+      "position": { "x": 500, "y": 0 },
+      "data": {
+        "label": "Recraft Upscale (1cr)",
+        "prompt": "",
+        "provider": "recraft-upscale",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-recraft-removebg",
+      "type": "edit-image",
+      "position": { "x": 500, "y": 200 },
+      "data": {
+        "label": "Recraft Remove BG (1cr)",
+        "prompt": "",
+        "provider": "recraft-remove-bg",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-nano-basic",
+      "type": "edit-image",
+      "position": { "x": 500, "y": 400 },
+      "data": {
+        "label": "Nano Edit — Basic Prompt (2cr)",
+        "prompt": "Make the sky a vivid sunset with orange and purple clouds",
+        "provider": "nano-banana-edit",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-nano-style-cinematic",
+      "type": "edit-image",
+      "position": { "x": 500, "y": 600 },
+      "data": {
+        "label": "Nano Edit — Cinematic Style (2cr)",
+        "prompt": "Add dramatic lens flare and color grading",
+        "provider": "nano-banana-edit",
+        "style": "Cinematic",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-nano-ar-16x9",
+      "type": "edit-image",
+      "position": { "x": 500, "y": 800 },
+      "data": {
+        "label": "Nano Edit — 16:9 Aspect (2cr)",
+        "prompt": "Extend the scene to fill a widescreen frame",
+        "provider": "nano-banana-edit",
+        "aspectRatio": "16:9",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-nano-negprompt",
+      "type": "edit-image",
+      "position": { "x": 500, "y": 1000 },
+      "data": {
+        "label": "Nano Edit — Neg Prompt (2cr)",
+        "prompt": "Transform into a watercolor painting style",
+        "provider": "nano-banana-edit",
+        "negativePrompt": "blurry, low quality, artifacts, text, watermark",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-nano-seed",
+      "type": "edit-image",
+      "position": { "x": 500, "y": 1200 },
+      "data": {
+        "label": "Nano Edit — Fixed Seed (2cr)",
+        "prompt": "Add snow falling in the scene",
+        "provider": "nano-banana-edit",
+        "seed": 42,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-nano-ar-9x16",
+      "type": "edit-image",
+      "position": { "x": 500, "y": 1400 },
+      "data": {
+        "label": "Nano Edit — 9:16 Portrait (2cr)",
+        "prompt": "Crop and extend to vertical portrait format",
+        "provider": "nano-banana-edit",
+        "aspectRatio": "9:16",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-nano-all-options",
+      "type": "edit-image",
+      "position": { "x": 500, "y": 1600 },
+      "data": {
+        "label": "Nano Edit — All Options (2cr)",
+        "prompt": "Turn into an oil painting with thick brushstrokes",
+        "provider": "nano-banana-edit",
+        "aspectRatio": "4:3",
+        "style": "Oil Painting",
+        "negativePrompt": "digital art, 3d render, photo realistic",
+        "seed": 12345,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-topaz-2k-1x",
+      "type": "edit-image",
+      "position": { "x": 1000, "y": 0 },
+      "data": {
+        "label": "Topaz 2K — 1x Enhance (4cr)",
+        "prompt": "",
+        "provider": "topaz-image-upscale",
+        "upscaleFactor": "1",
+        "targetResolution": "2K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-topaz-2k-2x",
+      "type": "edit-image",
+      "position": { "x": 1000, "y": 200 },
+      "data": {
+        "label": "Topaz 2K — 2x (4cr)",
+        "prompt": "",
+        "provider": "topaz-image-upscale",
+        "upscaleFactor": "2",
+        "targetResolution": "2K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-topaz-2k-4x",
+      "type": "edit-image",
+      "position": { "x": 1000, "y": 400 },
+      "data": {
+        "label": "Topaz 2K — 4x (4cr)",
+        "prompt": "",
+        "provider": "topaz-image-upscale",
+        "upscaleFactor": "4",
+        "targetResolution": "2K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-topaz-2k-8x",
+      "type": "edit-image",
+      "position": { "x": 1000, "y": 600 },
+      "data": {
+        "label": "Topaz 2K — 8x (4cr)",
+        "prompt": "",
+        "provider": "topaz-image-upscale",
+        "upscaleFactor": "8",
+        "targetResolution": "2K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-topaz-4k-2x",
+      "type": "edit-image",
+      "position": { "x": 1000, "y": 800 },
+      "data": {
+        "label": "Topaz 4K — 2x (7cr)",
+        "prompt": "",
+        "provider": "topaz-image-upscale",
+        "upscaleFactor": "2",
+        "targetResolution": "4K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-topaz-4k-4x",
+      "type": "edit-image",
+      "position": { "x": 1000, "y": 1000 },
+      "data": {
+        "label": "Topaz 4K — 4x (7cr)",
+        "prompt": "",
+        "provider": "topaz-image-upscale",
+        "upscaleFactor": "4",
+        "targetResolution": "4K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-topaz-4k-8x",
+      "type": "edit-image",
+      "position": { "x": 1000, "y": 1200 },
+      "data": {
+        "label": "Topaz 4K — 8x (7cr)",
+        "prompt": "",
+        "provider": "topaz-image-upscale",
+        "upscaleFactor": "8",
+        "targetResolution": "4K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-topaz-8k-2x",
+      "type": "edit-image",
+      "position": { "x": 1000, "y": 1400 },
+      "data": {
+        "label": "Topaz 8K — 2x (13cr)",
+        "prompt": "",
+        "provider": "topaz-image-upscale",
+        "upscaleFactor": "2",
+        "targetResolution": "8K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-topaz-8k-8x",
+      "type": "edit-image",
+      "position": { "x": 1000, "y": 1600 },
+      "data": {
+        "label": "Topaz 8K — 8x (13cr)",
+        "prompt": "",
+        "provider": "topaz-image-upscale",
+        "upscaleFactor": "8",
+        "targetResolution": "8K",
+        "fieldMappings": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-upload-recraft-up",
+      "source": "upload-1",
+      "target": "edit-recraft-upscale",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-recraft-bg",
+      "source": "upload-1",
+      "target": "edit-recraft-removebg",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-nano-basic",
+      "source": "upload-1",
+      "target": "edit-nano-basic",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-nano-style",
+      "source": "upload-1",
+      "target": "edit-nano-style-cinematic",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-nano-ar16",
+      "source": "upload-1",
+      "target": "edit-nano-ar-16x9",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-nano-neg",
+      "source": "upload-1",
+      "target": "edit-nano-negprompt",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-nano-seed",
+      "source": "upload-1",
+      "target": "edit-nano-seed",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-nano-ar9",
+      "source": "upload-1",
+      "target": "edit-nano-ar-9x16",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-nano-all",
+      "source": "upload-1",
+      "target": "edit-nano-all-options",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-topaz-2k-1x",
+      "source": "upload-1",
+      "target": "edit-topaz-2k-1x",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-topaz-2k-2x",
+      "source": "upload-1",
+      "target": "edit-topaz-2k-2x",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-topaz-2k-4x",
+      "source": "upload-1",
+      "target": "edit-topaz-2k-4x",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-topaz-2k-8x",
+      "source": "upload-1",
+      "target": "edit-topaz-2k-8x",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-topaz-4k-2x",
+      "source": "upload-1",
+      "target": "edit-topaz-4k-2x",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-topaz-4k-4x",
+      "source": "upload-1",
+      "target": "edit-topaz-4k-4x",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-topaz-4k-8x",
+      "source": "upload-1",
+      "target": "edit-topaz-4k-8x",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-topaz-8k-2x",
+      "source": "upload-1",
+      "target": "edit-topaz-8k-2x",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    },
+    {
+      "id": "e-upload-topaz-8k-8x",
+      "source": "upload-1",
+      "target": "edit-topaz-8k-8x",
+      "sourceHandle": "image",
+      "targetHandle": "image"
+    }
+  ]
+}
