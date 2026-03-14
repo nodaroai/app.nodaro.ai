@@ -259,7 +259,7 @@ describe("video worker processor", () => {
     )
   })
 
-  it("formats KieError with internal details for DB", async () => {
+  it("stores only sanitized message for KieError (no internal details)", async () => {
     mocks.mockHandler.mockRejectedValueOnce(
       new KieError("Image generation failed", "KIE API returned 500: internal server error", "generate-image"),
     )
@@ -270,7 +270,7 @@ describe("video worker processor", () => {
     expect(mocks.mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         status: "failed",
-        error_message: "Image generation failed | Internal: KIE API returned 500: internal server error",
+        error_message: "Image generation failed",
       }),
     )
   })
