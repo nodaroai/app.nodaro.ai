@@ -74,11 +74,11 @@ const handleMergeVideoAudio: HandlerFn = async function handleMergeVideoAudio(jo
 }
 
 const handleExtractAudio: HandlerFn = async function handleExtractAudio(job, ctx) {
-  const { videoUrl, audioFormat, outputSilentVideo } = job.data as {
-    jobId: string; videoUrl: string; audioFormat?: "mp3" | "wav" | "aac"; outputSilentVideo?: boolean
+  const { videoUrl, audioFormat, outputSilentVideo, startTime, endTime } = job.data as {
+    jobId: string; videoUrl: string; audioFormat?: "mp3" | "wav" | "aac"; outputSilentVideo?: boolean; startTime?: number; endTime?: number
   }
   console.log(`[worker] extract-audio ${ctx.jobId}`)
-  const result = await extractAudio({ videoUrl, audioFormat, outputSilentVideo })
+  const result = await extractAudio({ videoUrl, audioFormat, outputSilentVideo, startTime, endTime })
   await job.updateProgress(80)
   const audioR2Url = await uploadFileToR2(result.audioPath, ctx.jobId, "audio", ctx.jobUserId)
   let silentVideoR2Url: string | undefined

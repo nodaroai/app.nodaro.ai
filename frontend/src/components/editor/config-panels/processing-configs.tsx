@@ -224,6 +224,30 @@ export function ExtractAudioConfig({ data, onUpdate }: ConfigProps<ExtractAudioD
         />
         <Label htmlFor="output-silent">Output silent video</Label>
       </div>
+      <div>
+        <Label htmlFor="start-time">Start Time (s) — optional</Label>
+        <Input
+          id="start-time"
+          type="number"
+          min={0}
+          step={0.1}
+          placeholder="0"
+          value={(data.startTime as number | undefined) ?? ""}
+          onChange={(e) => onUpdate({ startTime: e.target.value ? parseFloat(e.target.value) : undefined })}
+        />
+      </div>
+      <div>
+        <Label htmlFor="end-time">End Time (s) — optional</Label>
+        <Input
+          id="end-time"
+          type="number"
+          min={0}
+          step={0.1}
+          placeholder="end of file"
+          value={(data.endTime as number | undefined) ?? ""}
+          onChange={(e) => onUpdate({ endTime: e.target.value ? parseFloat(e.target.value) : undefined })}
+        />
+      </div>
     </div>
   )
 }
