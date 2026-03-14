@@ -104,6 +104,19 @@ export function createSanitizedError(
   } else if (lowerMsg.includes("not support")) {
     sanitizedMessage =
       "This operation is not supported with the current provider."
+  } else if (
+    lowerMsg.includes("filtered") ||
+    lowerMsg.includes("prohibited") ||
+    lowerMsg.includes("content policy") ||
+    lowerMsg.includes("safety filter") ||
+    lowerMsg.includes("safety policy") ||
+    lowerMsg.includes("moderation") ||
+    lowerMsg.includes("violat") ||
+    lowerMsg.includes("nsfw") ||
+    lowerMsg.includes("inappropriate")
+  ) {
+    sanitizedMessage =
+      "Content policy violation: The output was blocked by the provider's safety filter. Try modifying your prompt or input image."
   } else {
     // Generic fallback - hide all provider-specific details
     sanitizedMessage = `${context} failed. Please try again or contact support if the issue persists.`

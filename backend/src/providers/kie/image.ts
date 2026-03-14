@@ -10,10 +10,12 @@ import type {
   ImageEditingProvider,
   ProviderResult,
 } from "../provider.interface.js"
+import sharp from "sharp"
 import { createSanitizedError, runKieTask } from "./client.js"
 import { runFluxKontextTask } from "./kontext-client.js"
 import { KIE_IMAGE_MODELS } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
+import { uploadBufferToR2 } from "../../lib/storage.js"
 
 // Models that need output_format forced to "png" (legacy Nano Banana family).
 // Nano Banana 2 uses its own output_format from extraParams (jpg default), so it is NOT included.
@@ -23,7 +25,7 @@ const FORCE_PNG_OUTPUT_PROVIDERS = new Set([
 
 // Models that use named image_size values instead of ratio strings (e.g. "landscape_16_9")
 const NAMED_IMAGE_SIZE_PROVIDERS = new Set([
-  "ideogram-edit", "ideogram-remix", "ideogram-reframe", "ideogram-v3",
+  "ideogram-remix", "ideogram-reframe", "ideogram-v3",
   "qwen", "qwen-i2i", "qwen-edit",
 ])
 
@@ -44,6 +46,48 @@ const RATIO_TO_NAMED_SIZE: Record<string, string> = {
   "3:4": "portrait_4_3",
   "3:2": "landscape_4_3",   // closest match
   "2:3": "portrait_4_3",    // closest match
+}
+
+/**
+ * Download an image and return its buffer + dimensions.
+ */
+async function downloadAndMeasure(url: string): Promise<{ buffer: Buffer; width: number; height: number }> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+  if (!res.ok) throw new Error(`Failed to download image: ${res.status}`)
+  const buffer = Buffer.from(await res.arrayBuffer())
+  const meta = await sharp(buffer).metadata()
+  if (!meta.width || !meta.height) throw new Error("Could not read image dimensions")
+  return { buffer, width: meta.width, height: meta.height }
+}
+
+/**
+ * Ensure mask dimensions match the source image. If they differ, resize
+ * the mask, upload it to R2, and return the new URL.
+ */
+async function ensureMaskDimensions(
+  imageUrl: string,
+  maskUrl: string,
+): Promise<string> {
+  const [img, mask] = await Promise.all([
+    downloadAndMeasure(imageUrl),
+    downloadAndMeasure(maskUrl),
+  ])
+
+  if (img.width === mask.width && img.height === mask.height) {
+    return maskUrl
+  }
+
+  console.log(
+    `[KIE.ai] Mask size (${mask.width}x${mask.height}) differs from image (${img.width}x${img.height}) — resizing mask`
+  )
+
+  const resized = await sharp(mask.buffer)
+    .resize(img.width, img.height, { fit: "fill" })
+    .png()
+    .toBuffer()
+
+  const key = `masks/resized-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`
+  return uploadBufferToR2(resized, key, "image/png")
 }
 
 export class KieImageProvider
@@ -108,6 +152,13 @@ export class KieImageProvider
       delete input.resolution
     }
 
+    // Ideogram character-edit: output dims come from input image + mask,
+    // does NOT support aspect_ratio or resolution
+    if (provider === "ideogram-edit") {
+      delete input.aspect_ratio
+      delete input.resolution
+    }
+
     // Imagen4 family: supports negative_prompt natively, no resolution
     if (provider.startsWith("imagen4")) {
       delete input.resolution
@@ -162,6 +213,14 @@ export class KieImageProvider
         // Text-to-image models use "image_input" for reference images
         input.image_input = referenceImageUrls
       }
+    }
+
+    // Ideogram character-edit: ensure mask matches source image dimensions
+    if (provider === "ideogram-edit" && input.mask_url && input.image_url) {
+      input.mask_url = await ensureMaskDimensions(
+        input.image_url as string,
+        input.mask_url as string,
+      )
     }
 
     console.log(
