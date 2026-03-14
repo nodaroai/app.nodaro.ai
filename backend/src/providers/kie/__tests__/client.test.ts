@@ -72,13 +72,26 @@ describe("createSanitizedError", () => {
 
   it("maps unknown errors to generic fallback message", () => {
     const error = createSanitizedError(
-      "NSFW content detected in output",
+      "Unexpected internal server error xyz123",
       "Image generation"
     )
 
     expect(error).toBeInstanceOf(KieError)
     expect(error.message).toBe(
       "Image generation failed. Please try again or contact support if the issue persists."
+    )
+    expect(error.internalDetails).toBe("Unexpected internal server error xyz123")
+  })
+
+  it("maps content policy errors to content policy message", () => {
+    const error = createSanitizedError(
+      "NSFW content detected in output",
+      "Image generation"
+    )
+
+    expect(error).toBeInstanceOf(KieError)
+    expect(error.message).toBe(
+      "Content policy violation: The output was blocked by the provider's safety filter. Try modifying your prompt or input image."
     )
     expect(error.internalDetails).toBe("NSFW content detected in output")
   })
