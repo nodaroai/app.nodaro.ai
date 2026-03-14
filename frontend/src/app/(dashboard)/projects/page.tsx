@@ -283,7 +283,15 @@ export default function ProjectsPage() {
                       <div className="relative aspect-square rounded-lg overflow-hidden bg-muted">
                         {app.previewMediaUrl ? (
                           app.previewMediaType === "video" ? (
-                            <video src={app.previewMediaUrl} className="w-full h-full object-cover" muted playsInline />
+                            <video
+                              src={app.previewMediaUrl}
+                              className="w-full h-full object-cover"
+                              muted
+                              loop
+                              playsInline
+                              onMouseEnter={(e) => e.currentTarget.play()}
+                              onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
+                            />
                           ) : (
                             <img src={app.previewMediaUrl} alt={app.name} className="w-full h-full object-cover" loading="lazy" />
                           )
