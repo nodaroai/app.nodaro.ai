@@ -19,8 +19,8 @@ const DEBUG = config.NODE_ENV === "development"
 
 export const KIE_API_BASE = "https://api.kie.ai"
 export const POLL_INTERVAL_MS = 2000 // Used by kling3-client
-// With exponential backoff: ~5 min total for 60 attempts, ~15 min for 120 attempts
-export const MAX_POLL_ATTEMPTS = 60
+// With exponential backoff: ~15 min total for 120 attempts
+export const MAX_POLL_ATTEMPTS = 120
 export const MAX_POLL_ATTEMPTS_VIDEO = 120
 
 // =============================================================================
