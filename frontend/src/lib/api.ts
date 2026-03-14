@@ -1024,8 +1024,8 @@ export async function mergeVideoAudioApi(
   return res.json()
 }
 
-export async function extractAudioApi(videoUrl: string, audioFormat?: string, outputSilentVideo?: boolean, userId?: string): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { videoUrl, audioFormat, outputSilentVideo }
+export async function extractAudioApi(videoUrl: string, audioFormat?: string, outputSilentVideo?: boolean, userId?: string, startTime?: number, endTime?: number): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, audioFormat, outputSilentVideo, startTime, endTime }
   if (userId) {
     body.userId = userId
   }

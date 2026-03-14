@@ -2,7 +2,7 @@
 
 import { memo, useState, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Volume2, Loader2, AlertCircle, X, Film, Mic, Music, AudioWaveform, Clapperboard } from "lucide-react"
+import { Volume2, Loader2, AlertCircle, X, Film, Mic, Music, AudioWaveform, Clapperboard, Maximize } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -116,12 +116,18 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
               <video
                 src={activeUrl}
                 className="w-full h-28 object-cover rounded-md"
-                autoPlay={videoAutoplay}
-                muted
-                loop={videoAutoplay}
+                controls
                 playsInline
               />
             )}
+            <button
+              type="button"
+              aria-label="Expand"
+              className="absolute top-1 left-1 w-6 h-6 flex items-center justify-center bg-black/30 hover:bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+            >
+              <Maximize className="w-3.5 h-3.5" />
+            </button>
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">
               Merged
             </div>

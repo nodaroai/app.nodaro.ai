@@ -2250,7 +2250,7 @@ export function executeNode(
   }
 
   if (node.type === "extract-audio") {
-    const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
+    const videoUrl = overrideMediaUrl ?? inputs.videoUrl ?? inputs.audioUrl;
     if (!videoUrl) {
       toast.error(
         `Node "${(node.data as ExtractAudioData).label}": no video input`,
@@ -2266,6 +2266,8 @@ export function executeNode(
           d.audioFormat,
           d.outputSilentVideo,
           ctx.userId,
+          d.startTime as number | undefined,
+          d.endTime as number | undefined,
         ),
       "generatedAudioUrl",
       "Extract Audio",
