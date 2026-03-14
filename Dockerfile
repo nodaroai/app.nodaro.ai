@@ -105,7 +105,8 @@ echo "Starting with PORT=${PORT:-3000}"
 
 # Start backend API server on fixed internal port
 cd /app/backend
-PORT=9000 node dist/backend/src/server.js &
+export BACKEND_PORT=9000
+PORT=$BACKEND_PORT node dist/backend/src/server.js &
 
 # Start BullMQ worker (job processor)
 node dist/backend/src/worker.js &

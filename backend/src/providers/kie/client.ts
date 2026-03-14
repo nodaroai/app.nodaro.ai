@@ -105,6 +105,16 @@ export function createSanitizedError(
     sanitizedMessage =
       "This operation is not supported with the current provider."
   } else if (
+    lowerMsg.includes("cannot exceed") ||
+    lowerMsg.includes("too long") ||
+    lowerMsg.includes("too large") ||
+    lowerMsg.includes("file size") ||
+    lowerMsg.includes("duration limit") ||
+    lowerMsg.includes("exceeds")
+  ) {
+    sanitizedMessage =
+      "Input file exceeds the size or duration limit. Please use a shorter or smaller file."
+  } else if (
     lowerMsg.includes("filtered") ||
     lowerMsg.includes("prohibited") ||
     lowerMsg.includes("content policy") ||

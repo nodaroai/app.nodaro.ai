@@ -103,17 +103,12 @@ export function createVideoWorker() {
           console.error(`[worker] Job ${jobId} failed:`, message)
         }
 
-        // Save error to database - include internal details for debugging
-        // Format: "User message | Internal: KIE.ai error details"
-        const errorMessageForDb = internalDetails
-          ? `${message} | Internal: ${internalDetails}`
-          : message
-
+        // Save only the sanitized message to DB (internal details already logged above)
         await supabase
           .from("jobs")
           .update({
             status: "failed",
-            error_message: errorMessageForDb,
+            error_message: message,
             completed_at: new Date().toISOString(),
           })
           .eq("id", jobId)
