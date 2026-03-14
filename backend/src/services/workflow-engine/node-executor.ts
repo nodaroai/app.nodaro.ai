@@ -208,7 +208,8 @@ async function executeSyncHttpNode(
     throw new Error(`No route mapping for sync HTTP node: ${node.type}`)
   }
 
-  const port = process.env.PORT || "8000"
+  // Backend listens on BACKEND_PORT (9000 in Docker), not Railway's PORT (Caddy)
+  const port = process.env.BACKEND_PORT || process.env.PORT || "8000"
   const url = `http://localhost:${port}${route}`
 
   // Build request body from node data + resolved inputs

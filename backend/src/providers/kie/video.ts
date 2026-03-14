@@ -37,6 +37,56 @@ import {
   durationToNFrames,
 } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
+import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
+import { uploadBufferToR2 } from "../../lib/storage.js"
+import { join } from "node:path"
+import { readFile } from "node:fs/promises"
+
+// Max audio duration (seconds) per lip-sync model
+const LIP_SYNC_MAX_AUDIO: Record<string, number> = {
+  "infinitalk": 15,
+}
+
+/**
+ * If audio exceeds the model's max duration, trim it with FFmpeg
+ * and upload the trimmed version to R2. Returns the (possibly new) audio URL.
+ */
+async function ensureAudioDuration(
+  audioUrl: string,
+  maxSeconds: number,
+): Promise<string> {
+  const workDir = await createWorkDir("lip-sync-trim")
+  try {
+    const ext = audioUrl.match(/\.(mp3|wav|m4a|ogg|aac|flac)/i)?.[1] ?? "mp3"
+    const inputPath = join(workDir, `input.${ext}`)
+    const outputPath = join(workDir, `trimmed.${ext}`)
+
+    await downloadFile(audioUrl, inputPath)
+    const duration = await getVideoDuration(inputPath)
+
+    if (duration <= maxSeconds) {
+      return audioUrl
+    }
+
+    console.log(
+      `[KIE.ai] Audio duration (${duration.toFixed(1)}s) exceeds ${maxSeconds}s limit — trimming`
+    )
+
+    await runFfmpeg([
+      "-i", inputPath,
+      "-t", String(maxSeconds),
+      "-c", "copy",
+      outputPath,
+    ])
+
+    const trimmedBuffer = await readFile(outputPath)
+    const mimeType = ext === "wav" ? "audio/wav" : ext === "ogg" ? "audio/ogg" : "audio/mpeg"
+    const key = `audio/lip-sync-trimmed-${Date.now()}.${ext}`
+    return uploadBufferToR2(trimmedBuffer, key, mimeType)
+  } finally {
+    await cleanupWorkDir(workDir)
+  }
+}
 
 function snapToAllowedDuration(requested: number, allowed: number[]): number {
   if (!allowed || allowed.length === 0) return requested
@@ -875,11 +925,17 @@ export class KieVideoProvider
       `[KIE.ai] Image: ${imageUrl}, Audio: ${audioUrl}`
     )
 
+    // Auto-trim audio if it exceeds model's max duration
+    const maxAudio = LIP_SYNC_MAX_AUDIO[provider]
+    const effectiveAudioUrl = maxAudio
+      ? await ensureAudioDuration(audioUrl, maxAudio)
+      : audioUrl
+
     // Start with extra params from config
     const input: Record<string, unknown> = {
       ...(modelConfig.extraParams ?? {}),
       image_url: imageUrl,
-      audio_url: audioUrl,
+      audio_url: effectiveAudioUrl,
     }
 
     // Add optional prompt (for infinitalk especially)
