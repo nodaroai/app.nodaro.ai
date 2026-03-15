@@ -112,6 +112,7 @@ import {
   SaveToStorageConfig,
   WebhookOutputConfig,
   SplitTextConfig,
+  PreviewConfig,
   SubWorkflowInputConfig,
   SubWorkflowOutputConfig,
   SubWorkflowConfig,
@@ -197,6 +198,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "sora-storyboard": "Sora Storyboard",
   "combine-text": "Combine Text",
   "split-text": "Split Text",
+  "preview": "Preview",
   "loop": "Loop",
   "save-to-storage": "Save to Storage",
   "webhook-output": "Webhook Output",
@@ -236,7 +238,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
 export const RUN_BUTTON_TYPES = new Set([
   "merge-video-audio", "combine-videos", "trim-audio", "trim-video",
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "manual-edit", "resize-video", "social-media-format", "adjust-volume",
-  "add-captions", "mix-audio", "combine-text", "split-text", "composite", "render-video",
+  "add-captions", "mix-audio", "combine-text", "split-text", "preview", "composite", "render-video",
   "sub-workflow",
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post",
 ])
@@ -248,7 +250,7 @@ const RESULT_PRODUCING_TYPES = new Set([
   ...GENERATE_BUTTON_TYPES,
   ...RUN_BUTTON_TYPES,
 ].filter(t =>
-  t !== "combine-text" && t !== "split-text" && t !== "sub-workflow" &&
+  t !== "combine-text" && t !== "split-text" && t !== "preview" && t !== "sub-workflow" &&
   t !== "instagram-post" && t !== "tiktok-post" && t !== "youtube-upload" &&
   t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post"
 ))
@@ -620,6 +622,7 @@ export function ConfigPanel() {
           {nodeType === "manual-edit" && <ManualEditConfig {...configProps} />}
           {nodeType === "combine-text" && <CombineTextConfig {...configProps} />}
           {nodeType === "split-text" && <SplitTextConfig {...configProps} />}
+          {nodeType === "preview" && <PreviewConfig {...configProps} />}
 
           {nodeType === "save-to-storage" && <SaveToStorageConfig {...configProps} />}
           {nodeType === "webhook-output" && <WebhookOutputConfig {...configProps} />}

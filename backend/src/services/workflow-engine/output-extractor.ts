@@ -396,6 +396,11 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return text ? { text } : undefined
   }
 
+  if (type === "preview") {
+    // Preview node output is set by inline executor (passthrough)
+    return undefined
+  }
+
   if (type === "split-text") {
     const results = (data.splitResults as string[] | undefined) ?? []
     return results.length > 0 ? { text: results[0], splitResults: results } : undefined

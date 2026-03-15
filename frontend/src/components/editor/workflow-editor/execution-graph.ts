@@ -334,6 +334,12 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   if (type === "combine-text") {
     return data.combinedText as string | undefined;
   }
+  if (type === "preview") {
+    // Pass through the first visible upstream value
+    const items = (data.previewItems as Array<{ value: string; visible: boolean }> | undefined) ?? [];
+    const first = items.find((item) => item.visible !== false);
+    return first?.value;
+  }
   if (type === "split-text") {
     const splitResults = (data.splitResults as string[] | undefined) ?? [];
     return splitResults.length > 0 ? splitResults[0] : undefined;
@@ -416,13 +422,13 @@ export function collapseExpandedClones(): {
   return { nodes, edges };
 }
 
-const IMAGE_SOURCE_TYPES = new Set([
+export const IMAGE_SOURCE_TYPES = new Set([
   "generate-image",
   "upload-image",
   "edit-image",
   "image-to-image",
 ]);
-const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
+export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "image-to-video",
   "video-to-video",
   "text-to-video",
@@ -442,7 +448,7 @@ const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "social-media-format",
   "trim-video",
 ]);
-const AUDIO_SOURCE_TYPES = new Set([
+export const AUDIO_SOURCE_TYPES = new Set([
   "text-to-speech",
   "text-to-audio",
   "generate-music",

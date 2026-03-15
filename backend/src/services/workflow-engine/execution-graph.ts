@@ -234,6 +234,7 @@ export const TEXT_SOURCE_TYPES = new Set([
   "ai-writer",
   "combine-text",
   "split-text",
+  "preview",
   "forced-alignment",
   "generate-script",
   "list",

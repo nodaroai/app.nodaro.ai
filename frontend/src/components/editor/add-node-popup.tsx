@@ -757,6 +757,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
   // Utility
   {
+    type: "preview",
+    label: "Preview",
+    icon: <Eye className="h-4 w-4" />,
+    category: "Processing",
+    group: "Text",
+  },
+  {
     type: "sticky-note",
     label: "Sticky Note",
     icon: <StickyNote className="h-4 w-4" />,

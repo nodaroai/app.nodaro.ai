@@ -15,7 +15,7 @@ import { hasCredits } from "../../lib/config.js"
 import { CreditsService } from "../../billing/credits.js"
 import { buildPayload, type WorkflowSettings } from "./payload-builder.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
-import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput } from "./inline-executor.js"
+import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
 import type {
   SimpleNode,
@@ -104,6 +104,7 @@ const INLINE_NODES = new Set([
   "split-text",
   "composite",
   "webhook-output",
+  "preview",
 ])
 
 // ---------------------------------------------------------------------------
@@ -186,6 +187,9 @@ async function executeInlineNode(
       break
     case "webhook-output":
       output = await executeWebhookOutput(node, edges, allNodes, nodeStates)
+      break
+    case "preview":
+      output = executePreview(node, edges, allNodes, nodeStates)
       break
     default:
       throw new Error(`Unknown inline node type: ${node.type}`)

@@ -117,6 +117,33 @@ export function executeComposite(
 }
 
 /**
+ * Execute preview node: passthrough — collects upstream output and forwards the first value.
+ */
+export function executePreview(
+  node: SimpleNode,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): NodeOutput {
+  const incomingEdges = edges.filter((e) => e.target === node.id)
+  let firstOutput: string | undefined
+
+  for (const edge of incomingEdges) {
+    const srcNode = allNodes.find((n) => n.id === edge.source)
+    if (!srcNode) continue
+    const state = nodeStates[srcNode.id]
+    if (!state?.output) continue
+    const value = getPrimaryOutput(state.output, srcNode.type, edge.sourceHandle)
+    if (value) {
+      firstOutput = value
+      break
+    }
+  }
+
+  return firstOutput ? { text: firstOutput } : {}
+}
+
+/**
  * Execute webhook-output node: collect upstream outputs and POST to configured URL.
  */
 export async function executeWebhookOutput(

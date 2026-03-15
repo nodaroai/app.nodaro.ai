@@ -1737,6 +1737,26 @@ export type CombineTextNodeData = {
   errorMessage?: string
 }
 
+// --- Preview Node Data ---
+
+export interface PreviewItem {
+  readonly type: "text" | "image" | "video" | "audio" | "data"
+  readonly value: string
+  readonly sourceNodeId: string
+  readonly sourceNodeLabel: string
+  readonly visible: boolean
+}
+
+export type PreviewNodeData = {
+  [key: string]: unknown
+  label: string
+  previewItems: PreviewItem[]
+  /** Persisted ordering by sourceNodeId — survives re-execution */
+  itemOrder: string[]
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
 // --- Split Text Node Data ---
 
 export type SplitTextData = {
@@ -2027,6 +2047,7 @@ export type SceneNodeData =
   | LoopNodeData
   | CombineTextNodeData
   | SplitTextData
+  | PreviewNodeData
   | StickyNoteData
   | SubWorkflowInputData
   | SubWorkflowOutputData
@@ -2123,6 +2144,7 @@ export type SceneNodeType =
   | "ai-writer"
   | "combine-text"
   | "split-text"
+  | "preview"
   | "sticky-note"
   | "sub-workflow-input"
   | "sub-workflow-output"
@@ -3295,6 +3317,19 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       trimWhitespace: true,
       removeEmpty: true,
     } as SplitTextData,
+  },
+  {
+    type: "preview",
+    label: "Preview",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: {
+      label: "Preview",
+      previewItems: [],
+      itemOrder: [],
+    } as PreviewNodeData,
   },
   {
     type: "sticky-note",

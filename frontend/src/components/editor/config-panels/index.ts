@@ -10,7 +10,7 @@ export { VideoComposerConfig, AfterEffectsConfig, LottieOverlayConfig, ThreeDTit
 export { MergeVideoAudioConfig } from "./merge-audio-config"
 export { CharacterConfig, FaceConfig, ObjectConfig, LocationConfig } from "./entity-configs"
 export { AIWriterConfig } from "./ai-writer-config"
-export { CombineTextConfig, SaveToStorageConfig, WebhookOutputConfig, SplitTextConfig } from "./utility-configs"
+export { CombineTextConfig, SaveToStorageConfig, WebhookOutputConfig, SplitTextConfig, PreviewConfig } from "./utility-configs"
 export { SubWorkflowInputConfig, SubWorkflowOutputConfig, SubWorkflowConfig } from "./sub-workflow-configs"
 export { WebhookTriggerConfig, ScheduleTriggerConfig } from "./trigger-configs"
 export { InstagramPostConfig, TiktokPostConfig, YoutubeUploadConfig, LinkedinPostConfig, XPostConfig, FacebookPostConfig } from "./social-configs"
