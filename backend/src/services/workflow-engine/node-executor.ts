@@ -13,6 +13,7 @@ import { videoQueue } from "../../lib/queue.js"
 import { renderQueue } from "../../lib/render-queue.js"
 import { hasCredits } from "../../lib/config.js"
 import { CreditsService } from "../../billing/credits.js"
+import { refundJobCredits } from "../../workers/shared.js"
 import { buildPayload, type WorkflowSettings } from "./payload-builder.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview } from "./inline-executor.js"
@@ -461,26 +462,12 @@ async function pollJobToCompletion(
   usageLogId?: string,
   creditsUsed?: number,
 ): Promise<ExecuteNodeResult> {
-  const startTime = Date.now()
+  let processingStartTime: number | null = null
 
   while (true) {
     // Check cancellation
     if (ctx.cancelled) {
       throw new Error("Execution cancelled")
-    }
-
-    // Check timeout — cancel job + refund credits to prevent credit leak
-    if (Date.now() - startTime > NODE_TIMEOUT_MS) {
-      // Mark job as cancelled so the worker's shouldSaveJobResult() bails out
-      await supabase.from("jobs").update({ status: "cancelled" }).eq("id", jobId)
-      // Refund reserved credits (safe no-op if already committed/refunded by worker)
-      if (hasCredits() && usageLogId) {
-        try {
-          await CreditsService.refundCredits(usageLogId)
-          console.log(`[orchestrator] Refunded credits for timed-out job ${jobId}`)
-        } catch { /* already committed or refunded by worker */ }
-      }
-      throw new Error(`Node timeout after ${NODE_TIMEOUT_MS / 1000}s`)
     }
 
     // Poll job status
@@ -496,6 +483,7 @@ async function pollJobToCompletion(
 
     const status = jobRecord.status as string
 
+    // Check terminal statuses BEFORE timeout — avoids cancelling a just-completed job
     if (status === "completed") {
       const outputData = (jobRecord.output_data as Record<string, unknown>) ?? {}
       const output = buildNodeOutputFromJobData(outputData, nodeType)
@@ -505,6 +493,19 @@ async function pollJobToCompletion(
     if (status === "failed" || status === "cancelled") {
       const errorMsg = (jobRecord.error_message as string) ?? `Job ${status}`
       throw new Error(errorMsg)
+    }
+
+    // Detect when worker picks up the job (status transitions from "pending")
+    if (processingStartTime === null && status !== "pending") {
+      processingStartTime = Date.now()
+    }
+
+    // Check processing timeout — only starts once the worker picks up the job.
+    // Queue wait time is bounded by the workflow-level timeout (WORKFLOW_TIMEOUT_MS).
+    if (processingStartTime !== null && Date.now() - processingStartTime > NODE_TIMEOUT_MS) {
+      await supabase.from("jobs").update({ status: "cancelled" }).eq("id", jobId)
+      await refundJobCredits(usageLogId, jobId, "Node timeout")
+      throw new Error(`Node timeout after ${NODE_TIMEOUT_MS / 1000}s of processing`)
     }
 
     // Wait before next poll

@@ -148,7 +148,7 @@ export interface OrchestratorContext {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Max time for a single node to complete (ms) */
+/** Max time for a single node to process after the worker picks it up (ms) */
 export const NODE_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
 
 /** Max time for an entire workflow execution (ms) */
