@@ -633,6 +633,14 @@ export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, o
         <Textarea rows={4} value={data.content ?? ""} onChange={(e) => { if (e.target.value.length <= 3000) onUpdate({ content: e.target.value }) }} placeholder="Enter style text to enhance..." maxLength={3000} />
         <p className="text-xs text-muted-foreground mt-1">{(data.content ?? "").length}/3000</p>
       </MappableField>
+      {data.generatedText && (
+        <div>
+          <Label>Result</Label>
+          <div className="rounded-md border bg-muted/30 p-2 text-xs max-h-40 overflow-y-auto whitespace-pre-wrap">
+            {data.generatedText}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
