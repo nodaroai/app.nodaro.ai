@@ -139,10 +139,10 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
     const beginTime = endTime - days * 86400_000
 
     // Fetch all KIE logs for the time window (generic + model-specific endpoints)
-    const { records, sources } = await fetchAllKieLogs(token, beginTime, endTime)
+    const { records, sources, errors, rawSamples } = await fetchAllKieLogs(token, beginTime, endTime)
 
     if (records.length === 0) {
-      return { message: "No records found", days, totalRecords: 0, sources, models: [] }
+      return { message: "No records found", days, totalRecords: 0, sources, errors, rawSamples, models: [] }
     }
 
     // Build our model mapping for comparison
@@ -158,7 +158,9 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
     }>()
 
     for (const record of records) {
-      if (record.state !== "success") continue
+      // Different endpoints use different state values: "success", "completed", "1", etc.
+      const s = record.state?.toLowerCase?.() ?? ""
+      if (s !== "success" && s !== "completed" && s !== "1" && s !== "done") continue
 
       const key = record.model
       const existing = byModel.get(key)
@@ -258,10 +260,15 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
     return {
       days,
       totalRecords: records.length,
-      successRecords: records.filter(r => r.state === "success").length,
+      successRecords: records.filter(r => {
+        const s = r.state?.toLowerCase?.() ?? ""
+        return s === "success" || s === "completed" || s === "1" || s === "done"
+      }).length,
       uniqueModels: byModel.size,
       mismatches: mismatches.length,
       sources,
+      errors,
+      rawSamples,
       models: results,
     }
   })

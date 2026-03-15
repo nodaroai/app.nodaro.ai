@@ -10,6 +10,10 @@
  * 2. Model-specific: POST /client/v1/userRecord/{type}/page — suno, gpt-4o image,
  *    flux kontext, veo, midjourney, runway aleph, luma modify, runway
  *
+ * The two families return different response shapes:
+ * - Generic: { code, data: { records: [...], pages } }  fields: taskId, consumeCredits, model, state
+ * - Model-specific: { code, data: { records: [...], pages } }  fields vary: id/taskId, credits/consumeCredits, status/state, modelName/model
+ *
  * Requires:
  * - KIE_UNIQUE_ID env var (constant per account)
  * - Session authorization token (changes per session, entered via admin UI)
@@ -68,8 +72,43 @@ function auditHeaders(sessionToken: string, uniqueId: string) {
 }
 
 /**
- * Generic paginated fetcher. Works for both endpoint families since
- * they share the same request/response shape.
+ * Normalize a raw record from any KIE endpoint into our standard KieLogRecord.
+ *
+ * Generic endpoint fields:   taskId, consumeCredits, remainedCredits, model, state, param, createTime, completeTime, costTime
+ * Model-specific fields:     uuid, creditsConsumed, creditsRemaining, type, successFlag (200=ok), paramJson, createTime, operationType
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeRecord(raw: any, sourceLabel: string): KieLogRecord {
+  // successFlag: 200 = success, anything else = failed
+  let state = raw.state ?? ""
+  if (!state && raw.successFlag !== undefined) {
+    state = raw.successFlag === 200 ? "success" : "fail"
+  }
+
+  return {
+    taskId: raw.taskId ?? raw.uuid ?? raw.task_id ?? raw.id?.toString() ?? "",
+    consumeCredits: raw.consumeCredits ?? raw.creditsConsumed ?? raw.credits_consumed ?? raw.credits ?? 0,
+    remainedCredits: raw.remainedCredits ?? raw.creditsRemaining ?? raw.credits_remaining ?? 0,
+    model: raw.model ?? raw.type ?? raw.modelName ?? raw.model_name ?? sourceLabel,
+    state,
+    param: raw.param ?? raw.paramJson ?? raw.params ?? undefined,
+    createTime: raw.createTime ?? raw.create_time ?? 0,
+    completeTime: raw.completeTime ?? raw.complete_time ?? 0,
+    costTime: raw.costTime ?? raw.cost_time ?? 0,
+    _source: sourceLabel,
+  }
+}
+
+interface FetchResult {
+  records: KieLogRecord[]
+  error?: string
+  /** First page raw response sample (for debugging unknown formats) */
+  rawSample?: unknown
+}
+
+/**
+ * Paginated fetcher that handles both endpoint families.
+ * Normalizes records from any response shape.
  */
 async function fetchPaginated(
   url: string,
@@ -79,8 +118,9 @@ async function fetchPaginated(
   endTime: number,
   sourceLabel: string,
   extraBody?: Record<string, unknown>,
-): Promise<KieLogRecord[]> {
+): Promise<FetchResult> {
   const records: KieLogRecord[] = []
+  let rawSample: unknown
 
   for (let page = 1; page <= 100; page++) {
     try {
@@ -99,34 +139,64 @@ async function fetchPaginated(
 
       if (!response.ok) {
         if (response.status === 401) {
-          throw new Error("KIE session token expired — get a new one from kie.ai/logs Network tab (authorization header)")
+          return { records, error: "401 — session token expired" }
         }
-        throw new Error(`KIE API error: ${response.status}`)
+        return { records, error: `HTTP ${response.status}` }
       }
 
-      const data = await response.json() as {
-        code: number
-        data?: { records?: KieLogRecord[]; pages?: number }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = await response.json() as any
+
+      // Save first page raw response for debugging
+      if (page === 1) {
+        try {
+          const sample = JSON.parse(JSON.stringify(data))
+          // Truncate records array to first item for sample
+          if (sample?.data?.records?.length > 1) {
+            sample.data.records = [sample.data.records[0]]
+            sample.data._recordsTruncated = true
+          }
+          rawSample = sample
+        } catch { /* ignore */ }
       }
 
       if (data.code === 401) {
-        throw new Error("KIE session token expired — get a new one from kie.ai/logs Network tab (authorization header)")
+        return { records, error: "code 401 — session token expired" }
       }
 
-      if (data.code !== 200 || !data.data?.records?.length) break
-
-      for (const r of data.data.records) {
-        records.push({ ...r, _source: sourceLabel })
+      // Try multiple possible response shapes
+      // Shape 1 (generic): { code: 200, data: { records: [...], pages: N } }
+      // Shape 2 (some model endpoints): { code: 0, data: { records: [...], pages: N } }
+      // Shape 3: { success: true, data: { list: [...], total: N } }
+      const isOk = data.code === 200 || data.code === 0 || data.success === true
+      if (!isOk) {
+        if (page === 1) return { records, error: `Unexpected code: ${data.code ?? data.status ?? "unknown"}`, rawSample }
+        break
       }
 
-      if (page >= (data.data.pages ?? 0)) break
+      const rawRecords: unknown[] =
+        data.data?.records ??
+        data.data?.list ??
+        data.records ??
+        data.data ??
+        []
+
+      if (!Array.isArray(rawRecords) || rawRecords.length === 0) break
+
+      for (const raw of rawRecords) {
+        records.push(normalizeRecord(raw, sourceLabel))
+      }
+
+      const totalPages = data.data?.pages ?? data.data?.totalPages ?? Math.ceil((data.data?.total ?? 0) / 50) ?? 0
+      if (page >= totalPages) break
     } catch (err) {
-      if (page === 1) throw err
+      const msg = err instanceof Error ? err.message : String(err)
+      if (page === 1) return { records, error: msg, rawSample }
       break
     }
   }
 
-  return records
+  return { records, rawSample }
 }
 
 /**
@@ -143,26 +213,41 @@ export async function fetchKieLogs(
     throw new Error("KIE_UNIQUE_ID env var not configured")
   }
 
-  return fetchPaginated(
+  const result = await fetchPaginated(
     KIE_GENERIC_URL, sessionToken, uniqueId,
     beginTime, endTime, "generic",
     { successFlag: "" },
   )
+  if (result.error && result.records.length === 0) {
+    throw new Error(result.error)
+  }
+  return result.records
+}
+
+export interface FetchAllResult {
+  records: KieLogRecord[]
+  sources: Record<string, number>
+  errors: Record<string, string>
+  /** First-page raw response samples per endpoint (for debugging) */
+  rawSamples: Record<string, unknown>
 }
 
 /**
  * Fetch KIE log records from ALL endpoints (generic + model-specific).
- * Deduplicates by taskId. Returns combined results with _source tags.
+ * Deduplicates by taskId. Returns combined results with _source tags
+ * and per-endpoint error reporting.
  */
 export async function fetchAllKieLogs(
   sessionToken: string,
   beginTime: number,
   endTime: number,
-): Promise<{ records: KieLogRecord[]; sources: Record<string, number> }> {
+): Promise<FetchAllResult> {
   const uniqueId = config.KIE_UNIQUE_ID
   if (!uniqueId) {
     throw new Error("KIE_UNIQUE_ID env var not configured")
   }
+
+  const endpointLabels = ["generic", ...USER_RECORD_ENDPOINTS.map(ep => ep.label)]
 
   // Fetch ALL endpoints in parallel (generic + model-specific)
   const allFetches = await Promise.allSettled([
@@ -185,24 +270,31 @@ export async function fetchAllKieLogs(
   const seen = new Set<string>()
   const allRecords: KieLogRecord[] = []
   const sources: Record<string, number> = {}
+  const errors: Record<string, string> = {}
+  const rawSamples: Record<string, unknown> = {}
 
-  for (const result of allFetches) {
-    if (result.status !== "fulfilled") continue
-    for (const r of result.value) {
+  for (let i = 0; i < allFetches.length; i++) {
+    const label = endpointLabels[i]
+    const result = allFetches[i]
+
+    if (result.status === "rejected") {
+      const msg = result.reason instanceof Error ? result.reason.message : String(result.reason)
+      errors[label] = msg
+      continue
+    }
+
+    const { records, error, rawSample } = result.value
+    if (error) errors[label] = error
+    if (rawSample) rawSamples[label] = rawSample
+
+    for (const r of records) {
       const key = r.taskId
       if (key && seen.has(key)) continue
       if (key) seen.add(key)
       allRecords.push(r)
-      const src = r._source ?? "unknown"
-      sources[src] = (sources[src] ?? 0) + 1
+      sources[label] = (sources[label] ?? 0) + 1
     }
   }
 
-  // If nothing succeeded at all, check if it was an auth error
-  if (allRecords.length === 0) {
-    const firstError = allFetches.find(r => r.status === "rejected")
-    if (firstError?.status === "rejected") throw firstError.reason
-  }
-
-  return { records: allRecords, sources }
+  return { records: allRecords, sources, errors, rawSamples }
 }
