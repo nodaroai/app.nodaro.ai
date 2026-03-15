@@ -1148,11 +1148,18 @@ export class CreditsService {
       ? FREE_TIER_RESTRICTIONS.dailyCreditCap
       : (tierConfig.daily_credit_limit ?? null)
 
+    // Reset daily spent if it's a new UTC day (otherwise stale value shows in UI)
+    const dailySpent = await getEffectiveDailySpent(
+      userId,
+      profile.daily_spent_credits ?? 0,
+      profile.last_daily_reset as string | null
+    )
+
     return {
       total: subscriptionCredits + topupCredits,
       subscription: subscriptionCredits,
       topup: topupCredits,
-      dailySpent: profile.daily_spent_credits ?? 0,
+      dailySpent,
       dailyLimit,
       monthlyAllocation: tierConfig.monthly_credits ?? 0,
       tier: userTier,
