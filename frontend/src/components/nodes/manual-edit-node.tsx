@@ -17,7 +17,7 @@ import type { ManualEditData } from "@/types/nodes"
 function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as ManualEditData | undefined
   const nodeData = currentNodeData ?? (data as ManualEditData)
-  const credits = useModelCredits("ffmpeg", 0)
+  const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

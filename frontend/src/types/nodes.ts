@@ -1203,7 +1203,7 @@ export type MergeVideoAudioData = {
   originalAudioVolume?: number
   originalAudioRole?: "background" | "effect" | "narration"
   // Per-track settings keyed by source node ID
-  trackSettings?: Record<string, { role: string; volume: number; startTime: number }>
+  trackSettings?: Record<string, { role: string; volume?: number; startTime?: number }>
   // Legacy fields (backward compat)
   audioType: "voiceover" | "background" | "both"
   voiceoverVolume: number
@@ -1426,15 +1426,15 @@ export interface CompositeLayerConfig {
   id: string
   inputHandle: string      // "video1" | "video2" | "video3" | "video4"
   position: "fullscreen" | "positioned"
-  x: number
-  y: number
-  width: number
-  height: number
-  startFrame: number
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  startFrame?: number
   durationInFrames?: number
   opacity: number
   blendMode: "normal" | "multiply" | "screen" | "overlay"
-  zIndex: number
+  zIndex?: number
 }
 
 export type CompositeData = {

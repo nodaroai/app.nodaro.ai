@@ -173,8 +173,8 @@ export function VideoSettingsAccordion({
               type="number"
               min={1}
               max={300}
-              value={durationSeconds}
-              onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 30 })}
+              value={durationSeconds ?? ""}
+              onChange={(e) => onUpdate({ durationSeconds: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
             />
           </div>
           <div>

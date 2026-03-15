@@ -135,8 +135,8 @@ export function SceneCountConfig({ data, onUpdate }: ConfigProps<SceneCountData>
           type="number"
           min={1}
           max={20}
-          value={data.count}
-          onChange={(e) => onUpdate({ count: parseInt(e.target.value, 10) || 5 })}
+          value={data.count ?? ""}
+          onChange={(e) => onUpdate({ count: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
         />
       </div>
     </div>
@@ -153,8 +153,8 @@ export function DurationConfig({ data, onUpdate }: ConfigProps<DurationData>) {
           type="number"
           min={1}
           max={600}
-          value={data.seconds}
-          onChange={(e) => onUpdate({ seconds: parseInt(e.target.value, 10) || 60 })}
+          value={data.seconds ?? ""}
+          onChange={(e) => onUpdate({ seconds: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
         />
       </div>
     </div>

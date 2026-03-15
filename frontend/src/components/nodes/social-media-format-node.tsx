@@ -20,7 +20,7 @@ import type { SocialMediaPlatform } from "@/lib/social-media-specs"
 function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as SocialMediaFormatData | undefined
   const nodeData = currentNodeData ?? (data as SocialMediaFormatData)
-  const credits = useModelCredits("ffmpeg", 0)
+  const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

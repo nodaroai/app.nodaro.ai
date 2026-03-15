@@ -2905,15 +2905,15 @@ export function executeNode(
             id: existing.id,
             sourceVideo: videoUrl,
             position: existing.position,
-            x: existing.x,
-            y: existing.y,
-            width: existing.width,
-            height: existing.height,
-            startFrame: existing.startFrame,
+            x: existing.x ?? 0,
+            y: existing.y ?? 0,
+            width: existing.width ?? 100,
+            height: existing.height ?? 100,
+            startFrame: existing.startFrame ?? 0,
             durationInFrames: existing.durationInFrames,
             opacity: existing.opacity,
             blendMode: existing.blendMode,
-            zIndex: existing.zIndex,
+            zIndex: existing.zIndex ?? 0,
           });
         } else {
           layers.push({

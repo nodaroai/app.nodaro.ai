@@ -213,8 +213,8 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             type="number"
             min={1}
             max={30}
-            value={data.duration}
-            onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 5 })}
+            value={data.duration ?? ""}
+            onChange={(e) => onUpdate({ duration: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
           />
         )}
       </MappableField>
@@ -295,8 +295,8 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             min={0}
             max={1}
             step={0.1}
-            value={(data as Record<string, unknown>).cfgScale as number ?? 0.5}
-            onChange={(e) => onUpdate({ cfgScale: parseFloat(e.target.value) || 0.5 })}
+            value={((data as Record<string, unknown>).cfgScale as number) ?? ""}
+            onChange={(e) => onUpdate({ cfgScale: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
           />
           <p className="text-[10px] text-muted-foreground mt-1">0 = creative, 1 = strict prompt adherence</p>
         </div>
@@ -832,8 +832,8 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             type="number"
             min={1}
             max={30}
-            value={data.duration}
-            onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 5 })}
+            value={data.duration ?? ""}
+            onChange={(e) => onUpdate({ duration: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
           />
         )}
       </MappableField>
@@ -865,8 +865,8 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             min={0}
             max={1}
             step={0.1}
-            value={(data as Record<string, unknown>).cfgScale as number ?? 0.5}
-            onChange={(e) => onUpdate({ cfgScale: parseFloat(e.target.value) || 0.5 })}
+            value={((data as Record<string, unknown>).cfgScale as number) ?? ""}
+            onChange={(e) => onUpdate({ cfgScale: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
           />
           <p className="text-[10px] text-muted-foreground mt-1">0 = creative, 1 = strict prompt adherence</p>
         </div>
@@ -1206,14 +1206,11 @@ export function SoraStoryboardConfig({ data, onUpdate }: ConfigProps<SoraStorybo
                   type="number"
                   min={1}
                   max={10}
-                  value={shot.duration}
+                  value={shot.duration || ""}
                   onChange={(e) => {
-                    const val = Number(e.target.value)
-                    if (val >= 1 && val <= 10) {
-                      const newShots = [...shots]
-                      newShots[i] = { ...shot, duration: val }
-                      onUpdate({ shots: newShots })
-                    }
+                    const newShots = [...shots]
+                    newShots[i] = { ...shot, duration: e.target.value === "" ? 0 : Number(e.target.value) }
+                    onUpdate({ shots: newShots })
                   }}
                   className="w-16 h-7 text-xs"
                 />

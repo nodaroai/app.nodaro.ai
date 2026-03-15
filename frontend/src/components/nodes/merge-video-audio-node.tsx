@@ -35,16 +35,15 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = currentNodeData ?? (data as MergeVideoAudioData)
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
-  const credits = useModelCredits("ffmpeg", 0)
+  const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
-  const activeThumbnail = activeResult?.thumbnailUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
@@ -205,7 +204,6 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
       {hasResult && (
         <VideoResultOverlay
           url={activeUrl}
-          thumbnailUrl={activeThumbnail}
           videoAutoplay={videoAutoplay}
           label={nodeData.label}
           hasResults={results.length > 0}

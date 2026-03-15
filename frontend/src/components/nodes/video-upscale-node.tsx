@@ -17,14 +17,13 @@ import type { VideoUpscaleData } from "@/types/nodes"
 function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as VideoUpscaleData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
-  const activeThumbnail = activeResult?.thumbnailUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
   const upscaleProvider = (nodeData.provider as string | undefined) ?? "topaz-video"
@@ -186,7 +185,6 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
       {hasResult && (
         <VideoResultOverlay
           url={activeUrl}
-          thumbnailUrl={activeThumbnail}
           videoAutoplay={videoAutoplay}
           label={nodeData.label}
           hasResults={results.length > 0}

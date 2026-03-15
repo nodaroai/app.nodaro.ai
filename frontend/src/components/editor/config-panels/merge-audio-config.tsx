@@ -111,7 +111,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
     return s[field]
   }
 
-  function updateTrackSetting(sourceNodeId: string, field: "role" | "volume" | "startTime", value: string | number) {
+  function updateTrackSetting(sourceNodeId: string, field: "role" | "volume" | "startTime", value: string | number | undefined) {
     const src = audioSources.find((n) => n.id === sourceNodeId)
     const existing = trackSettings[sourceNodeId] ?? {
       role: getTrackDefaultRole(src?.type ?? ""),
@@ -176,8 +176,8 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
                       type="number"
                       min={0}
                       max={200}
-                      value={origVolume}
-                      onChange={(e) => onUpdate({ originalAudioVolume: parseInt(e.target.value, 10) || 0 })}
+                      value={origVolume ?? ""}
+                      onChange={(e) => onUpdate({ originalAudioVolume: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
                       className="w-14 h-6 text-xs text-center px-1"
                     />
                     <span className="text-[10px] text-muted-foreground">%</span>
@@ -320,8 +320,8 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
                         type="number"
                         min={0}
                         max={200}
-                        value={vol}
-                        onChange={(e) => updateTrackSetting(src.id, "volume", parseInt(e.target.value, 10) || 0)}
+                        value={vol ?? ""}
+                        onChange={(e) => updateTrackSetting(src.id, "volume", e.target.value === "" ? undefined : parseInt(e.target.value, 10))}
                         className="w-14 h-6 text-xs text-center px-1"
                       />
                       <span className="text-[10px] text-muted-foreground">%</span>
@@ -334,8 +334,8 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
                         type="number"
                         min={0}
                         step={0.1}
-                        value={startTime}
-                        onChange={(e) => updateTrackSetting(src.id, "startTime", parseFloat(e.target.value) || 0)}
+                        value={startTime ?? ""}
+                        onChange={(e) => updateTrackSetting(src.id, "startTime", e.target.value === "" ? undefined : parseFloat(e.target.value))}
                         className="flex-1 h-6 text-xs"
                       />
                       <span className="text-xs text-muted-foreground">s</span>

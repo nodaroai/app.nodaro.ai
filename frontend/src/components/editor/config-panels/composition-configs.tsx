@@ -145,8 +145,8 @@ export function AfterEffectsConfig({ data, onUpdate, nodeRefs }: ConfigProps<Aft
                     type="number"
                     min={1}
                     max={300}
-                    value={data.durationSeconds}
-                    onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 10 })}
+                    value={data.durationSeconds ?? ""}
+                    onChange={(e) => onUpdate({ durationSeconds: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
                     className="h-8 text-xs"
                   />
                 </div>
@@ -213,8 +213,8 @@ export function LottieOverlayConfig({ data, onUpdate, nodeRefs }: ConfigProps<Lo
                     type="number"
                     min={1}
                     max={300}
-                    value={data.durationSeconds}
-                    onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 10 })}
+                    value={data.durationSeconds ?? ""}
+                    onChange={(e) => onUpdate({ durationSeconds: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
                     className="h-8 text-xs"
                   />
                 </div>
@@ -281,8 +281,8 @@ export function ThreeDTitleConfig({ data, onUpdate, nodeRefs }: ConfigProps<Thre
                     type="number"
                     min={1}
                     max={60}
-                    value={data.durationSeconds}
-                    onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 10 })}
+                    value={data.durationSeconds ?? ""}
+                    onChange={(e) => onUpdate({ durationSeconds: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
                     className="h-8 text-xs"
                   />
                 </div>
@@ -426,8 +426,8 @@ export function MotionGraphicsConfig({ data, onUpdate, nodeRefs }: ConfigProps<M
                     type="number"
                     min={1}
                     max={60}
-                    value={data.durationSeconds}
-                    onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 5 })}
+                    value={data.durationSeconds ?? ""}
+                    onChange={(e) => onUpdate({ durationSeconds: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
                     className="h-8 text-xs"
                   />
                 </div>
@@ -585,8 +585,8 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
                   type="number"
                   min={0}
                   max={10}
-                  value={layer.zIndex}
-                  onChange={(e) => updateLayer(layer.id, { zIndex: parseInt(e.target.value, 10) || 0 })}
+                  value={layer.zIndex ?? ""}
+                  onChange={(e) => updateLayer(layer.id, { zIndex: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
                   className="h-7 text-[11px]"
                 />
               </div>
@@ -595,8 +595,8 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
                 <Input
                   type="number"
                   min={0}
-                  value={layer.startFrame}
-                  onChange={(e) => updateLayer(layer.id, { startFrame: parseInt(e.target.value, 10) || 0 })}
+                  value={layer.startFrame ?? ""}
+                  onChange={(e) => updateLayer(layer.id, { startFrame: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
                   className="h-7 text-[11px]"
                 />
               </div>
@@ -606,19 +606,19 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="mb-1 block text-[10px]">X (%)</Label>
-                  <Input type="number" min={0} max={100} value={layer.x} onChange={(e) => updateLayer(layer.id, { x: parseFloat(e.target.value) || 0 })} className="h-7 text-[11px]" />
+                  <Input type="number" min={0} max={100} value={layer.x ?? ""} onChange={(e) => updateLayer(layer.id, { x: e.target.value === "" ? undefined : parseFloat(e.target.value) })} className="h-7 text-[11px]" />
                 </div>
                 <div>
                   <Label className="mb-1 block text-[10px]">Y (%)</Label>
-                  <Input type="number" min={0} max={100} value={layer.y} onChange={(e) => updateLayer(layer.id, { y: parseFloat(e.target.value) || 0 })} className="h-7 text-[11px]" />
+                  <Input type="number" min={0} max={100} value={layer.y ?? ""} onChange={(e) => updateLayer(layer.id, { y: e.target.value === "" ? undefined : parseFloat(e.target.value) })} className="h-7 text-[11px]" />
                 </div>
                 <div>
                   <Label className="mb-1 block text-[10px]">Width (%)</Label>
-                  <Input type="number" min={1} max={100} value={layer.width} onChange={(e) => updateLayer(layer.id, { width: parseFloat(e.target.value) || 50 })} className="h-7 text-[11px]" />
+                  <Input type="number" min={1} max={100} value={layer.width ?? ""} onChange={(e) => updateLayer(layer.id, { width: e.target.value === "" ? undefined : parseFloat(e.target.value) })} className="h-7 text-[11px]" />
                 </div>
                 <div>
                   <Label className="mb-1 block text-[10px]">Height (%)</Label>
-                  <Input type="number" min={1} max={100} value={layer.height} onChange={(e) => updateLayer(layer.id, { height: parseFloat(e.target.value) || 50 })} className="h-7 text-[11px]" />
+                  <Input type="number" min={1} max={100} value={layer.height ?? ""} onChange={(e) => updateLayer(layer.id, { height: e.target.value === "" ? undefined : parseFloat(e.target.value) })} className="h-7 text-[11px]" />
                 </div>
               </div>
             )}
@@ -650,8 +650,8 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
                     type="number"
                     min={1}
                     max={120}
-                    value={data.durationSeconds}
-                    onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 10 })}
+                    value={data.durationSeconds ?? ""}
+                    onChange={(e) => onUpdate({ durationSeconds: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
                     className="h-8 text-xs"
                   />
                 </div>
