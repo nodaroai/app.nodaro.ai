@@ -70,12 +70,17 @@ export async function adminSubscriptionHealthRoutes(app: FastifyInstance) {
 
         // Missing DB subscription
         if (!dbSub) {
+          const isStripeCustomer = stripeCustomerId?.startsWith("cus_")
           issues.push({
             userId: profile.id,
             email: profile.email,
             tier: profile.tier,
             issueType: "missing_subscription",
-            description: "Paid user with no active subscription in DB",
+            description: isStripeCustomer
+              ? "Paid user with Stripe customer but no active subscription in DB"
+              : !stripeCustomerId
+                ? "Paid user with no payment provider linked"
+                : `Paid user with non-Stripe customer (${stripeCustomerId?.slice(0, 8)}...)`,
             dbPeriodEnd: null,
             stripePeriodEnd: null,
             stripeSubscriptionId: null,
@@ -137,15 +142,28 @@ export async function adminSubscriptionHealthRoutes(app: FastifyInstance) {
       .single()
 
     if (!custRow?.stripe_customer_id) {
-      return reply.status(404).send({ error: { message: "No Stripe customer mapping found" } })
+      return reply.status(404).send({ error: { message: "No payment provider linked to this user" } })
+    }
+
+    // Validate it's a Stripe customer ID (not Paddle or other provider)
+    if (!custRow.stripe_customer_id.startsWith("cus_")) {
+      return reply.status(400).send({
+        error: { message: `Not a Stripe customer (${custRow.stripe_customer_id.slice(0, 12)}...). Cannot sync from Stripe.` },
+      })
     }
 
     // Fetch active subscription from Stripe
-    const subs = await stripe.subscriptions.list({
-      customer: custRow.stripe_customer_id,
-      status: "active",
-      limit: 1,
-    })
+    let subs
+    try {
+      subs = await stripe.subscriptions.list({
+        customer: custRow.stripe_customer_id,
+        status: "active",
+        limit: 1,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Stripe API error"
+      return reply.status(502).send({ error: { message: `Stripe API failed: ${msg}` } })
+    }
 
     const activeSub = subs.data[0]
     if (!activeSub) {
