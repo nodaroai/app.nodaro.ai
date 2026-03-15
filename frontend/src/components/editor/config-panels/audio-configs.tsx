@@ -810,9 +810,9 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         <Select value={data.provider || "kling-avatar"} onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"] })}>
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="kling-avatar">Kling Avatar (40 credits)</SelectItem>
-            <SelectItem value="kling-avatar-pro">Kling Avatar Pro (60 credits)</SelectItem>
-            <SelectItem value="infinitalk">Infinitalk (60 credits)</SelectItem>
+            <SelectItem value="kling-avatar">Kling Avatar (28 credits)</SelectItem>
+            <SelectItem value="kling-avatar-pro">Kling Avatar Pro (56 credits)</SelectItem>
+            <SelectItem value="infinitalk">Infinitalk (26 credits)</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>

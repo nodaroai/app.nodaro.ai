@@ -187,9 +187,9 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "kling-3.0-motion":  { provider: "KIE.ai",    providerCostUsd: 0.600, markupPct: 25 },  // 12 cr/sec × 10s (kling 3.0 720p)
   "sora-watermark-remove": { provider: "KIE.ai", providerCostUsd: 0.050, markupPct: 25 }, // 10 KIE cr
   // ── Lip Sync ──
-  "kling-avatar":      { provider: "KIE.ai",    providerCostUsd: 0.200, markupPct: 25 },  // 8 KIE cr/sec × ~5s (Standard 720p)
-  "kling-avatar-pro":  { provider: "KIE.ai",    providerCostUsd: 0.400, markupPct: 25 },  // 16 KIE cr/sec × ~5s (Pro 1080p)
-  "infinitalk":        { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 12 KIE cr/sec × ~5s (720p)
+  "kling-avatar":      { provider: "KIE.ai",    providerCostUsd: 0.560, markupPct: 25 },  // 8 KIE cr/sec × ~14s (Standard 720p)
+  "kling-avatar-pro":  { provider: "KIE.ai",    providerCostUsd: 1.120, markupPct: 25 },  // 16 KIE cr/sec × ~14s (Pro 1080p)
+  "infinitalk":        { provider: "KIE.ai",    providerCostUsd: 0.525, markupPct: 25 },  // 3–12 KIE cr/sec × ~14s (avg 480p/720p)
   "hailuo-avatar":     { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },  // estimated
   // ── Audio / TTS / Music ──
   "elevenlabs-turbo":       { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },  // 6 KIE cr
