@@ -3,6 +3,7 @@ import {
   cleanupFreeUserMedia,
   cleanupCanceledUserMedia,
   expireSubscriptions,
+  renewSubscriptionCredits,
   sendStorageWarnings,
 } from "./cleanup-service.js"
 
@@ -11,6 +12,7 @@ import {
  *
  * Schedule:
  * - expireSubscriptions:       every hour at :00
+ * - renewSubscriptionCredits:  every hour at :30
  * - cleanupFreeUserMedia:      daily at 03:00 UTC
  * - cleanupCanceledUserMedia:  daily at 03:30 UTC
  * - sendStorageWarnings:       daily at 09:00 UTC
@@ -38,6 +40,20 @@ export function startCleanupCron(): void {
       )
     } catch (err) {
       console.error("[cron] Subscription expiry failed:", err)
+    }
+  })
+
+  // Renew subscription credits (safety net) -- every hour at :30
+  cron.schedule("30 * * * *", async () => {
+    console.log("[cron] Starting subscription credit renewal check...")
+    const start = Date.now()
+    try {
+      const result = await renewSubscriptionCredits()
+      console.log(
+        `[cron] Credit renewal done: ${result.usersRenewed} renewed (${Date.now() - start}ms)`
+      )
+    } catch (err) {
+      console.error("[cron] Credit renewal failed:", err)
     }
   })
 
@@ -83,5 +99,5 @@ export function startCleanupCron(): void {
     }
   })
 
-  console.log("[cron] Billing cleanup cron jobs started (4 schedules)")
+  console.log("[cron] Billing cleanup cron jobs started (5 schedules)")
 }

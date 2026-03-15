@@ -24,11 +24,16 @@ import type Stripe from "stripe"
 
 const WEBHOOK_SECRET = config.STRIPE_WEBHOOK_SECRET
 
-/** Extract subscription period dates from Stripe SDK v20 Subscription object. */
+/** Extract current billing period dates from Stripe SDK v20 SubscriptionItem. */
 function extractSubscriptionPeriod(sub: Stripe.Subscription): { periodStart: string; periodEnd: string | null } {
+  const item = sub.items.data[0]
   return {
-    periodStart: new Date(sub.start_date * 1000).toISOString(),
-    periodEnd: sub.cancel_at ? new Date(sub.cancel_at * 1000).toISOString() : null,
+    periodStart: item
+      ? new Date(item.current_period_start * 1000).toISOString()
+      : new Date(sub.start_date * 1000).toISOString(),
+    periodEnd: item
+      ? new Date(item.current_period_end * 1000).toISOString()
+      : null,
   }
 }
 
