@@ -306,16 +306,16 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
         </Select>
       </MappableField>
       <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between"><label className="text-xs font-medium text-muted-foreground">Style Weight</label><span className="text-xs text-muted-foreground">{data.styleWeight ?? 50}</span></div>
-        <input type="range" min={0} max={100} step={1} value={data.styleWeight ?? 50} onChange={(e) => onUpdate({ styleWeight: parseInt(e.target.value) })} className="w-full accent-[#ff0073]" />
+        <div className="flex items-center justify-between"><label className="text-xs font-medium text-muted-foreground">Style Weight</label><span className="text-xs text-muted-foreground">{data.styleWeight ?? 0.5}</span></div>
+        <input type="range" min={0} max={1} step={0.01} value={data.styleWeight ?? 0.5} onChange={(e) => onUpdate({ styleWeight: parseFloat(e.target.value) })} className="w-full accent-[#ff0073]" />
       </div>
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between"><label className="text-xs font-medium text-muted-foreground">Weirdness</label><span className="text-xs text-muted-foreground">{data.weirdnessConstraint ?? 0}</span></div>
-        <input type="range" min={0} max={100} step={1} value={data.weirdnessConstraint ?? 0} onChange={(e) => onUpdate({ weirdnessConstraint: parseInt(e.target.value) })} className="w-full accent-[#ff0073]" />
+        <input type="range" min={0} max={1} step={0.01} value={data.weirdnessConstraint ?? 0} onChange={(e) => onUpdate({ weirdnessConstraint: parseFloat(e.target.value) })} className="w-full accent-[#ff0073]" />
       </div>
       <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between"><label className="text-xs font-medium text-muted-foreground">Audio Weight</label><span className="text-xs text-muted-foreground">{data.audioWeight ?? 50}</span></div>
-        <input type="range" min={0} max={100} step={1} value={data.audioWeight ?? 50} onChange={(e) => onUpdate({ audioWeight: parseInt(e.target.value) })} className="w-full accent-[#ff0073]" />
+        <div className="flex items-center justify-between"><label className="text-xs font-medium text-muted-foreground">Audio Weight</label><span className="text-xs text-muted-foreground">{data.audioWeight ?? 0.5}</span></div>
+        <input type="range" min={0} max={1} step={0.01} value={data.audioWeight ?? 0.5} onChange={(e) => onUpdate({ audioWeight: parseFloat(e.target.value) })} className="w-full accent-[#ff0073]" />
       </div>
       <div className="flex items-center gap-2">
         <input type="checkbox" id="suno-instrumental" checked={data.instrumental ?? false} onChange={(e) => onUpdate({ instrumental: e.target.checked })} className="accent-[#ff0073]" />
