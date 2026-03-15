@@ -9,11 +9,11 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
-import type { ExtractAudioData } from "@/types/nodes"
+import type { TrimAudioData } from "@/types/nodes"
 
-function ExtractAudioNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as ExtractAudioData | undefined
-  const nodeData = currentNodeData ?? (data as ExtractAudioData)
+function TrimAudioNodeComponent({ id, data, selected }: NodeProps) {
+  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as TrimAudioData | undefined
+  const nodeData = currentNodeData ?? (data as TrimAudioData)
   const credits = useModelCredits("ffmpeg", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -154,7 +154,7 @@ function ExtractAudioNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <div className="flex justify-between text-muted-foreground">
-          <span>Extract Audio</span>
+          <span>Trim Audio</span>
           <span className="text-xs">{nodeData.audioFormat}</span>
         </div>
       </div>
@@ -215,4 +215,4 @@ function ExtractAudioNodeComponent({ id, data, selected }: NodeProps) {
   )
 }
 
-export const ExtractAudioNode = memo(ExtractAudioNodeComponent)
+export const TrimAudioNode = memo(TrimAudioNodeComponent)

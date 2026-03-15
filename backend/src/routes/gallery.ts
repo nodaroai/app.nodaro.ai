@@ -24,7 +24,7 @@ const AUDIO_JOBS = new Set([
   "suno-generate", "suno-cover", "suno-extend",
   "text-to-dialogue", "voice-changer", "dubbing",
   "voice-remix", "voice-design",
-  // Excluded: suno-separate, extract-audio, mix-audio, adjust-volume,
+  // Excluded: suno-separate, trim-audio, mix-audio, adjust-volume,
   //           extract-youtube-audio, audio-isolation (processing)
 ])
 

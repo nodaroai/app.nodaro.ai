@@ -484,7 +484,7 @@ export function resolveNodeInputs(
       src.type === "suno-add-vocals" ||
       src.type === "suno-convert-wav" ||
       src.type === "suno-upload-extend" ||
-      src.type === "extract-audio" ||
+      src.type === "trim-audio" ||
       src.type === "mix-audio" ||
       src.type === "voice-changer" ||
       src.type === "dubbing" ||

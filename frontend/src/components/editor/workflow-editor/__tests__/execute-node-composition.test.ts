@@ -105,7 +105,7 @@ vi.mock("@/lib/api", () => ({
   motionTransferApi: vi.fn(),
   videoUpscaleApi: vi.fn(),
   mergeVideoAudioApi: vi.fn(),
-  extractAudioApi: vi.fn(),
+  trimAudioApi: vi.fn(),
   trimVideoApi: vi.fn(),
   transcodeVideoApi: vi.fn(),
   speedRampApi: vi.fn(),

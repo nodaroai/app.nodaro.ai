@@ -6,7 +6,7 @@ import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VI
 import { combineVideos } from "../../providers/video/combine-videos.js"
 import { socialMediaFormat } from "../../providers/video/social-media-format.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
-import { extractAudio } from "../../providers/video/extract-audio.js"
+import { trimAudio } from "../../providers/video/trim-audio.js"
 import { trimVideo } from "../../providers/video/trim-video.js"
 import { resizeVideo } from "../../providers/video/resize-video.js"
 import { adjustVolume } from "../../providers/video/adjust-volume.js"
@@ -73,12 +73,12 @@ const handleMergeVideoAudio: HandlerFn = async function handleMergeVideoAudio(jo
   await completeFfmpegVideoJob(outputPath, ctx)
 }
 
-const handleExtractAudio: HandlerFn = async function handleExtractAudio(job, ctx) {
+const handleTrimAudio: HandlerFn = async function handleTrimAudio(job, ctx) {
   const { videoUrl, audioFormat, outputSilentVideo, startTime, endTime } = job.data as {
     jobId: string; videoUrl: string; audioFormat?: "mp3" | "wav" | "aac"; outputSilentVideo?: boolean; startTime?: number; endTime?: number
   }
-  console.log(`[worker] extract-audio ${ctx.jobId}`)
-  const result = await extractAudio({ videoUrl, audioFormat, outputSilentVideo, startTime, endTime })
+  console.log(`[worker] trim-audio ${ctx.jobId}`)
+  const result = await trimAudio({ videoUrl, audioFormat, outputSilentVideo, startTime, endTime })
   await job.updateProgress(80)
   const audioR2Url = await uploadFileToR2(result.audioPath, ctx.jobId, "audio", ctx.jobUserId)
   let silentVideoR2Url: string | undefined
@@ -257,7 +257,7 @@ const handleSocialMediaFormat: HandlerFn = async function handleSocialMediaForma
 export const ffmpegHandlers: Record<string, HandlerFn> = {
   "combine-videos": handleCombineVideos,
   "merge-video-audio": handleMergeVideoAudio,
-  "extract-audio": handleExtractAudio,
+  "trim-audio": handleTrimAudio,
   "trim-video": handleTrimVideo,
   "speed-ramp": handleSpeedRamp,
   "loop-video": handleLoopVideo,

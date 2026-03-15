@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => {
   // FFmpeg operation functions
   const mockCombineVideos = vi.fn().mockResolvedValue("/tmp/combine-work/output.mp4")
   const mockMergeVideoAudio = vi.fn().mockResolvedValue("/tmp/merge-work/output.mp4")
-  const mockExtractAudio = vi.fn().mockResolvedValue({ audioPath: "/tmp/extract-work/audio.mp3" })
+  const mockTrimAudio = vi.fn().mockResolvedValue({ audioPath: "/tmp/extract-work/audio.mp3" })
   const mockTrimVideo = vi.fn().mockResolvedValue("/tmp/trim-work/output.mp4")
   const mockResizeVideo = vi.fn().mockResolvedValue("/tmp/resize-work/output.mp4")
   const mockAdjustVolume = vi.fn().mockResolvedValue({ outputPath: "/tmp/volume-work/output.mp4", inputType: "video" as const })
@@ -46,7 +46,7 @@ const mocks = vi.hoisted(() => {
     mockUploadFileToR2,
     mockCombineVideos,
     mockMergeVideoAudio,
-    mockExtractAudio,
+    mockTrimAudio,
     mockTrimVideo,
     mockResizeVideo,
     mockAdjustVolume,
@@ -100,8 +100,8 @@ vi.mock("@/providers/video/merge-video-audio.js", () => ({
   mergeVideoAudio: mocks.mockMergeVideoAudio,
 }))
 
-vi.mock("@/providers/video/extract-audio.js", () => ({
-  extractAudio: mocks.mockExtractAudio,
+vi.mock("@/providers/video/trim-audio.js", () => ({
+  trimAudio: mocks.mockTrimAudio,
 }))
 
 vi.mock("@/providers/video/trim-video.js", () => ({
@@ -182,7 +182,7 @@ beforeEach(() => {
   mocks.mockShouldSaveJobResult.mockResolvedValue(true)
   mocks.mockUploadFileToR2.mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
-  mocks.mockExtractAudio.mockResolvedValue({ audioPath: "/tmp/extract-work/audio.mp3" })
+  mocks.mockTrimAudio.mockResolvedValue({ audioPath: "/tmp/extract-work/audio.mp3" })
   mocks.mockAdjustVolume.mockResolvedValue({ outputPath: "/tmp/volume-work/output.mp4", inputType: "video" as const })
 })
 
@@ -286,17 +286,17 @@ describe("merge-video-audio handler", () => {
 })
 
 // ---------------------------------------------------------------------------
-// extract-audio
+// trim-audio
 // ---------------------------------------------------------------------------
 
-describe("extract-audio handler", () => {
-  const handler = ffmpegHandlers["extract-audio"]
+describe("trim-audio handler", () => {
+  const handler = ffmpegHandlers["trim-audio"]
 
-  it("extracts audio and uploads without silent video", async () => {
-    const job = makeJob("extract-audio", { videoUrl: "https://vid.mp4" })
+  it("trims audio and uploads without silent video", async () => {
+    const job = makeJob("trim-audio", { videoUrl: "https://vid.mp4" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockExtractAudio).toHaveBeenCalledWith({
+    expect(mocks.mockTrimAudio).toHaveBeenCalledWith({
       videoUrl: "https://vid.mp4",
       audioFormat: undefined,
       outputSilentVideo: undefined,
@@ -307,11 +307,11 @@ describe("extract-audio handler", () => {
   })
 
   it("uploads silent video when outputSilentVideo=true", async () => {
-    mocks.mockExtractAudio.mockResolvedValueOnce({
+    mocks.mockTrimAudio.mockResolvedValueOnce({
       audioPath: "/tmp/extract-work/audio.mp3",
       silentVideoPath: "/tmp/extract-work/silent.mp4",
     })
-    const job = makeJob("extract-audio", { videoUrl: "https://vid.mp4", outputSilentVideo: true })
+    const job = makeJob("trim-audio", { videoUrl: "https://vid.mp4", outputSilentVideo: true })
     await handler(job as never, makeCtx())
 
     // Two uploads: audio + silent video
@@ -321,7 +321,7 @@ describe("extract-audio handler", () => {
   })
 
   it("includes videoUrl in output_data when silentVideoPath exists", async () => {
-    mocks.mockExtractAudio.mockResolvedValueOnce({
+    mocks.mockTrimAudio.mockResolvedValueOnce({
       audioPath: "/tmp/extract-work/audio.mp3",
       silentVideoPath: "/tmp/extract-work/silent.mp4",
     })
@@ -330,7 +330,7 @@ describe("extract-audio handler", () => {
       .mockResolvedValueOnce("https://r2.example.com/audio.mp3")
       .mockResolvedValueOnce("https://r2.example.com/silent.mp4")
 
-    const job = makeJob("extract-audio", { videoUrl: "https://vid.mp4", outputSilentVideo: true })
+    const job = makeJob("trim-audio", { videoUrl: "https://vid.mp4", outputSilentVideo: true })
     await handler(job as never, makeCtx())
 
     expect(mocks.mockUpdate).toHaveBeenCalledWith(
@@ -345,7 +345,7 @@ describe("extract-audio handler", () => {
 
   it("returns early when cancelled", async () => {
     mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
-    const job = makeJob("extract-audio", { videoUrl: "https://vid.mp4" })
+    const job = makeJob("trim-audio", { videoUrl: "https://vid.mp4" })
     await handler(job as never, makeCtx())
 
     expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()

@@ -17,7 +17,7 @@ import type {
   CombineVideosData,
   AddCaptionsData,
   ResizeVideoData,
-  ExtractAudioData,
+  TrimAudioData,
   MixAudioData,
   AdjustVolumeData,
   TrimVideoData,
@@ -198,14 +198,14 @@ export function ResizeVideoConfig({ data, onUpdate }: ConfigProps<ResizeVideoDat
   )
 }
 
-export function ExtractAudioConfig({ data, onUpdate }: ConfigProps<ExtractAudioData>) {
+export function TrimAudioConfig({ data, onUpdate }: ConfigProps<TrimAudioData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
         <Label>Audio Format</Label>
         <Select
           value={data.audioFormat}
-          onValueChange={(v) => onUpdate({ audioFormat: v as ExtractAudioData["audioFormat"] })}
+          onValueChange={(v) => onUpdate({ audioFormat: v as TrimAudioData["audioFormat"] })}
         >
           <SelectTrigger aria-label="Audio format"><SelectValue /></SelectTrigger>
           <SelectContent>

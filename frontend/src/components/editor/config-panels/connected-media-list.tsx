@@ -146,7 +146,7 @@ const AUDIO_TYPES = new Set([
   "generate-music",
   "text-to-audio",
   "text-to-dialogue",
-  "extract-audio",
+  "trim-audio",
   "mix-audio",
   "adjust-volume",
   "audio-isolation",

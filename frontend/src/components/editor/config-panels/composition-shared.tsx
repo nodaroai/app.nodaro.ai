@@ -51,7 +51,7 @@ export const RENDER_MEDIA_SOURCE_TYPES = new Set([
   "resize-video", "trim-video",
   "text-to-speech", "text-to-audio", "generate-music", "upload-audio",
   "suno-generate", "suno-cover", "suno-extend", "suno-separate",
-  "extract-audio", "mix-audio", "adjust-volume", "reference-audio",
+  "trim-audio", "mix-audio", "adjust-volume", "reference-audio",
 ])
 
 export function useMediaOrder(

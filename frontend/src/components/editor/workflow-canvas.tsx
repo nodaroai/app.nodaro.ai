@@ -250,7 +250,7 @@ function getMiniMapNodeColor(node: { type?: string }): string {
       nodeType === 'merge-video-audio' ||
       nodeType === 'add-captions' ||
       nodeType === 'resize-video' ||
-      nodeType === 'extract-audio' ||
+      nodeType === 'trim-audio' ||
       nodeType === 'mix-audio' ||
       nodeType === 'adjust-volume' ||
       nodeType === 'trim-video' ||

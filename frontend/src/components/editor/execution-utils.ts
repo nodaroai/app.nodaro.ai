@@ -87,7 +87,7 @@ export const JOB_TYPE_LABELS: Record<string, string> = {
   "add-captions": "Add Captions",
   "resize-video": "Resize Video",
   "trim-video": "Trim Video",
-  "extract-audio": "Extract Audio",
+  "trim-audio": "Trim Audio",
   "speed-ramp": "Speed Ramp",
   "loop-video": "Loop Video",
   "fade-video": "Fade Video",

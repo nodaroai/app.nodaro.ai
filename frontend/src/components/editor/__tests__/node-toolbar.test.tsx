@@ -157,7 +157,7 @@ describe("NODE_DEFINITIONS essential types", () => {
       "merge-video-audio",
       "add-captions",
       "resize-video",
-      "extract-audio",
+      "trim-audio",
       "mix-audio",
       "adjust-volume",
       "trim-video",

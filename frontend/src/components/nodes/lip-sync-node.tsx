@@ -43,7 +43,7 @@ const AUDIO_OUTPUT_TYPES = [
   "suno-cover",
   "upload-audio",
   "reference-audio",
-  "extract-audio",
+  "trim-audio",
   "adjust-volume",
   "mix-audio",
 ]

@@ -30,7 +30,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "merge-video-audio": "Merge Video & Audio",
   "add-captions": "Add Captions",
   "resize-video": "Resize Video",
-  "extract-audio": "Extract Audio",
+  "trim-audio": "Trim Audio",
   "mix-audio": "Mix Audio",
   "adjust-volume": "Adjust Volume",
   "trim-video": "Trim Video",

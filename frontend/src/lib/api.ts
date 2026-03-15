@@ -1024,19 +1024,19 @@ export async function mergeVideoAudioApi(
   return res.json()
 }
 
-export async function extractAudioApi(videoUrl: string, audioFormat?: string, outputSilentVideo?: boolean, userId?: string, startTime?: number, endTime?: number): Promise<{ jobId: string }> {
+export async function trimAudioApi(videoUrl: string, audioFormat?: string, outputSilentVideo?: boolean, userId?: string, startTime?: number, endTime?: number): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, audioFormat, outputSilentVideo, startTime, endTime }
   if (userId) {
     body.userId = userId
   }
-  const res = await fetch(`${API_BASE_URL}/v1/extract-audio`, {
+  const res = await fetch(`${API_BASE_URL}/v1/trim-audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start extract-audio")
+    throwApiError(err, "Failed to start trim-audio")
   }
   return res.json()
 }

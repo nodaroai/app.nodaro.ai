@@ -309,7 +309,7 @@ const AUDIO_RESULT_TYPES = new Set([
   "dubbing",
   "voice-remix",
   "voice-design",
-  "extract-audio",
+  "trim-audio",
   "mix-audio",
 ])
 

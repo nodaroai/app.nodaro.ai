@@ -614,8 +614,8 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Audio",
   },
   {
-    type: "extract-audio",
-    label: "Extract Audio",
+    type: "trim-audio",
+    label: "Trim Audio",
     icon: <AudioLines className="h-4 w-4" />,
     category: "Processing",
     group: "Audio",

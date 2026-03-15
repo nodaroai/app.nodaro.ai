@@ -86,7 +86,7 @@ import {
   AddCaptionsConfig,
   ResizeVideoConfig,
   SocialMediaFormatConfig,
-  ExtractAudioConfig,
+  TrimAudioConfig,
   MixAudioConfig,
   AdjustVolumeConfig,
   TrimVideoConfig,
@@ -183,7 +183,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "add-captions": "Add Captions",
   "resize-video": "Resize Video",
   "social-media-format": "Social Media Format",
-  "extract-audio": "Extract Audio",
+  "trim-audio": "Trim Audio",
   "mix-audio": "Mix Audio",
   "adjust-volume": "Adjust Volume",
   "trim-video": "Trim Video",
@@ -234,7 +234,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
 ])
 
 export const RUN_BUTTON_TYPES = new Set([
-  "merge-video-audio", "combine-videos", "extract-audio", "trim-video",
+  "merge-video-audio", "combine-videos", "trim-audio", "trim-video",
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "manual-edit", "resize-video", "social-media-format", "adjust-volume",
   "add-captions", "mix-audio", "combine-text", "split-text", "composite", "render-video",
   "sub-workflow",
@@ -602,7 +602,7 @@ export function ConfigPanel() {
           {nodeType === "add-captions" && <AddCaptionsConfig {...configProps} />}
           {nodeType === "resize-video" && <ResizeVideoConfig {...configProps} />}
           {nodeType === "social-media-format" && <SocialMediaFormatConfig {...configProps} />}
-          {nodeType === "extract-audio" && <ExtractAudioConfig {...configProps} />}
+          {nodeType === "trim-audio" && <TrimAudioConfig {...configProps} />}
           {nodeType === "mix-audio" && <MixAudioConfig {...configProps} />}
           {nodeType === "adjust-volume" && <AdjustVolumeConfig {...configProps} />}
           {nodeType === "trim-video" && <TrimVideoConfig {...configProps} />}

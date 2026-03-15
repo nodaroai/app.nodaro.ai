@@ -49,7 +49,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "merge-video-audio": "Merge Video & Audio",
   "add-captions": "Add Captions",
   "resize-video": "Resize Video",
-  "extract-audio": "Extract Audio",
+  "trim-audio": "Trim Audio",
   "mix-audio": "Mix Audio",
   "adjust-volume": "Adjust Volume",
   "trim-video": "Trim Video",
@@ -84,7 +84,7 @@ const GENERATE_BUTTON_TYPES = new Set([
 ])
 
 const RUN_BUTTON_TYPES = new Set([
-  "merge-video-audio", "combine-videos", "extract-audio", "trim-video",
+  "merge-video-audio", "combine-videos", "trim-audio", "trim-video",
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "manual-edit", "resize-video", "adjust-volume",
   "add-captions", "mix-audio", "combine-text", "split-text", "composite", "render-video",
 ])
@@ -165,7 +165,7 @@ describe("GENERATE_BUTTON_TYPES", () => {
       "trim-video",
       "render-video",
       "merge-video-audio",
-      "extract-audio",
+      "trim-audio",
       "add-captions",
       "composite",
     ]
@@ -190,7 +190,7 @@ describe("RUN_BUTTON_TYPES", () => {
       "trim-video",
       "render-video",
       "merge-video-audio",
-      "extract-audio",
+      "trim-audio",
       "mix-audio",
       "add-captions",
       "composite",

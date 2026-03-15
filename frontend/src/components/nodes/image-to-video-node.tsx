@@ -46,7 +46,7 @@ const IMAGE_OUTPUT_TYPES = new Set([
 const AUDIO_OUTPUT_TYPES = new Set([
   "text-to-speech", "generate-music", "text-to-audio",
   "suno-generate", "suno-cover",
-  "upload-audio", "reference-audio", "extract-audio",
+  "upload-audio", "reference-audio", "trim-audio",
   "adjust-volume", "mix-audio",
 ])
 

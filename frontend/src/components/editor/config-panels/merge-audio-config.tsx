@@ -17,7 +17,7 @@ import type { ConfigProps } from "./types"
 
 const AUDIO_SOURCE_TYPES = new Set([
   "text-to-speech", "generate-music", "text-to-audio",
-  "upload-audio", "reference-audio", "extract-audio",
+  "upload-audio", "reference-audio", "trim-audio",
   "adjust-volume", "mix-audio",
 ])
 
