@@ -130,8 +130,9 @@ export function MaskPainterModal({ isOpen, onClose, imageUrl, onSave }: MaskPain
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [strokes, imageLoaded])
 
-  function getCanvasPoint(e: React.MouseEvent): { x: number; y: number } {
-    const canvas = canvasRef.current!
+  function getCanvasPoint(e: React.MouseEvent): { x: number; y: number } | null {
+    const canvas = canvasRef.current
+    if (!canvas) return null
     const rect = canvas.getBoundingClientRect()
     const { scaleX, scaleY } = getScale()
     return {
@@ -143,6 +144,7 @@ export function MaskPainterModal({ isOpen, onClose, imageUrl, onSave }: MaskPain
   function handlePointerDown(e: React.MouseEvent) {
     e.preventDefault()
     const pt = getCanvasPoint(e)
+    if (!pt) return
     activeStrokeRef.current = {
       points: [pt],
       radius: brushSize,
@@ -154,6 +156,7 @@ export function MaskPainterModal({ isOpen, onClose, imageUrl, onSave }: MaskPain
   function handlePointerMove(e: React.MouseEvent) {
     if (!activeStrokeRef.current) return
     const pt = getCanvasPoint(e)
+    if (!pt) return
     activeStrokeRef.current.points.push(pt)
     redrawOverlay()
   }

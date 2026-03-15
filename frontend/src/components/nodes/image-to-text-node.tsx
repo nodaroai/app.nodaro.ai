@@ -109,7 +109,7 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "image", type: "target", position: Position.Left, top: "calc(75% + 33px)", customStyle: { top: 'calc(75% + 33px)', left: '-29px' }, hideHandle: true },
-        { id: "text", type: "source", position: Position.Right, top: "25%", customStyle: { top: '25%', right: '-29px' }, hideHandle: true },
+        { id: "text", type: "source", position: Position.Right, customStyle: { top: 'calc(25% - 33px)', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1">

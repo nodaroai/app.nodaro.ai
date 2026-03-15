@@ -35,7 +35,7 @@
       "type": "suno-generate",
       "position": { "x": 500, "y": 0 },
       "data": {
-        "label": "Generate V4 (7cr)",
+        "label": "Generate V4 (4cr)",
         "prompt": "",
         "model": "V4",
         "lyrics": "",
@@ -50,7 +50,7 @@
       "type": "suno-generate",
       "position": { "x": 500, "y": 200 },
       "data": {
-        "label": "Generate V5 (13cr)",
+        "label": "Generate V5 (4cr)",
         "prompt": "",
         "model": "V5",
         "lyrics": "",
@@ -65,7 +65,7 @@
       "type": "suno-generate",
       "position": { "x": 500, "y": 400 },
       "data": {
-        "label": "Generate V4.5 (7cr)",
+        "label": "Generate V4.5 (4cr)",
         "prompt": "",
         "model": "V4_5",
         "lyrics": "",
@@ -80,7 +80,7 @@
       "type": "suno-generate",
       "position": { "x": 500, "y": 600 },
       "data": {
-        "label": "Generate V4.5+ (7cr)",
+        "label": "Generate V4.5+ (4cr)",
         "prompt": "",
         "model": "V4_5PLUS",
         "lyrics": "",
@@ -95,7 +95,7 @@
       "type": "suno-generate",
       "position": { "x": 500, "y": 800 },
       "data": {
-        "label": "Generate V5 instrumental (13cr)",
+        "label": "Generate V5 instrumental (4cr)",
         "prompt": "",
         "model": "V5",
         "lyrics": "",
@@ -134,7 +134,7 @@
       "type": "suno-cover",
       "position": { "x": 1000, "y": 400 },
       "data": {
-        "label": "Cover V4 (7cr)",
+        "label": "Cover V4 (4cr)",
         "prompt": "Acoustic folk version",
         "model": "V4",
         "lyrics": "",
@@ -149,7 +149,7 @@
       "type": "suno-cover",
       "position": { "x": 1000, "y": 600 },
       "data": {
-        "label": "Cover V5 (13cr)",
+        "label": "Cover V5 (4cr)",
         "prompt": "Jazz piano version",
         "model": "V5",
         "lyrics": "",
@@ -165,7 +165,7 @@
       "type": "suno-extend",
       "position": { "x": 1000, "y": 800 },
       "data": {
-        "label": "Extend V4 (7cr)",
+        "label": "Extend V4 (4cr)",
         "audioId": "",
         "defaultParamFlag": true,
         "prompt": "Continue with a guitar solo",
@@ -182,7 +182,7 @@
       "type": "suno-extend",
       "position": { "x": 1000, "y": 1000 },
       "data": {
-        "label": "Extend V5 (13cr)",
+        "label": "Extend V5 (4cr)",
         "audioId": "",
         "defaultParamFlag": true,
         "prompt": "Build to a dramatic chorus",
@@ -337,7 +337,7 @@
       "type": "suno-upload-extend",
       "position": { "x": 2000, "y": 800 },
       "data": {
-        "label": "Upload Extend V5 (13cr)",
+        "label": "Upload Extend V5 (4cr)",
         "prompt": "Continue into an epic finale",
         "model": "V5",
         "style": "epic orchestral",
@@ -359,25 +359,26 @@
     { "id": "e_p5", "source": "prompt_1", "target": "gen_v5_instrumental", "sourceHandle": "text", "targetHandle": "in" },
     { "id": "e_p6", "source": "prompt_1", "target": "lyrics_1",            "sourceHandle": "text", "targetHandle": "in" },
 
-    { "id": "e_a1",  "source": "upload_audio_1", "target": "cover_v4",              "sourceHandle": "audio", "targetHandle": "in" },
-    { "id": "e_a2",  "source": "upload_audio_1", "target": "cover_v5",              "sourceHandle": "audio", "targetHandle": "in" },
+    { "id": "e_a1",  "source": "upload_audio_1", "target": "cover_v4",  "sourceHandle": "audio", "targetHandle": "in" },
+    { "id": "e_a2",  "source": "upload_audio_1", "target": "cover_v5",  "sourceHandle": "audio", "targetHandle": "in" },
 
     { "id": "e_ext1", "source": "gen_v4",  "target": "extend_v4",      "sourceHandle": "audio", "targetHandle": "in" },
     { "id": "e_ext2", "source": "gen_v5",  "target": "extend_v5",      "sourceHandle": "audio", "targetHandle": "in" },
 
-    { "id": "e_sep1", "source": "gen_v4",  "target": "separate_vocal", "sourceHandle": "audio", "targetHandle": "audio" },
-    { "id": "e_sep2", "source": "gen_v4_5", "target": "separate_stem", "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_sep1", "source": "gen_v4",   "target": "separate_vocal", "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_sep2", "source": "gen_v4_5", "target": "separate_stem",  "sourceHandle": "audio", "targetHandle": "audio" },
 
     { "id": "e_mv1",  "source": "gen_v5",  "target": "music_video_1",  "sourceHandle": "audio", "targetHandle": "audio" },
 
-    { "id": "e_a8",  "source": "upload_audio_1", "target": "replace_section_1",     "sourceHandle": "audio", "targetHandle": "audio" },
-    { "id": "e_a9",  "source": "upload_audio_1", "target": "add_instrumental_v5",   "sourceHandle": "audio", "targetHandle": "audio" },
-    { "id": "e_a10", "source": "upload_audio_1", "target": "add_instrumental_v4_5plus", "sourceHandle": "audio", "targetHandle": "audio" },
-    { "id": "e_a11", "source": "upload_audio_1", "target": "add_vocals_v5",         "sourceHandle": "audio", "targetHandle": "audio" },
-    { "id": "e_a12", "source": "upload_audio_1", "target": "add_vocals_v4_5plus",   "sourceHandle": "audio", "targetHandle": "audio" },
-    { "id": "e_a13", "source": "upload_audio_1", "target": "convert_wav_1",         "sourceHandle": "audio", "targetHandle": "audio" },
-    { "id": "e_a14", "source": "upload_audio_1", "target": "upload_extend_v4",      "sourceHandle": "audio", "targetHandle": "audio" },
-    { "id": "e_a15", "source": "upload_audio_1", "target": "upload_extend_v5",      "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_rs1",  "source": "gen_v4_5plus",       "target": "replace_section_1",        "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_ai1",  "source": "gen_v5",             "target": "add_instrumental_v5",       "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_ai2",  "source": "gen_v4_5",           "target": "add_instrumental_v4_5plus", "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_av1",  "source": "gen_v5_instrumental", "target": "add_vocals_v5",            "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_av2",  "source": "gen_v4_5plus",       "target": "add_vocals_v4_5plus",       "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_cw1",  "source": "gen_v4",             "target": "convert_wav_1",             "sourceHandle": "audio", "targetHandle": "audio" },
+
+    { "id": "e_a14", "source": "upload_audio_1", "target": "upload_extend_v4", "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_a15", "source": "upload_audio_1", "target": "upload_extend_v5", "sourceHandle": "audio", "targetHandle": "audio" },
 
     { "id": "e_m1", "source": "upload_audio_1", "target": "mashup_v5", "sourceHandle": "audio", "targetHandle": "audio1" },
     { "id": "e_m2", "source": "upload_audio_2", "target": "mashup_v5", "sourceHandle": "audio", "targetHandle": "audio2" }
