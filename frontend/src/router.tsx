@@ -49,6 +49,7 @@ const AdminPricingPage = lazy(() => import("@/app/(admin)/admin/pricing/page"))
 const AdminSettings = lazy(() => import("@/app/(admin)/admin/settings/page"))
 const AdminApps = lazy(() => import("@/app/(admin)/admin/apps/page"))
 const AdminCreditAudit = lazy(() => import("@/app/(admin)/admin/credit-audit/page"))
+const AdminSubscriptions = lazy(() => import("@/app/(admin)/admin/subscriptions/page"))
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -211,6 +212,10 @@ export const router = createBrowserRouter([
       {
         path: "credit-audit",
         element: <SuspenseWrapper><AdminCreditAudit /></SuspenseWrapper>,
+      },
+      {
+        path: "subscriptions",
+        element: <SuspenseWrapper><AdminSubscriptions /></SuspenseWrapper>,
       },
     ],
   },
