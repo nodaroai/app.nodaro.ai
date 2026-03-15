@@ -128,6 +128,7 @@ export async function handleSubscriptionCreated(
       credits_reset_at: new Date().toISOString(),
       storage_limit_bytes: storageLimit,
       subscription_ended_at: null,
+      current_period_end: data.currentPeriodEnd,
     })
     .eq("id", userId)
 
@@ -290,12 +291,13 @@ export async function handleSubscriptionUpdated(
     console.error("[stripe] subscription.updated: update failed:", subError.message)
   }
 
-  // Update profile tier and storage
+  // Update profile tier, storage, and period end
   const { error: profileError } = await supabase
     .from("profiles")
     .update({
       tier: newTier,
       storage_limit_bytes: storageLimit,
+      current_period_end: data.currentPeriodEnd,
     })
     .eq("id", userId)
 
