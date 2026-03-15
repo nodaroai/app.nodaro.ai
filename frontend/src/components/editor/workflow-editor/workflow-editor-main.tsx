@@ -513,6 +513,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
     }
 
+    // Refresh execution history after cancellations settle
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ["workflow-executions"] });
+    }, 500);
+
     toast.info("Execution stopped");
   }
 

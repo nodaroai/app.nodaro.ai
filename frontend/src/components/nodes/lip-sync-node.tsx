@@ -378,7 +378,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
           {/* Video / thumbnail */}
           {status !== "running" && activeUrl && (
             <>
-              {activeThumbnail ? (
+              {activeThumbnail && !videoAutoplay ? (
                 <CachedImage
                   src={activeThumbnail}
                   alt="Video preview"
@@ -388,6 +388,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
               ) : (
                 <video
                   src={activeUrl}
+                  poster={activeThumbnail}
                   className="w-full object-cover rounded-xl"
                   style={{ minHeight: 180 }}
                   autoPlay={videoAutoplay}

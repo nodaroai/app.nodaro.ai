@@ -195,7 +195,7 @@ export const EXECUTABLE_TYPES = new Set([
   "facebook-post",
 ]);
 
-export const MAX_CONSECUTIVE_POLL_FAILURES = 5;
+export const MAX_CONSECUTIVE_POLL_FAILURES = 20;
 
 export function isExecutableNode(node: WorkflowNode): boolean {
   return EXECUTABLE_TYPES.has(node.type ?? "");
