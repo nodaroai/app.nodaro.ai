@@ -17,6 +17,8 @@
 			flush_interval -1
 		}
 	}
+	# Bust stale CDN cache for favicon.ico by rewriting to a versioned file
+	rewrite /favicon.ico /favicon-v8.ico
 	handle {
 		encode gzip
 		root * /app/frontend/dist
