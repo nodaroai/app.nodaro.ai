@@ -59,6 +59,20 @@ const NAV_ITEMS: readonly NavItem[] = [
   { href: "/admin", label: "Admin", icon: Shield, adminOnly: true },
 ]
 
+function formatRenewalTime(periodEnd: string): string {
+  const msLeft = new Date(periodEnd).getTime() - Date.now()
+  const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24))
+  if (daysLeft < 1) {
+    const hoursLeft = Math.floor(msLeft / (1000 * 60 * 60))
+    if (hoursLeft >= 1) return `in ${hoursLeft} hour${hoursLeft !== 1 ? "s" : ""}`
+    const minutesLeft = Math.floor(msLeft / (1000 * 60))
+    if (minutesLeft >= 1) return `in ${minutesLeft} minute${minutesLeft !== 1 ? "s" : ""}`
+    return "in less than a minute"
+  }
+  if (daysLeft <= 14) return `in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`
+  return new Date(periodEnd).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+}
+
 interface AppSidebarProps {
   /** If true, sidebar starts collapsed but can still be expanded by user */
   readonly defaultCollapsed?: boolean
@@ -187,13 +201,7 @@ export function AppSidebar({
                     )
                   ) : creditBalance.periodEnd ? (
                     <p className="text-zinc-500 dark:text-zinc-400">
-                      Renews {(() => {
-                        const end = new Date(creditBalance.periodEnd)
-                        const now = new Date()
-                        const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-                        if (daysLeft <= 14) return `in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`
-                        return end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-                      })()}
+                      Renews {formatRenewalTime(creditBalance.periodEnd)}
                     </p>
                   ) : null}
                 </TooltipContent>
@@ -253,13 +261,7 @@ export function AppSidebar({
                   })()}
                   {creditBalance.periodEnd && (
                     <p>
-                      Renews {(() => {
-                        const end = new Date(creditBalance.periodEnd)
-                        const now = new Date()
-                        const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-                        if (daysLeft <= 14) return `in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`
-                        return end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-                      })()}
+                      Renews {formatRenewalTime(creditBalance.periodEnd)}
                     </p>
                   )}
                 </div>
