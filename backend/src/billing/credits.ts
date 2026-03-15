@@ -1155,13 +1155,12 @@ export class CreditsService {
       profile.last_daily_reset as string | null
     )
 
-    // Read current_period_end from subscriptions table (source of truth, updated by Stripe webhooks)
-    // profiles.current_period_end can go stale if webhooks don't sync it
+    // Read current_period_end: DB first, then Stripe API as self-healing fallback
     let periodEnd: string | null = profile.current_period_end ?? null
     if (userTier !== "free") {
       const { data: sub } = await supabase
         .from("subscriptions")
-        .select("current_period_end")
+        .select("current_period_end, stripe_subscription_id")
         .eq("user_id", userId)
         .eq("status", "active")
         .order("current_period_end", { ascending: false })
@@ -1169,6 +1168,58 @@ export class CreditsService {
         .single()
       if (sub?.current_period_end) {
         periodEnd = sub.current_period_end
+      }
+
+      // Self-heal: if period end is stale (past), fetch directly from Stripe
+      const isPast = !periodEnd || new Date(periodEnd).getTime() < Date.now()
+      if (isPast && hasCredits()) {
+        try {
+          const { data: custRow } = await supabase
+            .from("stripe_customers")
+            .select("stripe_customer_id")
+            .eq("user_id", userId)
+            .single()
+          if (custRow?.stripe_customer_id) {
+            const { stripe } = await import("./stripe-client.js")
+            const subs = await stripe.subscriptions.list({
+              customer: custRow.stripe_customer_id,
+              status: "active",
+              limit: 1,
+            })
+            const activeSub = subs.data[0]
+            if (activeSub) {
+              const item = activeSub.items.data[0]
+              const freshEnd = item
+                ? new Date(item.current_period_end * 1000).toISOString()
+                : null
+              if (freshEnd) {
+                periodEnd = freshEnd
+                // Self-heal: update DB so we don't hit Stripe again
+                const freshStart = item
+                  ? new Date(item.current_period_start * 1000).toISOString()
+                  : null
+                await supabase
+                  .from("subscriptions")
+                  .upsert({
+                    user_id: userId,
+                    stripe_subscription_id: activeSub.id,
+                    stripe_price_id: activeSub.items.data[0]?.price?.id ?? "",
+                    tier: userTier,
+                    status: "active",
+                    current_period_start: freshStart,
+                    current_period_end: freshEnd,
+                  }, { onConflict: "stripe_subscription_id" })
+                await supabase
+                  .from("profiles")
+                  .update({ current_period_end: freshEnd })
+                  .eq("id", userId)
+              }
+            }
+          }
+        } catch (err) {
+          // Non-critical: log and continue with stale/null periodEnd
+          console.warn("[credits] Stripe subscription self-heal failed:", err)
+        }
       }
     }
 
