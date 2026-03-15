@@ -43,8 +43,9 @@ import { join } from "node:path"
 import { readFile } from "node:fs/promises"
 
 // Max audio duration (seconds) per lip-sync model
-// All lip-sync models have a 15-second audio limit
-const LIP_SYNC_MAX_AUDIO_SECONDS = 15
+// KIE.ai lip-sync models enforce a 15-second limit; use 14.5s to avoid
+// edge cases where ffprobe and KIE.ai measure duration slightly differently
+const LIP_SYNC_MAX_AUDIO_SECONDS = 14.5
 
 /**
  * If audio exceeds the model's max duration, trim it with FFmpeg
@@ -90,9 +91,11 @@ async function ensureAudioDuration(
     console.log(`[KIE.ai] Trimmed audio uploaded: ${trimmedUrl}`)
     return trimmedUrl
   } catch (err) {
-    console.error(`[KIE.ai] Audio trim failed, sending original URL: ${err instanceof Error ? err.message : err}`)
-    // Fall back to original URL — KIE may still accept it or return a clearer error
-    return audioUrl
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(`[KIE.ai] Audio trim failed: ${msg}`)
+    throw new Error(
+      `Lip sync requires audio ≤ ${maxSeconds}s. Auto-trim failed: ${msg}`
+    )
   } finally {
     if (workDir) await cleanupWorkDir(workDir)
   }
