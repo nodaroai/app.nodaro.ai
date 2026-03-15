@@ -95,7 +95,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "imagen4": 3,                  // 8 KIE cr, $0.04
   "imagen4-fast": 2,             // 4 KIE cr, $0.02
   "imagen4-ultra": 4,            // 12 KIE cr, $0.06
-  "qwen": 2,                     // 4 KIE cr, $0.02
+  ***REDACTED-OSS-SCRUB***
   "seedream": 3,                 // 6.5 KIE cr, $0.032
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
@@ -143,7 +143,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "minimax": 18,                 // 57 KIE cr, $0.285 (6s, 1080p)
   "veo3": 79,                    // 250 KIE cr, $1.25 (VEO 3.1 Quality)
   "veo3.1": 19,                  // 60 KIE cr, $0.30 (VEO 3.1 Fast)
-  "kling": 18,                   // 55 KIE cr, $0.275 (5s, no audio)
+  "kling": 28,                   // 110 KIE cr, $0.55 (10s avg)
   "kling-turbo": 14,             // 42 KIE cr, $0.21 (5s)
   "kling-3.0": 63,               // 200 KIE cr, $1.00 (5s, audio, 1080P — 40 cr/sec) — fallback only
   // Kling 3.0 duration-tiered pricing (1080P, per-second: 27 no audio, 40 with audio)
@@ -228,11 +228,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   // Replicate disabled
   ***REDACTED-OSS-SCRUB***
-  "suno": 7,                     // 12 KIE cr, $0.06 (per generation, V4 default)
-  "suno-v5": 13,                 // 12 KIE cr, $0.06 (V5 premium)
-  "suno-generate": 7,            // 12 KIE cr (V4 default)
-  "suno-cover": 7,               // 12 KIE cr
-  "suno-extend": 7,              // 12 KIE cr
+  "suno": 4,                     // 12 KIE cr, $0.06 (per generation, V4 default)
+  "suno-v5": 4,                  // 12 KIE cr, $0.06 (V5, same KIE cost as V4)
+  "suno-generate": 4,            // 12 KIE cr (V4 default)
+  "suno-cover": 4,               // 12 KIE cr
+  "suno-extend": 4,              // 12 KIE cr
   "suno-lyrics": 2,              // 0.4 KIE cr
   "suno-separate": 5,            // 10 KIE cr, vocal separation
   "suno-separate-stem": 16,      // 50 KIE cr, full stem separation
@@ -260,7 +260,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-voice-remix": 4,    // ElevenLabs voice remix/preview
   "elevenlabs-voice-design": 5,   // ElevenLabs voice design (full controls)
   "elevenlabs-forced-alignment": 3, // ElevenLabs forced alignment
-  ***REDACTED-OSS-SCRUB***
+  "infinitalk": 34,              // 42–168 KIE cr, $0.21–$0.84 (3–12 cr/sec * ~14s, 480p–720p)
   // ── Sora 2 Pro Storyboard ──
   "sora-storyboard": 47,          // 150 KIE cr, $0.75 (10 frames)
   "sora-storyboard:15": 85,       // 270 KIE cr, $1.35 (15/25 frames)
