@@ -524,6 +524,8 @@ export function resolveNodeInputs(
       inputs.prompt = output;
     } else if (src.type === "combine-text") {
       inputs.prompt = output;
+    } else if (src.type === "preview") {
+      inputs.prompt = output;
     } else if (src.type === "split-text") {
       inputs.prompt = output;
     } else if (src.type === "sub-workflow" || src.type === "sub-workflow-input") {

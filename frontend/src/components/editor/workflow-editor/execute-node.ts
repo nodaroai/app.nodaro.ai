@@ -122,6 +122,8 @@ import type {
   SceneNodeDataType,
   CombineTextNodeData,
   SplitTextData,
+  PreviewNodeData,
+  PreviewItem,
   VoiceChangerData,
   DubbingData,
   VoiceRemixData,
@@ -138,7 +140,7 @@ import {
   type ExecutionContext,
 } from "./types";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
-import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs } from "./execution-graph";
+import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
 import { resolveNodeInputs } from "./node-input-resolver";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { pollJobWithNodeUpdate } from "./poll-job";
@@ -3242,6 +3244,81 @@ export function executeNode(
       errorMessage: undefined,
       __listResults: [...parts],
       __listTotal: parts.length,
+    });
+    return Promise.resolve();
+  }
+
+  // Preview — collect upstream values and pass through
+  if (node.type === "preview") {
+    const {
+      nodes: currentNodes,
+      edges: currentEdges,
+      updateNodeData,
+    } = useWorkflowStore.getState();
+
+    const prevData = node.data as PreviewNodeData;
+    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+
+    const incomingEdges = currentEdges.filter((e) => e.target === node.id);
+
+    // Build a map of previous items to preserve visibility settings
+    const prevVisibility = new Map<string, boolean>();
+    for (const item of prevData.previewItems ?? []) {
+      prevVisibility.set(item.sourceNodeId, item.visible);
+    }
+    const prevOrder = prevData.itemOrder ?? [];
+
+    const freshItems: PreviewItem[] = [];
+
+    for (const edge of incomingEdges) {
+      const sourceNode = currentNodes.find((n) => n.id === edge.source);
+      if (!sourceNode) continue;
+
+      const raw = extractNodeOutput(sourceNode);
+      const trimmed = raw?.trim();
+      if (!trimmed) continue;
+
+      const srcType = sourceNode.type ?? "";
+      const srcLabel = (sourceNode.data as Record<string, unknown>).label as string || srcType;
+
+      let itemType: PreviewItem["type"] = "text";
+      if (IMAGE_SOURCE_TYPES.has(srcType) || srcType === "character" || srcType === "face" || srcType === "object" || srcType === "location") itemType = "image";
+      else if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(srcType)) itemType = "video";
+      else if (AUDIO_SOURCE_TYPES.has(srcType)) itemType = "audio";
+      else if (srcType === "forced-alignment") itemType = "data";
+      else if (/^https?:\/\/.*\.(png|jpe?g|gif|webp|svg|bmp)/i.test(trimmed)) itemType = "image";
+      else if (/^https?:\/\/.*\.(mp4|mov|webm|avi|mkv)/i.test(trimmed)) itemType = "video";
+      else if (/^https?:\/\/.*\.(mp3|wav|ogg|aac|flac|m4a)/i.test(trimmed)) itemType = "audio";
+
+      freshItems.push({
+        type: itemType,
+        value: trimmed,
+        sourceNodeId: sourceNode.id,
+        sourceNodeLabel: srcLabel,
+        visible: prevVisibility.get(sourceNode.id) ?? true,
+      });
+    }
+
+    // Apply saved ordering: known items first in saved order, new items appended
+    const itemMap = new Map(freshItems.map((item) => [item.sourceNodeId, item]));
+    const ordered: PreviewItem[] = [];
+    for (const id of prevOrder) {
+      const item = itemMap.get(id);
+      if (item) {
+        ordered.push(item);
+        itemMap.delete(id);
+      }
+    }
+    for (const item of itemMap.values()) {
+      ordered.push(item);
+    }
+
+    const newOrder = ordered.map((item) => item.sourceNodeId);
+
+    updateNodeData(node.id, {
+      previewItems: ordered,
+      itemOrder: newOrder,
+      executionStatus: "completed",
     });
     return Promise.resolve();
   }

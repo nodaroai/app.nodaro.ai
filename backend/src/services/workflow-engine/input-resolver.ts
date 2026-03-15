@@ -289,6 +289,7 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "ai-writer",
   "combine-text",
   "split-text",
+  "preview",
   "suno-style-boost",
 ])
 

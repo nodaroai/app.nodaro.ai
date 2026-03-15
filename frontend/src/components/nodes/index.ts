@@ -85,6 +85,7 @@ import { ObjectNode } from "./object-node";
 import { LocationNode } from "./location-node";
 import { CombineTextNode } from "./combine-text-node";
 import { SplitTextNode } from "./split-text-node";
+import { PreviewNode } from "./preview-node";
 import { StickyNoteNode } from "./sticky-note-node";
 import { SubWorkflowInputNode } from "./sub-workflow-input-node";
 import { SubWorkflowOutputNode } from "./sub-workflow-output-node";
@@ -195,6 +196,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   // Utility
   "combine-text": CombineTextNode,
   "split-text": SplitTextNode,
+  "preview": PreviewNode,
   "sticky-note": StickyNoteNode,
   // Sub-Workflow
   "sub-workflow-input": SubWorkflowInputNode,
