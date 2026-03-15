@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
-import { fetchKieLogs } from "../providers/kie/credit-lookup.js"
+import { fetchAllKieLogs } from "../providers/kie/credit-lookup.js"
 import {
   KIE_IMAGE_MODELS, KIE_VIDEO_MODELS, KIE_TEXT_TO_VIDEO_MODELS,
   KIE_VIDEO_TO_VIDEO_MODELS, KIE_MOTION_TRANSFER_MODELS, KIE_VIDEO_UPSCALE_MODELS,
@@ -138,11 +138,11 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
     const endTime = Date.now()
     const beginTime = endTime - days * 86400_000
 
-    // Fetch all KIE logs for the time window
-    const records = await fetchKieLogs(token, beginTime, endTime)
+    // Fetch all KIE logs for the time window (generic + model-specific endpoints)
+    const { records, sources } = await fetchAllKieLogs(token, beginTime, endTime)
 
     if (records.length === 0) {
-      return { message: "No records found", days, totalRecords: 0, models: [] }
+      return { message: "No records found", days, totalRecords: 0, sources, models: [] }
     }
 
     // Build our model mapping for comparison
@@ -261,6 +261,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
       successRecords: records.filter(r => r.state === "success").length,
       uniqueModels: byModel.size,
       mismatches: mismatches.length,
+      sources,
       models: results,
     }
   })
