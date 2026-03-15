@@ -3,6 +3,8 @@ import { config } from "../lib/config.js"
 import { deleteFromR2, batchDeleteFromR2 } from "../lib/storage.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
 import { TIER_STORAGE_LIMITS, TIER_CREDITS } from "../billing/stripe-config.js"
+import { invalidateBalanceCache } from "../routes/credits.js"
+import { CreditsService } from "./credits.js"
 
 // ============================================================
 // Types
@@ -16,6 +18,11 @@ interface CleanupResult {
 
 interface ExpiryResult {
   readonly usersDowngraded: number
+  readonly errors: number
+}
+
+interface RenewalResult {
+  readonly usersRenewed: number
   readonly errors: number
 }
 
@@ -455,7 +462,98 @@ export async function expireSubscriptions(): Promise<ExpiryResult> {
 }
 
 // ============================================================
-// D) Send storage warnings (80%, 95%, full)
+// D) Renew subscription credits (safety net for webhook failures)
+// ============================================================
+//
+// The primary renewal happens in handleSubscriptionUpdated (webhook).
+// This cron catches cases where the webhook was missed or delayed.
+// It finds active subscriptions whose billing period has ended and
+// whose credits haven't been reset since the period started.
+
+export async function renewSubscriptionCredits(): Promise<RenewalResult> {
+  let usersRenewed = 0
+  let errors = 0
+
+  const now = new Date().toISOString()
+
+  // Find active subscriptions whose billing period has ended
+  const { data: subs, error: subsError } = await supabase
+    .from("subscriptions")
+    .select("id, user_id, tier, current_period_end")
+    .eq("status", "active")
+    .lt("current_period_end", now)
+    .limit(100)
+
+  if (subsError) {
+    console.error("[cleanup] Failed to query renewable subscriptions:", subsError.message)
+    return { usersRenewed: 0, errors: 1 }
+  }
+
+  if (!subs || subs.length === 0) {
+    return { usersRenewed: 0, errors: 0 }
+  }
+
+  // Batch fetch all profiles to avoid N+1 queries
+  const userIds = subs.map(s => s.user_id)
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, credits_reset_at")
+    .in("id", userIds)
+
+  const profilesById = new Map((profiles ?? []).map(p => [p.id, p]))
+
+  for (const sub of subs) {
+    try {
+      // Skip if credits were already reset after the period end
+      // (webhook already handled it)
+      const profile = profilesById.get(sub.user_id)
+      if (profile?.credits_reset_at && profile.credits_reset_at >= sub.current_period_end) {
+        continue
+      }
+
+      const newCredits = TIER_CREDITS[sub.tier] ?? TIER_CREDITS.free
+
+      const { error: resetError } = await supabase
+        .from("profiles")
+        .update({
+          subscription_credits: newCredits,
+          credits_reset_at: now,
+        })
+        .eq("id", sub.user_id)
+
+      if (resetError) {
+        console.error(`[cleanup] Failed to renew credits for user ${sub.user_id}:`, resetError.message)
+        errors++
+        continue
+      }
+
+      invalidateBalanceCache(sub.user_id)
+
+      await CreditsService.logTransaction({
+        userId: sub.user_id,
+        amount: newCredits,
+        creditType: "subscription",
+        source: "subscription_renewal",
+        description: `Subscription renewal (cron safety net): ${sub.tier} tier (credits reset to ${newCredits})`,
+        balanceAfter: newCredits,
+      })
+
+      usersRenewed++
+      console.log(`[cleanup] Renewed credits for user ${sub.user_id}: ${sub.tier} tier, ${newCredits} credits`)
+    } catch (err) {
+      console.error(`[cleanup] Failed to renew subscription for user ${sub.user_id}:`, err)
+      errors++
+    }
+  }
+
+  if (usersRenewed > 0) {
+    console.log(`[cleanup] Renewed ${usersRenewed} subscriptions (${errors} errors)`)
+  }
+  return { usersRenewed, errors }
+}
+
+// ============================================================
+// E) Send storage warnings (80%, 95%, full)
 // ============================================================
 
 export async function sendStorageWarnings(): Promise<WarningResult> {
