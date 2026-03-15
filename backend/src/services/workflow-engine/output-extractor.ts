@@ -476,6 +476,11 @@ export function buildNodeOutputFromJobData(
     }
   }
 
+  // Normalize generatedText -> text (image-to-text, ai-writer store output as generatedText)
+  if (!output.text && outputData.generatedText) {
+    output.text = outputData.generatedText as string
+  }
+
   // Plan nodes store their plan under various keys
   for (const key of PLAN_OUTPUT_KEYS) {
     if (outputData[key]) {
