@@ -137,7 +137,7 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "imagen4-fast":      { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
   "imagen4-ultra":     { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr
   "ideogram-v3":       { provider: "KIE.ai",    providerCostUsd: 0.035, markupPct: 25 },  // 7 KIE cr (BALANCED)
-  "qwen":              { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
+  "qwen":              { provider: "KIE.ai",    providerCostUsd: 0.010, markupPct: 25 },  // 2 KIE cr
   "z-image":           { provider: "KIE.ai",    providerCostUsd: 0.004, markupPct: 25 },  // 0.8 KIE cr
   "seedream":          { provider: "KIE.ai",    providerCostUsd: 0.0275, markupPct: 25 }, // 5.5 KIE cr
   "seedream-5-lite":   { provider: "KIE.ai",    providerCostUsd: 0.0275, markupPct: 25 }, // 5.5 KIE cr
@@ -156,7 +156,7 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "minimax":           { provider: "KIE.ai",    providerCostUsd: 0.285, markupPct: 25 },  // 57 KIE cr (hailuo 02 Pro 6s 1080p)
   "veo3":              { provider: "KIE.ai",    providerCostUsd: 1.250, markupPct: 25 },  // 250 KIE cr (VEO 3.1 Quality)
   "veo3.1":            { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 60 KIE cr (VEO 3.1 Fast)
-  "kling":             { provider: "KIE.ai",    providerCostUsd: 0.275, markupPct: 25 },  // 55 KIE cr (2.6, 5s, no audio)
+  "kling":             { provider: "KIE.ai",    providerCostUsd: 0.550, markupPct: 25 },  // 110 KIE cr (2.6, 10s avg)
   "kling-turbo":       { provider: "KIE.ai",    providerCostUsd: 0.210, markupPct: 25 },  // 42 KIE cr (2.5 turbo 5s)
   "kling-3.0":         { provider: "KIE.ai",    providerCostUsd: 1.000, markupPct: 25 },  // 40 cr/sec × 5s = 200 KIE cr (audio, 1080P)
   "kling-master":      { provider: "KIE.ai",    providerCostUsd: 0.800, markupPct: 25 },  // 160 KIE cr (Master 5s)

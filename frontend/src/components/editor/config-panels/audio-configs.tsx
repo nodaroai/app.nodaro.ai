@@ -812,7 +812,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
           <SelectContent>
             <SelectItem value="kling-avatar">Kling Avatar (28 credits)</SelectItem>
             <SelectItem value="kling-avatar-pro">Kling Avatar Pro (56 credits)</SelectItem>
-            <SelectItem value="infinitalk">Infinitalk (32 credits)</SelectItem>
+            <SelectItem value="infinitalk">Infinitalk (34 credits)</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
