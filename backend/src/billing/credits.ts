@@ -143,8 +143,16 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "minimax": 18,                 // 57 KIE cr, $0.285 (6s, 1080p)
   "veo3": 79,                    // 250 KIE cr, $1.25 (VEO 3.1 Quality)
   "veo3.1": 19,                  // 60 KIE cr, $0.30 (VEO 3.1 Fast)
-  "kling": 28,                   // 110 KIE cr, $0.55 (10s avg)
-  "kling-turbo": 14,             // 42 KIE cr, $0.21 (5s)
+  ***REDACTED-OSS-SCRUB***
+  // Kling 2.6 duration-tiered pricing (5s/10s, audio doubles cost)
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  "kling:10s:audio": 56,         // 220 KIE cr, $1.10 (10s with audio)
+  "kling-turbo": 14,             // 42 KIE cr, $0.21 (5s fallback)
+  // Kling Turbo duration-tiered pricing
+  ***REDACTED-OSS-SCRUB***
+  "kling-turbo:10s": 22,         // 84 KIE cr, $0.42
   "kling-3.0": 63,               // 200 KIE cr, $1.00 (5s, audio, 1080P — 40 cr/sec) — fallback only
   // Kling 3.0 duration-tiered pricing (1080P, per-second: 27 no audio, 40 with audio)
   "kling-3.0:5s": 43,            // 135 KIE cr, $0.675 (1080P, no audio, 5s)
@@ -153,19 +161,47 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "kling-3.0:5s:audio": 63,      // 200 KIE cr, $1.00 (1080P, audio, 5s)
   "kling-3.0:10s:audio": 126,    // 400 KIE cr, $2.00 (1080P, audio, 10s)
   "kling-3.0:15s:audio": 189,    // 600 KIE cr, $3.00 (1080P, audio, 15s)
-  "grok-i2v": 7,                 // 20 KIE cr, $0.10 (6s, 720p)
-  "sora2-pro": 47,               // 150 KIE cr, $0.75 (Pro Standard 10s)
+  "grok-i2v": 7,                 // 20 KIE cr, $0.10 (6s fallback)
+  // Grok I2V duration-tiered pricing (shared with grok T2V)
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  "sora2-pro": 38,               // standard 5s fallback
+  // Sora2-Pro duration-tiered pricing (standard vs high quality mode)
+  "sora2-pro:5s": 38,            // 120 KIE cr, $0.60 (standard 5s)
+  "sora2-pro:10s": 68,           // 215 KIE cr, $1.075 (standard 10s)
+  "sora2-pro:5s:high": 83,       // 265 KIE cr, $1.325 (high quality 5s)
+  "sora2-pro:10s:high": 158,     // 500 KIE cr, $2.50 (high quality 10s)
   "seedance": 32,                // 100 KIE cr, $0.50 (not in KIE pricing data)
-  "wan-i2v": 22,                 // 70 KIE cr, $0.35 (5s, 720p)
+  "wan-i2v": 22,                 // 70 KIE cr, $0.35 (5s 720p fallback)
+  // Wan I2V duration-tiered pricing (720p default)
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   "wan-turbo": 13,               // 40 KIE cr, $0.20 (5s, 480p I2V default)
-  "hailuo-2.3-pro": 15,          // 45 KIE cr, $0.225 (6s, 768p)
-  "hailuo-2.3": 10,              // 30 KIE cr, $0.15 (6s, 768p)
-  "hailuo-standard": 10,         // 30 KIE cr, $0.15 (6s, 768p)
-  "sora2": 10,                   // 30 KIE cr, $0.15 (Standard 10s)
+  "hailuo-2.3-pro": 15,          // 45 KIE cr, $0.225 (6s fallback)
+  // Hailuo 2.3 Pro duration-tiered pricing (768p default)
+  "hailuo-2.3-pro:6s": 12,       // 45 KIE cr, $0.225
+  "hailuo-2.3-pro:10s": 23,      // 90 KIE cr, $0.45
+  "hailuo-2.3": 10,              // 30 KIE cr, $0.15 (6s fallback)
+  // Hailuo 2.3 duration-tiered pricing
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  "hailuo-standard": 10,         // 30 KIE cr, $0.15 (6s fallback)
+  // Hailuo Standard duration-tiered pricing
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  "sora2": 10,                   // 30 KIE cr, $0.15 (5s fallback)
+  // Sora2 duration-tiered pricing
+  "sora2:5s": 8,                 // 30 KIE cr, $0.15
+  "sora2:10s": 9,                // 35 KIE cr, $0.175
   "bytedance-lite": 16,          // 50 KIE cr, $0.25 (not in KIE pricing data)
   "bytedance-pro": 22,           // 70 KIE cr, $0.35 (not in KIE pricing data)
   "bytedance-pro-fast": 19,      // 60 KIE cr, $0.30 (not in KIE pricing data)
-  "kling-master": 50,            // 160 KIE cr, $0.80 (Master 5s)
+  "kling-master": 50,            // 160 KIE cr, $0.80 (5s fallback)
+  // Kling Master duration-tiered pricing
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   "runway-kie": 4,               // 12 KIE cr, $0.06 (5s, 720p)
   // ── Sora Watermark Removal ──
   "sora-watermark-remove": 4,    // 10 KIE cr, $0.05
@@ -260,7 +296,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-voice-remix": 4,    // ElevenLabs voice remix/preview
   "elevenlabs-voice-design": 5,   // ElevenLabs voice design (full controls)
   "elevenlabs-forced-alignment": 3, // ElevenLabs forced alignment
-  "infinitalk": 34,              // 42–168 KIE cr, $0.21–$0.84 (3–12 cr/sec * ~14s, 480p–720p)
+  "infinitalk": 42,              // fallback (720p default)
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   // ── Sora 2 Pro Storyboard ──
   "sora-storyboard": 47,          // 150 KIE cr, $0.75 (10 frames)
   "sora-storyboard:15": 85,       // 270 KIE cr, $1.35 (15/25 frames)
@@ -1337,7 +1375,7 @@ function getNodeModelIdentifier(node: { type: string; data?: Record<string, unkn
   if (nodeType === "image-to-video" || nodeType === "text-to-video") {
     const duration = data.duration as number | string | undefined
     const sound = (data.sound ?? data.kling3Sound) as boolean | undefined
-    return buildVideoCreditModelIdentifier(provider, duration, sound, nodeType as "image-to-video" | "text-to-video")
+    return buildVideoCreditModelIdentifier(provider, duration, sound, nodeType as "image-to-video" | "text-to-video", (data.videoSize ?? data.mode) as string | undefined)
   }
 
   // Image/edit nodes with quality/resolution variable pricing

@@ -310,7 +310,16 @@ export const GUIDANCE_SCALE_SUPPORT: Record<string, { min: number; max: number; 
  */
 export const DURATION_PRICED_PROVIDERS = new Set([
   "kling-3.0",
-  // Other models may be added after verification confirms variable pricing
+  "kling",
+  "kling-turbo",
+  "kling-master",
+  "grok-i2v",
+  "wan-i2v",
+  "hailuo-2.3-pro",
+  "hailuo-2.3",
+  "hailuo-standard",
+  "sora2-pro",
+  "sora2",
 ])
 
 /**
@@ -319,7 +328,15 @@ export const DURATION_PRICED_PROVIDERS = new Set([
  */
 export const AUDIO_ADDON_PROVIDERS = new Set([
   "kling-3.0",
-  // Other models may be added after verification
+  "kling",
+])
+
+/**
+ * Video models where a quality/mode parameter (e.g., videoSize "high") incurs higher cost.
+ * When provider is in this set and mode is "high", ":high" is appended to the identifier.
+ */
+export const MODE_ADDON_PROVIDERS = new Set([
+  "sora2-pro",
 ])
 
 /**
@@ -327,8 +344,18 @@ export const AUDIO_ADDON_PROVIDERS = new Set([
  * "duration" = cost varies by video length
  * "duration+audio" = cost varies by length AND audio on/off
  */
-export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio"> = {
+export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio" | "duration+mode"> = {
   "kling-3.0": "duration+audio",
+  "kling": "duration+audio",
+  "kling-turbo": "duration",
+  "kling-master": "duration",
+  "grok-i2v": "duration",
+  "wan-i2v": "duration",
+  "hailuo-2.3-pro": "duration",
+  "hailuo-2.3": "duration",
+  "hailuo-standard": "duration",
+  "sora2-pro": "duration+mode",
+  "sora2": "duration",
 }
 
 /**
@@ -341,6 +368,48 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
     { maxSeconds: 5, suffix: "5s" },
     { maxSeconds: 10, suffix: "10s" },
     { maxSeconds: 15, suffix: "15s" },
+  ],
+  "kling": [
+    { maxSeconds: 5, suffix: "5s" },
+    { maxSeconds: 10, suffix: "10s" },
+  ],
+  "kling-turbo": [
+    { maxSeconds: 5, suffix: "5s" },
+    { maxSeconds: 10, suffix: "10s" },
+  ],
+  "kling-master": [
+    { maxSeconds: 5, suffix: "5s" },
+    { maxSeconds: 10, suffix: "10s" },
+  ],
+  "grok-i2v": [
+    { maxSeconds: 6, suffix: "6s" },
+    { maxSeconds: 10, suffix: "10s" },
+    { maxSeconds: 15, suffix: "15s" },
+  ],
+  "wan-i2v": [
+    { maxSeconds: 5, suffix: "5s" },
+    { maxSeconds: 10, suffix: "10s" },
+    { maxSeconds: 15, suffix: "15s" },
+  ],
+  "hailuo-2.3-pro": [
+    { maxSeconds: 6, suffix: "6s" },
+    { maxSeconds: 10, suffix: "10s" },
+  ],
+  "hailuo-2.3": [
+    { maxSeconds: 6, suffix: "6s" },
+    { maxSeconds: 10, suffix: "10s" },
+  ],
+  "hailuo-standard": [
+    { maxSeconds: 6, suffix: "6s" },
+    { maxSeconds: 10, suffix: "10s" },
+  ],
+  "sora2-pro": [
+    { maxSeconds: 5, suffix: "5s" },
+    { maxSeconds: 10, suffix: "10s" },
+  ],
+  "sora2": [
+    { maxSeconds: 5, suffix: "5s" },
+    { maxSeconds: 10, suffix: "10s" },
   ],
 }
 

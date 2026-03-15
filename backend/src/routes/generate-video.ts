@@ -35,7 +35,7 @@ const generateVideoBody = z.object({
 })
 
 export async function generateVideoRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-video", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return buildVideoCreditModelIdentifier((body?.provider as string) ?? "minimax", body?.duration as number | string | undefined, body?.sound as boolean | undefined) }) }, async (req, reply) => {
+  app.post("/v1/generate-video", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return buildVideoCreditModelIdentifier((body?.provider as string) ?? "minimax", body?.duration as number | string | undefined, body?.sound as boolean | undefined, undefined, body?.videoSize as string | undefined) }) }, async (req, reply) => {
     const parsed = generateVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -56,7 +56,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     }
 
     // Determine model identifier for credit check (supports variable pricing by duration/audio)
-    const modelIdentifier = buildVideoCreditModelIdentifier(provider ?? "minimax", duration, sound)
+    const modelIdentifier = buildVideoCreditModelIdentifier(provider ?? "minimax", duration, sound, undefined, videoSize)
 
     const { data: job, error } = await supabase
       .from("jobs")

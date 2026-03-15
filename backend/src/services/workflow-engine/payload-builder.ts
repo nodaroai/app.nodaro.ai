@@ -561,6 +561,8 @@ export function buildPayload(
           provider,
           data.duration as number | string | undefined,
           (data.sound ?? data.kling3Sound) as boolean | undefined,
+          undefined,
+          (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
         ),
         payload: {
           jobId,
@@ -600,6 +602,7 @@ export function buildPayload(
           data.duration as number | string | undefined,
           (data.sound ?? data.kling3Sound) as boolean | undefined,
           "text-to-video",
+          (data.mode ?? data.kling3Mode ?? data.videoSize) as string | undefined,
         ),
         payload: {
           jobId,

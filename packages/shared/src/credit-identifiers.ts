@@ -9,6 +9,7 @@ import {
   IDEOGRAM_PROVIDERS,
   DURATION_PRICED_PROVIDERS,
   AUDIO_ADDON_PROVIDERS,
+  MODE_ADDON_PROVIDERS,
   VIDEO_DURATION_TIERS,
   MOTION_DURATION_TIERS,
 } from "./model-constants.js"
@@ -60,40 +61,56 @@ const T2V_CREDIT_OVERRIDES: Record<string, string> = {
 
 /**
  * Compute composite model identifier for video models with duration/audio-based pricing.
- * Examples: "kling-3.0:5s", "kling-3.0:10s:audio"
+ * Examples: "kling-3.0:5s", "kling-3.0:10s:audio", "sora2-pro:5s:high"
  *
  * @param provider - Video model key (e.g., "kling-3.0")
  * @param duration - Video duration in seconds
  * @param sound - Whether audio/sound is enabled
  * @param nodeType - Node type for T2V-specific cost overrides
+ * @param mode - Quality variant that affects pricing (e.g., videoSize "high" for sora2-pro)
  */
 export function buildVideoCreditModelIdentifier(
   provider: string,
   duration?: number | string,
   sound?: boolean,
   nodeType?: "image-to-video" | "text-to-video",
+  mode?: string,
 ): string {
-  // T2V overrides: some providers cost more for text-to-video than image-to-video
+  // T2V overrides: some providers have different base costs for text-to-video
+  let effectiveProvider = provider
   if (nodeType === "text-to-video") {
     const override = T2V_CREDIT_OVERRIDES[provider]
-    if (override) return override
+    if (override) {
+      // If override target also has duration pricing, use it as effective provider
+      if (DURATION_PRICED_PROVIDERS.has(override)) {
+        effectiveProvider = override
+      } else {
+        return override
+      }
+    }
   }
 
-  if (!DURATION_PRICED_PROVIDERS.has(provider)) {
-    return provider
+  if (!DURATION_PRICED_PROVIDERS.has(effectiveProvider)) {
+    return effectiveProvider
   }
 
   const durationSec = typeof duration === "string" ? parseInt(duration, 10) : (duration ?? 5)
-  const tiers = VIDEO_DURATION_TIERS[provider]
-  if (!tiers) return provider
+  const tiers = VIDEO_DURATION_TIERS[effectiveProvider]
+  if (!tiers) return effectiveProvider
 
   // Find the matching duration tier
   const tier = tiers.find(t => durationSec <= t.maxSeconds) ?? tiers[tiers.length - 1]
-  let identifier = `${provider}:${tier.suffix}`
+  let identifier = `${effectiveProvider}:${tier.suffix}`
 
   // Append audio suffix if applicable
-  if (AUDIO_ADDON_PROVIDERS.has(provider) && sound) {
+  if (AUDIO_ADDON_PROVIDERS.has(effectiveProvider) && sound) {
     identifier += ":audio"
+  }
+
+  // Append mode suffix for providers with quality-tiered pricing (e.g., sora2-pro)
+  // "high" comes from I2V videoSize field, "pro" comes from T2V mode field
+  if (MODE_ADDON_PROVIDERS.has(effectiveProvider) && (mode === "high" || mode === "pro")) {
+    identifier += ":high"
   }
 
   return identifier
