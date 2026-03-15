@@ -92,13 +92,14 @@ describe("CreditsService — extended", () => {
 
   describe("getBalance", () => {
     it("returns complete balance breakdown", async () => {
+      const todayUTC = new Date().toISOString().slice(0, 10)
       mockTable("profiles", {
         subscription_credits: 200,
         topup_credits: 50,
         tier: "pro",
         subscription_tier: null,
         daily_spent_credits: 5,
-        last_daily_reset: "2026-02-21",
+        last_daily_reset: todayUTC,
         current_period_end: "2026-03-21T00:00:00Z",
       })
 
