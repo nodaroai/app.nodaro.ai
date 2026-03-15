@@ -128,7 +128,7 @@ Full guide: `docs/adding-a-new-node.md`
 
 | Table | Key Columns | Notes |
 |-------|-------------|-------|
-| `profiles` | id, email, tier, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, role, public_outputs | Extends auth.users |
+| `profiles` | id, email, tier, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, role, public_outputs, current_period_end, subscription_ended_at | Extends auth.users |
 | `projects` | id, user_id, name, settings | |
 | `workflows` | id, project_id, user_id, nodes (JSONB), edges (JSONB), source_prompt | React Flow data |
 | `jobs` | id, workflow_id, user_id, status, progress, input_data, output_data, provider, provider_cost, is_public, should_watermark, workflow_execution_id | Execution records |
@@ -146,6 +146,7 @@ Full guide: `docs/adding-a-new-node.md`
 | `subscriptions` | id, stripe_subscription_id, stripe_price_id, tier, status, current_period_start/end, canceled_at | Synced from Stripe |
 | `transactions` | id, stripe_transaction_id, type, amount_usd, credits_granted | Payment history |
 | `social_connections` | id, user_id, platform, platform_user_id, access_token_encrypted, refresh_token_encrypted, token_expires_at, scopes, metadata | OAuth tokens (AES-256-GCM encrypted), one per user+platform |
+| `published_apps` | id, workflow_id, user_id, name, slug, version, nodes (JSONB), edges (JSONB), metadata, status | Versioned mini-app snapshots |
 
 ---
 
@@ -157,12 +158,12 @@ frontend/src/
   router.tsx              — React Router config (createBrowserRouter)
   app/(auth)/             — Login, signup
   app/(dashboard)/        — Projects, workflows, billing, settings, library, integrations
-  app/(admin)/            — Admin panel (cloud/business only)
+  app/(admin)/            — Admin panel (cloud/business only): pricing, jobs, models, reports, settings, usage, users, credit-audit, alerts, apps, subscriptions
   app/pricing/            — Pricing page (Stripe Checkout)
   app/gallery/            — Public community gallery
   routes/                 — Route wrapper components (workflow-editor-page, etc.)
   layouts/                — DashboardLayout, AdminLayout
-  components/nodes/       — 40+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, extend-video-node, webhook-trigger-node, schedule-trigger-node, social-node, speech-to-video-node, sora-storyboard-node, 7 suno-*-nodes)
+  components/nodes/       — 100+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, extend-video-node, webhook-trigger-node, schedule-trigger-node, social-node, speech-to-video-node, sora-storyboard-node, 13 suno-*-nodes, preview-node)
   components/editor/
     config-panel.tsx      — Thin dispatcher (~520 lines), delegates to config-panels/
     config-panels/        — 24 files: per-category node config components (image, video, audio, composition, entity, trigger, social, etc.) + tag-textarea.tsx (autocomplete for audio tags & Suno metatags)
@@ -193,10 +194,10 @@ backend/src/
   worker.ts               — BullMQ job processor (video-worker)
   render-worker.ts        — BullMQ render worker (Remotion, concurrency:1)
   orchestrator.ts         — BullMQ workflow orchestrator entry point (concurrency:2)
-  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones, voice-changer, dubbing, voice-remix, voice-design, forced-alignment, extend-video, workflow-execution, webhook-triggers, social-auth, social-publish, speech-to-video, sora-storyboard, suno)
+  routes/                 — 93 API route files (jobs, workflows, projects, admin-*, billing, stripe-webhook, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones, voice-changer, dubbing, voice-remix, voice-design, forced-alignment, extend-video, workflow-execution, webhook-triggers, social-auth, social-publish, speech-to-video, sora-storyboard, suno, published-apps, app-runner, app-analytics, admin-subscription-health, admin-credit-audit, cancel-jobs)
   prompts/                — AI system prompts (after-effects-system.ts, lottie-overlay-system.ts, three-d-title-system.ts, motion-graphics-system.ts)
   utils/watermark.ts      — Image + video watermark functions
-  providers/              — AI provider abstraction; KIE clients: `client.ts` (core + VEO), `kontext-client.ts` (Flux Kontext), `runway-client.ts` (Runway gen + extend), `luma-client.ts` (Luma Modify)
+  providers/              — AI provider abstraction; KIE clients: `client.ts` (core + VEO), `kontext-client.ts` (Flux Kontext), `runway-client.ts` (Runway + Aleph), `luma-client.ts` (Luma Modify), `kling3-client.ts` (Kling 3.0), `suno-client.ts` (Suno ops), `credit-lookup.ts` (credit audit)
   billing/                — Credits, Stripe, cleanup (see Credit System)
   services/workflow-engine/ — Backend workflow orchestration (8 files: types, execution-graph, input-resolver, output-extractor, payload-builder, node-executor, inline-executor, sub-workflow-handler)
   services/social/        — Social media OAuth + publishing (encryption, oauth, platforms/)
@@ -268,20 +269,25 @@ backend/src/
 - [ ] Landing page storage tier update
 - [ ] Project Folders
 - [ ] Version history per node
-- [x] New KIE models: Nano Banana 2, Seedream 5 Lite (image); Flux Kontext/Max (image edit); Runway KIE (video); Luma Modify (V2V); VEO/Runway Extend (video extend); VEO 1080p/4K upscale
-- [x] New KIE models Phase 2: Ideogram V3 (image); Kling 3.0 motion control; Topaz 4K/8K tiers; Sora watermark remover; 7 Suno ops (mashup, replace-section, style-boost, add-instrumental, add-vocals, convert-wav, upload-extend); Speech-to-Video (Wan 2.2); Sora Storyboard
 - [ ] Video generation with start+end frames (2 images → video) for supporting models
 - [ ] /v1/available-models endpoint (filter by edition + API keys)
-- [x] TTS voice browser with categories, search, audio previews
-- [x] Voice cloning (record/upload audio → ElevenLabs instant clone → custom voice for TTS)
 - [ ] Translation: use AI (Gemini/Claude) not Google Translate
 - [ ] Build from Prompt: MVP + Director Mode versions
 - [ ] Scene Node + Shot Node as optional "Director Mode"
+- [x] New KIE models: Nano Banana 2, Seedream 5 Lite (image); Flux Kontext/Max (image edit); Runway KIE (video); Luma Modify (V2V); VEO/Runway Extend (video extend); VEO 1080p/4K upscale
+- [x] New KIE models Phase 2: Ideogram V3 (image); Kling 3.0 motion control; Topaz 4K/8K tiers; Sora watermark remover; 7 Suno ops (mashup, replace-section, style-boost, add-instrumental, add-vocals, convert-wav, upload-extend); Speech-to-Video (Wan 2.2); Sora Storyboard
+- [x] TTS voice browser with categories, search, audio previews
+- [x] Voice cloning (record/upload audio → ElevenLabs instant clone → custom voice for TTS)
 - [x] Backend workflow execution engine (orchestrator, webhook triggers, schedule triggers)
 - [x] Execution history UI (per-workflow execution list + per-node status + single-node runs)
 - [x] Social media integrations (Instagram, TikTok, YouTube, LinkedIn, X, Facebook — OAuth + publishing nodes + integrations page)
+- [x] Admin subscription health page + Stripe self-healing
+- [x] Published apps / mini-apps system (versioning, embedding, app runner)
+- [x] Preview node (inspect connected asset values in workflow editor)
+- [x] Copy/paste/cut workflow nodes + clipboard workflow import
+- [x] Credit audit across all KIE record endpoints
 
 ---
 
-*Last updated: 2026-03-10*
-*Version: 1.54.0*
+*Last updated: 2026-03-15*
+*Version: 1.55.0*
