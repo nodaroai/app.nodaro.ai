@@ -75,7 +75,7 @@ async function ensureAudioDuration(
     await runFfmpeg([
       "-i", inputPath,
       "-t", String(maxSeconds),
-      "-c", "copy",
+      "-y",
       outputPath,
     ])
 
@@ -938,9 +938,11 @@ export class KieVideoProvider
       audio_url: effectiveAudioUrl,
     }
 
-    // Add optional prompt (for infinitalk especially)
+    // Infinitalk requires prompt — use a default if none provided
     if (prompt) {
       input.prompt = prompt
+    } else if (provider === "infinitalk") {
+      input.prompt = "A person speaking naturally"
     }
 
     // Override resolution if provided (for infinitalk: 480p or 720p)
