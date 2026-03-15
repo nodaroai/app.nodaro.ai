@@ -36,7 +36,7 @@ import { useUndoRedoActions } from "@/hooks/use-undo-redo"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { MobileCanvasContext } from "./mobile-canvas-context"
 import { CanvasZoomContext } from "./canvas-zoom-context"
-import type { WorkflowEdge, SceneNodeType } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, SceneNodeType } from "@/types/nodes"
 import type { LibraryAsset } from "@/lib/api"
 
 // Source handle → media type label
@@ -861,6 +861,87 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       if ((e.ctrlKey || e.metaKey) && e.key === "d" && selectedNodeId) {
         e.preventDefault()
         duplicateNode(selectedNodeId)
+        return
+      }
+
+      // Ctrl+C / Ctrl+X — Copy or Cut selected nodes
+      if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "x")) {
+        const state = useWorkflowStore.getState()
+        const selected = state.nodes.filter((n) => n.selected && n.type !== "sticky-note")
+        if (selected.length === 0) return
+        e.preventDefault()
+        const selectedIds = new Set(selected.map((n) => n.id))
+        const connectedEdges = state.edges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target))
+        const payload = JSON.stringify({ __nodaro_clipboard: true, nodes: selected, edges: connectedEdges })
+        navigator.clipboard.writeText(payload).then(() => {
+          if (e.key === "x") {
+            useWorkflowStore.setState({
+              nodes: state.nodes.filter((n) => !selectedIds.has(n.id)),
+              edges: state.edges.filter((edge) => !selectedIds.has(edge.source) && !selectedIds.has(edge.target)),
+              selectedNodeId: null,
+              isDirty: true,
+            })
+          }
+        }).catch(() => {})
+        return
+      }
+
+      // Ctrl+V - Paste nodes from clipboard
+      if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+        e.preventDefault()
+        navigator.clipboard.readText().then((text) => {
+          let parsed: { __nodaro_clipboard?: boolean; nodes?: WorkflowNode[]; edges?: WorkflowEdge[] }
+          try { parsed = JSON.parse(text) } catch { return }
+          if (!parsed.__nodaro_clipboard || !Array.isArray(parsed.nodes) || parsed.nodes.length === 0) return
+
+          const nodesToPaste = parsed.nodes
+          const edgesToPaste = parsed.edges ?? []
+
+          // Generate new IDs and strip execution state
+          const idMap: Record<string, string> = {}
+          const newNodes = nodesToPaste.map((node) => {
+            const newId = `${node.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+            idMap[node.id] = newId
+            const data = { ...node.data } as Record<string, unknown>
+            delete data.executionStatus
+            delete data.currentJobId
+            delete data.currentJobProgress
+            delete data.errorMessage
+            delete data.isStreaming
+            delete data.__listTotal
+            delete data.__listCompleted
+            delete data.__listResults
+            delete data.subWorkflowProgress
+            return { ...node, id: newId, data } as WorkflowNode
+          })
+
+          const newEdges = edgesToPaste.map((edge) => ({
+            ...edge,
+            id: `edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            source: idMap[edge.source] || edge.source,
+            target: idMap[edge.target] || edge.target,
+          }))
+
+          // Offset by 50px if any pasted node overlaps an existing node
+          const state = useWorkflowStore.getState()
+          const hasOverlap = state.nodes.length > 0 && newNodes.some((pn) =>
+            state.nodes.some((cn) => Math.abs(cn.position.x - pn.position.x) < 10 && Math.abs(cn.position.y - pn.position.y) < 10)
+          )
+          const offset = hasOverlap ? 50 : 0
+
+          const pastedNodes = newNodes.map((n) => ({
+            ...n,
+            position: { x: n.position.x + offset, y: n.position.y + offset },
+            selected: true,
+          }))
+
+          // Deselect existing nodes, add pasted nodes
+          useWorkflowStore.setState({
+            nodes: [...state.nodes.map((n) => n.selected ? { ...n, selected: false } : n), ...pastedNodes],
+            edges: [...state.edges, ...newEdges],
+            isDirty: true,
+          })
+        }).catch(() => {})
         return
       }
 
