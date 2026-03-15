@@ -922,16 +922,21 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             target: idMap[edge.target] || edge.target,
           }))
 
-          // Offset by 50px if any pasted node overlaps an existing node
+          // Center pasted group on mouse position (if inside canvas) or viewport center
           const state = useWorkflowStore.getState()
-          const hasOverlap = state.nodes.length > 0 && newNodes.some((pn) =>
-            state.nodes.some((cn) => Math.abs(cn.position.x - pn.position.x) < 10 && Math.abs(cn.position.y - pn.position.y) < 10)
-          )
-          const offset = hasOverlap ? 50 : 0
+          const mousePos = lastMousePositionRef.current
+          const screenTarget = (mousePos.x !== 0 || mousePos.y !== 0) ? mousePos : getViewportCenter()
+          const flowPos = screenToFlowPosition(screenTarget)
+          const minX = Math.min(...newNodes.map((n) => n.position.x))
+          const maxX = Math.max(...newNodes.map((n) => n.position.x + (n.measured?.width ?? 200)))
+          const minY = Math.min(...newNodes.map((n) => n.position.y))
+          const maxY = Math.max(...newNodes.map((n) => n.position.y + (n.measured?.height ?? 100)))
+          const offsetX = flowPos.x - (minX + maxX) / 2
+          const offsetY = flowPos.y - (minY + maxY) / 2
 
           const pastedNodes = newNodes.map((n) => ({
             ...n,
-            position: { x: n.position.x + offset, y: n.position.y + offset },
+            position: { x: n.position.x + offsetX, y: n.position.y + offsetY },
             selected: true,
           }))
 
