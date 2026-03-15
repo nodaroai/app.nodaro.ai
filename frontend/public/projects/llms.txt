@@ -109,6 +109,31 @@ Items are newline-separated. Each line triggers a separate execution of connecte
 
 **Edge note:** Edges from list nodes default to `outputMode: "each"`.
 
+#### loop
+Manual or connected data table for iteration. Each column becomes a separate output handle.
+
+```json
+{
+  "type": "loop",
+  "data": {
+    "label": "Loop",
+    "columns": [
+      { "id": "col_1", "name": "Prompt", "handleId": "h_1" },
+      { "id": "col_2", "name": "Style", "handleId": "h_2" }
+    ],
+    "rows": [
+      ["A sunset beach", "cinematic"],
+      ["A dark forest", "anime"]
+    ],
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text, optional — overrides table) | Dynamic per column (handleId) |
+
 #### upload-image
 Reference to a user-uploaded image.
 
@@ -343,7 +368,7 @@ Values: `"static"`, `"pan-left"`, `"pan-right"`, `"zoom-in"`, `"zoom-out"`
 
 ### AI Generation Nodes
 
-#### generate-image (5 credits)
+#### generate-image (2 credits)
 Generate an image from a text prompt.
 
 ```json
@@ -367,9 +392,11 @@ Generate an image from a text prompt.
 - Most: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `3:2`, `2:3`
 - GPT Image: `1:1`, `3:2`, `2:3` only
 - Flux Kontext: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `21:9`
+- Nano Banana family: adds `5:4`, `4:5`, `21:9`
+- Seedream: adds `21:9`
 
 **Optional fields:**
-- `resolution`: `"1K"`, `"2K"`, `"4K"` (nano-banana-pro, nano-banana-2, flux, flux-flex)
+- `resolution`: `"1K"`, `"2K"`, `"4K"` (nano-banana-pro, nano-banana-2); `"1K"`, `"2K"` (flux, flux-flex)
 - `quality`: `"medium"`, `"high"` (gpt-image); `"basic"`, `"high"` (seedream)
 - `seed`: number (for reproducibility)
 
@@ -381,7 +408,7 @@ Generate an image from a text prompt.
 
 When an image node connects to `generate-image`, it adds a reference image (supported by: `nano-banana`, `nano-banana-pro`, `ideogram-v3`).
 
-#### edit-image (3 credits)
+#### edit-image (2 credits)
 Transform or upscale an existing image.
 
 ```json
@@ -406,7 +433,7 @@ Transform or upscale an existing image.
 |---------------|----------------|
 | `image` (image) | `out` (image) |
 
-#### image-to-image (5 credits)
+#### image-to-image (2 credits)
 Transform an image with AI guided by a prompt.
 
 ```json
@@ -429,7 +456,7 @@ Transform an image with AI guided by a prompt.
 |---------------|----------------|
 | `image` (image) | `out` (image) |
 
-#### generate-script (2 credits)
+#### generate-script (10 credits)
 Generate a multi-scene script from a prompt.
 
 ```json
@@ -449,7 +476,7 @@ Generate a multi-scene script from a prompt.
 }
 ```
 
-**Providers:** `gemini`, `claude`, `openai`
+**Providers:** `gemini`, `claude`, `gpt`
 
 | Input Handles | Output Handles |
 |---------------|----------------|
@@ -483,7 +510,7 @@ Generate video from text prompt.
 |---------------|----------------|
 | `in` (text) | `video` (video) |
 
-#### image-to-video (20 credits)
+#### image-to-video (25 credits)
 Animate an image into video.
 
 ```json
@@ -529,13 +556,13 @@ Transform existing video with AI.
 }
 ```
 
-**Providers:** `wan` (default), `luma-modify`, `runway-aleph`
+**Providers:** `wan`, `luma-modify`, `runway-aleph`
 
 | Input Handles | Output Handles |
 |---------------|----------------|
 | `in` (video) | `video` (video) |
 
-#### text-to-speech (3 credits)
+#### text-to-speech (4 credits)
 Convert text to spoken audio.
 
 ```json
@@ -560,7 +587,7 @@ Convert text to spoken audio.
 }
 ```
 
-**Providers:** `elevenlabs-v3` (default, supports audio tags), `elevenlabs-v2`, `elevenlabs-turbo`
+**Providers:** `elevenlabs-v3` (default, supports audio tags), `elevenlabs-turbo`, `elevenlabs-multilingual`, `elevenlabs`
 
 **Common voice IDs:** `"Rachel"`, `"Clyde"`, `"Dave"`, `"Fin"`, `"Sarah"`, `"Antoni"`, `"Thomas"`, `"Charlie"`, `"George"`, `"Emily"`, `"Elli"`, `"Callum"`, `"Patrick"`, `"Harry"`, `"Liam"`, `"Dorothy"`, `"Josh"`, `"Arnold"`, `"Charlotte"`, `"Matilda"`, `"Jessica"`, `"Michael"`, `"Ethan"`, `"Gigi"`, `"Freya"`, `"Grace"`, `"Daniel"`, `"Lily"`, `"Serena"`, `"Adam"`, `"Nicole"`, `"Bill"`, `"Sam"`, `"Glinda"`, `"Giovanni"`, `"Mimi"`, `"Brian"`, `"Chris"`, `"James"`, `"Joseph"`, `"Drew"`, `"Paul"`, `"Aria"`, `"Roger"`, `"Eric"`, `"Valentino"`, `"Alice"`, `"Joanne"`, `"Laura"`, `"Will"`, `"Andrea"`, `"River"`
 
@@ -572,7 +599,7 @@ Convert text to spoken audio.
 |---------------|----------------|
 | `in` (text) | `audio` (audio) |
 
-#### generate-music (5 credits)
+#### generate-music (7 credits)
 Generate music from a prompt.
 
 ```json
@@ -581,7 +608,7 @@ Generate music from a prompt.
   "data": {
     "label": "Generate Music",
     "prompt": "Epic orchestral trailer music with building intensity",
-    "provider": "suno",
+    "provider": "minimax",
     "duration": 8,
     "genre": "",
     "mood": "",
@@ -596,11 +623,15 @@ Generate music from a prompt.
 }
 ```
 
+**Providers:** `minimax`
+
+Note: For Suno-powered music generation, use the dedicated `suno-generate` node instead.
+
 | Input Handles | Output Handles |
 |---------------|----------------|
 | `in` (text) | `audio` (audio) |
 
-#### text-to-audio (3 credits)
+#### text-to-audio (4 credits)
 Generate sound effects from a text description.
 
 ```json
@@ -616,11 +647,13 @@ Generate sound effects from a text description.
 }
 ```
 
+**Providers:** `elevenlabs-sfx`
+
 | Input Handles | Output Handles |
 |---------------|----------------|
 | `in` (text) | `audio` (audio) |
 
-#### ai-writer (2 credits)
+#### ai-writer (5 credits)
 AI text generation with custom system prompts.
 
 ```json
@@ -640,13 +673,13 @@ AI text generation with custom system prompts.
 }
 ```
 
-**Providers:** `claude`, `gemini`, `openai`
+**Providers:** `claude`
 
 | Input Handles | Output Handles |
 |---------------|----------------|
 | `in` (text) | `text` (text) |
 
-#### transcribe (3 credits)
+#### transcribe (4 credits)
 Transcribe audio to text.
 
 ```json
@@ -661,13 +694,15 @@ Transcribe audio to text.
 }
 ```
 
+**Providers:** `elevenlabs-stt`
+
 **Optional:** `diarize: true` (speaker detection), `tagAudioEvents: true`
 
 | Input Handles | Output Handles |
 |---------------|----------------|
 | `in` (audio) | `text` (text) |
 
-#### image-to-text (1 credit)
+#### image-to-text (5 credits)
 Describe an image with AI.
 
 ```json
@@ -688,7 +723,7 @@ Describe an image with AI.
 |---------------|----------------|
 | `image` (image) | `text` (text) |
 
-#### lip-sync (40 credits)
+#### lip-sync (13 credits)
 Animate a face to match audio.
 
 ```json
@@ -704,7 +739,7 @@ Animate a face to match audio.
 }
 ```
 
-**Providers:** `kling-avatar`, `infinitalk`, `infinitalk-pro`
+**Providers:** `kling-avatar`, `kling-avatar-pro`, `infinitalk`
 
 | Input Handles | Output Handles |
 |---------------|----------------|
@@ -870,7 +905,7 @@ Extend an existing AI-generated video.
 |---------------|----------------|
 | `in` (video) | `video` (video) |
 
-#### video-upscale (15 credits)
+#### video-upscale (19 credits)
 Upscale video resolution.
 
 ```json
@@ -885,13 +920,13 @@ Upscale video resolution.
 }
 ```
 
-**Providers:** `topaz`, `topaz-4k`, `topaz-8k`, `veo-1080p`, `veo-4k`
+**Providers:** `topaz`, `veo-1080p`, `veo-4k`
 
 | Input Handles | Output Handles |
 |---------------|----------------|
 | `in` (video) | `video` (video) |
 
-#### motion-transfer (30 credits)
+#### motion-transfer (38 credits)
 Transfer motion from a video to a character image.
 
 ```json
@@ -955,7 +990,7 @@ Multi-shot video generation with Sora 2 Pro.
 |---------------|----------------|
 | `image` (image, optional) | `video` (video) |
 
-#### qa-check (1 credit)
+#### qa-check (0 credits)
 AI quality check on media.
 
 ```json
@@ -971,6 +1006,8 @@ AI quality check on media.
 }
 ```
 
+**Providers:** `claude`, `gpt`
+
 | Input Handles | Output Handles |
 |---------------|----------------|
 | `in` (any) | `approved` (passthrough), `rejected` (passthrough) |
@@ -979,7 +1016,7 @@ AI quality check on media.
 
 ### Suno Music Nodes
 
-#### suno-generate (3 credits)
+#### suno-generate (7 credits)
 
 ```json
 {
@@ -1001,7 +1038,7 @@ AI quality check on media.
 |---------------|----------------|
 | `in` (text) | `audio` (audio) |
 
-#### suno-cover (3 credits)
+#### suno-cover (7 credits)
 
 ```json
 {
@@ -1024,7 +1061,7 @@ AI quality check on media.
 |---------------|----------------|
 | `in` (audio) | `audio` (audio) |
 
-#### suno-extend (3 credits)
+#### suno-extend (7 credits)
 
 ```json
 {
@@ -1048,7 +1085,7 @@ AI quality check on media.
 |---------------|----------------|
 | `in` (audio) | `audio` (audio) |
 
-#### suno-lyrics (1 credit)
+#### suno-lyrics (2 credits)
 Generate lyrics from a prompt.
 
 ```json
@@ -1062,7 +1099,7 @@ Generate lyrics from a prompt.
 |---------------|----------------|
 | `in` (text) | `text` (text) |
 
-#### suno-separate (2 credits)
+#### suno-separate (5 credits)
 Separate vocals from instrumentals.
 
 ```json
@@ -1119,7 +1156,7 @@ Separate vocals from instrumentals.
 |---------------|----------------|
 | `audio` (audio) | `audio` (audio) |
 
-#### suno-music-video (1 credit)
+#### suno-music-video (5 credits)
 
 ```json
 {
@@ -1200,7 +1237,7 @@ Separate vocals from instrumentals.
 
 ### Processing Nodes
 
-#### combine-videos (2 credits)
+#### combine-videos (0 credits)
 Concatenate multiple videos with transitions.
 
 ```json
@@ -1225,7 +1262,7 @@ Connect multiple video sources to the single `in` handle.
 |---------------|----------------|
 | `in` (video, accepts multiple) | `video` (video) |
 
-#### merge-video-audio (1 credit)
+#### merge-video-audio (0 credits)
 Merge video with one or more audio tracks.
 
 ```json
@@ -1251,7 +1288,7 @@ Connect one video and one or more audio sources to `in`.
 |---------------|----------------|
 | `in` (video + audio, accepts multiple) | `video` (video) |
 
-#### add-captions (2 credits)
+#### add-captions (0 credits)
 Add subtitles/captions to a video.
 
 ```json
@@ -1274,7 +1311,7 @@ Add subtitles/captions to a video.
 |---------------|----------------|
 | `in` (video) | `video` (video) |
 
-#### resize-video (1 credit)
+#### resize-video (0 credits)
 Resize video to a different aspect ratio.
 
 ```json
@@ -1296,13 +1333,14 @@ Resize video to a different aspect ratio.
 |---------------|----------------|
 | `in` (video) | `video` (video) |
 
-#### extract-audio (1 credit)
+#### trim-audio (0 credits)
+Extract audio from video, optionally output silent video.
 
 ```json
 {
-  "type": "extract-audio",
+  "type": "trim-audio",
   "data": {
-    "label": "Extract Audio",
+    "label": "Trim Audio",
     "outputSilentVideo": true,
     "audioFormat": "mp3",
     "fieldMappings": {}
@@ -1314,7 +1352,7 @@ Resize video to a different aspect ratio.
 |---------------|----------------|
 | `in` (video) | `audio` (audio), `silent-video` (video) |
 
-#### mix-audio (1 credit)
+#### mix-audio (0 credits)
 Mix multiple audio tracks together.
 
 ```json
@@ -1442,8 +1480,8 @@ Connect multiple audio sources to the single `in` handle.
     "label": "Transcode Video",
     "codec": "h264",
     "crf": 23,
-    "resolution": "1080p",
-    "audioBitrate": "192k",
+    "resolution": "original",
+    "audioBitrate": "128k",
     "fieldMappings": {}
   }
 }
@@ -1476,13 +1514,30 @@ Format media for social platform specs.
 |---------------|----------------|
 | `media` (image/video), `text` (text) | `media` (image/video), `text` (text) |
 
+#### manual-edit (0 credits)
+Pause for manual editing of a video.
+
+```json
+{
+  "type": "manual-edit",
+  "data": {
+    "label": "Manual Edit",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video) | `video` (video) |
+
 ---
 
 ### Composition Nodes
 
 These nodes create video compositions rendered by the `render-video` node.
 
-#### video-composer (2 credits)
+#### video-composer (10 credits)
 AI-powered video composition from natural language.
 
 ```json
@@ -1504,7 +1559,7 @@ AI-powered video composition from natural language.
 |---------------|----------------|
 | `in` (images/videos/audio) | `composition` (plan) |
 
-#### after-effects (2 credits)
+#### after-effects (10 credits)
 AI-generated post-processing effects on video.
 
 ```json
@@ -1524,7 +1579,27 @@ AI-generated post-processing effects on video.
 |---------------|----------------|
 | `in` (video) | `composition` (plan) |
 
-#### motion-graphics (2 credits)
+#### lottie-overlay (10 credits)
+AI-placed timed Lottie animations over video.
+
+```json
+{
+  "type": "lottie-overlay",
+  "data": {
+    "label": "Lottie Overlay",
+    "overlayPrompt": "Add celebration confetti animation at the end",
+    "fps": 30,
+    "durationSeconds": 10,
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video), `lottie` (Lottie JSON assets) | `composition` (plan) |
+
+#### motion-graphics (10 credits)
 AI-generated 2D motion graphics.
 
 ```json
@@ -1546,7 +1621,7 @@ AI-generated 2D motion graphics.
 |---------------|----------------|
 | `in` (optional) | `composition` (plan) |
 
-#### 3d-title (3 credits)
+#### 3d-title (15 credits)
 AI-generated animated 3D text scenes.
 
 ```json
@@ -1589,7 +1664,7 @@ Multi-layer video compositor (PiP, split screen, overlays).
 |---------------|----------------|
 | `video1`, `video2`, `video3`, `video4` (video) | `composition` (plan) |
 
-#### render-video (3 credits)
+#### render-video (15 credits)
 Renders a composition plan into a final video file.
 
 ```json
@@ -1606,7 +1681,7 @@ Renders a composition plan into a final video file.
 }
 ```
 
-**Must be connected downstream of a composition node** (video-composer, after-effects, motion-graphics, 3d-title, or composite).
+**Must be connected downstream of a composition node** (video-composer, after-effects, lottie-overlay, motion-graphics, 3d-title, or composite).
 
 | Input Handles | Output Handles |
 |---------------|----------------|
@@ -1658,6 +1733,24 @@ Split text into items.
 
 Edges from `split-text` default to `outputMode: "each"`.
 
+#### preview (0 credits)
+Preview any media passing through. Passthrough node — output equals input.
+
+```json
+{
+  "type": "preview",
+  "data": {
+    "label": "Preview",
+    "previewItems": [],
+    "itemOrder": []
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (any media) | `out` (passthrough) |
+
 #### sticky-note (no connections)
 Visual annotation. Not part of execution.
 
@@ -1665,12 +1758,12 @@ Visual annotation. Not part of execution.
 {
   "type": "sticky-note",
   "data": {
-    "label": "Note",
+    "label": "Sticky Note",
     "text": "This section handles the intro sequence",
     "color": "#2d2d44",
-    "textColor": "#e2e8f0",
-    "width": 200,
-    "height": 150,
+    "textColor": "#ffffff",
+    "width": 840,
+    "height": 540,
     "fontSize": "base",
     "bold": false,
     "italic": false,
@@ -1720,9 +1813,7 @@ Send results to an external URL.
 |---------------|----------------|
 | `in` (any) | none |
 
-#### Social Post Nodes (1 credit each)
-
-**instagram-post, tiktok-post, youtube-upload, linkedin-post, x-post, facebook-post**
+#### instagram-post (1 credit)
 
 ```json
 {
@@ -1732,6 +1823,105 @@ Send results to an external URL.
     "platform": "instagram",
     "action": "feed-post",
     "caption": "Check out this amazing video! #ai #creative",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (media) | none |
+
+#### tiktok-post (1 credit)
+
+```json
+{
+  "type": "tiktok-post",
+  "data": {
+    "label": "TikTok Post",
+    "platform": "tiktok",
+    "action": "post",
+    "caption": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (media) | none |
+
+#### youtube-upload (1 credit)
+
+```json
+{
+  "type": "youtube-upload",
+  "data": {
+    "label": "YouTube Upload",
+    "platform": "youtube",
+    "action": "upload",
+    "caption": "",
+    "title": "My Video",
+    "description": "",
+    "tags": [],
+    "privacy": "private",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (media) | none |
+
+#### linkedin-post (1 credit)
+
+```json
+{
+  "type": "linkedin-post",
+  "data": {
+    "label": "LinkedIn Post",
+    "platform": "linkedin",
+    "action": "post",
+    "caption": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (media) | none |
+
+#### x-post (1 credit)
+
+```json
+{
+  "type": "x-post",
+  "data": {
+    "label": "X Post",
+    "platform": "x",
+    "action": "post",
+    "caption": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (media) | none |
+
+#### facebook-post (1 credit)
+
+```json
+{
+  "type": "facebook-post",
+  "data": {
+    "label": "Facebook Post",
+    "platform": "facebook",
+    "action": "post",
+    "caption": "",
     "fieldMappings": {}
   }
 }
@@ -1772,14 +1962,19 @@ Send results to an external URL.
 - speed-ramp `in`
 - loop-video `in`
 - fade-video `in`
-- extract-audio `in`
+- trim-audio `in`
 - after-effects `in`
 - video-upscale `in`
 - extend-video `in`
 - motion-transfer `video`
 - video-to-video `in`
+- transcode-video `in`
+- social-media-format `media`
+- manual-edit `in`
+- lottie-overlay `in`
+- preview `in`
 
-**Audio outputs** (from: text-to-speech, generate-music, text-to-audio, extract-audio, mix-audio, suno-*, etc.) can connect to:
+**Audio outputs** (from: text-to-speech, generate-music, text-to-audio, trim-audio, mix-audio, suno-*, etc.) can connect to:
 - merge-video-audio `in`
 - mix-audio `in` (multiple audio accepted)
 - image-to-video `audio`
@@ -1790,8 +1985,9 @@ Send results to an external URL.
 - voice-changer `in`
 - dubbing `in`
 - adjust-volume `in`
+- preview `in`
 
-**Composition outputs** (from: video-composer, after-effects, motion-graphics, 3d-title, composite) must connect to:
+**Composition outputs** (from: video-composer, after-effects, lottie-overlay, motion-graphics, 3d-title, composite) must connect to:
 - render-video `in`
 
 ---
@@ -2097,6 +2293,6 @@ text-to-audio (SFX) ────────┘
 3. **Image routing**: When an image node connects to `image-to-video` via `startFrame`, it becomes the input frame. A second image on `endFrame` creates a start+end frame video (only supported by some providers).
 4. **Multiple inputs**: Nodes like `combine-videos` and `mix-audio` accept multiple connections on their single `in` handle.
 5. **Fan-out**: Connect a `list` or `split-text` node with edge `outputMode: "each"` to run downstream nodes once per item.
-6. **Composition pipeline**: Composition nodes (video-composer, after-effects, etc.) output plans, not videos. They MUST connect to a `render-video` node to produce actual video.
+6. **Composition pipeline**: Composition nodes (video-composer, after-effects, lottie-overlay, etc.) output plans, not videos. They MUST connect to a `render-video` node to produce actual video.
 7. **Node IDs** are remapped on import — use any convention (e.g., `node_1`, `node_2`).
 8. **Position** values are in pixels. Typical spacing: 300-350px horizontal, 200-250px vertical.
