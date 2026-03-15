@@ -43,9 +43,8 @@ import { join } from "node:path"
 import { readFile } from "node:fs/promises"
 
 // Max audio duration (seconds) per lip-sync model
-const LIP_SYNC_MAX_AUDIO: Record<string, number> = {
-  "infinitalk": 15,
-}
+// All lip-sync models have a 15-second audio limit
+const LIP_SYNC_MAX_AUDIO_SECONDS = 15
 
 /**
  * If audio exceeds the model's max duration, trim it with FFmpeg
@@ -925,11 +924,8 @@ export class KieVideoProvider
       `[KIE.ai] Image: ${imageUrl}, Audio: ${audioUrl}`
     )
 
-    // Auto-trim audio if it exceeds model's max duration
-    const maxAudio = LIP_SYNC_MAX_AUDIO[provider]
-    const effectiveAudioUrl = maxAudio
-      ? await ensureAudioDuration(audioUrl, maxAudio)
-      : audioUrl
+    // Auto-trim audio if it exceeds the 15-second lip-sync limit
+    const effectiveAudioUrl = await ensureAudioDuration(audioUrl, LIP_SYNC_MAX_AUDIO_SECONDS)
 
     // Start with extra params from config
     const input: Record<string, unknown> = {
