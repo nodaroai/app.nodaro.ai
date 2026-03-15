@@ -7,7 +7,13 @@
 -- qwen: 2→1 (overpriced +300%)
 
 UPDATE model_pricing SET credit_cost = 28 WHERE model_identifier = 'kling';
-UPDATE model_pricing SET credit_cost = 34 WHERE model_identifier = 'infinitalk';
+-- infinitalk: variable pricing by resolution
+UPDATE model_pricing SET credit_cost = 42 WHERE model_identifier = 'infinitalk';
+INSERT INTO model_pricing (model_identifier, credit_cost, is_enabled, tier_restriction)
+VALUES
+  ('infinitalk:480p', 11, true, null),
+  ('infinitalk:720p', 42, true, null)
+ON CONFLICT (model_identifier) DO UPDATE SET credit_cost = EXCLUDED.credit_cost;
 UPDATE model_pricing SET credit_cost = 4 WHERE model_identifier = 'suno';
 UPDATE model_pricing SET credit_cost = 4 WHERE model_identifier = 'suno-v5';
 UPDATE model_pricing SET credit_cost = 4 WHERE model_identifier = 'suno-generate';

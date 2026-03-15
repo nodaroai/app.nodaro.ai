@@ -25,7 +25,7 @@ const textToVideoBody = z.object({
 })
 
 export async function textToVideoRoutes(app: FastifyInstance) {
-  app.post("/v1/text-to-video", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return buildVideoCreditModelIdentifier((body?.provider as string) ?? "minimax", body?.duration as number | string | undefined, body?.sound as boolean | undefined, "text-to-video") }) }, async (req, reply) => {
+  app.post("/v1/text-to-video", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return buildVideoCreditModelIdentifier((body?.provider as string) ?? "minimax", body?.duration as number | string | undefined, body?.sound as boolean | undefined, "text-to-video", body?.mode as string | undefined) }) }, async (req, reply) => {
     const parsed = textToVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -46,7 +46,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
     }
 
     // Determine model identifier for credit check (supports variable pricing by duration/audio)
-    const modelIdentifier = buildVideoCreditModelIdentifier(provider ?? "minimax", duration, sound, "text-to-video")
+    const modelIdentifier = buildVideoCreditModelIdentifier(provider ?? "minimax", duration, sound, "text-to-video", mode)
 
     const { data: job, error } = await supabase
       .from("jobs")

@@ -151,7 +151,7 @@ export function getModelIdentifier(node: WorkflowNode): string {
     const duration = data.duration as number | string | undefined
     const sound = (data.sound ?? data.kling3Sound) as boolean | undefined
     const videoNodeType = nodeType as "image-to-video" | "text-to-video"
-    return buildVideoCreditModelIdentifier(provider, duration, sound, videoNodeType)
+    return buildVideoCreditModelIdentifier(provider, duration, sound, videoNodeType, (data.videoSize ?? data.mode) as string | undefined)
   }
 
   return buildCreditModelIdentifier(provider, data)

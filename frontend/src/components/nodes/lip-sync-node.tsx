@@ -81,7 +81,10 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const lipSyncProvider = nodeData.provider ?? "kling-avatar"
-  const credits = useModelCredits(lipSyncProvider, lipSyncProvider === "kling-avatar" ? 13 : 19)
+  const creditModelId = lipSyncProvider === "infinitalk"
+    ? `infinitalk:${nodeData.resolution ?? "720p"}`
+    : lipSyncProvider
+  const credits = useModelCredits(creditModelId, lipSyncProvider === "kling-avatar" ? 28 : 42)
 
   // Get all connected nodes to this node (deduplicated by node ID)
   const connectedNodes = useMemo(() => {

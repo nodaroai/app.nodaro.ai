@@ -20,7 +20,12 @@ export async function lipSyncRoutes(app: FastifyInstance) {
   app.post("/v1/lip-sync", {
     preHandler: creditGuard((req) => {
       const body = req.body as Record<string, unknown>
-      return (body?.provider as string) ?? "kling-avatar"
+      const provider = (body?.provider as string) ?? "kling-avatar"
+      if (provider === "infinitalk") {
+        const res = (body?.resolution as string) ?? "720p"
+        return `infinitalk:${res}`
+      }
+      return provider
     }),
   }, async (req, reply) => {
     const parsed = lipSyncBody.safeParse(req.body)
@@ -60,7 +65,11 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = provider ?? "kling-avatar"
+    // Build composite credit identifier for infinitalk (resolution-based pricing)
+    const baseProvider = provider ?? "kling-avatar"
+    const modelIdentifier = baseProvider === "infinitalk"
+      ? `infinitalk:${resolution ?? "720p"}`
+      : baseProvider
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
@@ -70,7 +79,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       imageUrl,
       audioUrl,
       prompt,
-      provider: modelIdentifier,
+      provider: baseProvider,
       resolution,
       usageLogId,
     })
