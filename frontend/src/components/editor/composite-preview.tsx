@@ -25,7 +25,7 @@ export function CompositePreview({ layers, aspectRatio }: CompositePreviewProps)
   const containerWidth = maxWidth
   const containerHeight = (maxWidth * ratio.h) / ratio.w
 
-  const sortedLayers = [...layers].sort((a, b) => a.zIndex - b.zIndex)
+  const sortedLayers = [...layers].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
 
   return (
     <div className="flex flex-col gap-2">
@@ -45,10 +45,10 @@ export function CompositePreview({ layers, aspectRatio }: CompositePreviewProps)
               style={{
                 borderColor: color,
                 backgroundColor: `${color}20`,
-                left: isFullscreen ? 0 : `${layer.x}%`,
-                top: isFullscreen ? 0 : `${layer.y}%`,
-                width: isFullscreen ? "100%" : `${layer.width}%`,
-                height: isFullscreen ? "100%" : `${layer.height}%`,
+                left: isFullscreen ? 0 : `${layer.x ?? 0}%`,
+                top: isFullscreen ? 0 : `${layer.y ?? 0}%`,
+                width: isFullscreen ? "100%" : `${layer.width ?? 100}%`,
+                height: isFullscreen ? "100%" : `${layer.height ?? 100}%`,
                 opacity: Math.max(0.4, layer.opacity),
               }}
             >

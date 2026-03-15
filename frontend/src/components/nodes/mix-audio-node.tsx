@@ -15,7 +15,7 @@ import type { MixAudioData } from "@/types/nodes"
 function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as MixAudioData | undefined
   const nodeData = currentNodeData ?? (data as MixAudioData)
-  const credits = useModelCredits("ffmpeg", 0)
+  const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

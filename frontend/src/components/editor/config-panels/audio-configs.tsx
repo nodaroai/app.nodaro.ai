@@ -197,8 +197,8 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
           min={minDuration}
           max={maxDuration}
           step={isSfx ? 0.5 : 1}
-          value={data.duration}
-          onChange={(e) => onUpdate({ duration: parseFloat(e.target.value) || 10 })}
+          value={data.duration ?? ""}
+          onChange={(e) => onUpdate({ duration: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
         />
       </MappableField>
       {isSfx && (
@@ -607,10 +607,10 @@ export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMapping
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Replace a section of an existing track. Connect an audio source.</p>
       <MappableField field="infillStartS" label="Start Time (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input type="number" min={0} step={1} value={data.infillStartS ?? 0} onChange={(e) => onUpdate({ infillStartS: parseFloat(e.target.value) || 0 })} placeholder="0" />
+        <Input type="number" min={0} step={1} value={data.infillStartS ?? ""} onChange={(e) => onUpdate({ infillStartS: e.target.value === "" ? undefined : parseFloat(e.target.value) })} placeholder="0" />
       </MappableField>
       <MappableField field="infillEndS" label="End Time (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input type="number" min={0} step={1} value={data.infillEndS ?? 30} onChange={(e) => onUpdate({ infillEndS: parseFloat(e.target.value) || 30 })} placeholder="30" />
+        <Input type="number" min={0} step={1} value={data.infillEndS ?? ""} onChange={(e) => onUpdate({ infillEndS: e.target.value === "" ? undefined : parseFloat(e.target.value) })} placeholder="30" />
       </MappableField>
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the replacement..." maxLength={3000} customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
@@ -700,7 +700,7 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
         <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the extension..." maxLength={3000} customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
       </MappableField>
       <MappableField field="continueAt" label="Continue At (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input type="number" min={0} step={1} value={data.continueAt ?? 0} onChange={(e) => onUpdate({ continueAt: parseFloat(e.target.value) || 0 })} placeholder="0" />
+        <Input type="number" min={0} step={1} value={data.continueAt ?? ""} onChange={(e) => onUpdate({ continueAt: e.target.value === "" ? undefined : parseFloat(e.target.value) })} placeholder="0" />
       </MappableField>
       <div className="flex items-center gap-2">
         <Checkbox id="upload-extend-default" checked={data.defaultParamFlag} onCheckedChange={(v) => onUpdate({ defaultParamFlag: !!v })} />

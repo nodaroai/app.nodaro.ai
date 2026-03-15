@@ -77,8 +77,8 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
           type="number"
           min={1}
           max={20}
-          value={data.sceneCount}
-          onChange={(e) => onUpdate({ sceneCount: parseInt(e.target.value, 10) || 5 })}
+          value={data.sceneCount ?? ""}
+          onChange={(e) => onUpdate({ sceneCount: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
         />
       </MappableField>
       <div>
@@ -116,8 +116,8 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
           type="number"
           min={10}
           max={600}
-          value={data.targetLength}
-          onChange={(e) => onUpdate({ targetLength: parseInt(e.target.value, 10) || 60 })}
+          value={data.targetLength ?? ""}
+          onChange={(e) => onUpdate({ targetLength: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
         />
       </MappableField>
 
@@ -200,8 +200,8 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
                             className="text-xs h-7"
                             min={1}
                             max={120}
-                            value={scene.durationHint}
-                            onChange={(e) => updateScene(i, "durationHint", parseInt(e.target.value, 10) || 5)}
+                            value={scene.durationHint ?? ""}
+                            onChange={(e) => updateScene(i, "durationHint", e.target.value === "" ? "" : parseInt(e.target.value, 10))}
                           />
                         </div>
                       </div>
@@ -265,8 +265,8 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
           min={0}
           max={1}
           step={0.05}
-          value={data.threshold}
-          onChange={(e) => onUpdate({ threshold: parseFloat(e.target.value) || 0.8 })}
+          value={data.threshold ?? ""}
+          onChange={(e) => onUpdate({ threshold: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
         />
       </div>
     </div>

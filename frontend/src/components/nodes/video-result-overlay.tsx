@@ -1,13 +1,12 @@
 "use client"
 
 import { memo } from "react"
-import { X, Expand, Download } from "lucide-react"
-import { CachedImage } from "@/components/ui/cached-image"
+import { X, Expand, Download, Link } from "lucide-react"
+import { toast } from "sonner"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 
 interface VideoResultOverlayProps {
   url: string
-  thumbnailUrl?: string
   videoAutoplay: boolean
   label: string
   hasResults: boolean
@@ -20,7 +19,6 @@ interface VideoResultOverlayProps {
 
 function VideoResultOverlayComponent({
   url,
-  thumbnailUrl,
   videoAutoplay,
   label,
   hasResults,
@@ -35,27 +33,23 @@ function VideoResultOverlayComponent({
       style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden', zIndex: 10 }}
       className="group/video"
     >
-      {thumbnailUrl ? (
-        <CachedImage src={thumbnailUrl} alt="Video preview" className="w-full h-full object-cover" thumbnail thumbnailWidth={320} />
-      ) : (
-        <video
-          src={url}
-          autoPlay={videoAutoplay}
-          loop={videoAutoplay}
-          muted
-          playsInline
-          className="w-full h-full object-cover"
-          onError={onVideoError}
-          onLoadedMetadata={(e) => {
-            onVideoLoad?.()
-            const video = e.currentTarget
-            const ratio = video.videoWidth / video.videoHeight
-            const baseWidth = 280
-            const baseHeight = Math.round(baseWidth / ratio)
-            onDimensionsChange({ width: baseWidth, height: Math.max(120, Math.min(360, baseHeight)) })
-          }}
-        />
-      )}
+      <video
+        src={url}
+        autoPlay={videoAutoplay}
+        loop={videoAutoplay}
+        muted
+        playsInline
+        className="w-full h-full object-cover"
+        onError={onVideoError}
+        onLoadedMetadata={(e) => {
+          onVideoLoad?.()
+          const video = e.currentTarget
+          const ratio = video.videoWidth / video.videoHeight
+          const baseWidth = 280
+          const baseHeight = Math.round(baseWidth / ratio)
+          onDimensionsChange({ width: baseWidth, height: Math.max(120, Math.min(360, baseHeight)) })
+        }}
+      />
       {hasResults && (
         <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
           <button
@@ -87,6 +81,16 @@ function VideoResultOverlayComponent({
           }}
         >
           <Download className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+          onClick={(e) => {
+            e.stopPropagation()
+            navigator.clipboard.writeText(url).then(() => toast.success("URL copied")).catch(() => {})
+          }}
+        >
+          <Link className="w-3.5 h-3.5" />
         </button>
       </div>
       <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">

@@ -72,9 +72,9 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
             min={0.1}
             max={2}
             step={0.1}
-            value={data.transitionDuration ?? 0.5}
+            value={data.transitionDuration ?? ""}
             onChange={(e) =>
-              onUpdate({ transitionDuration: parseFloat(e.target.value) || 0.5 })
+              onUpdate({ transitionDuration: e.target.value === "" ? undefined : parseFloat(e.target.value) })
             }
           />
         </div>
@@ -136,8 +136,8 @@ export function AddCaptionsConfig({ data, onUpdate }: ConfigProps<AddCaptionsDat
           type="number"
           min={8}
           max={72}
-          value={data.fontSize}
-          onChange={(e) => onUpdate({ fontSize: parseInt(e.target.value, 10) || 24 })}
+          value={data.fontSize ?? ""}
+          onChange={(e) => onUpdate({ fontSize: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
         />
       </div>
       <div>
@@ -324,8 +324,8 @@ export function AdjustVolumeConfig({ data, onUpdate }: ConfigProps<AdjustVolumeD
           type="number"
           min={0}
           max={200}
-          value={data.volume}
-          onChange={(e) => onUpdate({ volume: parseInt(e.target.value, 10) || 100 })}
+          value={data.volume ?? ""}
+          onChange={(e) => onUpdate({ volume: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
         />
       </div>
       <div className="flex items-center gap-2">
@@ -345,8 +345,8 @@ export function AdjustVolumeConfig({ data, onUpdate }: ConfigProps<AdjustVolumeD
           min={0}
           max={10}
           step={0.1}
-          value={data.fadeIn}
-          onChange={(e) => onUpdate({ fadeIn: parseFloat(e.target.value) || 0 })}
+          value={data.fadeIn ?? ""}
+          onChange={(e) => onUpdate({ fadeIn: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
         />
       </div>
       <div>
@@ -357,8 +357,8 @@ export function AdjustVolumeConfig({ data, onUpdate }: ConfigProps<AdjustVolumeD
           min={0}
           max={10}
           step={0.1}
-          value={data.fadeOut}
-          onChange={(e) => onUpdate({ fadeOut: parseFloat(e.target.value) || 0 })}
+          value={data.fadeOut ?? ""}
+          onChange={(e) => onUpdate({ fadeOut: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
         />
       </div>
     </div>
@@ -375,8 +375,8 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
           type="number"
           min={0}
           step={0.1}
-          value={data.startTime}
-          onChange={(e) => onUpdate({ startTime: parseFloat(e.target.value) || 0 })}
+          value={data.startTime ?? ""}
+          onChange={(e) => onUpdate({ startTime: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
         />
       </div>
       <div>
@@ -386,8 +386,8 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
           type="number"
           min={0}
           step={0.1}
-          value={data.endTime}
-          onChange={(e) => onUpdate({ endTime: parseFloat(e.target.value) || 0 })}
+          value={data.endTime ?? ""}
+          onChange={(e) => onUpdate({ endTime: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
         />
       </div>
     </div>

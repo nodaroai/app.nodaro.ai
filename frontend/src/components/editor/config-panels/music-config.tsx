@@ -99,8 +99,8 @@ export function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<Gen
             type="number"
             min={1}
             max={30}
-            value={data.duration}
-            onChange={(e) => onUpdate({ duration: parseInt(e.target.value) || 8 })}
+            value={data.duration ?? ""}
+            onChange={(e) => onUpdate({ duration: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
           />
         </div>
       )}
