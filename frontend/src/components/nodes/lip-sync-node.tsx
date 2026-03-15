@@ -2,7 +2,7 @@
 
 import { memo, useState, useMemo, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Users, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, LayoutGrid, Expand, Download } from "lucide-react"
+import { Users, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, LayoutGrid, Expand, Download, Link } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -19,6 +19,7 @@ import {
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
 import { EditableNodeLabel } from "./editable-node-label"
+import { toast } from "sonner"
 import type { LipSyncData, GeneratedResult } from "@/types/nodes"
 
 // Node types that output images (for portrait/face)
@@ -203,8 +204,6 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
       onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
     />
 
-    {/* Narrower wrapper — only around BaseNode */}
-    <div style={{ width: '85%' }}>
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -258,7 +257,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
       handles={[
         { id: "image", type: "target", position: Position.Left, customStyle: { top: '25%', left: '-29px' }, hideHandle: true },
         { id: "audio", type: "target", position: Position.Left, customStyle: { top: '75%', left: '-29px' }, hideHandle: true },
-        { id: "video", type: "source", position: Position.Right, customStyle: { top: 'calc(35% - 33px)', right: '-29px' }, hideHandle: true },
+        { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-2" style={{ minHeight: 180 }}>
@@ -444,6 +443,13 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                 >
                   <Download className="w-3.5 h-3.5" />
                 </button>
+                <button
+                  type="button"
+                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(activeUrl!).then(() => toast.success("URL copied")).catch(() => {}) }}
+                >
+                  <Link className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               {/* Bottom right: save to library */}
@@ -472,7 +478,6 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    </div>
 
     {/* image input handle icon */}
     <div
@@ -493,7 +498,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
     {/* video output handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(25% - 47px)', right: '-29px' }}
+      style={{ top: '6px', right: '-29px' }}
     >
       <Clapperboard className="w-3.5 h-3.5 text-white" />
     </div>
