@@ -9,12 +9,14 @@ const { mockFrom, mockRpc, tableResponses, setLastMatchedResponse, mockHasCredit
   let lastMatchedResponse: { data: unknown; error: unknown } | null = null
   const mockHasCreditsRef = { value: true }
 
-  function createChain() {
+  function createChain(response: { data: unknown; error: unknown } | null) {
     return {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
       single: vi.fn().mockImplementation(() =>
-        Promise.resolve(lastMatchedResponse ?? { data: null, error: { code: "PGRST116" } })
+        Promise.resolve(response ?? { data: null, error: { code: "PGRST116" } })
       ),
       insert: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
@@ -22,8 +24,9 @@ const { mockFrom, mockRpc, tableResponses, setLastMatchedResponse, mockHasCredit
   }
 
   const mockFrom = vi.fn().mockImplementation((table: string) => {
-    lastMatchedResponse = tableResponses.get(table) ?? null
-    return createChain()
+    const response = tableResponses.get(table) ?? null
+    lastMatchedResponse = response
+    return createChain(response)
   })
 
   const mockRpc = vi.fn().mockResolvedValue({ data: null, error: null })
@@ -109,6 +112,10 @@ describe("CreditsService — extended", () => {
         features: { hd_export: true },
       })
 
+      mockTable("subscriptions", {
+        current_period_end: "2026-04-15T00:00:00Z",
+      })
+
       const balance = await CreditsService.getBalance("user-123")
 
       expect(balance.total).toBe(250)
@@ -119,7 +126,7 @@ describe("CreditsService — extended", () => {
       expect(balance.monthlyAllocation).toBe(530)
       expect(balance.tier).toBe("pro")
       expect(balance.features).toEqual({ hd_export: true })
-      expect(balance.periodEnd).toBe("2026-03-21T00:00:00Z")
+      expect(balance.periodEnd).toBe("2026-04-15T00:00:00Z")
     })
 
     it("returns defaults when profile not found", async () => {

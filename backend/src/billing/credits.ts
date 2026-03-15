@@ -1155,6 +1155,23 @@ export class CreditsService {
       profile.last_daily_reset as string | null
     )
 
+    // Read current_period_end from subscriptions table (source of truth, updated by Stripe webhooks)
+    // profiles.current_period_end can go stale if webhooks don't sync it
+    let periodEnd: string | null = profile.current_period_end ?? null
+    if (userTier !== "free") {
+      const { data: sub } = await supabase
+        .from("subscriptions")
+        .select("current_period_end")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .order("current_period_end", { ascending: false })
+        .limit(1)
+        .single()
+      if (sub?.current_period_end) {
+        periodEnd = sub.current_period_end
+      }
+    }
+
     return {
       total: subscriptionCredits + topupCredits,
       subscription: subscriptionCredits,
@@ -1164,7 +1181,7 @@ export class CreditsService {
       monthlyAllocation: tierConfig.monthly_credits ?? 0,
       tier: userTier,
       features: (tierConfig.features as Record<string, unknown>) ?? {},
-      periodEnd: profile.current_period_end ?? null,
+      periodEnd,
       appCreditsAllowance: profile.app_credits_allowance ?? 0,
     }
   }
