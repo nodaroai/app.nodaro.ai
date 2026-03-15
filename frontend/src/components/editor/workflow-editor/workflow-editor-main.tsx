@@ -30,7 +30,7 @@ import { useUndoRedoSubscription } from "@/hooks/use-undo-redo";
 import { useProjectsStore } from "@/hooks/use-projects-store";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase";
-import { StorageExceededError, uploadFile, setCurrentWorkflowId } from "@/lib/api";
+import { StorageExceededError, uploadFile, setCurrentWorkflowId, cancelWorkflowExecution } from "@/lib/api";
 import { queryClient } from "@/lib/query-client";
 import { hasCredits } from "@/lib/edition";
 import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits";
@@ -488,16 +488,31 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
     pollIntervalsRef.current.clear();
     setIsRunning(false);
+
+    // Cancel active backend jobs/executions
+    const executionId = activeExecutionId;
     setActiveExecutionId(null);
 
     const { nodes, updateNodeData } = useWorkflowStore.getState();
+    const jobIdsToCancel: string[] = [];
     for (const node of nodes) {
-      if (
-        (node.data as Record<string, unknown>).executionStatus === "running"
-      ) {
+      const d = node.data as Record<string, unknown>;
+      if (d.executionStatus === "running") {
         updateNodeData(node.id, { executionStatus: "idle" });
+        if (d.currentJobId) jobIdsToCancel.push(d.currentJobId as string);
       }
     }
+
+    // Cancel workflow execution or standalone jobs in background
+    if (executionId) {
+      cancelWorkflowExecution(executionId).catch(() => {});
+    }
+    for (const jobId of jobIdsToCancel) {
+      if (jobId !== executionId) {
+        cancelWorkflowExecution(jobId).catch(() => {});
+      }
+    }
+
     toast.info("Execution stopped");
   }
 

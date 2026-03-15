@@ -281,7 +281,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
-    // Only cancel if still active
+    // Try workflow_executions first
     const { data: execution, error } = await supabase
       .from("workflow_executions")
       .select("id, status")
@@ -289,10 +289,37 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       .eq("user_id", req.userId)
       .single()
 
+    // Fallback: check if it's a standalone job (single-node execution)
     if (error || !execution) {
-      return reply.status(404).send({
-        error: { code: "not_found", message: "Execution not found" },
-      })
+      const { data: job, error: jobError } = await supabase
+        .from("jobs")
+        .select("id, status")
+        .eq("id", parsed.data.id)
+        .eq("user_id", req.userId)
+        .single()
+
+      if (jobError || !job) {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Execution not found" },
+        })
+      }
+
+      const activeJobStatuses = new Set(["pending", "queued", "processing", "running"])
+      if (!activeJobStatuses.has(job.status as string)) {
+        return reply.status(409).send({
+          error: {
+            code: "not_cancellable",
+            message: `Job is already ${job.status}`,
+          },
+        })
+      }
+
+      await supabase
+        .from("jobs")
+        .update({ status: "failed", output_data: { error: "Cancelled by user" } })
+        .eq("id", parsed.data.id)
+
+      return { success: true }
     }
 
     if (execution.status !== "pending" && execution.status !== "running" && execution.status !== "stopping") {
