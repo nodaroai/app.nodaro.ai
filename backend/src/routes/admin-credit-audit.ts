@@ -56,6 +56,29 @@ function buildModelMap(): Map<string, ModelMapping[]> {
   addModels(KIE_STORYBOARD_MODELS, "storyboard")
   addModels(KIE_SPECIAL_MODELS, "special")
 
+  // Suno model-specific endpoints return chirp-* codenames instead of suno/v4 etc.
+  // Map them as aliases so they aren't UNMAPPED.
+  function addAlias(alias: string, targetKey: string, category: string) {
+    const existing = map.get(alias) ?? []
+    existing.push({
+      ourKey: targetKey,
+      kieCredits: STATIC_CREDIT_COSTS[targetKey] ? STATIC_CREDIT_COSTS[targetKey] * KIE_CREDITS_PER_NODARO : 0,
+      ourCredits: STATIC_CREDIT_COSTS[targetKey] ?? 0,
+      category,
+    })
+    map.set(alias, existing)
+  }
+
+  // Suno chirp-* → our model keys
+  addAlias("chirp-v4", "suno", "music")
+  addAlias("chirp-auk", "suno", "music")           // V4.5
+  addAlias("chirp-bluejay", "suno", "music")        // V4.5+
+  addAlias("chirp-crow", "suno-v5", "music")        // V5
+
+  // Flux Kontext model-specific endpoint uses "flux-kontext-pro" / "flux-kontext-max"
+  addAlias("flux-kontext-pro", "flux-kontext", "image")
+  addAlias("flux-kontext-max", "flux-kontext-max", "image")
+
   return map
 }
 

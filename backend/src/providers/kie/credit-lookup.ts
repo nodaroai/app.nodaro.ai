@@ -90,14 +90,17 @@ function auditHeaders(sessionToken: string, uniqueId: string) {
  * Normalize a raw record from any KIE endpoint into our standard KieLogRecord.
  *
  * Generic endpoint fields:   taskId, consumeCredits, remainedCredits, model, state, param, createTime, completeTime, costTime
- * Model-specific fields:     uuid, creditsConsumed, creditsRemaining, type, successFlag (200=ok), paramJson, createTime, operationType
+ * Model-specific fields:     uuid, creditsConsumed, creditsRemaining, type, successFlag, paramJson, createTime, operationType
+ *
+ * successFlag varies by endpoint: suno-audio uses 200, others use 1 for success.
+ * VEO uses: 0=generating, 1=success, 2=failed, 3=generation failed.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeRecord(raw: any, sourceLabel: string): KieLogRecord {
-  // successFlag: 200 = success, anything else = failed
   let state = raw.state ?? ""
   if (!state && raw.successFlag !== undefined) {
-    state = raw.successFlag === 200 ? "success" : "fail"
+    // 200 (HTTP-style) or 1 (boolean-style) = success
+    state = (raw.successFlag === 200 || raw.successFlag === 1) ? "success" : "fail"
   }
 
   return {
