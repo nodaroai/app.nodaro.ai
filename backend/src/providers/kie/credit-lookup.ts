@@ -41,8 +41,8 @@ export interface KieLogRecord {
 
 /** Model-specific record endpoints that KIE uses for certain providers */
 interface UserRecordEndpoint {
-  /** URL path segment: /client/v1/userRecord/{slug}/page */
-  slug: string
+  /** Full path after /client/v1/userRecord/ (e.g., "suno-record/page" or "getLyricsRecords") */
+  path: string
   /** Human-readable label for the source */
   label: string
   /** Extra body fields (e.g., VEO needs { model: "generate" }) */
@@ -50,14 +50,29 @@ interface UserRecordEndpoint {
 }
 
 const USER_RECORD_ENDPOINTS: UserRecordEndpoint[] = [
-  { slug: "suno-record", label: "suno" },
-  { slug: "gpt4o-image-record", label: "gpt-4o-image" },
-  { slug: "flux-kontext-record", label: "flux-kontext" },
-  { slug: "veo-record", label: "veo", extraBody: { model: "generate" } },
-  { slug: "mj", label: "midjourney" },
-  { slug: "aleph", label: "runway-aleph" },
-  { slug: "modify", label: "luma-modify" },
-  { slug: "runway-record", label: "runway" },
+  // Image
+  { path: "gpt4o-image-record/page", label: "gpt-4o-image" },
+  { path: "flux-kontext-record/page", label: "flux-kontext" },
+  { path: "mj/page", label: "midjourney" },
+  // Video
+  { path: "veo-record/page", label: "veo-generate", extraBody: { model: "generate" } },
+  { path: "veo/page", label: "veo-extend", extraBody: { model: "extend" } },
+  { path: "veo/page", label: "veo-4k", extraBody: { model: "video4k" } },
+  { path: "veo1080p/page", label: "veo-1080p", extraBody: { model: "video1080p" } },
+  { path: "aleph/page", label: "runway-aleph" },
+  { path: "modify/page", label: "luma-modify" },
+  { path: "runway-record/page", label: "runway" },
+  // Suno music
+  { path: "suno-record/page", label: "suno-audio" },
+  { path: "getLyricsRecords", label: "suno-lyrics" },
+  { path: "getSubtitleRecords", label: "suno-subtitle" },
+  { path: "wav/page", label: "suno-wav" },
+  { path: "vocal-removal/page", label: "suno-vocal-removal" },
+  { path: "mp4/page", label: "suno-lyrics-video" },
+  { path: "midi/page", label: "suno-midi" },
+  { path: "persona/page", label: "suno-persona" },
+  { path: "style/page", label: "suno-style" },
+  { path: "cover/page", label: "suno-cover" },
 ]
 
 /**
@@ -258,7 +273,7 @@ export async function fetchAllKieLogs(
     ),
     ...USER_RECORD_ENDPOINTS.map(ep =>
       fetchPaginated(
-        `${KIE_USER_RECORD_URL}/${ep.slug}/page`,
+        `${KIE_USER_RECORD_URL}/${ep.path}`,
         sessionToken, uniqueId,
         beginTime, endTime, ep.label,
         ep.extraBody,
