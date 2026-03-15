@@ -113,7 +113,7 @@
       "position": { "x": 1000, "y": 0 },
       "data": {
         "label": "Lyrics Generation (2cr)",
-        "prompt": "",
+        "prompt": "Write lyrics for an upbeat indie pop song about summer road trips, catchy guitar riffs, and open highways",
         "fieldMappings": {}
       }
     },
@@ -361,11 +361,15 @@
 
     { "id": "e_a1",  "source": "upload_audio_1", "target": "cover_v4",              "sourceHandle": "audio", "targetHandle": "in" },
     { "id": "e_a2",  "source": "upload_audio_1", "target": "cover_v5",              "sourceHandle": "audio", "targetHandle": "in" },
-    { "id": "e_a3",  "source": "upload_audio_1", "target": "extend_v4",             "sourceHandle": "audio", "targetHandle": "in" },
-    { "id": "e_a4",  "source": "upload_audio_1", "target": "extend_v5",             "sourceHandle": "audio", "targetHandle": "in" },
-    { "id": "e_a5",  "source": "upload_audio_1", "target": "separate_vocal",        "sourceHandle": "audio", "targetHandle": "audio" },
-    { "id": "e_a6",  "source": "upload_audio_1", "target": "separate_stem",         "sourceHandle": "audio", "targetHandle": "audio" },
-    { "id": "e_a7",  "source": "upload_audio_1", "target": "music_video_1",         "sourceHandle": "audio", "targetHandle": "audio" },
+
+    { "id": "e_ext1", "source": "gen_v4",  "target": "extend_v4",      "sourceHandle": "audio", "targetHandle": "in" },
+    { "id": "e_ext2", "source": "gen_v5",  "target": "extend_v5",      "sourceHandle": "audio", "targetHandle": "in" },
+
+    { "id": "e_sep1", "source": "gen_v4",  "target": "separate_vocal", "sourceHandle": "audio", "targetHandle": "audio" },
+    { "id": "e_sep2", "source": "gen_v4_5", "target": "separate_stem", "sourceHandle": "audio", "targetHandle": "audio" },
+
+    { "id": "e_mv1",  "source": "gen_v5",  "target": "music_video_1",  "sourceHandle": "audio", "targetHandle": "audio" },
+
     { "id": "e_a8",  "source": "upload_audio_1", "target": "replace_section_1",     "sourceHandle": "audio", "targetHandle": "audio" },
     { "id": "e_a9",  "source": "upload_audio_1", "target": "add_instrumental_v5",   "sourceHandle": "audio", "targetHandle": "audio" },
     { "id": "e_a10", "source": "upload_audio_1", "target": "add_instrumental_v4_5plus", "sourceHandle": "audio", "targetHandle": "audio" },

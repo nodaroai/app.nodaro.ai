@@ -167,6 +167,13 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                       <X className="w-3 h-3" />
                     </button>
                   </div>
+                  {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                  <audio
+                    src={audioUrl}
+                    controls
+                    className="w-full mt-2 h-8 [&::-webkit-media-controls-panel]:bg-muted/50"
+                    onMouseDown={(e) => e.stopPropagation()}
+                  />
                 </div>
               ) : (
                 <>
@@ -221,6 +228,15 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                   className="w-full bg-transparent border-b border-muted-foreground/20 text-xs py-1 outline-none focus:border-[#38BDF8] transition-colors placeholder:text-muted-foreground/30"
                 />
               </div>
+              {(nodeData.externalUrl || nodeData.url) && (
+                /* eslint-disable-next-line jsx-a11y/media-has-caption */
+                <audio
+                  src={nodeData.externalUrl || nodeData.url}
+                  controls
+                  className="w-full mt-2 h-8 [&::-webkit-media-controls-panel]:bg-muted/50"
+                  onMouseDown={(e) => e.stopPropagation()}
+                />
+              )}
               <button
                 type="button"
                 className="w-full text-center text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors mt-1"

@@ -217,8 +217,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "wan-animate-replace:580p": 3,  // 9.5 KIE cr, $0.0475
   "wan-animate-replace:720p": 4,  // 12.5 KIE cr, $0.0625
   // ── Lip Sync ──
-  "kling-avatar": 13,            // 40 KIE cr, $0.20 (8 cr/sec * 5s)
-  "kling-avatar-pro": 25,        // 80 KIE cr, $0.40 (16 cr/sec * 5s)
+  "kling-avatar": 28,            // 112 KIE cr, $0.56 (8 cr/sec * ~14s)
+  "kling-avatar-pro": 56,        // 224 KIE cr, $1.12 (16 cr/sec * ~14s)
   ***REDACTED-OSS-SCRUB***
   // ── Audio / TTS / Music ──
   "elevenlabs-v3": 4,             // direct ElevenLabs API, $0.05
@@ -260,7 +260,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-voice-remix": 4,    // ElevenLabs voice remix/preview
   "elevenlabs-voice-design": 5,   // ElevenLabs voice design (full controls)
   "elevenlabs-forced-alignment": 3, // ElevenLabs forced alignment
-  "infinitalk": 19,              // 60 KIE cr, $0.30 (12 cr/sec * 5s at 720p)
+  "infinitalk": 26,              // 42–168 KIE cr, $0.21–$0.84 (3–12 cr/sec * ~14s, 480p–720p)
   // ── Sora 2 Pro Storyboard ──
   "sora-storyboard": 47,          // 150 KIE cr, $0.75 (10 frames)
   "sora-storyboard:15": 85,       // 270 KIE cr, $1.35 (15/25 frames)

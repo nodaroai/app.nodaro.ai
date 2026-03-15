@@ -7,7 +7,7 @@ import {
   type EdgeChange,
   type Connection,
 } from "@xyflow/react"
-import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition, LoopNodeData } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition, LoopNodeData, PreviewItem, PreviewNodeData } from "@/types/nodes"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
@@ -40,6 +40,67 @@ const EXECUTION_DATA_KEYS = new Set([
   "subWorkflowProgress",
   "outputResults",
 ])
+
+/**
+ * Simplified output extraction for preview auto-populate (avoids circular import
+ * with execution-graph.ts). Returns null if the node has no results yet.
+ */
+function getNodeOutputForPreview(node: WorkflowNode): { type: PreviewItem["type"]; value: string } | null {
+  const d = node.data as Record<string, unknown>
+  const t = node.type ?? ""
+
+  // Text source nodes
+  if (t === "text-prompt") {
+    const v = (d.text as string)?.trim()
+    return v ? { type: "text", value: v } : null
+  }
+
+  // Text output nodes
+  if (t === "suno-lyrics" || t === "suno-style-boost" || t === "ai-writer" || t === "generate-script") {
+    const v = (d.generatedText as string)?.trim()
+    return v ? { type: "text", value: v } : null
+  }
+
+  // Upload nodes
+  if (t === "upload-image") {
+    const v = ((d.r2Url || d.url || d.externalUrl) as string)?.trim()
+    return v ? { type: "image", value: v } : null
+  }
+  if (t === "upload-video") {
+    const v = ((d.r2Url || d.url || d.externalUrl) as string)?.trim()
+    return v ? { type: "video", value: v } : null
+  }
+  if (t === "upload-audio") {
+    const v = ((d.r2Url || d.url || d.externalUrl) as string)?.trim()
+    return v ? { type: "audio", value: v } : null
+  }
+
+  // Nodes with generatedResults array
+  const results = d.generatedResults as Array<{ url?: string; text?: string }> | undefined
+  const idx = (d.activeResultIndex as number) ?? 0
+  const result = results?.[idx]
+  if (result?.url) {
+    const url = result.url.trim()
+    if (/\.(png|jpe?g|gif|webp|svg|bmp)/i.test(url)) return { type: "image", value: url }
+    if (/\.(mp4|mov|webm)/i.test(url)) return { type: "video", value: url }
+    if (/\.(mp3|wav|ogg|aac|flac|m4a)/i.test(url)) return { type: "audio", value: url }
+    // Infer from node type
+    if (t.includes("image") || t === "character" || t === "face" || t === "object" || t === "location") return { type: "image", value: url }
+    if (t.includes("video")) return { type: "video", value: url }
+    if (t.includes("audio") || t.includes("speech") || t.includes("music") || t.includes("suno")) return { type: "audio", value: url }
+    return { type: "image", value: url }
+  }
+
+  // Fallback URL fields
+  const imgUrl = (d.generatedImageUrl as string)?.trim()
+  if (imgUrl) return { type: "image", value: imgUrl }
+  const vidUrl = (d.generatedVideoUrl as string)?.trim()
+  if (vidUrl) return { type: "video", value: vidUrl }
+  const audUrl = (d.generatedAudioUrl as string)?.trim()
+  if (audUrl) return { type: "audio", value: audUrl }
+
+  return null
+}
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error"
 
@@ -289,6 +350,38 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
                 : n,
             )
           }
+        }
+      }
+
+      // Auto-populate Preview node when connecting to a source that already has results
+      const previewTarget = newNodes.find((n) => n.id === connection.target && n.type === "preview")
+      if (previewTarget) {
+        const allIncoming = newEdges.filter((e) => e.target === previewTarget.id)
+        const items: PreviewItem[] = []
+        for (const edge of allIncoming) {
+          const src = newNodes.find((n) => n.id === edge.source)
+          if (!src) continue
+          const output = getNodeOutputForPreview(src)
+          if (!output) continue
+          items.push({
+            type: output.type,
+            value: output.value,
+            sourceNodeId: src.id,
+            sourceNodeLabel: (src.data as Record<string, unknown>).label as string || src.type || "",
+            visible: true,
+          })
+        }
+        if (items.length > 0) {
+          const prevData = previewTarget.data as PreviewNodeData
+          const prevItems = prevData.previewItems ?? []
+          // Merge: keep existing items, add/update from fresh data
+          const merged = new Map(prevItems.map((it) => [it.sourceNodeId, it]))
+          for (const item of items) merged.set(item.sourceNodeId, item)
+          newNodes = newNodes.map((n) =>
+            n.id === previewTarget.id
+              ? { ...n, data: { ...n.data, previewItems: [...merged.values()], executionStatus: "completed" } }
+              : n,
+          )
         }
       }
 

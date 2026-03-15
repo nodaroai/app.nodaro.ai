@@ -836,24 +836,24 @@ export const KIE_LIP_SYNC_MODELS: Record<string, KieModelConfig> = {
   // Kling AI Avatar
   "kling-avatar": {
     model: "kling/ai-avatar-standard",
-    credits: 40,
-    cost: 0.20,
+    credits: 112,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",
     extraParams: {},
   },
   "kling-avatar-pro": {
     model: "kling/ai-avatar-pro",
-    credits: 80,
-    cost: 0.40,  // 16 cr/sec * ~5s = 80 KIE credits (1080p)
+    credits: 224,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",
     extraParams: {},
   },
 
-  // Infinitalk (up to 15 sec audio)
+  ***REDACTED-OSS-SCRUB***
   "infinitalk": {
     model: "infinitalk/from-audio",
-    credits: 60,
-    cost: 0.30,
+    credits: 168,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",
     extraParams: { resolution: "720p" },
   },
@@ -978,8 +978,8 @@ export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
   // Image + Audio -> Talking Video
   "infinitalk": {
     model: "infinitalk/image-to-video",
-    credits: 60,
-    cost: 0.30,
+    credits: 168,
+    cost: 0.84,  // 12 cr/sec * ~14s (720p)
   },
 
   // Sora 2 Watermark Removal
