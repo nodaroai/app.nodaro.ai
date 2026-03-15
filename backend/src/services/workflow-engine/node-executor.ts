@@ -25,7 +25,7 @@ import type {
   NodeExecutionState,
   OrchestratorContext,
 } from "./types.js"
-import { JOB_POLL_INTERVAL_MS, NODE_TIMEOUT_MS, NODE_QUEUE_TIMEOUT_MS } from "./types.js"
+import { JOB_POLL_INTERVAL_MS, NODE_TIMEOUT_MS } from "./types.js"
 import { isSourceNode, isSkipNode } from "./execution-graph.js"
 
 // ---------------------------------------------------------------------------
@@ -472,7 +472,6 @@ async function pollJobToCompletion(
   usageLogId?: string,
   creditsUsed?: number,
 ): Promise<ExecuteNodeResult> {
-  const enqueueTime = Date.now()
   let processingStartTime: number | null = null
 
   while (true) {
@@ -481,22 +480,11 @@ async function pollJobToCompletion(
       throw new Error("Execution cancelled")
     }
 
-    // Check timeouts:
-    // 1. Queue timeout — job stuck waiting in BullMQ queue
-    // 2. Processing timeout — worker picked it up but hasn't finished
-    const now = Date.now()
-    if (processingStartTime !== null) {
-      // Worker is processing — check processing timeout
-      if (now - processingStartTime > NODE_TIMEOUT_MS) {
-        await cancelAndRefundTimedOutJob(jobId, usageLogId)
-        throw new Error(`Node timeout after ${NODE_TIMEOUT_MS / 1000}s of processing`)
-      }
-    } else {
-      // Still waiting in queue — check queue timeout
-      if (now - enqueueTime > NODE_QUEUE_TIMEOUT_MS) {
-        await cancelAndRefundTimedOutJob(jobId, usageLogId)
-        throw new Error(`Node timed out waiting in queue after ${NODE_QUEUE_TIMEOUT_MS / 1000}s`)
-      }
+    // Check processing timeout — only starts once the worker picks up the job.
+    // Queue wait time is bounded by the workflow-level timeout (WORKFLOW_TIMEOUT_MS).
+    if (processingStartTime !== null && Date.now() - processingStartTime > NODE_TIMEOUT_MS) {
+      await cancelAndRefundTimedOutJob(jobId, usageLogId)
+      throw new Error(`Node timeout after ${NODE_TIMEOUT_MS / 1000}s of processing`)
     }
 
     // Poll job status

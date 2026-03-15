@@ -151,9 +151,6 @@ export interface OrchestratorContext {
 /** Max time for a single node to process after the worker picks it up (ms) */
 export const NODE_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
 
-/** Max time for a node to wait in the BullMQ queue before being picked up (ms) */
-export const NODE_QUEUE_TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes
-
 /** Max time for an entire workflow execution (ms) */
 export const WORKFLOW_TIMEOUT_MS = 60 * 60 * 1000 // 60 minutes
 
