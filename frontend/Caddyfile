@@ -23,6 +23,8 @@
 		try_files {path} /index.html
 		file_server
 	}
-	@static path *.js *.css *.png *.svg *.ico *.woff2
+	@static path *.js *.css *.png *.svg *.woff2
 	header @static Cache-Control "public, max-age=31536000, immutable"
+	@favicon path *.ico
+	header @favicon Cache-Control "public, max-age=86400"
 }
