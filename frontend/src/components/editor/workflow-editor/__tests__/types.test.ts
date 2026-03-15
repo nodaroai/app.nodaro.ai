@@ -270,7 +270,7 @@ describe("NODE_CREDIT_COSTS — new nodes", () => {
 // ---------------------------------------------------------------------------
 
 describe("MAX_CONSECUTIVE_POLL_FAILURES", () => {
-  it("equals 5", () => {
-    expect(MAX_CONSECUTIVE_POLL_FAILURES).toBe(5)
+  it("equals 20", () => {
+    expect(MAX_CONSECUTIVE_POLL_FAILURES).toBe(20)
   })
 })
