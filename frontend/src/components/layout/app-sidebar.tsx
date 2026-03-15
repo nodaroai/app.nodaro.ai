@@ -61,7 +61,7 @@ const NAV_ITEMS: readonly NavItem[] = [
 
 function formatRenewalTime(periodEnd: string): string {
   const msLeft = new Date(periodEnd).getTime() - Date.now()
-  if (msLeft <= 0) return "soon"
+  if (msLeft <= 0) return "shortly"
   const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24))
   if (daysLeft < 1) {
     const hoursLeft = Math.floor(msLeft / (1000 * 60 * 60))
