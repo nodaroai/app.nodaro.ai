@@ -1,0 +1,2102 @@
+# Nodaro.ai — Workflow JSON Specification for LLMs
+
+> Nodaro.ai is a visual AI media production platform with a node-based workflow editor.
+> This document describes the JSON format for programmatically generating workflows
+> that can be imported into the system.
+
+## Export/Import Format
+
+```json
+{
+  "name": "My Workflow",
+  "nodes": [ ...WorkflowNode[] ],
+  "edges": [ ...WorkflowEdge[] ],
+  "exportedAt": "2026-03-15T00:00:00.000Z",
+  "version": "1.0"
+}
+```
+
+## Node Structure
+
+Every node is a React Flow node:
+
+```json
+{
+  "id": "node_1",
+  "type": "generate-image",
+  "position": { "x": 200, "y": 100 },
+  "data": { ...node-type-specific fields }
+}
+```
+
+**ID convention:** Use `node_1`, `node_2`, etc. IDs are remapped on import.
+
+**Position:** Arrange nodes left-to-right (inputs on left, outputs on right), spaced ~300px horizontally and ~200px vertically.
+
+## Edge Structure
+
+```json
+{
+  "id": "edge_1",
+  "source": "node_1",
+  "target": "node_2",
+  "sourceHandle": "image",
+  "targetHandle": "in"
+}
+```
+
+- `sourceHandle`: The output port name of the source node (see Output Handles below).
+- `targetHandle`: The input port name of the target node (see Input Handles below).
+- Optional `data.outputMode`: `"each"` (fan-out per item), `"last"` (default), `"all"` (combine), `"item:N"` (specific index).
+
+---
+
+## Media Types
+
+Nodes produce and consume four media types:
+
+| Type | Description |
+|------|-------------|
+| `text` | Prompts, scripts, transcriptions |
+| `image` | PNG, JPG, WEBP |
+| `video` | MP4, WEBM, MOV |
+| `audio` | MP3, WAV, OGG, FLAC |
+
+Connections must be media-type compatible. A node that outputs `image` can connect to a node that accepts `image` input.
+
+---
+
+## Node Reference
+
+### Input Nodes (0 credits)
+
+#### text-prompt
+Text input for prompts. Foundation of most workflows.
+
+```json
+{
+  "type": "text-prompt",
+  "data": {
+    "label": "Text Prompt",
+    "text": "A serene mountain landscape at golden hour"
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text, optional) | `prompt` (text) |
+
+#### list
+Fan-out execution — runs downstream nodes once per item.
+
+```json
+{
+  "type": "list",
+  "data": {
+    "label": "Scene List",
+    "items": "A sunny beach\nA dark forest\nA snowy mountain",
+    "fieldMappings": {}
+  }
+}
+```
+
+Items are newline-separated. Each line triggers a separate execution of connected nodes.
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text, optional) | `list` (text, fan-out) |
+
+**Edge note:** Edges from list nodes default to `outputMode: "each"`.
+
+#### upload-image
+Reference to a user-uploaded image.
+
+```json
+{
+  "type": "upload-image",
+  "data": {
+    "label": "Upload Image",
+    "assetId": "",
+    "url": ""
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (optional) | `image` (image) |
+
+#### upload-video
+
+```json
+{
+  "type": "upload-video",
+  "data": {
+    "label": "Upload Video",
+    "assetId": "",
+    "url": ""
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (optional) | `video` (video) |
+
+#### upload-audio
+
+```json
+{
+  "type": "upload-audio",
+  "data": {
+    "label": "Upload Audio",
+    "assetId": "",
+    "url": ""
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (optional) | `audio` (audio) |
+
+#### youtube-video
+Download video from YouTube URL.
+
+```json
+{
+  "type": "youtube-video",
+  "data": {
+    "label": "Video URL",
+    "youtubeUrl": "",
+    "videoId": "",
+    "title": "",
+    "thumbnailUrl": ""
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (optional) | `video` (video) |
+
+#### reference-audio
+Extract audio from YouTube or uploaded file.
+
+```json
+{
+  "type": "reference-audio",
+  "data": {
+    "label": "Reference Audio",
+    "sourceType": "youtube",
+    "youtubeUrl": "",
+    "uploadedFileUrl": "",
+    "directUrl": "",
+    "videoTitle": "",
+    "videoThumbnail": "",
+    "videoDuration": "",
+    "extractedAudioUrl": "",
+    "extractionStatus": "idle"
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (optional) | `audio` (audio) |
+
+#### rss-feed
+Fetch content from an RSS feed.
+
+```json
+{
+  "type": "rss-feed",
+  "data": {
+    "label": "RSS Feed",
+    "feedUrl": "",
+    "itemIndex": 0,
+    "extractFields": ["title", "description"]
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (optional) | `content` (text) |
+
+#### webhook-trigger
+Receive external HTTP POST requests to trigger the workflow.
+
+```json
+{
+  "type": "webhook-trigger",
+  "data": {
+    "label": "Webhook Trigger",
+    "params": [
+      { "id": "p1", "name": "prompt", "type": "string" }
+    ]
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| none | `payload` (text) |
+
+#### schedule-trigger
+Run workflow on a cron schedule or interval.
+
+```json
+{
+  "type": "schedule-trigger",
+  "data": {
+    "label": "Schedule Trigger",
+    "cron": "0 9 * * *",
+    "timezone": "America/New_York"
+  }
+}
+```
+
+Supports cron (5-field) or interval strings: `"5m"`, `"1h"`, `"1d"`.
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| none | `payload` (text) |
+
+---
+
+### Parameter Nodes (0 credits)
+
+These configure downstream AI nodes without generating content.
+
+#### tone
+
+```json
+{ "type": "tone", "data": { "label": "Tone", "tone": "cinematic and dramatic" } }
+```
+
+| Handles | `in` -> `tone` |
+|---------|---------------|
+
+#### style-guide
+
+```json
+{ "type": "style-guide", "data": { "label": "Style Guide", "text": "Photorealistic, 8K, shallow depth of field" } }
+```
+
+| Handles | `in` -> `style_guide` |
+|---------|----------------------|
+
+#### aspect-ratio
+
+```json
+{ "type": "aspect-ratio", "data": { "label": "Aspect Ratio", "ratio": "16:9" } }
+```
+
+Values: `"1:1"`, `"16:9"`, `"9:16"`, `"4:3"`, `"4:5"`
+
+| Handles | `in` -> `aspect_ratio` |
+|---------|-----------------------|
+
+#### duration
+
+```json
+{ "type": "duration", "data": { "label": "Duration", "seconds": 60 } }
+```
+
+| Handles | `in` -> `duration` |
+|---------|--------------------|
+
+#### scene-count
+
+```json
+{ "type": "scene-count", "data": { "label": "Scene Count", "count": 5 } }
+```
+
+| Handles | `in` -> `scene_count` |
+|---------|----------------------|
+
+#### motion
+
+```json
+{ "type": "motion", "data": { "label": "Motion", "motion": "moderate" } }
+```
+
+Values: `"subtle"`, `"moderate"`, `"dynamic"`
+
+| Handles | `in` -> `out` |
+|---------|---------------|
+
+#### camera-motion
+
+```json
+{ "type": "camera-motion", "data": { "label": "Camera Motion", "cameraMotion": "zoom-in" } }
+```
+
+Values: `"static"`, `"pan-left"`, `"pan-right"`, `"zoom-in"`, `"zoom-out"`
+
+| Handles | `in` -> `out` |
+|---------|---------------|
+
+---
+
+### AI Generation Nodes
+
+#### generate-image (5 credits)
+Generate an image from a text prompt.
+
+```json
+{
+  "type": "generate-image",
+  "data": {
+    "label": "Generate Image",
+    "prompt": "A futuristic cityscape at night with neon lights",
+    "provider": "nano-banana-pro",
+    "style": "cinematic",
+    "aspectRatio": "16:9",
+    "negativePrompt": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Providers:** `nano-banana`, `nano-banana-pro`, `grok`, `flux`, `flux-flex`, `gpt-image`, `imagen4`, `imagen4-fast`, `imagen4-ultra`, `ideogram-v3`, `qwen`, `seedream`, `seedream-5-lite`, `nano-banana-2`, `flux-kontext`, `flux-kontext-max`, `z-image`
+
+**Aspect ratios by provider:**
+- Most: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `3:2`, `2:3`
+- GPT Image: `1:1`, `3:2`, `2:3` only
+- Flux Kontext: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `21:9`
+
+**Optional fields:**
+- `resolution`: `"1K"`, `"2K"`, `"4K"` (nano-banana-pro, nano-banana-2, flux, flux-flex)
+- `quality`: `"medium"`, `"high"` (gpt-image); `"basic"`, `"high"` (seedream)
+- `seed`: number (for reproducibility)
+
+**Style presets:** `"cinematic"`, `"anime"`, `"photorealistic"`, `"oil-painting"`, `"watercolor"`, `"digital-art"`, `"3d-render"`, `"pixel-art"`, `"comic-book"`, `"sketch"`, `"fantasy"`, `"noir"`, `"pop-art"`, `"minimalist"`, `"vintage"`, `"surreal"`, or custom text.
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text/image) | `image` (image) |
+
+When an image node connects to `generate-image`, it adds a reference image (supported by: `nano-banana`, `nano-banana-pro`, `ideogram-v3`).
+
+#### edit-image (3 credits)
+Transform or upscale an existing image.
+
+```json
+{
+  "type": "edit-image",
+  "data": {
+    "label": "Edit Image",
+    "prompt": "Remove the background",
+    "provider": "recraft-remove-bg",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Providers:** `recraft-upscale`, `topaz-image-upscale`, `recraft-remove-bg`, `nano-banana-edit`
+
+**Optional fields:**
+- `upscaleFactor`: `"2"`, `"4"` (recraft-upscale)
+- `targetResolution`: `"2K"`, `"4K"`, `"8K"` (topaz-image-upscale)
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `image` (image) | `out` (image) |
+
+#### image-to-image (5 credits)
+Transform an image with AI guided by a prompt.
+
+```json
+{
+  "type": "image-to-image",
+  "data": {
+    "label": "Image to Image",
+    "prompt": "Make it look like a watercolor painting",
+    "provider": "flux-kontext",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Providers:** `nano-banana`, `nano-banana-pro`, `grok-i2i`, `flux-i2i`, `flux-pro-i2i`, `gpt-image-i2i`, `ideogram-edit`, `ideogram-remix`, `ideogram-reframe`, `qwen-i2i`, `qwen-edit`, `seedream-edit`, `seedream-5-lite-i2i`, `flux-kontext`, `flux-kontext-max`
+
+**Optional fields:** `strength` (0-1), `aspectRatio`, `negativePrompt`, `seed`, `guidanceScale`
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `image` (image) | `out` (image) |
+
+#### generate-script (2 credits)
+Generate a multi-scene script from a prompt.
+
+```json
+{
+  "type": "generate-script",
+  "data": {
+    "label": "Generate Script",
+    "provider": "gemini",
+    "model": "gemini-2.5-flash",
+    "sceneCount": 5,
+    "styleGuide": "",
+    "structure": "freeform",
+    "tone": "",
+    "targetLength": 60,
+    "fieldMappings": {}
+  }
+}
+```
+
+**Providers:** `gemini`, `claude`, `openai`
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text) | `scenes` (structured scene data) |
+
+#### text-to-video (25 credits)
+Generate video from text prompt.
+
+```json
+{
+  "type": "text-to-video",
+  "data": {
+    "label": "Text to Video",
+    "prompt": "A drone shot flying over a tropical coastline at sunset",
+    "provider": "minimax",
+    "duration": 5,
+    "aspectRatio": "16:9",
+    "negativePrompt": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Providers & durations:**
+- `minimax` (5s), `veo3` (8s), `kling` (5-10s), `kling-turbo` (5-10s), `kling-3.0` (3-15s)
+- `grok` (6-10s), `sora2-pro` (5-10s), `sora2` (5-10s), `seedance` (4-12s)
+- `wan` (5-15s), `wan-turbo` (5s), `hailuo-standard` (6-10s)
+- `bytedance-lite` (5-10s), `bytedance-pro` (5-10s), `runway-kie` (5-10s)
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text) | `video` (video) |
+
+#### image-to-video (20 credits)
+Animate an image into video.
+
+```json
+{
+  "type": "image-to-video",
+  "data": {
+    "label": "Image to Video",
+    "provider": "veo3",
+    "duration": 5,
+    "motion": "moderate",
+    "cameraMotion": "static",
+    "prompt": "Gentle breeze moves the leaves",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Providers:** `minimax`, `veo3`, `veo3.1`, `kling`, `kling-turbo`, `kling-3.0`, `kling-master`, `seedance`, `hailuo-2.3-pro`, `hailuo-2.3`, `hailuo-standard`, `sora2-pro`, `sora2`, `wan-i2v`, `wan-turbo`, `bytedance-lite`, `bytedance-pro`, `bytedance-pro-fast`, `grok-i2v`, `runway-kie`
+
+**Optional fields:**
+- `generateAudio`: boolean (veo3, veo3.1 only)
+- `aspectRatio`: `"16:9"`, `"9:16"`, `"1:1"`, `"21:9"`
+- `removeWatermark`: boolean (sora2, sora2-pro)
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `startFrame` (image), `endFrame` (image, optional), `audio` (audio, optional) | `video` (video) |
+
+**End frame support (2-image to video):** `minimax`, `veo3`, `veo3.1`, `kling-turbo`, `kling-3.0`, `hailuo-standard`, `bytedance-lite`
+
+#### video-to-video (25 credits)
+Transform existing video with AI.
+
+```json
+{
+  "type": "video-to-video",
+  "data": {
+    "label": "Video to Video",
+    "prompt": "Convert to anime style",
+    "duration": 5,
+    "fieldMappings": {}
+  }
+}
+```
+
+**Providers:** `wan` (default), `luma-modify`, `runway-aleph`
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video) | `video` (video) |
+
+#### text-to-speech (3 credits)
+Convert text to spoken audio.
+
+```json
+{
+  "type": "text-to-speech",
+  "data": {
+    "label": "Text to Speech",
+    "provider": "elevenlabs-v3",
+    "voiceId": "Rachel",
+    "voiceType": "premade",
+    "voiceDisplayName": "Rachel",
+    "language": "en",
+    "speed": 1,
+    "stability": 0.5,
+    "similarityBoost": 0.75,
+    "style": 0,
+    "languageCode": "",
+    "textSource": "connected",
+    "directText": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Providers:** `elevenlabs-v3` (default, supports audio tags), `elevenlabs-v2`, `elevenlabs-turbo`
+
+**Common voice IDs:** `"Rachel"`, `"Clyde"`, `"Dave"`, `"Fin"`, `"Sarah"`, `"Antoni"`, `"Thomas"`, `"Charlie"`, `"George"`, `"Emily"`, `"Elli"`, `"Callum"`, `"Patrick"`, `"Harry"`, `"Liam"`, `"Dorothy"`, `"Josh"`, `"Arnold"`, `"Charlotte"`, `"Matilda"`, `"Jessica"`, `"Michael"`, `"Ethan"`, `"Gigi"`, `"Freya"`, `"Grace"`, `"Daniel"`, `"Lily"`, `"Serena"`, `"Adam"`, `"Nicole"`, `"Bill"`, `"Sam"`, `"Glinda"`, `"Giovanni"`, `"Mimi"`, `"Brian"`, `"Chris"`, `"James"`, `"Joseph"`, `"Drew"`, `"Paul"`, `"Aria"`, `"Roger"`, `"Eric"`, `"Valentino"`, `"Alice"`, `"Joanne"`, `"Laura"`, `"Will"`, `"Andrea"`, `"River"`
+
+**textSource options:**
+- `"connected"`: Uses text from upstream connected node
+- `"direct"`: Uses the `directText` field
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text) | `audio` (audio) |
+
+#### generate-music (5 credits)
+Generate music from a prompt.
+
+```json
+{
+  "type": "generate-music",
+  "data": {
+    "label": "Generate Music",
+    "prompt": "Epic orchestral trailer music with building intensity",
+    "provider": "suno",
+    "duration": 8,
+    "genre": "",
+    "mood": "",
+    "instrumental": true,
+    "lyrics": "",
+    "referenceAudioUrl": "",
+    "referenceYouTubeUrl": "",
+    "referenceSource": "none",
+    "modelVersion": "stereo-large",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text) | `audio` (audio) |
+
+#### text-to-audio (3 credits)
+Generate sound effects from a text description.
+
+```json
+{
+  "type": "text-to-audio",
+  "data": {
+    "label": "Text to Audio",
+    "prompt": "Thunder rumbling in the distance",
+    "provider": "elevenlabs-sfx",
+    "duration": 10,
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text) | `audio` (audio) |
+
+#### ai-writer (2 credits)
+AI text generation with custom system prompts.
+
+```json
+{
+  "type": "ai-writer",
+  "data": {
+    "label": "AI Writer",
+    "templateId": "",
+    "systemPrompt": "You are a creative screenwriter.",
+    "userInput": "",
+    "provider": "claude",
+    "model": "claude-sonnet-4-6",
+    "temperature": 0.7,
+    "maxTokens": 2000,
+    "fieldMappings": {}
+  }
+}
+```
+
+**Providers:** `claude`, `gemini`, `openai`
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text) | `text` (text) |
+
+#### transcribe (3 credits)
+Transcribe audio to text.
+
+```json
+{
+  "type": "transcribe",
+  "data": {
+    "label": "Transcribe",
+    "provider": "elevenlabs-stt",
+    "language": "auto",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Optional:** `diarize: true` (speaker detection), `tagAudioEvents: true`
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (audio) | `text` (text) |
+
+#### image-to-text (1 credit)
+Describe an image with AI.
+
+```json
+{
+  "type": "image-to-text",
+  "data": {
+    "label": "Describe Image",
+    "detailLevel": "detailed",
+    "customPrompt": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+**detailLevel:** `"brief"`, `"detailed"`, `"structured"`
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `image` (image) | `text` (text) |
+
+#### lip-sync (40 credits)
+Animate a face to match audio.
+
+```json
+{
+  "type": "lip-sync",
+  "data": {
+    "label": "Lip Sync",
+    "provider": "kling-avatar",
+    "resolution": "720p",
+    "prompt": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Providers:** `kling-avatar`, `infinitalk`, `infinitalk-pro`
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `image` (image), `audio` (audio) | `video` (video) |
+
+#### text-to-dialogue (4 credits)
+Multi-speaker dialogue generation.
+
+```json
+{
+  "type": "text-to-dialogue",
+  "data": {
+    "label": "Text to Dialogue",
+    "dialogue": [
+      { "id": "1", "text": "Hello, how are you?", "voice": "Sarah" },
+      { "id": "2", "text": "I'm great, thanks!", "voice": "Dave" }
+    ],
+    "stability": 0.5,
+    "languageCode": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text, optional) | `audio` (audio) |
+
+#### audio-isolation (1 credit)
+Extract voice from audio, removing background noise.
+
+```json
+{
+  "type": "audio-isolation",
+  "data": {
+    "label": "Voice Extractor",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (audio) | `audio` (audio) |
+
+#### voice-changer (4 credits)
+Change the voice in audio while preserving emotion/delivery.
+
+```json
+{
+  "type": "voice-changer",
+  "data": {
+    "label": "Voice Changer",
+    "voiceId": "Rachel",
+    "voiceLabel": "Rachel",
+    "voiceType": "premade",
+    "stability": 0.5,
+    "similarityBoost": 0.75,
+    "removeBackgroundNoise": false,
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (audio) | `audio` (audio) |
+
+#### dubbing (8 credits)
+Translate audio to another language preserving speaker identity.
+
+```json
+{
+  "type": "dubbing",
+  "data": {
+    "label": "Dubbing",
+    "targetLanguage": "es",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Languages:** ISO codes (`"es"`, `"fr"`, `"de"`, `"ja"`, `"ko"`, `"zh"`, `"pt"`, `"it"`, `"ru"`, `"ar"`, `"hi"`, `"tr"`, `"pl"`, `"nl"`, `"sv"`, etc.)
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (audio) | `audio` (audio) |
+
+#### voice-remix (4 credits)
+Generate audio with a voice described in natural language.
+
+```json
+{
+  "type": "voice-remix",
+  "data": {
+    "label": "Voice Remix",
+    "text": "Hello, this is a test.",
+    "voiceDescription": "A warm female voice with a slight British accent",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text, optional) | `audio` (audio) |
+
+#### voice-design (5 credits)
+Design a custom voice with fine-grained controls.
+
+```json
+{
+  "type": "voice-design",
+  "data": {
+    "label": "Voice Design",
+    "text": "Hello, this is a test.",
+    "voiceDescription": "Young male, energetic",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text, optional) | `audio` (audio), `voiceId` (text) |
+
+#### forced-alignment (3 credits)
+Get word-level timestamps from audio + transcript.
+
+```json
+{
+  "type": "forced-alignment",
+  "data": {
+    "label": "Forced Alignment",
+    "transcript": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (audio) | `data` (JSON) |
+
+#### extend-video (40 credits)
+Extend an existing AI-generated video.
+
+```json
+{
+  "type": "extend-video",
+  "data": {
+    "label": "Extend Video",
+    "provider": "veo-extend",
+    "prompt": "Continue the scene with...",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Providers:** `veo-extend`, `runway-extend`
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video) | `video` (video) |
+
+#### video-upscale (15 credits)
+Upscale video resolution.
+
+```json
+{
+  "type": "video-upscale",
+  "data": {
+    "label": "Video Upscale",
+    "provider": "topaz",
+    "upscaleFactor": "2",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Providers:** `topaz`, `topaz-4k`, `topaz-8k`, `veo-1080p`, `veo-4k`
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video) | `video` (video) |
+
+#### motion-transfer (30 credits)
+Transfer motion from a video to a character image.
+
+```json
+{
+  "type": "motion-transfer",
+  "data": {
+    "label": "Motion Transfer",
+    "prompt": "",
+    "characterOrientation": "video",
+    "resolution": "720p",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Providers:** `kling`, `kling-3.0`, `wan-animate-move`, `wan-animate-replace`
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `image` (image), `video` (video) | `out` (video) |
+
+#### speech-to-video (4 credits)
+Generate a talking head video from image + audio.
+
+```json
+{
+  "type": "speech-to-video",
+  "data": {
+    "label": "Speech to Video",
+    "prompt": "A person speaking naturally",
+    "resolution": "480p",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `image` (image), `audio` (audio), `prompt` (text, optional) | `video` (video) |
+
+#### sora-storyboard (47 credits)
+Multi-shot video generation with Sora 2 Pro.
+
+```json
+{
+  "type": "sora-storyboard",
+  "data": {
+    "label": "Sora Storyboard",
+    "shots": [
+      { "scene": "A woman walks through a forest", "duration": 5 },
+      { "scene": "She discovers a hidden temple", "duration": 5 }
+    ],
+    "nFrames": "10",
+    "aspectRatio": "landscape",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `image` (image, optional) | `video` (video) |
+
+#### qa-check (1 credit)
+AI quality check on media.
+
+```json
+{
+  "type": "qa-check",
+  "data": {
+    "label": "QA Check",
+    "provider": "claude",
+    "checkType": "quality",
+    "threshold": 0.8,
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (any) | `approved` (passthrough), `rejected` (passthrough) |
+
+---
+
+### Suno Music Nodes
+
+#### suno-generate (3 credits)
+
+```json
+{
+  "type": "suno-generate",
+  "data": {
+    "label": "Suno Generate",
+    "prompt": "An upbeat pop song about summer",
+    "model": "V5",
+    "lyrics": "",
+    "style": "",
+    "title": "",
+    "negativeStyle": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text) | `audio` (audio) |
+
+#### suno-cover (3 credits)
+
+```json
+{
+  "type": "suno-cover",
+  "data": {
+    "label": "Suno Cover",
+    "prompt": "",
+    "model": "V5",
+    "uploadUrl": "",
+    "lyrics": "",
+    "style": "jazz",
+    "title": "",
+    "negativeStyle": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (audio) | `audio` (audio) |
+
+#### suno-extend (3 credits)
+
+```json
+{
+  "type": "suno-extend",
+  "data": {
+    "label": "Suno Extend",
+    "audioId": "",
+    "defaultParamFlag": true,
+    "prompt": "",
+    "model": "V5",
+    "style": "",
+    "title": "",
+    "continueAt": 0,
+    "negativeStyle": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (audio) | `audio` (audio) |
+
+#### suno-lyrics (1 credit)
+Generate lyrics from a prompt.
+
+```json
+{
+  "type": "suno-lyrics",
+  "data": { "label": "Suno Lyrics", "prompt": "Write lyrics about the ocean", "fieldMappings": {} }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text) | `text` (text) |
+
+#### suno-separate (2 credits)
+Separate vocals from instrumentals.
+
+```json
+{
+  "type": "suno-separate",
+  "data": { "label": "Suno Separate", "type": "separate_vocal", "taskId": "", "audioId": "", "fieldMappings": {} }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `audio` (audio) | `audio` (audio) |
+
+#### suno-mashup (4 credits)
+
+```json
+{
+  "type": "suno-mashup",
+  "data": {
+    "label": "Suno Mashup",
+    "model": "V5",
+    "customMode": false,
+    "style": "",
+    "title": "",
+    "negativeStyle": "",
+    "vocalGender": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `audio1` (audio), `audio2` (audio) | `audio` (audio) |
+
+#### suno-replace-section (2 credits)
+
+```json
+{
+  "type": "suno-replace-section",
+  "data": {
+    "label": "Suno Replace Section",
+    "infillStartS": 0,
+    "infillEndS": 30,
+    "prompt": "",
+    "tags": "",
+    "title": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `audio` (audio) | `audio` (audio) |
+
+#### suno-music-video (1 credit)
+
+```json
+{
+  "type": "suno-music-video",
+  "data": { "label": "Suno Music Video", "taskId": "", "audioId": "", "fieldMappings": {} }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `audio` (audio) | `video` (video) |
+
+#### suno-style-boost (1 credit)
+
+```json
+{ "type": "suno-style-boost", "data": { "label": "Suno Style Boost", "content": "", "fieldMappings": {} } }
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `text` (text) | `text` (text) |
+
+#### suno-add-instrumental (4 credits)
+
+```json
+{ "type": "suno-add-instrumental", "data": { "label": "Suno Add Instrumental", "model": "V5", "fieldMappings": {} } }
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `audio` (audio) | `audio` (audio) |
+
+#### suno-add-vocals (4 credits)
+
+```json
+{ "type": "suno-add-vocals", "data": { "label": "Suno Add Vocals", "model": "V5", "fieldMappings": {} } }
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `audio` (audio) | `audio` (audio) |
+
+#### suno-convert-wav (1 credit)
+
+```json
+{ "type": "suno-convert-wav", "data": { "label": "Suno Convert WAV", "fieldMappings": {} } }
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `audio` (audio) | `audio` (audio) |
+
+#### suno-upload-extend (4 credits)
+
+```json
+{
+  "type": "suno-upload-extend",
+  "data": {
+    "label": "Suno Upload Extend",
+    "prompt": "",
+    "model": "V5",
+    "style": "",
+    "title": "",
+    "negativeStyle": "",
+    "vocalGender": "",
+    "continueAt": 0,
+    "defaultParamFlag": true,
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `audio` (audio) | `audio` (audio) |
+
+---
+
+### Processing Nodes
+
+#### combine-videos (2 credits)
+Concatenate multiple videos with transitions.
+
+```json
+{
+  "type": "combine-videos",
+  "data": {
+    "label": "Combine Videos",
+    "transition": "fade",
+    "transitionDuration": 0.5,
+    "audioMode": "crossfade",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Transitions:** `"cut"`, `"fade"`, `"dissolve"`, `"dip-to-black"`, `"dip-to-white"`
+**Audio modes:** `"keep"`, `"crossfade"`, `"remove"`
+
+Connect multiple video sources to the single `in` handle.
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video, accepts multiple) | `video` (video) |
+
+#### merge-video-audio (1 credit)
+Merge video with one or more audio tracks.
+
+```json
+{
+  "type": "merge-video-audio",
+  "data": {
+    "label": "Merge Video & Audio",
+    "audioType": "voiceover",
+    "voiceoverVolume": 100,
+    "backgroundVolume": 30,
+    "keepOriginalAudio": true,
+    "originalAudioVolume": 30,
+    "originalAudioRole": "background",
+    "trackSettings": {},
+    "fieldMappings": {}
+  }
+}
+```
+
+Connect one video and one or more audio sources to `in`.
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video + audio, accepts multiple) | `video` (video) |
+
+#### add-captions (2 credits)
+Add subtitles/captions to a video.
+
+```json
+{
+  "type": "add-captions",
+  "data": {
+    "label": "Add Captions",
+    "style": "word-highlight",
+    "position": "bottom",
+    "fontSize": 24,
+    "color": "#ffffff",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Styles:** `"subtitle"`, `"word-highlight"`, `"karaoke"`
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video) | `video` (video) |
+
+#### resize-video (1 credit)
+Resize video to a different aspect ratio.
+
+```json
+{
+  "type": "resize-video",
+  "data": {
+    "label": "Resize Video",
+    "targetAspect": "9:16",
+    "method": "crop",
+    "padColor": "#000000",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Methods:** `"crop"`, `"pad"`, `"stretch"`
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video) | `video` (video) |
+
+#### extract-audio (1 credit)
+
+```json
+{
+  "type": "extract-audio",
+  "data": {
+    "label": "Extract Audio",
+    "outputSilentVideo": true,
+    "audioFormat": "mp3",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video) | `audio` (audio), `silent-video` (video) |
+
+#### mix-audio (1 credit)
+Mix multiple audio tracks together.
+
+```json
+{
+  "type": "mix-audio",
+  "data": {
+    "label": "Mix Audio",
+    "trackCount": 2,
+    "trackVolumes": {},
+    "fieldMappings": {}
+  }
+}
+```
+
+Connect multiple audio sources to the single `in` handle.
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (audio, accepts multiple) | `audio` (audio) |
+
+#### adjust-volume (0 credits)
+
+```json
+{
+  "type": "adjust-volume",
+  "data": {
+    "label": "Adjust Volume",
+    "volume": 100,
+    "normalize": false,
+    "fadeIn": 0,
+    "fadeOut": 0,
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (audio or video) | `audio` (audio) |
+
+#### trim-video (0 credits)
+
+```json
+{
+  "type": "trim-video",
+  "data": {
+    "label": "Trim Video",
+    "startTime": 0,
+    "endTime": 10,
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video) | `video` (video) |
+
+#### speed-ramp (0 credits)
+
+```json
+{
+  "type": "speed-ramp",
+  "data": {
+    "label": "Adjust Speed",
+    "speed": 1.5,
+    "adjustAudio": true,
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video) | `video` (video) |
+
+#### loop-video (0 credits)
+
+```json
+{
+  "type": "loop-video",
+  "data": {
+    "label": "Loop Video",
+    "mode": "repeat",
+    "repeatCount": 3,
+    "targetDuration": 10,
+    "fieldMappings": {}
+  }
+}
+```
+
+**Modes:** `"repeat"` (N times), `"duration"` (target seconds)
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video) | `video` (video) |
+
+#### fade-video (0 credits)
+
+```json
+{
+  "type": "fade-video",
+  "data": {
+    "label": "Fade In/Out",
+    "fadeIn": true,
+    "fadeInDuration": 0.5,
+    "fadeOut": true,
+    "fadeOutDuration": 0.5,
+    "color": "black",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video) | `video` (video) |
+
+#### transcode-video (0 credits)
+
+```json
+{
+  "type": "transcode-video",
+  "data": {
+    "label": "Transcode Video",
+    "codec": "h264",
+    "crf": 23,
+    "resolution": "1080p",
+    "audioBitrate": "192k",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video) | `video` (video) |
+
+#### social-media-format (0 credits)
+Format media for social platform specs.
+
+```json
+{
+  "type": "social-media-format",
+  "data": {
+    "label": "Social Media Format",
+    "platform": "instagram",
+    "contentType": "feed-square",
+    "specKey": "instagram:feed-square",
+    "method": "pad",
+    "padColor": "#000000",
+    "formattedText": "",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `media` (image/video), `text` (text) | `media` (image/video), `text` (text) |
+
+---
+
+### Composition Nodes
+
+These nodes create video compositions rendered by the `render-video` node.
+
+#### video-composer (2 credits)
+AI-powered video composition from natural language.
+
+```json
+{
+  "type": "video-composer",
+  "data": {
+    "label": "Compose Video",
+    "compositionPrompt": "Create a slideshow with all images, each for 3 seconds with fade transitions",
+    "fps": 30,
+    "aspectRatio": "16:9",
+    "durationSeconds": 30,
+    "backgroundColor": "#000000",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (images/videos/audio) | `composition` (plan) |
+
+#### after-effects (2 credits)
+AI-generated post-processing effects on video.
+
+```json
+{
+  "type": "after-effects",
+  "data": {
+    "label": "After Effects",
+    "effectPrompt": "Add a cinematic color grade with vignette and subtle film grain",
+    "fps": 30,
+    "durationSeconds": 10,
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (video) | `composition` (plan) |
+
+#### motion-graphics (2 credits)
+AI-generated 2D motion graphics.
+
+```json
+{
+  "type": "motion-graphics",
+  "data": {
+    "label": "Motion Graphics",
+    "motionPrompt": "Animated lower third with company name and title",
+    "aspectRatio": "16:9",
+    "backgroundColor": "#00000000",
+    "fps": 30,
+    "durationSeconds": 5,
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (optional) | `composition` (plan) |
+
+#### 3d-title (3 credits)
+AI-generated animated 3D text scenes.
+
+```json
+{
+  "type": "3d-title",
+  "data": {
+    "label": "3D Title",
+    "titlePrompt": "Epic golden 3D text saying ADVENTURE with particle effects",
+    "aspectRatio": "16:9",
+    "backgroundColor": "#000000",
+    "fps": 30,
+    "durationSeconds": 10,
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `background` (image/video, optional) | `composition` (plan) |
+
+#### composite (0 credits)
+Multi-layer video compositor (PiP, split screen, overlays).
+
+```json
+{
+  "type": "composite",
+  "data": {
+    "label": "Composite",
+    "layers": [],
+    "fps": 30,
+    "aspectRatio": "16:9",
+    "durationSeconds": 10,
+    "backgroundColor": "#000000"
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `video1`, `video2`, `video3`, `video4` (video) | `composition` (plan) |
+
+#### render-video (3 credits)
+Renders a composition plan into a final video file.
+
+```json
+{
+  "type": "render-video",
+  "data": {
+    "label": "Render Video",
+    "fps": 30,
+    "aspectRatio": "16:9",
+    "durationSeconds": 30,
+    "backgroundColor": "#000000",
+    "fieldMappings": {}
+  }
+}
+```
+
+**Must be connected downstream of a composition node** (video-composer, after-effects, motion-graphics, 3d-title, or composite).
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (composition plan) | `video` (video) |
+
+---
+
+### Utility Nodes
+
+#### combine-text (0 credits)
+Concatenate multiple text inputs.
+
+```json
+{
+  "type": "combine-text",
+  "data": {
+    "label": "Combine Text",
+    "separator": "newline",
+    "customSeparator": "",
+    "combinedText": ""
+  }
+}
+```
+
+**Separators:** `"newline"`, `"comma"`, `"space"`, `"double-newline"`, `"custom"`
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text, accepts multiple) | `text` (text) |
+
+#### split-text (0 credits)
+Split text into items.
+
+```json
+{
+  "type": "split-text",
+  "data": {
+    "label": "Split Text",
+    "separator": "\\n",
+    "trimWhitespace": true,
+    "removeEmpty": true
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (text) | `out` (text, fan-out) |
+
+Edges from `split-text` default to `outputMode: "each"`.
+
+#### sticky-note (no connections)
+Visual annotation. Not part of execution.
+
+```json
+{
+  "type": "sticky-note",
+  "data": {
+    "label": "Note",
+    "text": "This section handles the intro sequence",
+    "color": "#2d2d44",
+    "textColor": "#e2e8f0",
+    "width": 200,
+    "height": 150,
+    "fontSize": "base",
+    "bold": false,
+    "italic": false,
+    "alignment": "left"
+  }
+}
+```
+
+---
+
+### Output Nodes
+
+#### save-to-storage (0 credits)
+
+```json
+{
+  "type": "save-to-storage",
+  "data": {
+    "label": "Save to Storage",
+    "filename": "my-video",
+    "format": "mp4",
+    "quality": "standard",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (any media) | `asset` (reference) |
+
+#### webhook-output (0 credits)
+Send results to an external URL.
+
+```json
+{
+  "type": "webhook-output",
+  "data": {
+    "label": "Webhook Output",
+    "url": "https://example.com/callback",
+    "params": []
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (any) | none |
+
+#### Social Post Nodes (1 credit each)
+
+**instagram-post, tiktok-post, youtube-upload, linkedin-post, x-post, facebook-post**
+
+```json
+{
+  "type": "instagram-post",
+  "data": {
+    "label": "Instagram Post",
+    "platform": "instagram",
+    "action": "feed-post",
+    "caption": "Check out this amazing video! #ai #creative",
+    "fieldMappings": {}
+  }
+}
+```
+
+| Input Handles | Output Handles |
+|---------------|----------------|
+| `in` (media) | none |
+
+---
+
+## Connection Rules
+
+### Which nodes can connect to which
+
+**Text outputs** (from: text-prompt, ai-writer, transcribe, image-to-text, combine-text, split-text, suno-lyrics, suno-style-boost) can connect to:
+- Any node with `in` handle that accepts text (most AI nodes use connected text as prompt)
+- text-to-speech `in` (for narration)
+- generate-image `in` (as prompt)
+- text-to-video `in` (as prompt)
+
+**Image outputs** (from: generate-image, edit-image, image-to-image, upload-image, character, face, object, location) can connect to:
+- image-to-video `startFrame` or `endFrame`
+- image-to-image `image`
+- edit-image `image`
+- lip-sync `image`
+- speech-to-video `image`
+- motion-transfer `image`
+- sora-storyboard `image`
+- generate-image `in` (as reference image, for supported providers)
+
+**Video outputs** (from: image-to-video, text-to-video, video-to-video, combine-videos, merge-video-audio, render-video, etc.) can connect to:
+- combine-videos `in` (multiple videos accepted)
+- merge-video-audio `in`
+- add-captions `in`
+- resize-video `in`
+- trim-video `in`
+- speed-ramp `in`
+- loop-video `in`
+- fade-video `in`
+- extract-audio `in`
+- after-effects `in`
+- video-upscale `in`
+- extend-video `in`
+- motion-transfer `video`
+- video-to-video `in`
+
+**Audio outputs** (from: text-to-speech, generate-music, text-to-audio, extract-audio, mix-audio, suno-*, etc.) can connect to:
+- merge-video-audio `in`
+- mix-audio `in` (multiple audio accepted)
+- image-to-video `audio`
+- lip-sync `audio`
+- speech-to-video `audio`
+- transcribe `in`
+- audio-isolation `in`
+- voice-changer `in`
+- dubbing `in`
+- adjust-volume `in`
+
+**Composition outputs** (from: video-composer, after-effects, motion-graphics, 3d-title, composite) must connect to:
+- render-video `in`
+
+---
+
+## Common Workflow Patterns
+
+### Pattern 1: Text to Image
+```
+text-prompt -> generate-image
+```
+
+### Pattern 2: Text to Video
+```
+text-prompt -> text-to-video
+```
+
+### Pattern 3: Image to Video with Narration
+```
+text-prompt -> generate-image -> image-to-video
+text-prompt -> text-to-speech ─┐
+                                └-> merge-video-audio
+image-to-video ─────────────────┘
+```
+
+### Pattern 4: Multi-Scene Video
+```
+text-prompt -> generate-script -> [scene nodes] -> generate-image (per scene)
+                                                 -> image-to-video (per scene)
+                                                 -> combine-videos -> merge-video-audio
+text-prompt -> generate-music ──────────────────────────────────────┘
+```
+
+### Pattern 5: Fan-out (Batch Generation)
+```
+list (3 items) -> generate-image (runs 3 times)
+```
+
+### Pattern 6: AI Composition
+```
+generate-image ─┐
+generate-image ─┤
+generate-image ─┼-> video-composer -> render-video
+text-to-speech ─┤
+generate-music ─┘
+```
+
+### Pattern 7: Social Publishing Pipeline
+```
+text-to-video -> resize-video (9:16) -> instagram-post
+              -> resize-video (16:9) -> youtube-upload
+              -> resize-video (9:16) -> tiktok-post
+```
+
+### Pattern 8: Talking Head Video
+```
+upload-image ──-> lip-sync -> merge-video-audio
+text-prompt -> text-to-speech ─┘       │
+generate-music ────────────────────────┘
+```
+
+### Pattern 9: Webhook-Triggered Automation
+```
+webhook-trigger -> ai-writer -> generate-image -> image-to-video -> webhook-output
+```
+
+### Pattern 10: Audio Production
+```
+text-prompt -> suno-generate -> suno-separate (vocals)
+                             -> mix-audio -> merge-video-audio
+text-to-audio (SFX) ────────┘
+```
+
+---
+
+## Complete Example: Image Generation Workflow
+
+```json
+{
+  "name": "Simple Image Generation",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "text-prompt",
+      "position": { "x": 100, "y": 200 },
+      "data": {
+        "label": "Prompt",
+        "text": "A majestic dragon flying over a medieval castle at sunset, cinematic lighting, epic scale"
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "generate-image",
+      "position": { "x": 450, "y": 200 },
+      "data": {
+        "label": "Generate Image",
+        "prompt": "",
+        "provider": "flux",
+        "style": "cinematic",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "resolution": "2K",
+        "fieldMappings": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1",
+      "source": "node_1",
+      "target": "node_2",
+      "sourceHandle": "prompt",
+      "targetHandle": "in"
+    }
+  ],
+  "exportedAt": "2026-03-15T00:00:00.000Z",
+  "version": "1.0"
+}
+```
+
+## Complete Example: Video with Narration
+
+```json
+{
+  "name": "Video with Voiceover",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "text-prompt",
+      "position": { "x": 100, "y": 100 },
+      "data": {
+        "label": "Scene Description",
+        "text": "A serene Japanese garden with cherry blossoms falling gently"
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "text-prompt",
+      "position": { "x": 100, "y": 350 },
+      "data": {
+        "label": "Narration Text",
+        "text": "In the heart of Kyoto, where ancient traditions meet the whisper of spring, cherry blossoms dance their fleeting ballet."
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "generate-image",
+      "position": { "x": 450, "y": 100 },
+      "data": {
+        "label": "Generate Image",
+        "prompt": "",
+        "provider": "nano-banana-pro",
+        "style": "photorealistic",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "node_4",
+      "type": "image-to-video",
+      "position": { "x": 800, "y": 100 },
+      "data": {
+        "label": "Image to Video",
+        "provider": "veo3",
+        "duration": 8,
+        "motion": "subtle",
+        "cameraMotion": "static",
+        "prompt": "Cherry blossoms gently falling, subtle breeze",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "node_5",
+      "type": "text-to-speech",
+      "position": { "x": 450, "y": 350 },
+      "data": {
+        "label": "Narration",
+        "provider": "elevenlabs-v3",
+        "voiceId": "Charlotte",
+        "voiceType": "premade",
+        "voiceDisplayName": "Charlotte",
+        "language": "en",
+        "speed": 0.9,
+        "stability": 0.6,
+        "similarityBoost": 0.8,
+        "style": 0,
+        "languageCode": "",
+        "textSource": "connected",
+        "directText": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "node_6",
+      "type": "merge-video-audio",
+      "position": { "x": 1150, "y": 200 },
+      "data": {
+        "label": "Merge Video & Audio",
+        "audioType": "voiceover",
+        "voiceoverVolume": 100,
+        "backgroundVolume": 30,
+        "keepOriginalAudio": false,
+        "originalAudioVolume": 30,
+        "originalAudioRole": "background",
+        "trackSettings": {},
+        "fieldMappings": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1",
+      "source": "node_1",
+      "target": "node_3",
+      "sourceHandle": "prompt",
+      "targetHandle": "in"
+    },
+    {
+      "id": "edge_2",
+      "source": "node_3",
+      "target": "node_4",
+      "sourceHandle": "image",
+      "targetHandle": "startFrame"
+    },
+    {
+      "id": "edge_3",
+      "source": "node_2",
+      "target": "node_5",
+      "sourceHandle": "prompt",
+      "targetHandle": "in"
+    },
+    {
+      "id": "edge_4",
+      "source": "node_4",
+      "target": "node_6",
+      "sourceHandle": "video",
+      "targetHandle": "in"
+    },
+    {
+      "id": "edge_5",
+      "source": "node_5",
+      "target": "node_6",
+      "sourceHandle": "audio",
+      "targetHandle": "in"
+    }
+  ],
+  "exportedAt": "2026-03-15T00:00:00.000Z",
+  "version": "1.0"
+}
+```
+
+## Complete Example: Batch Image Generation with List
+
+```json
+{
+  "name": "Batch Scene Generator",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "list",
+      "position": { "x": 100, "y": 200 },
+      "data": {
+        "label": "Scene Prompts",
+        "items": "A sunrise over mountains with fog in the valleys\nA bustling cyberpunk city street at night with neon signs\nAn underwater coral reef teeming with colorful fish\nA cozy cabin interior with a fireplace during a snowstorm",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "generate-image",
+      "position": { "x": 500, "y": 200 },
+      "data": {
+        "label": "Generate Images",
+        "prompt": "",
+        "provider": "flux",
+        "style": "cinematic",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "resolution": "2K",
+        "fieldMappings": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1",
+      "source": "node_1",
+      "target": "node_2",
+      "sourceHandle": "list",
+      "targetHandle": "in",
+      "data": { "outputMode": "each" }
+    }
+  ],
+  "exportedAt": "2026-03-15T00:00:00.000Z",
+  "version": "1.0"
+}
+```
+
+## Important Notes
+
+1. **fieldMappings** should be `{}` in generated workflows — they are populated at runtime.
+2. **Prompt routing**: When a text node connects to an AI node via `in`, the text becomes the node's prompt automatically. You do NOT need to set the `prompt` field on the target node.
+3. **Image routing**: When an image node connects to `image-to-video` via `startFrame`, it becomes the input frame. A second image on `endFrame` creates a start+end frame video (only supported by some providers).
+4. **Multiple inputs**: Nodes like `combine-videos` and `mix-audio` accept multiple connections on their single `in` handle.
+5. **Fan-out**: Connect a `list` or `split-text` node with edge `outputMode: "each"` to run downstream nodes once per item.
+6. **Composition pipeline**: Composition nodes (video-composer, after-effects, etc.) output plans, not videos. They MUST connect to a `render-video` node to produce actual video.
+7. **Node IDs** are remapped on import — use any convention (e.g., `node_1`, `node_2`).
+8. **Position** values are in pixels. Typical spacing: 300-350px horizontal, 200-250px vertical.
