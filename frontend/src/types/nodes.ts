@@ -1293,7 +1293,7 @@ export type SocialPostData = {
   platformPostUrl?: string
 }
 
-export type ExtractAudioData = {
+export type TrimAudioData = {
   [key: string]: unknown
   label: string
   outputSilentVideo: boolean
@@ -1993,7 +1993,7 @@ export type SceneNodeData =
   | AddCaptionsData
   | ResizeVideoData
   | SocialMediaFormatData
-  | ExtractAudioData
+  | TrimAudioData
   | MixAudioData
   | AdjustVolumeData
   | TrimVideoData
@@ -2091,7 +2091,7 @@ export type SceneNodeType =
   | "add-captions"
   | "resize-video"
   | "social-media-format"
-  | "extract-audio"
+  | "trim-audio"
   | "mix-audio"
   | "adjust-volume"
   | "trim-video"
@@ -2738,13 +2738,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     } as SocialMediaFormatData,
   },
   {
-    type: "extract-audio",
-    label: "Extract Audio",
+    type: "trim-audio",
+    label: "Trim Audio",
     category: "processing",
     creditCost: 1,
     inputs: ["in"],
     outputs: ["audio", "silent-video"],
-    defaultData: { label: "Extract Audio", outputSilentVideo: true, audioFormat: "mp3", fieldMappings: {} },
+    defaultData: { label: "Trim Audio", outputSilentVideo: true, audioFormat: "mp3", fieldMappings: {} },
   },
   {
     type: "mix-audio",

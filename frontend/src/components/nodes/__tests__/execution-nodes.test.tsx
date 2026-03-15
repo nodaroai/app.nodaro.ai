@@ -170,7 +170,7 @@ import { CombineVideosNode } from "../combine-videos-node"
 import { MergeVideoAudioNode } from "../merge-video-audio-node"
 import { AddCaptionsNode } from "../add-captions-node"
 import { ResizeVideoNode } from "../resize-video-node"
-import { ExtractAudioNode } from "../extract-audio-node"
+import { TrimAudioNode } from "../trim-audio-node"
 import { MixAudioNode } from "../mix-audio-node"
 import { AdjustVolumeNode } from "../adjust-volume-node"
 import { TrimVideoNode } from "../trim-video-node"
@@ -224,7 +224,7 @@ const NODES: NodeTestConfig[] = [
   { name: "MergeVideoAudioNode", Component: MergeVideoAudioNode, expectedCategory: "processing", defaultData: { label: "Merge Video Audio" } },
   { name: "AddCaptionsNode", Component: AddCaptionsNode, expectedCategory: "processing", defaultData: { label: "Add Captions" } },
   { name: "ResizeVideoNode", Component: ResizeVideoNode, expectedCategory: "processing", defaultData: { label: "Resize Video" } },
-  { name: "ExtractAudioNode", Component: ExtractAudioNode, expectedCategory: "processing", defaultData: { label: "Extract Audio" } },
+  { name: "TrimAudioNode", Component: TrimAudioNode, expectedCategory: "processing", defaultData: { label: "Trim Audio" } },
   { name: "MixAudioNode", Component: MixAudioNode, expectedCategory: "processing", defaultData: { label: "Mix Audio" } },
   { name: "AdjustVolumeNode", Component: AdjustVolumeNode, expectedCategory: "processing", defaultData: { label: "Adjust Volume" } },
   { name: "TrimVideoNode", Component: TrimVideoNode, expectedCategory: "processing", defaultData: { label: "Trim Video" } },

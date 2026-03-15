@@ -107,7 +107,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "add-captions", label: "Add Captions", icon: <Captions className="h-4 w-4" />, category: "Processing", group: "Video" },
   // Processing — Audio
   { type: "merge-video-audio", label: "Merge Video & Audio", icon: <Volume2 className="h-4 w-4" />, category: "Processing", group: "Audio" },
-  { type: "extract-audio", label: "Extract Audio", icon: <AudioLines className="h-4 w-4" />, category: "Processing", group: "Audio" },
+  { type: "trim-audio", label: "Trim Audio", icon: <AudioLines className="h-4 w-4" />, category: "Processing", group: "Audio" },
   { type: "mix-audio", label: "Mix Audio", icon: <Music className="h-4 w-4" />, category: "Processing", group: "Audio" },
   { type: "adjust-volume", label: "Adjust Volume", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Processing", group: "Audio" },
   // Processing — Text

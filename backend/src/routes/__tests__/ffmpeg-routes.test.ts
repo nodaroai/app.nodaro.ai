@@ -70,7 +70,7 @@ import { speedRampRoutes } from "../speed-ramp.js"
 import { fadeVideoRoutes } from "../fade-video.js"
 import { loopVideoRoutes } from "../loop-video.js"
 import { mergeVideoAudioRoutes } from "../merge-video-audio.js"
-import { extractAudioRoutes } from "../extract-audio.js"
+import { trimAudioRoutes } from "../trim-audio.js"
 import { mixAudioRoutes } from "../mix-audio.js"
 import { adjustVolumeRoutes } from "../adjust-volume.js"
 import { addCaptionsRoutes } from "../add-captions.js"
@@ -197,16 +197,16 @@ const FFMPEG_ROUTES: FFmpegRouteConfig[] = [
     queueJobType: "merge-video-audio",
   },
   {
-    name: "extract-audio",
-    path: "/v1/extract-audio",
-    routeFn: extractAudioRoutes,
+    name: "trim-audio",
+    path: "/v1/trim-audio",
+    routeFn: trimAudioRoutes,
     requiredField: "videoUrl",
     invalidPayload: { userId: VALID_UUID },
     validPayload: {
       userId: VALID_UUID,
       videoUrl: EXAMPLE_VIDEO_URL,
     },
-    queueJobType: "extract-audio",
+    queueJobType: "trim-audio",
   },
   {
     name: "mix-audio",

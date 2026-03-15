@@ -6,7 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
-const extractAudioBody = z.object({
+const trimAudioBody = z.object({
   videoUrl: safeUrlSchema,
   audioFormat: z.enum(["mp3", "wav", "aac"]).optional().default("mp3"),
   outputSilentVideo: z.boolean().optional().default(false),
@@ -15,9 +15,9 @@ const extractAudioBody = z.object({
   userId: z.string().uuid().optional(),
 })
 
-export async function extractAudioRoutes(app: FastifyInstance) {
-  app.post("/v1/extract-audio", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
-    const parsed = extractAudioBody.safeParse(req.body)
+export async function trimAudioRoutes(app: FastifyInstance) {
+  app.post("/v1/trim-audio", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
+    const parsed = trimAudioBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
         error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
@@ -43,7 +43,7 @@ export async function extractAudioRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { ...restData, type: "extract-audio" },
+        input_data: { ...restData, type: "trim-audio" },
       })
       .select("id")
       .single()
@@ -57,7 +57,7 @@ export async function extractAudioRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("extract-audio", { jobId: job.id, ...restData, usageLogId })
+    await videoQueue.add("trim-audio", { jobId: job.id, ...restData, usageLogId })
     return { jobId: job.id }
   })
 }

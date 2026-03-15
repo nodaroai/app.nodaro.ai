@@ -213,7 +213,7 @@ export const AUDIO_SOURCE_TYPES = new Set([
   "suno-add-vocals",
   "suno-convert-wav",
   "suno-upload-extend",
-  "extract-audio",
+  "trim-audio",
   "mix-audio",
   "adjust-volume",
   "reference-audio",

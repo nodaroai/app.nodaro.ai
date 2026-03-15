@@ -59,7 +59,7 @@ function getOutputUrl(jobType: string, outputData: Record<string, unknown> | nul
   if (!outputData) return null
   const imageTypes = ["generate-image", "edit-image", "image-to-image", "generate-character", "generate-character-asset", "generate-object", "generate-object-asset", "generate-location", "generate-location-asset"]
   const videoTypes = ["image-to-video", "text-to-video", "video-to-video", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "suno-music-video", "merge-video-audio", "resize-video", "trim-video", "add-captions"]
-  const audioTypes = ["text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "extract-audio", "mix-audio", "adjust-volume"]
+  const audioTypes = ["text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "trim-audio", "mix-audio", "adjust-volume"]
 
   if (imageTypes.includes(jobType)) return (outputData.imageUrl as string) ?? null
   if (videoTypes.includes(jobType)) return (outputData.videoUrl as string) ?? null
@@ -70,7 +70,7 @@ function getOutputUrl(jobType: string, outputData: Record<string, unknown> | nul
 function getOutputType(jobType: string): "image" | "video" | "audio" | null {
   const imageTypes = ["generate-image", "edit-image", "image-to-image", "generate-character", "generate-character-asset", "generate-object", "generate-object-asset", "generate-location", "generate-location-asset"]
   const videoTypes = ["image-to-video", "text-to-video", "video-to-video", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "suno-music-video", "merge-video-audio", "resize-video", "trim-video", "add-captions"]
-  const audioTypes = ["text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "extract-audio", "mix-audio", "adjust-volume"]
+  const audioTypes = ["text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "trim-audio", "mix-audio", "adjust-volume"]
 
   if (imageTypes.includes(jobType)) return "image"
   if (videoTypes.includes(jobType)) return "video"

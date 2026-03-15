@@ -40,7 +40,7 @@ const mockLipSyncApi = vi.fn()
 const mockMotionTransferApi = vi.fn()
 const mockVideoUpscaleApi = vi.fn()
 const mockMergeVideoAudioApi = vi.fn()
-const mockExtractAudioApi = vi.fn()
+const mockTrimAudioApi = vi.fn()
 const mockTrimVideoApi = vi.fn()
 const mockTranscodeVideoApi = vi.fn()
 const mockSpeedRampApi = vi.fn()
@@ -123,7 +123,7 @@ vi.mock("@/lib/api", () => ({
   videoUpscaleApi: (...args: unknown[]) => mockVideoUpscaleApi(...args),
   mergeVideoAudioApi: (...args: unknown[]) =>
     mockMergeVideoAudioApi(...args),
-  extractAudioApi: (...args: unknown[]) => mockExtractAudioApi(...args),
+  trimAudioApi: (...args: unknown[]) => mockTrimAudioApi(...args),
   trimVideoApi: (...args: unknown[]) => mockTrimVideoApi(...args),
   transcodeVideoApi: (...args: unknown[]) => mockTranscodeVideoApi(...args),
   speedRampApi: (...args: unknown[]) => mockSpeedRampApi(...args),
@@ -557,14 +557,14 @@ describe("merge-video-audio", () => {
 })
 
 // ---------------------------------------------------------------------------
-// extract-audio
+// trim-audio
 // ---------------------------------------------------------------------------
 
-describe("extract-audio", () => {
+describe("trim-audio", () => {
   it("rejects when no video input", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     const promise = executeNode(
-      makeNode("extract-audio", {}),
+      makeNode("trim-audio", {}),
       makeCtx(),
     )
     promise.catch(() => {})
@@ -572,14 +572,14 @@ describe("extract-audio", () => {
     expect(mockToastError).toHaveBeenCalled()
   })
 
-  it("calls extractAudioApi with correct args", async () => {
+  it("calls trimAudioApi with correct args", async () => {
     mockResolveNodeInputs.mockReturnValue({
       videoUrl: "http://vid.mp4",
     })
-    mockExtractAudioApi.mockResolvedValue({ jobId: "j1" })
+    mockTrimAudioApi.mockResolvedValue({ jobId: "j1" })
     mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
     await executeNode(
-      makeNode("extract-audio", {
+      makeNode("trim-audio", {
         audioFormat: "mp3",
         outputSilentVideo: true,
       }),
@@ -589,13 +589,13 @@ describe("extract-audio", () => {
       "n1",
       expect.any(Function),
       "generatedAudioUrl",
-      "Extract Audio",
+      "Trim Audio",
       expect.anything(),
       undefined,
     )
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
-    expect(mockExtractAudioApi).toHaveBeenCalledWith(
+    expect(mockTrimAudioApi).toHaveBeenCalledWith(
       "http://vid.mp4",
       "mp3",
       true,

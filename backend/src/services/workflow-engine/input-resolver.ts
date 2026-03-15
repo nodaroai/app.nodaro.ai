@@ -333,7 +333,7 @@ const AUDIO_OUTPUT_NODE_TYPES = new Set([
   "suno-add-vocals",
   "suno-convert-wav",
   "suno-upload-extend",
-  "extract-audio",
+  "trim-audio",
   "mix-audio",
   "voice-changer",
   "dubbing",

@@ -107,7 +107,7 @@ describe("NODE_OPTIONS", () => {
     expect(processingTypes).toContain("render-video")
     expect(processingTypes).toContain("composite")
     expect(processingTypes).toContain("merge-video-audio")
-    expect(processingTypes).toContain("extract-audio")
+    expect(processingTypes).toContain("trim-audio")
   })
 
   it("contains expected Output nodes", () => {

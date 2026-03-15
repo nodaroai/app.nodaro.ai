@@ -19,7 +19,7 @@ function isSocialMediaUrl(url: string): boolean {
   }
 }
 
-interface ExtractAudioOptions {
+interface TrimAudioOptions {
   readonly videoUrl: string
   readonly audioFormat?: "mp3" | "wav" | "aac"
   readonly outputSilentVideo?: boolean
@@ -27,21 +27,21 @@ interface ExtractAudioOptions {
   readonly endTime?: number
 }
 
-interface ExtractAudioResult {
+interface TrimAudioResult {
   readonly audioPath: string
   readonly silentVideoPath?: string
 }
 
-export async function extractAudio(options: ExtractAudioOptions): Promise<ExtractAudioResult> {
+export async function trimAudio(options: TrimAudioOptions): Promise<TrimAudioResult> {
   const { videoUrl, audioFormat = "mp3", outputSilentVideo = false, startTime, endTime } = options
-  const workDir = await createWorkDir("extract-audio")
+  const workDir = await createWorkDir("trim-audio")
 
   try {
     const videoPath = join(workDir, "input.mp4")
-    console.log("[extractAudio] Downloading video")
+    console.log("[trimAudio] Downloading video")
 
     if (isSocialMediaUrl(videoUrl)) {
-      console.log("[extractAudio] Social media URL detected, using yt-dlp")
+      console.log("[trimAudio] Social media URL detected, using yt-dlp")
       try {
         await youtubedl(videoUrl, {
           output: videoPath,
@@ -58,7 +58,7 @@ export async function extractAudio(options: ExtractAudioOptions): Promise<Extrac
       } catch (ytErr: unknown) {
         const stderr = (ytErr as { stderr?: string }).stderr ?? ""
         const msg = (ytErr as Error).message || stderr || "yt-dlp failed"
-        console.error("[extractAudio] yt-dlp error:", stderr || msg)
+        console.error("[trimAudio] yt-dlp error:", stderr || msg)
         throw new Error(`yt-dlp download failed: ${msg}`)
       }
     } else {
@@ -93,7 +93,7 @@ export async function extractAudio(options: ExtractAudioOptions): Promise<Extrac
       ])
     }
 
-    console.log(`[extractAudio] Output: ${audioPath}`)
+    console.log(`[trimAudio] Output: ${audioPath}`)
     return { audioPath, silentVideoPath }
   } catch (err) {
     await cleanupWorkDir(workDir)

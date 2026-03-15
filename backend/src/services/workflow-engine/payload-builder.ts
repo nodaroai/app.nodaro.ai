@@ -1093,8 +1093,8 @@ export function buildPayload(
         usageLogId,
       })
 
-    case "extract-audio":
-      return ffmpegResult("extract-audio", {
+    case "trim-audio":
+      return ffmpegResult("trim-audio", {
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         usageLogId,

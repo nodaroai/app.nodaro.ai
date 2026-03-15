@@ -307,7 +307,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "merge-video-audio": 0,
   "add-captions": 0,
   "resize-video": 0,
-  "extract-audio": 0,
+  "trim-audio": 0,
   "mix-audio": 0,
   "adjust-volume": 0,
   "trim-video": 0,

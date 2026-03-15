@@ -40,7 +40,7 @@ import {
   generate3DTitle,
   generateMotionGraphics,
   mergeVideoAudioApi,
-  extractAudioApi,
+  trimAudioApi,
   trimVideoApi,
   transcodeVideoApi,
   speedRampApi,
@@ -104,7 +104,7 @@ import type {
   RenderVideoData,
   CombineVideosData,
   MergeVideoAudioData,
-  ExtractAudioData,
+  TrimAudioData,
   TrimVideoData,
   TranscodeVideoData,
   ManualEditData,
@@ -2249,19 +2249,19 @@ export function executeNode(
     );
   }
 
-  if (node.type === "extract-audio") {
+  if (node.type === "trim-audio") {
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl ?? inputs.audioUrl;
     if (!videoUrl) {
       toast.error(
-        `Node "${(node.data as ExtractAudioData).label}": no video input`,
+        `Node "${(node.data as TrimAudioData).label}": no video input`,
       );
       return Promise.reject(new Error("No video"));
     }
-    const d = node.data as ExtractAudioData;
+    const d = node.data as TrimAudioData;
     return runProcessingNode(
       node.id,
       () =>
-        extractAudioApi(
+        trimAudioApi(
           videoUrl,
           d.audioFormat,
           d.outputSilentVideo,
@@ -2270,7 +2270,7 @@ export function executeNode(
           d.endTime as number | undefined,
         ),
       "generatedAudioUrl",
-      "Extract Audio",
+      "Trim Audio",
       ctx,
     );
   }

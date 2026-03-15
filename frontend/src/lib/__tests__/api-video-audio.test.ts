@@ -24,7 +24,7 @@ import {
   generateMusicApi,
   combineVideos,
   mergeVideoAudioApi,
-  extractAudioApi,
+  trimAudioApi,
   trimVideoApi,
   transcodeVideoApi,
   speedRampApi,
@@ -461,19 +461,19 @@ describe("mergeVideoAudioApi", () => {
 })
 
 // ---------------------------------------------------------------------------
-// extractAudioApi
+// trimAudioApi
 // ---------------------------------------------------------------------------
 
-describe("extractAudioApi", () => {
+describe("trimAudioApi", () => {
   it("sends correct URL and body with videoUrl", async () => {
     noSession()
     const mock = mockFetchJson({ jobId: "j1" })
     vi.stubGlobal("fetch", mock)
 
-    const result = await extractAudioApi("http://vid.mp4")
+    const result = await trimAudioApi("http://vid.mp4")
 
     expect(mock).toHaveBeenCalledWith(
-      "/v1/extract-audio",
+      "/v1/trim-audio",
       expect.objectContaining({ method: "POST" }),
     )
     const body = JSON.parse(mock.mock.calls[0][1].body as string)
@@ -486,7 +486,7 @@ describe("extractAudioApi", () => {
     const mock = mockFetchJson({ jobId: "j2" })
     vi.stubGlobal("fetch", mock)
 
-    await extractAudioApi("http://vid.mp4", "wav", true)
+    await trimAudioApi("http://vid.mp4", "wav", true)
 
     const body = JSON.parse(mock.mock.calls[0][1].body as string)
     expect(body.audioFormat).toBe("wav")
@@ -494,14 +494,14 @@ describe("extractAudioApi", () => {
   })
 
   it("includes auth header when session exists", async () => {
-    sessionWith("tok-extract")
+    sessionWith("tok-trim-audio")
     const mock = mockFetchJson({ jobId: "j3" })
     vi.stubGlobal("fetch", mock)
 
-    await extractAudioApi("http://vid.mp4")
+    await trimAudioApi("http://vid.mp4")
 
     const headers = mock.mock.calls[0][1].headers
-    expect(headers.Authorization).toBe("Bearer tok-extract")
+    expect(headers.Authorization).toBe("Bearer tok-trim-audio")
   })
 })
 
