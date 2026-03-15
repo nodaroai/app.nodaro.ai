@@ -59,9 +59,9 @@ const NAV_ITEMS: readonly NavItem[] = [
   { href: "/admin", label: "Admin", icon: Shield, adminOnly: true },
 ]
 
-function formatRenewalTime(periodEnd: string): string {
+function formatRenewalTime(periodEnd: string): string | null {
   const msLeft = new Date(periodEnd).getTime() - Date.now()
-  if (msLeft <= 0) return "shortly"
+  if (msLeft <= 0) return null  // stale date — don't show misleading text
   const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24))
   if (daysLeft < 1) {
     const hoursLeft = Math.floor(msLeft / (1000 * 60 * 60))
@@ -200,7 +200,7 @@ export function AppSidebar({
                     creditBalance.dailyLimit != null && (
                       <p className="text-zinc-500 dark:text-zinc-400">Daily limit &middot; {Math.max(0, creditBalance.dailyLimit - creditBalance.dailySpent)} credits left</p>
                     )
-                  ) : creditBalance.periodEnd ? (
+                  ) : creditBalance.periodEnd && formatRenewalTime(creditBalance.periodEnd) ? (
                     <p className="text-zinc-500 dark:text-zinc-400">
                       Renews {formatRenewalTime(creditBalance.periodEnd)}
                     </p>
@@ -260,7 +260,7 @@ export function AppSidebar({
                       <p>Monthly limit: <span className="font-mono text-zinc-600 dark:text-zinc-300">{tierAllocation}</span></p>
                     )
                   })()}
-                  {creditBalance.periodEnd && (
+                  {creditBalance.periodEnd && formatRenewalTime(creditBalance.periodEnd) && (
                     <p>
                       Renews {formatRenewalTime(creditBalance.periodEnd)}
                     </p>
