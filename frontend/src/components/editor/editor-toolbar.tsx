@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Play, Pause, MoreVertical, Download, Upload, Package, FileJson, FileText } from "lucide-react"
+import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Play, Pause, MoreVertical, Download, Upload, Package, FileJson, FileText, ClipboardPaste } from "lucide-react"
 import { CreditBalance } from "@/components/credits/CreditBalance"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,15 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
 import {
   Tooltip,
@@ -88,6 +97,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
   const [showSavedState, setShowSavedState] = useState(false)
+  const [pendingImportData, setPendingImportData] = useState<ExportedWorkflow | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [userId, setUserId] = useState<string | undefined>(undefined)
 
@@ -439,164 +449,139 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
     }
   }, [nodes, edges, workflowName, flowTemplates])
 
+  function parseWorkflowJson(jsonStr: string): ExportedWorkflow {
+    const data = JSON.parse(jsonStr) as ExportedWorkflow
+    if (!data.nodes || !Array.isArray(data.nodes)) throw new Error("Missing nodes array")
+    if (!data.edges || !Array.isArray(data.edges)) throw new Error("Missing edges array")
+    return data
+  }
+
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
     const reader = new FileReader()
-    reader.onload = async (event) => {
+    reader.onload = (event) => {
       try {
-        const data = JSON.parse(event.target?.result as string) as ExportedWorkflow
+        const data = parseWorkflowJson(event.target?.result as string)
+        setPendingImportData(data)
+      } catch (err) {
+        toast.error("Invalid file: " + (err instanceof Error ? err.message : "Could not parse JSON"))
+      }
+    }
+    reader.readAsText(file)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }, [])
 
-        // Validate structure
-        if (!data.nodes || !Array.isArray(data.nodes)) {
-          throw new Error("Invalid workflow file: missing nodes array")
-        }
-        if (!data.edges || !Array.isArray(data.edges)) {
-          throw new Error("Invalid workflow file: missing edges array")
-        }
+  const handleClipboardImport = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      const data = parseWorkflowJson(text)
+      setPendingImportData(data)
+    } catch (err) {
+      toast.error("Clipboard import failed: " + (err instanceof Error ? err.message : "Could not read clipboard or invalid JSON"))
+    }
+  }, [])
 
-        setImporting(true)
+  const handleImport = useCallback(async (mode: "new" | "inject") => {
+    const data = pendingImportData
+    if (!data) return
+    setPendingImportData(null)
 
-        const supabase = createClient()
-        const { data: { user } } = await supabase.auth.getUser()
-        const userId = user?.id
+    try {
+      setImporting(true)
 
-        let nodesToImport = [...data.nodes]
-        const assetIdMap: Record<string, string> = {} // old ID -> new ID mapping
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      const uid = user?.id
 
-        // Import assets if they exist
-        if (data.assets) {
-          const { characters, objects, locations } = data.assets
+      let nodesToImport = [...data.nodes]
+      const assetIdMap: Record<string, string> = {}
 
-          // Import characters
-          for (const char of characters || []) {
-            try {
-              const result = await saveCharacter({
-                userId: userId,
-                nodeId: char.nodeId,
-                projectId: projectId,
-                name: char.name,
-                description: char.description ?? undefined,
-                gender: char.gender ?? undefined,
-                style: char.style ?? undefined,
-                baseOutfit: char.baseOutfit ?? undefined,
-                sourceImageUrl: char.sourceImageUrl ?? undefined,
-                expressions: char.expressions ?? [],
-                poses: char.poses ?? [],
-                lightingVariations: char.lightingVariations ?? [],
-              })
-              assetIdMap[char.id] = result.id
-            } catch (err) {
-              // Silently skip — import continues with remaining entities
-            }
-          }
+      // Import assets if they exist
+      if (data.assets) {
+        const { characters, objects, locations } = data.assets
 
-          // Import objects
-          for (const obj of objects || []) {
-            try {
-              const result = await saveObject({
-                userId: userId,
-                nodeId: obj.nodeId,
-                projectId: projectId,
-                name: obj.name,
-                description: obj.description ?? undefined,
-                category: obj.category ?? undefined,
-                style: obj.style ?? undefined,
-                sourceImageUrl: obj.sourceImageUrl ?? undefined,
-                angles: obj.angles ?? [],
-                materials: obj.materials ?? [],
-                variations: obj.variations ?? [],
-              })
-              assetIdMap[obj.id] = result.id
-            } catch (err) {
-              // Silently skip — import continues with remaining entities
-            }
-          }
-
-          // Import locations
-          for (const loc of locations || []) {
-            try {
-              const result = await saveLocation({
-                userId: userId,
-                nodeId: loc.nodeId,
-                projectId: projectId,
-                name: loc.name,
-                description: loc.description ?? undefined,
-                category: loc.category ?? undefined,
-                style: loc.style ?? undefined,
-                sourceImageUrl: loc.sourceImageUrl ?? undefined,
-                timeOfDay: loc.timeOfDay ?? [],
-                weather: loc.weather ?? [],
-                angles: loc.angles ?? [],
-              })
-              assetIdMap[loc.id] = result.id
-            } catch (err) {
-              // Silently skip — import continues with remaining entities
-            }
-          }
-
-          // Update node references to use new asset IDs
-          nodesToImport = nodesToImport.map(node => {
-            if (node.type === "character") {
-              const nodeData = node.data as CharacterNodeData
-              if (nodeData.characterDbId && assetIdMap[nodeData.characterDbId]) {
-                return {
-                  ...node,
-                  data: {
-                    ...nodeData,
-                    characterDbId: assetIdMap[nodeData.characterDbId],
-                  },
-                }
-              }
-            } else if (node.type === "object") {
-              const nodeData = node.data as ObjectNodeData
-              if (nodeData.objectDbId && assetIdMap[nodeData.objectDbId]) {
-                return {
-                  ...node,
-                  data: {
-                    ...nodeData,
-                    objectDbId: assetIdMap[nodeData.objectDbId],
-                  },
-                }
-              }
-            } else if (node.type === "location") {
-              const nodeData = node.data as LocationNodeData
-              if (nodeData.locationDbId && assetIdMap[nodeData.locationDbId]) {
-                return {
-                  ...node,
-                  data: {
-                    ...nodeData,
-                    locationDbId: assetIdMap[nodeData.locationDbId],
-                  },
-                }
-              }
-            }
-            return node
-          })
+        for (const char of characters || []) {
+          try {
+            const result = await saveCharacter({
+              userId: uid, nodeId: char.nodeId, projectId: projectId,
+              name: char.name, description: char.description ?? undefined,
+              gender: char.gender ?? undefined, style: char.style ?? undefined,
+              baseOutfit: char.baseOutfit ?? undefined, sourceImageUrl: char.sourceImageUrl ?? undefined,
+              expressions: char.expressions ?? [], poses: char.poses ?? [],
+              lightingVariations: char.lightingVariations ?? [],
+            })
+            assetIdMap[char.id] = result.id
+          } catch { /* skip */ }
         }
 
-        // Generate new node IDs to avoid conflicts
-        const nodeIdMap: Record<string, string> = {}
+        for (const obj of objects || []) {
+          try {
+            const result = await saveObject({
+              userId: uid, nodeId: obj.nodeId, projectId: projectId,
+              name: obj.name, description: obj.description ?? undefined,
+              category: obj.category ?? undefined, style: obj.style ?? undefined,
+              sourceImageUrl: obj.sourceImageUrl ?? undefined,
+              angles: obj.angles ?? [], materials: obj.materials ?? [],
+              variations: obj.variations ?? [],
+            })
+            assetIdMap[obj.id] = result.id
+          } catch { /* skip */ }
+        }
+
+        for (const loc of locations || []) {
+          try {
+            const result = await saveLocation({
+              userId: uid, nodeId: loc.nodeId, projectId: projectId,
+              name: loc.name, description: loc.description ?? undefined,
+              category: loc.category ?? undefined, style: loc.style ?? undefined,
+              sourceImageUrl: loc.sourceImageUrl ?? undefined,
+              timeOfDay: loc.timeOfDay ?? [], weather: loc.weather ?? [],
+              angles: loc.angles ?? [],
+            })
+            assetIdMap[loc.id] = result.id
+          } catch { /* skip */ }
+        }
+
+        // Update node references to use new asset IDs
         nodesToImport = nodesToImport.map(node => {
-          const newId = `${node.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-          nodeIdMap[node.id] = newId
-          return { ...node, id: newId }
+          if (node.type === "character") {
+            const nd = node.data as CharacterNodeData
+            if (nd.characterDbId && assetIdMap[nd.characterDbId])
+              return { ...node, data: { ...nd, characterDbId: assetIdMap[nd.characterDbId] } }
+          } else if (node.type === "object") {
+            const nd = node.data as ObjectNodeData
+            if (nd.objectDbId && assetIdMap[nd.objectDbId])
+              return { ...node, data: { ...nd, objectDbId: assetIdMap[nd.objectDbId] } }
+          } else if (node.type === "location") {
+            const nd = node.data as LocationNodeData
+            if (nd.locationDbId && assetIdMap[nd.locationDbId])
+              return { ...node, data: { ...nd, locationDbId: assetIdMap[nd.locationDbId] } }
+          }
+          return node
         })
+      }
 
-        // Update edge references
-        const edgesToImport = data.edges.map(edge => ({
-          ...edge,
-          id: `edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          source: nodeIdMap[edge.source] || edge.source,
-          target: nodeIdMap[edge.target] || edge.target,
-        }))
+      // Generate new node IDs to avoid conflicts
+      const nodeIdMap: Record<string, string> = {}
+      nodesToImport = nodesToImport.map(node => {
+        const newId = `${node.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        nodeIdMap[node.id] = newId
+        return { ...node, id: newId }
+      })
 
-        // Extract flow-level prompt templates from settings if present
-        const importedFlowTemplates =
-          (data.settings?.flowPromptTemplates as Record<string, string> | undefined) ?? {}
+      // Update edge references
+      const edgesToImport = data.edges.map(edge => ({
+        ...edge,
+        id: `edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        source: nodeIdMap[edge.source] || edge.source,
+        target: nodeIdMap[edge.target] || edge.target,
+      }))
 
-        // Set the imported workflow using loadWorkflow
+      const importedFlowTemplates =
+        (data.settings?.flowPromptTemplates as Record<string, string> | undefined) ?? {}
+
+      if (mode === "new") {
         const importedName = (data.name || "Untitled Workflow") + " (Imported)"
         loadWorkflow(
           workflowId || `temp-${Date.now()}`,
@@ -606,26 +591,50 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           undefined,
           Object.keys(importedFlowTemplates).length > 0 ? importedFlowTemplates : undefined,
         )
+      } else {
+        // Inject: offset imported nodes to the right of existing nodes
+        const state = useWorkflowStore.getState()
+        let offsetX = 0
+        if (state.nodes.length > 0 && nodesToImport.length > 0) {
+          const maxX = Math.max(...state.nodes.map(n => n.position.x + (n.measured?.width ?? 260)))
+          const minX = Math.min(...nodesToImport.map(n => n.position.x))
+          offsetX = maxX - minX + 100
+        }
 
-        const assetCount = Object.keys(assetIdMap).length
-        toast.success(
-          assetCount > 0
+        const offsetNodes = nodesToImport.map(n => ({
+          ...n,
+          position: { x: n.position.x + offsetX, y: n.position.y },
+        }))
+
+        useWorkflowStore.setState({
+          nodes: [...state.nodes, ...offsetNodes],
+          edges: [...state.edges, ...edgesToImport],
+          isDirty: true,
+        })
+
+        // Merge flow templates if any
+        if (Object.keys(importedFlowTemplates).length > 0) {
+          state.setFlowPromptTemplates({
+            ...state.flowPromptTemplates,
+            ...importedFlowTemplates,
+          })
+        }
+      }
+
+      const assetCount = Object.keys(assetIdMap).length
+      toast.success(
+        mode === "inject"
+          ? `Added ${nodesToImport.length} nodes to workflow${assetCount > 0 ? ` with ${assetCount} assets` : ""}`
+          : assetCount > 0
             ? `Imported workflow with ${assetCount} assets`
             : "Imported workflow"
-        )
-      } catch (err) {
-        toast.error("Invalid file: " + (err instanceof Error ? err.message : "Could not parse JSON"))
-      } finally {
-        setImporting(false)
-      }
+      )
+    } catch (err) {
+      toast.error("Import failed: " + (err instanceof Error ? err.message : "Unknown error"))
+    } finally {
+      setImporting(false)
     }
-    reader.readAsText(file)
-
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
-    }
-  }, [projectId, workflowId, loadWorkflow])
+  }, [pendingImportData, projectId, workflowId, loadWorkflow])
 
   return (
     <div className="flex items-center justify-between gap-2 px-2 sm:px-4 h-[41px] border-b border-gray-200 dark:border-border bg-white dark:bg-card">
@@ -721,6 +730,30 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           </Suspense>
         )}
 
+        {pendingImportData && (
+          <AlertDialog open onOpenChange={(open) => { if (!open) setPendingImportData(null) }}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Import Workflow</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {pendingImportData.name ? `"${pendingImportData.name}" — ` : ""}
+                  {pendingImportData.nodes.length} nodes, {pendingImportData.edges.length} connections
+                  {pendingImportData.assets ? ` + assets` : ""}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <Button variant="outline" onClick={() => handleImport("inject")}>
+                  Add to Current
+                </Button>
+                <Button onClick={() => handleImport("new")}>
+                  Import as New
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" aria-label="More options" disabled={exporting || importing}>
@@ -749,10 +782,22 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
-              <Upload className="h-4 w-4 mr-2" />
-              Import from file...
-            </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Upload className="h-4 w-4 mr-2" />
+                Import
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                  <FileJson className="h-4 w-4 mr-2" />
+                  From File
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleClipboardImport}>
+                  <ClipboardPaste className="h-4 w-4 mr-2" />
+                  From Clipboard
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>
 
