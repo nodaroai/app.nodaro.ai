@@ -54,14 +54,18 @@ async function ensureAudioDuration(
   audioUrl: string,
   maxSeconds: number,
 ): Promise<string> {
-  const workDir = await createWorkDir("lip-sync-trim")
+  let workDir: string | undefined
   try {
-    const ext = audioUrl.match(/\.(mp3|wav|m4a|ogg|aac|flac)/i)?.[1] ?? "mp3"
+    workDir = await createWorkDir("lip-sync-trim")
+    // Extract extension from URL (before query params), default to mp3
+    const ext = audioUrl.split("?")[0].match(/\.(mp3|wav|m4a|ogg|aac|flac)$/i)?.[1]?.toLowerCase() ?? "mp3"
     const inputPath = join(workDir, `input.${ext}`)
-    const outputPath = join(workDir, `trimmed.${ext}`)
+    const outputPath = join(workDir, `trimmed.mp3`)
 
+    console.log(`[KIE.ai] Downloading audio for duration check: ${audioUrl.substring(0, 120)}...`)
     await downloadFile(audioUrl, inputPath)
     const duration = await getVideoDuration(inputPath)
+    console.log(`[KIE.ai] Audio duration: ${duration.toFixed(1)}s (limit: ${maxSeconds}s)`)
 
     if (duration <= maxSeconds) {
       return audioUrl
@@ -71,19 +75,26 @@ async function ensureAudioDuration(
       `[KIE.ai] Audio duration (${duration.toFixed(1)}s) exceeds ${maxSeconds}s limit — trimming`
     )
 
+    // Always output as mp3 for maximum compatibility with KIE API
     await runFfmpeg([
       "-i", inputPath,
       "-t", String(maxSeconds),
+      "-c:a", "libmp3lame", "-b:a", "192k",
       "-y",
       outputPath,
     ])
 
     const trimmedBuffer = await readFile(outputPath)
-    const mimeType = ext === "wav" ? "audio/wav" : ext === "ogg" ? "audio/ogg" : "audio/mpeg"
-    const key = `audio/lip-sync-trimmed-${Date.now()}.${ext}`
-    return uploadBufferToR2(trimmedBuffer, key, mimeType)
+    const key = `audio/lip-sync-trimmed-${Date.now()}.mp3`
+    const trimmedUrl = await uploadBufferToR2(trimmedBuffer, key, "audio/mpeg")
+    console.log(`[KIE.ai] Trimmed audio uploaded: ${trimmedUrl}`)
+    return trimmedUrl
+  } catch (err) {
+    console.error(`[KIE.ai] Audio trim failed, sending original URL: ${err instanceof Error ? err.message : err}`)
+    // Fall back to original URL — KIE may still accept it or return a clearer error
+    return audioUrl
   } finally {
-    await cleanupWorkDir(workDir)
+    if (workDir) await cleanupWorkDir(workDir)
   }
 }
 
@@ -934,12 +945,8 @@ export class KieVideoProvider
       audio_url: effectiveAudioUrl,
     }
 
-    // Infinitalk requires prompt — use a default if none provided
-    if (prompt) {
-      input.prompt = prompt
-    } else if (provider === "infinitalk") {
-      input.prompt = "A person speaking naturally"
-    }
+    // KIE API requires prompt for all lip-sync models — use a default if none provided
+    input.prompt = prompt || "A person speaking naturally"
 
     // Override resolution if provided (for infinitalk: 480p or 720p)
     if (resolution) {

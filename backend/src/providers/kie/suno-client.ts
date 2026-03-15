@@ -43,11 +43,11 @@ export interface SunoGenerateParams {
   negativeStyle?: string
   /** Vocal gender: "male" or "female" */
   vocalGender?: string
-  /** Style weight 0-100, default 50 */
+  /** Style weight 0-1, default 0.5 */
   styleWeight?: number
-  /** Weirdness constraint 0-100, default 50 */
+  /** Weirdness constraint 0-1, default 0 */
   weirdnessConstraint?: number
-  /** Audio weight 0-100, default 50 */
+  /** Audio weight 0-1, default 0.5 */
   audioWeight?: number
   /** Whether to use custom mode (true when style/title/lyrics provided) */
   customMode?: boolean
@@ -97,11 +97,11 @@ export interface SunoExtendParams {
   negativeStyle?: string
   /** Vocal gender: "male" or "female" */
   vocalGender?: string
-  /** Style weight 0-100 */
+  /** Style weight 0-1 */
   styleWeight?: number
-  /** Weirdness constraint 0-100 */
+  /** Weirdness constraint 0-1 */
   weirdnessConstraint?: number
-  /** Audio weight 0-100 */
+  /** Audio weight 0-1 */
   audioWeight?: number
 }
 

@@ -13,7 +13,9 @@ const textToDialogueBody = z.object({
     (lines) => lines.reduce((sum, l) => sum + l.text.length, 0) <= 5000,
     { message: "Total dialogue text must not exceed 5000 characters" }
   ),
-  stability: z.number().min(0).max(1).optional(),
+  stability: z.number().refine((v) => v === 0 || v === 0.5 || v === 1, {
+    message: "Stability must be 0, 0.5, or 1",
+  }).optional(),
   languageCode: z.string().max(10).optional(),
   userId: z.string().uuid().optional(),
 })
