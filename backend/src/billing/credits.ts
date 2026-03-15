@@ -260,7 +260,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-voice-remix": 4,    // ElevenLabs voice remix/preview
   "elevenlabs-voice-design": 5,   // ElevenLabs voice design (full controls)
   "elevenlabs-forced-alignment": 3, // ElevenLabs forced alignment
-  "infinitalk": 26,              // 42–168 KIE cr, $0.21–$0.84 (3–12 cr/sec * ~14s, 480p–720p)
+  ***REDACTED-OSS-SCRUB***
   // ── Sora 2 Pro Storyboard ──
   "sora-storyboard": 47,          // 150 KIE cr, $0.75 (10 frames)
   "sora-storyboard:15": 85,       // 270 KIE cr, $1.35 (15/25 frames)
