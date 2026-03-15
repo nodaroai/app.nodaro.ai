@@ -94,7 +94,7 @@ async function fetchPaginated(
           endTime,
           ...extraBody,
         }),
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(30_000),
       })
 
       if (!response.ok) {
@@ -164,16 +164,14 @@ export async function fetchAllKieLogs(
     throw new Error("KIE_UNIQUE_ID env var not configured")
   }
 
-  // Fetch generic endpoint first (validates auth)
-  const genericRecords = await fetchPaginated(
-    KIE_GENERIC_URL, sessionToken, uniqueId,
-    beginTime, endTime, "generic",
-    { successFlag: "" },
-  )
-
-  // Fetch all model-specific endpoints in parallel
-  const modelResults = await Promise.allSettled(
-    USER_RECORD_ENDPOINTS.map(ep =>
+  // Fetch ALL endpoints in parallel (generic + model-specific)
+  const allFetches = await Promise.allSettled([
+    fetchPaginated(
+      KIE_GENERIC_URL, sessionToken, uniqueId,
+      beginTime, endTime, "generic",
+      { successFlag: "" },
+    ),
+    ...USER_RECORD_ENDPOINTS.map(ep =>
       fetchPaginated(
         `${KIE_USER_RECORD_URL}/${ep.slug}/page`,
         sessionToken, uniqueId,
@@ -181,15 +179,16 @@ export async function fetchAllKieLogs(
         ep.extraBody,
       ),
     ),
-  )
+  ])
 
   // Combine and deduplicate by taskId
   const seen = new Set<string>()
   const allRecords: KieLogRecord[] = []
   const sources: Record<string, number> = {}
 
-  function addRecords(records: KieLogRecord[]) {
-    for (const r of records) {
+  for (const result of allFetches) {
+    if (result.status !== "fulfilled") continue
+    for (const r of result.value) {
       const key = r.taskId
       if (key && seen.has(key)) continue
       if (key) seen.add(key)
@@ -199,13 +198,10 @@ export async function fetchAllKieLogs(
     }
   }
 
-  addRecords(genericRecords)
-
-  for (const result of modelResults) {
-    if (result.status === "fulfilled") {
-      addRecords(result.value)
-    }
-    // Silently skip failed model-specific endpoints (auth already validated via generic)
+  // If nothing succeeded at all, check if it was an auth error
+  if (allRecords.length === 0) {
+    const firstError = allFetches.find(r => r.status === "rejected")
+    if (firstError?.status === "rejected") throw firstError.reason
   }
 
   return { records: allRecords, sources }
