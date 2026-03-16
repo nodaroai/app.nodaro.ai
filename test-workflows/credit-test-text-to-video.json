@@ -22,7 +22,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -37,7 +37,7 @@
         "duration": 8,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -52,7 +52,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -67,7 +67,7 @@
         "duration": 10,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -82,7 +82,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -98,7 +98,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "kling3Sound": false,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -114,7 +114,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "kling3Sound": true,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -130,7 +130,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "kling3Sound": false,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -146,7 +146,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "kling3Sound": true,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -162,7 +162,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "kling3Sound": false,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -178,7 +178,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "kling3Sound": true,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -193,7 +193,7 @@
         "duration": 6,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -208,7 +208,7 @@
         "duration": 10,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -224,7 +224,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "removeWatermark": true,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -239,7 +239,7 @@
         "duration": 4,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -254,7 +254,7 @@
         "duration": 12,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -269,7 +269,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -284,7 +284,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -299,7 +299,7 @@
         "duration": 10,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -315,7 +315,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "removeWatermark": true,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -330,7 +330,7 @@
         "duration": 6,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -345,7 +345,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -360,7 +360,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -375,7 +375,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -390,7 +390,7 @@
         "duration": 5,
         "aspectRatio": "9:16",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -405,7 +405,7 @@
         "duration": 5,
         "aspectRatio": "1:1",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -420,38 +420,38 @@
         "duration": 10,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     }
   ],
 
   "edges": [
-    { "id": "e_1",  "source": "prompt_1", "target": "t2v_minimax",          "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_2",  "source": "prompt_1", "target": "t2v_veo3",             "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_4",  "source": "prompt_1", "target": "t2v_kling_5s",         "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_5",  "source": "prompt_1", "target": "t2v_kling_10s",        "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_6",  "source": "prompt_1", "target": "t2v_kling_turbo",      "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_7",  "source": "prompt_1", "target": "t2v_kling30_5s",       "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_8",  "source": "prompt_1", "target": "t2v_kling30_5s_audio", "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_9",  "source": "prompt_1", "target": "t2v_kling30_10s",      "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_10", "source": "prompt_1", "target": "t2v_kling30_10s_audio","sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_11", "source": "prompt_1", "target": "t2v_kling30_15s",      "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_12", "source": "prompt_1", "target": "t2v_kling30_15s_audio","sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_13", "source": "prompt_1", "target": "t2v_grok",             "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_14", "source": "prompt_1", "target": "t2v_sora2pro",         "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_15", "source": "prompt_1", "target": "t2v_sora2pro_wm",      "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_16", "source": "prompt_1", "target": "t2v_seedance",         "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_17", "source": "prompt_1", "target": "t2v_seedance_12s",     "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_18", "source": "prompt_1", "target": "t2v_wan",              "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_19", "source": "prompt_1", "target": "t2v_wan_turbo",        "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_20", "source": "prompt_1", "target": "t2v_sora2",            "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_21", "source": "prompt_1", "target": "t2v_sora2_wm",         "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_22", "source": "prompt_1", "target": "t2v_hailuo_std",       "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_23", "source": "prompt_1", "target": "t2v_bytedance_lite",   "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_24", "source": "prompt_1", "target": "t2v_bytedance_pro",    "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_25", "source": "prompt_1", "target": "t2v_runway_kie",       "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_26", "source": "prompt_1", "target": "t2v_minimax_916",      "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_27", "source": "prompt_1", "target": "t2v_kling_11",         "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_28", "source": "prompt_1", "target": "t2v_kling_turbo_10s",  "sourceHandle": "text", "targetHandle": "in" }
+    { "id": "e_1",  "source": "prompt_1", "target": "t2v_minimax",          "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_2",  "source": "prompt_1", "target": "t2v_veo3",             "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_4",  "source": "prompt_1", "target": "t2v_kling_5s",         "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_5",  "source": "prompt_1", "target": "t2v_kling_10s",        "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_6",  "source": "prompt_1", "target": "t2v_kling_turbo",      "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_7",  "source": "prompt_1", "target": "t2v_kling30_5s",       "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_8",  "source": "prompt_1", "target": "t2v_kling30_5s_audio", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_9",  "source": "prompt_1", "target": "t2v_kling30_10s",      "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_10", "source": "prompt_1", "target": "t2v_kling30_10s_audio","sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_11", "source": "prompt_1", "target": "t2v_kling30_15s",      "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_12", "source": "prompt_1", "target": "t2v_kling30_15s_audio","sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_13", "source": "prompt_1", "target": "t2v_grok",             "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_14", "source": "prompt_1", "target": "t2v_sora2pro",         "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_15", "source": "prompt_1", "target": "t2v_sora2pro_wm",      "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_16", "source": "prompt_1", "target": "t2v_seedance",         "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_17", "source": "prompt_1", "target": "t2v_seedance_12s",     "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_18", "source": "prompt_1", "target": "t2v_wan",              "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_19", "source": "prompt_1", "target": "t2v_wan_turbo",        "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_20", "source": "prompt_1", "target": "t2v_sora2",            "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_21", "source": "prompt_1", "target": "t2v_sora2_wm",         "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_22", "source": "prompt_1", "target": "t2v_hailuo_std",       "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_23", "source": "prompt_1", "target": "t2v_bytedance_lite",   "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_24", "source": "prompt_1", "target": "t2v_bytedance_pro",    "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_25", "source": "prompt_1", "target": "t2v_runway_kie",       "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_26", "source": "prompt_1", "target": "t2v_minimax_916",      "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_27", "source": "prompt_1", "target": "t2v_kling_11",         "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_28", "source": "prompt_1", "target": "t2v_kling_turbo_10s",  "sourceHandle": "prompt", "targetHandle": "in" }
   ]
 }

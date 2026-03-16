@@ -87,8 +87,8 @@
   "edges": [
     { "id": "e_img1", "source": "upload_img_1", "target": "i2v_veo31",     "sourceHandle": "image", "targetHandle": "image" },
     { "id": "e_img2", "source": "upload_img_1", "target": "i2v_runway",    "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_p1",   "source": "prompt_1",     "target": "i2v_veo31",     "sourceHandle": "text",  "targetHandle": "in" },
-    { "id": "e_p2",   "source": "prompt_1",     "target": "i2v_runway",    "sourceHandle": "text",  "targetHandle": "in" },
+    { "id": "e_p1",   "source": "prompt_1",     "target": "i2v_veo31",     "sourceHandle": "prompt",  "targetHandle": "in" },
+    { "id": "e_p2",   "source": "prompt_1",     "target": "i2v_runway",    "sourceHandle": "prompt",  "targetHandle": "in" },
 
     { "id": "e_v1", "source": "i2v_veo31",  "target": "ev_veo_fast",    "sourceHandle": "video", "targetHandle": "in" },
     { "id": "e_v2", "source": "i2v_veo31",  "target": "ev_veo_quality", "sourceHandle": "video", "targetHandle": "in" },

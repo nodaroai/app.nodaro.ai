@@ -59,9 +59,9 @@
   ],
 
   "edges": [
-    { "id": "e_p1", "source": "prompt_1", "target": "v2v_wan",    "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_p2", "source": "prompt_1", "target": "v2v_luma",   "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_p3", "source": "prompt_1", "target": "v2v_runway",  "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p1", "source": "prompt_1", "target": "v2v_wan",    "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p2", "source": "prompt_1", "target": "v2v_luma",   "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p3", "source": "prompt_1", "target": "v2v_runway",  "sourceHandle": "prompt", "targetHandle": "in" },
 
     { "id": "e_v1", "source": "upload_vid_1", "target": "v2v_wan",    "sourceHandle": "video", "targetHandle": "video" },
     { "id": "e_v2", "source": "upload_vid_1", "target": "v2v_luma",   "sourceHandle": "video", "targetHandle": "video" },
