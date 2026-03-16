@@ -251,7 +251,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     credits: 5.5,
     ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
-    imageParam: "image_url",  // Single URL string (like other seedream/i2i models)
+    imageParam: "image_urls",  // Array of URLs (like seedream-edit)
     extraParams: { aspect_ratio: "16:9", quality: "basic" },
   },
 
