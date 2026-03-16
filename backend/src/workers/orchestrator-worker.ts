@@ -135,7 +135,17 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     const edges = cleaned.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
 
     // Pass workflow settings (character definitions, prompt templates) to context
-    ctx.workflowSettings = (workflowData.settings as Record<string, unknown>) ?? {}
+    // Load user-level prompt templates from profiles (matches frontend userPromptTemplates)
+    const { data: userProfile } = await supabase
+      .from("profiles")
+      .select("prompt_templates")
+      .eq("id", userId)
+      .single()
+
+    ctx.workflowSettings = {
+      ...((workflowData.settings as Record<string, unknown>) ?? {}),
+      ...(userProfile?.prompt_templates ? { userPromptTemplates: userProfile.prompt_templates } : {}),
+    }
 
     // Apply presentation mode input overrides to source node data
     if (inputOverrides) {

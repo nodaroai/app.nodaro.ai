@@ -247,9 +247,20 @@ export function getPrimaryOutput(
     return output.generatedVoiceId
   }
 
-  // Adjust-volume can output either audio or video
+  // Adjust-volume can output either audio or video — respect lastInputType (matches frontend)
   if (sourceType === "adjust-volume") {
-    return output.videoUrl || output.audioUrl
+    if (output._lastInputType === "video") return output.videoUrl || output.audioUrl
+    return output.audioUrl || output.videoUrl
+  }
+
+  // Social-media-format: prefer video, fall back to image (matches frontend)
+  if (sourceType === "social-media-format") {
+    return output.videoUrl || output.imageUrl
+  }
+
+  // Preview node: route by the actual media type of the first item (matches frontend)
+  if (sourceType === "preview") {
+    return output.imageUrl || output.videoUrl || output.audioUrl || output.text
   }
 
   // Forced-alignment outputs alignment data, not text — serialize to match frontend
@@ -425,7 +436,7 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return url ? { audioUrl: url } : undefined
   }
 
-  // Adjust-volume → could be audio or video
+  // Adjust-volume → could be audio or video; carry _lastInputType for getPrimaryOutput routing
   if (type === "adjust-volume") {
     const lastInputType = (data.lastInputType as string | undefined) ?? "audio"
     const url =
@@ -434,9 +445,9 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
         ? (data.generatedVideoUrl as string | undefined)
         : (data.generatedAudioUrl as string | undefined))
     if (lastInputType === "video") {
-      return url ? { videoUrl: url } : undefined
+      return url ? { videoUrl: url, _lastInputType: "video" } : undefined
     }
-    return url ? { audioUrl: url } : undefined
+    return url ? { audioUrl: url, _lastInputType: "audio" } : undefined
   }
 
   // Entity nodes → imageUrl from generatedResults or sourceImageUrl
@@ -558,9 +569,10 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   const composerMapping = COMPOSER_PLAN_MAP[type]
   if (composerMapping) {
     let plan = data[composerMapping.planField] as Record<string, unknown> | undefined
-    // video-composer has a legacy fallback to data.sceneGraph
+    // video-composer: frontend stores in data.plan, legacy in data.sceneGraph
     if (!plan && type === "video-composer") {
-      plan = data.sceneGraph as Record<string, unknown> | undefined
+      plan = (data.plan as Record<string, unknown> | undefined) ??
+        (data.sceneGraph as Record<string, unknown> | undefined)
     }
     return plan ? { plan } : undefined
   }
