@@ -140,7 +140,7 @@ import {
   type ExecutionContext,
 } from "./types";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
-import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
+import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, detectPreviewItemType, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
 import { resolveNodeInputs } from "./node-input-resolver";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { pollJobWithNodeUpdate } from "./poll-job";
@@ -3281,14 +3281,7 @@ export function executeNode(
       const srcType = sourceNode.type ?? "";
       const srcLabel = (sourceNode.data as Record<string, unknown>).label as string || srcType;
 
-      let itemType: PreviewItem["type"] = "text";
-      if (IMAGE_SOURCE_TYPES.has(srcType) || srcType === "character" || srcType === "face" || srcType === "object" || srcType === "location") itemType = "image";
-      else if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(srcType)) itemType = "video";
-      else if (AUDIO_SOURCE_TYPES.has(srcType)) itemType = "audio";
-      else if (srcType === "forced-alignment") itemType = "data";
-      else if (/^https?:\/\/.*\.(png|jpe?g|gif|webp|svg|bmp)/i.test(trimmed)) itemType = "image";
-      else if (/^https?:\/\/.*\.(mp4|mov|webm|avi|mkv)/i.test(trimmed)) itemType = "video";
-      else if (/^https?:\/\/.*\.(mp3|wav|ogg|aac|flac|m4a)/i.test(trimmed)) itemType = "audio";
+      const itemType = detectPreviewItemType(srcType, trimmed);
 
       freshItems.push({
         type: itemType,

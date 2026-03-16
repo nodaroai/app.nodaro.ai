@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useState, useRef, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Eye, Type, Loader2, AlertCircle, X, ImageIcon } from "lucide-react"
 import { createPortal } from "react-dom"
@@ -21,6 +21,10 @@ function TextPreviewModal({
   readonly onClose: () => void
   readonly text: string
 }) {
+  const [copied, setCopied] = useState(false)
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => { return () => { if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current) } }, [])
+
   if (!isOpen) return null
 
   return createPortal(
@@ -37,13 +41,27 @@ function TextPreviewModal({
             <Eye className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-medium">Describe Image</span>
           </div>
-          <button
-            type="button"
-            className="text-muted-foreground hover:text-foreground transition-colors"
-            onClick={onClose}
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors"
+              onClick={() => {
+                if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
+                navigator.clipboard.writeText(text)
+                setCopied(true)
+                copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000)
+              }}
+            >
+              {copied ? "Copied!" : "Copy"}
+            </button>
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              onClick={onClose}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         <div className="overflow-y-auto p-4">
           <p className="text-sm whitespace-pre-wrap leading-relaxed">{text}</p>
