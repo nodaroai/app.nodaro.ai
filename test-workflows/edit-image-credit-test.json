@@ -168,22 +168,9 @@
       }
     },
     {
-      "id": "edit-topaz-2k-8x",
-      "type": "edit-image",
-      "position": { "x": 1000, "y": 600 },
-      "data": {
-        "label": "Topaz 2K — 8x (4cr)",
-        "prompt": "",
-        "provider": "topaz-image-upscale",
-        "upscaleFactor": "8",
-        "targetResolution": "2K",
-        "fieldMappings": {}
-      }
-    },
-    {
       "id": "edit-topaz-4k-2x",
       "type": "edit-image",
-      "position": { "x": 1000, "y": 800 },
+      "position": { "x": 1000, "y": 600 },
       "data": {
         "label": "Topaz 4K — 2x (7cr)",
         "prompt": "",
@@ -196,7 +183,7 @@
     {
       "id": "edit-topaz-4k-4x",
       "type": "edit-image",
-      "position": { "x": 1000, "y": 1000 },
+      "position": { "x": 1000, "y": 800 },
       "data": {
         "label": "Topaz 4K — 4x (7cr)",
         "prompt": "",
@@ -207,22 +194,9 @@
       }
     },
     {
-      "id": "edit-topaz-4k-8x",
-      "type": "edit-image",
-      "position": { "x": 1000, "y": 1200 },
-      "data": {
-        "label": "Topaz 4K — 8x (7cr)",
-        "prompt": "",
-        "provider": "topaz-image-upscale",
-        "upscaleFactor": "8",
-        "targetResolution": "4K",
-        "fieldMappings": {}
-      }
-    },
-    {
       "id": "edit-topaz-8k-2x",
       "type": "edit-image",
-      "position": { "x": 1000, "y": 1400 },
+      "position": { "x": 1000, "y": 1000 },
       "data": {
         "label": "Topaz 8K — 2x (13cr)",
         "prompt": "",
@@ -233,145 +207,35 @@
       }
     },
     {
-      "id": "edit-topaz-8k-8x",
+      "id": "edit-topaz-8k-4x",
       "type": "edit-image",
-      "position": { "x": 1000, "y": 1600 },
+      "position": { "x": 1000, "y": 1200 },
       "data": {
-        "label": "Topaz 8K — 8x (13cr)",
+        "label": "Topaz 8K — 4x (13cr)",
         "prompt": "",
         "provider": "topaz-image-upscale",
-        "upscaleFactor": "8",
+        "upscaleFactor": "4",
         "targetResolution": "8K",
         "fieldMappings": {}
       }
     }
   ],
   "edges": [
-    {
-      "id": "e-upload-recraft-up",
-      "source": "upload-1",
-      "target": "edit-recraft-upscale",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-recraft-bg",
-      "source": "upload-1",
-      "target": "edit-recraft-removebg",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-nano-basic",
-      "source": "upload-1",
-      "target": "edit-nano-basic",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-nano-style",
-      "source": "upload-1",
-      "target": "edit-nano-style-cinematic",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-nano-ar16",
-      "source": "upload-1",
-      "target": "edit-nano-ar-16x9",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-nano-neg",
-      "source": "upload-1",
-      "target": "edit-nano-negprompt",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-nano-seed",
-      "source": "upload-1",
-      "target": "edit-nano-seed",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-nano-ar9",
-      "source": "upload-1",
-      "target": "edit-nano-ar-9x16",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-nano-all",
-      "source": "upload-1",
-      "target": "edit-nano-all-options",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-topaz-2k-1x",
-      "source": "upload-1",
-      "target": "edit-topaz-2k-1x",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-topaz-2k-2x",
-      "source": "upload-1",
-      "target": "edit-topaz-2k-2x",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-topaz-2k-4x",
-      "source": "upload-1",
-      "target": "edit-topaz-2k-4x",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-topaz-2k-8x",
-      "source": "upload-1",
-      "target": "edit-topaz-2k-8x",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-topaz-4k-2x",
-      "source": "upload-1",
-      "target": "edit-topaz-4k-2x",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-topaz-4k-4x",
-      "source": "upload-1",
-      "target": "edit-topaz-4k-4x",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-topaz-4k-8x",
-      "source": "upload-1",
-      "target": "edit-topaz-4k-8x",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-topaz-8k-2x",
-      "source": "upload-1",
-      "target": "edit-topaz-8k-2x",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    },
-    {
-      "id": "e-upload-topaz-8k-8x",
-      "source": "upload-1",
-      "target": "edit-topaz-8k-8x",
-      "sourceHandle": "image",
-      "targetHandle": "image"
-    }
+    { "id": "e-upload-recraft-up", "source": "upload-1", "target": "edit-recraft-upscale", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-recraft-bg", "source": "upload-1", "target": "edit-recraft-removebg", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-nano-basic", "source": "upload-1", "target": "edit-nano-basic", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-nano-style", "source": "upload-1", "target": "edit-nano-style-cinematic", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-nano-ar16", "source": "upload-1", "target": "edit-nano-ar-16x9", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-nano-neg", "source": "upload-1", "target": "edit-nano-negprompt", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-nano-seed", "source": "upload-1", "target": "edit-nano-seed", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-nano-ar9", "source": "upload-1", "target": "edit-nano-ar-9x16", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-nano-all", "source": "upload-1", "target": "edit-nano-all-options", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-topaz-2k-1x", "source": "upload-1", "target": "edit-topaz-2k-1x", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-topaz-2k-2x", "source": "upload-1", "target": "edit-topaz-2k-2x", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-topaz-2k-4x", "source": "upload-1", "target": "edit-topaz-2k-4x", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-topaz-4k-2x", "source": "upload-1", "target": "edit-topaz-4k-2x", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-topaz-4k-4x", "source": "upload-1", "target": "edit-topaz-4k-4x", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-topaz-8k-2x", "source": "upload-1", "target": "edit-topaz-8k-2x", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-topaz-8k-4x", "source": "upload-1", "target": "edit-topaz-8k-4x", "sourceHandle": "image", "targetHandle": "image" }
   ]
 }

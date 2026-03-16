@@ -12,7 +12,7 @@ const editImageBody = z.object({
   imageUrl: safeUrlSchema,
   prompt: z.string().max(2000).optional(),
   provider: z.enum(IMAGE_EDIT_PROVIDERS).optional(),
-  upscaleFactor: z.enum(["1", "2", "4", "8"]).optional(),
+  upscaleFactor: z.enum(["1", "2", "4"]).optional(),
   targetResolution: z.enum(["2K", "4K", "8K"]).optional(),
   aspectRatio: z.string().max(20).optional(),
   negativePrompt: z.string().max(5000).optional(),
