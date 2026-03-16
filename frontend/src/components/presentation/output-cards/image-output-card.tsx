@@ -30,6 +30,8 @@ export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia }: Ima
             src={url}
             alt={label}
             className="w-full rounded-lg bg-black/20"
+            thumbnail
+            thumbnailWidth={480}
           />
           {/* Hover toolbar — top-right, no blur overlay */}
           <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">

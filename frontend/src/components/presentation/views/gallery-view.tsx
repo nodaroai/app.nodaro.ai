@@ -88,6 +88,7 @@ export function GalleryView({
                           src={result.url}
                           alt=""
                           thumbnail
+                          thumbnailWidth={320}
                           className="w-full h-full object-cover rounded-lg cursor-pointer"
                           onClick={() => onOpenMedia?.(node.id)}
                         />
@@ -191,7 +192,7 @@ function GalleryCard({
         {status === "running" ? (
           <div className="w-6 h-6 border-2 border-[#ff0073]/40 border-t-[#ff0073] rounded-full animate-spin" />
         ) : outputType === "image" && url ? (
-          <CachedImage src={url} alt={title} thumbnail className="w-full h-full object-cover" />
+          <CachedImage src={url} alt={title} thumbnail thumbnailWidth={480} className="w-full h-full object-cover" />
         ) : outputType === "video" && url ? (
           <div className="relative w-full h-full">
             <video src={url} className="w-full h-full object-cover" muted playsInline />
