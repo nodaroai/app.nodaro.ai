@@ -13,6 +13,14 @@ import type { KieModelConfig } from "../providers/kie/models.js"
 import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
 import { getAppSettings } from "../lib/app-settings.js"
 
+// T2V credit overrides: some providers bill differently for text-to-video vs image-to-video.
+// Must mirror T2V_CREDIT_OVERRIDES from packages/shared/src/credit-identifiers.ts.
+const T2V_CREDIT_OVERRIDES: Record<string, string> = {
+  "grok": "grok-i2v",
+  "wan": "wan-t2v",
+  "wan-turbo": "wan-turbo-t2v",
+}
+
 ***REDACTED-OSS-SCRUB***
 const KIE_CREDITS_PER_NODARO = 4
 
@@ -42,7 +50,21 @@ function buildModelMap(): Map<string, ModelMapping[]> {
 
   addModels(KIE_IMAGE_MODELS, "image")
   addModels(KIE_VIDEO_MODELS, "i2v")
-  addModels(KIE_TEXT_TO_VIDEO_MODELS, "t2v")
+
+  // For T2V models, apply T2V_CREDIT_OVERRIDES so the audit uses the correct
+  // credit key (e.g., grok T2V → grok-i2v, wan T2V → wan-t2v).
+  // Without this, the audit compares T2V provider costs against I2V/image credit prices.
+  const t2vModels: Record<string, KieModelConfig> = {}
+  for (const [key, cfg] of Object.entries(KIE_TEXT_TO_VIDEO_MODELS)) {
+    const overrideKey = T2V_CREDIT_OVERRIDES[key]
+    if (overrideKey) {
+      t2vModels[overrideKey] = { ...cfg, credits: STATIC_CREDIT_COSTS[overrideKey] ? STATIC_CREDIT_COSTS[overrideKey] * KIE_CREDITS_PER_NODARO : cfg.credits }
+    } else {
+      t2vModels[key] = cfg
+    }
+  }
+  addModels(t2vModels, "t2v")
+
   addModels(KIE_VIDEO_TO_VIDEO_MODELS, "v2v")
   addModels(KIE_MOTION_TRANSFER_MODELS, "motion")
   addModels(KIE_VIDEO_UPSCALE_MODELS, "upscale")
@@ -80,9 +102,11 @@ function buildModelMap(): Map<string, ModelMapping[]> {
   addAlias("suno-lyrics", "suno-lyrics", "music")
   addAlias("suno-style", "suno-style-boost", "music")
 
-  // Flux Kontext model-specific endpoint uses "flux-kontext-pro" / "flux-kontext-max"
+  // Flux Kontext: model-specific endpoint uses "flux-kontext-pro" / "flux-kontext-max"
+  // as model names, but records without a model field fall back to sourceLabel "flux-kontext"
   addAlias("flux-kontext-pro", "flux-kontext", "image")
   addAlias("flux-kontext-max", "flux-kontext-max", "image")
+  addAlias("flux-kontext", "flux-kontext", "image")
 
   // VEO record endpoint may return model as "generate" or fall back to sourceLabel "veo-generate"
   // Add both veo3 and veo3.1 so credit-based matching picks the right one
