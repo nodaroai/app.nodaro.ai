@@ -222,6 +222,12 @@ export function getPrimaryOutput(
     return output.videoUrl || output.audioUrl
   }
 
+  // Forced-alignment outputs alignment data, not text — serialize to match frontend
+  if (sourceType === "forced-alignment") {
+    if (output.alignment) return JSON.stringify(output.alignment)
+    return output.text
+  }
+
   if (IMAGE_SOURCE_TYPES.has(sourceType)) return output.imageUrl
   if (VIDEO_SOURCE_TYPES.has(sourceType)) return output.videoUrl
   if (AUDIO_SOURCE_TYPES.has(sourceType)) return output.audioUrl
@@ -274,6 +280,7 @@ const VIDEO_RESULT_TYPES = new Set([
   "sora-storyboard",
   "motion-transfer",
   "video-upscale",
+  "extend-video",
   "suno-music-video",
   "render-video",
   "combine-videos",
