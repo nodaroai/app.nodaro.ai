@@ -62,7 +62,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, currentIndex, to
       <div
         role="dialog"
         aria-modal="true"
-        className="relative w-[90vw] md:w-[60vw] max-h-[80vh] flex items-center justify-center"
+        className="relative w-[95vw] max-h-[95vh] flex items-center justify-center"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}
