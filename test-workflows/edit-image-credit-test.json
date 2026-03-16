@@ -192,6 +192,32 @@
         "targetResolution": "4K",
         "fieldMappings": {}
       }
+    },
+    {
+      "id": "edit-topaz-8k-2x",
+      "type": "edit-image",
+      "position": { "x": 1000, "y": 1000 },
+      "data": {
+        "label": "Topaz 8K — 2x (13cr)",
+        "prompt": "",
+        "provider": "topaz-image-upscale",
+        "upscaleFactor": "2",
+        "targetResolution": "8K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "edit-topaz-8k-4x",
+      "type": "edit-image",
+      "position": { "x": 1000, "y": 1200 },
+      "data": {
+        "label": "Topaz 8K — 4x (13cr)",
+        "prompt": "",
+        "provider": "topaz-image-upscale",
+        "upscaleFactor": "4",
+        "targetResolution": "8K",
+        "fieldMappings": {}
+      }
     }
   ],
   "edges": [
@@ -208,6 +234,8 @@
     { "id": "e-upload-topaz-2k-2x", "source": "upload-1", "target": "edit-topaz-2k-2x", "sourceHandle": "image", "targetHandle": "image" },
     { "id": "e-upload-topaz-2k-4x", "source": "upload-1", "target": "edit-topaz-2k-4x", "sourceHandle": "image", "targetHandle": "image" },
     { "id": "e-upload-topaz-4k-2x", "source": "upload-1", "target": "edit-topaz-4k-2x", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e-upload-topaz-4k-4x", "source": "upload-1", "target": "edit-topaz-4k-4x", "sourceHandle": "image", "targetHandle": "image" }
+    { "id": "e-upload-topaz-4k-4x", "source": "upload-1", "target": "edit-topaz-4k-4x", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-topaz-8k-2x", "source": "upload-1", "target": "edit-topaz-8k-2x", "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e-upload-topaz-8k-4x", "source": "upload-1", "target": "edit-topaz-8k-4x", "sourceHandle": "image", "targetHandle": "image" }
   ]
 }
