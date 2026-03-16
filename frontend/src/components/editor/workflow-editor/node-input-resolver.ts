@@ -15,6 +15,22 @@ import { extractNodeOutput } from "./execution-graph";
 /** Node types whose edges default to "each" output mode (fan-out) */
 const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"]);
 
+/** Node types that accept multiple audio inputs (accumulate to audioUrls array) */
+const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "suno-mashup"]);
+
+/** Node types that produce a Suno track/task ID for downstream passthrough */
+const SUNO_TRACK_NODE_TYPES = new Set([
+  "suno-generate",
+  "suno-cover",
+  "suno-extend",
+  "suno-mashup",
+  "suno-replace-section",
+  "suno-add-instrumental",
+  "suno-add-vocals",
+  "suno-convert-wav",
+  "suno-upload-extend",
+]);
+
 export function extractNodeOutputAsList(
   node: WorkflowNode,
 ): string[] | undefined {
@@ -361,7 +377,8 @@ export function resolveNodeInputs(
       src.type === "render-video" ||
       src.type === "speed-ramp" ||
       src.type === "loop-video" ||
-      src.type === "fade-video"
+      src.type === "fade-video" ||
+      src.type === "transcode-video"
     ) {
       if (node.type === "combine-videos") {
         inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
@@ -391,7 +408,7 @@ export function resolveNodeInputs(
     } else if (src.type === "reference-audio") {
       if (node.type === "generate-music") {
         inputs.audioUrl = output;
-      } else if (node.type === "mix-audio") {
+      } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
         inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
         inputs.audioUrlsWithSourceIds = [
           ...(inputs.audioUrlsWithSourceIds ?? []),
@@ -435,7 +452,7 @@ export function resolveNodeInputs(
         }
       }
     } else if (src.type === "upload-audio") {
-      if (node.type === "mix-audio") {
+      if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
         inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
         inputs.audioUrlsWithSourceIds = [
           ...(inputs.audioUrlsWithSourceIds ?? []),
@@ -454,7 +471,7 @@ export function resolveNodeInputs(
       const lastInputType = adjustData.lastInputType ?? "audio";
       if (lastInputType === "video") {
         inputs.videoUrl = output;
-      } else if (node.type === "mix-audio") {
+      } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
         inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
         inputs.audioUrlsWithSourceIds = [
           ...(inputs.audioUrlsWithSourceIds ?? []),
@@ -491,7 +508,7 @@ export function resolveNodeInputs(
       src.type === "voice-remix" ||
       src.type === "voice-design"
     ) {
-      if (node.type === "mix-audio") {
+      if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
         inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
         inputs.audioUrlsWithSourceIds = [
           ...(inputs.audioUrlsWithSourceIds ?? []),
@@ -505,11 +522,7 @@ export function resolveNodeInputs(
       } else {
         inputs.audioUrl = output;
       }
-      if (
-        src.type === "suno-generate" ||
-        src.type === "suno-cover" ||
-        src.type === "suno-extend"
-      ) {
+      if (SUNO_TRACK_NODE_TYPES.has(src.type!)) {
         const srcData = src.data as Record<string, unknown>;
         if (srcData.sunoTrackId) {
           inputs.sunoTrackId = srcData.sunoTrackId as string;

@@ -74,6 +74,9 @@ export function resolveNodeInputs(
 // Fan-out detection — check if a node has list input from upstream
 // ---------------------------------------------------------------------------
 
+/** Node types whose edges default to "each" output mode (fan-out). */
+const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"])
+
 /**
  * Check if a node receives list input from any upstream source.
  * Returns the list items (string[]) if a fan-out source is found, undefined otherwise.
@@ -143,7 +146,6 @@ export function getListInputForNode(
 
     // Check outputMode from edge data — only fan-out if mode is "each"
     // List/loop/split-text edges default to "each"; all other edges default to "last"
-    const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"])
     const edgeOutputMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined
     const outputMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type) ? "each" : "last")
     if (outputMode !== "each") continue
@@ -173,7 +175,6 @@ export function getListInputForNode(
 
   // Transitive fan-out: if a direct parent is a text-prompt whose own upstream
   // is a list-like node with "each" mode, resolve the text template per item.
-  const DEFAULT_EACH_TYPES_SET = new Set(["list", "loop", "split-text"])
   for (const edge of incomingEdges) {
     const sourceNode = allNodes.find((n) => n.id === edge.source)
     if (!sourceNode || sourceNode.type !== "text-prompt") continue
@@ -181,7 +182,7 @@ export function getListInputForNode(
     const sourceIncoming = edges.filter((e) => e.target === sourceNode.id)
     for (const srcEdge of sourceIncoming) {
       const listNode = allNodes.find((n) => n.id === srcEdge.source)
-      if (!listNode || !DEFAULT_EACH_TYPES_SET.has(listNode.type)) continue
+      if (!listNode || !DEFAULT_EACH_TYPES.has(listNode.type)) continue
 
       const gpEdgeMode = (srcEdge.data as Record<string, unknown> | undefined)
         ?.outputMode as string | undefined
@@ -285,7 +286,6 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "transcribe",
   "suno-lyrics",
   "image-to-text",
-  "forced-alignment",
   "ai-writer",
   "combine-text",
   "split-text",
@@ -301,6 +301,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "text-to-video",
   "lip-sync",
   "speech-to-video",
+  "sora-storyboard",
   "motion-transfer",
   "video-upscale",
   "extend-video",
