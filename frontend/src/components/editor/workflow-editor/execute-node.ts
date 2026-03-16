@@ -2070,36 +2070,9 @@ export function executeNode(
   if (node.type === "motion-transfer") {
     const mtData = node.data as unknown as MotionTransferData;
 
-    const IMAGE_PRODUCING_TYPES = new Set([
-      "generate-image",
-      "upload-image",
-      "character",
-      "location",
-      "object",
-    ]);
-    const VIDEO_PRODUCING_TYPES = new Set([
-      "image-to-video",
-      "text-to-video",
-      "video-to-video",
-      "upload-video",
-    ]);
-
-    const incomingEdges = edges.filter((e) => e.target === node.id);
-    let imageUrl: string | undefined;
-    let videoUrl: string | undefined;
-
-    for (const edge of incomingEdges) {
-      const sourceNode = nodes.find((n) => n.id === edge.source);
-      if (!sourceNode) continue;
-      const output = extractNodeOutput(sourceNode);
-      if (!output) continue;
-
-      if (IMAGE_PRODUCING_TYPES.has(sourceNode.type || "")) {
-        imageUrl = output;
-      } else if (VIDEO_PRODUCING_TYPES.has(sourceNode.type || "")) {
-        videoUrl = output;
-      }
-    }
+    // Use resolved inputs from resolveNodeInputs (covers all image/video source types)
+    const imageUrl = inputs.imageUrl;
+    const videoUrl = inputs.videoUrl;
 
     if (!imageUrl) {
       toast.error(
@@ -2654,18 +2627,8 @@ export function executeNode(
       toast.error("Not authenticated");
       return Promise.reject(new Error("Not authenticated"));
     }
-    const aeIncomingEdges = edges.filter((e) => e.target === node.id);
-    let inputVideoUrl: string | undefined;
-    for (const edge of aeIncomingEdges) {
-      const sourceNode = nodes.find((n) => n.id === edge.source);
-      if (sourceNode) {
-        const output = extractNodeOutput(sourceNode);
-        if (output && (output.startsWith("http") || output.startsWith("/"))) {
-          inputVideoUrl = output;
-          break;
-        }
-      }
-    }
+    // Use resolved inputs from resolveNodeInputs (matches backend routing)
+    const inputVideoUrl = inputs.videoUrl || d.inputVideoUrl;
     if (!inputVideoUrl) {
       toast.error(`Node "${d.label}": no video input connected`);
       return Promise.reject(new Error("No video input"));
@@ -2715,26 +2678,22 @@ export function executeNode(
       toast.error("Not authenticated");
       return Promise.reject(new Error("Not authenticated"));
     }
-    const loIncomingEdges = edges.filter((e) => e.target === node.id);
-    let inputVideoUrl: string | undefined;
+    // Use resolved inputs for video URL (matches backend routing)
+    const inputVideoUrl = inputs.videoUrl || d.inputVideoUrl;
+    // Lottie assets still need edge iteration for handle-specific collection
     const lottieAssets: Array<{ id: string; url: string; name: string }> = [];
+    const loIncomingEdges = edges.filter((e) => e.target === node.id);
     for (const edge of loIncomingEdges) {
+      if (edge.targetHandle !== "lottie") continue;
       const sourceNode = nodes.find((n) => n.id === edge.source);
       if (!sourceNode) continue;
-      if (edge.targetHandle === "in") {
-        const output = extractNodeOutput(sourceNode);
-        if (output && (output.startsWith("http") || output.startsWith("/"))) {
-          inputVideoUrl = output;
-        }
-      } else if (edge.targetHandle === "lottie") {
-        const output = extractNodeOutput(sourceNode);
-        if (output && (output.startsWith("http") || output.startsWith("/"))) {
-          lottieAssets.push({
-            id: sourceNode.id,
-            url: output,
-            name: (sourceNode.data as Record<string, unknown>).label as string ?? "Lottie Asset",
-          });
-        }
+      const output = extractNodeOutput(sourceNode);
+      if (output && (output.startsWith("http") || output.startsWith("/"))) {
+        lottieAssets.push({
+          id: sourceNode.id,
+          url: output,
+          name: (sourceNode.data as Record<string, unknown>).label as string ?? "Lottie Asset",
+        });
       }
     }
     if (!inputVideoUrl) {
@@ -2878,13 +2837,7 @@ export function executeNode(
       errorMessage: undefined,
     });
     try {
-      const ASPECT_DIMS: Record<string, { width: number; height: number }> = {
-        "16:9": { width: 1920, height: 1080 },
-        "9:16": { width: 1080, height: 1920 },
-        "1:1": { width: 1080, height: 1080 },
-        "4:5": { width: 1080, height: 1350 },
-      };
-      const dims = ASPECT_DIMS[d.aspectRatio] ?? { width: 1920, height: 1080 };
+      const dims = ASPECT_RATIO_DIMENSIONS[d.aspectRatio] ?? { width: 1920, height: 1080 };
       const durationInFrames = Math.round(d.durationSeconds * d.fps);
 
       const incomingEdges = edges.filter((e) => e.target === node.id);

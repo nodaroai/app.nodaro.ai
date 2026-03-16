@@ -361,7 +361,7 @@ describe("motion-transfer", () => {
     mockNodes = [makeNode("motion-transfer", {}), imageNode]
     mockEdges = [{ id: "e1", source: "img1", target: "n1" }]
     mockExtractNodeOutput.mockReturnValue("http://img.png")
-    mockResolveNodeInputs.mockReturnValue({})
+    mockResolveNodeInputs.mockReturnValue({ imageUrl: "http://img.png" })
     const promise = executeNode(
       makeNode("motion-transfer", {}),
       makeCtx(),
@@ -392,7 +392,7 @@ describe("motion-transfer", () => {
       if (node.id === "vid1") return "http://motion.mp4"
       return undefined
     })
-    mockResolveNodeInputs.mockReturnValue({})
+    mockResolveNodeInputs.mockReturnValue({ imageUrl: "http://character.png", videoUrl: "http://motion.mp4" })
     mockMotionTransferApi.mockResolvedValue({ jobId: "j1" })
     mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
     await executeNode(
@@ -1362,7 +1362,7 @@ describe("motion-transfer with kling-3.0 provider", () => {
       if (node.id === "vid1") return "http://motion.mp4"
       return undefined
     })
-    mockResolveNodeInputs.mockReturnValue({})
+    mockResolveNodeInputs.mockReturnValue({ imageUrl: "http://character.png", videoUrl: "http://motion.mp4" })
     mockMotionTransferApi.mockResolvedValue({ jobId: "j1" })
     mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
     await executeNode(
