@@ -16,7 +16,7 @@
       "position": { "x": 500, "y": 0 },
       "data": {
         "label": "MiniMax (18cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "minimax",
         "model": "",
         "duration": 5,
@@ -31,7 +31,7 @@
       "position": { "x": 500, "y": 200 },
       "data": {
         "label": "VEO 3 (79cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "veo3",
         "model": "",
         "duration": 8,
@@ -46,7 +46,7 @@
       "position": { "x": 500, "y": 600 },
       "data": {
         "label": "Kling 5s (18cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "kling",
         "model": "",
         "duration": 5,
@@ -61,7 +61,7 @@
       "position": { "x": 500, "y": 800 },
       "data": {
         "label": "Kling 10s (18cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "kling",
         "model": "",
         "duration": 10,
@@ -76,7 +76,7 @@
       "position": { "x": 500, "y": 1000 },
       "data": {
         "label": "Kling Turbo 5s (14cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "kling-turbo",
         "model": "",
         "duration": 5,
@@ -91,7 +91,7 @@
       "position": { "x": 500, "y": 1200 },
       "data": {
         "label": "Kling 3.0 5s no audio (43cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "kling-3.0",
         "model": "",
         "duration": 5,
@@ -107,7 +107,7 @@
       "position": { "x": 500, "y": 1400 },
       "data": {
         "label": "Kling 3.0 5s +audio (63cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "kling-3.0",
         "model": "",
         "duration": 5,
@@ -123,7 +123,7 @@
       "position": { "x": 500, "y": 1600 },
       "data": {
         "label": "Kling 3.0 10s no audio (86cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "kling-3.0",
         "model": "",
         "duration": 10,
@@ -139,7 +139,7 @@
       "position": { "x": 500, "y": 1800 },
       "data": {
         "label": "Kling 3.0 10s +audio (126cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "kling-3.0",
         "model": "",
         "duration": 10,
@@ -155,7 +155,7 @@
       "position": { "x": 500, "y": 2000 },
       "data": {
         "label": "Kling 3.0 15s no audio (128cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "kling-3.0",
         "model": "",
         "duration": 15,
@@ -171,7 +171,7 @@
       "position": { "x": 500, "y": 2200 },
       "data": {
         "label": "Kling 3.0 15s +audio (189cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "kling-3.0",
         "model": "",
         "duration": 15,
@@ -187,7 +187,7 @@
       "position": { "x": 1000, "y": 0 },
       "data": {
         "label": "Grok 6s (7cr via grok-i2v)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "grok",
         "model": "",
         "duration": 6,
@@ -202,7 +202,7 @@
       "position": { "x": 1000, "y": 200 },
       "data": {
         "label": "Sora 2 Pro (47cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "sora2-pro",
         "model": "",
         "duration": 10,
@@ -217,7 +217,7 @@
       "position": { "x": 1000, "y": 400 },
       "data": {
         "label": "Sora 2 Pro +removeWM (47+4cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "sora2-pro",
         "model": "",
         "duration": 10,
@@ -233,7 +233,7 @@
       "position": { "x": 1000, "y": 600 },
       "data": {
         "label": "Seedance 4s (32cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "seedance",
         "model": "",
         "duration": 4,
@@ -248,7 +248,7 @@
       "position": { "x": 1000, "y": 800 },
       "data": {
         "label": "Seedance 12s (32cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "seedance",
         "model": "",
         "duration": 12,
@@ -263,7 +263,7 @@
       "position": { "x": 1000, "y": 1000 },
       "data": {
         "label": "Wan 2.6 T2V 5s (33cr via wan-t2v)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "wan",
         "model": "",
         "duration": 5,
@@ -278,7 +278,7 @@
       "position": { "x": 1000, "y": 1200 },
       "data": {
         "label": "Wan Turbo T2V (25cr via wan-turbo-t2v)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "wan-turbo",
         "model": "",
         "duration": 5,
@@ -293,7 +293,7 @@
       "position": { "x": 1000, "y": 1400 },
       "data": {
         "label": "Sora 2 (10cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "sora2",
         "model": "",
         "duration": 10,
@@ -308,7 +308,7 @@
       "position": { "x": 1000, "y": 1600 },
       "data": {
         "label": "Sora 2 +removeWM (10+4cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "sora2",
         "model": "",
         "duration": 10,
@@ -324,7 +324,7 @@
       "position": { "x": 1000, "y": 1800 },
       "data": {
         "label": "MiniMax Standard 6s (10cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "hailuo-standard",
         "model": "",
         "duration": 6,
@@ -339,7 +339,7 @@
       "position": { "x": 1500, "y": 0 },
       "data": {
         "label": "Bytedance Lite 5s (16cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "bytedance-lite",
         "model": "",
         "duration": 5,
@@ -354,7 +354,7 @@
       "position": { "x": 1500, "y": 200 },
       "data": {
         "label": "Bytedance Pro 5s (22cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "bytedance-pro",
         "model": "",
         "duration": 5,
@@ -369,7 +369,7 @@
       "position": { "x": 1500, "y": 400 },
       "data": {
         "label": "Runway KIE 5s (4cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "runway-kie",
         "model": "",
         "duration": 5,
@@ -384,7 +384,7 @@
       "position": { "x": 1500, "y": 600 },
       "data": {
         "label": "MiniMax 9:16 portrait (18cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "minimax",
         "model": "",
         "duration": 5,
@@ -399,7 +399,7 @@
       "position": { "x": 1500, "y": 800 },
       "data": {
         "label": "Kling 1:1 square (18cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "kling",
         "model": "",
         "duration": 5,
@@ -414,7 +414,7 @@
       "position": { "x": 1500, "y": 1000 },
       "data": {
         "label": "Kling Turbo 10s (14cr)",
-        "prompt": "A golden retriever running through a sunlit meadow in slow motion, cinematic lighting",
+        "prompt": "",
         "provider": "kling-turbo",
         "model": "",
         "duration": 10,
