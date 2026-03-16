@@ -39,6 +39,8 @@ export interface NodeOutput {
     sourceNodeId: string
     sourceNodeLabel: string
   }>
+  /** Adjust-volume: tracks whether last input was audio or video for correct output routing */
+  _lastInputType?: "audio" | "video"
 }
 
 export type NodeExecutionStatus =

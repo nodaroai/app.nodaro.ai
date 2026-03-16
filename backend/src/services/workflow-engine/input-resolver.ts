@@ -383,11 +383,13 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "ai-writer",
   "combine-text",
   "split-text",
-  "preview",
   "suno-style-boost",
   "generate-script",
   "forced-alignment",
 ])
+
+// Preview routes by actual media type, not always to text (handled in routeOutput)
+// Social-media-format may produce images (handled in routeOutput)
 
 const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "location"])
 
@@ -509,6 +511,32 @@ function routeOutput(
       // "each" mode — output first item; fan-out handled separately
       inputs.prompt = output
     }
+    return
+  }
+
+  // --- Preview node: route by actual item type (matches frontend) ---
+  if (srcType === "preview") {
+    const state = nodeStates[src.id]
+    const previewItems = state?.output?.previewItems
+    if (previewItems && previewItems.length > 0) {
+      const first = previewItems.find((item) => item.value)
+      if (first) {
+        if (first.type === "image") {
+          inputs.imageUrl = output
+          return
+        }
+        if (first.type === "video") {
+          routeVideoOutput(inputs, output, targetType, src.id)
+          return
+        }
+        if (first.type === "audio") {
+          routeAudioOutput(inputs, output, targetType, src.id)
+          return
+        }
+      }
+    }
+    // Fallback: treat as prompt (default behavior)
+    inputs.prompt = output
     return
   }
 

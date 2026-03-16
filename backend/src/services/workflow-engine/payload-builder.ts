@@ -12,8 +12,9 @@ import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotio
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 import type { CharacterDef } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
-import { COMPOSER_PLAN_MAP } from "../../../../packages/shared/src/model-constants.js"
-import { extractSavedNodeOutput, extractSourceNodeOutput } from "./output-extractor.js"
+import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-constants.js"
+import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
+import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
 
 // ---------------------------------------------------------------------------
 // Character definitions + prompt template types (from workflow settings)
@@ -31,6 +32,8 @@ export interface CharacterDefinition {
 export interface WorkflowSettings {
   characterDefinitions?: CharacterDefinition[]
   flowPromptTemplates?: Record<string, string>
+  /** User-level prompt templates from profiles.prompt_templates */
+  userPromptTemplates?: Record<string, string>
 }
 
 /** Context passed to buildPayload for nodes that need workflow-level data. */
@@ -377,14 +380,13 @@ export function buildPayload(
         || ""
 
       // Use shared prompt builder (single source of truth with frontend)
-      // TODO: Pass userTemplates from user profile (prompt_templates) once available in PayloadBuildContext
       const result = buildImagePrompt({
         prompt: rawPrompt,
         provider,
         style: typeof data.style === "string" ? data.style : undefined,
         negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
         characterDefs: charDefs as CharacterDef[],
-        userTemplates: undefined,
+        userTemplates: settings?.userPromptTemplates,
         flowTemplates: settings?.flowPromptTemplates,
         referenceImageUrls: directRefs,
         ancestorRefs,
@@ -418,7 +420,7 @@ export function buildPayload(
     }
 
     case "edit-image": {
-      const provider = (data.provider as string) ?? "recraft-remove-bg"
+      const provider = (data.provider as string) ?? "recraft-upscale"
 
       // Apply connectedMediaOrder to determine main image vs references
       let mainImageUrl = resolvedInputs.imageUrl || data.imageUrl
@@ -483,7 +485,7 @@ export function buildPayload(
     }
 
     case "image-to-image": {
-      const provider = (data.provider as string) ?? "flux-i2i"
+      const provider = (data.provider as string) ?? "nano-banana"
       const settings = buildCtx?.settings
 
       // Apply connectedMediaOrder to determine main image vs references
@@ -528,14 +530,13 @@ export function buildPayload(
         || ""
 
       // Build prompt with style + character descriptions (same as generate-image)
-      // TODO: Pass userTemplates from user profile (prompt_templates) once available in PayloadBuildContext
       const i2iResult = buildImagePrompt({
         prompt: rawPrompt,
         provider,
         style: typeof data.style === "string" ? data.style : undefined,
         negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
         characterDefs: charDefs as CharacterDef[],
-        userTemplates: undefined,
+        userTemplates: settings?.userPromptTemplates,
         flowTemplates: settings?.flowPromptTemplates,
         referenceImageUrls: directRefs,
         ancestorRefs: [],
@@ -840,16 +841,21 @@ export function buildPayload(
       }
     }
 
-    case "text-to-audio":
+    case "text-to-audio": {
+      const t2aProvider = (data.provider as string) ?? "elevenlabs-sfx"
       return simpleResult("text-to-audio", "elevenlabs-sfx", {
         jobId,
         prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.text as string | undefined, refMap),
-        provider: data.provider,
+        provider: t2aProvider,
         duration: data.duration,
-        loop: data.loop,
-        promptInfluence: data.promptInfluence,
+        // Only send SFX-specific options for elevenlabs-sfx (matches frontend)
+        ...(t2aProvider === "elevenlabs-sfx" ? {
+          loop: data.loop,
+          promptInfluence: data.promptInfluence,
+        } : {}),
         usageLogId,
       })
+    }
 
     case "audio-isolation":
       return simpleResult("audio-isolation", "elevenlabs-isolation", {
@@ -952,7 +958,7 @@ export function buildPayload(
         prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
         uploadUrl: resolvedInputs.uploadUrl || resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl,
         model: data.model,
-        lyrics: data.lyrics,
+        lyrics: resolveRefs(data.lyrics as string | undefined, refMap),
         style: data.style,
         title: data.title,
         negativeStyle: data.negativeStyle,
@@ -1015,7 +1021,7 @@ export function buildPayload(
           resolvedInputs.audioUrl2,
         ].filter(Boolean),
         model: data.model,
-        customMode: data.customMode,
+        customMode: data.customMode ?? false,
         style: data.style,
         title: data.title,
         negativeStyle: data.negativeStyle,
@@ -1028,8 +1034,8 @@ export function buildPayload(
         jobId,
         taskId: resolvedInputs.sunoTaskId || data.sunoTaskId || data.taskId,
         audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
-        infillStartS: data.infillStartS,
-        infillEndS: data.infillEndS,
+        infillStartS: data.infillStartS ?? 0,
+        infillEndS: data.infillEndS ?? 30,
         prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
         tags: data.tags,
         title: data.title,
@@ -1066,9 +1072,10 @@ export function buildPayload(
       return simpleResult("suno-upload-extend", "suno-upload-extend", {
         jobId,
         uploadUrl: resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl,
-        continueAt: data.continueAt ?? 0,
+        prompt: resolveRefs(data.prompt as string | undefined, refMap),
+        continueAt: data.continueAt,
         defaultParamFlag: data.defaultParamFlag ?? true,
-        model: data.model || "V5",
+        model: data.model,
         style: resolvedInputs.prompt || data.style,
         title: data.title,
         negativeStyle: data.negativeStyle,
@@ -1079,13 +1086,30 @@ export function buildPayload(
     // --- Transcription / OCR ---
     case "transcribe": {
       const provider = (data.provider as string) ?? "elevenlabs-stt"
+      let transcribeAudioUrl = resolvedInputs.audioUrl || resolvedInputs.videoUrl || data.audioUrl
+
+      // If the audio source is a youtube-video node, prefer its downloadedAudioUrl
+      // (matches frontend logic that calls downloadYouTubeAudio before transcribing)
+      if (buildCtx?.edges && buildCtx?.nodes && buildCtx?.nodeStates) {
+        const transcribeInEdges = buildCtx.edges.filter((e) => e.target === node.id)
+        for (const edge of transcribeInEdges) {
+          const srcNode = buildCtx.nodes.find((n) => n.id === edge.source)
+          if (!srcNode || srcNode.type !== "youtube-video") continue
+          const ytAudio = (srcNode.data.downloadedAudioUrl as string | undefined)?.trim()
+          if (ytAudio) {
+            transcribeAudioUrl = ytAudio
+            break
+          }
+        }
+      }
+
       return {
         jobName: "transcribe",
         queueName: "video-generation",
         modelIdentifier: provider,
         payload: {
           jobId,
-          audioUrl: resolvedInputs.audioUrl || resolvedInputs.videoUrl || data.audioUrl,
+          audioUrl: transcribeAudioUrl,
           provider,
           language: data.language,
           diarize: data.diarize,
@@ -1366,6 +1390,19 @@ export function buildPayload(
             break
           }
         }
+
+        // Auto-composition fallback: if no plan found, collect media assets and
+        // build a simple scene graph (matches frontend buildAutoComposition)
+        if (!resolvedPlan && !resolvedSceneGraph) {
+          const assets = collectMediaAssetsForRender(node, buildCtx.edges, buildCtx.nodes, buildCtx.nodeStates)
+          if (assets.length > 0) {
+            const renderFps = (data.fps as number) ?? 30
+            const renderDuration = (data.durationSeconds as number) ?? 10
+            const renderAspect = (data.aspectRatio as string) ?? "16:9"
+            const renderBg = (data.backgroundColor as string) ?? "#000000"
+            resolvedSceneGraph = buildAutoCompositionForRender(assets, renderFps, renderDuration, renderAspect, renderBg)
+          }
+        }
       }
 
       return {
@@ -1385,5 +1422,113 @@ export function buildPayload(
 
     default:
       throw new Error(`[payload-builder] Unknown node type: ${type}`)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auto-composition helpers for render-video fallback (matches frontend)
+// ---------------------------------------------------------------------------
+
+/** Collect image/video/audio assets from upstream nodes (matches frontend collectMediaAssets). */
+function collectMediaAssetsForRender(
+  node: SimpleNode,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): Array<{ id: string; type: "image" | "video" | "audio"; url: string }> {
+  const assets: Array<{ id: string; type: "image" | "video" | "audio"; url: string }> = []
+  const seen = new Set<string>()
+  const incomingEdges = edges.filter((e) => e.target === node.id)
+
+  for (const edge of incomingEdges) {
+    const srcNode = allNodes.find((n) => n.id === edge.source)
+    if (!srcNode) continue
+    const srcType = srcNode.type
+    // Skip plan nodes — they're handled by the plan resolution path
+    if (COMPOSER_PLAN_MAP[srcType]) continue
+
+    let output: string | undefined
+    const state = nodeStates[srcNode.id]
+    if (state?.output) {
+      output = getPrimaryOutput(state.output, srcType, edge.sourceHandle)
+    } else if (isSourceNode(srcType)) {
+      const srcOutput = extractSourceNodeOutput(srcNode)
+      if (srcOutput) output = getPrimaryOutput(srcOutput, srcType, edge.sourceHandle)
+    }
+    if (!output || output === "plan-ready" || seen.has(srcNode.id)) continue
+    seen.add(srcNode.id)
+
+    let assetType: "image" | "video" | "audio" | undefined
+    if (IMAGE_SOURCE_TYPES.has(srcType)) assetType = "image"
+    else if (VIDEO_SOURCE_TYPES.has(srcType)) assetType = "video"
+    else if (AUDIO_SOURCE_TYPES.has(srcType)) assetType = "audio"
+
+    if (assetType) {
+      assets.push({ id: srcNode.id, type: assetType, url: output })
+    }
+  }
+
+  return assets
+}
+
+/** Build a simple scene graph from media assets (matches frontend buildAutoComposition). */
+function buildAutoCompositionForRender(
+  assets: Array<{ id: string; type: "image" | "video" | "audio"; url: string }>,
+  fps: number,
+  totalDuration: number,
+  aspectRatio: string,
+  backgroundColor: string,
+): Record<string, unknown> {
+  const visualAssets = assets.filter((a) => a.type !== "audio")
+  const audioAssets = assets.filter((a) => a.type === "audio")
+
+  const perAssetDuration = visualAssets.length > 0 ? totalDuration / visualAssets.length : totalDuration
+  const perAssetFrames = Math.round(perAssetDuration * fps)
+  const transitionFrames = 15
+  const lastIndex = Math.max(visualAssets.length - 1, 0)
+
+  const tracks: unknown[] = []
+
+  if (visualAssets.length > 0) {
+    const mediaSegments = visualAssets.map((asset, i) => ({
+      id: `seg_${i}`,
+      src: asset.url,
+      mediaType: asset.type as "image" | "video",
+      startFrame: i * perAssetFrames,
+      durationInFrames: perAssetFrames,
+      layout: { mode: "fullscreen" as const },
+      transitionIn: i > 0 ? { type: "fade", durationFrames: transitionFrames } : undefined,
+      transitionOut: i < lastIndex ? { type: "fade", durationFrames: transitionFrames } : undefined,
+      effects: asset.type === "image" ? [{ type: "ken-burns", startValue: 1.0, endValue: 1.1 }] : [],
+    }))
+    tracks.push({
+      id: "track_media",
+      type: "media",
+      zIndex: 0,
+      segments: mediaSegments,
+    })
+  }
+
+  for (let i = 0; i < audioAssets.length; i++) {
+    tracks.push({
+      id: `track_audio_${i}`,
+      type: "audio",
+      src: audioAssets[i].url,
+      volume: 1,
+      fadeInFrames: 0,
+      fadeOutFrames: 0,
+      startFrame: 0,
+    })
+  }
+
+  const dimensions = ASPECT_RATIO_DIMENSIONS[aspectRatio] ?? ASPECT_RATIO_DIMENSIONS["16:9"]
+
+  return {
+    fps,
+    width: dimensions.width,
+    height: dimensions.height,
+    durationInFrames: Math.round(totalDuration * fps),
+    backgroundColor,
+    tracks,
   }
 }
