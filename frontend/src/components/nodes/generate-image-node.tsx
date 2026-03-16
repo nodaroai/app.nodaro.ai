@@ -207,6 +207,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
             </div>
             <button
               type="button"
+              aria-label="Expand preview"
               className="absolute bottom-2 left-2 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
               title="Fullscreen"
@@ -216,6 +217,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
             <div className="absolute bottom-2 left-11 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 type="button"
+                aria-label="Settings"
                 className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => { e.stopPropagation(); selectNode(id) }}
                 title="Settings"
@@ -225,6 +227,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
             </div>
             <button
               type="button"
+              aria-label="Download"
               className="absolute bottom-2 left-20 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={(e) => {
                 e.stopPropagation()

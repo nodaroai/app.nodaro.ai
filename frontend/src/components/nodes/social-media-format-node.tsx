@@ -107,6 +107,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
               <>
                 <button
                   type="button"
+                  aria-label="Expand preview"
                   className="absolute bottom-8 left-2 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
                   onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
                   title="Fullscreen"
