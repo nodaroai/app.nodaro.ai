@@ -2351,7 +2351,7 @@ describe("suno-mashup", () => {
       "generatedAudioUrl",
       "Suno Mashup",
       expect.anything(),
-      undefined,
+      expect.any(Function),
     )
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
@@ -2403,7 +2403,7 @@ describe("suno-replace-section", () => {
       "generatedAudioUrl",
       "Suno Replace Section",
       expect.anything(),
-      undefined,
+      expect.any(Function),
     )
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
@@ -2486,7 +2486,7 @@ describe("suno-add-instrumental", () => {
       "generatedAudioUrl",
       "Suno Add Instrumental",
       expect.anything(),
-      undefined,
+      expect.any(Function),
     )
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
@@ -2528,7 +2528,7 @@ describe("suno-add-vocals", () => {
       "generatedAudioUrl",
       "Suno Add Vocals",
       expect.anything(),
-      undefined,
+      expect.any(Function),
     )
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
@@ -2570,7 +2570,7 @@ describe("suno-convert-wav", () => {
       "generatedAudioUrl",
       "Suno Convert WAV",
       expect.anything(),
-      undefined,
+      expect.any(Function),
     )
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
@@ -2618,7 +2618,7 @@ describe("suno-upload-extend", () => {
       "generatedAudioUrl",
       "Suno Upload Extend",
       expect.anything(),
-      undefined,
+      expect.any(Function),
     )
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()

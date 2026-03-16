@@ -115,9 +115,13 @@ export interface ResolvedInputs {
   imageUrl?: string
   videoUrl?: string
   videoUrls?: string[]
+  /** Video URLs with source node IDs for ordering (combine-videos) */
+  videoUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>
   audioUrl?: string
   audioUrl2?: string
   audioUrls?: string[]
+  /** Audio URLs with source node IDs for ordering (mix-audio) */
+  audioUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>
   audioSources?: Array<{
     url: string
     sourceNodeId: string

@@ -235,6 +235,7 @@ function routeAudioOutput(
 ): void {
   if (targetType === "mix-audio") {
     inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
+    inputs.audioUrlsWithSourceIds = [...(inputs.audioUrlsWithSourceIds ?? []), { nodeId: sourceNodeId, url: output }]
   } else if (targetType === "merge-video-audio") {
     inputs.audioSources = [
       ...(inputs.audioSources ?? []),
@@ -261,6 +262,7 @@ function routeVideoOutput(
 ): void {
   if (targetType === "combine-videos") {
     inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
+    inputs.videoUrlsWithSourceIds = [...(inputs.videoUrlsWithSourceIds ?? []), { nodeId: sourceNodeId, url: output }]
   } else if (targetType === "merge-video-audio") {
     if (!inputs.videoUrl) {
       inputs.videoUrl = output
@@ -291,6 +293,8 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "split-text",
   "preview",
   "suno-style-boost",
+  "generate-script",
+  "forced-alignment",
 ])
 
 const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "location"])
@@ -317,6 +321,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "loop-video",
   "fade-video",
   "transcode-video",
+  "manual-edit",
 ])
 
 const AUDIO_OUTPUT_NODE_TYPES = new Set([
@@ -630,18 +635,14 @@ function routeOutput(
       }
     } else {
       // Legacy fallback
-      if (output && !/^\d{4}-\d{2}-\d{2}T/.test(output)) {
-        inputs.prompt = output
-      }
+      inputs.prompt = output
     }
     return
   }
 
   // --- Schedule trigger ---
   if (srcType === "schedule-trigger") {
-    if (output && !/^\d{4}-\d{2}-\d{2}T/.test(output)) {
-      inputs.prompt = output
-    }
+    inputs.prompt = output
     return
   }
 

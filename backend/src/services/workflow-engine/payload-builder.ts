@@ -835,7 +835,7 @@ export function buildPayload(
     case "text-to-audio":
       return simpleResult("text-to-audio", "elevenlabs-sfx", {
         jobId,
-        text: resolvedInputs.prompt || resolveRefs(data.text as string | undefined, refMap) || resolveRefs(data.prompt as string | undefined, refMap),
+        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.text as string | undefined, refMap),
         provider: data.provider,
         duration: data.duration,
         loop: data.loop,
@@ -853,7 +853,7 @@ export function buildPayload(
     case "text-to-dialogue":
       return simpleResult("text-to-dialogue", "elevenlabs-dialogue", {
         jobId,
-        script: data.script ?? data.dialogue,
+        dialogue: data.dialogue ?? data.script,
         stability: data.stability,
         languageCode: data.languageCode,
         usageLogId,
@@ -1055,7 +1055,7 @@ export function buildPayload(
         jobId,
         uploadUrl: resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl,
         continueAt: data.continueAt ?? 0,
-        defaultParamFlag: data.defaultParamFlag ?? false,
+        defaultParamFlag: data.defaultParamFlag ?? true,
         model: data.model,
         style: data.style,
         title: data.title,
@@ -1084,34 +1084,57 @@ export function buildPayload(
     }
 
     // --- FFmpeg processing (0 credits) ---
-    case "combine-videos":
+    case "combine-videos": {
+      let combineVideoUrls = resolvedInputs.videoUrls || data.videoUrls || []
+      // Apply user-configured clip ordering if available (matches frontend logic)
+      const clipOrder = data.clipOrder as string[] | undefined
+      if (clipOrder?.length && resolvedInputs.videoUrlsWithSourceIds?.length) {
+        const ordered: string[] = []
+        for (const nodeId of clipOrder) {
+          const entry = resolvedInputs.videoUrlsWithSourceIds.find((e) => e.nodeId === nodeId)
+          if (entry) ordered.push(entry.url)
+        }
+        if (ordered.length >= 2) combineVideoUrls = ordered
+      }
       return ffmpegResult("combine-videos", {
         jobId,
-        videoUrls: resolvedInputs.videoUrls || data.videoUrls || [],
+        videoUrls: combineVideoUrls,
         transition: data.transition ?? "cut",
         transitionDuration: data.transitionDuration ?? 0.5,
         audioMode: data.audioMode ?? "crossfade",
         usageLogId,
       })
+    }
 
     case "merge-video-audio": {
-      // Apply per-track settings from node data (matches frontend logic)
+      // Build audioTracks from resolved audioSources (matches frontend mergeVideoAudioApi shape)
       const trackSettings = (data.trackSettings as Record<string, Record<string, unknown>> | undefined) ?? {}
-      const enrichedAudioSources = (resolvedInputs.audioSources ?? []).map((s) => {
+      const voiceoverVol = (data.voiceoverVolume as number | undefined) ?? 100
+      const audioTracks = (resolvedInputs.audioSources ?? []).map((s) => {
         const settings = trackSettings[s.sourceNodeId]
         return {
-          ...s,
-          volume: settings?.volume ?? 1,
-          startTime: settings?.startTime ?? 0,
+          url: s.url,
+          startTime: (settings?.startTime as number | undefined) ?? 0,
+          volume: (settings?.volume as number | undefined) ?? voiceoverVol,
           sourceType: s.sourceType ?? (settings?.sourceType as "audio" | "video" | undefined),
         }
       })
+      // If only a single audioUrl was resolved (no audioSources), add it as a track
+      if (audioTracks.length === 0 && resolvedInputs.audioUrl) {
+        audioTracks.push({
+          url: resolvedInputs.audioUrl,
+          startTime: 0,
+          volume: voiceoverVol,
+          sourceType: "audio" as const,
+        })
+      }
       return ffmpegResult("merge-video-audio", {
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        audioUrl: resolvedInputs.audioUrl,
-        audioSources: enrichedAudioSources.length > 0 ? enrichedAudioSources : undefined,
-        audioMode: data.audioMode ?? "replace",
+        audioTracks,
+        voiceoverVolume: voiceoverVol,
+        backgroundVolume: (data.backgroundVolume as number | undefined) ?? 30,
+        keepOriginalAudio: data.keepOriginalAudio ?? true,
         usageLogId,
       })
     }
@@ -1140,9 +1163,9 @@ export function buildPayload(
       return ffmpegResult("resize-video", {
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        width: data.width,
-        height: data.height,
-        aspectRatio: data.aspectRatio,
+        targetAspect: data.targetAspect ?? data.aspectRatio,
+        method: data.method ?? "fit",
+        padColor: data.padColor,
         usageLogId,
       })
 
@@ -1219,21 +1242,40 @@ export function buildPayload(
         usageLogId,
       })
 
-    case "mix-audio":
+    case "mix-audio": {
+      let mixAudioUrls = resolvedInputs.audioUrls || data.audioUrls || []
+      // Apply user-configured track ordering if available (matches frontend logic)
+      const trackOrder = data.trackOrder as string[] | undefined
+      if (trackOrder?.length && resolvedInputs.audioUrlsWithSourceIds?.length) {
+        const ordered: string[] = []
+        for (const nodeId of trackOrder) {
+          const entry = resolvedInputs.audioUrlsWithSourceIds.find((e) => e.nodeId === nodeId)
+          if (entry) ordered.push(entry.url)
+        }
+        if (ordered.length >= 2) mixAudioUrls = ordered
+      }
       return ffmpegResult("mix-audio", {
         jobId,
-        audioUrls: resolvedInputs.audioUrls || data.audioUrls || [],
+        audioUrls: mixAudioUrls,
         volumes: data.volumes,
         usageLogId,
       })
+    }
 
-    case "adjust-volume":
+    case "adjust-volume": {
+      const avInputUrl = resolvedInputs.audioUrl || resolvedInputs.videoUrl || data.audioUrl || data.videoUrl
+      const avVideoUrl = resolvedInputs.videoUrl || data.videoUrl
       return ffmpegResult("adjust-volume", {
         jobId,
-        audioUrl: resolvedInputs.audioUrl || resolvedInputs.videoUrl || data.audioUrl,
+        audioUrl: avInputUrl,
+        videoUrl: avVideoUrl,
         volume: data.volume,
+        normalize: data.normalize,
+        fadeIn: data.fadeIn,
+        fadeOut: data.fadeOut,
         usageLogId,
       })
+    }
 
     // --- Entity generation (character, face, object, location share identical structure) ---
     case "character":
