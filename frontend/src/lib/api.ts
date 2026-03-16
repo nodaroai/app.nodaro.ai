@@ -3913,39 +3913,27 @@ export async function getAppAnalyticsRuns(appId: string, cursor?: string): Promi
 
 // ---------- QA Check ----------
 
-export async function qaCheckApi(params: {
+export function qaCheckApi(params: {
   content: string
   checkType?: "content" | "quality" | "consistency" | "safety"
   provider?: "claude" | "gpt"
   threshold?: number
 }): Promise<{ jobId: string; score: number; approved: boolean; reason: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/qa-check`, {
+  return apiRequest("/v1/qa-check", "QA check failed", {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(params)),
+    body: withWorkflowId(params),
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "QA check failed")
-  }
-  return res.json()
 }
 
 // ---------- Save to Storage ----------
 
-export async function saveToStorageApi(params: {
+export function saveToStorageApi(params: {
   mediaUrl: string
   filename?: string
   mediaType?: "image" | "video" | "audio"
 }): Promise<{ jobId: string; url: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/save-to-storage`, {
+  return apiRequest("/v1/save-to-storage", "Failed to save to storage", {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(params)),
+    body: withWorkflowId(params),
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to save to storage")
-  }
-  return res.json()
 }

@@ -177,7 +177,7 @@ You MUST respond with ONLY a valid JSON object in this exact format, no other te
             await CreditsService.commitCredits(usageLogId)
           }
         } catch (postErr) {
-          console.error("[qa-check] Post-API error:", postErr)
+          req.log.error(postErr, "[qa-check] Post-API error")
         }
 
         return reply.send({ jobId: job.id, score, approved, reason })
