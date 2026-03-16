@@ -47,6 +47,10 @@ vi.mock("@/lib/supabase.js", () => ({
   },
 }))
 
+vi.mock("@/lib/app-settings.js", () => ({
+  getAppSettings: vi.fn().mockResolvedValue({ ai_provider: "kie", cost_markup_percent: 0 }),
+}))
+
 vi.mock("@/lib/config.js", () => ({
   config: { EDITION: "cloud" },
   hasCredits: () => mockHasCreditsRef.value,
