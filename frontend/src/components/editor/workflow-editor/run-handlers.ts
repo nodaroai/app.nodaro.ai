@@ -704,6 +704,19 @@ function syncNodeStatesToStore(
           updates.generatedAlignment = state.output.alignment;
         if (state.output.combinedText)
           updates.generatedText = state.output.combinedText;
+        // Sync text output for text-producing nodes (image-to-text, transcribe)
+        if (state.output.text && !state.output.combinedText) {
+          updates.generatedText = state.output.text;
+          const prevTextResults = (data.generatedResults ?? []) as Array<{ text?: string; jobId?: string }>;
+          const alreadyHas = prevTextResults.some((r) => r.text === state.output!.text);
+          if (!alreadyHas) {
+            updates.generatedResults = [
+              { text: state.output.text, jobId: `exec-${node.id}`, timestamp: new Date().toISOString() },
+              ...prevTextResults,
+            ];
+            updates.activeResultIndex = 0;
+          }
+        }
         if (state.output.splitResults)
           updates.generatedSplitResults = state.output.splitResults;
         // Sync fan-out list results so frontend resolveNodeInputs can use item:N
