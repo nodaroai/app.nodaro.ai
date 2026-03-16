@@ -198,6 +198,7 @@ export const VIDEO_SOURCE_TYPES = new Set([
   "loop-video",
   "fade-video",
   "transcode-video",
+  "manual-edit",
 ])
 
 export const AUDIO_SOURCE_TYPES = new Set([

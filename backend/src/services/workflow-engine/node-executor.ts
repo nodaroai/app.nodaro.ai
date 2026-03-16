@@ -268,8 +268,10 @@ function buildSyncHttpBody(
   switch (node.type) {
     case "ai-writer":
       return {
+        // data.systemPrompt is the primary field (matches frontend), data.template is legacy fallback
         systemPrompt: data.systemPrompt || data.template,
-        userInput: resolvedInputs.prompt || data.prompt || data.userInput,
+        // data.userInput is the primary field (matches frontend), data.prompt is legacy fallback
+        userInput: resolvedInputs.prompt || data.userInput || data.prompt,
         userId: ctx.userId,
         model: data.model,
         temperature: data.temperature,

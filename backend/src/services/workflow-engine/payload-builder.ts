@@ -311,12 +311,19 @@ export function buildPayload(
       if (nodeRefUrl && refUrlMap.size === 0) {
         refUrlMap.set("__legacy__", nodeRefUrl)
       }
-      // Wired upstream images
+      // Wired upstream images — use source node IDs as keys (matching frontend)
       const chainRefs = resolvedInputs.referenceImageUrls
         ?? (resolvedInputs.imageUrl ? [resolvedInputs.imageUrl] : undefined)
       if (chainRefs) {
+        const imageSourceTypes = new Set(["upload-image", "generate-image", "edit-image", "image-to-image"])
+        const wiredSourceIds = (buildCtx?.edges ?? [])
+          .filter((e) => e.target === node.id)
+          .map((e) => (buildCtx?.nodes ?? []).find((n) => n.id === e.source))
+          .filter((n): n is SimpleNode => !!n && imageSourceTypes.has(n.type))
+          .map((n) => n.id)
         for (let i = 0; i < chainRefs.length; i++) {
-          refUrlMap.set(`wired_${i}`, chainRefs[i])
+          const key = wiredSourceIds[i] ?? `wired_${i}`
+          refUrlMap.set(key, chainRefs[i])
         }
       }
       const extractedRefs = data.extractedReferenceUrls as string[] | undefined
@@ -361,12 +368,14 @@ export function buildPayload(
         || ""
 
       // Use shared prompt builder (single source of truth with frontend)
+      // TODO: Pass userTemplates from user profile (prompt_templates) once available in PayloadBuildContext
       const result = buildImagePrompt({
         prompt: rawPrompt,
         provider,
         style: typeof data.style === "string" ? data.style : undefined,
         negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
         characterDefs: charDefs as CharacterDef[],
+        userTemplates: undefined,
         flowTemplates: settings?.flowPromptTemplates,
         referenceImageUrls: directRefs,
         ancestorRefs,
@@ -511,12 +520,14 @@ export function buildPayload(
         || ""
 
       // Build prompt with style + character descriptions (same as generate-image)
+      // TODO: Pass userTemplates from user profile (prompt_templates) once available in PayloadBuildContext
       const i2iResult = buildImagePrompt({
         prompt: rawPrompt,
         provider,
         style: typeof data.style === "string" ? data.style : undefined,
         negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
         characterDefs: charDefs as CharacterDef[],
+        userTemplates: undefined,
         flowTemplates: settings?.flowPromptTemplates,
         referenceImageUrls: directRefs,
         ancestorRefs: [],
@@ -614,9 +625,6 @@ export function buildPayload(
           aspectRatio: data.aspectRatio,
           negativePrompt: data.negativePrompt,
           cfgScale: data.cfgScale,
-          resolution: data.resolution,
-          seed: data.seed,
-          cameraFixed: data.cameraFixed,
           multiShot: data.multiShot,
           shots: data.shots,
           elements: data.elements,
@@ -637,7 +645,6 @@ export function buildPayload(
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
           prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
           provider: v2vProvider,
-          strength: data.strength,
           usageLogId,
         },
       }
@@ -921,8 +928,6 @@ export function buildPayload(
         audioWeight: data.audioWeight,
         customMode: data.customMode ?? hasCustomFields,
         instrumental: data.instrumental ?? false,
-        isCustom: data.isCustom,
-        tags: data.tags,
         usageLogId,
       })
     }
@@ -951,7 +956,6 @@ export function buildPayload(
       return simpleResult("suno-extend", sunoExtCreditId, {
         jobId,
         audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
-        taskId: resolvedInputs.sunoTaskId || data.sunoTaskId,
         defaultParamFlag: data.defaultParamFlag ?? true,
         prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
         model: data.model,
@@ -1115,7 +1119,11 @@ export function buildPayload(
     case "trim-audio":
       return ffmpegResult("trim-audio", {
         jobId,
-        videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+        videoUrl: resolvedInputs.videoUrl || resolvedInputs.audioUrl || data.videoUrl,
+        audioFormat: data.audioFormat,
+        outputSilentVideo: data.outputSilentVideo,
+        startTime: data.startTime,
+        endTime: data.endTime,
         usageLogId,
       })
 
@@ -1161,6 +1169,7 @@ export function buildPayload(
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         speed: data.speed,
+        adjustAudio: data.adjustAudio,
         usageLogId,
       })
 
@@ -1168,7 +1177,9 @@ export function buildPayload(
       return ffmpegResult("loop-video", {
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        loops: data.loops,
+        mode: data.mode ?? "repeat",
+        repeatCount: data.repeatCount ?? data.loops,
+        targetDuration: data.targetDuration,
         usageLogId,
       })
 
@@ -1176,8 +1187,11 @@ export function buildPayload(
       return ffmpegResult("fade-video", {
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        fadeIn: data.fadeIn,
-        fadeOut: data.fadeOut,
+        fadeIn: data.fadeIn ?? true,
+        fadeInDuration: data.fadeInDuration ?? 0.5,
+        fadeOut: data.fadeOut ?? true,
+        fadeOutDuration: data.fadeOutDuration ?? 0.5,
+        color: data.color ?? "black",
         usageLogId,
       })
 
@@ -1185,8 +1199,10 @@ export function buildPayload(
       return ffmpegResult("transcode-video", {
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        format: data.format,
         codec: data.codec,
+        crf: data.crf,
+        resolution: data.resolution,
+        audioBitrate: data.audioBitrate,
         usageLogId,
       })
 
@@ -1194,9 +1210,12 @@ export function buildPayload(
       return ffmpegResult("add-captions", {
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        captions: data.captions,
+        text: resolvedInputs.prompt || resolveRefs(data.captions as string | undefined, refMap) || resolveRefs(data.text as string | undefined, refMap),
         style: data.captionStyle ?? data.style,
         position: data.captionPosition ?? data.position,
+        fontSize: data.fontSize,
+        color: data.color,
+        backgroundColor: data.backgroundColor,
         usageLogId,
       })
 
@@ -1257,10 +1276,9 @@ export function buildPayload(
       return simpleResult("generate-script", "generate-script", {
         jobId,
         prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
-        style: data.style,
         sceneCount: data.sceneCount,
-        tone: data.tone,
-        targetDuration: data.targetDuration,
+        tone: data.tone ?? data.style,
+        targetDuration: data.targetDuration ?? data.targetLength,
         provider: data.provider,
         usageLogId,
       })

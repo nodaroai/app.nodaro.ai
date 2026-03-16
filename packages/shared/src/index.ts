@@ -11,6 +11,7 @@ export {
   AUDIO_ADDON_PROVIDERS,
   VIDEO_VARIABLE_PRICING,
   VIDEO_DURATION_TIERS,
+  ASPECT_RATIO_DIMENSIONS,
 } from "./model-constants.js"
 
 export {

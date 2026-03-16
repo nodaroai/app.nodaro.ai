@@ -3,9 +3,10 @@
  * These run synchronously in the orchestrator process.
  */
 
+import { ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-constants.js"
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeOutput, NodeExecutionState } from "./types.js"
 import { getPrimaryOutput, extractSourceNodeOutput } from "./output-extractor.js"
-import { isSourceNode } from "./execution-graph.js"
+import { isSourceNode, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES } from "./execution-graph.js"
 
 /**
  * Map separator enum values to actual separator strings (matches frontend logic).
@@ -83,7 +84,9 @@ export function executeCombineText(
   }
 
   const texts = collectUpstreamTexts(node.id, edges, allNodes, nodeStates, true)
-  const combined = texts.join(separator)
+  // Trim each text part before combining (matches frontend logic)
+  const trimmedTexts = texts.map((t) => t.trim()).filter((t) => t.length > 0)
+  const combined = trimmedTexts.join(separator)
   return { text: combined, combinedText: combined }
 }
 
@@ -120,6 +123,7 @@ export function executeSplitText(
   return {
     text: splitResults[0] || "",
     splitResults,
+    listResults: splitResults,
   }
 }
 
@@ -138,10 +142,13 @@ export function executeComposite(
   nodeStates: Record<string, NodeExecutionState>,
 ): NodeOutput {
   const data = node.data
-  const layout = (data.layout as string) ?? "pip"
-  const width = (data.width as number) ?? 1920
-  const height = (data.height as number) ?? 1080
+  const layout = (data.layout as string) ?? "custom"
   const fps = (data.fps as number) ?? 30
+
+  const aspectRatio = data.aspectRatio as string | undefined
+  const dims = aspectRatio ? ASPECT_RATIO_DIMENSIONS[aspectRatio] : undefined
+  const width = dims?.width ?? (data.width as number) ?? 1920
+  const height = dims?.height ?? (data.height as number) ?? 1080
 
   // Collect incoming video URLs keyed by targetHandle (matches frontend logic)
   const incomingEdges = edges.filter((e) => e.target === node.id)
@@ -154,6 +161,8 @@ export function executeComposite(
     if (!state?.output) continue
     const url = getPrimaryOutput(state.output, srcNode.type, edge.sourceHandle)
     if (!url) continue
+    // Skip "plan-ready" sentinel values (matches frontend logic)
+    if (url === "plan-ready") continue
     const handle = edge.targetHandle ?? `video${handleVideoMap.size + 1}`
     handleVideoMap.set(handle, url)
   }
@@ -200,18 +209,26 @@ export function executeComposite(
     }
   }
 
-  // Compute durationInFrames from the longest layer (matches frontend logic)
-  let maxDurationInFrames = 0
-  for (const layer of layers) {
-    const layerDur = (layer.durationInFrames as number) ?? 0
-    const layerStart = (layer.startFrame as number) ?? 0
-    if (layerDur > 0) {
-      maxDurationInFrames = Math.max(maxDurationInFrames, layerStart + layerDur)
+  // Sort layers by zIndex (matches frontend logic)
+  layers.sort((a, b) => ((a.zIndex as number) ?? 0) - ((b.zIndex as number) ?? 0))
+
+  // Compute durationInFrames: prefer explicit durationSeconds (matches frontend logic)
+  const durationSeconds = data.durationSeconds as number | undefined
+  let maxDurationInFrames = durationSeconds ? Math.round(durationSeconds * fps) : 0
+
+  // Fallback: infer from longest layer
+  if (maxDurationInFrames === 0) {
+    for (const layer of layers) {
+      const layerDur = (layer.durationInFrames as number) ?? 0
+      const layerStart = (layer.startFrame as number) ?? 0
+      if (layerDur > 0) {
+        maxDurationInFrames = Math.max(maxDurationInFrames, layerStart + layerDur)
+      }
     }
   }
-  // Fallback: 10 seconds at configured fps
+  // Final fallback: 10 seconds at configured fps
   if (maxDurationInFrames === 0) {
-    maxDurationInFrames = (data.durationInFrames as number) ?? fps * 10
+    maxDurationInFrames = fps * 10
   }
 
   const compositePlan = {
@@ -228,8 +245,32 @@ export function executeComposite(
   return { plan: compositePlan }
 }
 
+// URL-based media type detection (matches frontend regex patterns)
+const IMAGE_URL_RE = /^https?:\/\/.*\.(png|jpe?g|gif|webp|svg|bmp)/i
+const VIDEO_URL_RE = /^https?:\/\/.*\.(mp4|mov|webm|avi|mkv)/i
+const AUDIO_URL_RE = /^https?:\/\/.*\.(mp3|wav|ogg|aac|flac|m4a)/i
+
 /**
- * Execute preview node: passthrough — collects upstream output and forwards the first value.
+ * Detect preview item type from source node type and value (matches frontend detectPreviewItemType).
+ */
+function detectPreviewItemType(
+  nodeType: string,
+  value?: string,
+): "image" | "video" | "audio" | "data" | "text" {
+  if (IMAGE_SOURCE_TYPES.has(nodeType)) return "image"
+  if (VIDEO_SOURCE_TYPES.has(nodeType)) return "video"
+  if (AUDIO_SOURCE_TYPES.has(nodeType)) return "audio"
+  if (nodeType === "forced-alignment") return "data"
+  if (value) {
+    if (IMAGE_URL_RE.test(value)) return "image"
+    if (VIDEO_URL_RE.test(value)) return "video"
+    if (AUDIO_URL_RE.test(value)) return "audio"
+  }
+  return "text"
+}
+
+/**
+ * Execute preview node: collect ALL upstream outputs with types (matches frontend rich preview).
  */
 export function executePreview(
   node: SimpleNode,
@@ -238,7 +279,12 @@ export function executePreview(
   nodeStates: Record<string, NodeExecutionState>,
 ): NodeOutput {
   const incomingEdges = edges.filter((e) => e.target === node.id)
-  let firstOutput: string | undefined
+  const previewItems: Array<{
+    type: "image" | "video" | "audio" | "data" | "text"
+    value: string
+    sourceNodeId: string
+    sourceNodeLabel: string
+  }> = []
 
   for (const edge of incomingEdges) {
     const srcNode = allNodes.find((n) => n.id === edge.source)
@@ -246,13 +292,24 @@ export function executePreview(
     const state = nodeStates[srcNode.id]
     if (!state?.output) continue
     const value = getPrimaryOutput(state.output, srcNode.type, edge.sourceHandle)
-    if (value) {
-      firstOutput = value
-      break
-    }
+    const trimmed = value?.trim()
+    if (!trimmed) continue
+
+    const srcType = srcNode.type ?? ""
+    const srcLabel = (srcNode.data.label as string) || srcType
+    const itemType = detectPreviewItemType(srcType, trimmed)
+
+    previewItems.push({
+      type: itemType,
+      value: trimmed,
+      sourceNodeId: srcNode.id,
+      sourceNodeLabel: srcLabel,
+    })
   }
 
-  return firstOutput ? { text: firstOutput } : {}
+  // Also set text to first value for backwards compatibility
+  const firstValue = previewItems.length > 0 ? previewItems[0].value : undefined
+  return { text: firstValue, previewItems }
 }
 
 /**

@@ -28,6 +28,17 @@ export interface NodeOutput {
   listResults?: string[]
   /** Sub-workflow output port values for handle-based routing in getPrimaryOutput */
   _outputResults?: Record<string, string>
+  /** Sub-workflow visible output port ID (from routeSnapshot.visibleOutputPortId) */
+  _visibleOutputPortId?: string
+  /** Sub-workflow-input injected port values for handle-based routing */
+  _injectedPortValues?: Record<string, string>
+  /** Preview node collected upstream items */
+  previewItems?: Array<{
+    type: "image" | "video" | "audio" | "data" | "text"
+    value: string
+    sourceNodeId: string
+    sourceNodeLabel: string
+  }>
 }
 
 export type NodeExecutionStatus =
