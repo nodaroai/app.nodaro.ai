@@ -398,7 +398,7 @@ function CompareItemDisplay({ item }: { item: CompareItem }) {
         {item.title}
       </span>
       {item.outputType === "image" && item.url ? (
-        <CachedImage src={item.url} alt={item.title} className="w-full rounded-lg" />
+        <CachedImage src={item.url} alt={item.title} className="w-full rounded-lg" thumbnail thumbnailWidth={480} />
       ) : item.outputType === "video" && item.url ? (
         <video src={item.url} controls className="w-full rounded-lg" />
       ) : item.outputType === "audio" && item.url ? (
