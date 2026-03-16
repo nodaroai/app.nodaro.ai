@@ -164,16 +164,15 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
 
       {connectedTextPrompts.length === 0 && (
         <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
-          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
-            Prompt
-          </Label>
-          <Textarea
-            value={data.prompt || ""}
-            onChange={(e) => onUpdate({ prompt: e.target.value })}
-            placeholder="Describe the motion or animation you want..."
-            rows={3}
-            className="text-xs bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
-          />
+          <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Textarea
+              value={data.prompt || ""}
+              onChange={(e) => onUpdate({ prompt: e.target.value })}
+              placeholder="Describe the motion or animation you want..."
+              rows={3}
+              className="text-xs bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+            />
+          </MappableField>
           <p className="text-[10px] text-muted-foreground mt-1.5">
             Tip: Connect a Text Prompt node for reusable prompts
           </p>
@@ -276,15 +275,14 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       )}
 
       {data.provider === "kling-turbo" && (
-        <div>
-          <Label className="text-xs">Negative Prompt</Label>
+        <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Textarea
             rows={2}
             value={(data as Record<string, unknown>).negativePrompt as string || ""}
             onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
             placeholder="Things to avoid..."
           />
-        </div>
+        </MappableField>
       )}
 
       {(data.provider === "kling-turbo" || data.provider === "kling-master") && (
@@ -303,15 +301,14 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       )}
 
       {data.provider === "kling-master" && (
-        <div>
-          <Label className="text-xs">Negative Prompt</Label>
+        <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Textarea
             rows={2}
             value={(data as Record<string, unknown>).negativePrompt as string || ""}
             onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
             placeholder="Things to avoid..."
           />
-        </div>
+        </MappableField>
       )}
 
       {data.provider === "grok-i2v" && (
@@ -980,7 +977,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 }
 
 
-export function SpeechToVideoConfig({ data, onUpdate }: ConfigProps<SpeechToVideoData>) {
+export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SpeechToVideoData>) {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   return (
@@ -1013,15 +1010,14 @@ export function SpeechToVideoConfig({ data, onUpdate }: ConfigProps<SpeechToVide
       </div>
 
       {/* Negative Prompt */}
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Negative Prompt</Label>
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea
           value={data.negativePrompt || ""}
           onChange={(e) => onUpdate({ negativePrompt: e.target.value || undefined })}
           placeholder="What to avoid..."
           className="min-h-[60px] text-sm"
         />
-      </div>
+      </MappableField>
 
       {/* Advanced Settings */}
       <button

@@ -45,6 +45,14 @@ export interface PayloadBuildContext {
 // Ancestor reference image collection — delegates to shared implementation
 // ---------------------------------------------------------------------------
 
+/** Get image URL from execution state, falling back to saved node data (matches frontend). */
+function getNodeImageUrl(
+  node: SimpleNode,
+  nodeStates: Record<string, NodeExecutionState>,
+): string | undefined {
+  return nodeStates[node.id]?.output?.imageUrl ?? extractSavedNodeOutput(node)?.imageUrl
+}
+
 function collectAncestorRefs(
   nodeId: string,
   nodes: SimpleNode[],
@@ -56,7 +64,7 @@ function collectAncestorRefs(
     nodeId,
     nodes,
     edges,
-    (src) => nodeStates[src.id]?.output?.imageUrl,
+    (src) => getNodeImageUrl(src, nodeStates),
     visited,
   )
 }
@@ -428,7 +436,7 @@ export function buildPayload(
           .filter((n): n is SimpleNode => !!n)
         const ordered = applyOrder(sourceNodes, connectedOrder)
         const orderedUrls = ordered
-          .map((n) => states[n.id]?.output?.imageUrl as string | undefined)
+          .map((n) => getNodeImageUrl(n, states))
           .filter((u): u is string => !!u)
         if (orderedUrls.length > 0) {
           mainImageUrl = orderedUrls[0]
@@ -436,7 +444,6 @@ export function buildPayload(
         }
       }
 
-      // Enrich prompt with character/asset descriptions for nano-banana-edit
       let editPrompt = (resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)) as string | undefined
       if (provider === "nano-banana-edit" && editPrompt) {
         const charIds = (data.characterDefinitionIds as string[]) ?? []
@@ -493,7 +500,7 @@ export function buildPayload(
           .filter((n): n is SimpleNode => !!n)
         const ordered = applyOrder(srcNodes, i2iOrder)
         const orderedUrls = ordered
-          .map((n) => states[n.id]?.output?.imageUrl as string | undefined)
+          .map((n) => getNodeImageUrl(n, states))
           .filter((u): u is string => !!u)
         if (orderedUrls.length > 0) {
           i2iMainImage = orderedUrls[0]
@@ -661,7 +668,7 @@ export function buildPayload(
           jobId,
           imageUrl: resolvedInputs.imageUrl || resolvedInputs.videoUrl || data.imageUrl || data.videoUrl,
           audioUrl: resolvedInputs.audioUrl || data.audioUrl,
-          prompt: resolvedInputs.prompt || data.prompt || "",
+          prompt: resolvedInputs.prompt || data.prompt || "A person talking naturally",
           provider,
           resolution: data.resolution,
           usageLogId,

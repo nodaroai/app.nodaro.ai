@@ -10,7 +10,7 @@ import type {
   NodeExecutionState,
   ResolvedInputs,
 } from "./types.js"
-import { extractSourceNodeOutput, extractSourceNodeOutputAsList, getPrimaryOutput } from "./output-extractor.js"
+import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
@@ -108,7 +108,68 @@ export function resolveNodeInputs(
     routeOutput(inputs, sourceNode, targetNode, output, edge, edges, allNodes, nodeStates)
   }
 
+  // --- Post-processing: selectedNodeId fallbacks (matches frontend) ---
+  // The frontend supports dropdown-selected node IDs as a fallback for finding
+  // inputs when no edge is wired. Replicate that here so backend execution
+  // produces the same results.
+  resolveSelectedNodeFallbacks(targetNode, inputs, allNodes, nodeStates, triggerData)
+
   return inputs
+}
+
+// ---------------------------------------------------------------------------
+// Selected-node-ID fallback resolution (matches frontend execute-node.ts)
+// ---------------------------------------------------------------------------
+
+/** Mapping from selectedNodeId data field → ResolvedInputs field, per node type. */
+const SELECTED_NODE_FALLBACKS: Record<string, Array<{ dataField: string; inputField: keyof ResolvedInputs; guard?: (inputs: ResolvedInputs) => boolean }>> = {
+  "image-to-video": [
+    { dataField: "selectedStartFrameNodeId", inputField: "imageUrl", guard: (i) => !i.startFrameUrl && !i.imageUrl },
+    { dataField: "selectedEndFrameNodeId", inputField: "endFrameUrl" },
+    { dataField: "selectedAudioNodeId", inputField: "audioUrl" },
+  ],
+  "lip-sync": [
+    { dataField: "selectedImageNodeId", inputField: "imageUrl" },
+    { dataField: "selectedAudioNodeId", inputField: "audioUrl" },
+  ],
+  "speech-to-video": [
+    { dataField: "selectedImageNodeId", inputField: "imageUrl" },
+    { dataField: "selectedAudioNodeId", inputField: "audioUrl" },
+  ],
+}
+
+/**
+ * For nodes with dropdown-selected source node IDs, resolve fallbacks when
+ * no edge provides the input. Matches frontend execute-node.ts behavior.
+ */
+function resolveSelectedNodeFallbacks(
+  targetNode: SimpleNode,
+  inputs: ResolvedInputs,
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+  triggerData?: Record<string, unknown>,
+): void {
+  const mappings = SELECTED_NODE_FALLBACKS[targetNode.type]
+  if (!mappings) return
+
+  for (const { dataField, inputField, guard } of mappings) {
+    // Skip if the input is already resolved (custom guard or simple truthy check)
+    if (guard ? !guard(inputs) : inputs[inputField]) continue
+    const selectedId = targetNode.data[dataField] as string | undefined
+    if (!selectedId) continue
+    const node = allNodes.find((n) => n.id === selectedId)
+    if (!node) continue
+    // Reuse getNodeOutput, with saved-data fallback for previously-executed nodes
+    const url = getNodeOutput(node, undefined, nodeStates, triggerData)
+      ?? getSavedNodeOutput(node)
+    if (url) (inputs as Record<string, unknown>)[inputField] = url
+  }
+}
+
+/** Extract primary output from a node's saved data (for non-re-executed nodes). */
+function getSavedNodeOutput(node: SimpleNode): string | undefined {
+  const saved = extractSavedNodeOutput(node)
+  return saved ? getPrimaryOutput(saved, node.type, undefined) : undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -523,6 +584,9 @@ function routeOutput(
       const state = nodeStates[src.id]
       if (state?.output?.kieTaskId) {
         inputs.kieTaskId = state.output.kieTaskId
+      } else if (src.data.kieTaskId) {
+        // Fallback to node data for skipped/frozen nodes (matches frontend)
+        inputs.kieTaskId = src.data.kieTaskId as string
       }
     }
     return
@@ -560,9 +624,14 @@ function routeOutput(
       const state = nodeStates[src.id]
       if (state?.output?.sunoTrackId) {
         inputs.sunoTrackId = state.output.sunoTrackId
+      } else if (src.data.sunoTrackId) {
+        // Fallback to node data for skipped/frozen nodes (matches frontend)
+        inputs.sunoTrackId = src.data.sunoTrackId as string
       }
       if (state?.output?.sunoTaskId) {
         inputs.sunoTaskId = state.output.sunoTaskId
+      } else if (src.data.sunoTaskId) {
+        inputs.sunoTaskId = src.data.sunoTaskId as string
       }
     }
     return

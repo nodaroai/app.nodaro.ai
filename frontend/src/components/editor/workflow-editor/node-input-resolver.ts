@@ -456,6 +456,12 @@ export function resolveNodeInputs(
           ...(inputs.audioUrlsWithSourceIds ?? []),
           { nodeId: src.id, url: output },
         ];
+      } else if (node.type === "merge-video-audio") {
+        // Route to audioSources for multi-track handling (matches backend)
+        inputs.audioSources = [
+          ...(inputs.audioSources ?? []),
+          { url: output, sourceNodeId: src.id },
+        ];
       } else {
         inputs.audioUrl = output;
       }

@@ -275,8 +275,9 @@ function buildSyncHttpBody(
         userId: ctx.userId,
         // Frontend defaults to claude-sonnet-4-5-20250929 when no model is set
         model: data.model || "claude-sonnet-4-5-20250929",
-        temperature: data.temperature,
-        maxTokens: data.maxTokens,
+        // Match frontend defaults (execute-node.ts): temperature 0.7, maxTokens 4096
+        temperature: data.temperature ?? 0.7,
+        maxTokens: data.maxTokens ?? 4096,
       }
 
     case "video-composer": {
@@ -374,7 +375,6 @@ function buildSyncHttpBody(
     case "image-to-text":
       return {
         imageUrl: resolvedInputs.imageUrl || data.imageUrl,
-        // Frontend uses data.customPrompt (type-specific field)
         customPrompt: resolvedInputs.prompt || data.customPrompt || data.prompt,
         detailLevel: data.detailLevel || "detailed",
         userId: ctx.userId,
