@@ -41,6 +41,12 @@ export interface NodeOutput {
   }>
   /** Adjust-volume: tracks whether last input was audio or video for correct output routing */
   _lastInputType?: "audio" | "video"
+  /** QA-check: whether content passed the quality check */
+  approved?: boolean
+  /** QA-check: explanation text */
+  reason?: string
+  /** QA-check: quality score 0.0-1.0 */
+  score?: number
 }
 
 export type NodeExecutionStatus =

@@ -81,6 +81,8 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "linkedin-post": 1,
   "x-post": 1,
   "facebook-post": 1,
+  "save-to-storage": 0,
+  "qa-check": 5,
 };
 
 /** Motion-transfer composite credit costs (mirrors STATIC_CREDIT_COSTS in backend) */
@@ -193,6 +195,8 @@ export const EXECUTABLE_TYPES = new Set([
   "linkedin-post",
   "x-post",
   "facebook-post",
+  "save-to-storage",
+  "qa-check",
 ]);
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 20;

@@ -3910,3 +3910,42 @@ export async function getAppAnalyticsRuns(appId: string, cursor?: string): Promi
     "Failed to load analytics runs",
   )
 }
+
+// ---------- QA Check ----------
+
+export async function qaCheckApi(params: {
+  content: string
+  checkType?: "content" | "quality" | "consistency" | "safety"
+  provider?: "claude" | "gpt"
+  threshold?: number
+}): Promise<{ jobId: string; score: number; approved: boolean; reason: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/qa-check`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(params)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "QA check failed")
+  }
+  return res.json()
+}
+
+// ---------- Save to Storage ----------
+
+export async function saveToStorageApi(params: {
+  mediaUrl: string
+  filename?: string
+  mediaType?: "image" | "video" | "audio"
+}): Promise<{ jobId: string; url: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/save-to-storage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(params)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to save to storage")
+  }
+  return res.json()
+}

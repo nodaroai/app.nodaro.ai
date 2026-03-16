@@ -439,6 +439,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
 
   if (!job) return null
 
+  const showInput = job.status !== "failed"
   const outputUrl = getOutputUrl(job.output_data)
   const isVideo = outputUrl ? isVideoUrl(outputUrl) : false
   const isAudio = outputUrl ? isAudioUrl(outputUrl) : false
@@ -552,10 +553,11 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
           </div>
         </div>
 
-        {/* Content - Two Columns */}
+        {/* Content - Two Columns (hide input on error) */}
         <div className="flex-1 overflow-auto bg-gray-50 dark:bg-[#121212]">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
-            {/* Left Column - Input */}
+          <div className={`grid grid-cols-1 ${showInput ? "lg:grid-cols-2" : ""} gap-6 p-6`}>
+            {showInput && (
+            /* Left Column - Input */
             <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Input</h3>
@@ -620,6 +622,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                 )}
               </div>
             </div>
+            )}
 
             {/* Right Column - Output */}
             <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">

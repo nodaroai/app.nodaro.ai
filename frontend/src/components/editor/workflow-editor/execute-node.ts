@@ -55,6 +55,8 @@ import {
   getJobStatus,
   generateAIWriterStream,
   setForcePrivate,
+  qaCheckApi,
+  saveToStorageApi,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP } from "@nodaro-shared/model-constants";
@@ -133,6 +135,8 @@ import type {
   SubWorkflowData,
   SocialMediaFormatData,
   SocialPostData,
+  SaveToStorageData,
+  QACheckData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -3381,6 +3385,74 @@ export function executeNode(
           throw err;
         },
       ),
+    );
+  }
+
+  // Save to Storage — upload upstream media to R2
+  if (node.type === "save-to-storage") {
+    const { updateNodeData } = useWorkflowStore.getState();
+    const d = node.data as SaveToStorageData;
+    const mediaUrl = overrideMediaUrl ?? inputs.videoUrl ?? inputs.imageUrl ?? inputs.audioUrl;
+
+    if (!mediaUrl) {
+      updateNodeData(node.id, { executionStatus: "failed", errorMessage: "No media input connected" });
+      return Promise.resolve();
+    }
+
+    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+
+    return saveToStorageApi({
+      mediaUrl,
+      filename: d.filename || undefined,
+    }).then(
+      (result) => {
+        updateNodeData(node.id, {
+          executionStatus: "completed",
+          savedUrl: result.url,
+        });
+      },
+      (err) => {
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err instanceof Error ? err.message : "Save to storage failed",
+        });
+      },
+    );
+  }
+
+  // QA Check — evaluate content quality via AI
+  if (node.type === "qa-check") {
+    const { updateNodeData } = useWorkflowStore.getState();
+    const d = node.data as QACheckData;
+    const content = overridePrompt ?? inputs.prompt ?? "";
+
+    if (!content) {
+      updateNodeData(node.id, { executionStatus: "failed", errorMessage: "No content input connected" });
+      return Promise.resolve();
+    }
+
+    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+
+    return qaCheckApi({
+      content,
+      checkType: d.checkType || "content",
+      provider: d.provider || "claude",
+      threshold: d.threshold ?? 0.7,
+    }).then(
+      (result) => {
+        updateNodeData(node.id, {
+          executionStatus: "completed",
+          score: result.score,
+          approved: result.approved,
+          reason: result.reason,
+        });
+      },
+      (err) => {
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err instanceof Error ? err.message : "QA check failed",
+        });
+      },
     );
   }
 

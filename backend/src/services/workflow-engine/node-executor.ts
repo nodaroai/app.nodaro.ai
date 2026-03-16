@@ -48,6 +48,8 @@ const SYNC_HTTP_NODES = new Set([
   "linkedin-post",
   "x-post",
   "facebook-post",
+  "qa-check",
+  "save-to-storage",
 ])
 
 // Maps node type to internal route path
@@ -60,6 +62,8 @@ const SYNC_HTTP_ROUTES: Record<string, string> = {
   "motion-graphics": "/v1/motion-graphics-ai/generate",
   "image-to-text": "/v1/image-to-text/describe",
   "suno-style-boost": "/v1/suno/style-boost",
+  "qa-check": "/v1/qa-check",
+  "save-to-storage": "/v1/save-to-storage",
   "instagram-post": "/v1/social/publish",
   "tiktok-post": "/v1/social/publish",
   "youtube-upload": "/v1/social/publish",
@@ -78,6 +82,8 @@ const SYNC_HTTP_MODEL_IDS: Record<string, string> = {
   "motion-graphics": "motion-graphics",
   "image-to-text": "image-to-text",
   "suno-style-boost": "suno-style-boost",
+  "qa-check": "qa-check",
+  "save-to-storage": "save-to-storage",
   "instagram-post": "social-publish",
   "tiktok-post": "social-publish",
   "youtube-upload": "social-publish",
@@ -383,6 +389,22 @@ function buildSyncHttpBody(
     case "suno-style-boost":
       return {
         content: resolvedInputs.prompt || data.content || data.prompt,
+        userId: ctx.userId,
+      }
+
+    case "qa-check":
+      return {
+        content: resolvedInputs.prompt || data.content,
+        checkType: data.checkType || "content",
+        provider: data.provider || "claude",
+        threshold: data.threshold ?? 0.7,
+        userId: ctx.userId,
+      }
+
+    case "save-to-storage":
+      return {
+        mediaUrl: resolvedInputs.videoUrl || resolvedInputs.imageUrl || resolvedInputs.audioUrl,
+        filename: data.filename,
         userId: ctx.userId,
       }
 

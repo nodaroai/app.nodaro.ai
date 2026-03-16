@@ -587,7 +587,7 @@ export function resolveNodeInputs(
           inputs.sunoTaskId = srcData.sunoTaskId as string;
         }
       }
-    } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "suno-style-boost" || src.type === "image-to-text" || src.type === "forced-alignment") {
+    } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "suno-style-boost" || src.type === "image-to-text" || src.type === "forced-alignment" || src.type === "qa-check") {
       inputs.prompt = output;
     } else if (src.type === "ai-writer") {
       inputs.prompt = output;

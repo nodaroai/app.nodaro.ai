@@ -381,6 +381,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     }
     return undefined;
   }
+  if (type === "qa-check") {
+    if (data.approved == null) return undefined;
+    const qaApproved = data.approved as boolean;
+    const qaReason = (data.reason as string | undefined) ?? (qaApproved ? "approved" : "rejected");
+    if (sourceHandle === "approved" && qaApproved) return qaReason;
+    if (sourceHandle === "rejected" && !qaApproved) return qaReason;
+    if (!sourceHandle) return qaReason;
+    return undefined;
+  }
   if (type === "ai-writer") {
     return data.generatedText as string | undefined;
   }
