@@ -207,6 +207,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
             <button
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              aria-label="Remove result"
               onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
             >
               <X className="w-3.5 h-3.5" />
@@ -220,6 +221,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
             <button
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              aria-label="Expand preview"
               onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
             >
               <Expand className="w-3.5 h-3.5" />
@@ -227,6 +229,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
             <button
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              aria-label="Download"
               onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }}
             >
               <Download className="w-3.5 h-3.5" />

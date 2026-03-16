@@ -285,6 +285,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
                   <button
                     type="button"
+                    aria-label="Remove result"
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
                   >
@@ -296,6 +297,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
               <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
                 <button
                   type="button"
+                  aria-label="Expand preview"
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
                 >
@@ -303,6 +305,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 </button>
                 <button
                   type="button"
+                  aria-label="Download"
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }}
                 >

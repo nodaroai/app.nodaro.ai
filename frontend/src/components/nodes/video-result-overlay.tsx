@@ -54,6 +54,7 @@ function VideoResultOverlayComponent({
         <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
           <button
             type="button"
+            aria-label="Remove result"
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
             onClick={(e) => { e.stopPropagation(); onDelete() }}
           >
@@ -64,6 +65,7 @@ function VideoResultOverlayComponent({
       <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
         <button
           type="button"
+          aria-label="Expand preview"
           className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
           onClick={(e) => { e.stopPropagation(); onExpand() }}
         >
@@ -71,6 +73,7 @@ function VideoResultOverlayComponent({
         </button>
         <button
           type="button"
+          aria-label="Download"
           className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
           onClick={(e) => {
             e.stopPropagation()
@@ -84,6 +87,7 @@ function VideoResultOverlayComponent({
         </button>
         <button
           type="button"
+          aria-label="Copy URL"
           className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
           onClick={(e) => {
             e.stopPropagation()
