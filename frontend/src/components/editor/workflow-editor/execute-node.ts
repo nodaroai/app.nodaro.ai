@@ -3234,6 +3234,11 @@ export function executeNode(
       if (output) inputText += output;
     }
 
+    // Fall back to resolved upstream prompt or node data (matches backend split-text)
+    if (!inputText) {
+      inputText = inputs.prompt || (splitData.text as string) || "";
+    }
+
     if (!inputText) {
       updateNodeData(node.id, {
         executionStatus: "failed",
