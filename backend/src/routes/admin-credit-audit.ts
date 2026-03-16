@@ -214,6 +214,8 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
       totalCredits: number
       minCredits: number
       maxCredits: number
+      /** Every distinct KIE credit amount observed → how many tasks had that cost */
+      costBuckets: Map<number, number>
     }>()
 
     for (const record of records) {
@@ -228,6 +230,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
         existing.totalCredits += record.consumeCredits
         existing.minCredits = Math.min(existing.minCredits, record.consumeCredits)
         existing.maxCredits = Math.max(existing.maxCredits, record.consumeCredits)
+        existing.costBuckets.set(record.consumeCredits, (existing.costBuckets.get(record.consumeCredits) ?? 0) + 1)
       } else {
         byModel.set(key, {
           kieModel: key,
@@ -235,6 +238,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
           totalCredits: record.consumeCredits,
           minCredits: record.consumeCredits,
           maxCredits: record.consumeCredits,
+          costBuckets: new Map([[record.consumeCredits, 1]]),
         })
       }
     }
@@ -283,18 +287,59 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
             Math.abs(m.kieCredits - avgKieCredits) < Math.abs(best.kieCredits - avgKieCredits) ? m : best
           )
 
-      // diff = how much more/less we charge vs expected (with markup)
-      const diff = round2(mapping.ourCredits - expectedCredits)
-      const diffPercent = expectedCredits > 0
-        ? round2((diff / expectedCredits) * 100)
-        : null
+      // Collect ALL credit tiers for this model (base + composite like key:5s, key:10s:audio)
+      const allTiers: number[] = []
+      for (const m of mappings) {
+        if (STATIC_CREDIT_COSTS[m.ourKey] !== undefined) {
+          allTiers.push(STATIC_CREDIT_COSTS[m.ourKey])
+        }
+        const prefix = m.ourKey + ":"
+        for (const k of Object.keys(STATIC_CREDIT_COSTS)) {
+          if (k.startsWith(prefix)) allTiers.push(STATIC_CREDIT_COSTS[k])
+        }
+      }
 
-      // UNDERPRICED = we charge less than expected, OVERPRICED = we charge much more
+      const isVariable = stats.minCredits !== stats.maxCredits
+      const hasTiers = allTiers.length > 1
+
+      // For variable models with tiers: validate EACH observed cost level
+      // against our actual tier pricing, not the meaningless average.
+      // For fixed-cost or single-tier models: compare normally.
       let status = "OK"
-      if (diff < -0.5) {
-        status = "UNDERPRICED"
-      } else if (expectedCredits > 0 && diffPercent != null && diffPercent > 100) {
-        status = "OVERPRICED"
+      let diff: number
+      let diffPercent: number | null
+      let tierBreakdown: { kieCost: number; tasks: number; required: number; bestTier: number; covered: boolean }[] | undefined
+
+      if (isVariable && hasTiers) {
+        // Per-cost-level validation
+        tierBreakdown = []
+        let worstDiff = 0
+        for (const [kieCost, count] of stats.costBuckets) {
+          const required = Math.ceil((kieCost / KIE_CREDITS_PER_NODARO) * markupMultiplier)
+          // Find the smallest tier that covers this cost
+          const coveringTiers = allTiers.filter(t => t >= required).sort((a, b) => a - b)
+          const bestTier = coveringTiers.length > 0 ? coveringTiers[0] : Math.max(...allTiers)
+          const covered = coveringTiers.length > 0
+          tierBreakdown.push({ kieCost, tasks: count, required, bestTier, covered })
+          if (!covered) {
+            worstDiff = Math.min(worstDiff, bestTier - required)
+          }
+        }
+        const allCovered = tierBreakdown.every(t => t.covered)
+        diff = allCovered ? 0 : worstDiff
+        diffPercent = null
+        if (!allCovered) status = "UNDERPRICED"
+      } else {
+        // Fixed-cost model: compare directly
+        diff = round2(mapping.ourCredits - expectedCredits)
+        diffPercent = expectedCredits > 0
+          ? round2((diff / expectedCredits) * 100)
+          : null
+        if (diff < -0.5) {
+          status = "UNDERPRICED"
+        } else if (expectedCredits > 0 && diffPercent != null && diffPercent > 100) {
+          status = "OVERPRICED"
+        }
       }
 
       results.push({
@@ -311,7 +356,8 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
         diff,
         diffPercent,
         status,
-        variable: stats.minCredits !== stats.maxCredits,
+        variable: isVariable,
+        ...(tierBreakdown ? { tierBreakdown } : {}),
       })
     }
 
