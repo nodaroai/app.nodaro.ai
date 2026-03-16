@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase.js"
 import { hasCredits } from "../lib/config.js"
+import { getAppSettings } from "../lib/app-settings.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
@@ -77,7 +78,8 @@ export interface StorageProfile {
 // ============================================================
 
 export const STATIC_CREDIT_COSTS: Record<string, number> = {
-  // 1 credit = $0.02. Formula: ceil(providerCost * 1.25 / 0.02)
+  ***REDACTED-OSS-SCRUB***
+  // Markup % is configurable in admin settings (app_settings.cost_markup_percent).
   // Base entries = default/cheapest setting. Composite entries = specific setting.
   //
   // ── Image Generation ──
@@ -152,7 +154,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "kling-turbo": 14,             // 42 KIE cr, $0.21 (5s fallback)
   // Kling Turbo duration-tiered pricing
   ***REDACTED-OSS-SCRUB***
-  "kling-turbo:10s": 22,         // 84 KIE cr, $0.42
+  ***REDACTED-OSS-SCRUB***
   "kling-3.0": 63,               // 200 KIE cr, $1.00 (5s, audio, 1080P — 40 cr/sec) — fallback only
   // Kling 3.0 duration-tiered pricing (1080P, per-second: 27 no audio, 40 with audio)
   "kling-3.0:5s": 43,            // 135 KIE cr, $0.675 (1080P, no audio, 5s)
@@ -172,7 +174,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "sora2-pro:10s": 68,           // 215 KIE cr, $1.075 (standard 10s)
   "sora2-pro:5s:high": 83,       // 265 KIE cr, $1.325 (high quality 5s)
   "sora2-pro:10s:high": 158,     // 500 KIE cr, $2.50 (high quality 10s)
-  "seedance": 32,                // 100 KIE cr, $0.50 (not in KIE pricing data)
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  "seedance:12s": 11,            // 42 KIE cr, $0.21
   "wan-i2v": 22,                 // 70 KIE cr, $0.35 (5s 720p fallback)
   // Wan I2V duration-tiered pricing (720p default)
   ***REDACTED-OSS-SCRUB***
@@ -195,8 +201,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Sora2 duration-tiered pricing
   "sora2:5s": 8,                 // 30 KIE cr, $0.15
   "sora2:10s": 9,                // 35 KIE cr, $0.175
-  "bytedance-lite": 16,          // 50 KIE cr, $0.25 (not in KIE pricing data)
-  "bytedance-pro": 22,           // 70 KIE cr, $0.35 (not in KIE pricing data)
+  ***REDACTED-OSS-SCRUB***
+  "bytedance-pro": 8,             // 30 KIE cr, $0.15 (actual from audit)
   "bytedance-pro-fast": 19,      // 60 KIE cr, $0.30 (not in KIE pricing data)
   "kling-master": 50,            // 160 KIE cr, $0.80 (5s fallback)
   // Kling Master duration-tiered pricing
@@ -284,7 +290,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // "musicgen": 7,                 // Replicate Meta MusicGen
   // "lyria": 7,                    // Replicate Google Lyria 2
   // "bark": 7,                     // Replicate Suno Bark
-  "elevenlabs-isolation": 1,     // 0.2 cr/sec * ~10s = 2 KIE cr
+  "elevenlabs-isolation": 4,     // 0.2 KIE cr/sec, variable; ~80s avg = 16 KIE cr
   // Replicate disabled
   // "whisper": 4,                   // Replicate whisper transcription
   // "incredibly-fast-whisper": 4,   // Replicate fast whisper
@@ -482,24 +488,40 @@ export function invalidateModelPricingCache(): void {
 
 /**
  * Get credit cost for a model from database, falling back to static costs.
- * Results are cached for 60s to avoid repeated DB queries.
+ * Base costs are cached for 60s. The cost_markup_percent from admin settings
+ * is applied on top: finalCost = ceil(baseCost * (1 + markup/100)).
+ * Both DB values and STATIC_CREDIT_COSTS represent base costs at 0% markup.
  */
 async function getModelCreditCostFromDB(modelIdentifier: string): Promise<ModelPricing> {
+  // Resolve base cost (cached 60s)
+  let base: ModelPricing
   const cached = modelPricingCache.get(modelIdentifier)
-  if (cached) return cached
+  if (cached) {
+    base = cached
+  } else {
+    const { data, error } = await supabase
+      .from("model_pricing")
+      .select("credit_cost, is_enabled, tier_restriction")
+      .eq("model_identifier", modelIdentifier)
+      .single()
 
-  const { data, error } = await supabase
-    .from("model_pricing")
-    .select("credit_cost, is_enabled, tier_restriction")
-    .eq("model_identifier", modelIdentifier)
-    .single()
+    base = (error || !data)
+      ? { creditCost: STATIC_CREDIT_COSTS[modelIdentifier] ?? 0, isEnabled: true, tierRestriction: null }
+      : { creditCost: data.credit_cost, isEnabled: data.is_enabled, tierRestriction: data.tier_restriction }
 
-  const result: ModelPricing = (error || !data)
-    ? { creditCost: STATIC_CREDIT_COSTS[modelIdentifier] ?? 0, isEnabled: true, tierRestriction: null }
-    : { creditCost: data.credit_cost, isEnabled: data.is_enabled, tierRestriction: data.tier_restriction }
+    modelPricingCache.set(modelIdentifier, base)
+  }
 
-  modelPricingCache.set(modelIdentifier, result)
-  return result
+  // Apply markup from admin settings (cached 60s separately)
+  const settings = await getAppSettings()
+  if (settings.cost_markup_percent > 0 && base.creditCost > 0) {
+    return {
+      ...base,
+      creditCost: Math.ceil(base.creditCost * (1 + settings.cost_markup_percent / 100)),
+    }
+  }
+
+  return base
 }
 
 // ── Tier config cache (60s TTL) ──

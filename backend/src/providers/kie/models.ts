@@ -436,8 +436,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Uses input_urls array (0-2 images for start/end frame)
   "seedance": {
     model: "bytedance/seedance-1.5-pro",
-    credits: 100,
-    cost: 0.50,
+    credits: 28,
+    cost: 0.14,  // 3.5 KIE cr/sec * 8s default = 28 KIE credits (actual from audit)
     imageParam: "input_urls",  // Array format: [startFrame] or [startFrame, endFrame]
     extraParams: { resolution: "720p", fixed_lens: false, generate_audio: false },
     allowedDurations: [4, 8, 12],
@@ -519,8 +519,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Bytedance V1 Lite I2V - docs.kie.ai/market/bytedance/v1-lite-image-to-video
   "bytedance-lite": {
     model: "bytedance/v1-lite-image-to-video",
-    credits: 50,
-    cost: 0.25,
+    credits: 22.5,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",  // Single URL string
     extraParams: { resolution: "480p" },
     allowedDurations: [5, 10],
@@ -531,8 +531,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Bytedance V1 Pro I2V - docs.kie.ai/market/bytedance/v1-pro-image-to-video
   "bytedance-pro": {
     model: "bytedance/v1-pro-image-to-video",
-    credits: 70,
-    cost: 0.35,
+    credits: 30,
+    cost: 0.15,  // 30 KIE credits (actual from audit)
     imageParam: "image_url",  // Single URL string
     extraParams: { resolution: "480p" },
     allowedDurations: [5, 10],
@@ -649,8 +649,8 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Seedance 1.5 Pro T2V - docs.kie.ai/market/bytedance/seedance-1.5-pro
   "seedance": {
     model: "bytedance/seedance-1.5-pro",
-    credits: 100,
-    cost: 0.50,
+    credits: 28,
+    cost: 0.14,  // 3.5 KIE cr/sec * 8s default = 28 KIE credits (actual from audit)
     extraParams: { resolution: "720p", fixed_lens: false, generate_audio: false },
     allowedDurations: [4, 8, 12],
   },
@@ -687,8 +687,8 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Bytedance V1 Lite T2V - docs.kie.ai/market/bytedance/v1-lite-text-to-video
   "bytedance-lite": {
     model: "bytedance/v1-lite-text-to-video",
-    credits: 50,
-    cost: 0.25,
+    credits: 22.5,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspect_ratio: "16:9", resolution: "720p" },
     allowedDurations: [5, 10],
   },
@@ -696,8 +696,8 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Bytedance V1 Pro T2V - docs.kie.ai/market/bytedance/v1-pro-text-to-video
   "bytedance-pro": {
     model: "bytedance/v1-pro-text-to-video",
-    credits: 70,
-    cost: 0.35,
+    credits: 30,
+    cost: 0.15,  // 30 KIE credits (actual from audit)
     extraParams: { aspect_ratio: "16:9", resolution: "720p" },
     allowedDurations: [5, 10],
   },
@@ -915,8 +915,8 @@ export const KIE_SOUND_EFFECT_MODELS: Record<string, KieModelConfig> = {
 export const KIE_AUDIO_ISOLATION_MODELS: Record<string, KieModelConfig> = {
   "elevenlabs-isolation": {
     model: "elevenlabs/audio-isolation",
-    credits: 2,
-    cost: 0.01,  // 0.2 cr/sec * ~10s = 2 KIE credits
+    credits: 16,
+    cost: 0.08,  // 0.2 KIE cr/sec, variable; ~80s avg = 16 KIE credits
   },
 }
 
