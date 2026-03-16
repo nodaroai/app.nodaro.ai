@@ -411,7 +411,7 @@ describe("resolveNodeInputs", () => {
   })
 
   it("resolves audio input for suno-mashup", () => {
-    // suno-mashup gets audioUrl (single) from the resolver, not audioUrls
+    // suno-mashup is in MULTI_AUDIO_INPUT_TYPES, so audio goes into audioUrls array
     // execute-node.ts uses audioUrls ?? [] with audioUrl fallback
     const audio1 = makeNode("a1", "upload-audio", {
       r2Url: "http://audio1.mp3",
@@ -424,7 +424,7 @@ describe("resolveNodeInputs", () => {
       [audio1, target],
       edges,
     )
-    expect(inputs.audioUrl).toBe("http://audio1.mp3")
+    expect(inputs.audioUrls).toEqual(["http://audio1.mp3"])
   })
 
   it("resolves suno-style-boost output as prompt (text)", () => {
