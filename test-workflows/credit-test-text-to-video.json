@@ -45,7 +45,7 @@
       "type": "text-to-video",
       "position": { "x": 500, "y": 600 },
       "data": {
-        "label": "Kling 5s (18cr)",
+        "label": "Kling 5s no-audio (14cr)",
         "prompt": "",
         "provider": "kling",
         "model": "",
@@ -60,7 +60,7 @@
       "type": "text-to-video",
       "position": { "x": 500, "y": 800 },
       "data": {
-        "label": "Kling 10s (18cr)",
+        "label": "Kling 10s no-audio (28cr)",
         "prompt": "",
         "provider": "kling",
         "model": "",
@@ -75,7 +75,7 @@
       "type": "text-to-video",
       "position": { "x": 500, "y": 1000 },
       "data": {
-        "label": "Kling Turbo 5s (14cr)",
+        "label": "Kling Turbo 5s (11cr)",
         "prompt": "",
         "provider": "kling-turbo",
         "model": "",
@@ -186,7 +186,7 @@
       "type": "text-to-video",
       "position": { "x": 1000, "y": 0 },
       "data": {
-        "label": "Grok 6s (7cr via grok-i2v)",
+        "label": "Grok 6s (5cr via grok-i2v:6s)",
         "prompt": "",
         "provider": "grok",
         "model": "",
@@ -201,7 +201,7 @@
       "type": "text-to-video",
       "position": { "x": 1000, "y": 200 },
       "data": {
-        "label": "Sora 2 Pro (47cr)",
+        "label": "Sora 2 Pro 5s std (38cr)",
         "prompt": "",
         "provider": "sora2-pro",
         "model": "",
@@ -216,7 +216,7 @@
       "type": "text-to-video",
       "position": { "x": 1000, "y": 400 },
       "data": {
-        "label": "Sora 2 Pro +removeWM (47+4cr)",
+        "label": "Sora 2 Pro +removeWM (38+4cr)",
         "prompt": "",
         "provider": "sora2-pro",
         "model": "",
@@ -232,7 +232,7 @@
       "type": "text-to-video",
       "position": { "x": 1000, "y": 600 },
       "data": {
-        "label": "Seedance 4s (32cr)",
+        "label": "Seedance 4s (4cr)",
         "prompt": "",
         "provider": "seedance",
         "model": "",
@@ -247,7 +247,7 @@
       "type": "text-to-video",
       "position": { "x": 1000, "y": 800 },
       "data": {
-        "label": "Seedance 12s (32cr)",
+        "label": "Seedance 12s (11cr)",
         "prompt": "",
         "provider": "seedance",
         "model": "",
@@ -292,7 +292,7 @@
       "type": "text-to-video",
       "position": { "x": 1000, "y": 1400 },
       "data": {
-        "label": "Sora 2 (10cr)",
+        "label": "Sora 2 5s (8cr)",
         "prompt": "",
         "provider": "sora2",
         "model": "",
@@ -307,7 +307,7 @@
       "type": "text-to-video",
       "position": { "x": 1000, "y": 1600 },
       "data": {
-        "label": "Sora 2 +removeWM (10+4cr)",
+        "label": "Sora 2 +removeWM (8+4cr)",
         "prompt": "",
         "provider": "sora2",
         "model": "",
@@ -323,7 +323,7 @@
       "type": "text-to-video",
       "position": { "x": 1000, "y": 1800 },
       "data": {
-        "label": "MiniMax Standard 6s (10cr)",
+        "label": "Hailuo Standard 6s (8cr)",
         "prompt": "",
         "provider": "hailuo-standard",
         "model": "",
@@ -338,7 +338,7 @@
       "type": "text-to-video",
       "position": { "x": 1500, "y": 0 },
       "data": {
-        "label": "Bytedance Lite 5s (16cr)",
+        "label": "Bytedance Lite 5s (6cr)",
         "prompt": "",
         "provider": "bytedance-lite",
         "model": "",
@@ -353,7 +353,7 @@
       "type": "text-to-video",
       "position": { "x": 1500, "y": 200 },
       "data": {
-        "label": "Bytedance Pro 5s (22cr)",
+        "label": "Bytedance Pro 5s (8cr)",
         "prompt": "",
         "provider": "bytedance-pro",
         "model": "",
@@ -398,7 +398,7 @@
       "type": "text-to-video",
       "position": { "x": 1500, "y": 800 },
       "data": {
-        "label": "Kling 1:1 square (18cr)",
+        "label": "Kling 5s 1:1 (14cr)",
         "prompt": "",
         "provider": "kling",
         "model": "",
@@ -413,11 +413,103 @@
       "type": "text-to-video",
       "position": { "x": 1500, "y": 1000 },
       "data": {
-        "label": "Kling Turbo 10s (14cr)",
+        "label": "Kling Turbo 10s (21cr)",
         "prompt": "",
         "provider": "kling-turbo",
         "model": "",
         "duration": 10,
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
+      }
+    },
+    {
+      "id": "t2v_seedance_8s",
+      "type": "text-to-video",
+      "position": { "x": 2000, "y": 0 },
+      "data": {
+        "label": "Seedance 8s (7cr)",
+        "prompt": "",
+        "provider": "seedance",
+        "model": "",
+        "duration": 8,
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
+      }
+    },
+    {
+      "id": "t2v_sora2pro_5s_high",
+      "type": "text-to-video",
+      "position": { "x": 2000, "y": 200 },
+      "data": {
+        "label": "Sora 2 Pro 5s high (83cr)",
+        "prompt": "",
+        "provider": "sora2-pro",
+        "model": "",
+        "duration": 5,
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "mode": "pro",
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
+      }
+    },
+    {
+      "id": "t2v_sora2pro_10s_high",
+      "type": "text-to-video",
+      "position": { "x": 2000, "y": 400 },
+      "data": {
+        "label": "Sora 2 Pro 10s high (158cr)",
+        "prompt": "",
+        "provider": "sora2-pro",
+        "model": "",
+        "duration": 10,
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "mode": "pro",
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
+      }
+    },
+    {
+      "id": "t2v_veo31",
+      "type": "text-to-video",
+      "position": { "x": 2000, "y": 600 },
+      "data": {
+        "label": "VEO 3.1 T2V (19cr)",
+        "prompt": "",
+        "provider": "veo3.1",
+        "model": "",
+        "duration": 8,
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
+      }
+    },
+    {
+      "id": "t2v_grok_10s",
+      "type": "text-to-video",
+      "position": { "x": 2000, "y": 800 },
+      "data": {
+        "label": "Grok 10s (8cr via grok-i2v:10s)",
+        "prompt": "",
+        "provider": "grok",
+        "model": "",
+        "duration": 10,
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
+      }
+    },
+    {
+      "id": "t2v_grok_15s",
+      "type": "text-to-video",
+      "position": { "x": 2000, "y": 1000 },
+      "data": {
+        "label": "Grok 15s (10cr via grok-i2v:15s)",
+        "prompt": "",
+        "provider": "grok",
+        "model": "",
+        "duration": 15,
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
@@ -452,6 +544,12 @@
     { "id": "e_25", "source": "prompt_1", "target": "t2v_runway_kie",       "sourceHandle": "prompt", "targetHandle": "in" },
     { "id": "e_26", "source": "prompt_1", "target": "t2v_minimax_916",      "sourceHandle": "prompt", "targetHandle": "in" },
     { "id": "e_27", "source": "prompt_1", "target": "t2v_kling_11",         "sourceHandle": "prompt", "targetHandle": "in" },
-    { "id": "e_28", "source": "prompt_1", "target": "t2v_kling_turbo_10s",  "sourceHandle": "prompt", "targetHandle": "in" }
+    { "id": "e_28", "source": "prompt_1", "target": "t2v_kling_turbo_10s",  "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_29", "source": "prompt_1", "target": "t2v_seedance_8s",      "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_30", "source": "prompt_1", "target": "t2v_sora2pro_5s_high", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_31", "source": "prompt_1", "target": "t2v_sora2pro_10s_high","sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_32", "source": "prompt_1", "target": "t2v_veo31",            "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_33", "source": "prompt_1", "target": "t2v_grok_10s",         "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_34", "source": "prompt_1", "target": "t2v_grok_15s",         "sourceHandle": "prompt", "targetHandle": "in" }
   ]
 }

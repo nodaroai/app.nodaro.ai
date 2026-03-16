@@ -53,25 +53,25 @@ These providers support both start and end frame images: minimax, veo3, veo3.1, 
 | Provider | Credits | Duration | Resolution |
 |----------|---------|----------|------------|
 | runway-kie | 4 | 5s | 720p |
-| grok-i2v | 7 | 6s | 720p |
-| sora2 | 10 | 10s | — |
-| hailuo-2.3 | 10 | 6s | 768p |
-| hailuo-standard | 10 | 6s | 768p |
+| grok-i2v | 5-10 | 6-15s | 720p, duration-tiered |
+| bytedance-lite | 6 | 5-10s | — |
+| seedance | 4-11 | 4-12s | Duration-tiered |
+| bytedance-pro | 8 | 5-10s | — |
+| hailuo-2.3 | 8-13 | 6-10s | 768p, duration-tiered |
+| hailuo-standard | 8-13 | 6-10s | 768p, duration-tiered |
+| kling-turbo | 11-21 | 5-10s | 720p, duration-tiered |
+| hailuo-2.3-pro | 12-23 | 6-10s | 768p, duration-tiered |
 | wan-turbo | 13 | 5s | 480p |
-| kling-turbo | 14 | 5s | 720p |
-| hailuo-2.3-pro | 15 | 6s | 768p |
-| bytedance-lite | 16 | 5-10s | — |
 | minimax | 18 | 5s | 1080p |
-| kling | 18 | 5s | 720p |
+| wan-i2v | 18-53 | 5-15s | 720p, duration-tiered |
 | veo3.1 | 19 | 8s | — |
 | bytedance-pro-fast | 19 | 5-10s | — |
-| wan-i2v | 22 | 5s | 720p |
-| bytedance-pro | 22 | 5-10s | — |
-| seedance | 32 | 4-12s | — |
-| sora2-pro | 47 | 10s | — |
-| kling-master | 50 | 5s | — |
-| kling-3.0 | 43-189 | 3-15s | 1080p |
+| kling | 14-56 | 5-10s | Audio doubles cost |
+| sora2-pro | 38-158 | 5-10s | Standard/high quality |
+| kling-master | 40-80 | 5-10s | Duration-tiered |
+| kling-3.0 | 43-189 | 3-15s | 1080p, audio doubles |
 | veo3 | 79 | 8s | — |
+| sora2 | 8-9 | 5-10s | — |
 
 Kling 3.0 costs scale with duration and audio: 5s no-audio = 43cr, 15s with audio = 189cr.
 

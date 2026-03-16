@@ -267,6 +267,16 @@
         "transcript": "Hello welcome to the audio credit testing workflow",
         "fieldMappings": {}
       }
+    },
+    {
+      "id": "voice_clone_1",
+      "type": "voice-clone",
+      "position": { "x": 1000, "y": 1400 },
+      "data": {
+        "label": "Voice Clone (5cr)",
+        "name": "Test Cloned Voice",
+        "fieldMappings": {}
+      }
     }
   ],
 
@@ -288,6 +298,7 @@
     { "id": "e_a4", "source": "upload_audio_1", "target": "voice_changer_1",    "sourceHandle": "audio", "targetHandle": "in" },
     { "id": "e_a5", "source": "upload_audio_1", "target": "dubbing_es",         "sourceHandle": "audio", "targetHandle": "in" },
     { "id": "e_a6", "source": "upload_audio_1", "target": "dubbing_ja",         "sourceHandle": "audio", "targetHandle": "in" },
-    { "id": "e_a7", "source": "upload_audio_1", "target": "forced_alignment_1", "sourceHandle": "audio", "targetHandle": "in" }
+    { "id": "e_a7", "source": "upload_audio_1", "target": "forced_alignment_1", "sourceHandle": "audio", "targetHandle": "in" },
+    { "id": "e_a8", "source": "upload_audio_1", "target": "voice_clone_1",     "sourceHandle": "audio", "targetHandle": "in" }
   ]
 }

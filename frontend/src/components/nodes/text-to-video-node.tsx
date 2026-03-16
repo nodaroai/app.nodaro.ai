@@ -18,12 +18,11 @@ import type { TextToVideoData } from "@/types/nodes"
 
 // Fallback credit costs per video provider (shown until API responds)
 const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
-  minimax: 25, veo3: 125, "veo3.1": 79, kling: 22, "kling-turbo": 16,
-  "kling-3.0": 32, "grok-i2v": 19, "sora2-pro": 63, seedance: 32,
-  "wan-i2v": 25, "wan-turbo": 13, "hailuo-2.3-pro": 32, "hailuo-2.3": 19,
-  "hailuo-standard": 16, sora2: 38, "bytedance-lite": 16, "bytedance-pro": 22,
-  "bytedance-pro-fast": 19, "kling-master": 22, "runway-kie": 32,
-  runway: 20, pika: 20, sora: 20,
+  minimax: 18, veo3: 79, "veo3.1": 19, kling: 28, "kling-turbo": 14,
+  "kling-3.0": 63, "grok-i2v": 7, "sora2-pro": 38, seedance: 7,
+  "wan-i2v": 22, "wan-turbo": 13, "hailuo-2.3-pro": 15, "hailuo-2.3": 10,
+  "hailuo-standard": 10, sora2: 10, "bytedance-lite": 6, "bytedance-pro": 8,
+  "bytedance-pro-fast": 19, "kling-master": 50, "runway-kie": 4,
 }
 
 function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {

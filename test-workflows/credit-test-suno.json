@@ -42,7 +42,7 @@
         "style": "indie pop",
         "title": "Summer Road Trip",
         "negativeStyle": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -57,7 +57,7 @@
         "style": "indie pop",
         "title": "Summer Road Trip",
         "negativeStyle": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -72,7 +72,7 @@
         "style": "lo-fi chill",
         "title": "Chill Vibes",
         "negativeStyle": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -87,7 +87,7 @@
         "style": "electronic dance",
         "title": "Night Drive",
         "negativeStyle": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -103,7 +103,7 @@
         "title": "Ambient Score",
         "negativeStyle": "",
         "instrumental": true,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
 
