@@ -422,6 +422,20 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
 }
 
 /**
+ * Maps composer node types to their plan type identifier and the node data field
+ * where the plan is stored. Used by render-video payload building, plan syncing,
+ * and the frontend DAG executor.
+ */
+export const COMPOSER_PLAN_MAP: Readonly<Record<string, { planType: string; planField: string }>> = {
+  "video-composer": { planType: "scene-graph", planField: "sceneGraph" },
+  "after-effects": { planType: "after-effects", planField: "effectPlan" },
+  "lottie-overlay": { planType: "lottie-overlay", planField: "overlayPlan" },
+  "3d-title": { planType: "3d-title", planField: "titlePlan" },
+  "motion-graphics": { planType: "motion-graphics", planField: "motionPlan" },
+  "composite": { planType: "composite", planField: "compositePlan" },
+}
+
+/**
  * Duration tier breakpoints for motion control pricing (per-second billing).
  * Same shape as VIDEO_DURATION_TIERS entries but with 30s tier for long reference videos.
  */

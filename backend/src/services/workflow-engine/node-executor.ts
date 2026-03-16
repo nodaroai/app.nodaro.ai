@@ -273,7 +273,8 @@ function buildSyncHttpBody(
         // data.userInput is the primary field (matches frontend), data.prompt is legacy fallback
         userInput: resolvedInputs.prompt || data.userInput || data.prompt,
         userId: ctx.userId,
-        model: data.model,
+        // Frontend defaults to claude-sonnet-4-5-20250929 when no model is set
+        model: data.model || "claude-sonnet-4-5-20250929",
         temperature: data.temperature,
         maxTokens: data.maxTokens,
       }
@@ -298,18 +299,28 @@ function buildSyncHttpBody(
         assets.push({ id: `aud_${assets.length}`, type: "audio", url: resolvedInputs.audioUrl })
       }
       return {
-        prompt: resolvedInputs.prompt || data.prompt,
+        // Frontend uses data.compositionPrompt (type-specific field)
+        prompt: resolvedInputs.prompt || data.compositionPrompt || data.prompt,
         assets: assets.length > 0 ? assets : undefined,
         videoUrl: resolvedInputs.videoUrl,
         imageUrls: resolvedInputs.referenceImageUrls,
+        audioUrl: resolvedInputs.audioUrl,
+        fps: data.fps,
+        aspectRatio: data.aspectRatio,
+        durationSeconds: data.durationSeconds,
         userId: ctx.userId,
       }
     }
 
     case "after-effects":
       return {
-        prompt: resolvedInputs.prompt || data.prompt,
+        // Frontend uses data.effectPrompt (type-specific field)
+        prompt: resolvedInputs.prompt || data.effectPrompt || data.prompt,
         videoUrl: resolvedInputs.videoUrl || data.sourceVideoUrl,
+        fps: data.fps,
+        width: data.width,
+        height: data.height,
+        durationSeconds: data.durationSeconds,
         userId: ctx.userId,
       }
 
@@ -321,30 +332,50 @@ function buildSyncHttpBody(
         lottieAssets.push(...(data.lottieAssets as Array<{ url: string; name?: string }>))
       }
       return {
-        prompt: resolvedInputs.prompt || data.prompt,
+        // Frontend uses data.overlayPrompt (type-specific field)
+        prompt: resolvedInputs.prompt || data.overlayPrompt || data.prompt,
         videoUrl: resolvedInputs.videoUrl || data.sourceVideoUrl,
         lottieAssets: lottieAssets.length > 0 ? lottieAssets : undefined,
+        fps: data.fps,
+        width: data.width,
+        height: data.height,
+        durationSeconds: data.durationSeconds,
         userId: ctx.userId,
       }
     }
 
     case "3d-title":
       return {
-        prompt: resolvedInputs.prompt || data.prompt,
+        // Frontend uses data.titlePrompt (type-specific field)
+        prompt: resolvedInputs.prompt || data.titlePrompt || data.prompt,
         backgroundMediaUrl: resolvedInputs.videoUrl || resolvedInputs.imageUrl || data.backgroundMediaUrl,
+        fps: data.fps,
+        aspectRatio: data.aspectRatio,
+        width: data.width,
+        height: data.height,
+        durationSeconds: data.durationSeconds,
+        backgroundColor: data.backgroundColor,
         userId: ctx.userId,
       }
 
     case "motion-graphics":
       return {
-        prompt: resolvedInputs.prompt || data.prompt,
+        // Frontend uses data.motionPrompt (type-specific field)
+        prompt: resolvedInputs.prompt || data.motionPrompt || data.prompt,
+        fps: data.fps,
+        aspectRatio: data.aspectRatio,
+        width: data.width,
+        height: data.height,
+        durationSeconds: data.durationSeconds,
+        backgroundColor: data.backgroundColor,
         userId: ctx.userId,
       }
 
     case "image-to-text":
       return {
         imageUrl: resolvedInputs.imageUrl || data.imageUrl,
-        customPrompt: resolvedInputs.prompt || data.prompt,
+        // Frontend uses data.customPrompt (type-specific field)
+        customPrompt: resolvedInputs.prompt || data.customPrompt || data.prompt,
         detailLevel: data.detailLevel || "detailed",
         userId: ctx.userId,
       }

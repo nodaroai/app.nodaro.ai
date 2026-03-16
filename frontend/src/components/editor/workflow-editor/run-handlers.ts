@@ -4,6 +4,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatus, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError } from "@/lib/api";
 import { createClient } from "@/lib/supabase";
 import { hasCredits } from "@/lib/edition";
+import { setSkipUndoCapture } from "@/hooks/undo-flags";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import { getCachedCredits } from "@/hooks/use-model-credits";
@@ -16,6 +17,7 @@ import {
   getFanOutMultiplier,
   type ExecutionContext,
 } from "./types";
+import { COMPOSER_PLAN_MAP } from "@nodaro-shared/model-constants";
 import { collapseExpandedClones } from "./execution-graph";
 import { getListInputForNode } from "./node-input-resolver";
 import { executeNode, rejectAllManualEdits } from "./execute-node";
@@ -645,15 +647,30 @@ interface NodeExecutionState {
     splitResults?: string[];
     combinedText?: string;
     listResults?: string[];
+    plan?: Record<string, unknown>;
+    sunoTrackId?: string;
+    sunoTaskId?: string;
+    kieTaskId?: string;
+    thumbnailUrl?: string;
+    paramOutputs?: Record<string, string>;
+    previewItems?: Array<{ type: string; value: string; sourceNodeId: string; sourceNodeLabel: string }>;
   };
   error?: string;
 }
 
-/** Sync a nodeStates snapshot from the backend into the Zustand store. */
+/**
+ * Sync a nodeStates snapshot from the backend into the Zustand store.
+ * Batches all node updates into a single setState call (O(N) instead of
+ * O(updates * N)) to avoid triggering N separate React re-renders during
+ * the polling loop that runs every 3 seconds.
+ */
 function syncNodeStatesToStore(
   nodeStates: Record<string, NodeExecutionState>,
 ): void {
-  const { nodes, updateNodeData } = useWorkflowStore.getState();
+  const { nodes } = useWorkflowStore.getState();
+
+  // Build per-node update patches in one pass
+  const patchMap = new Map<string, Record<string, unknown>>();
 
   for (const node of nodes) {
     const state = nodeStates[node.id];
@@ -662,9 +679,8 @@ function syncNodeStatesToStore(
     const data = node.data as Record<string, unknown>;
     const currentStatus = data.executionStatus as string | undefined;
 
-    // Also re-sync results when node is already completed but generatedResults
-    // is empty/missing (e.g. polling caught the completed status before output
-    // was persisted, then the full output arrived in a later poll/SSE event).
+    // Re-sync results when node is already completed but generatedResults
+    // is empty/missing (polling caught status before output was persisted).
     const needsResultSync =
       state.status === "completed" &&
       currentStatus === "completed" &&
@@ -697,14 +713,15 @@ function syncNodeStatesToStore(
         if (state.output.generatedVoiceId)
           updates.generatedVoiceId = state.output.generatedVoiceId;
         if (state.output.vocalUrl)
-          updates.generatedVocalUrl = state.output.vocalUrl;
+          updates.vocalUrl = state.output.vocalUrl;
         if (state.output.instrumentalUrl)
-          updates.generatedInstrumentalUrl = state.output.instrumentalUrl;
+          updates.instrumentalUrl = state.output.instrumentalUrl;
         if (state.output.alignment)
-          updates.generatedAlignment = state.output.alignment;
-        if (state.output.combinedText)
+          updates.alignmentResults = state.output.alignment;
+        if (state.output.combinedText) {
+          updates.combinedText = state.output.combinedText;
           updates.generatedText = state.output.combinedText;
-        // Sync text output for text-producing nodes (image-to-text, transcribe)
+        }
         if (state.output.text && !state.output.combinedText) {
           updates.generatedText = state.output.text;
           const prevTextResults = (data.generatedResults ?? []) as Array<{ text?: string; jobId?: string }>;
@@ -718,8 +735,26 @@ function syncNodeStatesToStore(
           }
         }
         if (state.output.splitResults)
-          updates.generatedSplitResults = state.output.splitResults;
-        // Sync fan-out list results so frontend resolveNodeInputs can use item:N
+          updates.splitResults = state.output.splitResults;
+        if (state.output.plan) {
+          const mapping = COMPOSER_PLAN_MAP[node.type ?? ""];
+          if (mapping) {
+            updates[mapping.planField] = state.output.plan;
+            if (node.type === "video-composer") updates.sceneGraph = state.output.plan;
+          }
+        }
+        if (state.output.sunoTrackId)
+          updates.sunoTrackId = state.output.sunoTrackId;
+        if (state.output.sunoTaskId)
+          updates.sunoTaskId = state.output.sunoTaskId;
+        if (state.output.kieTaskId)
+          updates.kieTaskId = state.output.kieTaskId;
+        if (state.output.previewItems)
+          updates.previewItems = state.output.previewItems;
+        if (state.output.paramOutputs)
+          updates.__triggerData = state.output.paramOutputs;
+        if (state.output.thumbnailUrl)
+          updates.thumbnailUrl = state.output.thumbnailUrl;
         if (state.output.listResults && state.output.listResults.length > 0) {
           updates.__listResults = state.output.listResults;
           updates.__listTotal = state.output.listResults.length;
@@ -763,22 +798,37 @@ function syncNodeStatesToStore(
           }
         }
       }
-      updateNodeData(node.id, updates);
+      patchMap.set(node.id, updates);
     } else if (state.status === "running" && currentStatus !== "running") {
-      updateNodeData(node.id, { executionStatus: "running" });
+      patchMap.set(node.id, { executionStatus: "running" });
     } else if (
       state.status === "pending" &&
       currentStatus !== "pending" &&
       currentStatus !== "running" &&
       currentStatus !== "completed"
     ) {
-      updateNodeData(node.id, { executionStatus: "pending" });
+      patchMap.set(node.id, { executionStatus: "pending" });
     } else if (state.status === "failed" && currentStatus !== "failed") {
-      updateNodeData(node.id, {
+      patchMap.set(node.id, {
         executionStatus: "failed",
         errorMessage: state.error ?? "Node failed",
       });
     }
   }
+
+  if (patchMap.size === 0) return;
+
+  // Apply all patches in a single store update (one React re-render).
+  // All updates are execution-only so we skip undo capture.
+  setSkipUndoCapture(true);
+  useWorkflowStore.setState((prev) => ({
+    nodes: prev.nodes.map((n) => {
+      const patch = patchMap.get(n.id);
+      if (!patch) return n;
+      return { ...n, data: { ...n.data, ...patch } };
+    }),
+    isDirty: true,
+  }));
+  setSkipUndoCapture(false);
 }
 

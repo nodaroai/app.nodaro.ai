@@ -16,6 +16,28 @@ import { buildNodeRefMap } from "./payload-builder.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 
 /**
+ * Resolve a node's primary output from execution state or source node data.
+ * Shared helper — deduplicates the check-state-then-source pattern used in
+ * resolveNodeInputs, getListInputForNode, and loop column routing.
+ */
+function getNodeOutput(
+  node: SimpleNode,
+  sourceHandle: string | null | undefined,
+  nodeStates: Record<string, NodeExecutionState>,
+  triggerData?: Record<string, unknown>,
+): string | undefined {
+  const state = nodeStates[node.id]
+  if (state?.output) {
+    return getPrimaryOutput(state.output, node.type, sourceHandle)
+  }
+  if (isSourceNode(node.type)) {
+    const srcOutput = extractSourceNodeOutput(node, triggerData)
+    if (srcOutput) return getPrimaryOutput(srcOutput, node.type, sourceHandle)
+  }
+  return undefined
+}
+
+/**
  * Resolve all inputs for a target node from its upstream connected nodes.
  */
 export function resolveNodeInputs(
@@ -51,13 +73,32 @@ export function resolveNodeInputs(
     }
 
     if (!output) {
-      if (state?.output) {
-        output = getPrimaryOutput(state.output, sourceNode.type, edge.sourceHandle)
-      } else if (isSourceNode(sourceNode.type)) {
-        const sourceOutput = extractSourceNodeOutput(sourceNode, triggerData)
-        if (sourceOutput) {
-          output = getPrimaryOutput(sourceOutput, sourceNode.type, edge.sourceHandle)
+      // Loop node column routing: resolve correct column value by sourceHandle (matches frontend)
+      if (sourceNode.type === "loop" && edge.sourceHandle) {
+        const columns = sourceNode.data.columns as Array<{ id: string; handleId: string }> | undefined
+        const colIndex = (columns ?? []).findIndex((c) => c.handleId === edge.sourceHandle)
+        if (colIndex >= 0) {
+          // Check connected mode first
+          const loopInEdges = edges.filter((e) => e.target === sourceNode.id && e.targetHandle === "in")
+          if (loopInEdges.length > 0) {
+            const upstreamNode = allNodes.find((n) => n.id === loopInEdges[0].source)
+            if (upstreamNode) {
+              const upstreamText = getNodeOutput(upstreamNode, loopInEdges[0].sourceHandle, nodeStates, triggerData)
+              if (upstreamText) {
+                const lines = upstreamText.split("\n").map((s) => s.trim()).filter((s) => s.length > 0)
+                output = lines[0]
+              }
+            }
+          } else {
+            // Manual mode: get correct column value
+            const rows = sourceNode.data.rows as string[][] | undefined
+            output = rows?.[0]?.[colIndex]?.trim()
+          }
         }
+      }
+
+      if (!output) {
+        output = getNodeOutput(sourceNode, edge.sourceHandle, nodeStates, triggerData)
       }
     }
 
@@ -112,17 +153,7 @@ export function getListInputForNode(
         const upstreamEdge = loopInEdges[0]
         const upstreamNode = allNodes.find((n) => n.id === upstreamEdge.source)
         if (upstreamNode) {
-          // Get upstream output as text and split by newlines
-          const state = nodeStates[upstreamNode.id]
-          let upstreamText: string | undefined
-          if (state?.output) {
-            upstreamText = getPrimaryOutput(state.output, upstreamNode.type, upstreamEdge.sourceHandle)
-          } else if (isSourceNode(upstreamNode.type)) {
-            const srcOutput = extractSourceNodeOutput(upstreamNode, triggerData)
-            if (srcOutput) {
-              upstreamText = getPrimaryOutput(srcOutput, upstreamNode.type, upstreamEdge.sourceHandle)
-            }
-          }
+          const upstreamText = getNodeOutput(upstreamNode, upstreamEdge.sourceHandle, nodeStates, triggerData)
           if (upstreamText) {
             const items = upstreamText
               .split("\n")

@@ -12,6 +12,7 @@ import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotio
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 import type { CharacterDef } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
+import { COMPOSER_PLAN_MAP } from "../../../../packages/shared/src/model-constants.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput } from "./output-extractor.js"
 
 // ---------------------------------------------------------------------------
@@ -850,14 +851,18 @@ export function buildPayload(
         usageLogId,
       })
 
-    case "text-to-dialogue":
+    case "text-to-dialogue": {
+      // Filter empty dialogue lines (matches frontend behavior)
+      const rawDialogue = (data.dialogue ?? data.script) as Array<{ text: string; voice?: string }> | undefined
+      const filteredDialogue = rawDialogue?.filter((l) => l.text?.trim())
       return simpleResult("text-to-dialogue", "elevenlabs-dialogue", {
         jobId,
-        dialogue: data.dialogue ?? data.script,
+        dialogue: filteredDialogue,
         stability: data.stability,
         languageCode: data.languageCode,
         usageLogId,
       })
+    }
 
     case "voice-changer":
       return simpleResult("voice-changer", "elevenlabs-voice-changer", {
@@ -1056,8 +1061,8 @@ export function buildPayload(
         uploadUrl: resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl,
         continueAt: data.continueAt ?? 0,
         defaultParamFlag: data.defaultParamFlag ?? true,
-        model: data.model,
-        style: data.style,
+        model: data.model || "V5",
+        style: resolvedInputs.prompt || data.style,
         title: data.title,
         negativeStyle: data.negativeStyle,
         vocalGender: data.vocalGender,
@@ -1133,7 +1138,7 @@ export function buildPayload(
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         audioTracks,
         voiceoverVolume: voiceoverVol,
-        backgroundVolume: (data.backgroundVolume as number | undefined) ?? 30,
+        backgroundVolume: (data.originalAudioVolume as number | undefined) ?? (data.backgroundVolume as number | undefined) ?? 30,
         keepOriginalAudio: data.keepOriginalAudio ?? true,
         usageLogId,
       })
@@ -1257,7 +1262,7 @@ export function buildPayload(
       return ffmpegResult("mix-audio", {
         jobId,
         audioUrls: mixAudioUrls,
-        volumes: data.volumes,
+        trackVolumes: data.trackVolumes ?? data.volumes,
         usageLogId,
       })
     }
@@ -1327,16 +1332,44 @@ export function buildPayload(
 
     // --- Render video (goes to render queue) ---
     case "render-video": {
+      // Resolve plan from upstream composer nodes (matches frontend execute-node.ts logic)
+      let resolvedPlanType = data.planType as string | undefined
+      let resolvedPlan = data.plan as Record<string, unknown> | undefined
+      let resolvedSceneGraph = data.sceneGraph as Record<string, unknown> | undefined
+
+      // Search upstream nodes for plan output (matches frontend logic)
+      if (!resolvedPlan && !resolvedSceneGraph && buildCtx?.edges && buildCtx?.nodes && buildCtx?.nodeStates) {
+        const incomingEdges = buildCtx.edges.filter((e) => e.target === node.id)
+        for (const edge of incomingEdges) {
+          const srcNode = buildCtx.nodes.find((n) => n.id === edge.source)
+          if (!srcNode) continue
+          const mapping = COMPOSER_PLAN_MAP[srcNode.type]
+          if (!mapping) continue
+          // Check execution state output first (current run), then saved node data
+          const foundPlan =
+            (buildCtx.nodeStates?.[srcNode.id]?.output?.plan as Record<string, unknown> | undefined) ??
+            (srcNode.data[mapping.planField] as Record<string, unknown> | undefined)
+          if (foundPlan) {
+            resolvedPlanType = mapping.planType
+            if (mapping.planType === "scene-graph") {
+              resolvedSceneGraph = foundPlan
+            } else {
+              resolvedPlan = foundPlan
+            }
+            break
+          }
+        }
+      }
+
       return {
         jobName: "render-video",
         queueName: "video-render",
         modelIdentifier: "render-video",
         payload: {
           jobId,
-          // The plan/scene-graph is passed through resolved inputs or node data
-          planType: data.planType,
-          plan: data.plan,
-          sceneGraph: data.sceneGraph,
+          planType: resolvedPlanType,
+          plan: resolvedPlan,
+          sceneGraph: resolvedSceneGraph,
           template: data.template,
           usageLogId,
         },
