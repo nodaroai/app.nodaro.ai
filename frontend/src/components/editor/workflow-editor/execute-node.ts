@@ -210,6 +210,12 @@ function resolveUpstreamKieTaskId(nodeId: string, nodeData: Record<string, unkno
  * Alias for pollJobWithNodeUpdate to match original codebase naming.
  * Used for node types that follow the standard poll-to-completion pattern.
  */
+/** Extract sunoTrackId/sunoTaskId from job output_data for downstream Suno node chaining. */
+const extractSunoOutputFields = (od: Record<string, unknown>) => ({
+  sunoTrackId: od.sunoTrackId as string | undefined,
+  sunoTaskId: od.sunoTaskId as string | undefined,
+});
+
 /** Extract Suno taskId/audioId from inputs or node data, returning null if missing. */
 function resolveSunoIds(
   inputs: FrontendResolvedInputs,
@@ -1120,10 +1126,7 @@ export function executeNode(
       "generatedAudioUrl",
       "Suno Generate",
       ctx,
-      (od) => ({
-        sunoTrackId: od.sunoTrackId as string | undefined,
-        sunoTaskId: od.sunoTaskId as string | undefined,
-      }),
+      extractSunoOutputFields,
     );
   }
 
@@ -1160,10 +1163,7 @@ export function executeNode(
       "generatedAudioUrl",
       "Suno Cover",
       ctx,
-      (od) => ({
-        sunoTrackId: od.sunoTrackId as string | undefined,
-        sunoTaskId: od.sunoTaskId as string | undefined,
-      }),
+      extractSunoOutputFields,
     );
   }
 
@@ -1197,10 +1197,7 @@ export function executeNode(
       "generatedAudioUrl",
       "Suno Extend",
       ctx,
-      (od) => ({
-        sunoTrackId: od.sunoTrackId as string | undefined,
-        sunoTaskId: od.sunoTaskId as string | undefined,
-      }),
+      extractSunoOutputFields,
     );
   }
 
@@ -1394,6 +1391,7 @@ export function executeNode(
       "generatedAudioUrl",
       "Suno Mashup",
       ctx,
+      extractSunoOutputFields,
     );
   }
 
@@ -1422,6 +1420,7 @@ export function executeNode(
       "generatedAudioUrl",
       "Suno Replace Section",
       ctx,
+      extractSunoOutputFields,
     );
   }
 
@@ -1477,6 +1476,7 @@ export function executeNode(
       "generatedAudioUrl",
       "Suno Add Instrumental",
       ctx,
+      extractSunoOutputFields,
     );
   }
 
@@ -1501,6 +1501,7 @@ export function executeNode(
       "generatedAudioUrl",
       "Suno Add Vocals",
       ctx,
+      extractSunoOutputFields,
     );
   }
 
@@ -1524,6 +1525,7 @@ export function executeNode(
       "generatedAudioUrl",
       "Suno Convert WAV",
       ctx,
+      extractSunoOutputFields,
     );
   }
 
@@ -1552,6 +1554,7 @@ export function executeNode(
       "generatedAudioUrl",
       "Suno Upload Extend",
       ctx,
+      extractSunoOutputFields,
     );
   }
 

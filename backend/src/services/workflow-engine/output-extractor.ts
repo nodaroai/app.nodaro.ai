@@ -150,7 +150,9 @@ export function extractSourceNodeOutput(
     }
 
     case "schedule-trigger": {
-      // Only produce timestamp output for actual scheduled triggers, not manual runs
+      // Prefer user-configured text (matches frontend), fall back to trigger timestamp
+      const scheduleText = (data.text as string | undefined)?.trim()
+      if (scheduleText) return { text: scheduleText }
       if (!triggerData) return undefined
       return { text: (triggerData.timestamp as string) ?? new Date().toISOString() }
     }
@@ -533,9 +535,15 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
 
   if (type === "preview") {
     // Check previewItems for saved output (matches frontend: first visible item's value)
-    const items = (data.previewItems as Array<{ value: string; visible: boolean }> | undefined) ?? []
+    const items = (data.previewItems as Array<{ type: string; value: string; visible: boolean }> | undefined) ?? []
     const first = items.find((item) => item.visible !== false)
-    if (first?.value) return { text: first.value }
+    if (first?.value) {
+      // Route by media type so downstream nodes receive correctly-typed output
+      if (first.type === "image") return { imageUrl: first.value }
+      if (first.type === "video") return { videoUrl: first.value }
+      if (first.type === "audio") return { audioUrl: first.value }
+      return { text: first.value }
+    }
     return undefined
   }
 
@@ -578,7 +586,7 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return plan ? { plan } : undefined
   }
   if (type === "video-composer") {
-    const plan = data.plan as Record<string, unknown> | undefined
+    const plan = (data.plan as Record<string, unknown> | undefined) ?? (data.sceneGraph as Record<string, unknown> | undefined)
     return plan ? { plan } : undefined
   }
 
