@@ -631,7 +631,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "sora-2-pro-text-to-video",
     credits: 150,
     cost: 0.75,  // 150 KIE credits * $0.005 (Pro Standard 10s)
-    extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+    extraParams: { aspect_ratio: "landscape", n_frames: "10", size: "standard", remove_watermark: true },
     allowedDurations: [5, 10],  // Sora Pro n_frames: 10 (~5s), 15 (~10s)
     usesNFrames: true,  // Uses n_frames parameter instead of duration
   },
