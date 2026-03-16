@@ -328,6 +328,7 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   "hailuo-standard",
   "sora2-pro",
   "sora2",
+  "seedance",
 ])
 
 /**
@@ -364,6 +365,7 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   "hailuo-standard": "duration",
   "sora2-pro": "duration+mode",
   "sora2": "duration",
+  "seedance": "duration",
 }
 
 /**
@@ -418,6 +420,11 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
   "sora2": [
     { maxSeconds: 5, suffix: "5s" },
     { maxSeconds: 10, suffix: "10s" },
+  ],
+  "seedance": [
+    { maxSeconds: 4, suffix: "4s" },
+    { maxSeconds: 8, suffix: "8s" },
+    { maxSeconds: 12, suffix: "12s" },
   ],
 }
 

@@ -266,6 +266,8 @@ export function resolveNodeInputs(
           ...(inputs.audioSources ?? []),
           { url: output, sourceNodeId: src.id },
         ];
+      } else if (node.type === "suno-mashup") {
+        routeSunoMashupAudio(inputs, output);
       } else {
         inputs.audioUrl = output;
       }

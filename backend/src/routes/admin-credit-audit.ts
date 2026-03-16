@@ -11,6 +11,7 @@ import {
 } from "../providers/kie/models.js"
 import type { KieModelConfig } from "../providers/kie/models.js"
 import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
+import { getAppSettings } from "../lib/app-settings.js"
 
 ***REDACTED-OSS-SCRUB***
 const KIE_CREDITS_PER_NODARO = 4
@@ -74,6 +75,10 @@ function buildModelMap(): Map<string, ModelMapping[]> {
   addAlias("chirp-auk", "suno", "music")           // V4.5
   addAlias("chirp-bluejay", "suno", "music")        // V4.5+
   addAlias("chirp-crow", "suno-v5", "music")        // V5
+
+  // Suno ops endpoints return sourceLabel as model key (no model field in records)
+  addAlias("suno-lyrics", "suno-lyrics", "music")
+  addAlias("suno-style", "suno-style-boost", "music")
 
   // Flux Kontext model-specific endpoint uses "flux-kontext-pro" / "flux-kontext-max"
   addAlias("flux-kontext-pro", "flux-kontext", "image")
@@ -212,6 +217,10 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
 
     const round2 = (n: number) => Math.round(n * 100) / 100
 
+    // Read markup from DB (admin settings) so audit matches pricing formula
+    const settings = await getAppSettings()
+    const markupMultiplier = 1 + settings.cost_markup_percent / 100
+
     // Compare: provider KIE credits vs what we charge users
     const results = []
     for (const [kieModel, stats] of byModel) {
@@ -219,6 +228,8 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
       const avgKieCredits = round2(stats.totalCredits / stats.tasks)
       // What the provider actually costs us in Nodaro credit units
       const providerCostInCredits = round2(avgKieCredits / KIE_CREDITS_PER_NODARO)
+      // What we SHOULD charge given the markup setting
+      const expectedCredits = Math.ceil(providerCostInCredits * markupMultiplier)
 
       if (!mappings?.length) {
         results.push({
@@ -231,6 +242,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
           providerMax: stats.maxCredits,
           ourCredits: null,
           providerCostInCredits,
+          expectedCredits,
           diff: null,
           diffPercent: null,
           status: "UNMAPPED",
@@ -247,17 +259,17 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
             Math.abs(m.kieCredits - avgKieCredits) < Math.abs(best.kieCredits - avgKieCredits) ? m : best
           )
 
-      // diff = how much more/less we charge vs provider cost (in Nodaro credits)
-      const diff = round2(mapping.ourCredits - providerCostInCredits)
-      const diffPercent = providerCostInCredits > 0
-        ? round2((diff / providerCostInCredits) * 100)
+      // diff = how much more/less we charge vs expected (with markup)
+      const diff = round2(mapping.ourCredits - expectedCredits)
+      const diffPercent = expectedCredits > 0
+        ? round2((diff / expectedCredits) * 100)
         : null
 
-      // UNDERPRICED = we charge less than it costs us, OVERPRICED = we charge much more
+      // UNDERPRICED = we charge less than expected, OVERPRICED = we charge much more
       let status = "OK"
       if (diff < -0.5) {
         status = "UNDERPRICED"
-      } else if (providerCostInCredits > 0 && diffPercent != null && diffPercent > 100) {
+      } else if (expectedCredits > 0 && diffPercent != null && diffPercent > 100) {
         status = "OVERPRICED"
       }
 
@@ -271,6 +283,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
         providerMax: stats.maxCredits,
         ourCredits: mapping.ourCredits,
         providerCostInCredits,
+        expectedCredits,
         diff,
         diffPercent,
         status,
@@ -289,6 +302,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
 
     return {
       days,
+      markupPercent: settings.cost_markup_percent,
       totalRecords: records.length,
       successRecords: records.filter(r => {
         const s = r.state?.toLowerCase?.() ?? ""
