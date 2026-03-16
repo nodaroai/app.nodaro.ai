@@ -423,7 +423,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       : undefined;
   }
   if (type === "video-composer") {
-    return (data.plan as Record<string, unknown> | undefined)
+    return (data.sceneGraph as Record<string, unknown> | undefined)
       ? "plan-ready"
       : undefined;
   }
@@ -552,7 +552,7 @@ export function detectPreviewItemType(
   nodeType: string,
   value?: string,
 ): "image" | "video" | "audio" | "data" | "text" {
-  if (IMAGE_SOURCE_TYPES.has(nodeType) || nodeType === "character" || nodeType === "face" || nodeType === "object" || nodeType === "location") return "image"
+  if (IMAGE_SOURCE_TYPES.has(nodeType)) return "image"
   if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(nodeType)) return "video"
   if (AUDIO_SOURCE_TYPES.has(nodeType)) return "audio"
   if (nodeType === "forced-alignment") return "data"

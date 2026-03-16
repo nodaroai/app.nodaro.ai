@@ -15,6 +15,8 @@ import {
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
 import { COMPOSER_PLAN_MAP } from "../../../../packages/shared/src/model-constants.js"
+import { buildScenePrompt } from "../../../../packages/shared/src/prompt-builder.js"
+import type { SceneData } from "../../../../packages/shared/src/types.js"
 
 // Node types that output a plan (not a media URL) — derived from COMPOSER_PLAN_MAP
 const PLAN_NODE_TYPES = new Set(Object.keys(COMPOSER_PLAN_MAP))
@@ -464,31 +466,18 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
       getActiveResultUrl(data) ??
       (data.generatedImageUrl as string | undefined)
     if (url) return { imageUrl: url }
-    // Fall back to composed scene prompt from available data fields
-    // (approximation of frontend buildScenePrompt — without full character definitions)
-    const parts: string[] = []
-    const summary = (data.summary as string | undefined)?.trim()
-    const description = (data.description as string | undefined)?.trim()
-    const prompt = (data.prompt as string | undefined)?.trim()
-    const mood = (data.mood as string | undefined)?.trim()
-    const locations = data.locations as string[] | undefined
-    const characters = data.characters as Array<{ name?: string; description?: string }> | undefined
-    if (summary) parts.push(summary)
-    if (description) parts.push(description)
-    if (prompt) parts.push(prompt)
-    if (characters && characters.length > 0) {
-      const charDesc = characters
-        .map((c) => c.name ? `${c.name}${c.description ? `: ${c.description}` : ""}` : c.description)
-        .filter(Boolean)
-        .join(", ")
-      if (charDesc) parts.push(`Characters: ${charDesc}`)
+    // Fall back to buildScenePrompt (shared with frontend) — without character
+    // definitions the character names will default to "a figure", but all other
+    // scene fields (shot type, camera angle, locations, mood, etc.) are preserved.
+    try {
+      const sceneText = buildScenePrompt(data as unknown as SceneData, [])
+      return sceneText ? { text: sceneText } : undefined
+    } catch {
+      // If data doesn't match SceneData shape, fall back to raw fields
+      const summary = (data.summary as string | undefined)?.trim()
+      const prompt = (data.prompt as string | undefined)?.trim()
+      return (summary || prompt) ? { text: (summary ?? prompt)! } : undefined
     }
-    if (locations && locations.length > 0) {
-      parts.push(`Location: ${locations.join(", ")}`)
-    }
-    if (mood) parts.push(`Mood: ${mood}`)
-    const sceneText = parts.join(". ")
-    return sceneText ? { text: sceneText } : undefined
   }
 
   // Suno-separate → audioUrl + stem URLs (vocalUrl, instrumentalUrl)

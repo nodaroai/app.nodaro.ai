@@ -109,7 +109,7 @@ export function executeSplitText(
 
   // Fall back to resolved prompt or node data
   const text = inputText || resolvedInputs.prompt || (node.data.text as string) || ""
-  const delimiter = (node.data.delimiter as string) || (node.data.separator as string) || "===NEXT==="
+  const delimiter = (node.data.separator as string) || (node.data.delimiter as string) || "===NEXT==="
   const trimWhitespace = (node.data.trimWhitespace as boolean) !== false
   const removeEmpty = (node.data.removeEmpty as boolean) !== false
 

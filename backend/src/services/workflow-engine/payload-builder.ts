@@ -7,10 +7,11 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from 
 
 // Shared logic from packages/shared — single source of truth
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "../../../../packages/shared/src/ancestor-refs.js"
-import { buildImagePrompt } from "../../../../packages/shared/src/prompt-builder.js"
+import { buildImagePrompt, buildScenePrompt } from "../../../../packages/shared/src/prompt-builder.js"
+import { resolveTemplate, applyTemplate } from "../../../../packages/shared/src/prompt-templates.js"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
-import type { CharacterDef } from "../../../../packages/shared/src/types.js"
+import type { CharacterDef, SceneData } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
 import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-constants.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
@@ -1335,15 +1336,63 @@ export function buildPayload(
 
     case "scene": {
       const provider = (data.provider as string) ?? "nano-banana"
+      const sceneSettings = buildCtx?.settings
+      const charDefs = sceneSettings?.characterDefinitions ?? []
+      const userTpl = sceneSettings?.userPromptTemplates
+      const flowTpl = sceneSettings?.flowPromptTemplates
+
+      // Build the rich scene prompt (matches frontend execute-node.ts logic).
+      // Wrapped in try/catch because node data is cast from Record<string, unknown>
+      // and may be missing required SceneData fields on older/malformed nodes.
+      let scenePrompt: string
+      const sceneRefUrls = [...(resolvedInputs.referenceImageUrls ?? [])]
+      try {
+        const sceneStylePrompt = buildScenePrompt(data as unknown as SceneData, charDefs as CharacterDef[])
+        const upstreamPrompt = resolvedInputs.prompt ?? ""
+        scenePrompt = upstreamPrompt
+          ? `${upstreamPrompt}. ${sceneStylePrompt}`
+          : sceneStylePrompt
+
+        // Append character description templates (matches frontend charDescs logic).
+        // buildScenePrompt adds compositional info (name + mood + action);
+        // this loop adds full description text via templates for the image generator.
+        const allAssetIds = [
+          ...((data.characters as Array<{ assetId: string }>) ?? []).map((c) => c.assetId),
+          ...((data.locations as Array<{ assetId: string }>) ?? []).map((l) => l.assetId),
+          ...((data.objects as Array<{ assetId: string }>) ?? []).map((o) => o.assetId),
+        ].filter(Boolean)
+        const sceneCharDescs: string[] = []
+        for (const assetId of allAssetIds) {
+          const asset = charDefs.find((a) => a.id === assetId)
+          if (!asset) continue
+          if (asset.referenceImageUrl) sceneRefUrls.push(asset.referenceImageUrl)
+          if (asset.type === "description" && asset.description) {
+            const templateKey =
+              asset.category === "face" ? "face-description"
+                : asset.category === "location" ? "location-description"
+                  : asset.category === "object" ? "object-description"
+                    : "character-description"
+            const template = resolveTemplate(templateKey, userTpl, flowTpl)
+            sceneCharDescs.push(applyTemplate(template, { name: asset.name, description: asset.description }))
+          }
+        }
+        if (sceneCharDescs.length > 0) {
+          scenePrompt = `${scenePrompt}\n${sceneCharDescs.join(" ")}`
+        }
+      } catch {
+        // Malformed scene data — fall back to raw prompt fields
+        scenePrompt = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || ""
+      }
+
       return {
         jobName: "generate-image",
         queueName: "video-generation",
         modelIdentifier: provider,
         payload: {
           jobId,
-          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+          prompt: scenePrompt,
           provider,
-          referenceImageUrls: resolvedInputs.referenceImageUrls,
+          referenceImageUrls: sceneRefUrls.length > 0 ? sceneRefUrls : undefined,
           aspectRatio: data.aspectRatio,
           usageLogId,
         },

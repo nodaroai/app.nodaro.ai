@@ -296,7 +296,7 @@ describe("after-effects", () => {
       sourceNode,
     ]
     mockEdges = [{ id: "e1", source: "vid1", target: "n1" }]
-    mockResolveNodeInputs.mockReturnValue({})
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://video.mp4" })
     mockExtractNodeOutput.mockReturnValue("http://video.mp4")
     mockGenerateAfterEffects.mockResolvedValue({
       jobId: "j1",
@@ -386,7 +386,7 @@ describe("lottie-overlay", () => {
     mockEdges = [
       { id: "e1", source: "vid1", target: "n1", targetHandle: "in" },
     ]
-    mockResolveNodeInputs.mockReturnValue({})
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://video.mp4" })
     mockExtractNodeOutput.mockReturnValue("http://video.mp4")
     mockGenerateLottieOverlay.mockResolvedValue({
       jobId: "j2",

@@ -1438,7 +1438,7 @@ describe("motion-transfer", () => {
       { id: "e1", source: "img1", target: "n1" },
       { id: "e2", source: "vid1", target: "n1" },
     ]
-    mockResolveNodeInputs.mockReturnValue({})
+    mockResolveNodeInputs.mockReturnValue({ imageUrl: "http://face.png", videoUrl: "http://motion.mp4" })
     mockExtractNodeOutput.mockImplementation((node: any) => {
       if (node.id === "img1") return "http://face.png"
       if (node.id === "vid1") return "http://motion.mp4"
@@ -2132,7 +2132,7 @@ describe("after-effects", () => {
       vidNode,
     ]
     mockEdges = [{ id: "e1", source: "vid1", target: "n1" }]
-    mockResolveNodeInputs.mockReturnValue({})
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
     mockExtractNodeOutput.mockReturnValue("http://vid.mp4")
     mockGenerateAfterEffects.mockResolvedValue({
       effectPlan: { effects: [] },
@@ -2174,7 +2174,7 @@ describe("lottie-overlay", () => {
     mockEdges = [
       { id: "e1", source: "vid1", target: "n1", targetHandle: "in" },
     ]
-    mockResolveNodeInputs.mockReturnValue({})
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
     mockExtractNodeOutput.mockReturnValue("http://vid.mp4")
     mockGenerateLottieOverlay.mockResolvedValue({
       overlayPlan: { overlays: [] },
