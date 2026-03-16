@@ -41,6 +41,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "loop-video",
   "fade-video",
   "transcode-video",
+  "manual-edit",
 ]);
 
 /** Resolved inputs from upstream node outputs — shared return type for resolveNodeInputs */
@@ -587,6 +588,48 @@ export function resolveNodeInputs(
     } else if (src.type === "preview") {
       inputs.prompt = output;
     } else if (src.type === "split-text") {
+      inputs.prompt = output;
+    } else if (src.type === "generate-script") {
+      inputs.prompt = output;
+    } else if (src.type === "webhook-trigger") {
+      // Route by param type using sourceHandle (matches backend)
+      const srcData = src.data as Record<string, unknown>;
+      const params = srcData.params as Array<{ id: string; name: string; type: string }> | undefined;
+      if (params && params.length > 0 && srcEdge.sourceHandle) {
+        const param = params.find((p) => p.id === srcEdge.sourceHandle);
+        if (param) {
+          if (param.type === "imageUrl") {
+            inputs.imageUrl = output;
+          } else if (param.type === "videoUrl") {
+            if (node.type === "combine-videos") {
+              inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
+              inputs.videoUrlsWithSourceIds = [
+                ...(inputs.videoUrlsWithSourceIds ?? []),
+                { nodeId: src.id, url: output },
+              ];
+            } else {
+              inputs.videoUrl = output;
+            }
+          } else if (param.type === "audioUrl") {
+            if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
+              inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
+              inputs.audioUrlsWithSourceIds = [
+                ...(inputs.audioUrlsWithSourceIds ?? []),
+                { nodeId: src.id, url: output },
+              ];
+            } else {
+              inputs.audioUrl = output;
+            }
+          } else {
+            inputs.prompt = output;
+          }
+        } else {
+          inputs.prompt = output;
+        }
+      } else {
+        inputs.prompt = output;
+      }
+    } else if (src.type === "schedule-trigger") {
       inputs.prompt = output;
     } else if (src.type === "sub-workflow" || src.type === "sub-workflow-input") {
       // Route sub-workflow output by the sourceHandle to the correct media type

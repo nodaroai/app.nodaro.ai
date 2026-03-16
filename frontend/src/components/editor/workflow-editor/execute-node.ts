@@ -57,6 +57,7 @@ import {
   setForcePrivate,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
+import { ASPECT_RATIO_DIMENSIONS } from "@nodaro-shared/model-constants";
 import { getAIWriterTemplate } from "@/lib/ai-writer-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import type {
@@ -141,7 +142,7 @@ import {
 } from "./types";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, detectPreviewItemType, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
-import { resolveNodeInputs } from "./node-input-resolver";
+import { resolveNodeInputs, type FrontendResolvedInputs } from "./node-input-resolver";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { pollJobWithNodeUpdate } from "./poll-job";
 import {
@@ -209,6 +210,17 @@ function resolveUpstreamKieTaskId(nodeId: string, nodeData: Record<string, unkno
  * Alias for pollJobWithNodeUpdate to match original codebase naming.
  * Used for node types that follow the standard poll-to-completion pattern.
  */
+/** Extract Suno taskId/audioId from inputs or node data, returning null if missing. */
+function resolveSunoIds(
+  inputs: FrontendResolvedInputs,
+  data: Record<string, unknown>,
+): { taskId: string; audioId: string } | null {
+  const taskId = (inputs.sunoTaskId as string | undefined) ?? (data.taskId as string | undefined);
+  const audioId = (inputs.sunoTrackId as string | undefined) ?? (data.audioId as string | undefined);
+  if (!taskId || !audioId) return null;
+  return { taskId, audioId };
+}
+
 function runProcessingNode(
   nodeId: string,
   apiCall: () => Promise<{ jobId: string }>,
@@ -1359,7 +1371,7 @@ export function executeNode(
 
   if (node.type === "suno-mashup") {
     const d = node.data as SunoMashupData;
-    // Mashup needs 2 audio inputs — uses audioUrl + audioUrl2 (matches backend)
+    // Mashup needs 2 audio inputs — backend expects uploadUrlList tuple
     const audioUrl1 = inputs.audioUrl ?? (inputs.audioUrls ?? [])[0];
     const audioUrl2 = inputs.audioUrl2 ?? (inputs.audioUrls ?? [])[1];
     if (!audioUrl1 || !audioUrl2) {
@@ -1370,8 +1382,7 @@ export function executeNode(
       node.id,
       () =>
         sunoMashupApi({
-          audioUrl1,
-          audioUrl2,
+          uploadUrlList: [audioUrl1, audioUrl2],
           model: d.model || undefined,
           customMode: d.customMode ?? false,
           style: d.style || undefined,
@@ -1388,20 +1399,23 @@ export function executeNode(
 
   if (node.type === "suno-replace-section") {
     const d = node.data as SunoReplaceSectionData;
-    const audioUrl = inputs.audioUrl;
-    if (!audioUrl) {
-      toast.error(`Node "${d.label}": no audio input found`);
-      return Promise.reject(new Error("No audio input"));
+    const ids = resolveSunoIds(inputs, d as Record<string, unknown>);
+    if (!ids) {
+      toast.error(
+        `Node "${d.label}": missing taskId or audioId. Connect to a Suno node or enter manually.`,
+      );
+      return Promise.reject(new Error("Missing taskId/audioId"));
     }
     return runProcessingNode(
       node.id,
       () =>
         sunoReplaceSectionApi({
-          audioUrl,
+          taskId: ids.taskId,
+          audioId: ids.audioId,
           infillStartS: d.infillStartS ?? 0,
           infillEndS: d.infillEndS ?? 30,
-          prompt: d.prompt?.trim() || undefined,
-          tags: d.tags?.trim() || undefined,
+          prompt: d.prompt?.trim() || "",
+          tags: d.tags?.trim() || "",
           title: d.title?.trim() || undefined,
           userId: ctx.userId,
         }),
@@ -1444,16 +1458,19 @@ export function executeNode(
 
   if (node.type === "suno-add-instrumental") {
     const d = node.data as SunoAddInstrumentalData;
-    const audioUrl = inputs.audioUrl;
-    if (!audioUrl) {
-      toast.error(`Node "${d.label}": no audio input found`);
-      return Promise.reject(new Error("No audio input"));
+    const ids = resolveSunoIds(inputs, d as Record<string, unknown>);
+    if (!ids) {
+      toast.error(
+        `Node "${d.label}": missing taskId or audioId. Connect to a Suno node or enter manually.`,
+      );
+      return Promise.reject(new Error("Missing taskId/audioId"));
     }
     return runProcessingNode(
       node.id,
       () =>
         sunoAddInstrumentalApi({
-          audioUrl,
+          taskId: ids.taskId,
+          audioId: ids.audioId,
           model: d.model || undefined,
           userId: ctx.userId,
         }),
@@ -1465,16 +1482,19 @@ export function executeNode(
 
   if (node.type === "suno-add-vocals") {
     const d = node.data as SunoAddVocalsData;
-    const audioUrl = inputs.audioUrl;
-    if (!audioUrl) {
-      toast.error(`Node "${d.label}": no audio input found`);
-      return Promise.reject(new Error("No audio input"));
+    const ids = resolveSunoIds(inputs, d as Record<string, unknown>);
+    if (!ids) {
+      toast.error(
+        `Node "${d.label}": missing taskId or audioId. Connect to a Suno node or enter manually.`,
+      );
+      return Promise.reject(new Error("Missing taskId/audioId"));
     }
     return runProcessingNode(
       node.id,
       () =>
         sunoAddVocalsApi({
-          audioUrl,
+          taskId: ids.taskId,
+          audioId: ids.audioId,
           model: d.model || undefined,
           userId: ctx.userId,
         }),
@@ -1486,16 +1506,19 @@ export function executeNode(
 
   if (node.type === "suno-convert-wav") {
     const d = node.data as SunoConvertWavData;
-    const audioUrl = inputs.audioUrl;
-    if (!audioUrl) {
-      toast.error(`Node "${d.label}": no audio input found`);
-      return Promise.reject(new Error("No audio input"));
+    const ids = resolveSunoIds(inputs, d as Record<string, unknown>);
+    if (!ids) {
+      toast.error(
+        `Node "${d.label}": missing taskId or audioId. Connect to a Suno node or enter manually.`,
+      );
+      return Promise.reject(new Error("Missing taskId/audioId"));
     }
     return runProcessingNode(
       node.id,
       () =>
         sunoConvertWavApi({
-          audioUrl,
+          taskId: ids.taskId,
+          audioId: ids.audioId,
           userId: ctx.userId,
         }),
       "generatedAudioUrl",
@@ -2773,13 +2796,7 @@ export function executeNode(
       errorMessage: undefined,
       backgroundMediaUrl,
     });
-    const ASPECT_DIMS: Record<string, { width: number; height: number }> = {
-      "16:9": { width: 1920, height: 1080 },
-      "9:16": { width: 1080, height: 1920 },
-      "1:1": { width: 1080, height: 1080 },
-      "4:5": { width: 1080, height: 1350 },
-    };
-    const dims = ASPECT_DIMS[d.aspectRatio] ?? { width: 1920, height: 1080 };
+    const dims = ASPECT_RATIO_DIMENSIONS[d.aspectRatio] ?? { width: 1920, height: 1080 };
     return generate3DTitle({
       prompt: d.titlePrompt,
       fps: d.fps,
@@ -2815,13 +2832,7 @@ export function executeNode(
       motionPlan: undefined,
       errorMessage: undefined,
     });
-    const ASPECT_DIMS: Record<string, { width: number; height: number }> = {
-      "16:9": { width: 1920, height: 1080 },
-      "9:16": { width: 1080, height: 1920 },
-      "1:1": { width: 1080, height: 1080 },
-      "4:5": { width: 1080, height: 1350 },
-    };
-    const dims = ASPECT_DIMS[d.aspectRatio] ?? { width: 1920, height: 1080 };
+    const dims = ASPECT_RATIO_DIMENSIONS[d.aspectRatio] ?? { width: 1920, height: 1080 };
     return generateMotionGraphics({
       prompt: d.motionPrompt,
       fps: d.fps,

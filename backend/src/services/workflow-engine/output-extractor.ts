@@ -214,11 +214,28 @@ export function getPrimaryOutput(
       const portId = sourceHandle.replace(/^out_/, "")
       if (outputResults[portId]) return outputResults[portId]
     }
+    // Fall back to visible output port (matches frontend routeSnapshot.visibleOutputPortId)
+    if (outputResults) {
+      const visiblePortId = output._visibleOutputPortId
+      if (visiblePortId && outputResults[visiblePortId]) return outputResults[visiblePortId]
+      // Fall back to first result value
+      const firstValue = Object.values(outputResults)[0]
+      if (firstValue) return firstValue
+    }
     return output.text || output.imageUrl || output.videoUrl || output.audioUrl
   }
 
-  // Sub-workflow-input handle routing
-  if (sourceType === "sub-workflow-input" && sourceHandle) {
+  // Sub-workflow-input handle routing (matches frontend: look up specific port value)
+  if (sourceType === "sub-workflow-input") {
+    if (sourceHandle && output._injectedPortValues) {
+      const val = output._injectedPortValues[sourceHandle]
+      if (val) return val
+    }
+    // Fall back to first value
+    if (output._injectedPortValues) {
+      const firstValue = Object.values(output._injectedPortValues)[0]
+      if (firstValue) return firstValue
+    }
     return output.text
   }
 
@@ -399,7 +416,13 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     const url =
       getActiveResultUrl(data) ??
       (data.generatedVideoUrl as string | undefined)
-    return url ? { videoUrl: url } : undefined
+    if (url) return { videoUrl: url }
+    // social-media-format can also produce images (matches frontend fallback)
+    if (type === "social-media-format") {
+      const imageUrl = data.generatedImageUrl as string | undefined
+      if (imageUrl) return { imageUrl }
+    }
+    return undefined
   }
 
   // Audio-generating nodes → audioUrl from generatedResults or generatedAudioUrl
@@ -438,9 +461,30 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
       getActiveResultUrl(data) ??
       (data.generatedImageUrl as string | undefined)
     if (url) return { imageUrl: url }
-    // Fall back to scene prompt text if no generated image (matches frontend buildScenePrompt)
-    const sceneText = (data.description as string | undefined)?.trim() ||
-      (data.prompt as string | undefined)?.trim()
+    // Fall back to composed scene prompt from available data fields
+    // (approximation of frontend buildScenePrompt — without full character definitions)
+    const parts: string[] = []
+    const summary = (data.summary as string | undefined)?.trim()
+    const description = (data.description as string | undefined)?.trim()
+    const prompt = (data.prompt as string | undefined)?.trim()
+    const mood = (data.mood as string | undefined)?.trim()
+    const locations = data.locations as string[] | undefined
+    const characters = data.characters as Array<{ name?: string; description?: string }> | undefined
+    if (summary) parts.push(summary)
+    if (description) parts.push(description)
+    if (prompt) parts.push(prompt)
+    if (characters && characters.length > 0) {
+      const charDesc = characters
+        .map((c) => c.name ? `${c.name}${c.description ? `: ${c.description}` : ""}` : c.description)
+        .filter(Boolean)
+        .join(", ")
+      if (charDesc) parts.push(`Characters: ${charDesc}`)
+    }
+    if (locations && locations.length > 0) {
+      parts.push(`Location: ${locations.join(", ")}`)
+    }
+    if (mood) parts.push(`Mood: ${mood}`)
+    const sceneText = parts.join(". ")
     return sceneText ? { text: sceneText } : undefined
   }
 
@@ -488,7 +532,10 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   }
 
   if (type === "preview") {
-    // Preview node output is set by inline executor (passthrough)
+    // Check previewItems for saved output (matches frontend: first visible item's value)
+    const items = (data.previewItems as Array<{ value: string; visible: boolean }> | undefined) ?? []
+    const first = items.find((item) => item.visible !== false)
+    if (first?.value) return { text: first.value }
     return undefined
   }
 
@@ -545,15 +592,23 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     if (firstValue) output.text = firstValue
     // Store full outputResults for handle-based routing in getPrimaryOutput
     output._outputResults = outputResults
+    // Store visibleOutputPortId for fallback routing (matches frontend routeSnapshot)
+    const routeSnapshot = data.routeSnapshot as Record<string, unknown> | undefined
+    const visiblePortId = routeSnapshot?.visibleOutputPortId as string | undefined
+    if (visiblePortId) output._visibleOutputPortId = visiblePortId
     return output
   }
 
-  // Sub-workflow-input — return injected port values (matches frontend)
+  // Sub-workflow-input — return all injected port values for handle-based routing (matches frontend)
   if (type === "sub-workflow-input") {
     const injected = data.__injectedPortValues as Record<string, string> | undefined
     if (!injected) return undefined
+    const output: NodeOutput = {}
     const firstValue = Object.values(injected)[0]
-    return firstValue ? { text: firstValue } : undefined
+    if (firstValue) output.text = firstValue
+    // Store full injected values so getPrimaryOutput can route by sourceHandle
+    output._injectedPortValues = injected
+    return output
   }
 
   return undefined

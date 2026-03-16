@@ -187,6 +187,14 @@ export const LIP_SYNC_PROVIDERS = [
 ] as const
 export type LipSyncProvider = typeof LIP_SYNC_PROVIDERS[number]
 
+/** Standard aspect ratio → pixel dimensions for composition nodes */
+export const ASPECT_RATIO_DIMENSIONS: Record<string, { width: number; height: number }> = {
+  "16:9": { width: 1920, height: 1080 },
+  "9:16": { width: 1080, height: 1920 },
+  "1:1": { width: 1080, height: 1080 },
+  "4:5": { width: 1080, height: 1350 },
+}
+
 /** Motion transfer providers */
 export const MOTION_TRANSFER_PROVIDERS = [
   "kling",

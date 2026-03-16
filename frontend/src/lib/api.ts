@@ -1698,8 +1698,7 @@ export async function sunoMusicVideoApi(params: {
 }
 
 export async function sunoMashupApi(params: {
-  audioUrl1: string
-  audioUrl2: string
+  uploadUrlList: [string, string]
   model?: string
   customMode?: boolean
   style?: string
@@ -1708,7 +1707,7 @@ export async function sunoMashupApi(params: {
   vocalGender?: string
   userId?: string
 }): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { audioUrl1: params.audioUrl1, audioUrl2: params.audioUrl2 }
+  const body: Record<string, unknown> = { uploadUrlList: params.uploadUrlList }
   if (params.model) body.model = params.model
   body.customMode = params.customMode ?? false
   if (params.style) body.style = params.style
@@ -1729,17 +1728,16 @@ export async function sunoMashupApi(params: {
 }
 
 export async function sunoReplaceSectionApi(params: {
-  audioUrl: string
+  taskId: string
+  audioId: string
   infillStartS: number
   infillEndS: number
-  prompt?: string
-  tags?: string
+  prompt: string
+  tags: string
   title?: string
   userId?: string
 }): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { audioUrl: params.audioUrl, infillStartS: params.infillStartS, infillEndS: params.infillEndS }
-  if (params.prompt) body.prompt = params.prompt
-  if (params.tags) body.tags = params.tags
+  const body: Record<string, unknown> = { taskId: params.taskId, audioId: params.audioId, infillStartS: params.infillStartS, infillEndS: params.infillEndS, prompt: params.prompt, tags: params.tags }
   if (params.title) body.title = params.title
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/replace-section`, {
@@ -1773,11 +1771,12 @@ export async function sunoStyleBoostApi(params: {
 }
 
 export async function sunoAddInstrumentalApi(params: {
-  audioUrl: string
+  taskId: string
+  audioId: string
   model?: string
   userId?: string
 }): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { audioUrl: params.audioUrl }
+  const body: Record<string, unknown> = { taskId: params.taskId, audioId: params.audioId }
   if (params.model) body.model = params.model
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/add-instrumental`, {
@@ -1793,11 +1792,12 @@ export async function sunoAddInstrumentalApi(params: {
 }
 
 export async function sunoAddVocalsApi(params: {
-  audioUrl: string
+  taskId: string
+  audioId: string
   model?: string
   userId?: string
 }): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { audioUrl: params.audioUrl }
+  const body: Record<string, unknown> = { taskId: params.taskId, audioId: params.audioId }
   if (params.model) body.model = params.model
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/add-vocals`, {
@@ -1813,10 +1813,11 @@ export async function sunoAddVocalsApi(params: {
 }
 
 export async function sunoConvertWavApi(params: {
-  audioUrl: string
+  taskId: string
+  audioId: string
   userId?: string
 }): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { audioUrl: params.audioUrl }
+  const body: Record<string, unknown> = { taskId: params.taskId, audioId: params.audioId }
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/convert-wav`, {
     method: "POST",

@@ -106,10 +106,19 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     );
   }
   if (type === "webhook-trigger") {
-    // Return first param value or legacy prompt (matches backend extractSourceNodeOutput)
+    // Return param value by sourceHandle, or first param value, or legacy prompt
     const params = data.params as Array<{ id: string; name: string; type: string }> | undefined;
     const triggerData = data.__triggerData as Record<string, unknown> | undefined;
     if (params && params.length > 0 && triggerData) {
+      // If sourceHandle specifies a param, return that param's value
+      if (sourceHandle) {
+        const param = params.find((p) => p.id === sourceHandle);
+        if (param) {
+          const val = triggerData[param.name];
+          if (val != null) return String(val);
+        }
+      }
+      // Fallback: return first available param value
       for (const p of params) {
         const val = triggerData[p.name];
         if (val != null) return String(val);
@@ -413,6 +422,11 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       ? "plan-ready"
       : undefined;
   }
+  if (type === "video-composer") {
+    return (data.plan as Record<string, unknown> | undefined)
+      ? "plan-ready"
+      : undefined;
+  }
   // Sub-workflow: return the output for a specific port (via sourceHandle) or visible output
   if (type === "sub-workflow") {
     const outputResults = data.outputResults as Record<string, string> | undefined;
@@ -471,6 +485,11 @@ export const IMAGE_SOURCE_TYPES = new Set([
   "upload-image",
   "edit-image",
   "image-to-image",
+  "character",
+  "face",
+  "object",
+  "location",
+  "scene",
 ]);
 export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "image-to-video",
@@ -496,6 +515,7 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "loop-video",
   "fade-video",
   "transcode-video",
+  "manual-edit",
 ]);
 export const AUDIO_SOURCE_TYPES = new Set([
   "text-to-speech",
@@ -605,15 +625,9 @@ export function collectMediaAssets(
   return orderedIds.map((id) => assetMap.get(id)!).filter(Boolean);
 }
 
-const ASPECT_RATIO_DIMENSIONS: Record<
-  string,
-  { width: number; height: number }
-> = {
-  "16:9": { width: 1920, height: 1080 },
-  "9:16": { width: 1080, height: 1920 },
-  "1:1": { width: 1080, height: 1080 },
-  "4:5": { width: 1080, height: 1350 },
-};
+// Re-export shared constant for local use and external imports
+import { ASPECT_RATIO_DIMENSIONS } from "@nodaro-shared/model-constants";
+export { ASPECT_RATIO_DIMENSIONS };
 
 export function buildAutoComposition(
   assets: Array<{
