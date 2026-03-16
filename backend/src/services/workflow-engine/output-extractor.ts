@@ -14,16 +14,10 @@ import {
   AUDIO_SOURCE_TYPES,
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
+import { COMPOSER_PLAN_MAP } from "../../../../packages/shared/src/model-constants.js"
 
-// Node types that output a plan (not a media URL)
-const PLAN_NODE_TYPES = new Set([
-  "after-effects",
-  "lottie-overlay",
-  "3d-title",
-  "motion-graphics",
-  "composite",
-  "video-composer",
-])
+// Node types that output a plan (not a media URL) — derived from COMPOSER_PLAN_MAP
+const PLAN_NODE_TYPES = new Set(Object.keys(COMPOSER_PLAN_MAP))
 
 // All NodeOutput keys that map 1:1 from job output_data
 const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
@@ -45,13 +39,9 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "listResults",
 ]
 
-// Job output_data keys that all map to NodeOutput.plan
+// Job output_data keys that all map to NodeOutput.plan — derived from COMPOSER_PLAN_MAP + generic "plan"
 const PLAN_OUTPUT_KEYS = [
-  "effectPlan",
-  "overlayPlan",
-  "titlePlan",
-  "motionPlan",
-  "compositePlan",
+  ...new Set(Object.values(COMPOSER_PLAN_MAP).map((m) => m.planField)),
   "plan",
 ]
 
@@ -564,29 +554,14 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return alignment ? { alignment } : undefined
   }
 
-  // Plan nodes
-  if (type === "after-effects") {
-    const plan = data.effectPlan as Record<string, unknown> | undefined
-    return plan ? { plan } : undefined
-  }
-  if (type === "lottie-overlay") {
-    const plan = data.overlayPlan as Record<string, unknown> | undefined
-    return plan ? { plan } : undefined
-  }
-  if (type === "3d-title") {
-    const plan = data.titlePlan as Record<string, unknown> | undefined
-    return plan ? { plan } : undefined
-  }
-  if (type === "motion-graphics") {
-    const plan = data.motionPlan as Record<string, unknown> | undefined
-    return plan ? { plan } : undefined
-  }
-  if (type === "composite") {
-    const plan = data.compositePlan as Record<string, unknown> | undefined
-    return plan ? { plan } : undefined
-  }
-  if (type === "video-composer") {
-    const plan = (data.plan as Record<string, unknown> | undefined) ?? (data.sceneGraph as Record<string, unknown> | undefined)
+  // Plan nodes — use COMPOSER_PLAN_MAP to find the correct data field
+  const composerMapping = COMPOSER_PLAN_MAP[type]
+  if (composerMapping) {
+    let plan = data[composerMapping.planField] as Record<string, unknown> | undefined
+    // video-composer has a legacy fallback to data.sceneGraph
+    if (!plan && type === "video-composer") {
+      plan = data.sceneGraph as Record<string, unknown> | undefined
+    }
     return plan ? { plan } : undefined
   }
 

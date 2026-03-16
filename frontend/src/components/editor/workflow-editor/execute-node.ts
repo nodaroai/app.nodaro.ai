@@ -57,7 +57,7 @@ import {
   setForcePrivate,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
-import { ASPECT_RATIO_DIMENSIONS } from "@nodaro-shared/model-constants";
+import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP } from "@nodaro-shared/model-constants";
 import { getAIWriterTemplate } from "@/lib/ai-writer-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import type {
@@ -2554,7 +2554,7 @@ export function executeNode(
           d.position,
           d.fontSize,
           d.color,
-          undefined,
+          d.backgroundColor as string | undefined,
           ctx.userId,
         ),
       "generatedVideoUrl",
@@ -2949,6 +2949,7 @@ export function executeNode(
 
       const compositePlan = {
         planType: "composite" as const,
+        layout: d.layout ?? "custom",
         fps: d.fps,
         width: dims.width,
         height: dims.height,
@@ -2974,14 +2975,6 @@ export function executeNode(
 
   if (node.type === "render-video") {
     const d = node.data as RenderVideoData;
-    const COMPOSER_PLAN_MAP: Record<string, { planType: string; planField: string }> = {
-      "video-composer": { planType: "scene-graph", planField: "sceneGraph" },
-      "after-effects": { planType: "after-effects", planField: "effectPlan" },
-      "lottie-overlay": { planType: "lottie-overlay", planField: "overlayPlan" },
-      "3d-title": { planType: "3d-title", planField: "titlePlan" },
-      "motion-graphics": { planType: "motion-graphics", planField: "motionPlan" },
-      "composite": { planType: "composite", planField: "compositePlan" },
-    };
     const incomingEdges = edges.filter((e) => e.target === node.id);
     let upstreamPlanType: string | undefined;
     let upstreamPlan: Record<string, unknown> | undefined;
