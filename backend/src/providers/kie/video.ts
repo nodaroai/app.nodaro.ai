@@ -42,6 +42,20 @@ import { uploadBufferToR2 } from "../../lib/storage.js"
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
 
+// Sora models use named aspect ratio values instead of ratio strings
+const SORA_ASPECT_RATIO_MAP: Record<string, string> = {
+  "16:9": "landscape",
+  "9:16": "portrait",
+  "1:1": "square",
+}
+
+function mapAspectRatio(provider: string, aspectRatio: string): string {
+  if (provider.startsWith("sora")) {
+    return SORA_ASPECT_RATIO_MAP[aspectRatio] ?? aspectRatio
+  }
+  return aspectRatio
+}
+
 // Max audio duration (seconds) per lip-sync model
 // KIE.ai lip-sync models enforce a 15-second limit; use 14.5s to avoid
 // edge cases where ffprobe and KIE.ai measure duration slightly differently
@@ -531,7 +545,7 @@ export class KieVideoProvider
 
     // Override aspect ratio if provided
     if (aspectRatio) {
-      input.aspect_ratio = aspectRatio
+      input.aspect_ratio = mapAspectRatio(provider, aspectRatio)
     }
 
     // Override sound from options (Kling 2.6 supports sound toggle)
@@ -1116,7 +1130,7 @@ export class KieVideoProvider
     }
 
     if (aspectRatio) {
-      input.aspect_ratio = aspectRatio
+      input.aspect_ratio = mapAspectRatio("sora-storyboard", aspectRatio)
     }
 
     if (imageUrls && imageUrls.length > 0) {
