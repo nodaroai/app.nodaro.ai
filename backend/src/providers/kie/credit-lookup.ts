@@ -99,15 +99,22 @@ function auditHeaders(sessionToken: string, uniqueId: string) {
 function normalizeRecord(raw: any, sourceLabel: string): KieLogRecord {
   let state = raw.state ?? ""
   if (!state && raw.successFlag !== undefined) {
+    // Use Number() to handle string values (e.g., "1" vs 1)
     // 200 (HTTP-style) or 1 (boolean-style) = success
-    state = (raw.successFlag === 200 || raw.successFlag === 1) ? "success" : "fail"
+    const sf = Number(raw.successFlag)
+    state = (sf === 200 || sf === 1) ? "success" : "fail"
+  }
+  // Some endpoints use `status` instead of `state`/`successFlag`
+  if (!state && raw.status !== undefined) {
+    const st = String(raw.status).toLowerCase()
+    state = (st === "1" || st === "success" || st === "completed" || st === "done") ? "success" : "fail"
   }
 
   return {
     taskId: raw.taskId ?? raw.uuid ?? raw.task_id ?? raw.id?.toString() ?? "",
     consumeCredits: raw.consumeCredits ?? raw.creditsConsumed ?? raw.credits_consumed ?? raw.credits ?? 0,
     remainedCredits: raw.remainedCredits ?? raw.creditsRemaining ?? raw.credits_remaining ?? 0,
-    model: raw.model ?? raw.type ?? raw.modelName ?? raw.model_name ?? sourceLabel,
+    model: raw.model ?? raw.type ?? raw.modelName ?? raw.model_name ?? raw.operationType ?? sourceLabel,
     state,
     param: raw.param ?? raw.paramJson ?? raw.params ?? undefined,
     createTime: raw.createTime ?? raw.create_time ?? 0,
