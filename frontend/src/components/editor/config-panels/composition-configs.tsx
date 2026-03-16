@@ -32,6 +32,7 @@ import type {
   CompositeLayerConfig,
   RenderVideoData,
 } from "@/types/nodes"
+import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 import {
   useMediaOrder,
@@ -40,15 +41,14 @@ import {
   SceneGraphPreviewInline,
 } from "./composition-shared"
 
-export function VideoComposerConfig({ data, onUpdate, sources, nodeRefs }: ConfigProps<VideoComposerData>) {
+export function VideoComposerConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VideoComposerData>) {
   const { sensors, orderedIds, orderedSources, handleDragEnd } = useMediaOrder(sources, data.assetOrder, onUpdate)
 
   return (
     <div className="flex flex-col gap-3">
       <MediaOrderList sensors={sensors} orderedIds={orderedIds} orderedSources={orderedSources} onDragEnd={handleDragEnd} />
 
-      <div>
-        <Label className="mb-1.5 block">Composition Prompt</Label>
+      <MappableField field="compositionPrompt" label="Composition Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
           placeholder="Describe the style of video you want: cinematic product showcase with slow fades, energetic social reel with zoom cuts..."
           value={data.compositionPrompt ?? ""}
@@ -57,7 +57,7 @@ export function VideoComposerConfig({ data, onUpdate, sources, nodeRefs }: Confi
           className="text-sm"
           nodeRefs={nodeRefs}
         />
-      </div>
+      </MappableField>
 
       {data.sceneGraph && (
         <>
@@ -85,11 +85,10 @@ export function VideoComposerConfig({ data, onUpdate, sources, nodeRefs }: Confi
 const LazyAfterEffectsPreview = lazy(() => import("@/components/editor/after-effects-preview").then(m => ({ default: m.AfterEffectsPreview })))
 const LazyAfterEffectsPlayerPreview = lazy(() => import("@/components/editor/after-effects-player-preview").then(m => ({ default: m.AfterEffectsPlayerPreview })))
 
-export function AfterEffectsConfig({ data, onUpdate, nodeRefs }: ConfigProps<AfterEffectsData>) {
+export function AfterEffectsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<AfterEffectsData>) {
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <Label className="mb-1.5 block">Effect Prompt</Label>
+      <MappableField field="effectPrompt" label="Effect Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
           placeholder="Describe the look: cinematic film grain with warm color grading, vignette, letterbox..."
           value={data.effectPrompt ?? ""}
@@ -98,7 +97,7 @@ export function AfterEffectsConfig({ data, onUpdate, nodeRefs }: ConfigProps<Aft
           className="text-sm"
           nodeRefs={nodeRefs}
         />
-      </div>
+      </MappableField>
 
       {data.effectPlan && (
         <>
@@ -161,11 +160,10 @@ export function AfterEffectsConfig({ data, onUpdate, nodeRefs }: ConfigProps<Aft
 
 const LazyLottieOverlayPreview = lazy(() => import("@/components/editor/lottie-overlay-preview").then(m => ({ default: m.LottieOverlayPreview })))
 
-export function LottieOverlayConfig({ data, onUpdate, nodeRefs }: ConfigProps<LottieOverlayData>) {
+export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<LottieOverlayData>) {
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <Label className="mb-1.5 block">Overlay Prompt</Label>
+      <MappableField field="overlayPrompt" label="Overlay Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
           placeholder="Describe overlays: add confetti at 3 seconds, floating particles throughout..."
           value={data.overlayPrompt ?? ""}
@@ -174,7 +172,7 @@ export function LottieOverlayConfig({ data, onUpdate, nodeRefs }: ConfigProps<Lo
           className="text-sm"
           nodeRefs={nodeRefs}
         />
-      </div>
+      </MappableField>
 
       {data.overlayPlan && (
         <>
@@ -229,11 +227,10 @@ export function LottieOverlayConfig({ data, onUpdate, nodeRefs }: ConfigProps<Lo
 
 const LazyThreeDTitlePreview = lazy(() => import("@/components/editor/three-d-title-preview").then(m => ({ default: m.ThreeDTitlePreview })))
 
-export function ThreeDTitleConfig({ data, onUpdate, nodeRefs }: ConfigProps<ThreeDTitleData>) {
+export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<ThreeDTitleData>) {
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <Label className="mb-1.5 block">Title Prompt</Label>
+      <MappableField field="titlePrompt" label="Title Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
           placeholder="Describe the 3D title: epic gold ADVENTURE text with particles, cinematic camera..."
           value={data.titlePrompt ?? ""}
@@ -242,7 +239,7 @@ export function ThreeDTitleConfig({ data, onUpdate, nodeRefs }: ConfigProps<Thre
           className="text-sm"
           nodeRefs={nodeRefs}
         />
-      </div>
+      </MappableField>
 
       {data.titlePlan && (
         <>
@@ -327,14 +324,13 @@ export function ThreeDTitleConfig({ data, onUpdate, nodeRefs }: ConfigProps<Thre
 const LazyMotionGraphicsPreview = lazy(() => import("@/components/editor/motion-graphics-preview").then(m => ({ default: m.MotionGraphicsPreview })))
 const LazyMotionGraphicsPlayerPreview = lazy(() => import("@/components/editor/motion-graphics-player-preview").then(m => ({ default: m.MotionGraphicsPlayerPreview })))
 
-export function MotionGraphicsConfig({ data, onUpdate, nodeRefs }: ConfigProps<MotionGraphicsData>) {
+export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<MotionGraphicsData>) {
   const [showInfo, setShowInfo] = useState(false)
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <Label>Motion Graphics Prompt</Label>
+      <MappableField field="motionPrompt" label="Motion Graphics Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <div className="flex items-center justify-end mb-1.5">
           <button
             type="button"
             onClick={() => setShowInfo(!showInfo)}
@@ -372,7 +368,6 @@ export function MotionGraphicsConfig({ data, onUpdate, nodeRefs }: ConfigProps<M
             </ul>
           </div>
         )}
-
         <TagTextarea
           placeholder="Describe the motion graphic: modern lower third with name, title card, animated shapes..."
           value={data.motionPrompt ?? ""}
@@ -381,7 +376,7 @@ export function MotionGraphicsConfig({ data, onUpdate, nodeRefs }: ConfigProps<M
           className="text-sm"
           nodeRefs={nodeRefs}
         />
-      </div>
+      </MappableField>
 
       {data.motionPlan && (
         <>

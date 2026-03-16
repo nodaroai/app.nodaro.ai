@@ -1047,11 +1047,10 @@ export function DubbingConfig({ data, onUpdate, nodeRefs }: ConfigProps<DubbingD
   )
 }
 
-export function VoiceRemixConfig({ data, onUpdate, nodeRefs }: ConfigProps<VoiceRemixData>) {
+export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VoiceRemixData>) {
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <Label>Voice Description</Label>
+      <MappableField field="voiceDescription" label="Voice Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
           rows={3}
           value={data.voiceDescription || ""}
@@ -1059,9 +1058,8 @@ export function VoiceRemixConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voice
           placeholder="Describe the voice you want (e.g. 'A warm, deep male voice with a British accent')"
           nodeRefs={nodeRefs}
         />
-      </div>
-      <div>
-        <Label>Preview Text</Label>
+      </MappableField>
+      <MappableField field="text" label="Preview Text" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
           rows={2}
           value={data.text || ""}
@@ -1069,7 +1067,7 @@ export function VoiceRemixConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voice
           placeholder="Text to preview the generated voice with..."
           nodeRefs={nodeRefs}
         />
-      </div>
+      </MappableField>
       <p className="text-xs text-muted-foreground">
         Generates a new voice from a natural language description and creates an audio preview with the specified text.
       </p>
@@ -1083,21 +1081,19 @@ const VOICE_DESIGN_MODEL_TO_TTS_PROVIDER: Record<string, string> = {
   "eleven_multilingual_ttv_v2": "elevenlabs-multilingual",
 }
 
-export function VoiceDesignConfig({ data, onUpdate, nodeRefs }: ConfigProps<VoiceDesignData>) {
+export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VoiceDesignData>) {
   const ttsProvider = VOICE_DESIGN_MODEL_TO_TTS_PROVIDER[data.model || "eleven_ttv_v3"] || "elevenlabs-v3"
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <Label>Voice Description</Label>
+      <MappableField field="voiceDescription" label="Voice Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea
           rows={3}
           value={data.voiceDescription || ""}
           onChange={(e) => onUpdate({ voiceDescription: e.target.value })}
           placeholder="Describe the voice you want (e.g. 'A warm, deep male voice with a British accent')"
         />
-      </div>
-      <div>
-        <Label>Preview Text <span className="text-muted-foreground text-[10px]">(100-1000 chars)</span></Label>
+      </MappableField>
+      <MappableField field="text" label="Preview Text (100-1000 chars)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
           rows={3}
           value={data.text || ""}
@@ -1110,7 +1106,7 @@ export function VoiceDesignConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voic
         {data.text && data.text.length < 100 && (
           <p className="text-[10px] text-amber-500 mt-0.5">{data.text.length}/100 characters (minimum 100 required)</p>
         )}
-      </div>
+      </MappableField>
       <div>
         <Label>Model</Label>
         <Select value={data.model || "eleven_ttv_v3"} onValueChange={(v) => onUpdate({ model: v })}>
@@ -1192,11 +1188,10 @@ export function VoiceDesignConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voic
   )
 }
 
-export function ForcedAlignmentConfig({ data, onUpdate, nodeRefs }: ConfigProps<ForcedAlignmentData>) {
+export function ForcedAlignmentConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<ForcedAlignmentData>) {
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <Label>Transcript</Label>
+      <MappableField field="transcript" label="Transcript" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
           rows={5}
           value={data.transcript || ""}
@@ -1204,7 +1199,7 @@ export function ForcedAlignmentConfig({ data, onUpdate, nodeRefs }: ConfigProps<
           placeholder="Enter the transcript to align with the audio..."
           nodeRefs={nodeRefs}
         />
-      </div>
+      </MappableField>
       <p className="text-xs text-muted-foreground">
         Aligns audio with a transcript to produce word-level timestamps. Connect an audio source to the input.
       </p>

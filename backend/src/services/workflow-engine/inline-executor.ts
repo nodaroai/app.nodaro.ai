@@ -83,7 +83,9 @@ export function executeCombineText(
     separator = rawSeparator
   }
 
-  const texts = collectUpstreamTexts(node.id, edges, allNodes, nodeStates, true)
+  // Use includeListResults: false to match frontend behavior — frontend extractNodeOutput
+  // returns the primary output (first/active item) not the full list expansion
+  const texts = collectUpstreamTexts(node.id, edges, allNodes, nodeStates, false)
   // Trim each text part before combining (matches frontend logic)
   const trimmedTexts = texts.map((t) => t.trim()).filter((t) => t.length > 0)
   const combined = trimmedTexts.join(separator)

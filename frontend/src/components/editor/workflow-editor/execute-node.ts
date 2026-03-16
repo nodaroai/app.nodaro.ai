@@ -452,8 +452,8 @@ export function executeNode(
     }
     const provider = editData.provider || "recraft-upscale";
 
-    // For nano-banana-edit: enrich prompt with character/asset descriptions
-    let prompt = editData.prompt || undefined;
+    // Upstream text-prompt can override edit instruction (matches backend)
+    let prompt = inputs.prompt || editData.prompt || undefined;
     if (provider === "nano-banana-edit" && prompt) {
       const charIds = editData.characterDefinitionIds ?? [];
       const allCharDefs = useWorkflowStore.getState().characterDefinitions;
@@ -945,7 +945,8 @@ export function executeNode(
 
   if (node.type === "voice-remix") {
     const d = node.data as VoiceRemixData;
-    if (!d.text?.trim()) {
+    const remixText = inputs.prompt || d.text;
+    if (!remixText?.trim()) {
       toast.error(`Node "${d.label}": no preview text provided`);
       return Promise.reject(new Error("No text"));
     }
@@ -957,7 +958,7 @@ export function executeNode(
       node.id,
       () =>
         voiceRemixApi(
-          d.text!,
+          remixText,
           d.voiceDescription!,
           ctx.userId,
         ),
@@ -969,7 +970,8 @@ export function executeNode(
 
   if (node.type === "voice-design") {
     const d = node.data as VoiceDesignData;
-    if (!d.text?.trim()) {
+    const designText = inputs.prompt || d.text;
+    if (!designText?.trim()) {
       toast.error(`Node "${d.label}": no preview text provided`);
       return Promise.reject(new Error("No text"));
     }
@@ -981,7 +983,7 @@ export function executeNode(
       node.id,
       () =>
         voiceDesignApi(
-          d.text!,
+          designText,
           d.voiceDescription!,
           {
             model: d.model,
@@ -1009,7 +1011,8 @@ export function executeNode(
       toast.error(`Node "${d.label}": no audio input found`);
       return Promise.reject(new Error("No audio input"));
     }
-    if (!d.transcript?.trim()) {
+    const alignTranscript = inputs.prompt || d.transcript;
+    if (!alignTranscript?.trim()) {
       toast.error(`Node "${d.label}": no transcript provided`);
       return Promise.reject(new Error("No transcript"));
     }
@@ -1022,7 +1025,7 @@ export function executeNode(
     });
 
     return new Promise<void>((resolve, reject) => {
-      forcedAlignmentApi(audioUrl, d.transcript!, ctx.userId)
+      forcedAlignmentApi(audioUrl, alignTranscript, ctx.userId)
         .then(({ jobId }) => {
           toast.info("Forced alignment started", { description: `Job ID: ${jobId}` });
           updateNodeData(node.id, { currentJobId: jobId });
@@ -1543,7 +1546,7 @@ export function executeNode(
           audioUrl,
           prompt: d.prompt?.trim() || undefined,
           model: d.model || undefined,
-          style: d.style || undefined,
+          style: inputs.prompt || d.style || undefined,
           title: d.title || undefined,
           negativeStyle: d.negativeStyle || undefined,
           vocalGender: d.vocalGender || undefined,
@@ -1758,7 +1761,7 @@ export function executeNode(
     return imageToTextApi(
       imageUrl,
       itData.detailLevel || "detailed",
-      itData.customPrompt || undefined,
+      inputs.prompt || itData.customPrompt || undefined,
       ctx.userId,
     )
       .then((result) => {
@@ -2596,7 +2599,8 @@ export function executeNode(
 
   if (node.type === "video-composer") {
     const d = node.data as VideoComposerData;
-    if (!d.compositionPrompt?.trim()) {
+    const composerPrompt = inputs.prompt || d.compositionPrompt;
+    if (!composerPrompt?.trim()) {
       toast.error(`Node "${d.label}": no composition prompt set`);
       return Promise.reject(new Error("No composition prompt"));
     }
@@ -2616,7 +2620,7 @@ export function executeNode(
       errorMessage: undefined,
     });
     return generateSceneGraph({
-      prompt: d.compositionPrompt,
+      prompt: composerPrompt,
       assets,
       fps: d.fps,
       aspectRatio: d.aspectRatio,
@@ -2641,7 +2645,8 @@ export function executeNode(
 
   if (node.type === "after-effects") {
     const d = node.data as AfterEffectsData;
-    if (!d.effectPrompt?.trim()) {
+    const aePrompt = inputs.prompt || d.effectPrompt;
+    if (!aePrompt?.trim()) {
       toast.error(`Node "${d.label}": no effect prompt set`);
       return Promise.reject(new Error("No effect prompt"));
     }
@@ -2675,7 +2680,7 @@ export function executeNode(
     const aeWidth = d.width ?? 1920;
     const aeHeight = d.height ?? 1080;
     return generateAfterEffects({
-      prompt: d.effectPrompt,
+      prompt: aePrompt,
       inputVideoUrl,
       fps: d.fps,
       width: aeWidth,
@@ -2701,7 +2706,8 @@ export function executeNode(
 
   if (node.type === "lottie-overlay") {
     const d = node.data as LottieOverlayData;
-    if (!d.overlayPrompt?.trim()) {
+    const loPrompt = inputs.prompt || d.overlayPrompt;
+    if (!loPrompt?.trim()) {
       toast.error(`Node "${d.label}": no overlay prompt set`);
       return Promise.reject(new Error("No overlay prompt"));
     }
@@ -2743,7 +2749,7 @@ export function executeNode(
       inputVideoUrl,
     });
     return generateLottieOverlay({
-      prompt: d.overlayPrompt,
+      prompt: loPrompt,
       inputVideoUrl,
       fps: d.fps,
       width: d.width ?? 1920,
@@ -2770,7 +2776,8 @@ export function executeNode(
 
   if (node.type === "3d-title") {
     const d = node.data as ThreeDTitleData;
-    if (!d.titlePrompt?.trim()) {
+    const tdPrompt = inputs.prompt || d.titlePrompt;
+    if (!tdPrompt?.trim()) {
       toast.error(`Node "${d.label}": no title prompt set`);
       return Promise.reject(new Error("No title prompt"));
     }
@@ -2801,7 +2808,7 @@ export function executeNode(
     });
     const dims = ASPECT_RATIO_DIMENSIONS[d.aspectRatio] ?? { width: 1920, height: 1080 };
     return generate3DTitle({
-      prompt: d.titlePrompt,
+      prompt: tdPrompt,
       fps: d.fps,
       aspectRatio: d.aspectRatio,
       width: dims.width,
@@ -2837,7 +2844,7 @@ export function executeNode(
     });
     const dims = ASPECT_RATIO_DIMENSIONS[d.aspectRatio] ?? { width: 1920, height: 1080 };
     return generateMotionGraphics({
-      prompt: d.motionPrompt,
+      prompt: inputs.prompt || d.motionPrompt,
       fps: d.fps,
       aspectRatio: d.aspectRatio,
       width: dims.width,

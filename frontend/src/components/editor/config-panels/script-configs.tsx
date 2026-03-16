@@ -273,7 +273,7 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
   )
 }
 
-export function ImageToTextConfig({ data, onUpdate, nodeRefs }: ConfigProps<ImageToTextData>) {
+export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<ImageToTextData>) {
   const imageToTextData = data as ImageToTextData
   const results = imageToTextData.generatedResults ?? []
   const activeIndex = imageToTextData.activeResultIndex ?? 0
@@ -299,15 +299,16 @@ export function ImageToTextConfig({ data, onUpdate, nodeRefs }: ConfigProps<Imag
       </div>
 
       <div>
-        <Label>Custom Prompt (optional)</Label>
-        <TagTextarea
-          value={imageToTextData.customPrompt ?? ""}
-          onChange={(v) => onUpdate({ customPrompt: v })}
-          placeholder="Override the detail level with a custom instruction..."
-          rows={3}
-          maxLength={2000}
-          nodeRefs={nodeRefs}
-        />
+        <MappableField field="customPrompt" label="Custom Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <TagTextarea
+            value={imageToTextData.customPrompt ?? ""}
+            onChange={(v) => onUpdate({ customPrompt: v })}
+            placeholder="Override the detail level with a custom instruction..."
+            rows={3}
+            maxLength={2000}
+            nodeRefs={nodeRefs}
+          />
+        </MappableField>
         <p className="text-xs text-muted-foreground mt-1">
           If provided, overrides the detail level preset.
         </p>

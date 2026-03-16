@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertCircle, ExternalLink } from "lucide-react"
 import { TagTextarea } from "./tag-textarea"
+import { MappableField } from "./mappable-field"
 import type { SocialPostData, SocialPlatformType, SocialConnection } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { getSocialConnections } from "@/lib/api"
@@ -68,7 +69,7 @@ function useSocialConnections(platform: SocialPlatformType) {
   return { connections, loading }
 }
 
-function SocialConfigBase({ data, onUpdate, platform, nodeRefs }: ConfigProps<SocialPostData> & { platform: SocialPlatformType }) {
+function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SocialPostData> & { platform: SocialPlatformType }) {
   const d = data as SocialPostData
   const { connections, loading } = useSocialConnections(platform)
   const actions = PLATFORM_ACTIONS[platform]
@@ -153,10 +154,13 @@ function SocialConfigBase({ data, onUpdate, platform, nodeRefs }: ConfigProps<So
       )}
 
       {/* Caption */}
-      <div>
-        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
-          {platform === "youtube" ? "Description" : "Caption"}
-        </Label>
+      <MappableField
+        field="caption"
+        label={platform === "youtube" ? "Description" : "Caption"}
+        sources={sources}
+        fieldMappings={fieldMappings}
+        onMapField={onMapField}
+      >
         <TagTextarea
           value={d.caption || ""}
           onChange={(v) => onUpdate({ caption: v })}
@@ -169,13 +173,18 @@ function SocialConfigBase({ data, onUpdate, platform, nodeRefs }: ConfigProps<So
         <p className={`text-[10px] mt-1 ${captionLen > charLimit * 0.9 ? "text-amber-500" : "text-muted-foreground"}`}>
           {captionLen}/{charLimit}
         </p>
-      </div>
+      </MappableField>
 
       {/* YouTube-specific fields */}
       {platform === "youtube" && (
         <>
-          <div>
-            <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Title</Label>
+          <MappableField
+            field="title"
+            label="Title"
+            sources={sources}
+            fieldMappings={fieldMappings}
+            onMapField={onMapField}
+          >
             <TagTextarea
               value={d.title || ""}
               onChange={(v) => onUpdate({ title: v })}
@@ -185,7 +194,7 @@ function SocialConfigBase({ data, onUpdate, platform, nodeRefs }: ConfigProps<So
               rows={1}
               nodeRefs={nodeRefs}
             />
-          </div>
+          </MappableField>
           <div>
             <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Tags</Label>
             <Input
