@@ -228,6 +228,11 @@ export function getPrimaryOutput(
     return output.text
   }
 
+  // Generate-script: prefer text (first scene imagePrompt), fall back to script existence
+  if (sourceType === "generate-script") {
+    return output.text
+  }
+
   if (IMAGE_SOURCE_TYPES.has(sourceType)) return output.imageUrl
   if (VIDEO_SOURCE_TYPES.has(sourceType)) return output.videoUrl
   if (AUDIO_SOURCE_TYPES.has(sourceType)) return output.audioUrl
@@ -247,6 +252,16 @@ interface GeneratedResult {
   [key: string]: unknown
 }
 
+interface ScriptScene {
+  imagePrompt?: string
+  [key: string]: unknown
+}
+
+interface ScriptData {
+  scenes: ScriptScene[]
+  [key: string]: unknown
+}
+
 function getActiveResultUrl(data: Record<string, unknown>): string | undefined {
   const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
   const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
@@ -257,6 +272,18 @@ function getActiveResultText(data: Record<string, unknown>): string | undefined 
   const results = (data.generatedResults as Array<{ text?: string }> | undefined) ?? []
   const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
   return results[activeIndex]?.text
+}
+
+/** Extract the first scene's imagePrompt from script data (matches frontend extractNodeOutput). */
+function getFirstSceneImagePrompt(data: Record<string, unknown>): { text?: string; script?: ScriptData } | undefined {
+  const scriptResults = (data.generatedResults as Array<{ script?: ScriptData }> | undefined) ?? []
+  const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+  const activeScript =
+    scriptResults[activeIndex]?.script ??
+    (data.generatedScript as ScriptData | undefined)
+  if (!activeScript || !activeScript.scenes?.length) return undefined
+  const text = activeScript.scenes[0].imagePrompt
+  return text ? { text, script: activeScript } : { script: activeScript }
 }
 
 // ---------------------------------------------------------------------------
@@ -296,7 +323,8 @@ const VIDEO_RESULT_TYPES = new Set([
   "manual-edit",
 ])
 
-/** Audio-generating node types that store results in generatedAudioUrl / generatedResults */
+/** Audio-generating node types that store results in generatedAudioUrl / generatedResults.
+ *  NOTE: suno-separate and voice-design are handled separately (they have extra output fields). */
 const AUDIO_RESULT_TYPES = new Set([
   "text-to-speech",
   "generate-music",
@@ -304,7 +332,6 @@ const AUDIO_RESULT_TYPES = new Set([
   "suno-generate",
   "suno-cover",
   "suno-extend",
-  "suno-separate",
   "suno-mashup",
   "suno-replace-section",
   "suno-add-instrumental",
@@ -315,7 +342,7 @@ const AUDIO_RESULT_TYPES = new Set([
   "voice-changer",
   "dubbing",
   "voice-remix",
-  "voice-design",
+  "audio-isolation",
   "trim-audio",
   "mix-audio",
 ])
@@ -392,6 +419,38 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return url ? { imageUrl: url } : undefined
   }
 
+  // Suno-separate → audioUrl + stem URLs (vocalUrl, instrumentalUrl)
+  if (type === "suno-separate") {
+    const url =
+      getActiveResultUrl(data) ??
+      (data.generatedAudioUrl as string | undefined)
+    const output: NodeOutput = {}
+    if (url) output.audioUrl = url
+    const vocalUrl = data.vocalUrl as string | undefined
+    const instrumentalUrl = data.instrumentalUrl as string | undefined
+    if (vocalUrl) output.vocalUrl = vocalUrl
+    if (instrumentalUrl) output.instrumentalUrl = instrumentalUrl
+    return Object.keys(output).length > 0 ? output : undefined
+  }
+
+  // Voice-design → audioUrl + generatedVoiceId (dual output)
+  if (type === "voice-design") {
+    const url =
+      getActiveResultUrl(data) ??
+      (data.generatedAudioUrl as string | undefined)
+    const voiceId = data.generatedVoiceId as string | undefined
+    const output: NodeOutput = {}
+    if (url) output.audioUrl = url
+    if (voiceId) output.generatedVoiceId = voiceId
+    return Object.keys(output).length > 0 ? output : undefined
+  }
+
+  // Generate-script → extract first scene imagePrompt as text (matches frontend)
+  if (type === "generate-script") {
+    const result = getFirstSceneImagePrompt(data)
+    return result ? { text: result.text, script: result.script } : undefined
+  }
+
   // Text-generating nodes
   if (type === "ai-writer" || type === "suno-lyrics" || type === "suno-style-boost") {
     const text = data.generatedText as string | undefined
@@ -459,16 +518,6 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return firstValue ? { text: firstValue } : undefined
   }
 
-  // Audio isolation → vocalUrl + instrumentalUrl
-  if (type === "audio-isolation") {
-    const vocalUrl = data.vocalUrl as string | undefined
-    const instrumentalUrl = data.instrumentalUrl as string | undefined
-    if (vocalUrl || instrumentalUrl) {
-      return { vocalUrl, instrumentalUrl, audioUrl: vocalUrl }
-    }
-    return undefined
-  }
-
   return undefined
 }
 
@@ -491,6 +540,25 @@ export function buildNodeOutputFromJobData(
   // Normalize generatedText -> text (image-to-text, ai-writer store output as generatedText)
   if (!output.text && outputData.generatedText) {
     output.text = outputData.generatedText as string
+  }
+
+  // Normalize suno-lyrics: worker stores { lyrics: [{text, title}, ...] }
+  if (!output.text && outputData.lyrics) {
+    const lyrics = outputData.lyrics
+    if (Array.isArray(lyrics)) {
+      const first = lyrics[0] as { text?: string } | undefined
+      if (first?.text) output.text = first.text
+    } else if (typeof lyrics === "string") {
+      output.text = lyrics
+    }
+  }
+
+  // Normalize generate-script: extract first scene imagePrompt as text (matches frontend)
+  if (!output.text && output.script) {
+    const scriptData = output.script as ScriptData
+    if (scriptData.scenes?.[0]?.imagePrompt) {
+      output.text = scriptData.scenes[0].imagePrompt
+    }
   }
 
   // Plan nodes store their plan under various keys

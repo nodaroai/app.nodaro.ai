@@ -447,6 +447,11 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "resize-video",
   "social-media-format",
   "trim-video",
+  "render-video",
+  "speed-ramp",
+  "loop-video",
+  "fade-video",
+  "transcode-video",
 ]);
 export const AUDIO_SOURCE_TYPES = new Set([
   "text-to-speech",
