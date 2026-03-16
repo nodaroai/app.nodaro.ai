@@ -122,7 +122,7 @@ export const MODEL_CREDIT_RANGES: Record<string, { min: number; max: number }> =
   "seedream-edit": { min: 3, max: 4 },
   "seedream-5-lite": { min: 3, max: 5 },
   "seedream-5-lite-i2i": { min: 3, max: 5 },
-  "topaz-image-upscale": { min: 4, max: 13 },
+  "topaz-image-upscale": { min: 4, max: 7 },
 }
 
 // =============================================================================
@@ -272,7 +272,6 @@ const FLUX_RESOLUTIONS = [
 export const TOPAZ_IMAGE_RESOLUTIONS = [
   { value: "2K", label: "2K (Standard)" },
   { value: "4K", label: "4K (High)" },
-  { value: "8K", label: "8K (Ultra)" },
 ] as const
 
 export const IMAGE_RESOLUTION_OPTIONS: Record<string, readonly { value: string; label: string }[]> = {

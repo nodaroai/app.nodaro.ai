@@ -763,7 +763,6 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
                 <SelectItem value="1">1x (Enhance only)</SelectItem>
                 <SelectItem value="2">2x</SelectItem>
                 <SelectItem value="4">4x</SelectItem>
-                <SelectItem value="8">8x</SelectItem>
               </SelectContent>
             </Select>
           </MappableField>
