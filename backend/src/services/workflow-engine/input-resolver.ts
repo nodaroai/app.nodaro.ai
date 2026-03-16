@@ -386,6 +386,7 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "suno-style-boost",
   "generate-script",
   "forced-alignment",
+  "qa-check",
 ])
 
 // Preview routes by actual media type, not always to text (handled in routeOutput)

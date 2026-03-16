@@ -39,6 +39,9 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "combinedText",
   "kieTaskId",
   "listResults",
+  "approved",
+  "reason",
+  "score",
 ]
 
 // Job output_data keys that all map to NodeOutput.plan — derived from COMPOSER_PLAN_MAP + generic "plan"
@@ -247,6 +250,13 @@ export function getPrimaryOutput(
   // Voice-design: support voiceId routing via sourceHandle
   if (sourceType === "voice-design" && sourceHandle === "voiceId") {
     return output.generatedVoiceId
+  }
+
+  // QA-check: route by approved/rejected handle
+  if (sourceType === "qa-check" && sourceHandle) {
+    if (sourceHandle === "approved" && output.approved) return output.reason
+    if (sourceHandle === "rejected" && !output.approved) return output.reason
+    return undefined
   }
 
   // Adjust-volume can output either audio or video — respect lastInputType (matches frontend)

@@ -39,18 +39,19 @@ The Text to Video node creates video from a text prompt without requiring a sour
 | Provider | Credits | Duration | Notes |
 |----------|---------|----------|-------|
 | runway-kie | 4 | 5s | 720p, most affordable |
-| grok | 7 | 6s | |
-| sora2 | 10 | 10s | Standard quality |
-| hailuo-standard | 10 | 6s | |
-| wan-turbo | 13 | 5s | 480p |
-| kling-turbo | 14 | 5s | |
-| bytedance-lite | 16 | 5-10s | |
+| grok | 5-10 | 6-15s | Via grok-i2v pricing |
+| bytedance-lite | 6 | 5-10s | |
+| seedance | 4-11 | 4-12s | Duration-tiered |
+| bytedance-pro | 8 | 5-10s | |
+| hailuo-standard | 8-13 | 6-10s | Duration-tiered |
+| sora2 | 8-9 | 5-10s | |
+| wan-turbo | 25 | 5s | Via wan-turbo-t2v |
+| kling-turbo | 11-21 | 5-10s | Duration-tiered |
+| kling | 14-28 | 5-10s | Audio doubles cost |
 | minimax | 18 | 5s | 1080p |
-| kling | 18 | 5s | |
 | veo3.1 | 19 | 8s | Fast mode |
 | wan-t2v | 33 | 5s | 1080p |
-| seedance | 32 | 4-12s | |
-| sora2-pro | 47 | 10s | Premium quality |
+| sora2-pro | 38-158 | 5-10s | Standard/high quality |
 | kling-3.0 | 43-189 | 3-15s | Audio doubles cost |
 | veo3 | 79 | 8s | Quality mode |
 

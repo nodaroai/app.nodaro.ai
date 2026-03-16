@@ -3910,3 +3910,30 @@ export async function getAppAnalyticsRuns(appId: string, cursor?: string): Promi
     "Failed to load analytics runs",
   )
 }
+
+// ---------- QA Check ----------
+
+export function qaCheckApi(params: {
+  content: string
+  checkType?: "content" | "quality" | "consistency" | "safety"
+  provider?: "claude" | "gpt"
+  threshold?: number
+}): Promise<{ jobId: string; score: number; approved: boolean; reason: string }> {
+  return apiRequest("/v1/qa-check", "QA check failed", {
+    method: "POST",
+    body: withWorkflowId(params),
+  })
+}
+
+// ---------- Save to Storage ----------
+
+export function saveToStorageApi(params: {
+  mediaUrl: string
+  filename?: string
+  mediaType?: "image" | "video" | "audio"
+}): Promise<{ jobId: string; url: string }> {
+  return apiRequest("/v1/save-to-storage", "Failed to save to storage", {
+    method: "POST",
+    body: withWorkflowId(params),
+  })
+}

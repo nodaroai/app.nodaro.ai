@@ -112,7 +112,7 @@
       "type": "image-to-video",
       "position": { "x": 800, "y": 300 },
       "data": {
-        "label": "kling-turbo 5s (14cr)",
+        "label": "kling-turbo 5s (11cr)",
         "provider": "kling-turbo",
         "model": "",
         "prompt": "Fast-paced zoom with dramatic reveal",
@@ -143,7 +143,7 @@
       "type": "image-to-video",
       "position": { "x": 1400, "y": 300 },
       "data": {
-        "label": "bytedance-lite 5s (16cr)",
+        "label": "bytedance-lite 5s (6cr)",
         "provider": "bytedance-lite",
         "model": "",
         "prompt": "Smooth camera glide with light bokeh effects",
@@ -237,7 +237,7 @@
       "type": "image-to-video",
       "position": { "x": 1400, "y": 600 },
       "data": {
-        "label": "bytedance-pro 5s (22cr)",
+        "label": "bytedance-pro 5s (8cr)",
         "provider": "bytedance-pro",
         "model": "",
         "prompt": "Professional quality slow zoom with rich colors",
@@ -253,7 +253,7 @@
       "type": "image-to-video",
       "position": { "x": 1700, "y": 600 },
       "data": {
-        "label": "seedance 4s (32cr)",
+        "label": "seedance 4s (4cr)",
         "provider": "seedance",
         "model": "",
         "prompt": "Fluid motion with artistic color grading",
@@ -271,7 +271,7 @@
       "type": "image-to-video",
       "position": { "x": 500, "y": 900 },
       "data": {
-        "label": "sora2-pro 5s std (47cr)",
+        "label": "sora2-pro 5s std (38cr)",
         "provider": "sora2-pro",
         "model": "",
         "prompt": "Cinematic establishing shot with dramatic lighting",
@@ -432,7 +432,7 @@
       "type": "image-to-video",
       "position": { "x": 800, "y": 1500 },
       "data": {
-        "label": "sora2-pro 5s +rmWatermark (47cr+4cr?)",
+        "label": "sora2-pro 5s +rmWM (38+4cr)",
         "provider": "sora2-pro",
         "model": "",
         "prompt": "Premium quality output without branding",
@@ -449,7 +449,7 @@
       "type": "image-to-video",
       "position": { "x": 1100, "y": 1500 },
       "data": {
-        "label": "seedance 4s +audio +fixedLens (32cr)",
+        "label": "seedance 4s +audio +fixedLens (4cr)",
         "provider": "seedance",
         "model": "",
         "prompt": "Rain falling on leaves with gentle wind sounds",
@@ -468,7 +468,7 @@
       "type": "image-to-video",
       "position": { "x": 1400, "y": 1500 },
       "data": {
-        "label": "sora2-pro 5s high (47cr)",
+        "label": "sora2-pro 5s high (83cr)",
         "provider": "sora2-pro",
         "model": "",
         "prompt": "Ultra high definition cinematic sequence",
@@ -478,38 +478,244 @@
         "videoSize": "high",
         "fieldMappings": {}
       }
+    },
+
+    {
+      "id": "i2v_31",
+      "type": "image-to-video",
+      "position": { "x": 500, "y": 1800 },
+      "data": {
+        "label": "grok-i2v 10s (8cr)",
+        "provider": "grok-i2v",
+        "model": "",
+        "prompt": "Extended motion with gradual transformation",
+        "duration": 10,
+        "motion": "moderate",
+        "cameraMotion": "pan-right",
+        "resolution": "720p",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2v_32",
+      "type": "image-to-video",
+      "position": { "x": 800, "y": 1800 },
+      "data": {
+        "label": "grok-i2v 15s (10cr)",
+        "provider": "grok-i2v",
+        "model": "",
+        "prompt": "Long form motion with evolving scene",
+        "duration": 15,
+        "motion": "moderate",
+        "cameraMotion": "zoom-out",
+        "resolution": "720p",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2v_33",
+      "type": "image-to-video",
+      "position": { "x": 1100, "y": 1800 },
+      "data": {
+        "label": "hailuo-2.3 10s (13cr)",
+        "provider": "hailuo-2.3",
+        "model": "",
+        "prompt": "Extended parallax with ambient atmosphere",
+        "duration": 10,
+        "motion": "moderate",
+        "cameraMotion": "static",
+        "resolution": "768P",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2v_34",
+      "type": "image-to-video",
+      "position": { "x": 1400, "y": 1800 },
+      "data": {
+        "label": "hailuo-2.3-pro 10s (23cr)",
+        "provider": "hailuo-2.3-pro",
+        "model": "",
+        "prompt": "Professional extended tracking shot",
+        "duration": 10,
+        "motion": "moderate",
+        "cameraMotion": "pan-left",
+        "resolution": "1080P",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2v_35",
+      "type": "image-to-video",
+      "position": { "x": 1700, "y": 1800 },
+      "data": {
+        "label": "hailuo-std 10s (13cr)",
+        "provider": "hailuo-standard",
+        "model": "",
+        "prompt": "Extended atmospheric motion",
+        "duration": 10,
+        "motion": "subtle",
+        "cameraMotion": "static",
+        "resolution": "768P",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2v_36",
+      "type": "image-to-video",
+      "position": { "x": 500, "y": 2100 },
+      "data": {
+        "label": "wan-i2v 10s (35cr)",
+        "provider": "wan-i2v",
+        "model": "",
+        "prompt": "Extended orbit with depth of field",
+        "duration": 10,
+        "motion": "moderate",
+        "cameraMotion": "pan-left",
+        "resolution": "720p",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2v_37",
+      "type": "image-to-video",
+      "position": { "x": 800, "y": 2100 },
+      "data": {
+        "label": "wan-i2v 15s (53cr)",
+        "provider": "wan-i2v",
+        "model": "",
+        "prompt": "Long tracking shot through environment",
+        "duration": 15,
+        "motion": "dynamic",
+        "cameraMotion": "zoom-in",
+        "resolution": "720p",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2v_38",
+      "type": "image-to-video",
+      "position": { "x": 1100, "y": 2100 },
+      "data": {
+        "label": "kling-master 10s (80cr)",
+        "provider": "kling-master",
+        "model": "",
+        "prompt": "Master quality extended scene",
+        "duration": 10,
+        "motion": "moderate",
+        "cameraMotion": "pan-right",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2v_39",
+      "type": "image-to-video",
+      "position": { "x": 1400, "y": 2100 },
+      "data": {
+        "label": "seedance 8s (7cr)",
+        "provider": "seedance",
+        "model": "",
+        "prompt": "Flowing artistic motion mid-duration",
+        "duration": 8,
+        "motion": "moderate",
+        "cameraMotion": "static",
+        "resolution": "720p",
+        "aspectRatio": "16:9",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2v_40",
+      "type": "image-to-video",
+      "position": { "x": 1700, "y": 2100 },
+      "data": {
+        "label": "seedance 12s (11cr)",
+        "provider": "seedance",
+        "model": "",
+        "prompt": "Extended artistic sequence with evolving color",
+        "duration": 12,
+        "motion": "dynamic",
+        "cameraMotion": "pan-left",
+        "resolution": "720p",
+        "aspectRatio": "16:9",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2v_41",
+      "type": "image-to-video",
+      "position": { "x": 500, "y": 2400 },
+      "data": {
+        "label": "kling 5s +audio (28cr)",
+        "provider": "kling",
+        "model": "",
+        "prompt": "Birds chirping in a garden with wind",
+        "duration": 5,
+        "motion": "moderate",
+        "cameraMotion": "static",
+        "sound": true,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "i2v_42",
+      "type": "image-to-video",
+      "position": { "x": 800, "y": 2400 },
+      "data": {
+        "label": "kling 10s +audio (56cr)",
+        "provider": "kling",
+        "model": "",
+        "prompt": "Rain on windows with distant thunder",
+        "duration": 10,
+        "motion": "subtle",
+        "cameraMotion": "static",
+        "sound": true,
+        "fieldMappings": {}
+      }
     }
   ],
 
   "edges": [
-    { "id": "e_2",  "source": "upload_1", "target": "i2v_2",  "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_3",  "source": "upload_1", "target": "i2v_3",  "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_4",  "source": "upload_1", "target": "i2v_4",  "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_5",  "source": "upload_1", "target": "i2v_5",  "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_6",  "source": "upload_1", "target": "i2v_6",  "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_7",  "source": "upload_1", "target": "i2v_7",  "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_8",  "source": "upload_1", "target": "i2v_8",  "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_9",  "source": "upload_1", "target": "i2v_9",  "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_10", "source": "upload_1", "target": "i2v_10", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_11", "source": "upload_1", "target": "i2v_11", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_12", "source": "upload_1", "target": "i2v_12", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_13", "source": "upload_1", "target": "i2v_13", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_14", "source": "upload_1", "target": "i2v_14", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_15", "source": "upload_1", "target": "i2v_15", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_16", "source": "upload_1", "target": "i2v_16", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_17", "source": "upload_1", "target": "i2v_17", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_18", "source": "upload_1", "target": "i2v_18", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_19", "source": "upload_1", "target": "i2v_19", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_20", "source": "upload_1", "target": "i2v_20", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_21", "source": "upload_1", "target": "i2v_21", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_22", "source": "upload_1", "target": "i2v_22", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_23", "source": "upload_1", "target": "i2v_23", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_24", "source": "upload_1", "target": "i2v_24", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_25", "source": "upload_1", "target": "i2v_25", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_26", "source": "upload_1", "target": "i2v_26", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_27", "source": "upload_1", "target": "i2v_27", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_28", "source": "upload_1", "target": "i2v_28", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_29", "source": "upload_1", "target": "i2v_29", "sourceHandle": "image", "targetHandle": "image" },
-    { "id": "e_30", "source": "upload_1", "target": "i2v_30", "sourceHandle": "image", "targetHandle": "image" }
+    { "id": "e_2",  "source": "upload_1", "target": "i2v_2",  "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_3",  "source": "upload_1", "target": "i2v_3",  "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_4",  "source": "upload_1", "target": "i2v_4",  "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_5",  "source": "upload_1", "target": "i2v_5",  "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_6",  "source": "upload_1", "target": "i2v_6",  "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_7",  "source": "upload_1", "target": "i2v_7",  "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_8",  "source": "upload_1", "target": "i2v_8",  "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_9",  "source": "upload_1", "target": "i2v_9",  "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_10", "source": "upload_1", "target": "i2v_10", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_11", "source": "upload_1", "target": "i2v_11", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_12", "source": "upload_1", "target": "i2v_12", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_13", "source": "upload_1", "target": "i2v_13", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_14", "source": "upload_1", "target": "i2v_14", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_15", "source": "upload_1", "target": "i2v_15", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_16", "source": "upload_1", "target": "i2v_16", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_17", "source": "upload_1", "target": "i2v_17", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_18", "source": "upload_1", "target": "i2v_18", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_19", "source": "upload_1", "target": "i2v_19", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_20", "source": "upload_1", "target": "i2v_20", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_21", "source": "upload_1", "target": "i2v_21", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_22", "source": "upload_1", "target": "i2v_22", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_23", "source": "upload_1", "target": "i2v_23", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_24", "source": "upload_1", "target": "i2v_24", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_25", "source": "upload_1", "target": "i2v_25", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_26", "source": "upload_1", "target": "i2v_26", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_27", "source": "upload_1", "target": "i2v_27", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_28", "source": "upload_1", "target": "i2v_28", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_29", "source": "upload_1", "target": "i2v_29", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_30", "source": "upload_1", "target": "i2v_30", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_31", "source": "upload_1", "target": "i2v_31", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_32", "source": "upload_1", "target": "i2v_32", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_33", "source": "upload_1", "target": "i2v_33", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_34", "source": "upload_1", "target": "i2v_34", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_35", "source": "upload_1", "target": "i2v_35", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_36", "source": "upload_1", "target": "i2v_36", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_37", "source": "upload_1", "target": "i2v_37", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_38", "source": "upload_1", "target": "i2v_38", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_39", "source": "upload_1", "target": "i2v_39", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_40", "source": "upload_1", "target": "i2v_40", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_41", "source": "upload_1", "target": "i2v_41", "sourceHandle": "image", "targetHandle": "startFrame" },
+    { "id": "e_42", "source": "upload_1", "target": "i2v_42", "sourceHandle": "image", "targetHandle": "startFrame" }
   ]
 }

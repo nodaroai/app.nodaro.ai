@@ -378,6 +378,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "linkedin-post": 1,
   "x-post": 1,
   "facebook-post": 1,
+  "save-to-storage": 0,
 }
 
 // Tier order for restriction checks

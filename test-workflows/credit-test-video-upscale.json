@@ -1,0 +1,75 @@
+{
+  "nodes": [
+    {
+      "id": "upload_vid_1",
+      "type": "upload-video",
+      "position": { "x": 50, "y": 200 },
+      "data": {
+        "label": "Source Video (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "upload_img_1",
+      "type": "upload-image",
+      "position": { "x": 50, "y": 800 },
+      "data": {
+        "label": "Source Image — Grok-generated (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+
+    {
+      "id": "vu_topaz",
+      "type": "video-upscale",
+      "position": { "x": 500, "y": 0 },
+      "data": {
+        "label": "Topaz Video Upscale (19cr)",
+        "provider": "topaz",
+        "upscaleFactor": "2",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "vu_veo_1080p",
+      "type": "video-upscale",
+      "position": { "x": 500, "y": 200 },
+      "data": {
+        "label": "VEO 1080p Upscale (2cr) — requires kieTaskId from VEO generation",
+        "provider": "veo-1080p",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "vu_veo_4k",
+      "type": "video-upscale",
+      "position": { "x": 500, "y": 400 },
+      "data": {
+        "label": "VEO 4K Upscale (38cr) — requires kieTaskId from VEO generation",
+        "provider": "veo-4k",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "ei_grok_upscale",
+      "type": "edit-image",
+      "position": { "x": 500, "y": 800 },
+      "data": {
+        "label": "Grok Upscale (4cr) — requires task_id from prior Grok generation",
+        "prompt": "",
+        "provider": "grok-upscale",
+        "fieldMappings": {}
+      }
+    }
+  ],
+
+  "edges": [
+    { "id": "e_v1", "source": "upload_vid_1", "target": "vu_topaz",        "sourceHandle": "video", "targetHandle": "in" },
+    { "id": "e_v2", "source": "upload_vid_1", "target": "vu_veo_1080p",    "sourceHandle": "video", "targetHandle": "in" },
+    { "id": "e_v3", "source": "upload_vid_1", "target": "vu_veo_4k",       "sourceHandle": "video", "targetHandle": "in" },
+
+    { "id": "e_i1", "source": "upload_img_1", "target": "ei_grok_upscale", "sourceHandle": "image", "targetHandle": "image" }
+  ]
+}

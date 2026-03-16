@@ -26,7 +26,7 @@
       "type": "lip-sync",
       "position": { "x": 500, "y": 0 },
       "data": {
-        "label": "Kling Avatar 720p (13cr)",
+        "label": "Kling Avatar 720p (~28cr/14s, 8 KIE/sec)",
         "provider": "kling-avatar",
         "resolution": "720p",
         "prompt": "",
@@ -38,7 +38,7 @@
       "type": "lip-sync",
       "position": { "x": 500, "y": 200 },
       "data": {
-        "label": "Kling Avatar 480p (13cr)",
+        "label": "Kling Avatar 480p (~28cr/14s, 8 KIE/sec)",
         "provider": "kling-avatar",
         "resolution": "480p",
         "prompt": "",
@@ -50,7 +50,7 @@
       "type": "lip-sync",
       "position": { "x": 500, "y": 400 },
       "data": {
-        "label": "Kling Avatar Pro 720p (25cr)",
+        "label": "Kling Avatar Pro 720p (~56cr/14s, 16 KIE/sec)",
         "provider": "kling-avatar-pro",
         "resolution": "720p",
         "prompt": "",
@@ -62,7 +62,7 @@
       "type": "lip-sync",
       "position": { "x": 500, "y": 600 },
       "data": {
-        "label": "Kling Avatar Pro 480p (25cr)",
+        "label": "Kling Avatar Pro 480p (~56cr/14s, 16 KIE/sec)",
         "provider": "kling-avatar-pro",
         "resolution": "480p",
         "prompt": "",
@@ -74,7 +74,7 @@
       "type": "lip-sync",
       "position": { "x": 500, "y": 800 },
       "data": {
-        "label": "Infinitalk 720p (19cr)",
+        "label": "Infinitalk 720p (~42cr/14s, 12 KIE/sec)",
         "provider": "infinitalk",
         "resolution": "720p",
         "prompt": "",
@@ -86,9 +86,21 @@
       "type": "lip-sync",
       "position": { "x": 500, "y": 1000 },
       "data": {
-        "label": "Infinitalk 480p (19cr)",
+        "label": "Infinitalk 480p (~11cr/14s, 3 KIE/sec)",
         "provider": "infinitalk",
         "resolution": "480p",
+        "prompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "ls_hailuo_avatar",
+      "type": "lip-sync",
+      "position": { "x": 500, "y": 1200 },
+      "data": {
+        "label": "Hailuo Avatar 720p (~19cr/14s)",
+        "provider": "hailuo-avatar",
+        "resolution": "720p",
         "prompt": "",
         "fieldMappings": {}
       }
@@ -108,6 +120,9 @@
     { "id": "e_a3", "source": "upload_audio_1", "target": "ls_kling_pro_720",   "sourceHandle": "audio", "targetHandle": "audio" },
     { "id": "e_a4", "source": "upload_audio_1", "target": "ls_kling_pro_480",   "sourceHandle": "audio", "targetHandle": "audio" },
     { "id": "e_a5", "source": "upload_audio_1", "target": "ls_infinitalk_720",  "sourceHandle": "audio", "targetHandle": "audio" },
-    { "id": "e_a6", "source": "upload_audio_1", "target": "ls_infinitalk_480",  "sourceHandle": "audio", "targetHandle": "audio" }
+    { "id": "e_a6", "source": "upload_audio_1", "target": "ls_infinitalk_480",  "sourceHandle": "audio", "targetHandle": "audio" },
+
+    { "id": "e_i7", "source": "upload_img_1",   "target": "ls_hailuo_avatar",   "sourceHandle": "image", "targetHandle": "image" },
+    { "id": "e_a7", "source": "upload_audio_1", "target": "ls_hailuo_avatar",   "sourceHandle": "audio", "targetHandle": "audio" }
   ]
 }
