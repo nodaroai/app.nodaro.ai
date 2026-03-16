@@ -56,6 +56,10 @@ export function executeSplitText(
 /**
  * Execute composite node: build composite plan from layer config + upstream video URLs.
  * The composite plan is sent to the render queue by the render-video node downstream.
+ *
+ * Matches frontend logic: layers are matched by inputHandle (targetHandle on edge),
+ * not by array index. This ensures consistent layer ordering between frontend DAG
+ * and backend orchestrator execution.
  */
 export function executeComposite(
   node: SimpleNode,
@@ -69,39 +73,61 @@ export function executeComposite(
   const height = (data.height as number) ?? 1080
   const fps = (data.fps as number) ?? 30
 
-  // Collect incoming video URLs
+  // Collect incoming video URLs keyed by targetHandle (matches frontend logic)
   const incomingEdges = edges.filter((e) => e.target === node.id)
-  const layers: Array<{
-    url: string
-    x: number
-    y: number
-    width: number
-    height: number
-    opacity: number
-    zIndex: number
-  }> = []
+  const handleVideoMap = new Map<string, string>()
 
-  const layerConfigs = (data.layers as Array<Record<string, unknown>>) ?? []
-
-  for (let i = 0; i < incomingEdges.length; i++) {
-    const edge = incomingEdges[i]
+  for (const edge of incomingEdges) {
     const srcNode = allNodes.find((n) => n.id === edge.source)
     if (!srcNode) continue
     const state = nodeStates[srcNode.id]
     if (!state?.output) continue
     const url = getPrimaryOutput(state.output, srcNode.type, edge.sourceHandle)
     if (!url) continue
+    const handle = edge.targetHandle ?? `video${handleVideoMap.size + 1}`
+    handleVideoMap.set(handle, url)
+  }
 
-    const layerConfig = layerConfigs[i] ?? {}
-    layers.push({
-      url,
-      x: (layerConfig.x as number) ?? 0,
-      y: (layerConfig.y as number) ?? 0,
-      width: (layerConfig.width as number) ?? width,
-      height: (layerConfig.height as number) ?? height,
-      opacity: (layerConfig.opacity as number) ?? 1,
-      zIndex: i,
-    })
+  // Build layer config map keyed by inputHandle (same as frontend)
+  const layerConfigs = (data.layers as Array<Record<string, unknown>>) ?? []
+  const existingLayerMap = new Map(
+    layerConfigs.map((l, i) => [(l.inputHandle as string) || `__unkeyed_${i}`, l]),
+  )
+
+  const layers: Array<Record<string, unknown>> = []
+
+  for (const [handle, videoUrl] of handleVideoMap) {
+    const existing = existingLayerMap.get(handle)
+    if (existing) {
+      layers.push({
+        id: existing.id ?? `layer-${handle}`,
+        sourceVideo: videoUrl,
+        position: existing.position ?? "fullscreen",
+        x: (existing.x as number) ?? 0,
+        y: (existing.y as number) ?? 0,
+        width: (existing.width as number) ?? 100,
+        height: (existing.height as number) ?? 100,
+        startFrame: (existing.startFrame as number) ?? 0,
+        durationInFrames: existing.durationInFrames,
+        opacity: (existing.opacity as number) ?? 1,
+        blendMode: existing.blendMode ?? "normal",
+        zIndex: (existing.zIndex as number) ?? layers.length,
+      })
+    } else {
+      layers.push({
+        id: `layer-${handle}`,
+        sourceVideo: videoUrl,
+        position: "fullscreen",
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        startFrame: 0,
+        opacity: 1,
+        blendMode: "normal",
+        zIndex: layers.length,
+      })
+    }
   }
 
   const compositePlan = {
