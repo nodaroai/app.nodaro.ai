@@ -570,6 +570,24 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         return { ...node, id: newId }
       })
 
+      // Remap fieldMappings sourceNodeIds to new IDs
+      nodesToImport = nodesToImport.map(node => {
+        const fm = (node.data as Record<string, unknown>)?.fieldMappings as Record<string, { sourceNodeId: string }> | undefined
+        if (!fm) return node
+        let changed = false
+        const newFm: Record<string, { sourceNodeId: string }> = {}
+        for (const [field, mapping] of Object.entries(fm)) {
+          if (mapping?.sourceNodeId && nodeIdMap[mapping.sourceNodeId]) {
+            newFm[field] = { sourceNodeId: nodeIdMap[mapping.sourceNodeId] }
+            changed = true
+          } else {
+            newFm[field] = mapping
+          }
+        }
+        if (!changed) return node
+        return { ...node, data: { ...node.data, fieldMappings: newFm } }
+      })
+
       // Update edge references
       const edgesToImport = data.edges.map(edge => ({
         ...edge,
