@@ -170,10 +170,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   "sora2-pro": 38,               // standard 5s fallback
   // Sora2-Pro duration-tiered pricing (standard vs high quality mode)
-  "sora2-pro:5s": 38,            // 120 KIE cr, $0.60 (standard 5s)
-  "sora2-pro:10s": 68,           // 215 KIE cr, $1.075 (standard 10s)
-  "sora2-pro:5s:high": 83,       // 265 KIE cr, $1.325 (high quality 5s)
-  "sora2-pro:10s:high": 158,     // 500 KIE cr, $2.50 (high quality 10s)
+  "sora2-pro:5s": 38,            // 150 KIE cr, $0.75 (standard n_frames=10 ~5s)
+  "sora2-pro:10s": 68,           // 270 KIE cr, $1.35 (standard n_frames=15 ~10s)
+  "sora2-pro:5s:high": 83,       // 330 KIE cr, $1.65 (high quality n_frames=10 ~5s)
+  "sora2-pro:10s:high": 158,     // 630 KIE cr, $3.15 (high quality n_frames=15 ~10s)
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
@@ -280,21 +280,21 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "suno-separate-stem": 16,      // 50 KIE cr, full stem separation
   "suno-music-video": 5,         // 2 KIE cr
   "suno-mashup": 4,              // 12 KIE cr
-  "suno-replace-section": 2,     // 6 KIE cr
-  "suno-style-boost": 1,         // 2 KIE cr
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   "suno-add-instrumental": 4,    // 12 KIE cr
   "suno-add-vocals": 4,          // 12 KIE cr
-  "suno-convert-wav": 1,         // 2 KIE cr
+  ***REDACTED-OSS-SCRUB***
   "suno-upload-extend": 4,       // 12 KIE cr
   // Replicate disabled
   // "musicgen": 7,                 // Replicate Meta MusicGen
   // "lyria": 7,                    // Replicate Google Lyria 2
   // "bark": 7,                     // Replicate Suno Bark
-  "elevenlabs-isolation": 4,     // 0.2 KIE cr/sec, variable; ~80s avg = 16 KIE cr
+  ***REDACTED-OSS-SCRUB***
   // Replicate disabled
   // "whisper": 4,                   // Replicate whisper transcription
   // "incredibly-fast-whisper": 4,   // Replicate fast whisper
-  "elevenlabs-stt": 2,           // 3.5 KIE cr per minute, $0.0175
+  ***REDACTED-OSS-SCRUB***
   "elevenlabs-dialogue": 5,     // 14 KIE cr per 1K chars, $0.07
   "voice-clone": 5,              // ElevenLabs instant voice clone
   "elevenlabs-voice-changer": 4,  // ElevenLabs speech-to-speech
