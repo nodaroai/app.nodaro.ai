@@ -17,11 +17,14 @@ const ExtractReferencesModal = lazy(() => import("@/components/editor/extract-re
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import type { SceneNodeDataType, ExtractedReference } from "@/types/nodes"
 
 function SceneNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SceneNodeDataType
   const credits = useModelCredits("scene", 0)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -126,7 +129,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
                 e.stopPropagation()
                 setPreviewOpen(true)
               }}
-              thumbnail
+              thumbnail={!useFull}
               thumbnailWidth={320}
             />
             <div className="absolute top-1 right-1 flex gap-1">
@@ -182,7 +185,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
                 src={locationAsset.referenceImageUrl}
                 alt={locationAsset.name}
                 className="w-full h-20 object-cover rounded-md"
-                thumbnail
+                thumbnail={!useFull}
                 thumbnailWidth={320}
               />
             ) : (

@@ -11,6 +11,7 @@ import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { WorkflowViewerModal } from "@/components/editor/workflow-viewer-modal"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { SubWorkflowData, SubWorkflowPort, GeneratedResult } from "@/types/nodes"
 
@@ -66,6 +67,8 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SubWorkflowData
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
   const updateNodeInternals = useUpdateNodeInternals()
   const status = nodeData.executionStatus ?? "idle"
 
@@ -157,10 +160,10 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
             ) : (
               <div className="mt-2 cursor-pointer" onClick={() => setLightboxOpen(true)}>
                 {isImage ? (
-                  <CachedImage src={previewUrl} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" thumbnail thumbnailWidth={320} />
+                  <CachedImage src={previewUrl} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" thumbnail={!useFull} thumbnailWidth={320} />
                 ) : isVideo ? (
                   generatedResults[activeIdx]?.thumbnailUrl ? (
-                    <CachedImage src={generatedResults[activeIdx]!.thumbnailUrl!} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" thumbnail thumbnailWidth={320} />
+                    <CachedImage src={generatedResults[activeIdx]!.thumbnailUrl!} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" thumbnail={!useFull} thumbnailWidth={320} />
                   ) : (
                     <video src={previewUrl} className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" muted />
                   )

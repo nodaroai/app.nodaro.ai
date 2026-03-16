@@ -9,6 +9,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import type { ExtendVideoData } from "@/types/nodes"
 
@@ -24,6 +25,8 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const activeThumbnail = activeResult?.thumbnailUrl
   const [previewOpen, setPreviewOpen] = useState(false)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
   const extendProvider = nodeData.provider || "veo-extend"
   const credits = useModelCredits(extendProvider, extendProvider === "runway-extend" ? 32 : 40)
 
@@ -95,7 +98,7 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
                 src={activeThumbnail}
                 alt="Video preview"
                 className="w-full h-28 object-cover rounded-md cursor-pointer"
-                thumbnail
+                thumbnail={!useFull}
                 thumbnailWidth={320}
                 onClick={(e) => {
                   e.stopPropagation()

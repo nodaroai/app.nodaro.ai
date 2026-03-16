@@ -2337,7 +2337,8 @@ describe("suno-mashup", () => {
 
   it("calls pollJobWithNodeUpdate with 2 audio inputs", async () => {
     mockResolveNodeInputs.mockReturnValue({
-      audioUrls: ["http://a1.mp3", "http://a2.mp3"],
+      audioUrl: "http://a1.mp3",
+      audioUrl2: "http://a2.mp3",
     })
     mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
     await executeNode(
@@ -2355,8 +2356,7 @@ describe("suno-mashup", () => {
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
     expect(mockSunoMashupApi).toHaveBeenCalledWith({
-      audioUrl1: "http://a1.mp3",
-      audioUrl2: "http://a2.mp3",
+      uploadUrlList: ["http://a1.mp3", "http://a2.mp3"],
       model: "chirp-v4",
       customMode: false,
       style: "rock",
@@ -2373,19 +2373,19 @@ describe("suno-mashup", () => {
 // ---------------------------------------------------------------------------
 
 describe("suno-replace-section", () => {
-  it("rejects when no audio input", async () => {
+  it("rejects when no taskId/audioId", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     const promise = executeNode(
       makeNode("suno-replace-section", {}),
       makeCtx(),
     )
     promise.catch(() => {})
-    await expect(promise).rejects.toThrow("No audio input")
+    await expect(promise).rejects.toThrow("Missing taskId/audioId")
     expect(mockToastError).toHaveBeenCalled()
   })
 
   it("calls pollJobWithNodeUpdate with timing params", async () => {
-    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://song.mp3" })
+    mockResolveNodeInputs.mockReturnValue({ sunoTaskId: "task-123", sunoTrackId: "audio-456" })
     mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
     await executeNode(
       makeNode("suno-replace-section", {
@@ -2408,7 +2408,8 @@ describe("suno-replace-section", () => {
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
     expect(mockSunoReplaceSectionApi).toHaveBeenCalledWith({
-      audioUrl: "http://song.mp3",
+      taskId: "task-123",
+      audioId: "audio-456",
       infillStartS: 10,
       infillEndS: 25,
       prompt: "guitar solo",
@@ -2461,19 +2462,19 @@ describe("suno-style-boost", () => {
 // ---------------------------------------------------------------------------
 
 describe("suno-add-instrumental", () => {
-  it("rejects when no audio input", async () => {
+  it("rejects when no taskId/audioId", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     const promise = executeNode(
       makeNode("suno-add-instrumental", {}),
       makeCtx(),
     )
     promise.catch(() => {})
-    await expect(promise).rejects.toThrow("No audio input")
+    await expect(promise).rejects.toThrow("Missing taskId/audioId")
     expect(mockToastError).toHaveBeenCalled()
   })
 
-  it("calls pollJobWithNodeUpdate with audio input and model", async () => {
-    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://vocals.mp3" })
+  it("calls pollJobWithNodeUpdate with taskId/audioId and model", async () => {
+    mockResolveNodeInputs.mockReturnValue({ sunoTaskId: "task-123", sunoTrackId: "audio-456" })
     mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
     await executeNode(
       makeNode("suno-add-instrumental", { model: "chirp-v4" }),
@@ -2490,7 +2491,8 @@ describe("suno-add-instrumental", () => {
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
     expect(mockSunoAddInstrumentalApi).toHaveBeenCalledWith({
-      audioUrl: "http://vocals.mp3",
+      taskId: "task-123",
+      audioId: "audio-456",
       model: "chirp-v4",
       userId: "u1",
     })
@@ -2502,19 +2504,19 @@ describe("suno-add-instrumental", () => {
 // ---------------------------------------------------------------------------
 
 describe("suno-add-vocals", () => {
-  it("rejects when no audio input", async () => {
+  it("rejects when no taskId/audioId", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     const promise = executeNode(
       makeNode("suno-add-vocals", {}),
       makeCtx(),
     )
     promise.catch(() => {})
-    await expect(promise).rejects.toThrow("No audio input")
+    await expect(promise).rejects.toThrow("Missing taskId/audioId")
     expect(mockToastError).toHaveBeenCalled()
   })
 
-  it("calls pollJobWithNodeUpdate with audio input and model", async () => {
-    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://instrumental.mp3" })
+  it("calls pollJobWithNodeUpdate with taskId/audioId and model", async () => {
+    mockResolveNodeInputs.mockReturnValue({ sunoTaskId: "task-123", sunoTrackId: "audio-456" })
     mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
     await executeNode(
       makeNode("suno-add-vocals", { model: "chirp-v4" }),
@@ -2531,7 +2533,8 @@ describe("suno-add-vocals", () => {
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
     expect(mockSunoAddVocalsApi).toHaveBeenCalledWith({
-      audioUrl: "http://instrumental.mp3",
+      taskId: "task-123",
+      audioId: "audio-456",
       model: "chirp-v4",
       userId: "u1",
     })
@@ -2543,19 +2546,19 @@ describe("suno-add-vocals", () => {
 // ---------------------------------------------------------------------------
 
 describe("suno-convert-wav", () => {
-  it("rejects when no audio input", async () => {
+  it("rejects when no taskId/audioId", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     const promise = executeNode(
       makeNode("suno-convert-wav", {}),
       makeCtx(),
     )
     promise.catch(() => {})
-    await expect(promise).rejects.toThrow("No audio input")
+    await expect(promise).rejects.toThrow("Missing taskId/audioId")
     expect(mockToastError).toHaveBeenCalled()
   })
 
-  it("calls pollJobWithNodeUpdate with audio input", async () => {
-    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://song.mp3" })
+  it("calls pollJobWithNodeUpdate with taskId/audioId", async () => {
+    mockResolveNodeInputs.mockReturnValue({ sunoTaskId: "task-123", sunoTrackId: "audio-456" })
     mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
     await executeNode(
       makeNode("suno-convert-wav", {}),
@@ -2572,7 +2575,8 @@ describe("suno-convert-wav", () => {
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
     expect(mockSunoConvertWavApi).toHaveBeenCalledWith({
-      audioUrl: "http://song.mp3",
+      taskId: "task-123",
+      audioId: "audio-456",
       userId: "u1",
     })
   })

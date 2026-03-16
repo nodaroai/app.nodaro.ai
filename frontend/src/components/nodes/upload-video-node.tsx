@@ -11,6 +11,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import type { UploadVideoData } from "@/types/nodes"
 
 const HANDLES = [
@@ -38,6 +39,8 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
 
   const videoUrl = nodeData.r2Url || nodeData.url
   const thumbnailUrl = nodeData.thumbnailUrl
@@ -157,8 +160,8 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                         src={thumbnailUrl}
                         alt={nodeData.filename || "Video thumbnail"}
                         className="w-full h-full object-cover"
-                        thumbnail
-                        thumbnailWidth={480}
+                        thumbnail={!useFull}
+                        thumbnailWidth={320}
                       />
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center">

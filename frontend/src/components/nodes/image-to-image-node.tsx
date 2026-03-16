@@ -11,6 +11,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -38,6 +39,8 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
     nodeData as unknown as Record<string, unknown>,
   )
   const credits = useModelCredits(creditModelId, 1)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -110,6 +113,8 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
             alt="Result"
             className="w-full h-full object-cover rounded-xl"
             style={{ minHeight: 180 }}
+            thumbnail={!useFull}
+            thumbnailWidth={320}
           />
         )}
 

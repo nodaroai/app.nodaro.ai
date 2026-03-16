@@ -9,6 +9,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
@@ -35,6 +36,8 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const resolution = nodeData.resolution || "720p"
   const modelId = buildMotionCreditModelIdentifier(provider, resolution, nodeData.videoDuration)
   const credits = useModelCredits(modelId, 38)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -125,6 +128,8 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
                 alt="Video preview"
                 className="w-full h-full object-cover rounded-xl"
                 style={{ minHeight: 180 }}
+                thumbnail={!useFull}
+                thumbnailWidth={320}
               />
             ) : (
               <video

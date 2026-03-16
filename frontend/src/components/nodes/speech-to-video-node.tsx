@@ -11,6 +11,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { EditableNodeLabel } from "./editable-node-label"
 import type { SpeechToVideoData, GeneratedResult } from "@/types/nodes"
 
@@ -62,6 +63,8 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const edges = useWorkflowStore((s) => s.edges)
   const nodes = useWorkflowStore((s) => s.nodes)
 
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -248,6 +251,8 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   alt="Video preview"
                   className="w-full h-full object-cover rounded-xl"
                   style={{ minHeight: 180 }}
+                  thumbnail={!useFull}
+                  thumbnailWidth={320}
                 />
               ) : (
                 <video
