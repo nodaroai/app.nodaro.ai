@@ -22,7 +22,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -37,7 +37,7 @@
         "duration": 8,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -52,7 +52,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -67,7 +67,7 @@
         "duration": 10,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -82,7 +82,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -98,7 +98,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "kling3Sound": false,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -114,7 +114,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "kling3Sound": true,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -130,7 +130,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "kling3Sound": false,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -146,7 +146,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "kling3Sound": true,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -162,7 +162,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "kling3Sound": false,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -178,7 +178,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "kling3Sound": true,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -193,7 +193,7 @@
         "duration": 6,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -208,7 +208,7 @@
         "duration": 10,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -224,7 +224,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "removeWatermark": true,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -239,7 +239,7 @@
         "duration": 4,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -254,7 +254,7 @@
         "duration": 12,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -269,7 +269,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -284,7 +284,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -299,7 +299,7 @@
         "duration": 10,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -315,7 +315,7 @@
         "aspectRatio": "16:9",
         "negativePrompt": "",
         "removeWatermark": true,
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -330,7 +330,7 @@
         "duration": 6,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -345,7 +345,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -360,7 +360,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -375,7 +375,7 @@
         "duration": 5,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -390,7 +390,7 @@
         "duration": 5,
         "aspectRatio": "9:16",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -405,7 +405,7 @@
         "duration": 5,
         "aspectRatio": "1:1",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     },
     {
@@ -420,7 +420,7 @@
         "duration": 10,
         "aspectRatio": "16:9",
         "negativePrompt": "",
-        "fieldMappings": {}
+        "fieldMappings": { "prompt": { "sourceNodeId": "prompt_1" } }
       }
     }
   ],
