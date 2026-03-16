@@ -352,12 +352,12 @@
   ],
 
   "edges": [
-    { "id": "e_p1", "source": "prompt_1", "target": "gen_v4",              "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_p2", "source": "prompt_1", "target": "gen_v5",              "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_p3", "source": "prompt_1", "target": "gen_v4_5",            "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_p4", "source": "prompt_1", "target": "gen_v4_5plus",        "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_p5", "source": "prompt_1", "target": "gen_v5_instrumental", "sourceHandle": "text", "targetHandle": "in" },
-    { "id": "e_p6", "source": "prompt_1", "target": "lyrics_1",            "sourceHandle": "text", "targetHandle": "in" },
+    { "id": "e_p1", "source": "prompt_1", "target": "gen_v4",              "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p2", "source": "prompt_1", "target": "gen_v5",              "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p3", "source": "prompt_1", "target": "gen_v4_5",            "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p4", "source": "prompt_1", "target": "gen_v4_5plus",        "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p5", "source": "prompt_1", "target": "gen_v5_instrumental", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p6", "source": "prompt_1", "target": "lyrics_1",            "sourceHandle": "prompt", "targetHandle": "in" },
 
     { "id": "e_a1",  "source": "upload_audio_1", "target": "cover_v4",  "sourceHandle": "audio", "targetHandle": "in" },
     { "id": "e_a2",  "source": "upload_audio_1", "target": "cover_v5",  "sourceHandle": "audio", "targetHandle": "in" },
