@@ -13,6 +13,7 @@ import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { EditableNodeLabel } from "./editable-node-label"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 
@@ -96,6 +97,8 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
   const provider = nodeData.provider ?? "minimax"
   const credits = useModelCredits(provider, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
   const isNodeRunning = nodeData.executionStatus === "running"
@@ -392,7 +395,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
             {startFrameInfo?.thumbnailUrl ? (
               <div className="w-full h-[70px] rounded-md overflow-hidden bg-muted/30 border border-muted/50">
                 <CachedImage src={startFrameInfo.thumbnailUrl} alt={startFrameInfo.label}
-                  className="w-full h-full object-cover" thumbnail thumbnailWidth={320} />
+                  className="w-full h-full object-cover" thumbnail={!useFull} thumbnailWidth={320} />
               </div>
             ) : (
               <div className="w-full h-[70px] rounded-md border border-dashed border-muted-foreground/20 flex items-center justify-center">
@@ -407,7 +410,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
             {endFrameInfo?.thumbnailUrl ? (
               <div className="w-full h-[70px] rounded-md overflow-hidden bg-muted/30 border border-muted/50">
                 <CachedImage src={endFrameInfo.thumbnailUrl} alt={endFrameInfo.label}
-                  className="w-full h-full object-cover" thumbnail thumbnailWidth={320} />
+                  className="w-full h-full object-cover" thumbnail={!useFull} thumbnailWidth={320} />
               </div>
             ) : (
               <div className={`w-full h-[70px] rounded-md border border-dashed flex items-center justify-center ${supportsEndFrame ? "border-muted-foreground/20" : "border-muted-foreground/10 opacity-40"}`}>
@@ -481,7 +484,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
               {activeThumbnail ? (
                 <CachedImage src={activeThumbnail} alt="Video preview"
                   className="w-full h-full object-cover"
-                  thumbnail thumbnailWidth={320}
+                  thumbnail={!useFull} thumbnailWidth={320}
                 />
               ) : (
                 <video src={activeUrl}
@@ -565,7 +568,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         {activeThumbnail ? (
           <CachedImage src={activeThumbnail} alt="Video preview"
             className="w-full h-full object-cover"
-            thumbnail thumbnailWidth={320}
+            thumbnail={!useFull} thumbnailWidth={320}
           />
         ) : (
           <video src={activeUrl} autoPlay={videoAutoplay} loop={videoAutoplay} muted playsInline className="w-full h-full object-cover"

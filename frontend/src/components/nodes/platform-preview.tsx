@@ -5,6 +5,7 @@ import { Heart, MessageCircle, Send, Share2 } from "lucide-react"
 import { PLATFORM_SPECS, PLATFORM_LABELS } from "@/lib/social-media-specs"
 import type { SocialMediaPlatform } from "@/lib/social-media-specs"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 export const PLATFORM_COLORS: Record<SocialMediaPlatform, string> = {
@@ -177,6 +178,8 @@ function MediaSlot({
   mediaUrl?: string; isVideo?: boolean; className: string
 }) {
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
 
   if (!mediaUrl) {
     return (
@@ -204,7 +207,7 @@ function MediaSlot({
       src={mediaUrl}
       alt="Preview"
       className={className}
-      thumbnail
+      thumbnail={!useFull}
       thumbnailWidth={320}
     />
   )

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { EditableNodeLabel } from "./editable-node-label"
 import { toast } from "sonner"
 import type { LipSyncData, GeneratedResult } from "@/types/nodes"
@@ -80,6 +81,8 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
   const lipSyncProvider = nodeData.provider ?? "kling-avatar"
   const creditModelId = lipSyncProvider === "infinitalk"
     ? `infinitalk:${nodeData.resolution ?? "720p"}`
@@ -387,6 +390,8 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                   alt="Video preview"
                   className="w-full h-full object-cover rounded-xl"
                   style={{ minHeight: 180 }}
+                  thumbnail={!useFull}
+                  thumbnailWidth={320}
                 />
               ) : (
                 <video

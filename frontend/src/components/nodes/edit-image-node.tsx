@@ -12,6 +12,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { EditableNodeLabel } from "./editable-node-label"
 import type { EditImageData } from "@/types/nodes"
@@ -32,6 +33,8 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const credits = useModelCredits(nodeData.provider ?? "recraft-upscale", 2)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -103,6 +106,8 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
             alt="Result"
             className="w-full h-full object-cover rounded-xl"
             style={{ minHeight: 180 }}
+            thumbnail={!useFull}
+            thumbnailWidth={320}
           />
         )}
 

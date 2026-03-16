@@ -9,6 +9,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -42,6 +43,8 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const provider = nodeData.provider ?? "minimax"
   const credits = useModelCredits(provider, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
   const isNodeRunning = nodeData.executionStatus === "running"
@@ -139,6 +142,8 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 alt="Video preview"
                 className="w-full h-full object-cover rounded-xl"
                 style={{ minHeight: 180 }}
+                thumbnail={!useFull}
+                thumbnailWidth={320}
               />
             ) : (
               <video

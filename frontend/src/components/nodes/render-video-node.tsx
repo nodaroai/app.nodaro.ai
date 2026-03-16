@@ -8,6 +8,7 @@ import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import type { RenderVideoData } from "@/types/nodes"
@@ -16,6 +17,8 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as RenderVideoData | undefined
   const nodeData = currentNodeData ?? (data as RenderVideoData)
   const credits = useModelCredits("render-video", 15)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -98,7 +101,7 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
                 src={activeThumbnail}
                 alt="Video preview"
                 className="w-full h-28 object-cover rounded-md"
-                thumbnail
+                thumbnail={!useFull}
                 thumbnailWidth={320}
               />
             ) : (

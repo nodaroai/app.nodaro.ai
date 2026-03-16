@@ -12,6 +12,7 @@ import { useConnectionCount } from "@/hooks/use-connection-count"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import type { FaceNodeData } from "@/types/nodes"
@@ -26,6 +27,8 @@ const STYLE_LABELS: Record<string, string> = {
 function FaceNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as FaceNodeData
   const credits = useModelCredits((nodeData.provider as string | undefined) ?? "nano-banana", 2)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const inConnectionCount = useConnectionCount(id)
@@ -104,8 +107,8 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
                 src={activeUrl}
                 alt={nodeData.faceName || "Face"}
                 className="w-full h-full object-cover cursor-pointer"
-                thumbnail
-                thumbnailWidth={480}
+                thumbnail={!useFull}
+                thumbnailWidth={320}
                 onClick={(e) => {
                   e.stopPropagation()
                   setLightboxSrc(activeUrl)

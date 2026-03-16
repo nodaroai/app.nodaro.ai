@@ -9,6 +9,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { SunoMusicVideoData } from "@/types/nodes"
 
@@ -22,6 +23,8 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results?.[0]
   const thumbnailUrl = activeResult?.thumbnailUrl
   const credits = useModelCredits("suno-music-video", 5)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
   const [previewOpen, setPreviewOpen] = useState(false)
 
   return (
@@ -70,7 +73,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
                 alt="Video preview"
                 className="w-full h-full object-cover rounded-xl cursor-pointer"
                 style={{ minHeight: 120 }}
-                thumbnail
+                thumbnail={!useFull}
                 thumbnailWidth={320}
                 onClick={(e) => {
                   e.stopPropagation()

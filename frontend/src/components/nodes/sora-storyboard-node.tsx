@@ -11,6 +11,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { EditableNodeLabel } from "./editable-node-label"
 import type { SoraStoryboardData, GeneratedResult } from "@/types/nodes"
 
@@ -36,6 +37,8 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
   const creditModelId = nFrames === "10" ? "sora-storyboard" : "sora-storyboard:15"
   const defaultCost = nFrames === "10" ? 47 : 85
   const credits = useModelCredits(creditModelId, defaultCost)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
 
   const shotCount = nodeData.shots?.length ?? 0
 
@@ -159,6 +162,8 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
                   alt="Video preview"
                   className="w-full h-full object-cover rounded-xl"
                   style={{ minHeight: 180 }}
+                  thumbnail={!useFull}
+                  thumbnailWidth={320}
                 />
               ) : (
                 <video

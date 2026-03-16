@@ -9,6 +9,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -33,6 +34,8 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const v2vProvider = (nodeData.provider as string | undefined) ?? "wan"
   const credits = useModelCredits(v2vProvider, v2vProvider === "luma-modify" ? 32 : 25)
+  const { zoom } = useCanvasZoom()
+  const useFull = zoom >= 0.8
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
   const isNodeRunning = nodeData.executionStatus === "running"
@@ -131,6 +134,8 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 className="w-full h-full object-cover rounded-xl cursor-pointer"
                 style={{ minHeight: 180 }}
                 onClick={() => selectNode(id)}
+                thumbnail={!useFull}
+                thumbnailWidth={320}
               />
             ) : (
               <video
