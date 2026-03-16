@@ -105,6 +105,21 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.url as string | undefined)?.trim()
     );
   }
+  if (type === "webhook-trigger") {
+    // Return first param value or legacy prompt (matches backend extractSourceNodeOutput)
+    const params = data.params as Array<{ id: string; name: string; type: string }> | undefined;
+    const triggerData = data.__triggerData as Record<string, unknown> | undefined;
+    if (params && params.length > 0 && triggerData) {
+      for (const p of params) {
+        const val = triggerData[p.name];
+        if (val != null) return String(val);
+      }
+    }
+    return (data.text as string | undefined)?.trim();
+  }
+  if (type === "schedule-trigger") {
+    return (data.text as string | undefined)?.trim();
+  }
   if (type === "generate-image") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
@@ -163,6 +178,37 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.generatedVideoUrl as string | undefined)
     );
   }
+  // Suno-separate: support stem routing via sourceHandle (matches backend)
+  if (type === "suno-separate") {
+    if (sourceHandle === "vocal") {
+      return (data.vocalUrl as string | undefined) ??
+        (data.generatedAudioUrl as string | undefined);
+    }
+    if (sourceHandle === "instrumental") {
+      return (data.instrumentalUrl as string | undefined) ??
+        (data.generatedAudioUrl as string | undefined);
+    }
+    const results =
+      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+    return (
+      results[activeIndex]?.url ??
+      (data.generatedAudioUrl as string | undefined)
+    );
+  }
+  // Voice-design: support voiceId routing via sourceHandle (matches backend)
+  if (type === "voice-design") {
+    if (sourceHandle === "voiceId") {
+      return data.generatedVoiceId as string | undefined;
+    }
+    const results =
+      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+    return (
+      results[activeIndex]?.url ??
+      (data.generatedAudioUrl as string | undefined)
+    );
+  }
   if (
     type === "text-to-speech" ||
     type === "generate-music" ||
@@ -170,12 +216,10 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "suno-generate" ||
     type === "suno-cover" ||
     type === "suno-extend" ||
-    type === "suno-separate" ||
     type === "text-to-dialogue" ||
     type === "voice-changer" ||
     type === "dubbing" ||
     type === "voice-remix" ||
-    type === "voice-design" ||
     type === "audio-isolation" ||
     type === "suno-mashup" ||
     type === "suno-replace-section" ||

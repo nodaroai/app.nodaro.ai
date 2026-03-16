@@ -181,7 +181,7 @@ async function executeInlineNode(
       output = executeCombineText(node, edges, allNodes, nodeStates)
       break
     case "split-text":
-      output = executeSplitText(node, resolvedInputs)
+      output = executeSplitText(node, resolvedInputs, edges, allNodes, nodeStates)
       break
     case "composite":
       output = executeComposite(node, edges, allNodes, nodeStates)
@@ -276,25 +276,63 @@ function buildSyncHttpBody(
         maxTokens: data.maxTokens,
       }
 
-    case "video-composer":
+    case "video-composer": {
+      // Build assets array from resolved inputs (matches frontend collectMediaAssets)
+      const assets: Array<{ id: string; type: string; url: string }> = []
+      if (resolvedInputs.referenceImageUrls) {
+        for (const url of resolvedInputs.referenceImageUrls) {
+          assets.push({ id: `img_${assets.length}`, type: "image", url })
+        }
+      }
+      if (resolvedInputs.videoUrl) {
+        assets.push({ id: `vid_${assets.length}`, type: "video", url: resolvedInputs.videoUrl })
+      }
+      if (resolvedInputs.videoUrls) {
+        for (const url of resolvedInputs.videoUrls) {
+          assets.push({ id: `vid_${assets.length}`, type: "video", url })
+        }
+      }
+      if (resolvedInputs.audioUrl) {
+        assets.push({ id: `aud_${assets.length}`, type: "audio", url: resolvedInputs.audioUrl })
+      }
       return {
         prompt: resolvedInputs.prompt || data.prompt,
-        userId: ctx.userId,
+        assets: assets.length > 0 ? assets : undefined,
         videoUrl: resolvedInputs.videoUrl,
         imageUrls: resolvedInputs.referenceImageUrls,
+        userId: ctx.userId,
       }
+    }
 
-    // After-effects and lottie-overlay share the same body shape (prompt + videoUrl)
     case "after-effects":
-    case "lottie-overlay":
       return {
         prompt: resolvedInputs.prompt || data.prompt,
         videoUrl: resolvedInputs.videoUrl || data.sourceVideoUrl,
         userId: ctx.userId,
       }
 
-    // 3D title and motion graphics only need prompt
+    case "lottie-overlay": {
+      // Collect lottie asset URLs from edges with targetHandle "lottie" (matches frontend)
+      const lottieAssets: Array<{ url: string; name?: string }> = []
+      if (data.lottieAssets) {
+        // If already stored on node data
+        lottieAssets.push(...(data.lottieAssets as Array<{ url: string; name?: string }>))
+      }
+      return {
+        prompt: resolvedInputs.prompt || data.prompt,
+        videoUrl: resolvedInputs.videoUrl || data.sourceVideoUrl,
+        lottieAssets: lottieAssets.length > 0 ? lottieAssets : undefined,
+        userId: ctx.userId,
+      }
+    }
+
     case "3d-title":
+      return {
+        prompt: resolvedInputs.prompt || data.prompt,
+        backgroundMediaUrl: resolvedInputs.videoUrl || resolvedInputs.imageUrl || data.backgroundMediaUrl,
+        userId: ctx.userId,
+      }
+
     case "motion-graphics":
       return {
         prompt: resolvedInputs.prompt || data.prompt,

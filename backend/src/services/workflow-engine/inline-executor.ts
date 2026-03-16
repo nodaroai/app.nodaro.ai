@@ -8,6 +8,60 @@ import { getPrimaryOutput, extractSourceNodeOutput } from "./output-extractor.js
 import { isSourceNode } from "./execution-graph.js"
 
 /**
+ * Map separator enum values to actual separator strings (matches frontend logic).
+ */
+const SEPARATOR_MAP: Record<string, string> = {
+  newline: "\n",
+  "double-newline": "\n\n",
+  comma: ", ",
+  space: " ",
+}
+
+/**
+ * Collect text outputs from all upstream nodes connected to a target node.
+ * Shared by executeCombineText and executeSplitText.
+ *
+ * @param includeListResults If true, expand listResults from fan-out nodes into individual items.
+ */
+function collectUpstreamTexts(
+  nodeId: string,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+  includeListResults: boolean,
+): string[] {
+  const incomingEdges = edges.filter((e) => e.target === nodeId)
+  const texts: string[] = []
+
+  for (const edge of incomingEdges) {
+    const srcNode = allNodes.find((n) => n.id === edge.source)
+    if (!srcNode) continue
+    const state = nodeStates[srcNode.id]
+    if (state?.output) {
+      if (includeListResults) {
+        const listResults = state.output.listResults
+        if (listResults && listResults.length > 0) {
+          for (const item of listResults) {
+            if (item?.trim()) texts.push(item.trim())
+          }
+          continue
+        }
+      }
+      const text = getPrimaryOutput(state.output, srcNode.type, edge.sourceHandle)
+      if (text) texts.push(text)
+    } else if (isSourceNode(srcNode.type)) {
+      const srcOutput = extractSourceNodeOutput(srcNode)
+      if (srcOutput) {
+        const text = getPrimaryOutput(srcOutput, srcNode.type, edge.sourceHandle)
+        if (text) texts.push(text)
+      }
+    }
+  }
+
+  return texts
+}
+
+/**
  * Execute combine-text node: joins upstream text outputs with a separator.
  */
 export function executeCombineText(
@@ -16,36 +70,52 @@ export function executeCombineText(
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
 ): NodeOutput {
-  const separator = (node.data.separator as string) ?? "\n"
-  const incomingEdges = edges.filter((e) => e.target === node.id)
-
-  const texts: string[] = []
-  for (const edge of incomingEdges) {
-    const srcNode = allNodes.find((n) => n.id === edge.source)
-    if (!srcNode) continue
-    const state = nodeStates[srcNode.id]
-    if (!state?.output) continue
-    const text = getPrimaryOutput(state.output, srcNode.type, edge.sourceHandle)
-    if (text) texts.push(text)
+  const rawSeparator = (node.data.separator as string) ?? "newline"
+  // Map enum values to actual strings; if "custom", use customSeparator; otherwise
+  // check if it's a known enum or already a literal separator string
+  let separator: string
+  if (rawSeparator === "custom") {
+    separator = (node.data.customSeparator as string) ?? ""
+  } else if (rawSeparator in SEPARATOR_MAP) {
+    separator = SEPARATOR_MAP[rawSeparator]
+  } else {
+    separator = rawSeparator
   }
 
+  const texts = collectUpstreamTexts(node.id, edges, allNodes, nodeStates, true)
   const combined = texts.join(separator)
   return { text: combined, combinedText: combined }
 }
 
 /**
  * Execute split-text node: splits text by delimiter.
+ * Matches frontend defaults: delimiter defaults to "===NEXT===",
+ * trimWhitespace and removeEmpty flags are respected.
  */
 export function executeSplitText(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
 ): NodeOutput {
-  const text = resolvedInputs.prompt || (node.data.text as string) || ""
-  const delimiter = (node.data.delimiter as string) ?? "\n"
-  const splitResults = text
-    .split(delimiter)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
+  const upstreamTexts = collectUpstreamTexts(node.id, edges, allNodes, nodeStates, false)
+  const inputText = upstreamTexts.join("")
+
+  // Fall back to resolved prompt or node data
+  const text = inputText || resolvedInputs.prompt || (node.data.text as string) || ""
+  const delimiter = (node.data.delimiter as string) || (node.data.separator as string) || "===NEXT==="
+  const trimWhitespace = (node.data.trimWhitespace as boolean) !== false
+  const removeEmpty = (node.data.removeEmpty as boolean) !== false
+
+  let splitResults = text.split(delimiter)
+
+  if (trimWhitespace) {
+    splitResults = splitResults.map((s) => s.trim())
+  }
+  if (removeEmpty) {
+    splitResults = splitResults.filter((s) => s.length > 0)
+  }
 
   return {
     text: splitResults[0] || "",
@@ -130,12 +200,28 @@ export function executeComposite(
     }
   }
 
+  // Compute durationInFrames from the longest layer (matches frontend logic)
+  let maxDurationInFrames = 0
+  for (const layer of layers) {
+    const layerDur = (layer.durationInFrames as number) ?? 0
+    const layerStart = (layer.startFrame as number) ?? 0
+    if (layerDur > 0) {
+      maxDurationInFrames = Math.max(maxDurationInFrames, layerStart + layerDur)
+    }
+  }
+  // Fallback: 10 seconds at configured fps
+  if (maxDurationInFrames === 0) {
+    maxDurationInFrames = (data.durationInFrames as number) ?? fps * 10
+  }
+
   const compositePlan = {
     planType: "composite",
     layout,
     width,
     height,
     fps,
+    durationInFrames: maxDurationInFrames,
+    backgroundColor: (data.backgroundColor as string) ?? "#000000",
     layers,
   }
 
