@@ -16,7 +16,67 @@ import { extractNodeOutput } from "./execution-graph";
 const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"]);
 
 /** Node types that accept multiple audio inputs (accumulate to audioUrls array) */
-const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "suno-mashup"]);
+const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio"]);
+
+/** VIDEO_OUTPUT_NODE_TYPES — used for kieTaskId passthrough */
+const VIDEO_OUTPUT_NODE_TYPES = new Set([
+  "image-to-video",
+  "video-to-video",
+  "text-to-video",
+  "lip-sync",
+  "speech-to-video",
+  "sora-storyboard",
+  "motion-transfer",
+  "video-upscale",
+  "extend-video",
+  "suno-music-video",
+  "combine-videos",
+  "merge-video-audio",
+  "add-captions",
+  "resize-video",
+  "social-media-format",
+  "trim-video",
+  "render-video",
+  "speed-ramp",
+  "loop-video",
+  "fade-video",
+  "transcode-video",
+]);
+
+/** Resolved inputs from upstream node outputs — shared return type for resolveNodeInputs */
+export interface FrontendResolvedInputs {
+  prompt?: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  videoUrls?: string[];
+  videoUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>;
+  audioUrl?: string;
+  audioUrl2?: string;
+  audioUrls?: string[];
+  audioUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>;
+  audioSources?: {
+    url: string;
+    sourceNodeId: string;
+    sourceType?: "audio" | "video";
+  }[];
+  referenceImageUrls?: string[];
+  sunoTrackId?: string;
+  sunoTaskId?: string;
+  uploadUrl?: string;
+  startFrameUrl?: string;
+  endFrameUrl?: string;
+  maskUrl?: string;
+  kieTaskId?: string;
+}
+
+/** Route audio to suno-mashup's dual-input fields (audioUrl + audioUrl2). */
+function routeSunoMashupAudio(inputs: FrontendResolvedInputs, output: string): void {
+  if (!inputs.audioUrl) {
+    inputs.audioUrl = output;
+  } else {
+    inputs.audioUrl2 = output;
+  }
+}
 
 /** Node types that produce a Suno track/task ID for downstream passthrough */
 const SUNO_TRACK_NODE_TYPES = new Set([
@@ -151,46 +211,9 @@ export function resolveNodeInputs(
   node: WorkflowNode,
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
-): {
-  prompt?: string;
-  imageUrl?: string;
-  videoUrl?: string;
-  videoUrls?: string[];
-  videoUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>;
-  audioUrl?: string;
-  audioUrls?: string[];
-  audioUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>;
-  audioSources?: {
-    url: string;
-    sourceNodeId: string;
-    sourceType?: "audio" | "video";
-  }[];
-  referenceImageUrls?: string[];
-  sunoTrackId?: string;
-  sunoTaskId?: string;
-  uploadUrl?: string;
-} {
+): FrontendResolvedInputs {
   const incomingEdges = edges.filter((e) => e.target === node.id);
-
-  const inputs: {
-    prompt?: string;
-    imageUrl?: string;
-    videoUrl?: string;
-    videoUrls?: string[];
-    videoUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>;
-    audioUrl?: string;
-    audioUrls?: string[];
-    audioUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>;
-    audioSources?: {
-      url: string;
-      sourceNodeId: string;
-      sourceType?: "audio" | "video";
-    }[];
-    referenceImageUrls?: string[];
-    sunoTrackId?: string;
-    sunoTaskId?: string;
-    uploadUrl?: string;
-  } = {};
+  const inputs: FrontendResolvedInputs = {};
 
   for (const srcEdge of incomingEdges) {
     const src = nodes.find((n) => n.id === srcEdge.source);
@@ -216,6 +239,37 @@ export function resolveNodeInputs(
       output = extractNodeOutput(src, srcEdge.sourceHandle ?? undefined);
     }
     if (!output) continue;
+
+    // --- Handle-specific routing takes priority (matches backend) ---
+    if (srcEdge.targetHandle === "startFrame") {
+      inputs.startFrameUrl = output;
+      continue;
+    }
+    if (srcEdge.targetHandle === "endFrame") {
+      inputs.endFrameUrl = output;
+      continue;
+    }
+    if (srcEdge.targetHandle === "mask") {
+      inputs.maskUrl = output;
+      continue;
+    }
+    if (srcEdge.targetHandle === "audio") {
+      if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
+        inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
+        inputs.audioUrlsWithSourceIds = [
+          ...(inputs.audioUrlsWithSourceIds ?? []),
+          { nodeId: src.id, url: output },
+        ];
+      } else if (node.type === "merge-video-audio") {
+        inputs.audioSources = [
+          ...(inputs.audioSources ?? []),
+          { url: output, sourceNodeId: src.id },
+        ];
+      } else {
+        inputs.audioUrl = output;
+      }
+      continue;
+    }
 
     if (src.type === "text-prompt") {
       inputs.prompt = output;
@@ -357,29 +411,7 @@ export function resolveNodeInputs(
       } else {
         inputs.imageUrl = output;
       }
-    } else if (
-      src.type === "image-to-video" ||
-      src.type === "video-to-video" ||
-      src.type === "text-to-video" ||
-      src.type === "lip-sync" ||
-      src.type === "speech-to-video" ||
-      src.type === "sora-storyboard" ||
-      src.type === "motion-transfer" ||
-      src.type === "video-upscale" ||
-      src.type === "extend-video" ||
-      src.type === "suno-music-video" ||
-      src.type === "combine-videos" ||
-      src.type === "merge-video-audio" ||
-      src.type === "add-captions" ||
-      src.type === "resize-video" ||
-      src.type === "social-media-format" ||
-      src.type === "trim-video" ||
-      src.type === "render-video" ||
-      src.type === "speed-ramp" ||
-      src.type === "loop-video" ||
-      src.type === "fade-video" ||
-      src.type === "transcode-video"
-    ) {
+    } else if (VIDEO_OUTPUT_NODE_TYPES.has(src.type!)) {
       if (node.type === "combine-videos") {
         inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
         inputs.videoUrlsWithSourceIds = [
@@ -405,9 +437,18 @@ export function resolveNodeInputs(
       } else {
         inputs.videoUrl = output;
       }
+      // Pass through kieTaskId for VEO/Runway extend and upscale nodes (matches backend)
+      if (node.type === "extend-video" || node.type === "video-upscale") {
+        const srcData = src.data as Record<string, unknown>;
+        if (srcData.kieTaskId) {
+          inputs.kieTaskId = srcData.kieTaskId as string;
+        }
+      }
     } else if (src.type === "reference-audio") {
       if (node.type === "generate-music") {
         inputs.audioUrl = output;
+      } else if (node.type === "suno-mashup") {
+        routeSunoMashupAudio(inputs, output);
       } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
         inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
         inputs.audioUrlsWithSourceIds = [
@@ -452,7 +493,9 @@ export function resolveNodeInputs(
         }
       }
     } else if (src.type === "upload-audio") {
-      if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
+      if (node.type === "suno-mashup") {
+        routeSunoMashupAudio(inputs, output);
+      } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
         inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
         inputs.audioUrlsWithSourceIds = [
           ...(inputs.audioUrlsWithSourceIds ?? []),
@@ -471,6 +514,8 @@ export function resolveNodeInputs(
       const lastInputType = adjustData.lastInputType ?? "audio";
       if (lastInputType === "video") {
         inputs.videoUrl = output;
+      } else if (node.type === "suno-mashup") {
+        routeSunoMashupAudio(inputs, output);
       } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
         inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
         inputs.audioUrlsWithSourceIds = [
@@ -508,7 +553,9 @@ export function resolveNodeInputs(
       src.type === "voice-remix" ||
       src.type === "voice-design"
     ) {
-      if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
+      if (node.type === "suno-mashup") {
+        routeSunoMashupAudio(inputs, output);
+      } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
         inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
         inputs.audioUrlsWithSourceIds = [
           ...(inputs.audioUrlsWithSourceIds ?? []),

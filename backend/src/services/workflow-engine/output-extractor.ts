@@ -207,14 +207,35 @@ export function getPrimaryOutput(
   sourceType: string,
   sourceHandle?: string | null,
 ): string | undefined {
-  // Sub-workflow output routing by handle
-  if (sourceType === "sub-workflow" && sourceHandle) {
+  // Sub-workflow output routing by handle (matches frontend)
+  if (sourceType === "sub-workflow") {
+    const outputResults = output._outputResults
+    if (sourceHandle && outputResults) {
+      const portId = sourceHandle.replace(/^out_/, "")
+      if (outputResults[portId]) return outputResults[portId]
+    }
     return output.text || output.imageUrl || output.videoUrl || output.audioUrl
+  }
+
+  // Sub-workflow-input handle routing
+  if (sourceType === "sub-workflow-input" && sourceHandle) {
+    return output.text
   }
 
   // Plan nodes return a marker
   if (PLAN_NODE_TYPES.has(sourceType)) {
     return output.plan ? "plan-ready" : undefined
+  }
+
+  // Suno-separate: support stem routing via sourceHandle
+  if (sourceType === "suno-separate" && sourceHandle) {
+    if (sourceHandle === "vocal") return output.vocalUrl || output.audioUrl
+    if (sourceHandle === "instrumental") return output.instrumentalUrl || output.audioUrl
+  }
+
+  // Voice-design: support voiceId routing via sourceHandle
+  if (sourceType === "voice-design" && sourceHandle === "voiceId") {
+    return output.generatedVoiceId
   }
 
   // Adjust-volume can output either audio or video
@@ -411,12 +432,16 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return url ? { imageUrl: url } : undefined
   }
 
-  // Scene → imageUrl from generatedResults or generatedImageUrl
+  // Scene → imageUrl from generatedResults or generatedImageUrl, with text fallback
   if (type === "scene") {
     const url =
       getActiveResultUrl(data) ??
       (data.generatedImageUrl as string | undefined)
-    return url ? { imageUrl: url } : undefined
+    if (url) return { imageUrl: url }
+    // Fall back to scene prompt text if no generated image (matches frontend buildScenePrompt)
+    const sceneText = (data.description as string | undefined)?.trim() ||
+      (data.prompt as string | undefined)?.trim()
+    return sceneText ? { text: sceneText } : undefined
   }
 
   // Suno-separate → audioUrl + stem URLs (vocalUrl, instrumentalUrl)
@@ -510,11 +535,24 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return plan ? { plan } : undefined
   }
 
-  // Sub-workflow
+  // Sub-workflow — support handle-based routing (matches frontend)
   if (type === "sub-workflow") {
     const outputResults = data.outputResults as Record<string, string> | undefined
     if (!outputResults) return undefined
+    // Return all port values so getPrimaryOutput can route by handle
+    const output: NodeOutput = {}
     const firstValue = Object.values(outputResults)[0]
+    if (firstValue) output.text = firstValue
+    // Store full outputResults for handle-based routing in getPrimaryOutput
+    output._outputResults = outputResults
+    return output
+  }
+
+  // Sub-workflow-input — return injected port values (matches frontend)
+  if (type === "sub-workflow-input") {
+    const injected = data.__injectedPortValues as Record<string, string> | undefined
+    if (!injected) return undefined
+    const firstValue = Object.values(injected)[0]
     return firstValue ? { text: firstValue } : undefined
   }
 

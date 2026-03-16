@@ -1359,10 +1359,9 @@ export function executeNode(
 
   if (node.type === "suno-mashup") {
     const d = node.data as SunoMashupData;
-    // Mashup needs 2 audio inputs - collect from audioUrls or fallback
-    const audioUrls = inputs.audioUrls ?? [];
-    const audioUrl1 = audioUrls[0] ?? inputs.audioUrl;
-    const audioUrl2 = audioUrls[1];
+    // Mashup needs 2 audio inputs — uses audioUrl + audioUrl2 (matches backend)
+    const audioUrl1 = inputs.audioUrl ?? (inputs.audioUrls ?? [])[0];
+    const audioUrl2 = inputs.audioUrl2 ?? (inputs.audioUrls ?? [])[1];
     if (!audioUrl1 || !audioUrl2) {
       toast.error(`Node "${d.label}": connect two audio sources for mashup`);
       return Promise.reject(new Error("Need two audio inputs"));

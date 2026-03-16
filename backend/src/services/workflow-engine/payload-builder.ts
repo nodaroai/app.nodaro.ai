@@ -725,6 +725,7 @@ export function buildPayload(
           jobId,
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
           imageUrl: resolvedInputs.imageUrl || data.imageUrl,
+          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
           provider: mtProvider,
           backgroundSource: data.backgroundSource,
           characterOrientation: data.characterOrientation,
@@ -1070,6 +1071,9 @@ export function buildPayload(
           jobId,
           audioUrl: resolvedInputs.audioUrl || resolvedInputs.videoUrl || data.audioUrl,
           provider,
+          language: data.language,
+          diarize: data.diarize,
+          tagAudioEvents: data.tagAudioEvents,
           usageLogId,
         },
       }
@@ -1082,19 +1086,31 @@ export function buildPayload(
         videoUrls: resolvedInputs.videoUrls || data.videoUrls || [],
         transition: data.transition ?? "cut",
         transitionDuration: data.transitionDuration ?? 0.5,
-        audioMode: data.audioMode ?? "keep",
+        audioMode: data.audioMode ?? "crossfade",
         usageLogId,
       })
 
-    case "merge-video-audio":
+    case "merge-video-audio": {
+      // Apply per-track settings from node data (matches frontend logic)
+      const trackSettings = (data.trackSettings as Record<string, Record<string, unknown>> | undefined) ?? {}
+      const enrichedAudioSources = (resolvedInputs.audioSources ?? []).map((s) => {
+        const settings = trackSettings[s.sourceNodeId]
+        return {
+          ...s,
+          volume: settings?.volume ?? 1,
+          startTime: settings?.startTime ?? 0,
+          sourceType: s.sourceType ?? (settings?.sourceType as "audio" | "video" | undefined),
+        }
+      })
       return ffmpegResult("merge-video-audio", {
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         audioUrl: resolvedInputs.audioUrl,
-        audioSources: resolvedInputs.audioSources,
+        audioSources: enrichedAudioSources.length > 0 ? enrichedAudioSources : undefined,
         audioMode: data.audioMode ?? "replace",
         usageLogId,
       })
+    }
 
     case "trim-audio":
       return ffmpegResult("trim-audio", {

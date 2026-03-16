@@ -545,6 +545,30 @@ function routeOutput(
     if (state?.output?.text) {
       inputs.prompt = state.output.text
     }
+    // Extract character/object/location reference images from scene data (matches frontend)
+    const sceneData = src.data
+    const characters = (sceneData.characters as Array<{ assetId: string }> | undefined) ?? []
+    const objects = (sceneData.objects as Array<{ assetId: string }> | undefined) ?? []
+    const locations = (sceneData.locations as Array<{ assetId: string }> | undefined) ?? []
+    const allAssetIds = [
+      ...characters.map((c) => c.assetId),
+      ...locations.map((l) => l.assetId),
+      ...objects.map((o) => o.assetId),
+    ].filter(Boolean)
+    if (allAssetIds.length > 0) {
+      // Look for character definition nodes in the workflow
+      for (const assetId of allAssetIds) {
+        const assetNode = allNodes.find((n) => n.id === assetId)
+        if (!assetNode) continue
+        const assetState = nodeStates[assetId]
+        const refUrl = assetState?.output?.imageUrl ||
+          (assetNode.data.sourceImageUrl as string | undefined) ||
+          (assetNode.data.referenceImageUrl as string | undefined)
+        if (refUrl) {
+          inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), refUrl]
+        }
+      }
+    }
     return
   }
 
