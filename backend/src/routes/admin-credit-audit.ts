@@ -79,6 +79,13 @@ function buildModelMap(): Map<string, ModelMapping[]> {
   addAlias("flux-kontext-pro", "flux-kontext", "image")
   addAlias("flux-kontext-max", "flux-kontext-max", "image")
 
+  // VEO record endpoint may return model as "generate" or fall back to sourceLabel "veo-generate"
+  // Add both veo3 and veo3.1 so credit-based matching picks the right one
+  addAlias("veo-generate", "veo3", "i2v")
+  addAlias("veo-generate", "veo3.1", "i2v")
+  addAlias("generate", "veo3", "i2v")
+  addAlias("generate", "veo3.1", "i2v")
+
   return map
 }
 
