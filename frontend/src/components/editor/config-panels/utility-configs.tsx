@@ -1,7 +1,7 @@
 "use client"
 
-import { useCallback, useState } from "react"
-import { Plus, Trash2, FileText, ImageIcon, Film, Music, GripVertical, Eye, EyeOff, ChevronUp, ChevronDown } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { Plus, Trash2, FileText, ImageIcon, Film, Music, GripVertical, Eye, EyeOff, ChevronUp, ChevronDown, Copy, Check, Download } from "lucide-react"
 import { nanoid } from "nanoid"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,6 +24,7 @@ import type {
   PreviewItem,
 } from "@/types/nodes"
 import { isMediaUrl } from "@/lib/media-type"
+import { downloadFile } from "@/components/presentation/output-cards/shared"
 import type { ConfigProps } from "./types"
 
 const SEPARATOR_OPTIONS = [
@@ -250,6 +251,19 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
   const items = data.previewItems ?? []
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleCopy = useCallback((value: string, idx: number) => {
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
+    navigator.clipboard.writeText(value)
+    setCopiedIdx(idx)
+    copyTimeoutRef.current = setTimeout(() => setCopiedIdx(null), 2000)
+  }, [])
+
+  useEffect(() => {
+    return () => { if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current) }
+  }, [])
 
   const toggleVisibility = useCallback((index: number) => {
     const updated = items.map((item, i) =>
@@ -374,6 +388,37 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
                   <audio src={item.value} className="w-full" controls />
                 ) : (
                   <Textarea rows={Math.min((item.value.match(/\n/g) || []).length + 1, 6)} value={item.value} readOnly className="text-xs opacity-70" />
+                )}
+              </div>
+
+              {/* Action buttons */}
+              <div className={"flex gap-1.5 px-2.5 pb-2 " + (!isVisible ? "opacity-40" : "")}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 text-xs h-7"
+                  onClick={() => handleCopy(item.value, i)}
+                >
+                  {copiedIdx === i ? (
+                    <Check className="w-3 h-3 mr-1 text-green-500" />
+                  ) : (
+                    <Copy className="w-3 h-3 mr-1" />
+                  )}
+                  {copiedIdx === i ? "Copied" : item.type === "text" ? "Copy Text" : item.type === "data" ? "Copy Data" : "Copy URL"}
+                </Button>
+                {(item.type === "image" || item.type === "video" || item.type === "audio") && isMediaUrl(item.value) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-xs h-7"
+                    onClick={() => {
+                      const ext = item.type === "video" ? "mp4" : item.type === "audio" ? "mp3" : "png"
+                      downloadFile(item.value, `${item.sourceNodeLabel}.${ext}`)
+                    }}
+                  >
+                    <Download className="w-3 h-3 mr-1" />
+                    Download
+                  </Button>
                 )}
               </div>
             </div>

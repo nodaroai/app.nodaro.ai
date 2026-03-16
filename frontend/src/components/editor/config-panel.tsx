@@ -252,7 +252,8 @@ const RESULT_PRODUCING_TYPES = new Set([
 ].filter(t =>
   t !== "combine-text" && t !== "split-text" && t !== "preview" && t !== "sub-workflow" &&
   t !== "instagram-post" && t !== "tiktok-post" && t !== "youtube-upload" &&
-  t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post"
+  t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post" &&
+  t !== "image-to-text"
 ))
 
 export function ConfigPanel() {

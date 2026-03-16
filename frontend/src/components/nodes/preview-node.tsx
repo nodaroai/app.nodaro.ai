@@ -1,6 +1,6 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Eye, FileText, ImageIcon, Film, Music } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -9,6 +9,10 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { isMediaUrl } from "@/lib/media-type"
+import {
+  extractNodeOutput,
+  detectPreviewItemType,
+} from "@/components/editor/workflow-editor/execution-graph"
 import type { PreviewNodeData, PreviewItem } from "@/types/nodes"
 
 const TYPE_ICON: Record<PreviewItem["type"], React.ReactNode> = {
@@ -58,6 +62,94 @@ function PreviewNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const status = nodeData.executionStatus ?? "idle"
   const hiddenCount = allItems.length - visibleItems.length
+
+  // Auto-collect: compute a fingerprint of upstream outputs so we re-render
+  // only when an edge changes or an upstream node produces new output.
+  const upstreamFingerprint = useWorkflowStore(
+    useCallback((s) => {
+      const inEdges = s.edges.filter((e) => e.target === id)
+      return inEdges.map((e) => {
+        const src = s.nodes.find((n) => n.id === e.source)
+        return src ? `${e.source}:${extractNodeOutput(src) ?? ""}` : ""
+      }).join("||")
+    }, [id])
+  )
+
+  // When the fingerprint changes, re-collect upstream data without requiring
+  // manual execution. This mirrors the logic in execute-node.ts for "preview".
+  useEffect(() => {
+    const { nodes: currentNodes, edges: currentEdges } = useWorkflowStore.getState()
+    const thisNode = currentNodes.find((n) => n.id === id)
+    if (!thisNode) return
+    const prevData = thisNode.data as PreviewNodeData
+
+    const incomingEdges = currentEdges.filter((e) => e.target === id)
+
+    // Preserve previous visibility settings and ordering
+    const prevVisibility = new Map<string, boolean>()
+    for (const item of prevData.previewItems ?? []) {
+      prevVisibility.set(item.sourceNodeId, item.visible)
+    }
+    const prevOrder = prevData.itemOrder ?? []
+
+    const freshItems: PreviewItem[] = []
+
+    for (const edge of incomingEdges) {
+      const sourceNode = currentNodes.find((n) => n.id === edge.source)
+      if (!sourceNode) continue
+
+      const raw = extractNodeOutput(sourceNode)
+      const trimmed = raw?.trim()
+      if (!trimmed) continue
+
+      const srcType = sourceNode.type ?? ""
+      const srcLabel = ((sourceNode.data as Record<string, unknown>).label as string) || srcType
+
+      const itemType = detectPreviewItemType(srcType, trimmed)
+
+      freshItems.push({
+        type: itemType,
+        value: trimmed,
+        sourceNodeId: sourceNode.id,
+        sourceNodeLabel: srcLabel,
+        visible: prevVisibility.get(sourceNode.id) ?? true,
+      })
+    }
+
+    // Apply saved ordering: known items first in saved order, new items appended
+    const itemMap = new Map(freshItems.map((item) => [item.sourceNodeId, item]))
+    const ordered: PreviewItem[] = []
+    for (const oid of prevOrder) {
+      const item = itemMap.get(oid)
+      if (item) {
+        ordered.push(item)
+        itemMap.delete(oid)
+      }
+    }
+    for (const item of itemMap.values()) {
+      ordered.push(item)
+    }
+
+    const newOrder = ordered.map((item) => item.sourceNodeId)
+
+    // Only update if items actually changed to avoid infinite loops
+    const prevItems = prevData.previewItems ?? []
+    const changed =
+      ordered.length !== prevItems.length ||
+      ordered.some((item, i) =>
+        item.value !== prevItems[i]?.value ||
+        item.type !== prevItems[i]?.type ||
+        item.sourceNodeId !== prevItems[i]?.sourceNodeId ||
+        item.sourceNodeLabel !== prevItems[i]?.sourceNodeLabel
+      )
+
+    if (changed) {
+      updateNodeData(id, {
+        previewItems: ordered,
+        itemOrder: newOrder,
+      })
+    }
+  }, [upstreamFingerprint, id, updateNodeData])
 
   return (
     <div className="relative" style={{ maxWidth: '260px' }}>

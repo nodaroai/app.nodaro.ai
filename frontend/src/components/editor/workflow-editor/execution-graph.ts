@@ -474,6 +474,27 @@ export const AUDIO_SOURCE_TYPES = new Set([
   "audio-isolation",
 ]);
 
+const IMAGE_URL_RE = /^https?:\/\/.*\.(png|jpe?g|gif|webp|svg|bmp)/i
+const VIDEO_URL_RE = /^https?:\/\/.*\.(mp4|mov|webm|avi|mkv)/i
+const AUDIO_URL_RE = /^https?:\/\/.*\.(mp3|wav|ogg|aac|flac|m4a)/i
+
+/** Determine the preview item type from a node type and/or its output URL. */
+export function detectPreviewItemType(
+  nodeType: string,
+  value?: string,
+): "image" | "video" | "audio" | "data" | "text" {
+  if (IMAGE_SOURCE_TYPES.has(nodeType) || nodeType === "character" || nodeType === "face" || nodeType === "object" || nodeType === "location") return "image"
+  if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(nodeType)) return "video"
+  if (AUDIO_SOURCE_TYPES.has(nodeType)) return "audio"
+  if (nodeType === "forced-alignment") return "data"
+  if (value) {
+    if (IMAGE_URL_RE.test(value)) return "image"
+    if (VIDEO_URL_RE.test(value)) return "video"
+    if (AUDIO_URL_RE.test(value)) return "audio"
+  }
+  return "text"
+}
+
 export function collectMediaAssets(
   node: WorkflowNode,
   allEdges: WorkflowEdge[],

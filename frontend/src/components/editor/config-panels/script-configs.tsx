@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -277,6 +277,9 @@ export function ImageToTextConfig({ data, onUpdate, nodeRefs }: ConfigProps<Imag
   const imageToTextData = data as ImageToTextData
   const results = imageToTextData.generatedResults ?? []
   const activeIndex = imageToTextData.activeResultIndex ?? 0
+  const [copied, setCopied] = useState(false)
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => { return () => { if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current) } }, [])
 
   return (
     <div className="flex flex-col gap-3">
@@ -339,7 +342,23 @@ export function ImageToTextConfig({ data, onUpdate, nodeRefs }: ConfigProps<Imag
 
       {imageToTextData.generatedText && (
         <div>
-          <Label>Output</Label>
+          <div className="flex items-center justify-between">
+            <Label>Output</Label>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-[10px] gap-1"
+              onClick={() => {
+                if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
+                navigator.clipboard.writeText(imageToTextData.generatedText ?? "")
+                setCopied(true)
+                copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000)
+              }}
+            >
+              {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+              {copied ? "Copied" : "Copy"}
+            </Button>
+          </div>
           <div className="mt-1 rounded-md bg-muted/30 p-3 text-sm whitespace-pre-wrap max-h-60 overflow-y-auto">
             {imageToTextData.generatedText}
           </div>
