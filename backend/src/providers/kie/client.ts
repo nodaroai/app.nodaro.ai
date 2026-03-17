@@ -435,7 +435,8 @@ export async function runKieTask(
 export async function runVeoTask(
   model: string,
   prompt: string,
-  imageUrls?: string[]
+  imageUrls?: string[],
+  options?: { aspectRatio?: string; seed?: number }
 ): Promise<{ resultJson: KieResultJson; costTime?: number; taskId: string; rawRecordInfo?: Record<string, unknown> }> {
   const apiKey = config.KIE_API_KEY
 
@@ -457,6 +458,14 @@ export async function runVeoTask(
     requestBody.generationType = "FIRST_AND_LAST_FRAMES_2_VIDEO"
   } else {
     requestBody.generationType = "TEXT_2_VIDEO"
+  }
+
+  // VEO-specific optional params
+  if (options?.aspectRatio) {
+    requestBody.aspect_ratio = options.aspectRatio
+  }
+  if (options?.seed !== undefined) {
+    requestBody.seeds = options.seed
   }
 
   if (DEBUG) {

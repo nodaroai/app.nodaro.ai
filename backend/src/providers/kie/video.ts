@@ -246,7 +246,8 @@ export class KieVideoProvider
       const { resultJson, taskId: veoTaskId } = await runVeoTask(
         modelConfig.model,
         prompt ?? "smooth cinematic motion",
-        imageUrls
+        imageUrls,
+        { aspectRatio: options?.aspectRatio, seed: options?.seed }
       )
 
       const videoUrl =
@@ -479,7 +480,9 @@ export class KieVideoProvider
     if (provider === "veo3") {
       const { resultJson, taskId: veoTaskId } = await runVeoTask(
         modelConfig.model,
-        prompt
+        prompt,
+        undefined,
+        { aspectRatio: aspectRatio ?? options?.aspectRatio, seed: options?.seed }
       )
 
       const videoUrl =

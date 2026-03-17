@@ -181,19 +181,46 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       )}
 
       {(data.provider === "veo3" || data.provider === "veo3.1") && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-2 px-1">
-            <input
-              type="checkbox"
-              id="generateAudio"
-              checked={data.generateAudio !== false}
-              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
-              className="rounded border-muted-foreground/40"
+        <>
+          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select
+              value={data.aspectRatio || "16:9"}
+              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
+            >
+              <SelectTrigger aria-label="Aspect Ratio"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Auto">Auto (from image)</SelectItem>
+                <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
+                <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
+              </SelectContent>
+            </Select>
+          </MappableField>
+          <div>
+            <Label className="text-xs">Seed (optional)</Label>
+            <Input
+              type="number"
+              min={10000}
+              max={99999}
+              placeholder="10000–99999"
+              value={data.seed ?? ""}
+              onChange={(e) => onUpdate({ seed: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
             />
-            <label htmlFor="generateAudio" className="text-xs">Generate Audio</label>
+            <p className="text-[10px] text-muted-foreground mt-1">Same seed produces similar results. Leave empty for random.</p>
           </div>
-          <p className="text-xs text-muted-foreground px-1">VEO 3/3.1 creates AI audio from the prompt. Disable for silent video, then use Add Audio node.</p>
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2 px-1">
+              <input
+                type="checkbox"
+                id="generateAudio"
+                checked={data.generateAudio !== false}
+                onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+                className="rounded border-muted-foreground/40"
+              />
+              <label htmlFor="generateAudio" className="text-xs">Generate Audio</label>
+            </div>
+            <p className="text-xs text-muted-foreground px-1">VEO 3/3.1 creates AI audio from the prompt. Disable for silent video, then use Add Audio node.</p>
+          </div>
+        </>
       )}
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         {allowedDurations ? (

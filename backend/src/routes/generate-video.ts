@@ -21,7 +21,7 @@ const generateVideoBody = z.object({
   sound: z.boolean().optional(),
   negativePrompt: z.string().max(2500).optional(),
   cfgScale: z.number().min(0).max(1).optional(),
-  aspectRatio: z.enum(["16:9", "9:16", "1:1", "21:9"]).optional(),
+  aspectRatio: z.enum(["16:9", "9:16", "1:1", "21:9", "Auto"]).optional(),
   multiShot: z.boolean().optional(),
   shots: shotsSchema.optional(),
   elements: elementsSchema.optional(),

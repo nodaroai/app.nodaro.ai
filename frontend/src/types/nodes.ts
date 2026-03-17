@@ -539,7 +539,7 @@ export type ImageToVideoData = {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
-  aspectRatio?: "16:9" | "9:16" | "1:1" | "21:9"
+  aspectRatio?: "16:9" | "9:16" | "1:1" | "21:9" | "Auto"
   multiShot?: boolean
   resolution?: string
   grokMode?: "fun" | "normal" | "spicy"
