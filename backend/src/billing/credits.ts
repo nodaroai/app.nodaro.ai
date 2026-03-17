@@ -506,9 +506,15 @@ async function getModelCreditCostFromDB(modelIdentifier: string): Promise<ModelP
       .eq("model_identifier", modelIdentifier)
       .single()
 
-    base = (error || !data)
-      ? { creditCost: STATIC_CREDIT_COSTS[modelIdentifier] ?? 0, isEnabled: true, tierRestriction: null }
-      : { creditCost: data.credit_cost, isEnabled: data.is_enabled, tierRestriction: data.tier_restriction }
+    if (error || !data) {
+      const staticCost = STATIC_CREDIT_COSTS[modelIdentifier]
+      if (staticCost === undefined) {
+        console.warn(`[credits] Unknown model identifier "${modelIdentifier}" — no DB or static cost, defaulting to 1`)
+      }
+      base = { creditCost: staticCost ?? 1, isEnabled: true, tierRestriction: null }
+    } else {
+      base = { creditCost: data.credit_cost, isEnabled: data.is_enabled, tierRestriction: data.tier_restriction }
+    }
 
     modelPricingCache.set(modelIdentifier, base)
   }

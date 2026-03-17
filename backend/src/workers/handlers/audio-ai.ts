@@ -91,7 +91,7 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     })
     .eq("id", ctx.jobId)
 
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -180,7 +180,7 @@ const handleAudioIsolation: HandlerFn = async function handleAudioIsolation(job,
     completed_at: new Date().toISOString(),
     provider_cost: result.cost,
   }).eq("id", ctx.jobId)
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
@@ -208,7 +208,7 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
     completed_at: new Date().toISOString(),
     provider_cost: result.cost,
   }).eq("id", ctx.jobId)
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 

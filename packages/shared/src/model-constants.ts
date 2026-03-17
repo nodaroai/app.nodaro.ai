@@ -3,6 +3,9 @@
  * Single source of truth for model capability sets and variable pricing rules.
  */
 
+/** Base USD cost per 1 Nodaro credit (before markup). Used for cost→credit conversion. */
+export const CREDIT_BASE_USD = 0.02
+
 // Models that accept negative_prompt as a native API parameter.
 // All other models get negative prompt appended to the prompt text as "Avoid: ...".
 export const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([

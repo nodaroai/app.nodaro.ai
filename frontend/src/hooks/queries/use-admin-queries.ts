@@ -565,3 +565,102 @@ export function useAdminChangeRoleMutation() {
     },
   })
 }
+
+// --- Credit Anomaly Types ---
+export interface CreditAnomaly {
+  readonly id: string
+  readonly created_at: string
+  readonly job_id: string | null
+  readonly user_id: string
+  readonly user_email: string
+  readonly model_identifier: string
+  readonly provider: string | null
+  readonly credits_estimated: number
+  readonly credits_actual: number
+  readonly diff: number
+  readonly provider_cost_usd: number | null
+  readonly anomaly_type: "overcharge" | "undercharge" | "unknown_model" | "zero_cost"
+  readonly status: "pending" | "acknowledged" | "dismissed"
+  readonly admin_notes: string | null
+  readonly resolved_at: string | null
+}
+
+export interface AnomalySummary {
+  readonly pending: number
+  readonly totalOvercharge: number
+  readonly totalUndercharge: number
+  readonly total: number
+}
+
+// --- Credit Anomaly Queries ---
+
+export function useAdminCreditAnomaliesSummary() {
+  return useQuery({
+    queryKey: queryKeys.admin.creditAnomaliesSummary(),
+    queryFn: async (): Promise<AnomalySummary> => {
+      const res = await fetch("/v1/admin/credit-anomalies/summary", {
+        headers: await getAuthHeaders(),
+      })
+      if (!res.ok) throw new Error("Failed to fetch summary")
+      return res.json()
+    },
+    enabled: hasAdmin(),
+    staleTime: 30_000,
+  })
+}
+
+export function useAdminCreditAnomalies(offset: number, status: string, anomalyType: string, model: string) {
+  return useQuery({
+    queryKey: queryKeys.admin.creditAnomalies(offset, status, anomalyType, model),
+    queryFn: async (): Promise<{ data: CreditAnomaly[]; total: number }> => {
+      const params = new URLSearchParams({ offset: String(offset), limit: "50" })
+      if (status !== "all") params.set("status", status)
+      if (anomalyType !== "all") params.set("anomalyType", anomalyType)
+      if (model.trim()) params.set("model", model.trim())
+      const res = await fetch(`/v1/admin/credit-anomalies?${params}`, {
+        headers: await getAuthHeaders(),
+      })
+      if (!res.ok) throw new Error("Failed to fetch anomalies")
+      return res.json()
+    },
+    enabled: hasAdmin(),
+    staleTime: 15_000,
+  })
+}
+
+// --- Credit Anomaly Mutations ---
+
+export function usePatchCreditAnomalyMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: "acknowledged" | "dismissed" }) => {
+      const res = await fetch(`/v1/admin/credit-anomalies/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) throw new Error("Failed to update anomaly")
+      return res.json()
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "credit-anomalies"] })
+    },
+  })
+}
+
+export function useDeleteCreditAnomalyMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/v1/admin/credit-anomalies/${id}`, {
+        method: "DELETE",
+        headers: await getAuthHeaders(),
+      })
+      if (!res.ok) throw new Error("Failed to delete anomaly")
+      return res.json()
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "credit-anomalies"] })
+    },
+  })
+}

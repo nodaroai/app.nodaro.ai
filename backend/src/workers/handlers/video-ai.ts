@@ -134,7 +134,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     })
     .eq("id", ctx.jobId)
 
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${finalVideoUrl} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -170,7 +170,7 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
     })
     .eq("id", ctx.jobId)
 
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -247,7 +247,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     })
     .eq("id", ctx.jobId)
 
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -285,7 +285,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     })
     .eq("id", ctx.jobId)
 
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -338,7 +338,7 @@ const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, c
     })
     .eq("id", ctx.jobId)
 
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: kie, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -393,7 +393,7 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
     display_cost: result.displayCost,
   }).eq("id", ctx.jobId)
 
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -542,7 +542,7 @@ const handleSoraStoryboard: HandlerFn = async function handleSoraStoryboard(job,
     provider_cost: result.cost,
   }).eq("id", ctx.jobId)
 
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: kie, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 

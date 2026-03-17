@@ -66,6 +66,7 @@ import { galleryRoutes } from "./routes/gallery.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { adminGalleryReportsRoutes } from "./routes/admin-gallery-reports.js"
 import { adminCreditAuditRoutes } from "./routes/admin-credit-audit.js"
+import { adminCreditAnomalyRoutes } from "./routes/admin-credit-anomalies.js"
 import { adminSubscriptionHealthRoutes } from "./routes/admin-subscription-health.js"
 import { aiWriterRoutes } from "./routes/ai-writer.js"
 import { downloadRoutes } from "./routes/download.js"
@@ -195,6 +196,7 @@ export async function buildApp() {
   await app.register(userSettingsRoutes)
   await app.register(adminGalleryReportsRoutes)
   await app.register(adminCreditAuditRoutes)
+  await app.register(adminCreditAnomalyRoutes)
   await app.register(adminSubscriptionHealthRoutes)
   await app.register(aiWriterRoutes)
   await app.register(downloadRoutes)

@@ -7,6 +7,7 @@ import youtubedl from "youtube-dl-exec"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { CreditsService } from "../services/credits.js"
+import { computeActualCredits, checkAndLogAnomaly } from "../billing/credit-anomaly.js"
 import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2 } from "../lib/storage.js"
 import { applyImageWatermark, applyVideoWatermark } from "../utils/watermark.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
@@ -111,14 +112,54 @@ export async function shouldSaveJobResult(jobId: string): Promise<boolean> {
 
 /**
  * Commit credits after successful job completion (cloud edition only).
+ * When providerCostUsd is provided, computes actual credits from provider cost,
+ * logs any anomaly, and passes actual credits to the RPC (which refunds surplus).
  * Wrapped in try-catch to avoid failing the job if credit commit fails.
  */
-export async function commitJobCredits(usageLogId: string | null | undefined, jobId: string): Promise<void> {
+export async function commitJobCredits(
+  usageLogId: string | null | undefined,
+  jobId: string,
+  providerCostUsd?: number | null,
+): Promise<void> {
   if (!hasCredits() || !usageLogId) return
 
   try {
-    await CreditsService.commitCredits(usageLogId)
-    console.log(`[worker] Credits committed for job ${jobId}`)
+    if (providerCostUsd && providerCostUsd > 0) {
+      // Compute actual credits and fetch reserved amount in parallel
+      const [actualCredits, { data: usageLog }] = await Promise.all([
+        computeActualCredits(providerCostUsd),
+        supabase
+          .from("usage_logs")
+          .select("credits_used, user_id, action, provider")
+          .eq("id", usageLogId)
+          .single(),
+      ])
+
+      // Commit, update job, and log anomaly (if any) are independent — run in parallel
+      // checkAndLogAnomaly has internal try/catch so it never rejects
+      const tasks: PromiseLike<unknown>[] = [
+        CreditsService.commitCredits(usageLogId, actualCredits),
+        supabase.from("jobs").update({ credits_actual: actualCredits }).eq("id", jobId),
+      ]
+      if (usageLog) {
+        tasks.push(checkAndLogAnomaly({
+          jobId,
+          userId: usageLog.user_id,
+          usageLogId,
+          modelIdentifier: usageLog.action ?? "unknown",
+          provider: usageLog.provider ?? null,
+          reservedCredits: usageLog.credits_used,
+          actualCredits,
+          providerCostUsd,
+        }))
+      }
+      await Promise.all(tasks)
+
+      console.log(`[worker] Credits committed for job ${jobId} (actual: ${actualCredits}, reserved: ${usageLog?.credits_used ?? "??"})`)
+    } else {
+      await CreditsService.commitCredits(usageLogId)
+      console.log(`[worker] Credits committed for job ${jobId}`)
+    }
   } catch (error) {
     console.error(`[worker] Failed to commit credits for job ${jobId}:`, error)
     // Don't fail the job if credit commit fails
