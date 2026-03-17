@@ -18,7 +18,8 @@ import { prefetchModelCredits } from "@/hooks/use-model-credits"
 import { toast } from "sonner"
 import { uploadFile } from "@/lib/api"
 import type { ImageToVideoData } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, PROVIDERS_WITH_END_FRAME } from "./model-options"
+import { VIDEO_I2V_MODELS, PROVIDERS_WITH_END_FRAME, VIDEO_RATIOS } from "./model-options"
+import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
@@ -329,17 +330,11 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                 </div>
                 <div>
                   <Label className="text-[10px] text-muted-foreground mb-1 block">Aspect Ratio</Label>
-                  <Select
+                  <AspectRatioSelector
+                    options={VIDEO_RATIOS}
                     value={data.aspectRatio ?? "16:9"}
                     onValueChange={(v) => onUpdate({ aspectRatio: v })}
-                  >
-                    <SelectTrigger aria-label="Aspect Ratio" className="h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="16:9">16:9</SelectItem>
-                      <SelectItem value="9:16">9:16</SelectItem>
-                      <SelectItem value="1:1">1:1</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
               </div>
 

@@ -31,6 +31,7 @@ import type {
 import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, IMAGE_EDIT_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
+import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { ReferenceImageList } from "./reference-image-list"
 import { ConnectedMediaList } from "./connected-media-list"
 import type { ConfigProps } from "./types"
@@ -347,17 +348,11 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Model Settings</label>
         <div className="flex flex-col gap-3 mt-2">
           <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <Select
+            <AspectRatioSelector
+              options={aspectRatioOptions}
               value={data.aspectRatio || aspectRatioOptions[0]?.value || "1:1"}
               onValueChange={(v) => onUpdate({ aspectRatio: v })}
-            >
-              <SelectTrigger aria-label="Aspect Ratio"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {aspectRatioOptions.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </MappableField>
           {resolutionOptions && (
             <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -721,17 +716,11 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Model Settings</label>
             <div className="flex flex-col gap-3 mt-2">
               <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-                <Select
+                <AspectRatioSelector
+                  options={aspectRatioOptions}
                   value={data.aspectRatio || aspectRatioOptions[0]?.value || "1:1"}
                   onValueChange={(v) => onUpdate({ aspectRatio: v })}
-                >
-                  <SelectTrigger aria-label="Aspect Ratio"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {aspectRatioOptions.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </MappableField>
               <div>
                 <Label className="text-xs">Seed</Label>
@@ -1148,17 +1137,11 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Model Settings</label>
         <div className="flex flex-col gap-3 mt-2">
           <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <Select
+            <AspectRatioSelector
+              options={aspectRatioOptions}
               value={data.aspectRatio || aspectRatioOptions[0]?.value || "1:1"}
               onValueChange={(v) => onUpdate({ aspectRatio: v })}
-            >
-              <SelectTrigger aria-label="Aspect Ratio"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {aspectRatioOptions.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </MappableField>
           {resolutionOptions && (
             <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>

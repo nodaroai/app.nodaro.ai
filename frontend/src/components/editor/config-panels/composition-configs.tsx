@@ -40,6 +40,8 @@ import {
   VideoSettingsAccordion,
   SceneGraphPreviewInline,
 } from "./composition-shared"
+import { AspectRatioSelector } from "./aspect-ratio-selector"
+import { COMPOSITION_RATIOS } from "./model-options"
 
 export function VideoComposerConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VideoComposerData>) {
   const { sensors, orderedIds, orderedSources, handleDragEnd } = useMediaOrder(sources, data.assetOrder, onUpdate)
@@ -285,16 +287,12 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
                 </div>
               </div>
               <div>
-                <Label htmlFor="3d-aspect" className="mb-1.5 block text-xs">Aspect Ratio</Label>
-                <Select value={data.aspectRatio} onValueChange={(v) => onUpdate({ aspectRatio: v as ThreeDTitleData["aspectRatio"] })}>
-                  <SelectTrigger id="3d-aspect" className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="16:9">16:9</SelectItem>
-                    <SelectItem value="9:16">9:16</SelectItem>
-                    <SelectItem value="1:1">1:1</SelectItem>
-                    <SelectItem value="4:5">4:5</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="mb-1.5 block text-xs">Aspect Ratio</Label>
+                <AspectRatioSelector
+                  options={COMPOSITION_RATIOS}
+                  value={data.aspectRatio}
+                  onValueChange={(v) => onUpdate({ aspectRatio: v as ThreeDTitleData["aspectRatio"] })}
+                />
               </div>
               <div>
                 <Label htmlFor="3d-bgcolor" className="mb-1.5 block text-xs">Background Color</Label>
@@ -428,16 +426,12 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
                 </div>
               </div>
               <div>
-                <Label htmlFor="mg-aspect" className="mb-1.5 block text-xs">Aspect Ratio</Label>
-                <Select value={data.aspectRatio} onValueChange={(v) => onUpdate({ aspectRatio: v as MotionGraphicsData["aspectRatio"] })}>
-                  <SelectTrigger id="mg-aspect" className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="16:9">16:9</SelectItem>
-                    <SelectItem value="9:16">9:16</SelectItem>
-                    <SelectItem value="1:1">1:1</SelectItem>
-                    <SelectItem value="4:5">4:5</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="mb-1.5 block text-xs">Aspect Ratio</Label>
+                <AspectRatioSelector
+                  options={COMPOSITION_RATIOS}
+                  value={data.aspectRatio}
+                  onValueChange={(v) => onUpdate({ aspectRatio: v as MotionGraphicsData["aspectRatio"] })}
+                />
               </div>
               <div>
                 <Label htmlFor="mg-bgcolor" className="mb-1.5 block text-xs">Background Color</Label>
@@ -652,16 +646,12 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
                 </div>
               </div>
               <div>
-                <Label htmlFor="comp-aspect" className="mb-1.5 block text-xs">Aspect Ratio</Label>
-                <Select value={data.aspectRatio} onValueChange={(v) => onUpdate({ aspectRatio: v as CompositeData["aspectRatio"] })}>
-                  <SelectTrigger id="comp-aspect" className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
-                    <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
-                    <SelectItem value="1:1">1:1 (Square)</SelectItem>
-                    <SelectItem value="4:5">4:5 (Social)</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="mb-1.5 block text-xs">Aspect Ratio</Label>
+                <AspectRatioSelector
+                  options={COMPOSITION_RATIOS}
+                  value={data.aspectRatio}
+                  onValueChange={(v) => onUpdate({ aspectRatio: v as CompositeData["aspectRatio"] })}
+                />
               </div>
               <div>
                 <Label htmlFor="comp-bg" className="mb-1.5 block text-xs">Background Color</Label>

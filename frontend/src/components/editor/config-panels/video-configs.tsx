@@ -32,11 +32,12 @@ import type {
   SpeechToVideoData,
   SoraStoryboardData,
 } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS } from "./model-options"
+import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
 import { Kling3StudioConfig } from "./kling3-studio-config"
+import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { getConnectedProviderModel } from "./helpers"
 import { ConnectedMediaList } from "./connected-media-list"
 import type { ConfigProps } from "./types"
@@ -183,17 +184,15 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       {(data.provider === "veo3" || data.provider === "veo3.1") && (
         <>
           <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <Select
+            <AspectRatioSelector
+              options={[
+                { value: "Auto", label: "Auto (from image)" },
+                { value: "16:9", label: "16:9 (Landscape)" },
+                { value: "9:16", label: "9:16 (Portrait)" },
+              ]}
               value={data.aspectRatio || "16:9"}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
-            >
-              <SelectTrigger aria-label="Aspect Ratio"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Auto">Auto (from image)</SelectItem>
-                <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
-                <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
-              </SelectContent>
-            </Select>
+            />
           </MappableField>
           <div>
             <Label className="text-xs">Seed (optional)</Label>
@@ -420,18 +419,16 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             </Select>
           </div>
           <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <Select
+            <AspectRatioSelector
+              options={[
+                { value: "16:9", label: "16:9 (Landscape)" },
+                { value: "9:16", label: "9:16 (Portrait)" },
+                { value: "1:1", label: "1:1 (Square)" },
+                { value: "21:9", label: "21:9 (Ultra-wide)" },
+              ]}
               value={data.aspectRatio || "16:9"}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
-            >
-              <SelectTrigger aria-label="Aspect Ratio"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
-                <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
-                <SelectItem value="1:1">1:1 (Square)</SelectItem>
-                <SelectItem value="21:9">21:9 (Ultra-wide)</SelectItem>
-              </SelectContent>
-            </Select>
+            />
           </MappableField>
           <div className="flex items-center gap-2 px-1">
             <input
@@ -928,17 +925,11 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
       )}
 
       <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select
+        <AspectRatioSelector
+          options={VIDEO_RATIOS}
           value={data.aspectRatio}
           onValueChange={(v) => onUpdate({ aspectRatio: v as TextToVideoData["aspectRatio"] })}
-        >
-          <SelectTrigger aria-label="Aspect Ratio"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
-            <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
-            <SelectItem value="1:1">1:1 (Square)</SelectItem>
-          </SelectContent>
-        </Select>
+        />
       </MappableField>
       <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
@@ -1193,16 +1184,14 @@ export function SoraStoryboardConfig({ data, onUpdate }: ConfigProps<SoraStorybo
       {/* Aspect Ratio */}
       <div className="flex flex-col gap-1.5">
         <Label className="text-xs text-muted-foreground">Aspect Ratio</Label>
-        <Select
+        <AspectRatioSelector
+          options={[
+            { value: "landscape", label: "Landscape (16:9)" },
+            { value: "portrait", label: "Portrait (9:16)" },
+          ]}
           value={data.aspectRatio || "landscape"}
           onValueChange={(v) => onUpdate({ aspectRatio: v as "portrait" | "landscape" })}
-        >
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="landscape">Landscape (16:9)</SelectItem>
-            <SelectItem value="portrait">Portrait (9:16)</SelectItem>
-          </SelectContent>
-        </Select>
+        />
       </div>
 
       {/* Shots Editor */}
