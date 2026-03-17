@@ -180,7 +180,7 @@ describe("image-to-video handler", () => {
       VIDEO_RESULT.url, "job-1", "user-1", false,
     )
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", VIDEO_RESULT.cost)
   })
 
   it("audio merge branch: uploads raw → merges → watermarks local", async () => {
@@ -311,7 +311,7 @@ describe("video-to-video handler", () => {
     expect(mocks.mockVideoToVideo).toHaveBeenCalledWith("https://vid.mp4", "wan", "stylize")
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", VIDEO_RESULT.cost)
   })
 
   it("uses default provider 'wan' when none specified", async () => {
@@ -344,7 +344,7 @@ describe("text-to-video handler", () => {
       "a sunset", "minimax", undefined, undefined, expect.any(Object),
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", VIDEO_RESULT.cost)
   })
 
   it("uses default provider 'minimax' when none specified", async () => {
@@ -398,7 +398,7 @@ describe("lip-sync handler", () => {
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", VIDEO_RESULT.cost)
   })
 
   it("uses default provider 'kling-avatar' when none specified", async () => {
@@ -452,7 +452,7 @@ describe("motion-transfer handler", () => {
       }),
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", VIDEO_RESULT.cost)
   })
 
   it("always uses hardcoded 'kling' provider", async () => {
@@ -584,7 +584,7 @@ describe("speech-to-video handler", () => {
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", S2V_RESULT.cost)
   })
 
   it("passes resolution and optional params", async () => {
@@ -636,7 +636,7 @@ describe("sora-storyboard handler", () => {
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", STORYBOARD_RESULT.cost)
   })
 
   it("passes nFrames, imageUrls, and aspectRatio when provided", async () => {

@@ -65,7 +65,7 @@ describe("generate-character handler", () => {
 
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith("a warrior", "nano-banana", undefined, undefined)
     expect(mocks.mockUploadImageMaybeWatermark).toHaveBeenCalledWith(PROVIDER_RESULT.url, "job-1", "user-1", false)
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
   })
 
   it("uses custom provider", async () => {
@@ -110,7 +110,7 @@ describe("generate-object handler", () => {
     const job = makeJob("generate-object", { prompt: "a treasure chest" })
     await handler(job as never, makeCtx())
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith("a treasure chest", "nano-banana", undefined, undefined)
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
   })
 })
 
@@ -133,7 +133,7 @@ describe("generate-location handler", () => {
     const job = makeJob("generate-location", { prompt: "a dark forest" })
     await handler(job as never, makeCtx())
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith("a dark forest", "nano-banana", undefined, undefined)
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
   })
 })
 

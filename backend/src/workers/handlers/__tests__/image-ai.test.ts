@@ -121,7 +121,7 @@ describe("generate-image handler", () => {
         display_cost: 0.025,
       }),
     )
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
   })
 
   it("uses default provider 'nano-banana' when none specified", async () => {
@@ -190,7 +190,7 @@ describe("edit-image handler", () => {
 
     expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-upscale", "upscale", undefined)
     expect(mocks.mockUploadImageMaybeWatermark).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
   })
 
   it("uses default provider 'recraft-upscale' when none specified", async () => {
@@ -234,7 +234,7 @@ describe("image-to-image handler", () => {
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
       "transform", "nano-banana", ["https://main.png", "https://ref1.png"], undefined,
     )
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
   })
 
   it("uses default provider 'nano-banana' when none specified", async () => {
