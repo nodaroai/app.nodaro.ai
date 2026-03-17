@@ -19,11 +19,6 @@ Auto-detects connected audio nodes and displays them in the track list.
 
 **Inputs:** 2+ audio tracks (connected via input handles)
 **Outputs:** Single mixed audio file
-
-## Credit Cost
-
-0 credits — FFmpeg processing, always free.
-
 ## Best Practices
 
 - Keep voiceover at 100% and reduce background music to 30-50% for clear speech

@@ -28,10 +28,6 @@ The Instagram Post node publishes content from your workflow directly to a conne
 
 **Outputs:**
 None. This is a terminal output node.
-
-## Credit Cost
-1 credit per post.
-
 ## Best Practices
 - Connect your Instagram account on the Integrations page before adding this node.
 - Match your upstream content dimensions to Instagram's recommended specs for the chosen action.

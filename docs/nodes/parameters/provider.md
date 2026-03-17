@@ -20,13 +20,6 @@ The Provider parameter node allows you to centralize provider/model selection fo
 
 **Outputs:**
 - `provider` -- provider identifier string, consumed by downstream generation nodes
-
-## Credit Cost
-
-| Cost | Notes |
-|------|-------|
-| 0 credits | Parameter nodes are free -- they only pass data, no AI processing |
-
 ## Supported Providers
 
 The available providers depend on the selected category:

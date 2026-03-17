@@ -18,11 +18,6 @@ The Loop Video node extends short video clips by repeating them. Choose between 
 
 **Inputs:** Video (required)
 **Outputs:** Looped video
-
-## Credit Cost
-
-0 credits — FFmpeg processing, always free.
-
 ## Best Practices
 
 - Use "duration" mode when you need a specific length (e.g., 30s for social media)

@@ -17,11 +17,6 @@ No additional configuration is required. The node processes the input audio auto
 
 - **Input**: `in` -- audio file containing speech mixed with background noise or music
 - **Output**: `audio` -- cleaned audio file with isolated voice (URL)
-
-## Credit Cost
-
-1 credit per extraction (`elevenlabs-isolation`).
-
 ## Best Practices
 
 - Use this node before Text to Speech voice cloning to ensure the reference audio is clean and free of background noise.
@@ -42,4 +37,4 @@ No additional configuration is required. The node processes the input audio auto
 - The node processes the entire audio input -- there is no option to select a time range. Use the Trim Audio processing node first if you only need a specific segment.
 - Output quality depends heavily on input quality. Audio where speech is heavily buried under noise may produce artifacts.
 - This node outputs audio, not data. For word-level timing information, use the Forced Alignment node instead.
-- At 1 credit per use, this is one of the most cost-effective AI audio nodes.
+

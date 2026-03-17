@@ -29,10 +29,6 @@ The Object node creates a persistent object asset with a base image and multiple
 
 **Outputs:**
 - `objectRef` -- Object reference for use in scenes and compositions.
-
-## Credit Cost
-2 credits per base generation. Additional credits per asset category generation.
-
 ## Best Practices
 - Include specific material and texture descriptions (e.g., "brushed stainless steel coffee mug with a matte black handle").
 - Choose the appropriate category to help the AI understand the object's context and typical usage.

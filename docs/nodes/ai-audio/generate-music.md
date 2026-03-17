@@ -22,23 +22,15 @@ The Generate Music node produces original music from a text description using Su
 
 ### Providers
 
-| Provider | Model | Credits | Notes |
-|----------|-------|---------|-------|
-| `suno` | Suno V4 | 7 | Standard quality, lower cost |
-| `suno-v5` | Suno V5 | 13 | Premium quality, higher fidelity |
+| Provider | Model | Notes |
+|----------|-------|-------|
+| `suno` | Suno V4 | Standard quality, lower cost |
+| `suno-v5` | Suno V5 | Premium quality, higher fidelity |
 
 ## Inputs & Outputs
 
 - **Input**: `in` -- optional upstream text connection for dynamic prompt via field mapping
 - **Output**: `audio` -- generated music track (URL)
-
-## Credit Cost
-
-| Model | Credits |
-|-------|---------|
-| Suno V4 | 7 |
-| Suno V5 | 13 |
-
 ## Best Practices
 
 - Write detailed prompts that specify genre, instruments, tempo, mood, and structure. "Upbeat electronic dance track, 120 BPM, synth leads, punchy drums, building energy" works better than "dance music."
@@ -61,4 +53,4 @@ The Generate Music node produces original music from a text description using Su
 - The prompt maximum is 3000 characters, providing room for very detailed descriptions including specific instruments, arrangement notes, and dynamic changes.
 - Reference audio can help steer the style, but the output will never be a copy of the reference. It influences mood and instrumentation rather than melody.
 - Generated music tracks can be connected to Merge Video & Audio for adding background music to video, or to Mix Audio for layering with other audio sources.
-- The `modelVersion` field in the node data controls which Suno model version is used; credit cost is determined at runtime based on this selection.
+- The `modelVersion` field in the node data controls which Suno model version is used.

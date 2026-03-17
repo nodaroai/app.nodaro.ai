@@ -24,46 +24,18 @@ The Motion Transfer node takes motion from a reference video and applies it to a
 
 **Outputs:**
 - Generated video with transferred motion
-
-## Credit Cost
-
-### Kling 2.6
-
-| Duration | 720p | 1080p |
-|----------|------|-------|
-| 5s | 10 | 15 |
-| 10s | 19 | 29 |
-| 15s | 29 | 43 |
-| 30s | 57 | 85 |
-
-### Kling 3.0
-
-| Duration | 720p | 1080p |
-|----------|------|-------|
-| 5s | 19 | 32 |
-| 10s | 38 | 63 |
-| 15s | 57 | 94 |
-| 30s | 113 | 188 |
-
-### Wan Animate
-
-| Provider | 480p | 580p | 720p |
-|----------|------|------|------|
-| wan-animate-move | 2 | 3 | 4 |
-| wan-animate-replace | 2 | 3 | 4 |
-
 ## Supported Providers
 
 - **Kling 2.6** — Standard motion transfer, 720p/1080p, 5-30s
-- **Kling 3.0** — Premium quality, higher cost, background source control
-- **Wan Animate Move** — Budget option (2-4cr), lower resolution
-- **Wan Animate Replace** — Budget option, replaces character in motion video
+- **Kling 3.0** — Premium quality, background source control
+- **Wan Animate Move** — Lightweight option, lower resolution
+- **Wan Animate Replace** — Lightweight option, replaces character in motion video
 
 ## Best Practices
 
 - Use a clear, full-body character image for best results
 - Reference video should have clean, distinct movements
-- Wan Animate (2-4cr) is excellent for quick iterations before upgrading to Kling
+- Wan Animate is excellent for quick iterations before upgrading to Kling
 - Duration is auto-detected from the connected video when possible
 
 ## Common Use Cases
@@ -76,5 +48,5 @@ The Motion Transfer node takes motion from a reference video and applies it to a
 ## Tips
 
 - Kling 3.0 offers background source selection — use input_image for clean backgrounds or input_video to preserve the reference scene
-- Wan Animate is 10-50x cheaper than Kling — start there for testing
-- Longer durations scale linearly in cost, so consider trimming reference video to only the needed motion
+- Wan Animate is faster than Kling — start there for testing
+- Consider trimming reference video to only the needed motion segment

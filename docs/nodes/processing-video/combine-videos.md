@@ -4,7 +4,7 @@
 
 ## Overview
 
-The Combine Videos node joins multiple video clips in sequence with configurable transitions between them. Supports drag-and-drop reordering of connected clips. All processing is done via FFmpeg — no AI credits consumed.
+The Combine Videos node joins multiple video clips in sequence with configurable transitions between them. Supports drag-and-drop reordering of connected clips. All processing is done via FFmpeg.
 
 ## Configuration
 
@@ -35,11 +35,6 @@ The Combine Videos node joins multiple video clips in sequence with configurable
 
 **Inputs:** 2+ video clips (connected via input handles)
 **Outputs:** Single combined video
-
-## Credit Cost
-
-0 credits — FFmpeg processing, always free.
-
 ## Best Practices
 
 - Use "fade" (0.5s) for professional-looking transitions between most clips

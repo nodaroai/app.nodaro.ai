@@ -33,11 +33,6 @@ The config panel displays exact dimensions, aspect ratio, and maximum duration f
 
 **Inputs:** Video (required)
 **Outputs:** Formatted video + caption text
-
-## Credit Cost
-
-0 credits — always free.
-
 ## Best Practices
 
 - Select the platform and content type first — specs display updates automatically

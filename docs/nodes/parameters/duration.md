@@ -18,13 +18,6 @@ The Duration parameter node provides a numeric value (in seconds) that controls 
 
 **Outputs:**
 - `duration` -- numeric duration value in seconds, consumed by downstream generation nodes
-
-## Credit Cost
-
-| Cost | Notes |
-|------|-------|
-| 0 credits | Parameter nodes are free -- they only pass data, no AI processing |
-
 ## Supported Providers
 
 Not applicable. This is a data-passing parameter node with no AI provider.

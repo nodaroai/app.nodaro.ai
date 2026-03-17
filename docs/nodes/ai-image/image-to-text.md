@@ -19,13 +19,6 @@ Describe Image (internally `image-to-text`) analyzes an input image using Claude
 
 **Outputs:**
 - `text` -- generated text description
-
-## Credit Cost
-
-| Provider | Credits | Notes |
-|----------|---------|-------|
-| Claude Sonnet (Anthropic) | 5 | Fixed cost, single provider |
-
 ## Supported Providers
 
 This node uses Claude Sonnet exclusively via the Anthropic API. There is no provider selection -- the model is fixed.

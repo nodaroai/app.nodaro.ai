@@ -19,11 +19,6 @@ The Adjust Volume node modifies the volume level of an audio track and optionall
 
 **Inputs:** Audio (required)
 **Outputs:** Volume-adjusted audio
-
-## Credit Cost
-
-0 credits — FFmpeg processing, always free.
-
 ## Best Practices
 
 - Use normalize for audio from different sources to ensure consistent levels

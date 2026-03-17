@@ -29,10 +29,6 @@ The YouTube Upload node uploads video content from your workflow to a connected 
 
 **Outputs:**
 None. This is a terminal output node.
-
-## Credit Cost
-1 credit per upload.
-
 ## Best Practices
 - Start with `private` privacy and change to `public` after reviewing the uploaded content on YouTube.
 - Write descriptive titles under 100 characters and use the description field for detailed content.

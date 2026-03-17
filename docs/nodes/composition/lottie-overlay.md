@@ -20,10 +20,6 @@ The Lottie Overlay node uses Claude Sonnet to interpret a prompt and select, pos
 
 **Outputs:**
 - `composition` -- Overlay plan (JSON). Connect to a Render Video node for final output.
-
-## Credit Cost
-10 credits per generation (Claude Sonnet AI call).
-
 ## Best Practices
 - Be specific about where overlays should appear (e.g., "confetti falling from the top during the first 3 seconds").
 - Reference timing relative to your video content to ensure overlays align with key moments.

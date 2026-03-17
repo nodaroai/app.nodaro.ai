@@ -18,11 +18,6 @@ The Text to Audio node creates sound effects, ambient sounds, and audio textures
 
 - **Input**: `in` -- optional text input that can feed the prompt field via field mapping
 - **Output**: `audio` -- generated sound effect audio file (URL)
-
-## Credit Cost
-
-1 credit per generation (`elevenlabs-sfx`).
-
 ## Best Practices
 
 - Keep prompts concise and descriptive -- focus on the sound itself rather than the context (e.g., "heavy rain on a tin roof" rather than "it was a stormy night").
@@ -41,6 +36,6 @@ The Text to Audio node creates sound effects, ambient sounds, and audio textures
 ## Tips
 
 - The 450-character prompt limit encourages focused descriptions. If you need a complex soundscape, generate individual layers and mix them.
-- Duration affects credit cost indirectly through the SFX model -- the per-generation cost is fixed at 1 credit regardless of duration.
+- Duration does not affect the per-generation cost -- the output length is controlled by the Duration parameter regardless.
 - Seamless loop mode works best with continuous, ambient-style sounds rather than discrete one-shot effects.
 - This node is specifically for non-speech audio. For spoken audio, use the Text to Speech node instead.

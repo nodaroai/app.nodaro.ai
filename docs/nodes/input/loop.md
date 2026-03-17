@@ -21,15 +21,10 @@ Displays row x column count. Add/remove columns and rows via buttons. Cell editi
 
 **Outputs:**
 - Per-column outputs — each column value is available as a separate output per iteration
-
-## Credit Cost
-
-0 credits — always free.
-
 ## Best Practices
 
 - Name columns descriptively (e.g., "character_name", "prompt", "style")
-- Keep the table manageable — very large tables increase total credit consumption
+- Keep the table manageable — very large tables increase total execution time
 - Test with 1-2 rows before running the full batch
 
 ## Common Use Cases
@@ -42,5 +37,5 @@ Displays row x column count. Add/remove columns and rows via buttons. Cell editi
 ## Tips
 
 - Each row triggers a full execution of all connected downstream nodes
-- Total credits = per-execution cost x number of rows
+- Each row triggers a separate downstream execution — more rows means longer total runtime
 - Use columns to map to different input fields on downstream nodes

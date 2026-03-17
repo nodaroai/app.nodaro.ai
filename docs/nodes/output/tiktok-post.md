@@ -25,10 +25,6 @@ The TikTok Post node publishes video content from your workflow directly to a co
 
 **Outputs:**
 None. This is a terminal output node.
-
-## Credit Cost
-1 credit per post.
-
 ## Best Practices
 - Connect your TikTok account on the Integrations page before adding this node.
 - Use 9:16 vertical video format (1080x1920) for optimal TikTok display.

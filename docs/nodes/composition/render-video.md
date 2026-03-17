@@ -21,10 +21,6 @@ The Render Video node takes a composition plan from any upstream composer node (
 
 **Outputs:**
 - `video` -- Rendered video file (MP4).
-
-## Credit Cost
-15 credits per render (Remotion compute).
-
 ## Best Practices
 - Always connect an upstream composition node (Video Composer, After Effects, etc.) for best results.
 - Match FPS and aspect ratio settings with the upstream composer to avoid unexpected scaling or frame rate conversion.

@@ -20,11 +20,6 @@ Accepts: PNG, JPEG, WebP formats.
 
 **Outputs:**
 - Image URL — accessible to downstream nodes
-
-## Credit Cost
-
-0 credits — always free.
-
 ## Best Practices
 
 - Use high-resolution source images for best downstream results

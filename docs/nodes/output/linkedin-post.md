@@ -27,10 +27,6 @@ The LinkedIn Post node publishes content from your workflow directly to a connec
 
 **Outputs:**
 None. This is a terminal output node.
-
-## Credit Cost
-1 credit per post.
-
 ## Best Practices
 - Use `post-text` for text-only updates and `post-image` or `post-video` when media is available.
 - Keep captions professional and under 3,000 characters.

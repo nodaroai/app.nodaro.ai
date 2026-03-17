@@ -26,11 +26,6 @@ The AI Writer node (labeled "AI Agent" on the canvas) uses Claude Sonnet to gene
 
 - **Single text**: One continuous text block
 - **Multiple items**: Text separated by `===NEXT===` delimiters, parsed into `generatedItems[]` array. When using predefined templates, the node can spawn individual image nodes from these items.
-
-## Credit Cost
-
-5 credits per generation (`ai-writer`).
-
 ## Best Practices
 
 - Use the System Prompt to define the output format, tone, and constraints. A good system prompt dramatically improves output consistency.

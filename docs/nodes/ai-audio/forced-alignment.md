@@ -22,8 +22,8 @@ The output is an array of `AlignmentWord` objects:
 
 ```json
 [
-  { "word": "Hello", "start": 0.0, "end": 0.35 },
-  { "word": "world", "start": 0.38, "end": 0.72 }
+ { "word": "Hello", "start": 0.0, "end": 0.35 },
+ { "word": "world", "start": 0.38, "end": 0.72 }
 ]
 ```
 
@@ -32,11 +32,6 @@ The output is an array of `AlignmentWord` objects:
 | word | `string` | The aligned word |
 | start | `number` | Start time in seconds |
 | end | `number` | End time in seconds |
-
-## Credit Cost
-
-3 credits per alignment (`elevenlabs-forced-alignment`).
-
 ## Best Practices
 
 - The transcript must closely match the actual spoken content for accurate alignment. Mismatches between the transcript and audio will produce unreliable timestamps.

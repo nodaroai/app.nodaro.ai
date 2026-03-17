@@ -27,10 +27,6 @@ The X Post node publishes content from your workflow directly to a connected X (
 
 **Outputs:**
 None. This is a terminal output node.
-
-## Credit Cost
-1 credit per post.
-
 ## Best Practices
 - Keep captions concise -- the 280-character limit is strictly enforced by the platform.
 - Use high-contrast images that are legible at small sizes in the X feed.

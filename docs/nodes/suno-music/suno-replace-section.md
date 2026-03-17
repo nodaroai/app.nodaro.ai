@@ -21,18 +21,13 @@ Suno Replace Section targets a precise time range within an existing Suno track 
 
 - **Inputs:** `audio` -- Suno task ID and audio ID from an upstream Suno node
 - **Outputs:** `audio` -- modified audio URL with the replaced section
-
-## Credit Cost
-
-- **Fixed:** 2 credits
-
 ## Best Practices
 
 - Keep the replacement window between 6 and 60 seconds -- shorter or longer ranges are not supported.
 - Provide both a descriptive prompt and relevant tags for the best replacement quality.
 - Listen to the source track carefully to identify precise start and end timestamps before replacing.
 - Use this node iteratively to refine individual sections without affecting the rest of the song.
-- At 2 credits per replacement, this is cost-effective for iterative editing compared to full regeneration.
+- This is efficient for iterative editing compared to full regeneration.
 
 ## Common Use Cases
 
@@ -47,4 +42,4 @@ Suno Replace Section targets a precise time range within an existing Suno track 
 - The End Time must be at least 6 seconds and at most 60 seconds. The minimum replacement length is 6 seconds.
 - Both Task ID and Audio ID are resolved automatically when connected to an upstream Suno node.
 - The Tags field is required by the backend validation -- always provide at least basic genre tags.
-- This is one of the most cost-efficient Suno nodes at 2 credits, making it ideal for iterative refinement workflows.
+- This is one of the most cost-efficient Suno nodes, making it ideal for iterative refinement workflows.

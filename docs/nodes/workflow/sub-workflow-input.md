@@ -27,10 +27,6 @@ None. This is an entry-point node.
 
 **Outputs:**
 - `out` -- Passes received data downstream within the sub-workflow.
-
-## Credit Cost
-0 credits.
-
 ## Best Practices
 - Name ports descriptively so callers understand what data to provide (e.g., "Background Video", "Narration Text").
 - Set the media type to the most specific type that applies, rather than using `any`, to catch connection errors early.

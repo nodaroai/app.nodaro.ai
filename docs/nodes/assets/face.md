@@ -20,10 +20,6 @@ The Face node creates a facial identity asset from a clear reference photo. It p
 
 **Outputs:**
 - `faceRef` -- Face reference for use in lip-sync nodes, scene nodes, and other identity-preserving operations.
-
-## Credit Cost
-2 credits per base generation (5 credits as listed in NODE_DEFINITIONS).
-
 ## Best Practices
 - Use a clear, well-lit, front-facing photo with the face clearly visible and unobstructed.
 - Avoid photos with heavy makeup, sunglasses, or extreme angles, as these reduce identity accuracy.

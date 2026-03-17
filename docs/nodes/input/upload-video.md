@@ -20,11 +20,6 @@ Accepts: MP4, MOV, WebM formats.
 
 **Outputs:**
 - Video URL — accessible to downstream nodes
-
-## Credit Cost
-
-0 credits — always free.
-
 ## Best Practices
 
 - Use standard formats (MP4 with H.264) for maximum compatibility

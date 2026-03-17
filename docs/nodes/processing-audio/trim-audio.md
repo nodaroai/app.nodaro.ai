@@ -22,11 +22,6 @@ The Trim Audio node extracts a time range from an audio file or extracts the aud
 **Outputs:**
 - Trimmed audio file
 - Silent video (if enabled)
-
-## Credit Cost
-
-0 credits — FFmpeg processing, always free.
-
 ## Best Practices
 
 - Use WAV for highest quality when feeding into AI nodes (voice cloning, forced alignment)

@@ -30,15 +30,6 @@ Add/remove shots dynamically. Each shot is independently described.
 
 **Outputs:**
 - Generated multi-shot video URL
-
-## Credit Cost
-
-| Frames | Approx Duration | Credits |
-|--------|-----------------|---------|
-| 10 | ~5 seconds | 47 |
-| 15 | ~10 seconds | 85 |
-| 25 | ~15 seconds | 85 |
-
 ## Best Practices
 
 - Plan your shots before starting — write out the full storyboard sequence

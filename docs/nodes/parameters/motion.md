@@ -26,13 +26,6 @@ The Motion parameter node specifies how much movement and dynamism should appear
 
 **Outputs:**
 - `out` -- motion intensity string, consumed by downstream video generation and script nodes
-
-## Credit Cost
-
-| Cost | Notes |
-|------|-------|
-| 0 credits | Parameter nodes are free -- they only pass data, no AI processing |
-
 ## Supported Providers
 
 Not applicable. This is a data-passing parameter node with no AI provider.

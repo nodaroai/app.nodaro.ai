@@ -30,27 +30,6 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 
 **Outputs:**
 - `out` -- transformed image URL
-
-## Credit Cost
-
-| Provider | Base Credits | Variable Credits | Variable Setting |
-|----------|-------------|-----------------|------------------|
-| nano-banana | 2 | -- | -- |
-| nano-banana-pro | 6 | 8 | 4K resolution |
-| grok-i2i | 2 | -- | -- |
-| flux-i2i | 5 | 8 | 2K resolution |
-| flux-pro-i2i | 2 | 3 | 2K resolution |
-| gpt-image-i2i | 4 | 7 | high quality |
-| qwen-i2i | 2 | -- | -- |
-| qwen-edit | 2 | -- | -- |
-| seedream-edit | 3 | 4 | high (4K) quality |
-| seedream-5-lite-i2i | 2 | 5 | high (4K) quality |
-| flux-kontext | 2 | -- | -- |
-| flux-kontext-max | 4 | -- | -- |
-| ideogram-edit | 6 (balanced) | 4 (turbo), 8 (quality) | rendering speed |
-| ideogram-remix | 6 (balanced) | 4 (turbo), 8 (quality) | rendering speed |
-| ideogram-reframe | 3 (balanced) | 2 (turbo), 4 (quality) | rendering speed |
-
 ## Supported Providers
 
 | Provider | Label | Description | Key Capability |

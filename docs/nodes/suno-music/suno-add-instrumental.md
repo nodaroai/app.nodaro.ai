@@ -17,15 +17,10 @@ Suno Add Instrumental takes an existing Suno audio track (typically one with iso
 
 - **Inputs:** `audio` -- Suno task ID and audio ID from an upstream Suno node
 - **Outputs:** `audio` -- audio URL with added instrumental
-
-## Credit Cost
-
-- **Fixed:** 4 credits
-
 ## Best Practices
 
 - Use this after Suno Separate to add a new instrumental to isolated vocals.
-- V5 generally produces higher quality instrumentals but the credit cost is the same as V4.5 Plus for this node.
+- V5 generally produces higher quality instrumentals than V4.5 Plus for this node.
 - Ensure the source track has clear vocals for the best instrumental matching.
 - Pair with Suno Separate (vocal extraction) and then Add Instrumental for complete vocal re-arrangement workflows.
 - The AI will attempt to match the genre, tempo, and key of the source audio automatically.

@@ -21,10 +21,6 @@ The 3D Title node uses Claude Sonnet to generate a plan for animated 3D text sce
 
 **Outputs:**
 - `composition` -- 3D title plan (JSON). Connect to a Render Video node for final output.
-
-## Credit Cost
-15 credits per generation (Claude Sonnet AI call).
-
 ## Best Practices
 - Describe the text content, animation style, and mood clearly (e.g., "epic gold title 'ADVENTURE' rotating with dramatic lighting").
 - Keep duration short (5--15 seconds) for title cards; the 60-second maximum is a hard limit.
@@ -41,5 +37,5 @@ The 3D Title node uses Claude Sonnet to generate a plan for animated 3D text sce
 - The plan includes camera position and movement, lighting (ambient, directional, point lights), and optional particle systems.
 - Duration is capped at 60 seconds. For longer title sequences, consider splitting into multiple segments.
 - Background media (connected via the `background` input) is rendered behind the 3D scene.
-- The higher credit cost (15 vs. 10 for other composition nodes) reflects the complexity of 3D scene planning.
+- This node uses Claude Sonnet for 3D scene planning, which reflects the complexity of generating camera, lighting, and particle configurations.
 - Connect to Render Video downstream to produce the final video file.

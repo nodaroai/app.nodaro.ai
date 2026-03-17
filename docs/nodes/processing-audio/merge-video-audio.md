@@ -18,11 +18,6 @@ No additional configuration required. Connect video and audio inputs.
 
 **Outputs:**
 - Video with merged audio
-
-## Credit Cost
-
-0 credits — FFmpeg processing, always free.
-
 ## Best Practices
 
 - Ensure audio and video durations are compatible — audio longer than video is trimmed, shorter audio leaves silence

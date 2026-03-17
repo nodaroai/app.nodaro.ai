@@ -18,13 +18,6 @@ The Scene Count parameter node provides a numeric value that controls how many s
 
 **Outputs:**
 - `scene_count` -- numeric scene count value, consumed by Generate Script nodes
-
-## Credit Cost
-
-| Cost | Notes |
-|------|-------|
-| 0 credits | Parameter nodes are free -- they only pass data, no AI processing |
-
 ## Supported Providers
 
 Not applicable. This is a data-passing parameter node with no AI provider.
@@ -44,4 +37,4 @@ Not applicable. This is a data-passing parameter node with no AI provider.
 ## Tips
 
 - The Generate Script node also has a built-in `sceneCount` field. The Scene Count parameter node overrides it when connected, but if no Scene Count node is wired, the inline value is used.
-- Scene count affects total credit usage indirectly: more scenes means more downstream image/video generation nodes to execute, each consuming their own credits.
+- More scenes means more downstream image/video generation nodes to execute.

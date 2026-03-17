@@ -21,15 +21,6 @@ The Video to Video node applies AI-powered transformations to an existing video 
 
 **Outputs:**
 - Transformed video URL
-
-## Credit Cost
-
-| Provider | Credits | Notes |
-|----------|---------|-------|
-| wan | 22 | Wan V2V, 5s, 720p |
-| luma-modify | 32 | Luma Modify |
-| runway-aleph | 35 | Runway Aleph |
-
 ## Supported Providers
 
 - **Wan** (22cr) — Good general-purpose V2V with reliable results

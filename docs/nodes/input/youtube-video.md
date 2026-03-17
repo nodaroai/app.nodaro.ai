@@ -21,11 +21,6 @@ Supported platforms: YouTube, Facebook, TikTok, Instagram, X/Twitter.
 **Outputs:**
 - Video URL — downloaded/streaming video accessible to downstream nodes
 - Metadata — title and thumbnail (when available)
-
-## Credit Cost
-
-0 credits — always free.
-
 ## Best Practices
 
 - YouTube videos stream directly without download — fastest option

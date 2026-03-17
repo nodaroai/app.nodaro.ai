@@ -19,11 +19,6 @@ The Voice Changer node uses ElevenLabs Speech-to-Speech to re-voice audio input.
 
 - **Input**: `in` -- source audio file containing the voice to be transformed
 - **Output**: `audio` -- transformed audio file with the target voice applied (URL)
-
-## Credit Cost
-
-4 credits per transformation (`elevenlabs-voice-changer`).
-
 ## Best Practices
 
 - Start with Stability at 0.5 and Similarity Boost at 0.75, then adjust based on results. Higher similarity produces more accurate voice matching but can reduce naturalness.

@@ -35,10 +35,6 @@ A "Generate All Assets" button triggers all categories at once.
 
 **Outputs:**
 - `characterRef` -- Character reference that can be connected to scene nodes, image generation, and other nodes that accept character references.
-
-## Credit Cost
-2 credits per base portrait generation. Additional credits per asset category generation.
-
 ## Best Practices
 - Write detailed descriptions covering facial features, body type, hair, and clothing for the most consistent results.
 - Upload a reference image when you need the character to match a specific look.

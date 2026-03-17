@@ -29,10 +29,6 @@ The Location node creates a persistent environment or setting asset with variati
 
 **Outputs:**
 - `locationRef` -- Location reference for use in scenes and compositions.
-
-## Credit Cost
-2 credits per base generation. Additional credits per asset category generation.
-
 ## Best Practices
 - Write rich descriptions that cover architecture, vegetation, lighting mood, and scale.
 - Choose a category that best represents the primary setting type for more accurate generation.

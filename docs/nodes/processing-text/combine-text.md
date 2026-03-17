@@ -17,11 +17,6 @@ The Combine Text node joins text from multiple input connections into a single o
 
 **Inputs:** 2+ text connections
 **Outputs:** Single combined text string
-
-## Credit Cost
-
-0 credits — always free. Inline execution (no API call).
-
 ## Best Practices
 
 - Use newline separator for combining multi-line content (scripts, lists)

@@ -15,11 +15,6 @@ Suno Lyrics generates structured song lyrics from a descriptive prompt. The outp
 
 - **Inputs:** `in` -- optional upstream text connection
 - **Outputs:** `text` -- generated lyrics text (includes `generatedTitle` and `generatedText`)
-
-## Credit Cost
-
-- **Fixed:** 2 credits
-
 ## Best Practices
 
 - Be specific about the theme, mood, and story in your prompt for more coherent lyrics.
@@ -39,6 +34,6 @@ Suno Lyrics generates structured song lyrics from a descriptive prompt. The outp
 ## Tips
 
 - The output contains two fields: `generatedTitle` (a suggested song title) and `generatedText` (the full lyrics with metatags).
-- At 2 credits, this is one of the most cost-effective Suno nodes -- use it freely for exploration.
+- Use this node freely for exploration and iteration.
 - The prompt field supports style tag autocomplete in the editor for convenience.
 - Pair with Suno Style Boost to enhance the generated lyrics before song creation.

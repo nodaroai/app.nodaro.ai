@@ -25,10 +25,6 @@ None.
 
 **Outputs:**
 None.
-
-## Credit Cost
-0 credits.
-
 ## Best Practices
 - Use sticky notes to label major sections of complex workflows (e.g., "Image Generation", "Audio Processing", "Output").
 - Choose contrasting background and text colors for readability.

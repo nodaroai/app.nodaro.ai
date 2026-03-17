@@ -21,10 +21,6 @@ The Motion Graphics node uses Claude Sonnet to generate a plan for 2D motion gra
 
 **Outputs:**
 - `composition` -- Motion graphics plan (JSON). Connect to a Render Video node for final output.
-
-## Credit Cost
-10 credits per generation (Claude Sonnet AI call).
-
 ## Best Practices
 - Use the info guide in the prompt field for tips on what the AI can generate.
 - Specify colors, fonts, and animation styles explicitly for consistent branding.

@@ -18,11 +18,6 @@ The Text Prompt node is the most common starting point for workflows. It provide
 
 **Outputs:**
 - Text — the entered text value, available to all connected downstream nodes
-
-## Credit Cost
-
-0 credits — always free.
-
 ## Best Practices
 
 - Write detailed, specific prompts for AI generation nodes — vague prompts produce vague results

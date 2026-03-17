@@ -19,10 +19,6 @@ The Save to Storage node persists the upstream media result to Cloudflare R2 clo
 
 **Outputs:**
 None. This is a terminal output node.
-
-## Credit Cost
-0 credits. Storage is free; usage counts against the account storage quota.
-
 ## Best Practices
 - Use descriptive filenames to organize saved assets in your library.
 - Choose the appropriate quality tier based on your needs -- `draft` for quick previews, `high` or `4k` for final deliverables.

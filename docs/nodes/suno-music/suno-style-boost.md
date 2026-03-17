@@ -15,11 +15,6 @@ Suno Style Boost takes raw text content (typically lyrics) and enhances its styl
 
 - **Inputs:** `text` -- text content from an upstream node (e.g., Suno Lyrics)
 - **Outputs:** `text` -- enhanced/boosted text
-
-## Credit Cost
-
-- **Fixed:** 1 credit
-
 ## Best Practices
 
 - Use this after Suno Lyrics to polish AI-generated lyrics before feeding them into Suno Generate.
@@ -38,7 +33,7 @@ Suno Style Boost takes raw text content (typically lyrics) and enhances its styl
 
 ## Tips
 
-- At 1 credit, this is the cheapest Suno node -- use it liberally in your workflows.
+- This is one of the cheapest Suno nodes -- use it liberally in your workflows.
 - Unlike most Suno nodes, Style Boost executes synchronously (no job polling). Results return immediately.
 - The output is plain text, not audio. Connect it to a Suno Generate node's lyrics or prompt input for the next step.
 - This node processes the content through the Suno style enhancement API directly, without going through the BullMQ worker queue.

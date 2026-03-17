@@ -19,11 +19,6 @@ No configurable parameters — click "Open Editor" on the node during workflow e
 
 **Inputs:** Video (required)
 **Outputs:** Edited video
-
-## Credit Cost
-
-0 credits — always free.
-
 ## Best Practices
 
 - Place Manual Edit nodes at points where human review is essential
