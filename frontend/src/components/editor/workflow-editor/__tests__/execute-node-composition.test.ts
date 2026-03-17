@@ -961,6 +961,7 @@ describe("image-to-text", () => {
       "detailed",
       "Describe this image",
       "u1",
+      undefined,
     )
     expect(mockUpdateNodeData).toHaveBeenCalledWith(
       "n1",

@@ -358,6 +358,7 @@ describe("generate-script", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
     )
   })
 
@@ -381,6 +382,7 @@ describe("generate-script", () => {
       "dramatic",
       "short",
       "claude",
+      undefined,
     )
   })
 })

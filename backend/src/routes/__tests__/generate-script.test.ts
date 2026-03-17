@@ -239,7 +239,7 @@ describe("POST /v1/generate-script", () => {
       expect.anything(),
       expect.anything(),
       TEST_JOB_ID,
-      "claude",
+      "generate-script",
     )
   })
 })
