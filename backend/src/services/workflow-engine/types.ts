@@ -144,6 +144,7 @@ export interface ResolvedInputs {
   endFrameUrl?: string
   maskUrl?: string
   kieTaskId?: string
+  caption?: string
 }
 
 // ---------------------------------------------------------------------------

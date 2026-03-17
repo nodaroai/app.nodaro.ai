@@ -30,6 +30,16 @@ const TRIGGER_NODE_TYPES = new Set([
   "schedule-trigger",
 ])
 
+const ALWAYS_EXCLUDED_TYPES = new Set([
+  "sticky-note",
+  "webhook-trigger",
+  "schedule-trigger",
+  "loop",
+  "list",
+  "sub-workflow-input",
+  "sub-workflow-output",
+])
+
 const NON_OUTPUT_TYPES = new Set([
   "text-prompt",
   "list",
@@ -103,6 +113,7 @@ const VIDEO_OUTPUT_TYPES = new Set([
   "speed-ramp", "loop-video", "fade-video", "transcode-video",
   "upload-video",
   "lip-sync", "motion-transfer", "video-upscale", "add-captions",
+  "social-media-format",
 ])
 
 const AUDIO_OUTPUT_TYPES = new Set([
@@ -131,10 +142,9 @@ export type OutputType = "image" | "video" | "audio" | "text" | "data"
 /** Get nodes that act as user inputs (text prompts, uploads, parameters). */
 export function getInputNodes<T extends GenericNode>(nodes: T[], curatedOnly = true): T[] {
   return nodes.filter((n) => {
-    if (!n.type || !INPUT_NODE_TYPES.has(n.type)) return false
+    if (!n.type || ALWAYS_EXCLUDED_TYPES.has(n.type)) return false
     if (n.hidden) return false
-    if (TRIGGER_NODE_TYPES.has(n.type)) return false
-    if (curatedOnly) return n.data.presentationVisible === true
+    if (curatedOnly) return n.data.presentationInput === true
     return true
   })
 }
@@ -145,18 +155,10 @@ export function getOutputNodes<T extends GenericNode>(
   edges: GenericEdge[],
   curatedOnly = true,
 ): T[] {
-  const nodesWithOutgoing = new Set(edges.map((e) => e.source))
-
   return nodes.filter((n) => {
-    if (!n.type) return false
+    if (!n.type || ALWAYS_EXCLUDED_TYPES.has(n.type)) return false
     if (n.hidden) return false
-    if (NON_OUTPUT_TYPES.has(n.type)) return false
-
-    // A node is an output if it either produces media or has no outgoing edges
-    const isOutput = !nodesWithOutgoing.has(n.id) || MEDIA_PRODUCING_TYPES.has(n.type)
-    if (!isOutput) return false
-
-    if (curatedOnly) return n.data.presentationVisible === true
+    if (curatedOnly) return n.data.presentationOutput === true
     return true
   })
 }

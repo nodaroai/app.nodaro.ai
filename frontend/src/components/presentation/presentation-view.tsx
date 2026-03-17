@@ -55,6 +55,11 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { ShareDialog } from "./share-dialog"
 import { PublishDialog } from "./publish-dialog"
 import { NodePickerDialog } from "./node-picker-dialog"
+import { NodeConfigModal, CONFIG_INPUT_TYPES } from "./node-config-modal"
+import { PlatformPreview, PLATFORM_COLORS } from "@/components/nodes/platform-preview"
+import { PLATFORM_LABELS } from "@/lib/social-media-specs"
+import { isVideoUrl } from "@/lib/media-type"
+import { StatusBadge } from "./output-cards/shared"
 import { RunTargetSelector } from "./run-target-selector"
 import { ViewModeSelector, ALL_VIEW_MODES } from "./view-mode-selector"
 import { TextInputCard } from "./input-cards/text-input-card"
@@ -128,6 +133,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false)
   const [showGetCreditsModal, setShowGetCreditsModal] = useState(false)
   const [isRemixing, setIsRemixing] = useState(false)
+  const [configNode, setConfigNode] = useState<WorkflowNode | null>(null)
 
   // Native fullscreen toggle (browser Fullscreen API)
   const toggleNativeFullscreen = useCallback(() => {
@@ -637,10 +643,68 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       onUpdateInput={presUpdateInput}
       readOnly={inputsReadOnly ?? (isShareReadOnly || isRunning || isTerminal)}
       onOpenMedia={handleOpenMedia}
+      onOpenConfig={setConfigNode}
     />
   ), [isFullscreen, presInputValues, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia])
 
   const renderOutputCard = useCallback((node: WorkflowNode) => {
+    // Social media format: show PlatformPreview with platform badge
+    if (node.type === "social-media-format") {
+      const nodeData = node.data as Record<string, unknown>
+      const result = getResult(node.id)
+      const status = getNodeStatus(node.id)
+      const platform = (nodeData.platform as string) ?? "instagram"
+      return (
+        <div className="rounded-lg border border-border bg-card overflow-hidden cursor-pointer" onClick={() => setConfigNode(node)}>
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="text-xs font-medium text-foreground">{getCardTitle(node)}</span>
+            <div className="flex items-center gap-2">
+              <span
+                className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                style={{ backgroundColor: (PLATFORM_COLORS[platform as keyof typeof PLATFORM_COLORS] ?? "#888") + "20", color: PLATFORM_COLORS[platform as keyof typeof PLATFORM_COLORS] ?? "#888" }}
+              >
+                {PLATFORM_LABELS[platform as keyof typeof PLATFORM_LABELS] ?? platform}
+              </span>
+              <StatusBadge status={status} />
+            </div>
+          </div>
+          <div className="flex items-center justify-center py-2 scale-75 origin-center" style={{ height: "200px" }}>
+            <PlatformPreview
+              platform={platform as "instagram"}
+              specKey={(nodeData.specKey as string) ?? ""}
+              mediaUrl={result.url}
+              isVideo={result.url ? isVideoUrl(result.url) : undefined}
+              caption={(nodeData.formattedText as string) ?? ""}
+              size="sm"
+            />
+          </div>
+        </div>
+      )
+    }
+    // Config-type output nodes open a modal with their full config panel
+    if (node.type && CONFIG_INPUT_TYPES.has(node.type)) {
+      const label = getCardTitle(node)
+      const resultData = getNodeResult(node.data as Record<string, unknown>)
+      const mediaType = getOutputType(node.type)
+      return (
+        <button
+          type="button"
+          onClick={() => setConfigNode(node)}
+          className="w-full text-left rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer overflow-hidden"
+        >
+          {resultData.url && mediaType === "image" && (
+            <img src={resultData.url} alt={label} className="w-full h-32 object-cover" />
+          )}
+          {resultData.url && mediaType === "video" && (
+            <video src={resultData.url} muted playsInline className="w-full h-32 object-cover" />
+          )}
+          <div className="p-3">
+            <p className="text-sm font-medium text-foreground">{label}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Click to edit settings</p>
+          </div>
+        </button>
+      )
+    }
     const outputType = getOutputType(node.type)
     const status = getNodeStatus(node.id)
     const result = getResult(node.id)
@@ -673,6 +737,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     getResult,
     getCardTitle,
     onOpenMedia: handleOpenMedia,
+    onOpenConfig: setConfigNode,
   }
 
   const editableProps = {
@@ -996,6 +1061,13 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         />
       )}
 
+      {/* Config modal for config-type input nodes */}
+      <NodeConfigModal
+        node={configNode}
+        open={!!configNode}
+        onOpenChange={(o) => { if (!o) setConfigNode(null) }}
+      />
+
       {/* Get Credits modal for app runner */}
       {isAppRunner && userCredits && (
         <GetCreditsModal
@@ -1018,6 +1090,7 @@ function InputCard({
   onUpdateInput,
   readOnly,
   onOpenMedia,
+  onOpenConfig,
 }: {
   node: WorkflowNode
   isFullscreen: boolean
@@ -1025,9 +1098,24 @@ function InputCard({
   onUpdateInput: (nodeId: string, key: string, value: unknown) => void
   readOnly?: boolean
   onOpenMedia?: (nodeId: string) => void
+  onOpenConfig?: (node: WorkflowNode) => void
 }) {
   const label = getNodeLabel(node)
   const data = node.data as Record<string, unknown>
+
+  // Config-type nodes open a modal with their full config panel
+  if (node.type && CONFIG_INPUT_TYPES.has(node.type)) {
+    return (
+      <button
+        type="button"
+        onClick={() => onOpenConfig?.(node)}
+        className="w-full text-left p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+      >
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Click to configure</p>
+      </button>
+    )
+  }
 
   switch (node.type) {
     case "text-prompt":

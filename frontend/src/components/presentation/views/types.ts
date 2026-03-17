@@ -12,6 +12,8 @@ export interface ViewProps {
   getCardTitle: (node: WorkflowNode) => string
   /** Open a shared media lightbox navigable across all items */
   onOpenMedia?: (nodeId: string) => void
+  /** Open config modal for config-type nodes */
+  onOpenConfig?: (node: WorkflowNode) => void
 }
 
 export interface EditableViewProps extends ViewProps {

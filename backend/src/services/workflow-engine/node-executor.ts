@@ -397,7 +397,7 @@ function buildSyncHttpBody(
         platform: SOCIAL_NODE_TO_PLATFORM[node.type],
         action: data.action,
         connectionId: data.connectionId,
-        caption: data.caption || data.text,
+        caption: (resolvedInputs.caption as string | undefined) || data.caption || data.text,
         mediaUrl: resolvedInputs.videoUrl || resolvedInputs.imageUrl || resolvedInputs.audioUrl,
         title: data.title,
         description: data.description,

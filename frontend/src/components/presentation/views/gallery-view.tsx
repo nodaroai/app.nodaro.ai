@@ -1,9 +1,14 @@
 import { useState, useMemo } from "react"
-import { ImageIcon, VideoIcon, Music, FileText, Play } from "lucide-react"
+import { ImageIcon, VideoIcon, Music, FileText, Play, Settings } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { getOutputType } from "@/lib/presentation-utils"
+import { CONFIG_INPUT_TYPES } from "../node-config-modal"
+import { PlatformPreview, PLATFORM_COLORS } from "@/components/nodes/platform-preview"
+import { PLATFORM_LABELS } from "@/lib/social-media-specs"
+import { isVideoUrl } from "@/lib/media-type"
 import { GlassCard, StatusBadge, type OutputStatus } from "../output-cards/shared"
 import { WaveformBars } from "../input-cards/shared"
+import type { WorkflowNode } from "@/types/nodes"
 import type { ViewProps } from "./types"
 
 type Tab = "all" | "outputs" | "inputs"
@@ -21,6 +26,7 @@ export function GalleryView({
   getResult,
   getCardTitle,
   onOpenMedia,
+  onOpenConfig,
 }: ViewProps) {
   const [activeTab, setActiveTab] = useState<Tab>("all")
   const [textPreview, setTextPreview] = useState<{ title: string; text: string } | null>(null)
@@ -118,7 +124,7 @@ export function GalleryView({
                 {outputItems.map(({ node, outputType, status, result, title }) => (
                   <GalleryCard
                     key={node.id}
-                    nodeId={node.id}
+                    node={node}
                     title={title}
                     outputType={outputType}
                     status={status}
@@ -126,6 +132,7 @@ export function GalleryView({
                     text={result.text}
                     onClickMedia={onOpenMedia}
                     onClickText={(text) => setTextPreview({ title, text })}
+                    onOpenConfig={onOpenConfig}
                   />
                 ))}
               </div>
@@ -154,7 +161,7 @@ export function GalleryView({
 }
 
 function GalleryCard({
-  nodeId,
+  node,
   title,
   outputType,
   status,
@@ -162,8 +169,9 @@ function GalleryCard({
   text,
   onClickMedia,
   onClickText,
+  onOpenConfig,
 }: {
-  nodeId: string
+  node: WorkflowNode
   title: string
   outputType: string
   status: OutputStatus
@@ -171,16 +179,23 @@ function GalleryCard({
   text?: string
   onClickMedia?: (nodeId: string) => void
   onClickText: (text: string) => void
+  onOpenConfig?: (node: WorkflowNode) => void
 }) {
+  const isConfigType = !!(node.type && CONFIG_INPUT_TYPES.has(node.type))
+
   const handleClick = () => {
+    if (isConfigType) {
+      onOpenConfig?.(node)
+      return
+    }
     if ((outputType === "image" || outputType === "video" || outputType === "audio") && url) {
-      onClickMedia?.(nodeId)
+      onClickMedia?.(node.id)
     } else if (text) {
       onClickText(text)
     }
   }
 
-  const hasContent = url || text
+  const hasContent = url || text || isConfigType
 
   return (
     <GlassCard className={hasContent ? "cursor-pointer hover:border-[#ff0073]/30 transition-colors" : ""}>
@@ -191,6 +206,36 @@ function GalleryCard({
       <div className="aspect-square rounded-lg overflow-hidden bg-muted/30 flex items-center justify-center" onClick={handleClick}>
         {status === "running" ? (
           <div className="w-6 h-6 border-2 border-[#ff0073]/40 border-t-[#ff0073] rounded-full animate-spin" />
+        ) : node.type === "social-media-format" ? (
+          (() => {
+            const nodeData = node.data as Record<string, unknown>
+            const platform = (nodeData.platform as string) ?? "instagram"
+            return (
+              <div className="flex flex-col items-center w-full h-full">
+                <div className="flex items-center gap-1.5 py-1.5">
+                  <span
+                    className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                    style={{
+                      backgroundColor: (PLATFORM_COLORS[platform as keyof typeof PLATFORM_COLORS] ?? "#888") + "20",
+                      color: PLATFORM_COLORS[platform as keyof typeof PLATFORM_COLORS] ?? "#888",
+                    }}
+                  >
+                    {PLATFORM_LABELS[platform as keyof typeof PLATFORM_LABELS] ?? platform}
+                  </span>
+                </div>
+                <div className="flex-1 flex items-center justify-center scale-[0.55] origin-center">
+                  <PlatformPreview
+                    platform={platform as "instagram"}
+                    specKey={(nodeData.specKey as string) ?? ""}
+                    mediaUrl={url}
+                    isVideo={url ? isVideoUrl(url) : undefined}
+                    caption={(nodeData.formattedText as string) ?? ""}
+                    size="sm"
+                  />
+                </div>
+              </div>
+            )
+          })()
         ) : outputType === "image" && url ? (
           <CachedImage src={url} alt={title} thumbnail thumbnailWidth={480} className="w-full h-full object-cover" />
         ) : outputType === "video" && url ? (
@@ -209,6 +254,11 @@ function GalleryCard({
           </div>
         ) : text ? (
           <p className="text-xs text-muted-foreground/80 px-3 line-clamp-6 text-center">{text}</p>
+        ) : isConfigType ? (
+          <div className="flex flex-col items-center gap-2 text-muted-foreground/60">
+            <Settings className="w-8 h-8" />
+            <span className="text-[10px]">Click to edit</span>
+          </div>
         ) : (
           <div className="flex flex-col items-center gap-1 text-muted-foreground/40">
             {outputType === "image" ? <ImageIcon className="w-8 h-8" /> :

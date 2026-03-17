@@ -443,6 +443,11 @@ const AUDIO_OUTPUT_NODE_TYPES = new Set([
   "voice-design",
 ])
 
+const SOCIAL_POST_NODE_TYPES = new Set([
+  "instagram-post", "tiktok-post", "youtube-upload",
+  "linkedin-post", "x-post", "facebook-post",
+])
+
 const SUNO_TRACK_NODE_TYPES = new Set([
   "suno-generate",
   "suno-cover",
@@ -772,6 +777,23 @@ function routeOutput(
   // --- Schedule trigger ---
   if (srcType === "schedule-trigger") {
     inputs.prompt = output
+    return
+  }
+
+  // --- Social post nodes: route by source type ---
+  if (SOCIAL_POST_NODE_TYPES.has(targetType)) {
+    if (VIDEO_OUTPUT_NODE_TYPES.has(srcType) || srcType === "upload-video" || srcType === "youtube-video") {
+      routeVideoOutput(inputs, output, targetType, src.id)
+    } else if (
+      srcType === "generate-image" || srcType === "edit-image" || srcType === "image-to-image" ||
+      srcType === "upload-image" || ENTITY_NODE_TYPES.has(srcType)
+    ) {
+      inputs.imageUrl = output
+    } else if (AUDIO_OUTPUT_NODE_TYPES.has(srcType) || srcType === "upload-audio" || srcType === "reference-audio") {
+      routeAudioOutput(inputs, output, targetType, src.id)
+    } else {
+      inputs.caption = output
+    }
     return
   }
 

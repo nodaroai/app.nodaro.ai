@@ -165,7 +165,7 @@ function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, on
           value={d.caption || ""}
           onChange={(v) => onUpdate({ caption: v })}
           placeholder={`Write your ${platform === "x" ? "tweet" : "caption"}...`}
-          className="mt-1.5 min-h-[80px]"
+          className="min-h-[80px]"
           maxLength={charLimit}
           rows={3}
           nodeRefs={nodeRefs}

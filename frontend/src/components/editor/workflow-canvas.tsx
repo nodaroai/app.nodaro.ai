@@ -87,6 +87,8 @@ const TARGET_LABELS: Record<string, string> = {
   lottie: "Lottie",
   background: "Background",
   "ref-audio": "Ref Audio",
+  media: "Media",
+  caption: "Caption",
 }
 
 // Entity node types that always represent a reference connection
