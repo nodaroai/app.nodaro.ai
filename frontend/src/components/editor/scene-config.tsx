@@ -21,6 +21,7 @@ import { textToSpeech, getJobStatus } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDialogueEntry, SceneLocationEntry, GenerateScriptData, WorkflowNode, AudioAssignment } from "@/types/nodes"
 import { mapScriptSceneToNodeData, getSceneCharacterNames } from "@/types/nodes"
+import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS } from "@/components/editor/config-panels/model-options"
 
 type WizardStep = 1 | 2 | 3 | 4
 
@@ -1210,9 +1211,15 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
         <Label className="text-xs">Video Provider</Label>
         <Select value={data.videoProvider ?? "minimax"} onValueChange={(v) => onUpdate({ videoProvider: v })}>
           <SelectTrigger className="h-8 text-xs mt-1" aria-label="Select video provider"><SelectValue /></SelectTrigger>
-          <SelectContent position="popper" className="z-[9999]">
-            {["minimax", "veo3", "veo3.1", "kling", "kling-3.0", "runway", "pika"].map((p) => (
-              <SelectItem key={p} value={p}>{p === "veo3" ? "VEO 3" : p === "veo3.1" ? "VEO 3.1" : p === "kling-3.0" ? "Kling 3.0" : p.charAt(0).toUpperCase() + p.slice(1)}</SelectItem>
+          <SelectContent position="popper" className="z-[9999] max-h-72">
+            <p className="px-2 py-1 text-[10px] font-medium text-muted-foreground">Image to Video</p>
+            {VIDEO_I2V_MODELS.map((m) => (
+              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+            ))}
+            <SelectSeparator />
+            <p className="px-2 py-1 text-[10px] font-medium text-muted-foreground">Text to Video</p>
+            {VIDEO_T2V_MODELS.filter((m) => !VIDEO_I2V_MODELS.some((i) => i.value === m.value)).map((m) => (
+              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
