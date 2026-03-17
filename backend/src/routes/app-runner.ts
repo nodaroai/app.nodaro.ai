@@ -126,7 +126,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     // Step 2: load all versions by workflow_id (slug is unique per row, workflow_id spans versions)
     const { data: allVersionRows } = await supabase
       .from("published_apps")
-      .select("id, name, description, icon_url, version, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits, creator_id, max_runs_per_user_per_day, thumbnail_node_id, created_at, workflow_id")
+      .select("id, name, description, icon_url, version, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits, creator_id, max_runs_per_user_per_day, thumbnail_node_id, supports_remix, created_at, workflow_id")
       .eq("workflow_id", workflowId)
       .order("version", { ascending: false })
 
@@ -164,6 +164,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       creatorId: appRow.creator_id,
       maxRunsPerUserPerDay: appRow.max_runs_per_user_per_day,
       thumbnailNodeId: appRow.thumbnail_node_id ?? null,
+      supportsRemix: appRow.supports_remix ?? false,
       createdAt: appRow.created_at,
       workflowId: appRow.workflow_id,
       versions,
