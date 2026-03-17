@@ -52,6 +52,18 @@ export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecor
 
   // Regular users: hide sensitive provider/cost details
   const { provider, provider_cost, display_cost, credits_actual, ...rest } = job
+
+  // Also strip internal fields from input_data (orchestrator stores full payload)
+  if (rest.input_data && typeof rest.input_data === "object") {
+    const cleaned = { ...(rest.input_data as Record<string, unknown>) }
+    delete cleaned.userId
+    delete cleaned.jobId
+    delete cleaned.usageLogId
+    delete cleaned.force_private
+    delete cleaned.provider
+    rest.input_data = cleaned
+  }
+
   return {
     ...rest,
     cost: display_cost,
