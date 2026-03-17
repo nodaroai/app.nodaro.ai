@@ -3974,3 +3974,169 @@ export function saveToStorageApi(params: {
     body: withWorkflowId(params),
   })
 }
+
+// ---------------------------------------------------------------------------
+// Workflow Template Marketplace
+// ---------------------------------------------------------------------------
+
+/** Full template with snapshot data */
+export interface WorkflowTemplate {
+  id: string
+  workflowId: string
+  creatorId: string
+  slug: string
+  name: string
+  description: string | null
+  markdownDescription: string | null
+  snapshotNodes: unknown[]
+  snapshotEdges: unknown[]
+  snapshotSettings: Record<string, unknown>
+  nodeTypesUsed: string[]
+  providersUsed: string[]
+  nodeCount: number
+  estimatedCredits: number
+  complexity: "simple" | "intermediate" | "advanced"
+  category: string
+  outputTypes: string[]
+  tags: string[]
+  previewMediaUrl: string | null
+  previewMediaType: string | null
+  creatorDisplayName: string | null
+  cloneCount: number
+  favoriteCount: number
+  isActive: boolean
+  isListed: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+/** Slim card type returned by /v1/templates/browse (no snapshot data) */
+export interface TemplateBrowseCard {
+  id: string
+  slug: string
+  name: string
+  description: string | null
+  nodeTypesUsed: string[]
+  providersUsed: string[]
+  nodeCount: number
+  estimatedCredits: number
+  complexity: "simple" | "intermediate" | "advanced"
+  category: string
+  outputTypes: string[]
+  tags: string[]
+  previewMediaUrl: string | null
+  previewMediaType: string | null
+  creatorId: string
+  creatorDisplayName: string | null
+  cloneCount: number
+  favoriteCount: number
+  createdAt: string
+}
+
+export async function browseTemplates(params: {
+  cursor?: string
+  limit?: number
+  category?: string
+  outputType?: string
+  tag?: string
+  search?: string
+  sort?: "popular" | "newest" | "most-favorited"
+  nodeType?: string
+  provider?: string
+  complexity?: string
+  favoritesOnly?: boolean
+}): Promise<{ data: TemplateBrowseCard[]; nextCursor: string | null }> {
+  const qs = new URLSearchParams()
+  if (params.cursor) qs.set("cursor", params.cursor)
+  if (params.limit) qs.set("limit", String(params.limit))
+  if (params.category) qs.set("category", params.category)
+  if (params.outputType) qs.set("outputType", params.outputType)
+  if (params.tag) qs.set("tag", params.tag)
+  if (params.search) qs.set("search", params.search)
+  if (params.sort) qs.set("sort", params.sort)
+  if (params.nodeType) qs.set("nodeType", params.nodeType)
+  if (params.provider) qs.set("provider", params.provider)
+  if (params.complexity) qs.set("complexity", params.complexity)
+  if (params.favoritesOnly) qs.set("favoritesOnly", "true")
+  const query = qs.toString()
+  return apiRequest<{ data: TemplateBrowseCard[]; nextCursor: string | null }>(
+    `/v1/templates/browse${query ? `?${query}` : ""}`,
+    "Failed to browse templates",
+    { skipAuth: !params.favoritesOnly },
+  )
+}
+
+export async function getTemplateBySlug(slug: string): Promise<WorkflowTemplate> {
+  return apiRequest<WorkflowTemplate>(
+    `/v1/templates/${encodeURIComponent(slug)}`,
+    "Failed to load template",
+    { skipAuth: true },
+  )
+}
+
+export async function publishTemplate(data: {
+  workflowId: string
+  name: string
+  description?: string
+  markdownDescription?: string
+  slug?: string
+  category?: string
+  outputTypes?: string[]
+  tags?: string[]
+  previewMediaUrl?: string
+  previewMediaType?: string
+  isListed?: boolean
+}): Promise<WorkflowTemplate> {
+  return apiRequest<WorkflowTemplate>(
+    "/v1/templates/publish",
+    "Failed to publish template",
+    { method: "POST", body: data },
+  )
+}
+
+export async function getMyTemplates(): Promise<WorkflowTemplate[]> {
+  return apiRequest<WorkflowTemplate[]>(
+    "/v1/templates/mine",
+    "Failed to fetch templates",
+  )
+}
+
+export async function updateTemplate(id: string, data: Record<string, unknown>): Promise<WorkflowTemplate> {
+  return apiRequest<WorkflowTemplate>(
+    `/v1/templates/${encodeURIComponent(id)}`,
+    "Failed to update template",
+    { method: "PATCH", body: data },
+  )
+}
+
+export async function deleteTemplate(id: string): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>(
+    `/v1/templates/${encodeURIComponent(id)}`,
+    "Failed to delete template",
+    { method: "DELETE" },
+  )
+}
+
+export async function cloneTemplate(slug: string, projectId: string, name?: string): Promise<{ workflowId: string; projectId: string }> {
+  return apiRequest<{ workflowId: string; projectId: string }>(
+    `/v1/templates/${encodeURIComponent(slug)}/clone`,
+    "Failed to clone template",
+    { method: "POST", body: { projectId, ...(name ? { name } : {}) } },
+  )
+}
+
+export async function toggleTemplateFavorite(templateId: string): Promise<{ favorited: boolean }> {
+  return apiRequest<{ favorited: boolean }>(
+    "/v1/templates/favorite",
+    "Failed to toggle favorite",
+    { method: "POST", body: { templateId } },
+  )
+}
+
+export async function getTemplateFavorites(): Promise<string[]> {
+  const res = await apiRequest<{ data: string[] }>(
+    "/v1/templates/favorites",
+    "Failed to fetch favorites",
+  )
+  return res.data
+}

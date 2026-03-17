@@ -622,3 +622,26 @@ html, body {
     max-width: 320px;
   }
 }
+
+/* Mobile app shell */
+.mobile-progress-bar {
+  transition: width 300ms ease;
+}
+
+.mobile-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.mobile-menu-sheet {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}

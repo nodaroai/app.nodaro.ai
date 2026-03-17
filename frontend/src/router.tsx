@@ -31,6 +31,7 @@ const ApiSettingsPage = lazy(() => import("@/app/(dashboard)/settings/api/page")
 const IntegrationsPage = lazy(() => import("@/app/(dashboard)/integrations/page"))
 const AppsPage = lazy(() => import("@/app/(dashboard)/apps/page"))
 const AppAnalyticsPage = lazy(() => import("@/app/(dashboard)/apps/analytics-page"))
+const TemplatesPage = lazy(() => import("@/app/(dashboard)/templates/page"))
 
 // Auth pages (lazy — rarely revisited)
 const LoginPage = lazy(() => import("@/app/(auth)/login/page"))
@@ -156,6 +157,10 @@ export const router = createBrowserRouter([
       {
         path: "/apps/:appId/analytics",
         element: <SuspenseWrapper><AppAnalyticsPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/templates",
+        element: <SuspenseWrapper><TemplatesPage /></SuspenseWrapper>,
       },
       {
         path: "/_gallery",

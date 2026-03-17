@@ -6,7 +6,9 @@ import { PlatformCard } from "@/components/integrations/platform-card"
 import { getSocialConnections } from "@/lib/api"
 import type { SocialPlatformType, SocialConnection } from "@/types/nodes"
 
-const PLATFORMS: SocialPlatformType[] = ["instagram", "tiktok", "youtube", "linkedin", "x", "facebook"]
+const PLATFORMS: SocialPlatformType[] = ["instagram", "facebook", "tiktok", "youtube", "linkedin", "x"]
+
+const COMING_SOON_PLATFORMS: ReadonlySet<SocialPlatformType> = new Set(["tiktok", "youtube", "linkedin", "x"])
 
 export default function IntegrationsPage() {
   const [connections, setConnections] = useState<SocialConnection[]>([])
@@ -48,6 +50,7 @@ export default function IntegrationsPage() {
               platform={platform}
               connections={connections.filter((c) => c.platform === platform)}
               onConnectionChange={loadConnections}
+              comingSoon={COMING_SOON_PLATFORMS.has(platform)}
             />
           ))}
         </div>

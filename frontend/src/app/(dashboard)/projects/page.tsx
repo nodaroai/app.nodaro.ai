@@ -14,7 +14,9 @@ import { StatsOverview } from "@/components/dashboard/stats-overview"
 import { WorkflowThumbnail } from "@/components/dashboard/workflow-thumbnail"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { browseApps } from "@/lib/api"
+import { browseApps, browseTemplates, type TemplateBrowseCard } from "@/lib/api"
+import { useTemplateFavorites, useToggleTemplateFavoriteMutation } from "@/hooks/queries/use-template-marketplace-queries"
+import { TemplatePreviewModal } from "@/components/templates/template-preview-modal"
 
 interface WorkflowSearchResult extends WorkflowMeta {
   readonly projectName: string
@@ -71,6 +73,90 @@ function useWorkflowSearch(search: string, projectMap: Map<string, string>) {
   }, [search])
 
   return { results, loading }
+}
+
+function TemplatesCarousel() {
+  const navigate = useNavigate()
+  const [previewTemplate, setPreviewTemplate] = useState<TemplateBrowseCard | null>(null)
+  const { data: myProjects = [] } = useProjects()
+  const { data: browseData, isLoading } = useQuery({
+    queryKey: ["template-carousel"],
+    queryFn: () => browseTemplates({ sort: "popular", limit: 6 }),
+    staleTime: 60_000,
+  })
+  const { data: favoriteIds = [] } = useTemplateFavorites()
+  const favSet = useMemo(() => new Set(favoriteIds), [favoriteIds])
+  const favMutation = useToggleTemplateFavoriteMutation()
+
+  const templates = browseData?.data ?? []
+
+  if (isLoading) {
+    return (
+      <div className="px-3 pb-3">
+        <div className="grid grid-cols-3 gap-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="aspect-video rounded-lg bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (templates.length === 0) {
+    return (
+      <div className="text-center py-10 text-muted-foreground">
+        <LayoutTemplate className="h-8 w-8 mx-auto mb-2 opacity-30" />
+        <p className="text-xs font-medium">No templates available yet</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-3 pb-3">
+      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+        {templates.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className="relative flex-shrink-0 w-48 rounded-lg overflow-hidden border border-border hover:border-zinc-400 transition-colors group cursor-pointer text-left"
+            onClick={() => setPreviewTemplate(t)}
+          >
+            <div className="aspect-video bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-900 overflow-hidden">
+              {t.previewMediaUrl ? (
+                <img src={t.previewMediaUrl} alt={t.name} className="w-full h-full object-cover" loading="lazy" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <LayoutTemplate className="h-6 w-6 text-zinc-300 dark:text-zinc-600" />
+                </div>
+              )}
+            </div>
+            <div className="p-2">
+              <p className="text-xs font-medium text-foreground truncate">{t.name}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t.nodeCount} nodes · {t.estimatedCredits} CR</p>
+            </div>
+          </button>
+        ))}
+        {/* "See all" link card */}
+        <button
+          type="button"
+          className="flex-shrink-0 w-48 rounded-lg border border-dashed border-border hover:border-zinc-400 transition-colors flex items-center justify-center text-muted-foreground hover:text-foreground"
+          onClick={() => navigate("/templates")}
+        >
+          <span className="text-xs font-medium">See all templates →</span>
+        </button>
+      </div>
+
+      {previewTemplate && (
+        <TemplatePreviewModal
+          template={previewTemplate}
+          onClose={() => setPreviewTemplate(null)}
+          isFavorited={favSet.has(previewTemplate.id)}
+          onToggleFavorite={(id) => favMutation.mutate({ templateId: id })}
+          projects={myProjects.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name }))}
+        />
+      )}
+    </div>
+  )
 }
 
 export default function ProjectsPage() {
@@ -357,11 +443,7 @@ export default function ProjectsPage() {
         )}
 
         {activeTab === "templates" && (
-          <div className="text-center py-16 text-muted-foreground">
-            <LayoutTemplate className="h-10 w-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm font-medium">Templates coming soon</p>
-            <p className="text-xs mt-1 opacity-70">Preset workflow templates to get you started faster.</p>
-          </div>
+          <TemplatesCarousel />
         )}
 
         {activeTab === "tutorials" && (

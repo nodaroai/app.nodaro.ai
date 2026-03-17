@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useRef } from "react"
 import { Link } from "react-router-dom"
 import { Plus, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -38,31 +38,7 @@ export function RunsSidebar({
   const hasMultipleVersions = versions.length > 1
   const sidebarRef = useRef<HTMLDivElement>(null)
 
-  // Arrow key navigation
-  useEffect(() => {
-    const el = sidebarRef.current
-    if (!el) return
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return
-      if (slots.length === 0) return
-
-      e.preventDefault()
-      const currentIndex = activeSlotId ? slots.findIndex((s) => s.id === activeSlotId) : -1
-
-      let nextIndex: number
-      if (e.key === "ArrowDown") {
-        nextIndex = currentIndex < slots.length - 1 ? currentIndex + 1 : 0
-      } else {
-        nextIndex = currentIndex > 0 ? currentIndex - 1 : slots.length - 1
-      }
-
-      onSelectSlot(slots[nextIndex].id)
-    }
-
-    el.addEventListener("keydown", handleKeyDown)
-    return () => el.removeEventListener("keydown", handleKeyDown)
-  }, [slots, activeSlotId, onSelectSlot])
+  // Arrow key navigation is handled by the global handler in use-run-slots.ts
 
   // Collapsed sidebar — narrow icon strip
   if (collapsed) {
@@ -98,7 +74,7 @@ export function RunsSidebar({
           role="button"
           tabIndex={0}
           onClick={onClose}
-          onKeyDown={(e) => { if (e.key === "Enter") onClose() }}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClose() } }}
           className="border-t border-border shrink-0 flex items-center justify-center py-2 cursor-pointer hover:bg-muted/50 transition-colors"
           title="Expand sidebar"
         >

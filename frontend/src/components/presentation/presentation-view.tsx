@@ -40,7 +40,6 @@ import {
   getInputNodes,
   getOutputNodes,
   getOutputType,
-  getNodeLabel,
   getNodeResult,
 } from "@/lib/presentation-utils"
 import { EXECUTABLE_TYPES, estimateNodeCredits, isExecutableNode, getFanOutMultiplier } from "@/components/editor/workflow-editor/types"
@@ -54,23 +53,18 @@ import { toast } from "sonner"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { ShareDialog } from "./share-dialog"
 import { PublishDialog } from "./publish-dialog"
+import { PublishTemplateDialog } from "@/components/templates/publish-template-dialog"
 import { NodePickerDialog } from "./node-picker-dialog"
 import { NodeConfigModal, CONFIG_INPUT_TYPES } from "./node-config-modal"
 import { PlatformPreview, PLATFORM_COLORS } from "@/components/nodes/platform-preview"
 import { PLATFORM_LABELS } from "@/lib/social-media-specs"
 import { isVideoUrl } from "@/lib/media-type"
 import { StatusBadge } from "./output-cards/shared"
+import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled } from "./helpers"
 import { RunTargetSelector } from "./run-target-selector"
 import { ViewModeSelector, ALL_VIEW_MODES } from "./view-mode-selector"
-import { TextInputCard } from "./input-cards/text-input-card"
-import { ImageUploadCard } from "./input-cards/image-upload-card"
-import { VideoUploadCard } from "./input-cards/video-upload-card"
-import { AudioUploadCard } from "./input-cards/audio-upload-card"
-import { ParameterCard } from "./input-cards/parameter-card"
-import { ImageOutputCard } from "./output-cards/image-output-card"
-import { VideoOutputCard } from "./output-cards/video-output-card"
-import { AudioOutputCard } from "./output-cards/audio-output-card"
-import { TextOutputCard } from "./output-cards/text-output-card"
+import { InputCard } from "./input-card"
+import { OutputCard } from "./output-card"
 import {
   HorizontalView,
   VerticalView,
@@ -81,33 +75,6 @@ import {
 
 const POINTER_ACTIVATION = { activationConstraint: { distance: 5 } } as const
 const VALID_VIEW_MODES = new Set<PresentationViewMode>(ALL_VIEW_MODES)
-
-/** Reorder nodes by an ID array, appending any new nodes at the end */
-function orderNodesByIds(nodes: WorkflowNode[], order: string[] | undefined): WorkflowNode[] {
-  if (!order || order.length === 0) return nodes
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]))
-  const ordered: WorkflowNode[] = []
-  for (const id of order) {
-    const node = nodeMap.get(id)
-    if (node) {
-      ordered.push(node)
-      nodeMap.delete(id)
-    }
-  }
-  for (const node of nodeMap.values()) ordered.push(node)
-  return ordered
-}
-
-/** getNodeResult that also checks input node data fields (url, text) */
-function getNodeResultWithInputFallback(node: WorkflowNode): { url?: string; text?: string } {
-  const data = node.data as Record<string, unknown>
-  const result = getNodeResult(data)
-  if (result.url || result.text) return result
-  // Input nodes store their content in data.url / data.text directly
-  const url = data.url as string | undefined
-  const text = data.text as string | undefined
-  return { url: url || undefined, text: text || undefined }
-}
 
 interface PresentationViewProps {
   mode: "tab" | "fullscreen"
@@ -135,6 +102,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false)
   const [showGetCreditsModal, setShowGetCreditsModal] = useState(false)
   const [isRemixing, setIsRemixing] = useState(false)
+  const [showPublishTemplate, setShowPublishTemplate] = useState(false)
   const [configNode, setConfigNode] = useState<WorkflowNode | null>(null)
 
   // Native fullscreen toggle (browser Fullscreen API)
@@ -305,21 +273,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // Check if all required inputs are filled (fullscreen app/embed mode only)
   const allInputsFilled = useMemo(() => {
     if (!isFullscreen) return true
-    for (const node of orderedInputNodes) {
-      const data = node.data as Record<string, unknown>
-      const nodeType = node.type ?? ""
-      // Check presInputValues first, then fall back to snapshot data
-      const inputVals = presInputValues[node.id] as Record<string, unknown> | undefined
-      if (nodeType === "text-prompt") {
-        const text = (inputVals?.text as string) ?? (data.text as string) ?? ""
-        if (!text.trim()) return false
-      } else if (nodeType === "upload-image" || nodeType === "upload-video" || nodeType === "upload-audio") {
-        const url = (inputVals?.url as string) ?? (data.url as string) ?? ""
-        if (!url) return false
-      }
-      // Parameter nodes always have defaults, so skip validation
-    }
-    return true
+    return areAllInputsFilled(orderedInputNodes, presInputValues)
   }, [isFullscreen, orderedInputNodes, presInputValues])
 
   const handleRunClick = useCallback(() => {
@@ -622,9 +576,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   }, [lightboxIndex, mediaItems])
 
   // Card meta helpers
-  const getCardTitle = useCallback((node: WorkflowNode) => {
-    return settings.cardMeta?.[node.id]?.title || getNodeLabel(node)
-  }, [settings.cardMeta])
+  const getCardTitle = useCallback(
+    (node: WorkflowNode) => getCardTitleHelper(node, settings.cardMeta),
+    [settings.cardMeta],
+  )
 
   const updateCardMeta = useCallback((nodeId: string, field: "title" | "description", value: string) => {
     const current = settings.cardMeta ?? {}
@@ -991,6 +946,22 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 updatePresentationSettings={updatePresentationSettings}
                 nodes={allPresentationNodes}
               />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPublishTemplate(true)}
+                className="border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                <LayoutGrid className="h-4 w-4 mr-1" />
+                Template
+              </Button>
+              <PublishTemplateDialog
+                workflowId={workflowId}
+                nodes={nodes.map((n) => ({ id: n.id, type: n.type ?? "", data: (n.data ?? {}) as Record<string, unknown> }))}
+                edges={edges.map((e) => ({ id: e.id, source: e.source, target: e.target }))}
+                open={showPublishTemplate}
+                onOpenChange={setShowPublishTemplate}
+              />
             </>
           )}
 
@@ -1113,145 +1084,4 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       )}
     </div>
   )
-}
-
-/** Renders the appropriate input card based on node type */
-function InputCard({
-  node,
-  isFullscreen,
-  inputValues,
-  onUpdateInput,
-  readOnly,
-  onOpenMedia,
-  onOpenConfig,
-}: {
-  node: WorkflowNode
-  isFullscreen: boolean
-  inputValues: Record<string, Record<string, unknown>>
-  onUpdateInput: (nodeId: string, key: string, value: unknown) => void
-  readOnly?: boolean
-  onOpenMedia?: (nodeId: string) => void
-  onOpenConfig?: (node: WorkflowNode) => void
-}) {
-  const label = getNodeLabel(node)
-  const data = node.data as Record<string, unknown>
-
-  // Config-type nodes open a modal with their full config panel
-  if (node.type && CONFIG_INPUT_TYPES.has(node.type)) {
-    return (
-      <button
-        type="button"
-        onClick={() => onOpenConfig?.(node)}
-        className="w-full text-left p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
-      >
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">Click to configure</p>
-      </button>
-    )
-  }
-
-  switch (node.type) {
-    case "text-prompt":
-      return (
-        <TextInputCard
-          label={label}
-          value={isFullscreen ? (inputValues[node.id]?.text as string ?? data.text as string ?? "") : (data.text as string ?? "")}
-          placeholder={(data.placeholder as string) ?? "Enter text..."}
-          onChange={(val) => {
-            if (isFullscreen) {
-              onUpdateInput(node.id, "text", val)
-            } else {
-              useWorkflowStore.getState().updateNodeData(node.id, { text: val })
-            }
-          }}
-          readOnly={readOnly}
-        />
-      )
-
-    case "upload-image":
-      return (
-        <ImageUploadCard
-          label={label}
-          url={(data.url as string) ?? undefined}
-          nodeId={node.id}
-          isFullscreen={isFullscreen}
-          inputValues={inputValues}
-          onUpdateInput={onUpdateInput}
-          readOnly={readOnly}
-          onOpenMedia={onOpenMedia}
-        />
-      )
-
-    case "upload-video":
-      return (
-        <VideoUploadCard
-          label={label}
-          url={(data.url as string) ?? undefined}
-          nodeId={node.id}
-          isFullscreen={isFullscreen}
-          inputValues={inputValues}
-          onUpdateInput={onUpdateInput}
-          readOnly={readOnly}
-        />
-      )
-
-    case "upload-audio":
-      return (
-        <AudioUploadCard
-          label={label}
-          url={(data.url as string) ?? undefined}
-          nodeId={node.id}
-          isFullscreen={isFullscreen}
-          inputValues={inputValues}
-          onUpdateInput={onUpdateInput}
-          readOnly={readOnly}
-        />
-      )
-
-    default:
-      return (
-        <ParameterCard
-          nodeId={node.id}
-          label={label}
-          nodeType={node.type!}
-          data={data}
-          isFullscreen={isFullscreen}
-          inputValues={inputValues}
-          onUpdateInput={onUpdateInput}
-          readOnly={readOnly}
-        />
-      )
-  }
-}
-
-/** Renders the appropriate output card based on output type */
-function OutputCard({
-  nodeId,
-  label,
-  outputType,
-  status,
-  url,
-  text,
-  onOpenMedia,
-}: {
-  nodeId: string
-  label: string
-  outputType: string
-  status: "idle" | "running" | "completed" | "failed"
-  url?: string
-  text?: string
-  onOpenMedia?: (nodeId: string) => void
-}) {
-  switch (outputType) {
-    case "image":
-      return <ImageOutputCard label={label} status={status} url={url} nodeId={nodeId} onOpenMedia={onOpenMedia} />
-    case "video":
-      return <VideoOutputCard label={label} status={status} url={url} nodeId={nodeId} onOpenMedia={onOpenMedia} />
-    case "audio":
-      return <AudioOutputCard label={label} status={status} url={url} />
-    case "text":
-      return <TextOutputCard label={label} status={status} text={text} />
-    default:
-      return <TextOutputCard label={label} status={status} text={text ?? url} />
-  }
 }

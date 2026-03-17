@@ -100,6 +100,7 @@ import { apiTokenRoutes } from "./routes/api-tokens.js"
 import { socialAuthRoutes } from "./routes/social-auth.js"
 import { socialPublishRoutes } from "./routes/social-publish.js"
 import { publishedAppsRoutes } from "./routes/published-apps.js"
+import { workflowTemplatesRoutes } from "./routes/workflow-templates.js"
 import { appRunnerRoutes } from "./routes/app-runner.js"
 import { appAnalyticsRoutes } from "./routes/app-analytics.js"
 import { embedRoutes } from "./routes/embed.js"
@@ -233,6 +234,7 @@ export async function buildApp() {
   await app.register(socialAuthRoutes)
   await app.register(socialPublishRoutes)
   await app.register(publishedAppsRoutes)
+  await app.register(workflowTemplatesRoutes)
   await app.register(appRunnerRoutes)
   await app.register(appAnalyticsRoutes)
   await app.register(embedRoutes)

@@ -105,7 +105,7 @@ export function RunSlotItem({
   const [editValue, setEditValue] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const startEditing = useCallback((e: React.MouseEvent) => {
+  const startEditing = useCallback((e: React.SyntheticEvent) => {
     e.stopPropagation()
     setEditValue(slot.name ?? "")
     setEditing(true)
@@ -182,7 +182,7 @@ export function RunSlotItem({
                       role="button"
                       tabIndex={0}
                       onClick={startEditing}
-                      onKeyDown={(e) => { if (e.key === "Enter") startEditing(e as unknown as React.MouseEvent) }}
+                      onKeyDown={(e) => { if (e.key === "Enter") startEditing(e) }}
                       className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded transition-all shrink-0 cursor-pointer"
                       title="Rename"
                     >

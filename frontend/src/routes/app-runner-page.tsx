@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { useParams, useSearchParams, Link } from "react-router-dom"
 import { Loader2, Clock } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
+import { useIsMobile } from "@/hooks/use-is-mobile"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
@@ -15,7 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "@/hooks/use-workflow-store"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import { useRunSlots, AppRunnerLayout, RunsSidebar, ORIGINAL_SLOT_ID } from "@/components/app-runner"
+import { useRunSlots, AppRunnerLayout, RunsSidebar, MobileAppShell, ORIGINAL_SLOT_ID } from "@/components/app-runner"
 
 export default function AppRunnerPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -59,6 +60,8 @@ export default function AppRunnerPage() {
   // Run slots hook — all slot state, CRUD, DB sync
   const runSlots = useRunSlots({ slug, user, persistRuns: !!user, initialRunId, initialSidebar })
 
+  const isMobile = useIsMobile()
+
   // Loading / error states — show spinner until app is loaded (no blank flash)
   if (errorMessage && !app) {
     return (
@@ -79,6 +82,42 @@ export default function AppRunnerPage() {
       <div className="flex h-[100dvh] items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
+    )
+  }
+
+  const deleteDialog = (
+    <Dialog open={runSlots.deleteConfirmSlotId !== null} onOpenChange={(open) => { if (!open) runSlots.setDeleteConfirmSlotId(null) }}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Delete Run</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Are you sure you want to delete this run? This action cannot be undone.
+        </p>
+        <DialogFooter className="flex gap-2 sm:justify-end">
+          <Button variant="outline" onClick={() => runSlots.setDeleteConfirmSlotId(null)} autoFocus>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={runSlots.handleConfirmDelete}>
+            Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+
+  if (isMobile) {
+    return (
+      <>
+        <MobileAppShell
+          app={app}
+          user={user ?? null}
+          runSlots={runSlots}
+          cancel={cancel}
+          initialRunId={initialRunId}
+        />
+        {deleteDialog}
+      </>
     )
   }
 
@@ -128,26 +167,7 @@ export default function AppRunnerPage() {
           ) : null
         }
       />
-
-      {/* Delete confirmation dialog */}
-      <Dialog open={runSlots.deleteConfirmSlotId !== null} onOpenChange={(open) => { if (!open) runSlots.setDeleteConfirmSlotId(null) }}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete Run</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Are you sure you want to delete this run? This action cannot be undone.
-          </p>
-          <DialogFooter className="flex gap-2 sm:justify-end">
-            <Button variant="outline" onClick={() => runSlots.setDeleteConfirmSlotId(null)} autoFocus>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={runSlots.handleConfirmDelete}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {deleteDialog}
     </AppRunnerLayout>
   )
 }
