@@ -21,6 +21,7 @@ import {
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { AI_WRITER_TEMPLATES, getAIWriterTemplate } from "@/lib/ai-writer-templates"
 import type { AIWriterNodeData } from "@/types/nodes"
+import { LlmModelSelect } from "./llm-model-select"
 import type { ConfigProps } from "./types"
 
 export function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
@@ -147,6 +148,11 @@ export function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>
                 </SelectContent>
               </Select>
             </div>
+            <LlmModelSelect
+              feature="ai-writer"
+              value={data.llmModel}
+              onChange={(v) => onUpdate({ llmModel: v })}
+            />
             <div>
               <Label className="text-xs text-muted-foreground">Temperature: {data.temperature.toFixed(1)}</Label>
               <input

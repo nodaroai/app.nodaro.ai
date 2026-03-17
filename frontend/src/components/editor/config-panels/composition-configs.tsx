@@ -32,6 +32,7 @@ import type {
   CompositeLayerConfig,
   RenderVideoData,
 } from "@/types/nodes"
+import { LlmModelSelect } from "./llm-model-select"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 import {
@@ -49,6 +50,12 @@ export function VideoComposerConfig({ data, onUpdate, sources, fieldMappings, on
   return (
     <div className="flex flex-col gap-3">
       <MediaOrderList sensors={sensors} orderedIds={orderedIds} orderedSources={orderedSources} onDragEnd={handleDragEnd} />
+
+      <LlmModelSelect
+        feature="scene-graph-ai"
+        value={data.llmModel}
+        onChange={(v) => onUpdate({ llmModel: v })}
+      />
 
       <MappableField field="compositionPrompt" label="Composition Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
@@ -90,6 +97,12 @@ const LazyAfterEffectsPlayerPreview = lazy(() => import("@/components/editor/aft
 export function AfterEffectsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<AfterEffectsData>) {
   return (
     <div className="flex flex-col gap-3">
+      <LlmModelSelect
+        feature="after-effects"
+        value={data.llmModel}
+        onChange={(v) => onUpdate({ llmModel: v })}
+      />
+
       <MappableField field="effectPrompt" label="Effect Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
           placeholder="Describe the look: cinematic film grain with warm color grading, vignette, letterbox..."
@@ -165,6 +178,12 @@ const LazyLottieOverlayPreview = lazy(() => import("@/components/editor/lottie-o
 export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<LottieOverlayData>) {
   return (
     <div className="flex flex-col gap-3">
+      <LlmModelSelect
+        feature="lottie-overlay"
+        value={data.llmModel}
+        onChange={(v) => onUpdate({ llmModel: v })}
+      />
+
       <MappableField field="overlayPrompt" label="Overlay Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
           placeholder="Describe overlays: add confetti at 3 seconds, floating particles throughout..."
@@ -232,6 +251,12 @@ const LazyThreeDTitlePreview = lazy(() => import("@/components/editor/three-d-ti
 export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<ThreeDTitleData>) {
   return (
     <div className="flex flex-col gap-3">
+      <LlmModelSelect
+        feature="3d-title"
+        value={data.llmModel}
+        onChange={(v) => onUpdate({ llmModel: v })}
+      />
+
       <MappableField field="titlePrompt" label="Title Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
           placeholder="Describe the 3D title: epic gold ADVENTURE text with particles, cinematic camera..."
@@ -327,6 +352,12 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
 
   return (
     <div className="flex flex-col gap-3">
+      <LlmModelSelect
+        feature="motion-graphics"
+        value={data.llmModel}
+        onChange={(v) => onUpdate({ llmModel: v })}
+      />
+
       <MappableField field="motionPrompt" label="Motion Graphics Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <div className="flex items-center justify-end mb-1.5">
           <button

@@ -4,7 +4,8 @@ import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../billing/credits.js"
-import { getAnthropicClient, CLAUDE_MODEL } from "../lib/anthropic.js"
+import { llmComplete } from "../lib/llm-client.js"
+import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
 const qaCheckBody = z.object({
@@ -14,6 +15,7 @@ const qaCheckBody = z.object({
     .default("content"),
   provider: z.enum(["claude", "gpt"]).default("claude"),
   threshold: z.number().min(0).max(1).default(0.7),
+  llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
 })
 
 const SYSTEM_PROMPTS: Record<string, string> = {
@@ -31,7 +33,7 @@ export async function qaCheckRoutes(app: FastifyInstance) {
   app.post(
     "/v1/qa-check",
     {
-      preHandler: creditGuard(() => "qa-check"),
+      preHandler: creditGuard((req) => resolveLlmCreditId("qa-check", req.body)),
     },
     async (req, reply) => {
       const parsed = qaCheckBody.safeParse(req.body)
@@ -53,25 +55,17 @@ export async function qaCheckRoutes(app: FastifyInstance) {
         })
       }
 
-      if (provider === "gpt") {
+      if (!config.KIE_API_KEY && !config.ANTHROPIC_API_KEY) {
         return reply.status(503).send({
           error: {
             code: "provider_unavailable",
-            message: "GPT provider is not yet supported for QA checks",
+            message: "LLM API key not configured",
           },
         })
       }
 
-      if (!config.ANTHROPIC_API_KEY) {
-        return reply.status(503).send({
-          error: {
-            code: "provider_unavailable",
-            message: "Anthropic API key not configured",
-          },
-        })
-      }
-
-      const modelIdentifier = "qa-check"
+      const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["qa-check"]
+      const modelIdentifier = buildLlmCreditIdentifier("qa-check", llmModel)
 
       // Create a job record for audit trail
       const { data: job, error: jobError } = await supabase
@@ -108,31 +102,19 @@ export async function qaCheckRoutes(app: FastifyInstance) {
       const usageLogId = reservation?.usageLogId
 
       try {
-        const anthropic = getAnthropicClient()
         const systemPrompt = `You are a QA evaluation assistant. ${SYSTEM_PROMPTS[checkType]}
 
 You MUST respond with ONLY a valid JSON object in this exact format, no other text:
 {"score": <number 0.0-1.0>, "approved": <true if score >= ${threshold}, false otherwise>, "reason": "<brief explanation>"}`
 
-        const response = await anthropic.messages.create({
-          model: CLAUDE_MODEL,
-          max_tokens: 1024,
+        const response = await llmComplete({
+          modelId: llmModel,
           system: systemPrompt,
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: `Evaluate the following content:\n\n${content}`,
-                },
-              ],
-            },
-          ],
+          messages: [{ role: "user", content: `Evaluate the following content:\n\n${content}` }],
+          maxTokens: 1024,
         })
 
-        const textBlock = response.content.find((b) => b.type === "text")
-        const rawText = textBlock?.text ?? ""
+        const rawText = response.text
 
         // Parse the JSON response from Claude, with fallback
         let score = 0.5

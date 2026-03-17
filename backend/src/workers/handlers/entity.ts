@@ -63,17 +63,18 @@ function makeEntityImageHandler(
 }
 
 const handleGenerateScript: HandlerFn = async function handleGenerateScript(job, ctx) {
-  const { prompt, sceneCount, tone, targetDuration, provider } = job.data as {
+  const { prompt, sceneCount, tone, targetDuration, provider, llmModel } = job.data as {
     jobId: string
     prompt: string
     sceneCount?: number
     tone?: string
     targetDuration?: number
     provider?: ScriptProvider
+    llmModel?: string
   }
-  console.log(`[worker] generate-script ${ctx.jobId} (provider: ${provider ?? "gemini"})`)
+  console.log(`[worker] generate-script ${ctx.jobId} (model: ${llmModel ?? provider ?? "default"})`)
 
-  const script = await generateScript(prompt, sceneCount, tone, targetDuration, provider)
+  const script = await generateScript(prompt, sceneCount, tone, targetDuration, provider, llmModel)
   await job.updateProgress(100)
 
   if (!await shouldSaveJobResult(ctx.jobId)) return

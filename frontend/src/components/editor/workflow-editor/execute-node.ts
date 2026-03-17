@@ -317,6 +317,7 @@ export function executeNode(
       scriptData.tone || undefined,
       scriptData.targetLength || undefined,
       scriptData.provider || undefined,
+      scriptData.llmModel || undefined,
     );
   }
 
@@ -1771,6 +1772,7 @@ export function executeNode(
       itData.detailLevel || "detailed",
       inputs.prompt || itData.customPrompt || undefined,
       ctx.userId,
+      itData.llmModel,
     )
       .then((result) => {
         const existingResults =
@@ -1868,6 +1870,7 @@ export function executeNode(
       model: writerData.model || "claude-sonnet-4-5-20250929",
       temperature: writerData.temperature ?? 0.7,
       maxTokens: writerData.maxTokens ?? 4096,
+      llmModel: writerData.llmModel,
       onToken: (token) => {
         const fresh = useWorkflowStore
           .getState()
@@ -2608,6 +2611,7 @@ export function executeNode(
       aspectRatio: d.aspectRatio,
       durationSeconds: d.durationSeconds,
       userId: ctx.userId,
+      llmModel: d.llmModel,
     })
       .then((result) => {
         updateNodeData(node.id, {
@@ -2659,6 +2663,7 @@ export function executeNode(
       height: aeHeight,
       durationSeconds: d.durationSeconds,
       userId: ctx.userId,
+      llmModel: d.llmModel,
     })
       .then((result) => {
         updateNodeData(node.id, {
@@ -2725,6 +2730,7 @@ export function executeNode(
       durationSeconds: d.durationSeconds,
       lottieAssets: lottieAssets.length > 0 ? lottieAssets : undefined,
       userId: ctx.userId,
+      llmModel: d.llmModel,
     })
       .then((result) => {
         updateNodeData(node.id, {
@@ -2785,6 +2791,7 @@ export function executeNode(
       backgroundColor: d.backgroundColor,
       backgroundMediaUrl,
       userId: ctx.userId,
+      llmModel: d.llmModel,
     })
       .then((result) => {
         updateNodeData(node.id, {
@@ -2820,6 +2827,7 @@ export function executeNode(
       durationSeconds: d.durationSeconds,
       backgroundColor: d.backgroundColor,
       userId: ctx.userId!,
+      llmModel: d.llmModel,
     })
       .then((result) => {
         updateNodeData(node.id, {
@@ -3443,6 +3451,7 @@ export function executeNode(
       checkType: d.checkType || "content",
       provider: d.provider || "claude",
       threshold: d.threshold ?? 0.7,
+      llmModel: d.llmModel,
     }).then(
       (result) => {
         updateNodeData(node.id, {

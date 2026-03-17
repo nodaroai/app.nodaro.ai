@@ -427,6 +427,7 @@ export type GenerateScriptData = {
   label: string
   provider: ScriptProvider
   model: string
+  llmModel?: string
   sceneCount: number
   styleGuide: string
   structure: "freeform" | "8-step" | "custom"
@@ -750,6 +751,7 @@ export type QACheckData = {
   provider: QaCheckProvider
   checkType: "content" | "quality" | "consistency" | "safety"
   threshold: number
+  llmModel?: string
   fieldMappings: FieldMappings
 }
 
@@ -1161,6 +1163,7 @@ export type ImageToTextData = {
   label: string
   detailLevel: "brief" | "detailed" | "structured"
   customPrompt: string
+  llmModel?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1362,6 +1365,7 @@ export type VideoComposerData = {
   durationSeconds: number
   backgroundColor: string
   assetOrder?: string[]
+  llmModel?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1375,6 +1379,7 @@ export type AfterEffectsData = {
   inputVideoUrl?: string
   width?: number
   height?: number
+  llmModel?: string
   fps: number
   durationSeconds: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -1390,6 +1395,7 @@ export type LottieOverlayData = {
   width?: number
   height?: number
   lottieAssets?: Array<{ id: string; url: string; name: string; durationSeconds?: number }>
+  llmModel?: string
   fps: number
   durationSeconds: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -1404,6 +1410,7 @@ export type ThreeDTitleData = {
   aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
   backgroundColor: string
   backgroundMediaUrl?: string
+  llmModel?: string
   fps: number
   durationSeconds: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -1417,6 +1424,7 @@ export type MotionGraphicsData = {
   motionPlan?: Record<string, unknown>
   aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
   backgroundColor: string
+  llmModel?: string
   fps: number
   durationSeconds: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -1714,6 +1722,7 @@ export type AIWriterNodeData = {
   userInput: string
   provider: AiWriterProvider
   model: string
+  llmModel?: string
   temperature: number
   maxTokens: number
   fieldMappings: FieldMappings

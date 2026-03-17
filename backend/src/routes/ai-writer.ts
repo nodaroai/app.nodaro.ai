@@ -5,7 +5,8 @@ import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../billing/credits.js"
 import { createSSEStream } from "../lib/sse.js"
-import { getAnthropicClient } from "../lib/anthropic.js"
+import { llmComplete, llmStream } from "../lib/llm-client.js"
+import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { AI_WRITER_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
@@ -17,6 +18,7 @@ const aiWriterBody = z.object({
   temperature: z.number().min(0).max(2).default(0.7),
   maxTokens: z.number().min(1).max(16384).default(4096),
   userId: z.string().uuid().optional(),
+  llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
 })
 
 export async function aiWriterRoutes(app: FastifyInstance) {
@@ -27,7 +29,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
   app.post(
     "/v1/ai-writer/generate",
     {
-      preHandler: creditGuard(() => "ai-writer"),
+      preHandler: creditGuard((req) => resolveLlmCreditId("ai-writer", req.body)),
       config: { requestTimeout: 120000 } as Record<string, unknown>,
     },
     async (req, reply) => {
@@ -45,7 +47,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         })
       }
 
-      const { systemPrompt, userInput, model, temperature, maxTokens } =
+      const { systemPrompt, userInput, temperature, maxTokens } =
         parsed.data
       const userId = req.userId
 
@@ -55,16 +57,17 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         })
       }
 
-      if (!config.ANTHROPIC_API_KEY) {
+      if (!config.KIE_API_KEY && !config.ANTHROPIC_API_KEY) {
         return reply.status(503).send({
           error: {
             code: "provider_unavailable",
-            message: "Anthropic API key not configured",
+            message: "LLM API key not configured",
           },
         })
       }
 
-      const modelIdentifier = "ai-writer"
+      const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["ai-writer"]
+      const modelIdentifier = buildLlmCreditIdentifier("ai-writer", llmModel)
 
       // Create a job record for audit trail
       const { data: job, error: jobError } = await supabase
@@ -78,7 +81,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
             type: "ai-writer",
             systemPrompt,
             userInput,
-            model,
+            llmModel,
             temperature,
             maxTokens,
           },
@@ -92,8 +95,6 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         })
       }
 
-      console.log("[ai-writer] Job inserted:", job.id)
-
       // Reserve credits
       const reservation = await reserveCreditsForJob(
         req,
@@ -104,51 +105,34 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      // Call Anthropic Claude API synchronously
       try {
-        const anthropic = getAnthropicClient()
-
-        console.log("[ai-writer] Calling Anthropic API with model:", model, "maxTokens:", maxTokens)
-
-        const response = await anthropic.messages.create({
-          model,
-          max_tokens: maxTokens,
-          temperature,
+        const response = await llmComplete({
+          modelId: llmModel,
           system: systemPrompt,
           messages: [{ role: "user", content: userInput }],
+          maxTokens,
+          temperature,
         })
 
-        console.log("[ai-writer] Success, output tokens:", response.usage.output_tokens, "stop_reason:", response.stop_reason)
-
-        // Extract text from response
-        const textBlock = response.content.find((b) => b.type === "text")
-        const generatedText = textBlock?.text ?? ""
+        const generatedText = response.text
 
         // Finalize job and credits
         try {
-          const { error: updateError } = await supabase
+          await supabase
             .from("jobs")
             .update({
               status: "completed",
-              output_data: { generatedText, model, usage: response.usage },
+              output_data: { generatedText, model: llmModel, usage: response.usage },
             })
             .eq("id", job.id)
 
-          if (updateError) {
-            console.error("[ai-writer] Supabase job update error:", updateError.message)
-          } else {
-            console.log("[ai-writer] Job marked completed")
-          }
-
           if (usageLogId) {
             await CreditsService.commitCredits(usageLogId)
-            console.log("[ai-writer] Credits finalized")
           }
         } catch (postErr) {
           console.error("[ai-writer] Post-API error:", postErr)
         }
 
-        console.log("[ai-writer] Sending response, text length:", generatedText.length)
         return reply.send({ jobId: job.id, generatedText })
       } catch (err) {
         const message =
@@ -179,7 +163,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
   app.post(
     "/v1/ai-writer/generate-stream",
     {
-      preHandler: creditGuard(() => "ai-writer"),
+      preHandler: creditGuard((req) => resolveLlmCreditId("ai-writer", req.body)),
       config: { requestTimeout: 120000 } as Record<string, unknown>,
     },
     async (req, reply) => {
@@ -196,7 +180,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         })
       }
 
-      const { systemPrompt, userInput, model, temperature, maxTokens } =
+      const { systemPrompt, userInput, temperature, maxTokens } =
         parsed.data
       const userId = req.userId
 
@@ -206,16 +190,17 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         })
       }
 
-      if (!config.ANTHROPIC_API_KEY) {
+      if (!config.KIE_API_KEY && !config.ANTHROPIC_API_KEY) {
         return reply.status(503).send({
           error: {
             code: "provider_unavailable",
-            message: "Anthropic API key not configured",
+            message: "LLM API key not configured",
           },
         })
       }
 
-      const modelIdentifier = "ai-writer"
+      const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["ai-writer"]
+      const modelIdentifier = buildLlmCreditIdentifier("ai-writer", llmModel)
 
       // Create job record
       const { data: job, error: jobError } = await supabase
@@ -229,7 +214,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
             type: "ai-writer-stream",
             systemPrompt,
             userInput,
-            model,
+            llmModel,
             temperature,
             maxTokens,
           },
@@ -242,8 +227,6 @@ export async function aiWriterRoutes(app: FastifyInstance) {
           error: { code: "internal_error", message: jobError.message },
         })
       }
-
-      console.log("[ai-writer-stream] Job inserted:", job.id)
 
       // Reserve credits
       const reservation = await reserveCreditsForJob(
@@ -260,42 +243,33 @@ export async function aiWriterRoutes(app: FastifyInstance) {
 
       sse.sendEvent({
         type: "metadata",
-        data: { jobId: job.id, model, maxTokens },
+        data: { jobId: job.id, model: llmModel, maxTokens },
       })
 
-      const anthropic = getAnthropicClient()
+      // Abort upstream LLM stream when client disconnects
+      const abortController = new AbortController()
+      req.raw.on("close", () => abortController.abort())
+
       let fullText = ""
 
-      console.log(
-        "[ai-writer-stream] Starting stream, model:",
-        model,
-        "maxTokens:",
-        maxTokens,
-      )
-
       try {
-        const stream = anthropic.messages.stream({
-          model,
-          max_tokens: maxTokens,
-          temperature,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userInput }],
-        })
-
-        stream.on("text", (delta) => {
-          if (sse.isClosed) {
-            stream.abort()
-            return
-          }
-          fullText += delta
-          sse.sendEvent({ type: "token", data: delta })
-        })
-
-        // Wait for the stream to finish
-        const finalMessage = await stream.finalMessage()
+        const finalResponse = await llmStream(
+          {
+            modelId: llmModel,
+            system: systemPrompt,
+            messages: [{ role: "user", content: userInput }],
+            maxTokens,
+            temperature,
+          },
+          (delta) => {
+            if (sse.isClosed) return
+            fullText += delta
+            sse.sendEvent({ type: "token", data: delta })
+          },
+          abortController.signal,
+        )
 
         if (sse.isClosed) {
-          console.log("[ai-writer-stream] Client disconnected during stream")
           // Still finalize job and credits even if client disconnected
           await supabase
             .from("jobs")
@@ -303,8 +277,8 @@ export async function aiWriterRoutes(app: FastifyInstance) {
               status: "completed",
               output_data: {
                 generatedText: fullText,
-                model,
-                usage: finalMessage.usage,
+                model: llmModel,
+                usage: finalResponse.usage,
               },
             })
             .eq("id", job.id)
@@ -315,35 +289,22 @@ export async function aiWriterRoutes(app: FastifyInstance) {
           return
         }
 
-        console.log(
-          "[ai-writer-stream] Complete, tokens:",
-          finalMessage.usage.output_tokens,
-        )
-
         // Finalize job
-        const { error: updateError } = await supabase
+        await supabase
           .from("jobs")
           .update({
             status: "completed",
             output_data: {
               generatedText: fullText,
-              model,
-              usage: finalMessage.usage,
+              model: llmModel,
+              usage: finalResponse.usage,
             },
           })
           .eq("id", job.id)
 
-        if (updateError) {
-          console.error(
-            "[ai-writer-stream] Job update error:",
-            updateError.message,
-          )
-        }
-
         // Commit credits
         if (usageLogId) {
           await CreditsService.commitCredits(usageLogId)
-          console.log("[ai-writer-stream] Credits finalized")
         }
 
         sse.sendEvent({
@@ -351,7 +312,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
           data: {
             jobId: job.id,
             generatedText: fullText,
-            usage: finalMessage.usage,
+            usage: finalResponse.usage,
           },
         })
         sse.close()

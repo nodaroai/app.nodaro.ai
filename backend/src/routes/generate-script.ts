@@ -5,6 +5,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { SCRIPT_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
+import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId } from "../../../packages/shared/src/llm-models.js"
 
 const generateScriptBody = z.object({
   prompt: z.string().min(1).max(10000),
@@ -13,10 +14,11 @@ const generateScriptBody = z.object({
   targetDuration: z.number().int().min(5).max(600).optional(),
   provider: z.enum(SCRIPT_PROVIDERS).optional(),
   userId: z.string().uuid().optional(),
+  llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
 })
 
 export async function generateScriptRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-script", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return (body?.provider as string) ?? "generate-script" }) }, async (req, reply) => {
+  app.post("/v1/generate-script", { preHandler: creditGuard((req) => resolveLlmCreditId("generate-script", req.body)) }, async (req, reply) => {
     const parsed = generateScriptBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -27,7 +29,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, sceneCount, tone, targetDuration, provider } = parsed.data
+    const { prompt, sceneCount, tone, targetDuration, provider, llmModel } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -36,8 +38,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       })
     }
 
-    // Determine model identifier for credit check (default to gemini)
-    const modelIdentifier = provider ?? "generate-script"
+    const modelIdentifier = buildLlmCreditIdentifier("generate-script", llmModel)
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -46,7 +47,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { prompt, sceneCount, tone, targetDuration, provider, type: "generate-script" },
+        input_data: { prompt, sceneCount, tone, targetDuration, provider, llmModel, type: "generate-script" },
       })
       .select("id")
       .single()
@@ -69,6 +70,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       tone,
       targetDuration,
       provider,
+      llmModel,
       usageLogId,
     })
 

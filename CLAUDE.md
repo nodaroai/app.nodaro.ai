@@ -185,7 +185,7 @@ frontend/src/
   components/integrations/ — Platform OAuth connect/disconnect cards
   types/nodes.ts          — Node data types
 
-packages/shared/          — Shared pure logic between frontend & backend (model-constants, prompt-templates, ancestor-refs, credit-identifiers, prompt-builder, types)
+packages/shared/          — Shared pure logic between frontend & backend (model-constants, prompt-templates, ancestor-refs, credit-identifiers, prompt-builder, llm-models, types)
 packages/remotion/        — Remotion compositions (slideshow, explainer, social-reel, documentary, scene-graph, after-effects, lottie-overlay, 3d-title, motion-graphics, composite)
 
 backend/src/
@@ -204,6 +204,7 @@ backend/src/
   workers/orchestrator-worker.ts — Main orchestrator BullMQ worker
   middleware/             — credit-guard.ts, auth.ts (JWT verification + 5-min SHA-256 cache)
   lib/config.ts           — Env config + edition helpers
+  lib/llm-client.ts       — Unified LLM client (KIE.ai chat-completions/messages/responses + Anthropic fallback)
   lib/request-helpers.ts  — `extractWorkflowId(body)` — reads optional workflowId from request body for single-node job tracking
   lib/admin-check.ts      — Shared cached admin check (30s TTL)
   lib/app-settings.ts     — Settings cache (60s TTL, stampede-safe)
@@ -238,7 +239,8 @@ backend/src/
 | Video extend | VEO Extend + Runway Extend via KIE.ai | `POST /v1/extend-video` (40/32 credits), requires upstream `kieTaskId` from VEO/Runway generation; new `extend-video` node type with provider-specific params (model/seeds for VEO, quality for Runway) |
 | Media processing | FFmpeg in worker | 12 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale), 0 credits |
 | Image generation | Per-model params via `model-options.ts` | Config panel layout: Provider → Prompt → Style → Negative Prompt → Assets → Model Settings; style uses `IMAGE_STYLE_PRESETS` dropdown (16 presets) + "Custom..." free text; aspect ratios, resolution (Flux/Nano Banana 2), quality (GPT Image/Seedream) filtered per provider; Nano Banana v1 uses `image_size` (not `aspect_ratio`) and has no `resolution`; Nano Banana 2 uses native `aspect_ratio` with 1K/2K/4K resolution; `output_format` only sent to Nano Banana family; Flux Kontext/Max use own aspect ratio set (1:1, 16:9, 9:16, 4:3, 3:4, 21:9); style appended to prompt at execution; `negative_prompt` sent natively for imagen4/ideogram/qwen, appended as "Avoid: ..." for others; Ideogram uses `reference_image_urls` for character refs; reference image UI hidden for models that don't support it (`MODELS_WITH_REFERENCE_IMAGE_SUPPORT`: nano-banana, nano-banana-pro, ideogram only) |
-| Translation | Gemini Flash via Replicate | Creative prompt translation |
+| LLM routing | KIE.ai unified client + Anthropic fallback | `packages/shared/src/llm-models.ts` (model registry), `backend/src/lib/llm-client.ts` (3 format adapters: chat-completions, messages, responses); 7 models across 3 tiers (economy/standard/premium); all 10 LLM routes + translate migrated; `LlmModelSelect` component in all LLM config panels |
+| Translation | Gemini Flash via KIE.ai | Creative prompt translation (migrated from Replicate to unified LLM client) |
 | Composition preview | `@remotion/player` in frontend | Lazy-loaded Player preview for After Effects + Motion Graphics config panels; `@remotion-pkg` Vite alias resolves `packages/remotion/src`; `resolve.dedupe` prevents duplicate remotion bundles |
 | Undo/redo | Zustand snapshot stack (50 max), 300ms debounce | `undo-flags.ts` shared skip flag prevents execution updates (status/progress/results via `EXECUTION_DATA_KEYS`) from creating undo entries; `_isRestoring` flag prevents restore from triggering subscription; `loadGeneration` counter clears history only on workflow load/switch, not on auto-save `markClean()` |
 | Settings cache | 60s TTL, stampede-safe | Reduce DB queries, mutex prevents stampede |
@@ -290,4 +292,4 @@ backend/src/
 ---
 
 *Last updated: 2026-03-17*
-*Version: 1.56.1*
+*Version: 1.57.0*

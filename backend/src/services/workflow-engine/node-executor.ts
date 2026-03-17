@@ -16,6 +16,7 @@ import { CreditsService } from "../../billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
 import { buildPayload, type WorkflowSettings } from "./payload-builder.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
+
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
 import type {
@@ -72,7 +73,7 @@ const SYNC_HTTP_ROUTES: Record<string, string> = {
   "facebook-post": "/v1/social/publish",
 }
 
-// Model identifiers for sync HTTP routes
+// Base model identifiers for sync HTTP routes (LLM nodes use dynamic identifiers)
 const SYNC_HTTP_MODEL_IDS: Record<string, string> = {
   "ai-writer": "ai-writer",
   "video-composer": "scene-graph-ai",
@@ -274,14 +275,10 @@ function buildSyncHttpBody(
   switch (node.type) {
     case "ai-writer":
       return {
-        // data.systemPrompt is the primary field (matches frontend), data.template is legacy fallback
         systemPrompt: data.systemPrompt || data.template,
-        // data.userInput is the primary field (matches frontend), data.prompt is legacy fallback
         userInput: resolvedInputs.prompt || data.userInput || data.prompt,
         userId: ctx.userId,
-        // Frontend defaults to claude-sonnet-4-5-20250929 when no model is set
-        model: data.model || "claude-sonnet-4-5-20250929",
-        // Match frontend defaults (execute-node.ts): temperature 0.7, maxTokens 4096
+        llmModel: data.llmModel,
         temperature: data.temperature ?? 0.7,
         maxTokens: data.maxTokens ?? 4096,
       }
@@ -306,7 +303,6 @@ function buildSyncHttpBody(
         assets.push({ id: `aud_${assets.length}`, type: "audio", url: resolvedInputs.audioUrl })
       }
       return {
-        // Frontend uses data.compositionPrompt (type-specific field)
         prompt: resolvedInputs.prompt || data.compositionPrompt || data.prompt,
         assets: assets.length > 0 ? assets : undefined,
         videoUrl: resolvedInputs.videoUrl,
@@ -315,19 +311,20 @@ function buildSyncHttpBody(
         fps: data.fps,
         aspectRatio: data.aspectRatio,
         durationSeconds: data.durationSeconds,
+        llmModel: data.llmModel,
         userId: ctx.userId,
       }
     }
 
     case "after-effects":
       return {
-        // Frontend uses data.effectPrompt (type-specific field)
         prompt: resolvedInputs.prompt || data.effectPrompt || data.prompt,
         videoUrl: resolvedInputs.videoUrl || data.sourceVideoUrl,
         fps: data.fps,
         width: data.width,
         height: data.height,
         durationSeconds: data.durationSeconds,
+        llmModel: data.llmModel,
         userId: ctx.userId,
       }
 
@@ -339,7 +336,6 @@ function buildSyncHttpBody(
         lottieAssets.push(...(data.lottieAssets as Array<{ url: string; name?: string }>))
       }
       return {
-        // Frontend uses data.overlayPrompt (type-specific field)
         prompt: resolvedInputs.prompt || data.overlayPrompt || data.prompt,
         videoUrl: resolvedInputs.videoUrl || data.sourceVideoUrl,
         lottieAssets: lottieAssets.length > 0 ? lottieAssets : undefined,
@@ -347,13 +343,13 @@ function buildSyncHttpBody(
         width: data.width,
         height: data.height,
         durationSeconds: data.durationSeconds,
+        llmModel: data.llmModel,
         userId: ctx.userId,
       }
     }
 
     case "3d-title":
       return {
-        // Frontend uses data.titlePrompt (type-specific field)
         prompt: resolvedInputs.prompt || data.titlePrompt || data.prompt,
         backgroundMediaUrl: resolvedInputs.videoUrl || resolvedInputs.imageUrl || data.backgroundMediaUrl,
         fps: data.fps,
@@ -362,12 +358,12 @@ function buildSyncHttpBody(
         height: data.height,
         durationSeconds: data.durationSeconds,
         backgroundColor: data.backgroundColor,
+        llmModel: data.llmModel,
         userId: ctx.userId,
       }
 
     case "motion-graphics":
       return {
-        // Frontend uses data.motionPrompt (type-specific field)
         prompt: resolvedInputs.prompt || data.motionPrompt || data.prompt,
         fps: data.fps,
         aspectRatio: data.aspectRatio,
@@ -375,6 +371,7 @@ function buildSyncHttpBody(
         height: data.height,
         durationSeconds: data.durationSeconds,
         backgroundColor: data.backgroundColor,
+        llmModel: data.llmModel,
         userId: ctx.userId,
       }
 
@@ -383,6 +380,7 @@ function buildSyncHttpBody(
         imageUrl: resolvedInputs.imageUrl || data.imageUrl,
         customPrompt: resolvedInputs.prompt || data.customPrompt || data.prompt,
         detailLevel: data.detailLevel || "detailed",
+        llmModel: data.llmModel,
         userId: ctx.userId,
       }
 
@@ -398,6 +396,7 @@ function buildSyncHttpBody(
         checkType: data.checkType || "content",
         provider: data.provider || "claude",
         threshold: data.threshold ?? 0.7,
+        llmModel: data.llmModel,
         userId: ctx.userId,
       }
 

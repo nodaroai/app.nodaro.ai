@@ -960,12 +960,13 @@ export async function textToSpeech(
   return res.json()
 }
 
-export async function generateScriptApi(prompt: string, sceneCount?: number, tone?: string, targetDuration?: number, provider?: string, userId?: string): Promise<{ jobId: string }> {
+export async function generateScriptApi(prompt: string, sceneCount?: number, tone?: string, targetDuration?: number, provider?: string, llmModel?: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (sceneCount !== undefined) body.sceneCount = sceneCount
   if (tone) body.tone = tone
   if (targetDuration !== undefined) body.targetDuration = targetDuration
   if (provider) body.provider = provider
+  if (llmModel) body.llmModel = llmModel
   if (userId) body.userId = userId
   const res = await fetch(`${API_BASE_URL}/v1/generate-script`, {
     method: "POST",
@@ -1892,11 +1893,13 @@ export async function imageToTextApi(
   detailLevel?: "brief" | "detailed" | "structured",
   customPrompt?: string,
   userId?: string,
+  llmModel?: string,
 ): Promise<{ jobId: string; generatedText: string }> {
   const body: Record<string, unknown> = { imageUrl }
   if (detailLevel) body.detailLevel = detailLevel
   if (customPrompt) body.customPrompt = customPrompt
   if (userId) body.userId = userId
+  if (llmModel) body.llmModel = llmModel
   const res = await fetch(`${API_BASE_URL}/v1/image-to-text/describe`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
@@ -2285,6 +2288,7 @@ export async function generateSceneGraph(params: {
   aspectRatio: string
   durationSeconds: number
   userId: string
+  llmModel?: string
 }): Promise<{ jobId: string; sceneGraph: Record<string, unknown> }> {
   const res = await fetch(`${API_BASE_URL}/v1/scene-graph/generate`, {
     method: "POST",
@@ -2308,6 +2312,7 @@ export async function generateAfterEffects(params: {
   height: number
   durationSeconds: number
   userId: string
+  llmModel?: string
 }): Promise<{ jobId: string; effectPlan: Record<string, unknown> }> {
   const res = await fetch(`${API_BASE_URL}/v1/after-effects/generate`, {
     method: "POST",
@@ -2349,6 +2354,7 @@ export async function generateLottieOverlay(params: {
   height?: number
   lottieAssets?: Array<{ id: string; url: string; name: string; durationSeconds?: number }>
   userId: string
+  llmModel?: string
 }): Promise<{ jobId: string; overlayPlan: Record<string, unknown> }> {
   const res = await fetch(`${API_BASE_URL}/v1/lottie-overlay/generate`, {
     method: "POST",
@@ -2374,6 +2380,7 @@ export async function generate3DTitle(params: {
   backgroundColor?: string
   backgroundMediaUrl?: string
   userId: string
+  llmModel?: string
 }): Promise<{ jobId: string; titlePlan: Record<string, unknown> }> {
   const res = await fetch(`${API_BASE_URL}/v1/3d-title/generate`, {
     method: "POST",
@@ -2398,6 +2405,7 @@ export async function generateMotionGraphics(params: {
   durationSeconds: number
   backgroundColor?: string
   userId: string
+  llmModel?: string
 }): Promise<{ jobId: string; motionPlan: Record<string, unknown> }> {
   const res = await fetch(`${API_BASE_URL}/v1/motion-graphics/generate`, {
     method: "POST",
@@ -2445,6 +2453,7 @@ export async function generateAIWriterStream(params: {
   temperature: number
   maxTokens: number
   userId: string
+  llmModel?: string
   onToken: (token: string) => void
   signal?: AbortSignal
 }): Promise<{ jobId: string; generatedText: string }> {
@@ -3944,6 +3953,7 @@ export function qaCheckApi(params: {
   checkType?: "content" | "quality" | "consistency" | "safety"
   provider?: "claude" | "gpt"
   threshold?: number
+  llmModel?: string
 }): Promise<{ jobId: string; score: number; approved: boolean; reason: string }> {
   return apiRequest("/v1/qa-check", "QA check failed", {
     method: "POST",

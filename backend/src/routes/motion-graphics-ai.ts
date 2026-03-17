@@ -10,7 +10,8 @@ import { CreditsService } from "../billing/credits.js"
 import { MOTION_GRAPHICS_SYSTEM_PROMPT } from "../prompts/motion-graphics-system.js"
 import { validateMotionGraphicsPlan } from "../lib/motion-graphics-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
-import { getAnthropicClient, CLAUDE_MODEL } from "../lib/anthropic.js"
+import { llmComplete } from "../lib/llm-client.js"
+import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
@@ -23,13 +24,14 @@ const generateBody = z.object({
   durationSeconds: z.number().min(1).max(60),
   backgroundColor: z.string().optional(),
   userId: z.string().uuid(),
+  llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
 })
 
 export async function motionGraphicsAIRoutes(app: FastifyInstance) {
   app.post(
     "/v1/motion-graphics/generate",
     {
-      preHandler: [aiRateLimit, creditGuard(() => "motion-graphics")],
+      preHandler: [aiRateLimit, creditGuard((req) => resolveLlmCreditId("motion-graphics", req.body))],
       config: { requestTimeout: 60000 } as Record<string, unknown>,
     },
     async (req, reply) => {
@@ -49,14 +51,16 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
       const { prompt, fps, durationSeconds } = parsed.data
       const userId = req.userId
 
-      if (!config.ANTHROPIC_API_KEY) {
+      if (!config.KIE_API_KEY && !config.ANTHROPIC_API_KEY) {
         return reply.status(503).send({
           error: {
             code: "provider_unavailable",
-            message: "Anthropic API key not configured",
+            message: "LLM API key not configured",
           },
         })
       }
+
+      const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["motion-graphics"]
 
       // Resolve dimensions from aspectRatio or explicit width/height
       let width = parsed.data.width ?? 1920
@@ -98,13 +102,12 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
       }
 
       // Reserve credits
-      const reservation = await reserveCreditsForJob(req, reply, job.id, "motion-graphics")
+      const modelIdentifier = buildLlmCreditIdentifier("motion-graphics", llmModel)
+      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
       try {
-        const anthropic = getAnthropicClient()
-
         const userMessage = `Create motion graphics:
 - FPS: ${fps}
 - Resolution: ${width}x${height}
@@ -115,16 +118,15 @@ Prompt: ${prompt}`
 
         console.log(`[motion-graphics-ai] Generating for job ${job.id}, ${durationSeconds}s`)
 
-        const response = await anthropic.messages.create({
-          model: CLAUDE_MODEL,
-          max_tokens: 2048,
-          temperature: 0.3,
+        const response = await llmComplete({
+          modelId: llmModel,
           system: MOTION_GRAPHICS_SYSTEM_PROMPT,
           messages: [{ role: "user", content: userMessage }],
+          maxTokens: 2048,
+          temperature: 0.3,
         })
 
-        const textBlock = response.content.find((b) => b.type === "text")
-        const rawText = textBlock?.text ?? ""
+        const rawText = response.text
 
         // Parse JSON from response
         let rawJson: unknown
@@ -162,7 +164,7 @@ Prompt: ${prompt}`
           await CreditsService.commitCredits(usageLogId)
         }
 
-        console.log(`[motion-graphics-ai] Job ${job.id} completed, tokens: ${response.usage.output_tokens}`)
+        console.log(`[motion-graphics-ai] Job ${job.id} completed, tokens: ${response.usage?.outputTokens}`)
 
         return reply.send({
           jobId: job.id,
