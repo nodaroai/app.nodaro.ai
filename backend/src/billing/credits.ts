@@ -321,19 +321,37 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   // "sora": 20,                    // Replicate, ~$0.30 typical
-  // ── LLM ──
-  "prompt-helper": 1,            // Claude Haiku — prompt enhancement
-  "ai-writer": 5,                // Claude Sonnet
-  "scene-graph-ai": 10,          // Claude Sonnet
-  "video-composer": 10,          // Claude Sonnet
-  "after-effects": 10,           // Claude Sonnet
-  "lottie-overlay": 10,          // Claude Sonnet
-  "3d-title": 15,                // Claude Sonnet
-  "motion-graphics": 10,         // Claude Sonnet
+  // ── LLM (standard tier = base entry, economy = 0.5x min 1, premium = 3x) ──
+  "prompt-helper": 1,            // standard (economy same: min 1)
+  "prompt-helper:economy": 1,
+  "prompt-helper:premium": 3,
+  "ai-writer": 5,                // standard
+  "ai-writer:economy": 3,
+  "ai-writer:premium": 15,
+  "scene-graph-ai": 10,          // standard
+  "scene-graph-ai:economy": 5,
+  "scene-graph-ai:premium": 30,
+  "video-composer": 10,          // standard
+  "video-composer:economy": 5,
+  "video-composer:premium": 30,
+  "after-effects": 10,           // standard
+  "after-effects:economy": 5,
+  "after-effects:premium": 30,
+  "lottie-overlay": 10,          // standard
+  "lottie-overlay:economy": 5,
+  "lottie-overlay:premium": 30,
+  "3d-title": 15,                // standard
+  "3d-title:economy": 8,
+  "3d-title:premium": 45,
+  "motion-graphics": 10,         // standard
+  "motion-graphics:economy": 5,
+  "motion-graphics:premium": 30,
   "composite": 0,
   "sub-workflow": 0,
   // ── Node types (additional entries for workflow estimation by node.type) ──
   "generate-script": 10,
+  "generate-script:economy": 5,
+  "generate-script:premium": 30,
   "generate-image": 2,
   "edit-image": 2,
   "image-to-image": 2,
@@ -348,6 +366,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "extend-video": 40,
   "transcribe": 4,
   "qa-check": 5,
+  "qa-check:economy": 3,
+  "qa-check:premium": 15,
   "combine-videos": 0,
   "merge-video-audio": 0,
   "add-captions": 0,
@@ -363,6 +383,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "audio-isolation": 8,          // alias for elevenlabs-isolation
   "text-to-dialogue": 4,
   "image-to-text": 5,
+  "image-to-text:economy": 3,
+  "image-to-text:premium": 15,
   "character": 2,
   "object": 2,
   "location": 2,

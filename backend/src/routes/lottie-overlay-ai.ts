@@ -11,7 +11,8 @@ import { CreditsService } from "../billing/credits.js"
 import { LOTTIE_OVERLAY_SYSTEM_PROMPT } from "../prompts/lottie-overlay-system.js"
 import { validateLottieOverlayPlan } from "../lib/lottie-overlay-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
-import { getAnthropicClient, CLAUDE_MODEL } from "../lib/anthropic.js"
+import { llmComplete } from "../lib/llm-client.js"
+import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
 const lottieAssetSchema = z.object({
@@ -30,13 +31,14 @@ const generateBody = z.object({
   height: z.number().min(100).max(3840).optional(),
   lottieAssets: z.array(lottieAssetSchema).optional(),
   userId: z.string().uuid(),
+  llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
 })
 
 export async function lottieOverlayAIRoutes(app: FastifyInstance) {
   app.post(
     "/v1/lottie-overlay/generate",
     {
-      preHandler: [aiRateLimit, creditGuard(() => "lottie-overlay")],
+      preHandler: [aiRateLimit, creditGuard((req) => resolveLlmCreditId("lottie-overlay", req.body))],
       config: { requestTimeout: 60000 } as Record<string, unknown>,
     },
     async (req, reply) => {
@@ -56,14 +58,16 @@ export async function lottieOverlayAIRoutes(app: FastifyInstance) {
       const { prompt, inputVideoUrl, fps, durationSeconds, lottieAssets } = parsed.data
       const userId = req.userId
 
-      if (!config.ANTHROPIC_API_KEY) {
+      if (!config.KIE_API_KEY && !config.ANTHROPIC_API_KEY) {
         return reply.status(503).send({
           error: {
             code: "provider_unavailable",
-            message: "Anthropic API key not configured",
+            message: "LLM API key not configured",
           },
         })
       }
+
+      const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["lottie-overlay"]
 
       const width = parsed.data.width ?? 1920
       const height = parsed.data.height ?? 1080
@@ -97,13 +101,12 @@ export async function lottieOverlayAIRoutes(app: FastifyInstance) {
       }
 
       // Reserve credits
-      const reservation = await reserveCreditsForJob(req, reply, job.id, "lottie-overlay")
+      const modelIdentifier = buildLlmCreditIdentifier("lottie-overlay", llmModel)
+      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
       try {
-        const anthropic = getAnthropicClient()
-
         const assetLines = lottieAssets?.map((a) =>
           `- ${a.name} (${a.url})${a.durationSeconds ? ` [${a.durationSeconds}s]` : ""}`,
         )
@@ -121,16 +124,15 @@ Overlay style: ${prompt}${assetSection}`
 
         console.log(`[lottie-overlay-ai] Generating for job ${job.id}, ${durationSeconds}s video`)
 
-        const response = await anthropic.messages.create({
-          model: CLAUDE_MODEL,
-          max_tokens: 2048,
-          temperature: 0.3,
+        const response = await llmComplete({
+          modelId: llmModel,
           system: LOTTIE_OVERLAY_SYSTEM_PROMPT,
           messages: [{ role: "user", content: userMessage }],
+          maxTokens: 2048,
+          temperature: 0.3,
         })
 
-        const textBlock = response.content.find((b) => b.type === "text")
-        const rawText = textBlock?.text ?? ""
+        const rawText = response.text
 
         // Parse JSON from response
         let rawJson: unknown
@@ -168,7 +170,7 @@ Overlay style: ${prompt}${assetSection}`
           await CreditsService.commitCredits(usageLogId)
         }
 
-        console.log(`[lottie-overlay-ai] Job ${job.id} completed, tokens: ${response.usage.output_tokens}`)
+        console.log(`[lottie-overlay-ai] Job ${job.id} completed, tokens: ${response.usage?.outputTokens}`)
 
         return reply.send({
           jobId: job.id,

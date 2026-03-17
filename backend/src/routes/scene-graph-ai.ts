@@ -7,7 +7,8 @@ import { CreditsService } from "../billing/credits.js"
 import { SCENE_GRAPH_SYSTEM_PROMPT } from "../prompts/scene-graph-system.js"
 import { validateSceneGraph } from "../lib/scene-graph-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
-import { getAnthropicClient, CLAUDE_MODEL } from "../lib/anthropic.js"
+import { llmComplete } from "../lib/llm-client.js"
+import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
@@ -24,13 +25,14 @@ const generateBody = z.object({
   aspectRatio: z.string().default("16:9"),
   durationSeconds: z.number().min(1).max(300).default(30),
   userId: z.string().uuid(),
+  llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
 })
 
 export async function sceneGraphAIRoutes(app: FastifyInstance) {
   app.post(
     "/v1/scene-graph/generate",
     {
-      preHandler: creditGuard(() => "scene-graph-ai"),
+      preHandler: creditGuard((req) => resolveLlmCreditId("scene-graph-ai", req.body)),
       config: { requestTimeout: 60000 } as Record<string, unknown>,
     },
     async (req, reply) => {
@@ -50,14 +52,16 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
       const { prompt, assets, fps, aspectRatio, durationSeconds } = parsed.data
       const userId = req.userId
 
-      if (!config.ANTHROPIC_API_KEY) {
+      if (!config.KIE_API_KEY && !config.ANTHROPIC_API_KEY) {
         return reply.status(503).send({
           error: {
             code: "provider_unavailable",
-            message: "Anthropic API key not configured",
+            message: "LLM API key not configured",
           },
         })
       }
+
+      const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["scene-graph-ai"]
 
       const dimensions = ASPECT_DIMENSIONS[aspectRatio] ?? ASPECT_DIMENSIONS["16:9"]
       const durationInFrames = Math.round(durationSeconds * fps)
@@ -89,13 +93,12 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
       }
 
       // Reserve credits
-      const reservation = await reserveCreditsForJob(req, reply, job.id, "scene-graph-ai")
+      const modelIdentifier = buildLlmCreditIdentifier("scene-graph-ai", llmModel)
+      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
       try {
-        const anthropic = getAnthropicClient()
-
         // Build user message with asset list
         const assetList = assets.map((a, i) => {
           const label = a.label || `Asset ${i + 1}`
@@ -115,16 +118,15 @@ Composition style: ${prompt}`
 
         console.log(`[scene-graph-ai] Generating for job ${job.id}, ${assets.length} assets, ${durationSeconds}s`)
 
-        const response = await anthropic.messages.create({
-          model: CLAUDE_MODEL,
-          max_tokens: 4096,
-          temperature: 0.3,
+        const response = await llmComplete({
+          modelId: llmModel,
           system: SCENE_GRAPH_SYSTEM_PROMPT,
           messages: [{ role: "user", content: userMessage }],
+          maxTokens: 4096,
+          temperature: 0.3,
         })
 
-        const textBlock = response.content.find((b) => b.type === "text")
-        const rawText = textBlock?.text ?? ""
+        const rawText = response.text
 
         // Parse JSON from response (handle potential markdown wrapping)
         let rawJson: unknown
@@ -168,7 +170,7 @@ Composition style: ${prompt}`
           await CreditsService.commitCredits(usageLogId)
         }
 
-        console.log(`[scene-graph-ai] Job ${job.id} completed, tokens: ${response.usage.output_tokens}`)
+        console.log(`[scene-graph-ai] Job ${job.id} completed, tokens: ${response.usage?.outputTokens}`)
 
         return reply.send({
           jobId: job.id,

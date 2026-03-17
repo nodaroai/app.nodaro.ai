@@ -28,6 +28,7 @@ import type {
   QACheckData,
   ImageToTextData,
 } from "@/types/nodes"
+import { LlmModelSelect } from "./llm-model-select"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 
@@ -72,6 +73,11 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
           </SelectContent>
         </Select>
       </MappableField>
+      <LlmModelSelect
+        feature="generate-script"
+        value={data.llmModel}
+        onChange={(v) => onUpdate({ llmModel: v })}
+      />
       <MappableField field="sceneCount" label="Number of Scenes" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
           type="number"
@@ -242,6 +248,11 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
           </SelectContent>
         </Select>
       </div>
+      <LlmModelSelect
+        feature="qa-check"
+        value={data.llmModel}
+        onChange={(v) => onUpdate({ llmModel: v })}
+      />
       <div>
         <Label>Check Type</Label>
         <Select
@@ -297,6 +308,12 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
           </SelectContent>
         </Select>
       </div>
+
+      <LlmModelSelect
+        feature="image-to-text"
+        value={data.llmModel}
+        onChange={(v) => onUpdate({ llmModel: v })}
+      />
 
       <div>
         <MappableField field="customPrompt" label="Custom Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>

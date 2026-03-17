@@ -51,3 +51,16 @@ export {
   isExpandedClone,
   filterCloneNodes,
 } from "./clone-utils.js"
+
+export {
+  LLM_MODELS,
+  LLM_MODEL_IDS,
+  LLM_FEATURE_DEFAULTS,
+  getLlmModel,
+  getLlmTier,
+  buildLlmCreditIdentifier,
+  resolveLlmCreditId,
+  type LlmTier,
+  type KieApiFormat,
+  type LlmModelDef,
+} from "./llm-models.js"

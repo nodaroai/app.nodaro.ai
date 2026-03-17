@@ -4,7 +4,8 @@ import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../billing/credits.js"
-import { getAnthropicClient, CLAUDE_MODEL } from "../lib/anthropic.js"
+import { llmComplete } from "../lib/llm-client.js"
+import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
 const imageToTextBody = z.object({
@@ -14,6 +15,7 @@ const imageToTextBody = z.object({
     .default("detailed"),
   customPrompt: z.string().max(2000).optional(),
   userId: z.string().uuid().optional(),
+  llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
 })
 
 const SYSTEM_PROMPTS: Record<string, string> = {
@@ -29,7 +31,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
   app.post(
     "/v1/image-to-text/describe",
     {
-      preHandler: creditGuard(() => "image-to-text"),
+      preHandler: creditGuard((req) => resolveLlmCreditId("image-to-text", req.body)),
     },
     async (req, reply) => {
       const parsed = imageToTextBody.safeParse(req.body)
@@ -51,16 +53,17 @@ export async function imageToTextRoutes(app: FastifyInstance) {
         })
       }
 
-      if (!config.ANTHROPIC_API_KEY) {
+      if (!config.KIE_API_KEY && !config.ANTHROPIC_API_KEY) {
         return reply.status(503).send({
           error: {
             code: "provider_unavailable",
-            message: "Anthropic API key not configured",
+            message: "LLM API key not configured",
           },
         })
       }
 
-      const modelIdentifier = "image-to-text"
+      const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["image-to-text"]
+      const modelIdentifier = buildLlmCreditIdentifier("image-to-text", llmModel)
 
       // Create a job record for audit trail
       const { data: job, error: jobError } = await supabase
@@ -97,32 +100,22 @@ export async function imageToTextRoutes(app: FastifyInstance) {
       const usageLogId = reservation?.usageLogId
 
       try {
-        const anthropic = getAnthropicClient()
         const systemPrompt = customPrompt || SYSTEM_PROMPTS[detailLevel]
 
-        const response = await anthropic.messages.create({
-          model: CLAUDE_MODEL,
-          max_tokens: 1024,
+        const response = await llmComplete({
+          modelId: llmModel,
           system: systemPrompt,
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "image",
-                  source: { type: "url", url: imageUrl },
-                },
-                {
-                  type: "text",
-                  text: "Describe this image.",
-                },
-              ],
-            },
-          ],
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image", url: imageUrl },
+              { type: "text", text: "Describe this image." },
+            ],
+          }],
+          maxTokens: 1024,
         })
 
-        const textBlock = response.content.find((b) => b.type === "text")
-        const generatedText = textBlock?.text ?? ""
+        const generatedText = response.text
 
         // Finalize job and credits
         try {

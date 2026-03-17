@@ -918,12 +918,13 @@ export function runScriptGeneration(
   tone?: string,
   targetDuration?: number,
   provider?: string,
+  llmModel?: string,
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, { executionStatus: "running" });
 
   return new Promise((resolve, reject) => {
-    generateScriptApi(prompt, sceneCount, tone, targetDuration, provider, ctx.userId)
+    generateScriptApi(prompt, sceneCount, tone, targetDuration, provider, llmModel, ctx.userId)
       .then(({ jobId }) => {
         toast.info("Script generation started", {
           description: `Job ID: ${jobId}`,

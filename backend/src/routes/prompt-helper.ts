@@ -4,7 +4,8 @@ import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../billing/credits.js"
-import { getAnthropicClient } from "../lib/anthropic.js"
+import { llmComplete } from "../lib/llm-client.js"
+import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildPromptHelperSystem } from "../prompts/prompt-helper-system.js"
 
@@ -17,13 +18,14 @@ const promptHelperBody = z.object({
   aspectRatio: z.string().optional(),
   duration: z.number().optional(),
   additionalContext: z.string().max(1000).optional(),
+  llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
 })
 
 export async function promptHelperRoutes(app: FastifyInstance) {
   app.post(
     "/v1/prompt-helper/enhance",
     {
-      preHandler: creditGuard(() => "prompt-helper"),
+      preHandler: creditGuard((req) => resolveLlmCreditId("prompt-helper", req.body)),
     },
     async (req, reply) => {
       const parsed = promptHelperBody.safeParse(req.body)
@@ -45,16 +47,17 @@ export async function promptHelperRoutes(app: FastifyInstance) {
         })
       }
 
-      if (!config.ANTHROPIC_API_KEY) {
+      if (!config.KIE_API_KEY && !config.ANTHROPIC_API_KEY) {
         return reply.status(503).send({
           error: {
             code: "provider_unavailable",
-            message: "Anthropic API key not configured",
+            message: "LLM API key not configured",
           },
         })
       }
 
-      const modelIdentifier = "prompt-helper"
+      const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["prompt-helper"]
+      const modelIdentifier = buildLlmCreditIdentifier("prompt-helper", llmModel)
 
       const { data: job, error: jobError } = await supabase
         .from("jobs")
@@ -90,8 +93,6 @@ export async function promptHelperRoutes(app: FastifyInstance) {
       const usageLogId = reservation?.usageLogId
 
       try {
-        const anthropic = getAnthropicClient()
-
         const systemPrompt = buildPromptHelperSystem({
           nodeType,
           provider,
@@ -106,16 +107,15 @@ export async function promptHelperRoutes(app: FastifyInstance) {
           userMessage += `\n\nAdditional context from the user: ${additionalContext}`
         }
 
-        const response = await anthropic.messages.create({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 1024,
-          temperature: 0.7,
+        const response = await llmComplete({
+          modelId: llmModel,
           system: systemPrompt,
           messages: [{ role: "user", content: userMessage }],
+          maxTokens: 1024,
+          temperature: 0.7,
         })
 
-        const textBlock = response.content.find((b) => b.type === "text")
-        const enhancedPrompt = textBlock?.text?.trim() ?? ""
+        const enhancedPrompt = response.text.trim()
 
         try {
           await supabase

@@ -1,4 +1,5 @@
-import { replicate } from "../replicate/client.js"
+import { llmComplete } from "../../lib/llm-client.js"
+import { getLlmModel, LLM_FEATURE_DEFAULTS } from "../../../../packages/shared/src/llm-models.js"
 
 export interface ScriptSceneCharacter {
   readonly name: string
@@ -120,10 +121,11 @@ RULES:
 
 export type ScriptProvider = "gemini" | "claude" | "gpt"
 
-const SCRIPT_MODELS: Record<ScriptProvider, string> = {
-  gemini: "google/gemini-2.5-flash",
-  claude: "anthropic/claude-3.5-sonnet",
-  gpt: "openai/gpt-4o",
+/** Legacy provider names → new LLM model IDs */
+const LEGACY_PROVIDER_MAP: Record<string, string> = {
+  gemini: "gemini-3-flash",
+  claude: "claude-sonnet-4.6",
+  gpt: "gpt-5.2",
 }
 
 export async function generateScript(
@@ -132,9 +134,17 @@ export async function generateScript(
   tone?: string,
   targetDuration?: number,
   provider?: ScriptProvider,
+  llmModel?: string,
 ): Promise<GeneratedScript> {
-  const resolvedProvider = provider ?? "gemini"
-  const model = SCRIPT_MODELS[resolvedProvider] ?? SCRIPT_MODELS.gemini
+  // Resolve model: prefer explicit llmModel, then map legacy provider, then feature default
+  let resolvedModelId = llmModel
+  if (!resolvedModelId && provider) {
+    resolvedModelId = LEGACY_PROVIDER_MAP[provider]
+  }
+  if (!resolvedModelId) {
+    resolvedModelId = LLM_FEATURE_DEFAULTS["generate-script"]
+  }
+
   const duration = targetDuration ?? 60
 
   let userPrompt = `Create a ${sceneCount}-scene cinematic script for the following concept:\n\n${prompt}\n\nTarget duration: ${duration} seconds.`
@@ -142,17 +152,18 @@ export async function generateScript(
     userPrompt += `\nTone: ${tone}`
   }
 
-  console.log(`[generateScript] Provider: ${resolvedProvider}, Model: ${model}`)
+  const modelDef = getLlmModel(resolvedModelId)
+  console.log(`[generateScript] Model: ${resolvedModelId} (${modelDef?.displayName ?? "unknown"})`)
   console.log(`[generateScript] Prompt: "${prompt}", scenes: ${sceneCount}, tone: "${tone ?? "none"}"`)
 
-  const output = await replicate.run(model as `${string}/${string}`, {
-    input: {
-      prompt: `${SYSTEM_PROMPT}\n\n${userPrompt}`,
-      max_tokens: 8192,
-    },
+  const response = await llmComplete({
+    modelId: resolvedModelId,
+    system: SYSTEM_PROMPT,
+    messages: [{ role: "user", content: userPrompt }],
+    maxTokens: 8192,
   })
 
-  const raw = Array.isArray(output) ? output.join("") : String(output)
+  const raw = response.text
   console.log(`[generateScript] Raw output length: ${raw.length}`)
 
   const cleaned = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim()
