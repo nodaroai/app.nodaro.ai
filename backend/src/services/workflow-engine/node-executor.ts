@@ -484,16 +484,15 @@ async function executeWorkerNode(
     },
   )
 
-  // 2b. Update job with rich input_data from the built payload
-  const inputData: Record<string, unknown> = { type: node.type }
-  if (payload.prompt) inputData.prompt = payload.prompt
-  if (payload.provider) inputData.provider = payload.provider
-  if (payload.referenceImageUrls) inputData.referenceImageUrls = payload.referenceImageUrls
-  if (payload.imageUrl || resolvedInputs.imageUrl) inputData.imageUrl = payload.imageUrl || resolvedInputs.imageUrl
-  if (payload.endFrameUrl) inputData.endFrameUrl = payload.endFrameUrl
-  if (payload.videoUrl || resolvedInputs.videoUrl) inputData.videoUrl = payload.videoUrl || resolvedInputs.videoUrl
-  if (payload.audioUrl || resolvedInputs.audioUrl) inputData.audioUrl = payload.audioUrl || resolvedInputs.audioUrl
-  if (payload.model) inputData.model = payload.model
+  // 2b. Update job with full input_data from the built payload
+  // Store all payload fields so the execution detail modal can show complete inputs.
+  // Internal fields (jobId, userId, usageLogId) are kept — useful for admin debugging;
+  // regular users never see raw input_data anyway (sanitizeJobForPublic strips sensitive job fields).
+  const inputData: Record<string, unknown> = { type: node.type, ...payload }
+  // Backfill resolved inputs that payload may not carry (e.g. upstream media URLs)
+  if (!inputData.imageUrl && resolvedInputs.imageUrl) inputData.imageUrl = resolvedInputs.imageUrl
+  if (!inputData.videoUrl && resolvedInputs.videoUrl) inputData.videoUrl = resolvedInputs.videoUrl
+  if (!inputData.audioUrl && resolvedInputs.audioUrl) inputData.audioUrl = resolvedInputs.audioUrl
 
   await supabase
     .from("jobs")
