@@ -371,7 +371,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
 
   const handleRemoveNode = useCallback(
     (nodeId: string) => {
-      updateNodeData(nodeId, { presentationVisible: false })
+      updateNodeData(nodeId, { presentationVisible: false, presentationInput: false, presentationOutput: false })
     },
     [updateNodeData],
   )

@@ -144,7 +144,13 @@ export function getInputNodes<T extends GenericNode>(nodes: T[], curatedOnly = t
   return nodes.filter((n) => {
     if (!n.type || ALWAYS_EXCLUDED_TYPES.has(n.type)) return false
     if (n.hidden) return false
-    if (curatedOnly) return n.data.presentationInput === true
+    if (curatedOnly) {
+      // New explicit flag
+      if (n.data.presentationInput === true) return true
+      // Backwards compat: old flag on input-type nodes
+      if (n.data.presentationVisible === true && INPUT_NODE_TYPES.has(n.type)) return true
+      return false
+    }
     return true
   })
 }
@@ -155,10 +161,21 @@ export function getOutputNodes<T extends GenericNode>(
   edges: GenericEdge[],
   curatedOnly = true,
 ): T[] {
+  const nodesWithOutgoing = new Set(edges.map((e) => e.source))
+
   return nodes.filter((n) => {
     if (!n.type || ALWAYS_EXCLUDED_TYPES.has(n.type)) return false
     if (n.hidden) return false
-    if (curatedOnly) return n.data.presentationOutput === true
+    if (curatedOnly) {
+      // New explicit flag
+      if (n.data.presentationOutput === true) return true
+      // Backwards compat: old flag on output-eligible nodes
+      if (n.data.presentationVisible === true) {
+        if (NON_OUTPUT_TYPES.has(n.type)) return false
+        return !nodesWithOutgoing.has(n.id) || MEDIA_PRODUCING_TYPES.has(n.type)
+      }
+      return false
+    }
     return true
   })
 }
