@@ -263,34 +263,62 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           </p>
         </div>
       )}
-      <MappableField field="motion" label="Motion" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select
-          value={data.motion}
-          onValueChange={(v) => onUpdate({ motion: v as ImageToVideoData["motion"] })}
-        >
-          <SelectTrigger aria-label="Motion"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="subtle">Subtle</SelectItem>
-            <SelectItem value="moderate">Moderate</SelectItem>
-            <SelectItem value="dynamic">Dynamic</SelectItem>
-          </SelectContent>
-        </Select>
-      </MappableField>
-      <MappableField field="cameraMotion" label="Camera Motion" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select
-          value={data.cameraMotion}
-          onValueChange={(v) => onUpdate({ cameraMotion: v as ImageToVideoData["cameraMotion"] })}
-        >
-          <SelectTrigger aria-label="Camera Motion"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="static">Static</SelectItem>
-            <SelectItem value="pan-left">Pan Left</SelectItem>
-            <SelectItem value="pan-right">Pan Right</SelectItem>
-            <SelectItem value="zoom-in">Zoom In</SelectItem>
-            <SelectItem value="zoom-out">Zoom Out</SelectItem>
-          </SelectContent>
-        </Select>
-      </MappableField>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="motionEnabled"
+            checked={!!data.motionEnabled}
+            onChange={(e) => onUpdate({ motionEnabled: e.target.checked, ...(!e.target.checked ? { motion: undefined } : {}) })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="motionEnabled" className="text-xs">Motion hint (injected into prompt)</label>
+        </div>
+        {data.motionEnabled && (
+          <MappableField field="motion" label="Motion" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select
+              value={data.motion || "moderate"}
+              onValueChange={(v) => onUpdate({ motion: v as ImageToVideoData["motion"] })}
+            >
+              <SelectTrigger aria-label="Motion"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="subtle">Subtle</SelectItem>
+                <SelectItem value="moderate">Moderate</SelectItem>
+                <SelectItem value="dynamic">Dynamic</SelectItem>
+              </SelectContent>
+            </Select>
+          </MappableField>
+        )}
+      </div>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="cameraMotionEnabled"
+            checked={!!data.cameraMotionEnabled}
+            onChange={(e) => onUpdate({ cameraMotionEnabled: e.target.checked, ...(!e.target.checked ? { cameraMotion: undefined } : {}) })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="cameraMotionEnabled" className="text-xs">Camera motion hint (injected into prompt)</label>
+        </div>
+        {data.cameraMotionEnabled && (
+          <MappableField field="cameraMotion" label="Camera Motion" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select
+              value={data.cameraMotion || "static"}
+              onValueChange={(v) => onUpdate({ cameraMotion: v as ImageToVideoData["cameraMotion"] })}
+            >
+              <SelectTrigger aria-label="Camera Motion"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="static">Static</SelectItem>
+                <SelectItem value="pan-left">Pan Left</SelectItem>
+                <SelectItem value="pan-right">Pan Right</SelectItem>
+                <SelectItem value="zoom-in">Zoom In</SelectItem>
+                <SelectItem value="zoom-out">Zoom Out</SelectItem>
+              </SelectContent>
+            </Select>
+          </MappableField>
+        )}
+      </div>
 
       {data.provider === "kling" && (
         <div className="flex items-center gap-2 px-1">

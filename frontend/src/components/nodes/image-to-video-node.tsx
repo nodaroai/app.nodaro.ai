@@ -209,7 +209,6 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
     />
     <BaseNode
-      key={`${id}-${activeUrl && !showConfig ? 'result' : 'config'}`}
       id={id}
       label={isKling3 ? "Kling 3.0 Studio" : nodeData.label}
       icon={<Clapperboard className="h-4 w-4" />}

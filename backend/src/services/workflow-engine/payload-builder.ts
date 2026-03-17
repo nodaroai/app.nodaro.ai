@@ -590,7 +590,15 @@ export function buildPayload(
           imageUrl: resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || data.imageUrl,
           endFrameUrl: resolvedInputs.endFrameUrl,
           audioUrl: resolvedInputs.audioUrl,
-          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.motionPrompt as string | undefined, refMap),
+          prompt: (() => {
+            let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.motionPrompt as string | undefined, refMap)
+            const hints: string[] = []
+            if (data.motionEnabled && data.motion) hints.push(`${data.motion} motion`)
+            if (data.cameraMotionEnabled && data.cameraMotion && data.cameraMotion !== "static") hints.push(`camera: ${String(data.cameraMotion).replace("-", " ")}`)
+            if (hints.length > 0 && p) p = `${p}. ${hints.join(", ")}`
+            else if (hints.length > 0) p = hints.join(", ")
+            return p
+          })(),
           provider,
           duration: data.duration,
           mode: data.mode ?? data.kling3Mode,
