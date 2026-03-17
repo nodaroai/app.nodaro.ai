@@ -55,7 +55,7 @@ export function GlassButton({
         onClick(e)
       }}
       title={title}
-      className="flex items-center justify-center w-9 h-9 rounded-lg bg-black/50 hover:bg-black/70 text-white transition-all duration-200"
+      className="flex items-center justify-center w-9 h-9 rounded-lg bg-black/50 hover:bg-black/70 text-white transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#ff0073] focus-visible:outline-none"
     >
       {children}
     </button>
@@ -72,7 +72,7 @@ export function GlassCard({
 }) {
   return (
     <div
-      className={`bg-transparent border border-border/50 rounded-xl p-4 transition-all duration-300 ${className}`}
+      className={`bg-transparent border border-border/50 rounded-xl p-3 sm:p-4 transition-all duration-300 min-w-[280px] ${className}`}
     >
       {children}
     </div>

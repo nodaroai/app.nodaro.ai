@@ -28,7 +28,7 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
             <audio src={media.effectiveUrl} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
           </div>
           {!readOnly && (
-            <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <div className="media-overlay-controls absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               <GlassButton onClick={media.handleRemove} title="Remove">
                 <X className="w-3.5 h-3.5" />
               </GlassButton>

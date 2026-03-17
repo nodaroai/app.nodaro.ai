@@ -30,10 +30,10 @@ export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues,
           <CachedImage
             src={media.effectiveUrl}
             alt={label}
-            className="w-full rounded-lg bg-black/20"
+            className="w-full max-h-[70vh] object-contain rounded-lg bg-black/20"
           />
-          {/* Hover toolbar — top-right, no blur overlay */}
-          <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          {/* Toolbar — top-right, visible on hover/touch */}
+          <div className="media-overlay-controls absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <GlassButton onClick={handleOpen} title="Enlarge">
               <Maximize2 className="w-3.5 h-3.5" />
             </GlassButton>

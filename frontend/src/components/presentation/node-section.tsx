@@ -40,7 +40,7 @@ export function NodeSection({
   renderCard,
 }: NodeSectionProps) {
   return (
-    <div className="space-y-4">
+    <div className="flex-1 flex flex-col space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           {label}
@@ -61,22 +61,24 @@ export function NodeSection({
           {isEditing ? `Click "Add" to select ${label.toLowerCase()} nodes` : `No ${label.toLowerCase()} configured`}
         </div>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={nodes.map((n) => n.id)} strategy={verticalListSortingStrategy}>
-            {nodes.map((node) => (
-              <SortableCardWrapper
-                key={node.id}
-                id={node.id}
-                isEditMode={isEditing}
-                onRemove={() => onRemove(node.id)}
-                cardDescription={settings.cardMeta?.[node.id]?.description}
-                onDescriptionChange={(v) => updateCardMeta(node.id, "description", v)}
-              >
-                {renderCard(node)}
-              </SortableCardWrapper>
-            ))}
-          </SortableContext>
-        </DndContext>
+        <div className="flex-1">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={nodes.map((n) => n.id)} strategy={verticalListSortingStrategy}>
+              {nodes.map((node) => (
+                <SortableCardWrapper
+                  key={node.id}
+                  id={node.id}
+                  isEditMode={isEditing}
+                  onRemove={() => onRemove(node.id)}
+                  cardDescription={settings.cardMeta?.[node.id]?.description}
+                  onDescriptionChange={(v) => updateCardMeta(node.id, "description", v)}
+                >
+                  {renderCard(node)}
+                </SortableCardWrapper>
+              ))}
+            </SortableContext>
+          </DndContext>
+        </div>
       )}
     </div>
   )

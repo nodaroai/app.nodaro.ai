@@ -37,8 +37,8 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
               <Play className="w-7 h-7 text-white ml-1" fill="white" />
             </div>
           </div>
-          {/* Hover toolbar — top-right, no blur overlay */}
-          <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          {/* Toolbar — top-right, visible on hover/touch */}
+          <div className="media-overlay-controls absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <GlassButton onClick={() => setPreviewOpen(true)} title="Fullscreen">
               <Maximize2 className="w-3.5 h-3.5" />
             </GlassButton>

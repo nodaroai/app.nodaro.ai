@@ -122,9 +122,11 @@ interface PresentationViewProps {
   isRunning?: boolean
   /** Show a native fullscreen toggle button in the header */
   showFullscreenToggle?: boolean
+  /** Optional element rendered left of the title (e.g. Runs button) */
+  headerLeft?: React.ReactNode
 }
 
-export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle }: PresentationViewProps) {
+export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle, headerLeft }: PresentationViewProps) {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const [isEditMode, setIsEditMode] = useState(false)
@@ -760,18 +762,34 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       <div className="relative flex flex-col md:flex-row md:items-center md:justify-between px-3 md:px-6 border-b border-border bg-card shrink-0" style={{ paddingTop: 'max(0.5rem, var(--safe-area-top))' }}>
         {/* Top row: title + right-side controls */}
         <div className="flex items-center justify-between h-11 md:h-14 w-full md:w-auto min-w-0">
-          <h1 className="text-base md:text-lg font-semibold truncate text-foreground">
-            {workflowName || "Untitled"}
-          </h1>
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {headerLeft}
+            <h1 className="text-sm md:text-lg font-semibold truncate text-foreground min-w-[3rem]">
+              {workflowName || "Untitled"}
+            </h1>
+          </div>
           {/* Mobile-only: compact right-side controls */}
-          <div className="flex items-center gap-1.5 md:hidden shrink-0">
+          <div className="flex items-center gap-1 md:hidden shrink-0">
             {isFullscreen && <ThemeToggle />}
-            {user && hasCredits() && <CreditBalance userId={user.id} onClick={isAppRunner ? () => setShowGetCreditsModal(true) : undefined} />}
+            {user && hasCredits() && (
+              isAppRunner ? (
+                <TooltipProvider delayDuration={0}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div><CreditBalance userId={user.id} onClick={() => setShowGetCreditsModal(true)} /></div>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">View credits &amp; plans</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <CreditBalance userId={user.id} />
+              )
+            )}
             {user && isAppRunner && (
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="sm" onClick={signOut} className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
+                    <Button variant="ghost" size="sm" onClick={signOut} className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground touch-manipulation">
                       <LogOut className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -787,18 +805,20 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               />
             )}
             {isFullscreen && allowedModes.length > 1 && (
-              <ViewModeSelector viewMode={viewMode} onChange={handleViewModeChange} allowedModes={allowedModes} />
+              <div className="hidden sm:contents">
+                <ViewModeSelector viewMode={viewMode} onChange={handleViewModeChange} allowedModes={allowedModes} />
+              </div>
             )}
           </div>
         </div>
 
-        {/* App runner: action buttons — stacked below title on mobile, centered on desktop */}
+        {/* App runner: action buttons — scrollable row on mobile, centered on desktop */}
         {isAppRunner && (
-          <div className="flex flex-wrap items-center gap-2 pb-2 md:pb-0 md:absolute md:left-1/2 md:-translate-x-1/2">
+          <div className="flex items-center gap-2 pb-2 md:pb-0 md:absolute md:left-1/2 md:-translate-x-1/2 overflow-x-auto scrollbar-none -mx-3 px-3 md:mx-0 md:px-0 md:overflow-x-visible">
             <button
               type="button"
               onClick={onNewRun}
-              className={`h-9 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all duration-200 touch-manipulation ${
+              className={`shrink-0 whitespace-nowrap h-10 md:h-8 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all duration-200 touch-manipulation ${
                 newRunLabel === "Retry" || newRunLabel === "Clear"
                   ? "text-foreground bg-muted hover:bg-muted/80 border border-border"
                   : "text-white bg-[#ff0073] hover:bg-[#ff0073]/90"
@@ -807,18 +827,18 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               {newRunLabel === "Retry" || newRunLabel === "Clear"
                 ? <RotateCcw className="h-4 w-4" />
                 : <Plus className="h-4 w-4" />}
-              {newRunLabel ?? "New Run"}
+              <span className="hidden sm:inline">{newRunLabel ?? "New Run"}</span>
             </button>
 
             {isRunning ? (
               <button
                 type="button"
                 onClick={onCancel}
-                className="h-9 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-white bg-red-600 hover:bg-red-700 flex items-center gap-2 transition-all duration-200 touch-manipulation"
+                className="shrink-0 whitespace-nowrap h-10 md:h-8 px-4 rounded-full text-sm font-medium text-white bg-red-600 hover:bg-red-700 flex items-center gap-2 transition-all duration-200 touch-manipulation"
                 disabled={!onCancel}
               >
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Stop
+                <span className="hidden sm:inline">Stop</span>
               </button>
             ) : (
               inputsReadOnly !== true && (
@@ -826,22 +846,22 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   <button
                     type="button"
                     onClick={() => setShowGetCreditsModal(true)}
-                    className="h-9 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 touch-manipulation"
+                    className="shrink-0 whitespace-nowrap h-10 md:h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 touch-manipulation"
                   >
                     <Sparkles className="h-4 w-4" />
-                    {userCredits?.tier === "free" ? "Get Free Credits" : "Get Credits"}
+                    <span className="hidden sm:inline">{userCredits?.tier === "free" ? "Get Free Credits" : "Get Credits"}</span>
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={handleRunClick}
-                    className="h-9 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+                    className="shrink-0 whitespace-nowrap h-10 md:h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                     disabled={!!user && !allInputsFilled}
                   >
                     {!user ? (
-                      <><LogIn className="h-4 w-4" />Sign in to Run</>
+                      <><LogIn className="h-4 w-4" /><span className="hidden sm:inline">Sign in to Run</span></>
                     ) : (
-                      <><Play className="h-4 w-4" />Run{costLabel}</>
+                      <><Play className="h-4 w-4" />Run<span className="hidden sm:inline">{costLabel}</span></>
                     )}
                   </button>
                 )
@@ -851,13 +871,13 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             {/* Remix: create editable copy (only when app creator enabled it) */}
             {appSupportsRemix && (
               <>
-                <div className="w-px h-5 bg-border hidden md:block" />
+                <div className="w-px h-5 bg-border hidden md:block shrink-0" />
                 <button
                   type="button"
                   onClick={handleRemix}
                   disabled={isRemixing}
                   title="Remix this app"
-                  className="h-9 md:h-8 px-2.5 md:px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 disabled:opacity-50 touch-manipulation"
+                  className="shrink-0 whitespace-nowrap h-10 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 disabled:opacity-50 touch-manipulation"
                 >
                   {isRemixing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
                   <span className="hidden md:inline">Remix</span>
@@ -870,7 +890,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               type="button"
               onClick={() => window.open("/apps", "_blank")}
               title="Explore more apps"
-              className="h-9 md:h-8 px-2.5 md:px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 touch-manipulation"
+              className="shrink-0 whitespace-nowrap h-10 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 touch-manipulation"
             >
               <LayoutGrid className="h-4 w-4" />
               <span className="hidden md:inline">More Apps</span>
@@ -892,7 +912,20 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             </Button>
           )}
           {isFullscreen && <ThemeToggle />}
-          {user && hasCredits() && <CreditBalance userId={user.id} onClick={isAppRunner ? () => setShowGetCreditsModal(true) : undefined} />}
+          {user && hasCredits() && (
+            isAppRunner ? (
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div><CreditBalance userId={user.id} onClick={() => setShowGetCreditsModal(true)} /></div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">View credits &amp; plans</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <CreditBalance userId={user.id} />
+            )
+          )}
           {user && isAppRunner && (
             <TooltipProvider delayDuration={0}>
               <Tooltip>

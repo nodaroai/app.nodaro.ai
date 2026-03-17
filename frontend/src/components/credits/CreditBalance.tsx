@@ -39,7 +39,7 @@ export function CreditBalance({ userId, onClick }: CreditBalanceProps) {
     <>
       <Coins className="w-4 h-4 text-muted-foreground" />
       <span className="text-sm font-medium font-mono">{balance.total.toLocaleString()}</span>
-      <span className="text-xs text-muted-foreground">credits</span>
+      <span className="text-xs text-muted-foreground hidden sm:inline">credits</span>
       <Badge
         variant="secondary"
         className="text-[10px] px-1.5 py-0 h-4 capitalize"

@@ -1,4 +1,7 @@
 import type { WorkflowNode } from "@/types/nodes"
+import { getNodeResult, getOutputType } from "@/lib/presentation-utils"
+
+export const ORIGINAL_SLOT_ID = "original"
 
 export interface RunSlotNodeState {
   status: "pending" | "running" | "completed" | "failed" | "skipped"
@@ -43,6 +46,46 @@ export function dbStatusToSlotStatus(s: string): RunSlot["executionStatus"] {
   if (s === "completed") return "completed"
   if (s === "failed" || s === "cancelled") return "failed"
   return "idle" // "draft"
+}
+
+/**
+ * Build input values from published snapshot nodes (the demo values captured at publish time).
+ */
+export function makeSnapshotInputs(inputNodes: WorkflowNode[]): Record<string, Record<string, unknown>> {
+  const inputs: Record<string, Record<string, unknown>> = {}
+  for (const node of inputNodes) {
+    const t = node.type ?? ""
+    if (t === "text-prompt") {
+      inputs[node.id] = { text: (node.data.text as string) ?? "" }
+    } else if (t === "upload-image" || t === "upload-video" || t === "upload-audio") {
+      inputs[node.id] = { url: (node.data.url as string) ?? "" }
+    }
+  }
+  return inputs
+}
+
+/**
+ * Build node states from published snapshot output nodes (completed results captured at publish time).
+ */
+export function makeSnapshotNodeStates(outputNodes: WorkflowNode[]): Record<string, RunSlotNodeState> {
+  const states: Record<string, RunSlotNodeState> = {}
+  for (const node of outputNodes) {
+    const result = getNodeResult(node.data as Record<string, unknown>)
+    if (result.url || result.text) {
+      // getFullscreenResult expects typed keys (imageUrl/videoUrl/audioUrl), not generic "url"
+      const output: Record<string, unknown> = {}
+      if (result.url) {
+        const outputType = getOutputType(node.type)
+        if (outputType === "image") output.imageUrl = result.url
+        else if (outputType === "video") output.videoUrl = result.url
+        else if (outputType === "audio") output.audioUrl = result.url
+        else output.imageUrl = result.url // fallback
+      }
+      if (result.text) output.text = result.text
+      states[node.id] = { status: "completed", output }
+    }
+  }
+  return states
 }
 
 export function isMediaUrl(url: string): "image" | "video" | null {

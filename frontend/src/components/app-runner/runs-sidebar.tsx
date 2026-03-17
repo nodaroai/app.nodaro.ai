@@ -1,8 +1,10 @@
 import { useEffect, useRef } from "react"
-import { Plus, ChevronLeft } from "lucide-react"
+import { Link } from "react-router-dom"
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { NodaroLogo } from "@/components/nodaro-logo"
 import type { RunSlot } from "./types"
-import { RunSlotItem } from "./run-slot-item"
+import { RunSlotItem, CompactSlotItem } from "./run-slot-item"
 
 export function RunsSidebar({
   slots,
@@ -13,6 +15,7 @@ export function RunsSidebar({
   onDeleteSlot,
   onRenameSlot,
   onClose,
+  collapsed,
   versions,
   selectedVersion,
   onSelectVersion,
@@ -26,6 +29,7 @@ export function RunsSidebar({
   onDeleteSlot: (slotId: string) => void
   onRenameSlot: (slotId: string, name: string | null) => void
   onClose: () => void
+  collapsed?: boolean
   versions: { version: number; id: string; createdAt: string }[]
   selectedVersion: number | null
   onSelectVersion: (version: number | null) => void
@@ -60,20 +64,63 @@ export function RunsSidebar({
     return () => el.removeEventListener("keydown", handleKeyDown)
   }, [slots, activeSlotId, onSelectSlot])
 
+  // Collapsed sidebar — narrow icon strip
+  if (collapsed) {
+    return (
+      <div
+        ref={sidebarRef}
+        tabIndex={-1}
+        className="w-[72px] h-full border-r border-border bg-card flex flex-col shrink-0 outline-none"
+      >
+        {/* Collapsed header — logo only, matches presentation header height */}
+        <div className="border-b border-border shrink-0" style={{ paddingTop: 'max(0.5rem, var(--safe-area-top))' }}>
+          <div className="flex items-center justify-center h-11 md:h-14">
+            <Link to="/" title="Home" className="shrink-0">
+              <NodaroLogo variant="icon" size="sm" />
+            </Link>
+          </div>
+        </div>
+
+        {/* Compact slot list */}
+        <div className="flex-1 overflow-y-auto">
+          {slots.map((slot) => (
+            <CompactSlotItem
+              key={slot.id}
+              slot={slot}
+              isActive={activeSlotId === slot.id}
+              onSelect={() => onSelectSlot(slot.id)}
+            />
+          ))}
+        </div>
+
+        {/* Expand bar at bottom — full width clickable */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={onClose}
+          onKeyDown={(e) => { if (e.key === "Enter") onClose() }}
+          className="border-t border-border shrink-0 flex items-center justify-center py-2 cursor-pointer hover:bg-muted/50 transition-colors"
+          title="Expand sidebar"
+        >
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       ref={sidebarRef}
       tabIndex={-1}
       className="w-full sm:w-72 h-full border-r border-border bg-card flex flex-col shrink-0 outline-none"
     >
-      <div className="flex items-center justify-between px-4 h-14 border-b border-border">
-        <h2 className="text-sm font-semibold text-foreground">Runs</h2>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={onCreateNew} title="New run">
+      <div className="border-b border-border shrink-0" style={{ paddingTop: 'max(0.5rem, var(--safe-area-top))' }}>
+        <div className="flex items-center justify-between px-3 h-11 md:h-14">
+          <Link to="/" title="Home" className="shrink-0">
+            <NodaroLogo size="sm" />
+          </Link>
+          <Button variant="ghost" size="sm" onClick={onCreateNew} title="New run" className="h-8 w-8 p-0">
             <Plus className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onClose} title="Close">
-            <ChevronLeft className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -120,6 +167,18 @@ export function RunsSidebar({
             Click + to create a new run
           </div>
         )}
+      </div>
+
+      {/* Collapse bar at bottom — full width clickable */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onClose}
+        onKeyDown={(e) => { if (e.key === "Enter") onClose() }}
+        className="border-t border-border shrink-0 flex items-center justify-center py-2 cursor-pointer hover:bg-muted/50 transition-colors"
+        title="Collapse sidebar"
+      >
+        <ChevronLeft className="h-4 w-4 text-muted-foreground" />
       </div>
     </div>
   )

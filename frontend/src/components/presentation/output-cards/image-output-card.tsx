@@ -29,12 +29,12 @@ export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia }: Ima
           <CachedImage
             src={url}
             alt={label}
-            className="w-full rounded-lg bg-black/20"
+            className="w-full max-h-[70vh] object-contain rounded-lg bg-black/20"
             thumbnail
             thumbnailWidth={480}
           />
-          {/* Hover toolbar — top-right, no blur overlay */}
-          <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          {/* Toolbar — top-right, visible on hover/touch */}
+          <div className="media-overlay-controls absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <GlassButton onClick={handleClick} title="Fullscreen">
               <Maximize2 className="w-3.5 h-3.5" />
             </GlassButton>
@@ -47,7 +47,7 @@ export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia }: Ima
           </div>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center h-48 rounded-lg bg-muted/30 text-muted-foreground">
+        <div className="flex flex-col items-center justify-center h-32 sm:h-48 rounded-lg bg-muted/30 text-muted-foreground">
           <ImageIcon className="w-10 h-10 mb-2 animate-pulse" />
           <span className="text-xs">
             {status === "failed" ? "Generation failed" : "Awaiting generation"}

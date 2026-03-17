@@ -1,25 +1,31 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
-import { getInputNodes } from "@/lib/presentation-utils"
+import { getInputNodes, getOutputNodes } from "@/lib/presentation-utils"
 import { createAppRun, updateAppRunInputs, getAppRuns, deleteAppRun } from "@/lib/api"
 import type { WorkflowNode } from "@/types/nodes"
 import type { RunSlot, RunSlotNodeState } from "./types"
-import { makeEmptyInputs, toSlotStatus, dbStatusToSlotStatus } from "./types"
+import { ORIGINAL_SLOT_ID, makeEmptyInputs, makeSnapshotInputs, makeSnapshotNodeStates, toSlotStatus, dbStatusToSlotStatus } from "./types"
+import { isMediaUrl } from "./types"
 
 interface UseRunSlotsOptions {
   slug: string | undefined
   user: { id: string } | null
   /** When false, skip DB calls (unauthenticated embed) */
   persistRuns: boolean
+  /** Auto-select this run slot on load (from ?run= query param) */
+  initialRunId?: string
+  /** Override default sidebar state (from ?sidebar= query param) */
+  initialSidebar?: "open" | "closed" | null
 }
 
-export function useRunSlots({ slug, user, persistRuns }: UseRunSlotsOptions) {
+export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSidebar }: UseRunSlotsOptions) {
   const [showHistory, setShowHistory] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [runsLoaded, setRunsLoaded] = useState(false)
   const [slots, setSlots] = useState<RunSlot[]>([])
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null)
-  const activeSlot = useMemo(() => slots.find((s) => s.id === activeSlotId), [slots, activeSlotId])
+  // activeSlot is computed after allSlots is built (below)
   const [deleteConfirmSlotId, setDeleteConfirmSlotId] = useState<string | null>(null)
 
   // App runner store
@@ -32,9 +38,11 @@ export function useRunSlots({ slug, user, persistRuns }: UseRunSlotsOptions) {
   const newRun = useAppRunnerStore((s) => s.newRun)
   const app = useAppRunnerStore((s) => s.app)
 
-  // Input nodes (for building empty input maps)
+  // Input/output nodes (for building empty input maps and original slot)
   const presNodes = usePresentationStore((s) => s.nodes)
+  const presEdges = usePresentationStore((s) => s.edges)
   const inputNodes = useMemo(() => getInputNodes(presNodes, true), [presNodes])
+  const outputNodes = useMemo(() => getOutputNodes(presNodes, presEdges, true), [presNodes, presEdges])
 
   // Selected version for new runs
   const selectedVersion = useAppRunnerStore((s) => s.selectedVersion)
@@ -43,6 +51,103 @@ export function useRunSlots({ slug, user, persistRuns }: UseRunSlotsOptions) {
   const latestVersion = versions.length > 0
     ? Math.max(...versions.map((v: { version: number }) => v.version))
     : app?.version ?? 1
+
+  // Build the synthetic "Original" slot from published snapshot data
+  const originalSlot = useMemo<RunSlot | null>(() => {
+    if (!app) return null
+    const snapshotInputs = makeSnapshotInputs(inputNodes)
+    const snapshotStates = makeSnapshotNodeStates(outputNodes)
+    const hasOutputs = Object.keys(snapshotStates).length > 0
+
+    // Find first output URL for thumbnail
+    let thumbnailUrl: string | null = null
+    for (const state of Object.values(snapshotStates)) {
+      const url = state.output?.url as string | undefined
+      if (url && isMediaUrl(url)) {
+        thumbnailUrl = url
+        break
+      }
+    }
+
+    return {
+      id: ORIGINAL_SLOT_ID,
+      name: "Original",
+      inputValues: snapshotInputs,
+      nodeStates: snapshotStates,
+      executionId: null,
+      executionStatus: hasOutputs ? "completed" : "idle",
+      completedNodes: hasOutputs ? outputNodes.length : 0,
+      totalNodes: outputNodes.length,
+      creditsUsed: 0,
+      createdAt: new Date(app.createdAt).getTime(),
+      version: app.version,
+      thumbnailUrl,
+    }
+  }, [app, inputNodes, outputNodes])
+
+  // Merge original slot (always first) with user slots
+  const allSlots = useMemo(() => {
+    if (!originalSlot) return slots
+    return [originalSlot, ...slots]
+  }, [originalSlot, slots])
+
+  const activeSlot = useMemo(() => allSlots.find((s) => s.id === activeSlotId), [allSlots, activeSlotId])
+
+  // Track whether initial params have been applied
+  const initialAppliedRef = useRef(false)
+
+  // Auto-open sidebar on desktop + apply initial run/sidebar params
+  // Wait for presNodes to be seeded (otherwise originalSlot is built from empty nodes)
+  useEffect(() => {
+    if (!allSlots.length || initialAppliedRef.current) return
+    if (presNodes.length === 0) return
+    initialAppliedRef.current = true
+
+    // Auto-select from URL param, or default to "original"
+    const targetId = initialRunId ?? ORIGINAL_SLOT_ID
+    const target = allSlots.find((s) => s.id === targetId)
+    if (target) {
+      // Apply slot data directly (handleSelectSlot checks activeSlotId which is null)
+      setActiveSlotId(target.id)
+      usePresentationStore.setState({
+        inputValues: target.inputValues,
+        nodeStates: target.nodeStates,
+        executionStatus: target.executionStatus,
+        completedNodes: target.completedNodes,
+        totalNodes: target.totalNodes,
+      })
+      useAppRunnerStore.setState({
+        activeRunId: target.id,
+        executionId: target.executionId ?? null,
+        executionStatus: target.executionStatus as "idle" | "running" | "completed" | "failed",
+        nodeStates: target.nodeStates,
+        completedNodes: target.completedNodes,
+        totalNodes: target.totalNodes,
+        errorMessage: null,
+      })
+    }
+
+    // Sidebar: on desktop always visible (collapsed/expanded), on mobile overlay
+    // ?sidebar=closed → collapse on desktop, hide on mobile
+    // ?sidebar=open → expand on desktop, show on mobile
+    const isDesktop = window.matchMedia("(min-width: 768px)").matches
+    if (initialSidebar === "closed") {
+      if (isDesktop) {
+        setSidebarCollapsed(true)
+      } else {
+        setShowHistory(false)
+      }
+    } else if (initialSidebar === "open") {
+      setShowHistory(true)
+      setSidebarCollapsed(false)
+    } else {
+      // Default: expanded on desktop, closed on mobile
+      if (isDesktop) {
+        setSidebarCollapsed(false)
+      }
+      setShowHistory(isDesktop)
+    }
+  }, [allSlots.length > 0, presNodes.length > 0]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load past runs from DB when app is ready and user is authenticated
   useEffect(() => {
@@ -72,7 +177,10 @@ export function useRunSlots({ slug, user, persistRuns }: UseRunSlotsOptions) {
   }, [app, user, slug, runsLoaded, persistRuns])
 
   // Sync execution state: app runner store -> presentation store + active slot
+  // Guard: skip entirely when Original slot is active — its data is static snapshot
   useEffect(() => {
+    if (activeSlotId === ORIGINAL_SLOT_ID) return
+
     usePresentationStore.setState({ executionStatus, nodeStates, completedNodes, totalNodes })
 
     if (activeSlotId) {
@@ -84,9 +192,9 @@ export function useRunSlots({ slug, user, persistRuns }: UseRunSlotsOptions) {
     }
   }, [executionStatus, nodeStates, completedNodes, totalNodes, activeSlotId])
 
-  // Sync executionId to active slot
+  // Sync executionId to active slot (guard: skip Original)
   useEffect(() => {
-    if (activeSlotId && storeExecutionId) {
+    if (activeSlotId && activeSlotId !== ORIGINAL_SLOT_ID && storeExecutionId) {
       setSlots((prev) => prev.map((s) =>
         s.id === activeSlotId ? { ...s, executionId: storeExecutionId } : s,
       ))
@@ -239,7 +347,7 @@ export function useRunSlots({ slug, user, persistRuns }: UseRunSlotsOptions) {
 
   // Duplicate — create a new draft with same inputs as given slot
   const handleDuplicateSlot = useCallback(async (slotId: string) => {
-    const slot = slots.find((s) => s.id === slotId)
+    const slot = allSlots.find((s) => s.id === slotId)
     if (!slot) return
 
     const runVersion = selectedVersion ?? undefined
@@ -302,23 +410,29 @@ export function useRunSlots({ slug, user, persistRuns }: UseRunSlotsOptions) {
       completedNodes: 0,
       totalNodes: 0,
     })
-  }, [slots, slug, user, newRun, selectedVersion, latestVersion, persistRuns])
+  }, [allSlots, slug, user, newRun, selectedVersion, latestVersion, persistRuns])
 
   // Header button: "Clear" when idle, "Retry" when failed, "Create New" otherwise
+  // Original slot always shows "New Run" (can't clear/retry a snapshot)
+  const isOriginal = activeSlotId === ORIGINAL_SLOT_ID
   const isSlotIdle = activeSlot?.executionStatus === "idle"
   const isSlotFailed = activeSlot?.executionStatus === "failed"
   const handleHeaderAction = useCallback(() => {
-    if (isSlotIdle) handleClear()
+    if (isOriginal) handleCreateNew()
+    else if (isSlotIdle) handleClear()
     else if (isSlotFailed) handleRetry()
     else handleCreateNew()
-  }, [isSlotIdle, isSlotFailed, handleClear, handleRetry, handleCreateNew])
-  const newRunLabel = isSlotIdle ? "Clear" : isSlotFailed ? "Retry" : "New Run"
+  }, [isOriginal, isSlotIdle, isSlotFailed, handleClear, handleRetry, handleCreateNew])
+  const newRunLabel = isOriginal ? "New Run" : isSlotIdle ? "Clear" : isSlotFailed ? "Retry" : "New Run"
 
   // Select slot
   const handleSelectSlot = useCallback((slotId: string) => {
     if (slotId === activeSlotId) return
-    saveCurrentSlotInputs()
-    const slot = slots.find((s) => s.id === slotId)
+    // Don't save inputs when switching away from Original (it's read-only)
+    if (activeSlotId !== ORIGINAL_SLOT_ID) {
+      saveCurrentSlotInputs()
+    }
+    const slot = allSlots.find((s) => s.id === slotId)
     if (!slot) return
 
     setActiveSlotId(slotId)
@@ -347,10 +461,20 @@ export function useRunSlots({ slug, user, persistRuns }: UseRunSlotsOptions) {
         errorMessage: null,
       })
     }
-  }, [activeSlotId, saveCurrentSlotInputs, slots])
 
-  // Delete slot — request confirmation
+    // Update URL for deep-linking (replaceState, no navigation)
+    const url = new URL(window.location.href)
+    if (slotId === ORIGINAL_SLOT_ID) {
+      url.searchParams.delete("run")
+    } else {
+      url.searchParams.set("run", slotId)
+    }
+    window.history.replaceState({}, "", url.toString())
+  }, [activeSlotId, saveCurrentSlotInputs, allSlots])
+
+  // Delete slot — request confirmation (guard: skip Original)
   const handleRequestDelete = useCallback((slotId: string) => {
+    if (slotId === ORIGINAL_SLOT_ID) return
     setDeleteConfirmSlotId(slotId)
   }, [])
 
@@ -377,8 +501,9 @@ export function useRunSlots({ slug, user, persistRuns }: UseRunSlotsOptions) {
     }
   }, [deleteConfirmSlotId, activeSlotId, newRun, slug, persistRuns])
 
-  // Rename slot
+  // Rename slot (guard: skip Original)
   const handleRenameSlot = useCallback((slotId: string, name: string | null) => {
+    if (slotId === ORIGINAL_SLOT_ID) return
     setSlots((prev) => prev.map((s) => s.id === slotId ? { ...s, name } : s))
     if (slug && persistRuns) {
       updateAppRunInputs(slug, slotId, undefined, name).catch(() => {})
@@ -387,7 +512,7 @@ export function useRunSlots({ slug, user, persistRuns }: UseRunSlotsOptions) {
 
   // Navigate between runs with up/down arrow keys (global)
   useEffect(() => {
-    if (slots.length === 0) return
+    if (allSlots.length === 0) return
     const handler = (e: KeyboardEvent) => {
       // Don't capture when typing in an input/textarea/select
       const tag = (e.target as HTMLElement)?.tagName
@@ -395,33 +520,45 @@ export function useRunSlots({ slug, user, persistRuns }: UseRunSlotsOptions) {
       if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return
 
       e.preventDefault()
-      const currentIndex = activeSlotId ? slots.findIndex((s) => s.id === activeSlotId) : -1
+      const currentIndex = activeSlotId ? allSlots.findIndex((s) => s.id === activeSlotId) : -1
 
       let nextIndex: number
       if (e.key === "ArrowDown") {
-        nextIndex = currentIndex < slots.length - 1 ? currentIndex + 1 : 0
+        nextIndex = currentIndex < allSlots.length - 1 ? currentIndex + 1 : 0
       } else {
-        nextIndex = currentIndex > 0 ? currentIndex - 1 : slots.length - 1
+        nextIndex = currentIndex > 0 ? currentIndex - 1 : allSlots.length - 1
       }
 
-      handleSelectSlot(slots[nextIndex].id)
+      handleSelectSlot(allSlots[nextIndex].id)
     }
     document.addEventListener("keydown", handler)
     return () => document.removeEventListener("keydown", handler)
-  }, [slots, activeSlotId, handleSelectSlot])
+  }, [allSlots, activeSlotId, handleSelectSlot])
+
+  // Smart close: desktop=collapse, mobile=hide
+  const handleCloseSidebar = useCallback(() => {
+    const isDesktop = window.matchMedia("(min-width: 768px)").matches
+    if (isDesktop) {
+      setSidebarCollapsed((prev) => !prev)
+    } else {
+      setShowHistory(false)
+    }
+  }, [])
 
   // Derived state
   const isRunning = executionStatus === "running"
   const isTerminal = activeSlot?.executionStatus === "completed" || activeSlot?.executionStatus === "failed"
-  const inputsReadOnlyValue = !activeSlotId || isRunning || isTerminal
+  const inputsReadOnlyValue = !activeSlotId || isRunning || isTerminal || activeSlotId === ORIGINAL_SLOT_ID
 
   return {
-    // State
-    slots,
+    // State (allSlots includes the synthetic Original slot)
+    slots: allSlots,
     activeSlotId,
     activeSlot,
     showHistory,
     setShowHistory,
+    sidebarCollapsed,
+    setSidebarCollapsed,
     deleteConfirmSlotId,
     setDeleteConfirmSlotId,
 
@@ -435,6 +572,7 @@ export function useRunSlots({ slug, user, persistRuns }: UseRunSlotsOptions) {
     handleRequestDelete,
     handleConfirmDelete,
     handleRenameSlot,
+    handleCloseSidebar,
 
     // Derived
     newRunLabel,

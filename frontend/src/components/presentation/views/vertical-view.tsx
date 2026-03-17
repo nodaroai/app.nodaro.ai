@@ -19,7 +19,7 @@ export function VerticalView({
     <div className="flex-1 overflow-auto p-3 sm:p-6" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom))' }}>
       <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8">
         <NodeSection
-          label="In"
+          label="Inputs"
           nodes={orderedInputNodes}
           isEditing={isEditing}
           sensors={sensors}
@@ -35,7 +35,7 @@ export function VerticalView({
         <div className="border-t border-border" />
 
         <NodeSection
-          label="Out"
+          label="Outputs"
           nodes={orderedOutputNodes}
           isEditing={isEditing}
           sensors={sensors}

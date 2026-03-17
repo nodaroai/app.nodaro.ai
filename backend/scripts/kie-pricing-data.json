@@ -1,5 +1,65 @@
 [
   {
+    "modelDescription": "Qwen2 - Image edit, image-to-image",
+    "interfaceType": "image",
+    "provider": "Qwen",
+    "creditPrice": "5.6",
+    "creditUnit": "per image",
+    "usdPrice": "0.028",
+    "falPrice": "0.035",
+    "discountRate": 20,
+    "anchor": "https://kie.ai/qwen-image-2",
+    "discountPrice": false
+  },
+  {
+    "modelDescription": "gpt-5.4-codex, Chat, Output",
+    "interfaceType": "chat",
+    "provider": "OpenAI",
+    "creditPrice": "1120",
+    "creditUnit": "per million tokens",
+    "usdPrice": "5.60",
+    "falPrice": "",
+    "discountRate": 0,
+    "anchor": "https://kie.ai/codex?model=gpt-5.4-codex",
+    "discountPrice": false
+  },
+  {
+    "modelDescription": "gpt-5.4-codex, Chat, Input",
+    "interfaceType": "chat",
+    "provider": "OpenAI",
+    "creditPrice": "140",
+    "creditUnit": "per million tokens",
+    "usdPrice": "0.70",
+    "falPrice": "",
+    "discountRate": 0,
+    "anchor": "https://kie.ai/codex?model=gpt-5.4-codex",
+    "discountPrice": false
+  },
+  {
+    "modelDescription": "gpt-5.4, Chat, Output",
+    "interfaceType": "chat",
+    "provider": "OpenAI",
+    "creditPrice": "1120",
+    "creditUnit": "per million tokens",
+    "usdPrice": "5.60",
+    "falPrice": "",
+    "discountRate": 0,
+    "anchor": "https://kie.ai/gpt-5-4",
+    "discountPrice": false
+  },
+  {
+    "modelDescription": "gpt-5.4, Chat, Input",
+    "interfaceType": "chat",
+    "provider": "OpenAI",
+    "creditPrice": "140",
+    "creditUnit": "per million tokens",
+    "usdPrice": "0.70",
+    "falPrice": "",
+    "discountRate": 0,
+    "anchor": "https://kie.ai/gpt-5-4",
+    "discountPrice": false
+  },
+  {
     "modelDescription": "kling 3.0 motion control, video-to-video, 1080P",
     "interfaceType": "video",
     "provider": "Kling",
