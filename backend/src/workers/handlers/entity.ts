@@ -57,7 +57,7 @@ function makeEntityImageHandler(
       display_cost: result.displayCost,
     }).eq("id", ctx.jobId)
 
-    await commitJobCredits(ctx.usageLogId, ctx.jobId)
+    await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
     console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
   }
 }

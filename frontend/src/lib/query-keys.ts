@@ -137,5 +137,9 @@ export const queryKeys = {
       ["admin", "user-transactions", userId] as const,
     apps: (page: number, pageSize: number) =>
       ["admin", "apps", page, pageSize] as const,
+    creditAnomalies: (offset: number, status: string, anomalyType: string, model: string) =>
+      ["admin", "credit-anomalies", "list", offset, status, anomalyType, model] as const,
+    creditAnomaliesSummary: () =>
+      ["admin", "credit-anomalies", "summary"] as const,
   },
 } as const

@@ -20,6 +20,7 @@ import {
   AppWindow,
   Scale,
   HeartPulse,
+  AlertTriangle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -46,6 +47,7 @@ const ADMIN_NAV = [
   { href: "/admin/reports", label: "Reports", icon: Flag },
   { href: "/admin/pricing", label: "Pricing", icon: DollarSign },
   { href: "/admin/credit-audit", label: "Credit Audit", icon: Scale },
+  { href: "/admin/credit-anomalies", label: "Credit Anomalies", icon: AlertTriangle },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: HeartPulse },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ] as const

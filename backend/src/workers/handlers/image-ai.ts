@@ -59,7 +59,7 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     })
     .eq("id", ctx.jobId)
 
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -109,7 +109,7 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
     })
     .eq("id", ctx.jobId)
 
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -168,7 +168,7 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
     })
     .eq("id", ctx.jobId)
 
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 

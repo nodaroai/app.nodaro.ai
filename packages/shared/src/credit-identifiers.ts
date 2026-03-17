@@ -94,7 +94,8 @@ export function buildVideoCreditModelIdentifier(
     return effectiveProvider
   }
 
-  const durationSec = typeof duration === "string" ? parseInt(duration, 10) : (duration ?? 5)
+  const parsed = typeof duration === "string" ? parseInt(duration, 10) : (duration ?? 5)
+  const durationSec = Number.isNaN(parsed) ? 5 : parsed
   const tiers = VIDEO_DURATION_TIERS[effectiveProvider]
   if (!tiers) return effectiveProvider
 
@@ -141,7 +142,8 @@ export function buildMotionCreditModelIdentifier(
     return provider
   }
 
-  const durationSec = Math.floor(videoDuration ?? 10) // default 10s; floor to match KIE per-second billing
+  const raw = videoDuration ?? 10
+  const durationSec = Math.floor(Number.isNaN(raw) ? 10 : raw) // default 10s; floor to match KIE per-second billing
   const tier = MOTION_DURATION_TIERS.find(t => durationSec <= t.maxSeconds)
     ?? MOTION_DURATION_TIERS[MOTION_DURATION_TIERS.length - 1]
 
