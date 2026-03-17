@@ -602,6 +602,15 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [8],  // FIXED: VEO3 always produces 8 second videos (not configurable)
   },
 
+  // VEO 3.1 Fast - Uses SPECIAL API endpoint: /api/v1/veo/generate
+  "veo3.1": {
+    model: "veo3_fast",  // Fast model - lower cost, faster
+    credits: 60,
+    cost: 0.30,  // 60 KIE credits * $0.005 (VEO 3.1 Fast)
+    extraParams: { generationType: "TEXT_2_VIDEO" },
+    allowedDurations: [8],  // FIXED: VEO3 always produces 8 second videos (not configurable)
+  },
+
   // Kling family - VERIFIED: docs.kie.ai/market/kling/text-to-video
   "kling": {
     model: "kling-2.6/text-to-video",

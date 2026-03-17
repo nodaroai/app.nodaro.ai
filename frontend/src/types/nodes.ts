@@ -599,6 +599,7 @@ export type TextToVideoData = {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
+  seed?: number                      // VEO 3.1: reproducible generation (10000-99999)
   removeWatermark?: boolean          // Sora2/Sora2-Pro: post-generation watermark removal (4 CR)
   // Progress tracking fields
   currentJobId?: string              // ID of the currently running job (for progress polling)

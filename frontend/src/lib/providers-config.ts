@@ -26,7 +26,7 @@ export const PROVIDERS_CONFIG: Record<ProviderCategory, Record<string, ProviderI
   },
   video: {
     veo3: {
-      label: "VEO 3",
+      label: "VEO 3.1",
       models: ["veo-3", "veo-3-fast"],
     },
     kling: {

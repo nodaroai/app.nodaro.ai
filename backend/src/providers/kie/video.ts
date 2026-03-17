@@ -476,8 +476,8 @@ export class KieVideoProvider
       )
     }
 
-    // VEO3 uses a special API endpoint
-    if (provider === "veo3") {
+    // VEO3/VEO3.1 uses a special API endpoint
+    if (provider === "veo3" || provider === "veo3.1") {
       const { resultJson, taskId: veoTaskId } = await runVeoTask(
         modelConfig.model,
         prompt,

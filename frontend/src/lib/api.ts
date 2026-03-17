@@ -908,6 +908,7 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   shots?: Array<{ prompt: string; duration: number }>
   elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
   removeWatermark?: boolean
+  seed?: number
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt, provider, ...options }
   if (userId) {
