@@ -118,6 +118,26 @@ function buildModelMap(): Map<string, ModelMapping[]> {
   return map
 }
 
+// Lazy-cached model map (pure function of static imports, safe to cache at module level)
+let _cachedModelMap: Map<string, ModelMapping[]> | null = null
+function getCachedModelMap() {
+  if (!_cachedModelMap) _cachedModelMap = buildModelMap()
+  return _cachedModelMap
+}
+
+function isSuccessState(state: string | undefined): boolean {
+  const s = state?.toLowerCase?.() ?? ""
+  return s === "success" || s === "completed" || s === "1" || s === "done"
+}
+
+function findBestMapping(mappings: ModelMapping[], avgKieCredits: number): ModelMapping {
+  return mappings.length === 1
+    ? mappings[0]
+    : mappings.reduce((best, m) =>
+        Math.abs(m.kieCredits - avgKieCredits) < Math.abs(best.kieCredits - avgKieCredits) ? m : best
+      )
+}
+
 export async function adminCreditAuditRoutes(app: FastifyInstance) {
   // GET /v1/admin/credit-audit - List recent audit entries
   // Query params: ?mismatch=true&model=kling-3.0&limit=50&offset=0
@@ -186,7 +206,12 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
   app.post("/v1/admin/credit-audit/sync", { preHandler: requireAdmin }, async (request, reply) => {
     const body = request.body as Record<string, unknown>
     const token = body.token as string
-    const days = Math.min(30, Math.max(1, Number(body.days) || 7))
+    const mode = (body.mode as string) === "actual" ? "actual" as const : "theoretical" as const
+
+    // Support both lookbackMinutes (fine-grained) and days (legacy)
+    const lookbackMinutes = body.lookbackMinutes
+      ? Math.min(43200, Math.max(1, Number(body.lookbackMinutes)))
+      : Math.min(30, Math.max(1, Number(body.days) || 7)) * 1440
 
     if (!token) {
       return reply.code(400).send({
@@ -195,17 +220,17 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
     }
 
     const endTime = Date.now()
-    const beginTime = endTime - days * 86400_000
+    const beginTime = endTime - lookbackMinutes * 60_000
 
     // Fetch all KIE logs for the time window (generic + model-specific endpoints)
     const { records, sources, errors, rawSamples } = await fetchAllKieLogs(token, beginTime, endTime)
 
     if (records.length === 0) {
-      return { message: "No records found", days, totalRecords: 0, sources, errors, rawSamples, models: [] }
+      return { mode, lookbackMinutes, message: "No records found", totalRecords: 0, sources, errors, rawSamples, models: [] }
     }
 
     // Build our model mapping for comparison
-    const modelMap = buildModelMap()
+    const modelMap = getCachedModelMap()
 
     // Group by KIE model and aggregate (raw KIE credits)
     const byModel = new Map<string, {
@@ -218,10 +243,10 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
       costBuckets: Map<number, number>
     }>()
 
+    let successCount = 0
     for (const record of records) {
-      // Different endpoints use different state values: "success", "completed", "1", etc.
-      const s = record.state?.toLowerCase?.() ?? ""
-      if (s !== "success" && s !== "completed" && s !== "1" && s !== "done") continue
+      if (!isSuccessState(record.state)) continue
+      successCount++
 
       const key = record.model
       const existing = byModel.get(key)
@@ -249,6 +274,140 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
     const settings = await getAppSettings()
     const markupMultiplier = 1 + settings.cost_markup_percent / 100
 
+    // ---------- Actual mode: compare KIE cost vs what we ACTUALLY charged ----------
+    if (mode === "actual") {
+      const since = new Date(beginTime).toISOString()
+      const until = new Date(endTime).toISOString()
+
+      // Fetch usage_logs for the time window (paginated, up to 10k rows)
+      const allUsageLogs: { action: string; credits_used: number }[] = []
+      let usageOffset = 0
+      const USAGE_PAGE = 1000
+      while (usageOffset < 10_000) {
+        const { data } = await supabase
+          .from("usage_logs")
+          .select("action, credits_used")
+          .gte("created_at", since)
+          .lte("created_at", until)
+          .neq("status", "refunded")
+          .range(usageOffset, usageOffset + USAGE_PAGE - 1)
+        if (!data || data.length === 0) break
+        allUsageLogs.push(...(data as { action: string; credits_used: number }[]))
+        if (data.length < USAGE_PAGE) break
+        usageOffset += USAGE_PAGE
+      }
+
+      // Group by base model key (strip composite ":variant" suffix)
+      const usageByBaseKey = new Map<string, { count: number; totalCredits: number; min: number; max: number }>()
+      for (const log of allUsageLogs) {
+        const baseKey = log.action.split(":")[0]
+        const credits = log.credits_used ?? 0
+        const existing = usageByBaseKey.get(baseKey)
+        if (existing) {
+          existing.count++
+          existing.totalCredits += credits
+          existing.min = Math.min(existing.min, credits)
+          existing.max = Math.max(existing.max, credits)
+        } else {
+          usageByBaseKey.set(baseKey, { count: 1, totalCredits: credits, min: credits, max: credits })
+        }
+      }
+
+      const actualResults = []
+      for (const [kieModel, stats] of byModel) {
+        const mappings = modelMap.get(kieModel)
+        const avgKieCredits = round2(stats.totalCredits / stats.tasks)
+        const providerCostInCredits = round2(avgKieCredits / KIE_CREDITS_PER_NODARO)
+        const expectedCredits = Math.ceil(providerCostInCredits * markupMultiplier)
+
+        if (!mappings?.length) {
+          actualResults.push({
+            kieModel, ourKey: null, category: "unknown",
+            kieTasks: stats.tasks, ourJobs: 0,
+            avgKieCredits, providerCostInCredits, expectedCredits,
+            actualAvgCredits: null, actualMin: null, actualMax: null,
+            diff: null, diffPercent: null,
+            status: "UNMAPPED" as const,
+            variable: stats.minCredits !== stats.maxCredits,
+          })
+          continue
+        }
+
+        const mapping = findBestMapping(mappings, avgKieCredits)
+
+        const possibleKeys = [...new Set(mappings.map(m => m.ourKey))]
+        let totalOurJobs = 0
+        let totalOurCredits = 0
+        let ourMin = Infinity
+        let ourMax = -Infinity
+
+        for (const key of possibleKeys) {
+          const usage = usageByBaseKey.get(key)
+          if (usage) {
+            totalOurJobs += usage.count
+            totalOurCredits += usage.totalCredits
+            ourMin = Math.min(ourMin, usage.min)
+            ourMax = Math.max(ourMax, usage.max)
+          }
+        }
+
+        if (totalOurJobs === 0) {
+          actualResults.push({
+            kieModel, ourKey: possibleKeys.join(", "), category: mapping.category,
+            kieTasks: stats.tasks, ourJobs: 0,
+            avgKieCredits, providerCostInCredits, expectedCredits,
+            actualAvgCredits: null, actualMin: null, actualMax: null,
+            diff: null, diffPercent: null,
+            status: "UNMATCHED" as const,
+            variable: stats.minCredits !== stats.maxCredits,
+          })
+          continue
+        }
+
+        const actualAvgCredits = round2(totalOurCredits / totalOurJobs)
+        const diff = round2(actualAvgCredits - expectedCredits)
+        const diffPercent = expectedCredits > 0 ? round2((diff / expectedCredits) * 100) : null
+
+        let status: "OK" | "UNDERCHARGED" | "OVERCHARGED" = "OK"
+        if (diff < -0.5) status = "UNDERCHARGED"
+        else if (expectedCredits > 0 && diffPercent != null && diffPercent > 100) status = "OVERCHARGED"
+
+        actualResults.push({
+          kieModel,
+          ourKey: possibleKeys.length === 1 ? possibleKeys[0] : possibleKeys.join(", "),
+          category: mapping.category,
+          kieTasks: stats.tasks, ourJobs: totalOurJobs,
+          avgKieCredits, providerCostInCredits, expectedCredits,
+          actualAvgCredits,
+          actualMin: ourMin === Infinity ? null : ourMin,
+          actualMax: ourMax === -Infinity ? null : ourMax,
+          diff, diffPercent, status,
+          variable: stats.minCredits !== stats.maxCredits || (ourMin !== ourMax && ourMin !== Infinity),
+        })
+      }
+
+      actualResults.sort((a, b) => {
+        if (a.status !== "OK" && b.status === "OK") return -1
+        if (a.status === "OK" && b.status !== "OK") return 1
+        return Math.abs(b.diff ?? 0) - Math.abs(a.diff ?? 0)
+      })
+
+      const actualMismatches = actualResults.filter(r => r.status !== "OK").length
+      return {
+        mode: "actual" as const,
+        lookbackMinutes,
+        markupPercent: settings.cost_markup_percent,
+        totalRecords: records.length,
+        successRecords: successCount,
+        totalUsageLogs: allUsageLogs.length,
+        uniqueModels: byModel.size,
+        mismatches: actualMismatches,
+        sources, errors, rawSamples,
+        models: actualResults,
+      }
+    }
+
+    // ---------- Theoretical mode: compare KIE cost vs our pricing table ----------
     // Compare: provider KIE credits vs what we charge users
     const results = []
     for (const [kieModel, stats] of byModel) {
@@ -281,11 +440,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
 
       // When multiple keys map to same KIE model, pick the one whose
       // KIE credits are closest to the actual average
-      const mapping = mappings.length === 1
-        ? mappings[0]
-        : mappings.reduce((best, m) =>
-            Math.abs(m.kieCredits - avgKieCredits) < Math.abs(best.kieCredits - avgKieCredits) ? m : best
-          )
+      const mapping = findBestMapping(mappings, avgKieCredits)
 
       // Collect ALL credit tiers for this model (base + composite like key:5s, key:10s:audio)
       const allTiers: number[] = []
@@ -361,23 +516,21 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
       })
     }
 
-    // Sort: mismatches first, then by absolute diff
+    // Sort: mismatches first, then by largest absolute diff
     results.sort((a, b) => {
       if (a.status !== "OK" && b.status === "OK") return -1
       if (a.status === "OK" && b.status !== "OK") return 1
-      return Math.abs(a.diff ?? 0) - Math.abs(b.diff ?? 0)
+      return Math.abs(b.diff ?? 0) - Math.abs(a.diff ?? 0)
     })
 
     const mismatches = results.filter(r => r.status !== "OK")
 
     return {
-      days,
+      mode: "theoretical" as const,
+      lookbackMinutes,
       markupPercent: settings.cost_markup_percent,
       totalRecords: records.length,
-      successRecords: records.filter(r => {
-        const s = r.state?.toLowerCase?.() ?? ""
-        return s === "success" || s === "completed" || s === "1" || s === "done"
-      }).length,
+      successRecords: successCount,
       uniqueModels: byModel.size,
       mismatches: mismatches.length,
       sources,
