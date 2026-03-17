@@ -102,8 +102,21 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
 
 export const LLM_MODEL_IDS = LLM_MODELS.map((m) => m.id)
 
+export type LlmFeature =
+  | "ai-writer"
+  | "prompt-helper"
+  | "scene-graph-ai"
+  | "after-effects"
+  | "motion-graphics"
+  | "lottie-overlay"
+  | "3d-title"
+  | "image-to-text"
+  | "qa-check"
+  | "generate-script"
+  | "translate"
+
 /** Feature → default model when user hasn't selected one */
-export const LLM_FEATURE_DEFAULTS: Record<string, string> = {
+export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   "ai-writer": "claude-sonnet-4.6",
   "prompt-helper": "gemini-3-flash",
   "scene-graph-ai": "claude-sonnet-4.6",

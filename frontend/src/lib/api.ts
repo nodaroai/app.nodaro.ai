@@ -960,18 +960,19 @@ export async function textToSpeech(
   return res.json()
 }
 
-export async function generateScriptApi(prompt: string, sceneCount?: number, tone?: string, targetDuration?: number, provider?: string, llmModel?: string, userId?: string): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { prompt }
-  if (sceneCount !== undefined) body.sceneCount = sceneCount
-  if (tone) body.tone = tone
-  if (targetDuration !== undefined) body.targetDuration = targetDuration
-  if (provider) body.provider = provider
-  if (llmModel) body.llmModel = llmModel
-  if (userId) body.userId = userId
+export async function generateScriptApi(params: {
+  prompt: string
+  sceneCount?: number
+  tone?: string
+  targetDuration?: number
+  provider?: string
+  llmModel?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-script`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
+    body: JSON.stringify(withWorkflowId(params)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -2449,7 +2450,6 @@ export async function enhancePrompt(params: {
 export async function generateAIWriterStream(params: {
   systemPrompt: string
   userInput: string
-  model: string
   temperature: number
   maxTokens: number
   userId: string

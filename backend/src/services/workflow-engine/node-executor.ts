@@ -73,26 +73,6 @@ const SYNC_HTTP_ROUTES: Record<string, string> = {
   "facebook-post": "/v1/social/publish",
 }
 
-// Base model identifiers for sync HTTP routes (LLM nodes use dynamic identifiers)
-const SYNC_HTTP_MODEL_IDS: Record<string, string> = {
-  "ai-writer": "ai-writer",
-  "video-composer": "scene-graph-ai",
-  "after-effects": "after-effects",
-  "lottie-overlay": "lottie-overlay",
-  "3d-title": "3d-title",
-  "motion-graphics": "motion-graphics",
-  "image-to-text": "image-to-text",
-  "suno-style-boost": "suno-style-boost",
-  "qa-check": "qa-check",
-  "save-to-storage": "save-to-storage",
-  "instagram-post": "social-publish",
-  "tiktok-post": "social-publish",
-  "youtube-upload": "social-publish",
-  "linkedin-post": "social-publish",
-  "x-post": "social-publish",
-  "facebook-post": "social-publish",
-}
-
 // Maps social node type to platform name
 const SOCIAL_NODE_TO_PLATFORM: Record<string, string> = {
   "instagram-post": "instagram",

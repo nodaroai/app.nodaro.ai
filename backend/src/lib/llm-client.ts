@@ -9,7 +9,7 @@
 
 import { config } from "./config.js"
 import { getLlmModel, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
-import type { LlmModelDef } from "../../../packages/shared/src/llm-models.js"
+import type { LlmModelDef, LlmFeature } from "../../../packages/shared/src/llm-models.js"
 import { getAnthropicClient } from "./anthropic.js"
 import { KIE_API_BASE } from "../providers/kie/client.js"
 
@@ -104,7 +104,7 @@ export async function llmStream(
 function resolveModel(req: LlmRequest): LlmModelDef {
   let modelId = req.modelId
   if (!modelId && req.feature) {
-    modelId = LLM_FEATURE_DEFAULTS[req.feature] ?? "claude-sonnet-4.6"
+    modelId = LLM_FEATURE_DEFAULTS[req.feature as LlmFeature] ?? "claude-sonnet-4.6"
   }
   const model = getLlmModel(modelId)
   if (!model) {

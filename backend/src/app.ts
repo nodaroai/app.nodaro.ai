@@ -106,6 +106,7 @@ import { embedRoutes } from "./routes/embed.js"
 import { qaCheckRoutes } from "./routes/qa-check.js"
 import { saveToStorageRoutes } from "./routes/save-to-storage.js"
 import { promptHelperRoutes } from "./routes/prompt-helper.js"
+import { adminLlmModelsRoutes } from "./routes/admin-llm-models.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
@@ -238,6 +239,7 @@ export async function buildApp() {
   await app.register(qaCheckRoutes)
   await app.register(saveToStorageRoutes)
   await app.register(promptHelperRoutes)
+  await app.register(adminLlmModelsRoutes)
 
   return app
 }

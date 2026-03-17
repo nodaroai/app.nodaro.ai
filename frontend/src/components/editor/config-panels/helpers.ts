@@ -1,6 +1,8 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
 import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
+import { buildLlmCreditIdentifier } from "@nodaro-shared/llm-models"
+import type { LlmFeature } from "@nodaro-shared/llm-models"
 
 export const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = {
   prompt: ["text-prompt"],
@@ -107,15 +109,27 @@ export function extractDisplayValue(data: Record<string, unknown>, nodeType: str
   }
 }
 
-/**
- * Build composite model identifier for credit cost lookup.
- * Appends settings that affect pricing (quality or resolution) for variable-pricing models.
- * Examples: "gpt-image:high", "flux:2K", "nano-banana-pro:4K"
- */
+/** Map node types that use LLM models to their credit feature names */
+const LLM_NODE_FEATURE_MAP: Record<string, LlmFeature> = {
+  "ai-writer": "ai-writer",
+  "video-composer": "scene-graph-ai",
+  "after-effects": "after-effects",
+  "lottie-overlay": "lottie-overlay",
+  "3d-title": "3d-title",
+  "motion-graphics": "motion-graphics",
+  "generate-script": "generate-script",
+  "qa-check": "qa-check",
+  "image-to-text": "image-to-text",
+}
+
 export function getModelIdentifier(node: WorkflowNode): string {
-  // AI Writer always uses "ai-writer" for credit cost lookup (not the LLM provider name)
-  if (node.type === "ai-writer") return "ai-writer"
   const data = node.data as Record<string, unknown>
+
+  // LLM-powered nodes: use composite credit identifier based on selected model tier
+  const llmFeature = LLM_NODE_FEATURE_MAP[node.type ?? ""]
+  if (llmFeature) {
+    return buildLlmCreditIdentifier(llmFeature, data.llmModel as string | undefined)
+  }
 
   const nodeType = node.type ?? "unknown"
 

@@ -1867,7 +1867,6 @@ export function executeNode(
       userId: ctx.userId ?? "",
       systemPrompt: processedPrompt,
       userInput,
-      model: writerData.model || "claude-sonnet-4-5-20250929",
       temperature: writerData.temperature ?? 0.7,
       maxTokens: writerData.maxTokens ?? 4096,
       llmModel: writerData.llmModel,

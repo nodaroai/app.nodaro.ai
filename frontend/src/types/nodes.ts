@@ -1721,7 +1721,8 @@ export type AIWriterNodeData = {
   systemPrompt: string
   userInput: string
   provider: AiWriterProvider
-  model: string
+  /** @deprecated Use llmModel instead. Kept optional for backward compat with saved workflows. */
+  model?: string
   llmModel?: string
   temperature: number
   maxTokens: number
@@ -3293,7 +3294,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       systemPrompt: "",
       userInput: "",
       provider: "claude",
-      model: "claude-sonnet-4-5-20250929",
       temperature: 0.7,
       maxTokens: 4096,
       fieldMappings: {},

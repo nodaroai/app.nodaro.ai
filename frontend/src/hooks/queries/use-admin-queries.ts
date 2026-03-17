@@ -664,3 +664,56 @@ export function useDeleteCreditAnomalyMutation() {
     },
   })
 }
+
+// --- LLM Models ---
+
+export interface AdminLlmModel {
+  readonly id: string
+  readonly displayName: string
+  readonly tier: "economy" | "standard" | "premium"
+  readonly vendor: "anthropic" | "google" | "openai"
+  readonly isEnabled: boolean
+}
+
+export interface AdminLlmModelsResponse {
+  readonly models: AdminLlmModel[]
+  readonly tierCosts: { economy: number | null; standard: number | null; premium: number | null }
+  readonly featureCosts: Record<string, { economy: number | null; standard: number | null; premium: number | null }>
+}
+
+export function useAdminLlmModels() {
+  return useQuery({
+    queryKey: queryKeys.admin.llmModels(),
+    queryFn: async (): Promise<AdminLlmModelsResponse> => {
+      const res = await fetch("/v1/admin/llm-models", {
+        headers: await getAuthHeaders(),
+      })
+      if (!res.ok) throw new Error("Failed to fetch LLM models")
+      const json = await res.json()
+      return (json.data ?? { models: [], tierCosts: {}, featureCosts: {} }) as AdminLlmModelsResponse
+    },
+    enabled: hasAdmin(),
+    staleTime: 60_000,
+  })
+}
+
+export function useToggleLlmModelMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ modelId, isEnabled }: { modelId: string; isEnabled: boolean }) => {
+      const res = await fetch(`/v1/admin/llm-models/${modelId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...await getAuthHeaders(),
+        },
+        body: JSON.stringify({ isEnabled }),
+      })
+      if (!res.ok) throw new Error("Failed to update LLM model")
+      return res.json()
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.admin.llmModels() })
+    },
+  })
+}

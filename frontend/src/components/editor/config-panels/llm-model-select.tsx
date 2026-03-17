@@ -1,6 +1,6 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LLM_MODELS, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
-import type { LlmTier } from "@nodaro-shared/llm-models"
+import type { LlmTier, LlmFeature } from "@nodaro-shared/llm-models"
 
 const TIER_LABELS: Record<LlmTier, string> = {
   economy: "Economy",
@@ -15,13 +15,13 @@ const TIER_COLORS: Record<LlmTier, string> = {
 }
 
 interface LlmModelSelectProps {
-  feature: string
+  feature: LlmFeature
   value?: string
   onChange: (modelId: string) => void
 }
 
 export function LlmModelSelect({ feature, value, onChange }: LlmModelSelectProps) {
-  const defaultModel = LLM_FEATURE_DEFAULTS[feature] ?? "claude-sonnet-4.6"
+  const defaultModel = LLM_FEATURE_DEFAULTS[feature]
   const currentValue = value || defaultModel
 
   return (

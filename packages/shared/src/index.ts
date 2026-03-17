@@ -61,6 +61,7 @@ export {
   buildLlmCreditIdentifier,
   resolveLlmCreditId,
   type LlmTier,
+  type LlmFeature,
   type KieApiFormat,
   type LlmModelDef,
 } from "./llm-models.js"

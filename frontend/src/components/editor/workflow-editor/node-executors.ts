@@ -924,7 +924,7 @@ export function runScriptGeneration(
   updateNodeData(nodeId, { executionStatus: "running" });
 
   return new Promise((resolve, reject) => {
-    generateScriptApi(prompt, sceneCount, tone, targetDuration, provider, llmModel, ctx.userId)
+    generateScriptApi({ prompt, sceneCount, tone, targetDuration, provider, llmModel, userId: ctx.userId })
       .then(({ jobId }) => {
         toast.info("Script generation started", {
           description: `Job ID: ${jobId}`,

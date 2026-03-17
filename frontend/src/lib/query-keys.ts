@@ -143,5 +143,6 @@ export const queryKeys = {
       ["admin", "credit-anomalies", "summary"] as const,
     kieCredits: (days: number) =>
       ["admin", "kie-credits", days] as const,
+    llmModels: () => ["admin", "llm-models"] as const,
   },
 } as const

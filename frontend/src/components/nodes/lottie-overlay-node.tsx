@@ -7,13 +7,14 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { buildLlmCreditIdentifier } from "@nodaro-shared/llm-models"
 import type { LottieOverlayData } from "@/types/nodes"
 
 function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as LottieOverlayData | undefined
   const nodeData = currentNodeData ?? (data as LottieOverlayData)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const credits = useModelCredits("lottie-overlay", 10)
+  const credits = useModelCredits(buildLlmCreditIdentifier("lottie-overlay", nodeData.llmModel), 10)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const isRunning = status === "running"
