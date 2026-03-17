@@ -21,9 +21,9 @@ import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
   minimax: 18, veo3: 79, "veo3.1": 19, kling: 28, "kling-turbo": 14,
   "kling-3.0": 63, "grok-i2v": 7, "sora2-pro": 38, seedance: 7,
-  "wan-i2v": 22, "wan-turbo": 13, "hailuo-2.3-pro": 15, "hailuo-2.3": 10,
-  "hailuo-standard": 10, sora2: 10, "bytedance-lite": 6, "bytedance-pro": 8,
-  "bytedance-pro-fast": 19, "kling-master": 50, "runway-kie": 4,
+  "wan-i2v": 22, "wan-turbo": 13, "hailuo-2.3-pro": 20, "hailuo-2.3": 10,
+  "hailuo-standard": 10, sora2: 10, "bytedance-lite": 6, "bytedance-pro": 18,
+  "bytedance-pro-fast": 9, "kling-master": 50, "runway-kie": 4,
 }
 
 // Providers that support End Frame (second image for video ending)

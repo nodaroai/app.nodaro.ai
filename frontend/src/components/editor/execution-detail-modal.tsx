@@ -26,9 +26,14 @@ function getCostDisplayForModal(job: Job, showDollars: boolean): string {
     if (cost < 0.01) return `$${cost.toFixed(4)}`
     return `$${cost.toFixed(3)}`
   }
-  const credits = job.credits
-  if (credits == null) return "-"
-  return `${credits} CR`
+  // Admin sees actual vs estimated; regular users only have credits
+  const actual = job.credits_actual
+  const estimated = job.credits
+  if (actual == null && estimated == null) return "-"
+  if (actual != null && estimated != null && actual !== estimated) {
+    return `${actual} CR (est. ${estimated})`
+  }
+  return `${actual ?? estimated} CR`
 }
 
 interface ExecutionDetailModalProps {
@@ -119,12 +124,11 @@ function extractJobType(inputData: Job["input_data"]): string {
 }
 
 function extractProvider(inputData: Job["input_data"], job: Job): string | null {
-  // In cloud edition, don't show provider info to regular users
-  // The backend doesn't send the provider field, so we check for its existence
-  if (isCloud() && !job.provider) {
+  // Backend strips provider field for non-admin users, so check for its existence
+  if (!job.provider) {
     return null
   }
-  // Self-hosted or admin: show provider from job record or input data
+  // Admin users: show provider from job record or input data
   return job.provider || inputData.provider || "replicate"
 }
 

@@ -16,7 +16,7 @@ import {
   runKieTask,
   MAX_POLL_ATTEMPTS_VIDEO,
 } from "./client.js"
-import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS, KIE_DIALOGUE_MODELS } from "./models.js"
+import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS, KIE_DIALOGUE_MODELS, KIE_CREDIT_USD } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 
 // ---------------------------------------------------------------------------
@@ -263,7 +263,7 @@ export class KieAudioProvider
       `[KIE.ai] Isolating audio with ${modelConfig.model}`
     )
 
-    const { resultJson } = await runKieTask(
+    const { resultJson, costTime } = await runKieTask(
       modelConfig.model,
       { audio_url: audioUrl },
       MAX_POLL_ATTEMPTS_VIDEO
@@ -278,11 +278,13 @@ export class KieAudioProvider
       )
     }
 
+    // Use actual KIE cost if available (costTime = KIE credits consumed)
+    const actualCost = costTime ? costTime * KIE_CREDIT_USD : modelConfig.cost
     console.log(
-      `[KIE.ai] Audio isolation completed: ${resultUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      `[KIE.ai] Audio isolation completed: ${resultUrl} (cost: $${actualCost.toFixed(4)}, KIE cr: ${costTime ?? "N/A"})`
     )
 
-    return { url: resultUrl, cost: modelConfig.cost }
+    return { url: resultUrl, cost: actualCost }
   }
 
   async speechToText(
@@ -306,7 +308,7 @@ export class KieAudioProvider
     if (options?.diarize != null) input.diarize = options.diarize
     if (options?.tagAudioEvents != null) input.tag_audio_events = options.tagAudioEvents
 
-    const { resultJson } = await runKieTask(
+    const { resultJson, costTime } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO
@@ -316,11 +318,13 @@ export class KieAudioProvider
     const text = (raw.text as string) ?? (raw.transcription as string) ?? ""
     const language = (raw.language_code as string) ?? (raw.detected_language as string) ?? "unknown"
 
+    // Use actual KIE cost if available (costTime = KIE credits consumed)
+    const actualCost = costTime ? costTime * KIE_CREDIT_USD : modelConfig.cost
     console.log(
-      `[KIE.ai] STT completed: ${text.length} chars (cost: $${modelConfig.cost.toFixed(4)})`
+      `[KIE.ai] STT completed: ${text.length} chars (cost: $${actualCost.toFixed(4)}, KIE cr: ${costTime ?? "N/A"})`
     )
 
-    return { text, language, cost: modelConfig.cost }
+    return { text, language, cost: actualCost }
   }
 
   async generateDialogue(
