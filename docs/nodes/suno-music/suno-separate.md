@@ -26,15 +26,9 @@ Suno Separate offers two modes of audio separation. Vocal separation isolates vo
 
 **Full Stem Split (`split_stem`):**
 - `stems` -- object containing up to 12 individual stem URLs (drums, bass, guitar, piano, vocals, etc.)
-
-## Credit Cost
-
-- **Vocal separation (`separate_vocal`):** 5 credits
-- **Full stem split (`split_stem`):** 16 credits
-
 ## Best Practices
 
-- Start with vocal separation at 5 credits before committing to a full stem split at 16 credits.
+- Start with vocal separation before committing to a full stem split.
 - Use vocal separation when you only need to isolate vocals for dubbing, voice changing, or remixing.
 - Use full stem splitting when you need granular control over individual instruments for mixing or re-arrangement.
 - Connect the vocal output to a Voice Changer or Dubbing node for further processing.
@@ -52,5 +46,5 @@ Suno Separate offers two modes of audio separation. Vocal separation isolates vo
 
 - Both Task ID and Audio ID are required -- these come from upstream Suno nodes, not from raw audio files.
 - For non-Suno audio files, consider using the Audio Isolation node (ElevenLabs Voice Extractor) instead.
-- The 12-stem split costs over three times as much as vocal separation -- only use it when you need individual instrument control.
+- The 12-stem split takes longer than vocal separation -- only use it when you need individual instrument control.
 - Stem names in the output depend on what the AI detects in the source audio.

@@ -26,11 +26,6 @@ The Text to Dialogue node uses ElevenLabs Dialogue V3 to produce a single audio 
 
 - **Input**: `in` -- optional upstream connection (not typically used; dialogue is configured directly in the panel)
 - **Output**: `audio` -- single audio file containing all dialogue lines spoken in sequence (URL)
-
-## Credit Cost
-
-5 credits per generation (`elevenlabs-dialogue`). Maximum 5000 characters total across all lines.
-
 ## Best Practices
 
 - Assign distinct voices to each speaker to make the conversation easy to follow. Use the Voice Browser to preview voices before assigning them.

@@ -17,11 +17,6 @@ The Trim Video node extracts a section of video between specified start and end 
 
 **Inputs:** Video (required)
 **Outputs:** Trimmed video clip
-
-## Credit Cost
-
-0 credits — FFmpeg processing, always free.
-
 ## Best Practices
 
 - Preview the source video first to identify exact trim points

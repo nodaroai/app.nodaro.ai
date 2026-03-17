@@ -20,11 +20,6 @@ Item counter displays the total number of entries.
 
 **Outputs:**
 - Text — each item is emitted sequentially to downstream nodes
-
-## Credit Cost
-
-0 credits — always free.
-
 ## Best Practices
 
 - Keep list items consistent in format for predictable downstream behavior
@@ -42,4 +37,4 @@ Item counter displays the total number of entries.
 
 - Press Enter to add a new item quickly
 - Items are processed in order from top to bottom
-- For very large batches, consider breaking into smaller lists to manage credit usage
+- For very large batches, consider breaking into smaller lists to manage workflow size

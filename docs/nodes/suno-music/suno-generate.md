@@ -26,19 +26,13 @@ Suno Generate creates complete songs from text prompts. It supports multiple Sun
 
 - **Inputs:** `in` -- optional upstream connection (text prompt, etc.)
 - **Outputs:** `audio` -- generated audio URL
-
-## Credit Cost
-
-- **V4 / V4.5 models:** 7 credits
-- **V5 model:** 13 credits
-
 ## Best Practices
 
 - Use Suno metatags in lyrics (`[Verse]`, `[Chorus]`, `[Bridge]`, `[Outro]`) to structure the song.
 - Keep Style Weight around 0.5 for balanced results; push toward 1.0 only when you need strict genre adherence.
 - Set Weirdness to 0.0 for predictable output; increase gradually for more experimental results.
 - Use Negative Style to explicitly exclude unwanted genres (e.g., "metal, screaming") rather than relying on the prompt alone.
-- V5 produces higher quality output but costs nearly double the credits of V4 models.
+- V5 produces higher quality output than V4 models.
 
 ## Common Use Cases
 

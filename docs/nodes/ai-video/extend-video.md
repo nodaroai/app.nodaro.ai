@@ -23,19 +23,10 @@ The Extend Video node continues a previously generated video by appending new co
 ## Inputs & Outputs
 
 **Inputs:**
-- Video (required) — upstream VEO or Runway generated video with kieTaskId
+- Video (required) — upstream VEO or Runway generated video (must come from a VEO or Runway generation node)
 
 **Outputs:**
 - Extended video URL
-
-## Credit Cost
-
-| Provider | Credits | Notes |
-|----------|---------|-------|
-| veo-extend (fast) | 19 | VEO 3.1 Fast |
-| veo-extend (quality) | 79 | VEO 3.1 Quality |
-| runway-extend | 32 | Runway extend |
-
 ## Best Practices
 
 - The source video must come from a VEO or Runway generation node — this node cannot extend arbitrary uploaded videos
@@ -52,6 +43,6 @@ The Extend Video node continues a previously generated video by appending new co
 
 ## Tips
 
-- VEO Fast (19cr) and Quality (79cr) have a 4x cost difference — use Fast for drafts
+- Use "fast" mode for draft iterations and "quality" for final renders
 - The prompt for extension should describe what happens next, not repeat what already exists
 - Each extension adds roughly the same duration as the original clip

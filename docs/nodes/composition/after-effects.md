@@ -19,10 +19,6 @@ The After Effects node uses Claude Sonnet to interpret a natural language prompt
 
 **Outputs:**
 - `composition` -- Effect plan (JSON). Connect to a Render Video node for final output.
-
-## Credit Cost
-10 credits per generation (Claude Sonnet AI call).
-
 ## Best Practices
 - Describe effects in plain language (e.g., "cinematic color grade with warm tones and subtle vignette").
 - Use the config panel preview to verify the effect plan before rendering.

@@ -20,11 +20,6 @@ The Fade In/Out node adds smooth fade transitions to video. Configure fade-in, f
 
 **Inputs:** Video (required)
 **Outputs:** Video with fade transitions
-
-## Credit Cost
-
-0 credits — FFmpeg processing, always free.
-
 ## Best Practices
 
 - 0.5s is a good default for most content

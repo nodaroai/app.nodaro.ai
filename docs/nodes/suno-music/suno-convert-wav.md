@@ -18,18 +18,13 @@ No additional configuration fields. The conversion is automatic.
 
 - **Inputs:** `audio` -- Suno task ID and audio ID from an upstream Suno node
 - **Outputs:** `audio` -- WAV format audio URL
-
-## Credit Cost
-
-- **Fixed:** 1 credit
-
 ## Best Practices
 
 - Place this node at the end of a Suno workflow when you need lossless output for production use.
 - WAV files are significantly larger than MP3 -- consider storage implications before converting.
 - Use this before feeding audio into FFmpeg processing nodes that benefit from lossless input.
 - Not all downstream use cases require WAV -- skip this node if MP3 quality is sufficient.
-- At 1 credit, the cost is negligible so convert proactively when quality matters.
+- The cost is negligible so convert proactively when quality matters.
 
 ## Common Use Cases
 
@@ -42,6 +37,6 @@ No additional configuration fields. The conversion is automatic.
 ## Tips
 
 - This is one of the simplest Suno nodes -- no configuration beyond the automatic Task ID and Audio ID resolution.
-- At 1 credit, this is tied with Suno Style Boost as the cheapest Suno operation.
+- This is tied with Suno Style Boost as one of the cheapest Suno operations.
 - The source track must originate from a Suno node. This is not a general-purpose audio format converter.
 - WAV output will be uncompressed PCM audio, resulting in much larger file sizes than the source MP3.

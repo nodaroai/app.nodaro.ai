@@ -26,32 +26,21 @@ Edit Image takes an existing image as input and applies a transformation operati
 
 **Outputs:**
 - `out` -- processed/edited image URL
-
-## Credit Cost
-
-| Provider | Credits | Notes |
-|----------|---------|-------|
-| recraft-upscale | 1 | AI-powered upscaling |
-| recraft-remove-bg | 1 | Background removal, outputs transparent PNG |
-| nano-banana-edit | 2 | Context-aware editing with prompt guidance |
-| grok-upscale | 4 | AI upscaling via Grok |
-| topaz-image-upscale | 4 (2K), 7 (4K), 13 (8K) | Variable by target resolution |
-
 ## Supported Providers
 
 | Provider | Label | Description |
 |----------|-------|-------------|
 | recraft-upscale | Recraft Upscale | AI-powered upscaling and enhancement. Simple one-click operation with no additional configuration. |
-| topaz-image-upscale | Topaz Upscale | Advanced upscaling with configurable factor (1x/2x/4x/8x) and target resolution (2K/4K/8K). Higher resolutions cost more credits. |
+| topaz-image-upscale | Topaz Upscale | Advanced upscaling with configurable factor (1x/2x/4x/8x) and target resolution (2K/4K/8K). |
 | recraft-remove-bg | Recraft Remove BG | Removes the background and outputs a transparent PNG. No additional configuration needed. |
 | nano-banana-edit | Nano Banana Edit | Context-aware image editing using a text prompt. Supports style presets, negative prompts, aspect ratio, seed, and character/asset references. |
 | grok-upscale | Grok Upscale | AI upscaling via Grok. |
 
 ## Best Practices
 
-- Use Recraft Upscale (1 credit) for quick, low-cost enhancement when precise resolution control is not needed.
-- Use Topaz Upscale for production-quality upscaling where you need to target a specific resolution (2K/4K/8K), but be mindful of the higher credit cost at 8K (13 credits).
-- Recraft Remove BG is the most cost-effective background removal option (1 credit) and outputs transparent PNGs suitable for compositing workflows.
+- Use Recraft Upscale for quick, low-cost enhancement when precise resolution control is not needed.
+- Use Topaz Upscale for production-quality upscaling where you need to target a specific resolution (2K/4K/8K).
+- Recraft Remove BG outputs transparent PNGs suitable for compositing workflows.
 - Nano Banana Edit is the only Edit Image operation that accepts a text prompt -- use it for targeted modifications (e.g., "change the sky to sunset", "add a hat to the person").
 - Chain Edit Image nodes for multi-step operations: remove background first, then upscale.
 

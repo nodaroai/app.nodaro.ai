@@ -27,10 +27,6 @@ The Webhook Output node sends the upstream media result and any configured param
 
 **Outputs:**
 None. This is a terminal output node.
-
-## Credit Cost
-0 credits.
-
 ## Best Practices
 - Verify the webhook URL is reachable and accepts POST requests before running the workflow.
 - Define parameter names and types that match what the receiving service expects.

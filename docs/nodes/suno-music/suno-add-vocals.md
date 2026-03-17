@@ -17,11 +17,6 @@ Suno Add Vocals takes an existing Suno audio track (typically an instrumental) a
 
 - **Inputs:** `audio` -- Suno task ID and audio ID from an upstream Suno node
 - **Outputs:** `audio` -- audio URL with added vocals
-
-## Credit Cost
-
-- **Fixed:** 4 credits
-
 ## Best Practices
 
 - Use this after generating an instrumental track (via Suno Generate with the Instrumental toggle on) to add vocals.

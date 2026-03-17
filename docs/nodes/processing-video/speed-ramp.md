@@ -17,11 +17,6 @@ The Adjust Speed (Speed Ramp) node changes video playback speed from 0.25x (slow
 
 **Inputs:** Video (required)
 **Outputs:** Speed-adjusted video
-
-## Credit Cost
-
-0 credits — FFmpeg processing, always free.
-
 ## Best Practices
 
 - Use 0.5x for smooth slow motion of action scenes

@@ -22,16 +22,6 @@ The Lip Sync node takes a portrait image and an audio track (speech/voiceover) a
 
 **Outputs:**
 - Lip-synced video
-
-## Credit Cost
-
-| Provider | Credits | Notes |
-|----------|---------|-------|
-| kling-avatar | 28 | Standard quality |
-| hailuo-avatar | 19 | — |
-| infinitalk | 32 | — |
-| kling-avatar-pro | 56 | Premium quality |
-
 ## Best Practices
 
 - Use a clear, front-facing portrait for best lip sync accuracy

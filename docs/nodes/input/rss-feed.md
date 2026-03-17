@@ -19,11 +19,6 @@ The RSS Feed node fetches content from an RSS or Atom feed URL. Select a specifi
 
 **Outputs:**
 - Feed item content (title, description, link)
-
-## Credit Cost
-
-0 credits — always free.
-
 ## Best Practices
 
 - Use index 0 for the most recent item in the feed

@@ -18,13 +18,6 @@ The Style Guide parameter node holds a free-text visual style description that i
 
 **Outputs:**
 - `style_guide` -- style guide text string, consumed by downstream AI nodes
-
-## Credit Cost
-
-| Cost | Notes |
-|------|-------|
-| 0 credits | Parameter nodes are free -- they only pass data, no AI processing |
-
 ## Supported Providers
 
 Not applicable. This is a data-passing parameter node with no AI provider.

@@ -18,10 +18,6 @@ The Preview node renders the output of any upstream node directly in the workflo
 
 **Outputs:**
 None. This is a display-only node.
-
-## Credit Cost
-0 credits.
-
 ## Best Practices
 - Place Preview nodes at key points in your workflow to monitor intermediate results.
 - Use multiple Preview nodes to compare outputs from different branches of a workflow.
@@ -37,4 +33,4 @@ None. This is a display-only node.
 - The item order is persisted, so reordering is preserved when you re-run the workflow.
 - Preview supports all media types: text renders as formatted text, images render inline, video shows a player, and audio shows a playback control.
 - This node has no outputs -- it is purely for visual inspection in the editor.
-- Preview nodes are lightweight and do not affect workflow performance or credit consumption.
+- Preview nodes are lightweight and do not affect workflow performance.

@@ -22,13 +22,8 @@ The Voice Design node provides comprehensive control over voice synthesis via th
 
 - **Input**: `in` -- optional upstream connection for dynamic text via field mapping
 - **Outputs**:
-  - `audio` -- audio preview of the designed voice speaking the preview text (URL)
-  - `voiceId` -- the generated voice ID string, reusable in Text to Speech and other voice nodes
-
-## Credit Cost
-
-5 credits per design (`elevenlabs-voice-design`).
-
+ - `audio` -- audio preview of the designed voice speaking the preview text (URL)
+ - `voiceId` -- the generated voice ID string, reusable in Text to Speech and other voice nodes
 ## Best Practices
 
 - Use the `eleven_ttv_v3` model for best quality and widest language support. Fall back to `eleven_multilingual_ttv_v2` only if v3 produces unexpected results for a specific use case.
@@ -51,4 +46,4 @@ The Voice Design node provides comprehensive control over voice synthesis via th
 - Loudness is relative to the model's default output level. Use it to normalize volume across different generated voices.
 - The Guidance Scale behaves similarly to classifier-free guidance in image generation -- very high values can reduce quality while increasing adherence to the description.
 - When providing a seed, the same seed + description + model combination should produce the same voice. Changing any parameter may produce a different voice even with the same seed.
-- This node uses the ElevenLabs `POST /v1/text-to-voice/design` endpoint directly, not through KIE.ai.
+- This node uses the ElevenLabs `POST /v1/text-to-voice/design` endpoint directly, not.

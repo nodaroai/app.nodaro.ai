@@ -24,11 +24,6 @@ The Resize Video node changes video dimensions to a target aspect ratio using cr
 
 **Inputs:** Video (required)
 **Outputs:** Resized video
-
-## Credit Cost
-
-0 credits — FFmpeg processing, always free.
-
 ## Best Practices
 
 - Use "crop" for most cases — it looks more natural than padding

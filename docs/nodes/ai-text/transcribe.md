@@ -31,11 +31,6 @@ The node produces both a simple text output and structured result data:
 When Speaker Diarization is enabled, the transcript includes speaker labels (e.g., "Speaker 1:", "Speaker 2:") before each segment.
 
 When Tag Audio Events is enabled, non-speech sounds are annotated inline (e.g., "[music]", "[laughter]").
-
-## Credit Cost
-
-2 credits per transcription (`elevenlabs-stt`).
-
 ## Best Practices
 
 - Use auto-detect for language unless you know the audio is in a specific language. Explicit language selection can improve accuracy for languages that sound similar.

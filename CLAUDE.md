@@ -3,7 +3,7 @@
 **After every commit, update this file** to reflect new features, fixes, or architecture changes.
 - Bump version (patch for fixes, minor for features)
 - This root CLAUDE.md is tracked in git. Subdirectory CLAUDE.md files are gitignored.
-- Full project spec is in `docs/FULL_SPEC.md` (reference only, don't load into context)
+- Full project spec is in `specs/FULL_SPEC.md` (reference only, don't load into context)
 
 **See also:**
 - `frontend/CLAUDE.md` — Frontend patterns (API proxy, SSE client, UI styling)

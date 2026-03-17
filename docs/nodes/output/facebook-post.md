@@ -26,10 +26,6 @@ The Facebook Post node publishes content from your workflow directly to a connec
 
 **Outputs:**
 None. This is a terminal output node.
-
-## Credit Cost
-1 credit per post.
-
 ## Best Practices
 - Use `post-story` for ephemeral 24-hour content and `post-image`/`post-video` for permanent feed posts.
 - Facebook supports very long captions (63,206 characters), but shorter, focused text performs better.

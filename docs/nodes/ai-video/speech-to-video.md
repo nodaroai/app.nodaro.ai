@@ -33,15 +33,6 @@ The Speech to Video node creates video content driven by speech audio. It uses W
 
 **Outputs:**
 - Generated video URL
-
-## Credit Cost
-
-| Resolution | Credits |
-|------------|---------|
-| 480p | 4 |
-| 580p | 6 |
-| 720p | 8 |
-
 ## Best Practices
 
 - Use clear, well-recorded speech audio for best results

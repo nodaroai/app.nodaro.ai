@@ -22,10 +22,6 @@ The Video Composer node uses Claude Sonnet to transform a text prompt into a str
 
 **Outputs:**
 - `composition` -- Scene-graph plan (JSON). Must be connected to a Render Video node for final output.
-
-## Credit Cost
-10 credits per generation (Claude Sonnet AI call).
-
 ## Best Practices
 - Write descriptive prompts that reference your upstream assets by name using `@node-name` syntax.
 - Reorder assets in the Asset Order panel to match their intended visual priority.

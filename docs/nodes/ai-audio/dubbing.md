@@ -17,11 +17,6 @@ The Dubbing node uses ElevenLabs Dubbing to translate audio from one language to
 
 - **Input**: `in` -- source audio file to be dubbed
 - **Output**: `audio` -- dubbed audio file in the target language (URL)
-
-## Credit Cost
-
-8 credits per dubbing job (`elevenlabs-dubbing`).
-
 ## Best Practices
 
 - Explicitly set the source language when you know it -- auto-detection is reliable but specifying it avoids edge cases with accented or mixed-language speech.
@@ -43,6 +38,6 @@ The Dubbing node uses ElevenLabs Dubbing to translate audio from one language to
 - The dubbing process is asynchronous and may take longer than other audio nodes, depending on the length of the input audio.
 - The internal flow is: submit dubbing job, poll for completion, download the dubbed audio. Progress is shown in the node during execution.
 - Target language uses standard language codes (e.g., "es" for Spanish, "fr" for French, "de" for German, "ja" for Japanese).
-- At 8 credits, this is one of the higher-cost audio nodes. This reflects the computational complexity of voice-preserving translation.
+- This is one of the more computationally intensive audio operations, reflecting the complexity of voice-preserving translation.
 - For simple translation of text (without voice preservation), consider using a Translate node followed by Text to Speech instead.
 - The node preserves speaker identity but not background audio -- the output contains only the translated speech.

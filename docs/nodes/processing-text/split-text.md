@@ -17,11 +17,6 @@ The Split Text node breaks a single text input into multiple items based on a de
 
 **Inputs:** Text (required)
 **Outputs:** List of text items
-
-## Credit Cost
-
-0 credits — always free. Inline execution (no API call).
-
 ## Best Practices
 
 - Use newline delimiter for multi-line text (scripts, lists)

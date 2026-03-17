@@ -16,11 +16,6 @@ The Voice Remix node uses ElevenLabs Text-to-Voice to create a new voice based o
 
 - **Input**: `in` -- optional upstream connection for dynamic text input via field mapping
 - **Output**: `audio` -- audio preview of the described voice speaking the preview text (URL)
-
-## Credit Cost
-
-4 credits per generation (`elevenlabs-voice-remix`).
-
 ## Best Practices
 
 - Be specific in your voice description -- include age range, gender, accent, tone, pacing, and emotional quality for more accurate results.

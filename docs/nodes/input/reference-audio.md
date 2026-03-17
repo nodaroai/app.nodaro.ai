@@ -34,11 +34,6 @@ The Reference Audio node provides audio from multiple sources: extract from a Yo
 
 **Outputs:**
 - Audio URL — extracted or provided audio
-
-## Credit Cost
-
-0 credits — always free.
-
 ## Best Practices
 
 - YouTube extraction includes metadata fetching — verify the correct video before extracting

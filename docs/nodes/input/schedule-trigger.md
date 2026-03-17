@@ -27,8 +27,8 @@ The Schedule Trigger node runs workflows automatically on a time-based schedule.
 ### Custom Cron Format
 
 ```
-minute  hour  day-of-month  month  day-of-week
-  *       *        *          *        *
+minute hour day-of-month month day-of-week
+ * * * * *
 ```
 
 Examples:
@@ -42,15 +42,10 @@ Examples:
 
 **Outputs:**
 - Trigger metadata (timestamp, execution count)
-
-## Credit Cost
-
-0 credits — the trigger itself is free. Downstream nodes consume credits per execution.
-
 ## Best Practices
 
-- Start with longer intervals and decrease as needed — each execution consumes credits
-- Set Max Executions during testing to avoid runaway credit usage
+- Start with longer intervals and decrease as needed
+- Set Max Executions during testing to avoid runaway executions
 - Account for timezone when scheduling (especially for daily triggers)
 - The scheduler skips if the previous execution is still running
 
@@ -63,7 +58,7 @@ Examples:
 
 ## Tips
 
-- Total credit cost = per-execution cost x number of executions — plan your interval accordingly
+- Plan your interval based on how frequently you need the workflow to run
 - Combine with Webhook Trigger for workflows that run both on schedule and on demand
 - The 60-second check interval means schedules are accurate to within 1 minute
 - Workflows already in progress are skipped, preventing duplicate runs

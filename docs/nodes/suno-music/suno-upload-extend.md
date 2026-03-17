@@ -22,11 +22,6 @@ Suno Upload Extend takes any audio file via URL and extends it using Suno AI. Un
 
 - **Inputs:** `audio` -- audio URL from any upstream audio node (upload, TTS, generate music, etc.)
 - **Outputs:** `audio` -- extended audio URL
-
-## Credit Cost
-
-- **Fixed:** 4 credits
-
 ## Best Practices
 
 - Use this node instead of Suno Extend when your source audio is not from a Suno node.
@@ -46,7 +41,7 @@ Suno Upload Extend takes any audio file via URL and extends it using Suno AI. Un
 ## Tips
 
 - The key difference from Suno Extend is that this node accepts a raw audio URL (`uploadUrl`) rather than a Suno Audio ID. Use Suno Extend for Suno-generated tracks and Upload Extend for everything else.
-- At 4 credits, this is cheaper than standard Suno Extend (7-13 credits) because it does not use the full generation pipeline.
+- This is lighter than standard Suno Extend because it does not use the full generation pipeline.
 - The Prompt field is optional but recommended -- without it, the AI relies entirely on the source audio to determine continuation.
 - Style, Negative Style, and Vocal Gender are only active when Use Default Parameters is set to false.
 - Connect any audio-producing node upstream (Upload Audio, Text to Speech, Generate Music, Audio Isolation, etc.).

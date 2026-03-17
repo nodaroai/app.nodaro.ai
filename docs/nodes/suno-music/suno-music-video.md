@@ -16,11 +16,6 @@ Suno Music Video creates a visual music video to accompany a Suno-generated audi
 
 - **Inputs:** `audio` -- Suno task ID and audio ID from an upstream Suno node
 - **Outputs:** `video` -- generated music video URL
-
-## Credit Cost
-
-- **Fixed:** 5 credits
-
 ## Best Practices
 
 - Ensure the upstream Suno node has completed successfully before running this node, as it requires valid task and audio IDs.
@@ -39,5 +34,5 @@ Suno Music Video creates a visual music video to accompany a Suno-generated audi
 
 - This node has the simplest configuration of all Suno nodes -- just connect it to an upstream Suno audio node.
 - The output is a video file, making it the only Suno node that outputs video rather than audio or text.
-- At 5 credits, it is a cost-effective way to visualize generated music.
+- It is a convenient way to visualize generated music.
 - Task ID and Audio ID are automatically resolved when connected to an upstream Suno node in the workflow editor.

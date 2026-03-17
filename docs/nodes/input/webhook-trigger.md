@@ -32,11 +32,6 @@ The Webhook Trigger node creates a public HTTP endpoint that triggers workflow e
 
 **Outputs:**
 - Configured parameters — extracted from the incoming webhook request body
-
-## Credit Cost
-
-0 credits — the trigger itself is free. Downstream nodes consume credits as normal.
-
 ## Rate Limiting
 
 10 requests per minute per token.

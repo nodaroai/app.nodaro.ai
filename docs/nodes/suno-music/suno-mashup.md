@@ -20,11 +20,6 @@ Suno Mashup takes two audio tracks and blends them together into a cohesive mash
 
 - **Inputs:** `audio1`, `audio2` -- two audio tracks to blend (both required)
 - **Outputs:** `audio` -- mashup audio URL
-
-## Credit Cost
-
-- **Fixed:** 4 credits
-
 ## Best Practices
 
 - Choose source tracks in compatible keys and tempos for the most musical results.
@@ -46,4 +41,4 @@ Suno Mashup takes two audio tracks and blends them together into a cohesive mash
 - This is the only Suno node that requires exactly two audio inputs (`audio1` and `audio2`).
 - The `uploadUrlList` parameter internally expects a tuple of exactly two URLs.
 - Custom Mode must be enabled before style and title fields take effect.
-- At 4 credits, mashups are more affordable than full generation -- useful for iterative blending experiments.
+- Mashups are useful for iterative blending experiments.

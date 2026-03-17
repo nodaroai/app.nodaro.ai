@@ -24,19 +24,13 @@ Suno Cover takes a source audio track and generates a new cover version of it. Y
 
 - **Inputs:** `in` -- source audio URL from an upstream audio node
 - **Outputs:** `audio` -- generated cover audio URL
-
-## Credit Cost
-
-- **V4 / V4.5 models:** 7 credits
-- **V5 model:** 13 credits
-
 ## Best Practices
 
 - Provide a clear prompt describing the target style for the cover (e.g., "acoustic folk version" or "80s synthwave remix").
 - Use the Instrumental toggle to create karaoke-style versions of songs.
 - Supply custom lyrics if you want to change the words, not just the musical style.
 - Pair with Suno Separate first to isolate vocals or instrumentals from the source before covering.
-- Test with V4 models first at lower credit cost before committing to V5 for final output.
+- Test with V4 models first before committing to V5 for final output.
 
 ## Common Use Cases
 

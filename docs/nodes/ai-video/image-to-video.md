@@ -47,37 +47,9 @@ These providers support both start and end frame images: minimax, veo3, veo3.1, 
 **Outputs:**
 - Generated video URL
 - Provider task metadata
-
-## Credit Cost
-
-| Provider | Credits | Duration | Resolution |
-|----------|---------|----------|------------|
-| runway-kie | 4 | 5s | 720p |
-| grok-i2v | 5-10 | 6-15s | 720p, duration-tiered |
-| bytedance-lite | 6 | 5-10s | — |
-| seedance | 4-11 | 4-12s | Duration-tiered |
-| bytedance-pro | 8 | 5-10s | — |
-| hailuo-2.3 | 8-13 | 6-10s | 768p, duration-tiered |
-| hailuo-standard | 8-13 | 6-10s | 768p, duration-tiered |
-| kling-turbo | 11-21 | 5-10s | 720p, duration-tiered |
-| hailuo-2.3-pro | 12-23 | 6-10s | 768p, duration-tiered |
-| wan-turbo | 13 | 5s | 480p |
-| minimax | 18 | 5s | 1080p |
-| wan-i2v | 18-53 | 5-15s | 720p, duration-tiered |
-| veo3.1 | 19 | 8s | — |
-| bytedance-pro-fast | 19 | 5-10s | — |
-| kling | 14-56 | 5-10s | Audio doubles cost |
-| sora2-pro | 38-158 | 5-10s | Standard/high quality |
-| kling-master | 40-80 | 5-10s | Duration-tiered |
-| kling-3.0 | 43-189 | 3-15s | 1080p, audio doubles |
-| veo3 | 79 | 8s | — |
-| sora2 | 8-9 | 5-10s | — |
-
-Kling 3.0 costs scale with duration and audio: 5s no-audio = 43cr, 15s with audio = 189cr.
-
 ## Supported Providers
 
-21 providers: minimax, veo3, veo3.1, kling, kling-turbo, kling-3.0, kling-master, seedance, hailuo-2.3-pro, hailuo-2.3, hailuo-standard, sora2-pro, sora2, wan-i2v, wan-turbo, bytedance-lite, bytedance-pro, bytedance-pro-fast, grok-i2v, runway-kie.
+21 providers: minimax, veo3, veo3.1, kling, kling-turbo, kling-3.0, kling-master, seedance, hailuo-2.3-pro, hailuo-2.3, hailuo-standard, sora2-pro, sora2, wan-i2v, wan-turbo, bytedance-lite, bytedance-pro, bytedance-pro-fast, grok-i2v, runway.
 
 ## Best Practices
 
@@ -97,7 +69,7 @@ Kling 3.0 costs scale with duration and audio: 5s no-audio = 43cr, 15s with audi
 
 ## Tips
 
-- Runway KIE (4cr) is the most cost-effective for quick previews
-- VEO 3.1 Fast (19cr) offers a good quality/cost balance at 8 seconds
-- Kling 3.0 with audio is expensive but produces sound-enabled video
+- Runway is a good option for quick previews
+- VEO 3.1 Fast offers a good quality/speed balance at 8 seconds
+- Kling 3.0 with audio produces sound-enabled video
 - Connect a Camera Motion parameter node to control movement consistently across multiple I2V nodes

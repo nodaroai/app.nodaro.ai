@@ -22,11 +22,11 @@ The Text to Speech node generates spoken audio from text input using ElevenLabs 
 
 ### Providers
 
-| Provider | Model | Credits | Languages | Audio Tags |
-|----------|-------|---------|-----------|------------|
-| `elevenlabs-v3` | ElevenLabs v3 (recommended) | 4 | 46 | Yes |
-| `elevenlabs-turbo` | Turbo v2.5 | 2 | 32 | No (stripped) |
-| `elevenlabs-multilingual` | Multilingual v2 | 4 | 29 | No (stripped) |
+| Provider | Model | Languages | Audio Tags |
+|----------|-------|-----------|------------|
+| `elevenlabs-v3` | ElevenLabs v3 (recommended) | 46 | Yes |
+| `elevenlabs-turbo` | Turbo v2.5 | 32 | No (stripped) |
+| `elevenlabs-multilingual` | Multilingual v2 | 29 | No (stripped) |
 
 ### Language Support
 
@@ -38,15 +38,6 @@ The Text to Speech node generates spoken audio from text input using ElevenLabs 
 
 - **Input**: `in` -- text string (from Text Prompt, AI Writer, Combine Text, or any text-producing node)
 - **Output**: `audio` -- generated speech audio file (URL)
-
-## Credit Cost
-
-| Provider | Credits |
-|----------|---------|
-| `elevenlabs-v3` | 4 |
-| `elevenlabs-turbo` | 2 |
-| `elevenlabs-multilingual` | 4 |
-
 ## Best Practices
 
 - Use ElevenLabs v3 for the widest language support and audio tag capabilities.
@@ -69,4 +60,4 @@ The Text to Speech node generates spoken audio from text input using ElevenLabs 
 - Audio tags supported by v3 include emotions (`[excited]`, `[sad]`, `[angry]`), reactions (`[laughs]`, `[sighs]`, `[gasps]`), delivery styles (`[whispers]`, `[shouting]`), pacing (`[pause]`, `[long pause]`), tone (`[cheerfully]`, `[deadpan]`), and sound effects (`[applause]`, `[thunder]`).
 - v2 models support SSML break tags (e.g., `<break time="1.0s" />`) for inserting pauses.
 - Setting Language to auto-detect works well for most cases, but explicitly selecting a language can improve pronunciation accuracy for non-English text.
-- Custom cloned voices always route through the direct ElevenLabs API, bypassing KIE.ai.
+- Custom cloned voices always route through the direct ElevenLabs API.

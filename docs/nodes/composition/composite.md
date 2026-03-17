@@ -38,10 +38,6 @@ The Composite node combines up to 4 video layers into a single composition. Each
 
 **Outputs:**
 - `composition` -- Composite plan (JSON). Connect to a Render Video node for final output.
-
-## Credit Cost
-0 credits. No AI is involved; the plan is built client-side.
-
 ## Best Practices
 - Use z-index to control which layers appear in front. Higher z-index renders on top.
 - Set start frames to create sequential or staggered layer appearances.
@@ -57,7 +53,7 @@ The Composite node combines up to 4 video layers into a single composition. Each
 - Adding semi-transparent watermark or branding overlays.
 
 ## Tips
-- This node is free (0 credits) because it requires no AI processing.
+- This node is free because it requires no AI processing.
 - All positioning uses percentages, making compositions resolution-independent.
 - Maximum 4 layers. For more complex compositions, chain multiple Composite nodes or use the Video Composer node.
 - The output is a plan that must be rendered through the Render Video node.

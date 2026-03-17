@@ -33,11 +33,6 @@ The Transcode Video node re-encodes video with different codec, quality, resolut
 
 **Inputs:** Video (required)
 **Outputs:** Transcoded video
-
-## Credit Cost
-
-0 credits — FFmpeg processing, always free.
-
 ## Best Practices
 
 - CRF 23 with h264 is the best default for most purposes

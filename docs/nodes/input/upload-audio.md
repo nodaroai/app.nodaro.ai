@@ -20,11 +20,6 @@ Accepts: MP3, WAV, M4A, AAC formats.
 
 **Outputs:**
 - Audio URL — accessible to downstream nodes
-
-## Credit Cost
-
-0 credits — always free.
-
 ## Best Practices
 
 - Use WAV for highest quality, MP3 for smaller file sizes

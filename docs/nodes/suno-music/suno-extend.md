@@ -26,12 +26,6 @@ Suno Extend takes a previously generated Suno track (identified by its Audio ID)
 
 - **Inputs:** `in` -- Suno audio ID from an upstream Suno node (e.g., Suno Generate)
 - **Outputs:** `audio` -- extended audio URL
-
-## Credit Cost
-
-- **V4 / V4.5 models:** 7 credits
-- **V5 model:** 13 credits
-
 ## Best Practices
 
 - Set Continue From to the exact timestamp where you want new content to begin; setting it to 0 appends to the end.

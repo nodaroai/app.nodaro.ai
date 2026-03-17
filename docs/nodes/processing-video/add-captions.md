@@ -31,11 +31,6 @@ The Add Captions node automatically generates captions from video audio and over
 
 **Inputs:** Video with audio (required)
 **Outputs:** Video with burned-in captions
-
-## Credit Cost
-
-0 credits — FFmpeg processing, always free.
-
 ## Best Practices
 
 - Use "subtitle" style for professional content

@@ -23,10 +23,6 @@ The Sub-Workflow node invokes another workflow by reference, passing inputs thro
 
 **Outputs:**
 - `out` -- Results from the sub-workflow's output ports. Dynamic handles are created based on the selected route's output port definitions.
-
-## Credit Cost
-0 credits for the Sub-Workflow node itself. Credits are consumed by the individual nodes within the referenced workflow as they execute.
-
 ## Best Practices
 - Keep sub-workflow nesting shallow. The maximum depth is 5 levels; deeply nested workflows are harder to debug.
 - Use descriptive labels to clarify what each Sub-Workflow node does in the parent workflow context.
@@ -44,4 +40,4 @@ The Sub-Workflow node invokes another workflow by reference, passing inputs thro
 - Execution progress is tracked via `subWorkflowProgress` with `currentNode`, `completed`, and `total` counts.
 - Only nodes reachable from the selected route's input (via BFS traversal) are executed, not the entire target workflow.
 - The route snapshot caches the interface definition. Use the Refresh button if the target workflow's ports have been modified.
-- The Sub-Workflow node itself is free, but all nodes executed within the referenced workflow consume credits as they normally would.
+- All nodes executed within the referenced workflow run as they normally would.

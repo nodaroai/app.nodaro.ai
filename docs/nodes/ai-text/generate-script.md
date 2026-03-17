@@ -39,11 +39,6 @@ The Generate Script node uses Gemini Flash to produce a structured, multi-scene 
 | cinematography | `ScriptSceneCinematography` | Shot type, camera angle, camera movement |
 | musicMood | `string` | Suggested background music mood |
 | soundEffects | `string[]` | Suggested sound effects |
-
-## Credit Cost
-
-10 credits per generation (`generate-script`).
-
 ## Best Practices
 
 - Provide a clear, specific prompt. "30-second product ad for a fitness app showing morning routine" produces better results than "make a video."
