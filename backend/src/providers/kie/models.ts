@@ -424,12 +424,13 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
 
   // Sora 2 Pro - VERIFIED: docs.kie.ai/market/sora2/sora-2-pro-image-to-video
   // size: "standard" (720p) or "high" (1080p)
+  // NOTE: remove_watermark causes KIE 500 — use sora-2-watermark-remove post-processing instead
   "sora2-pro": {
     model: "sora-2-pro-image-to-video",
     credits: 150,
     cost: 0.75,  // 150 KIE credits * $0.005 (Pro Standard 10s)
     imageParam: "image_urls",  // array format (maxItems: 1, no end frame support)
-    extraParams: { aspect_ratio: "landscape", n_frames: "10", size: "standard", remove_watermark: true },
+    extraParams: { aspect_ratio: "landscape", n_frames: "10", size: "standard" },
     allowedDurations: [5, 10],  // Sora Pro n_frames: 10 (~5s), 15 (~10s)
     usesNFrames: true,  // Uses n_frames parameter instead of duration
     supportsEndFrame: false,  // Sora2 Pro only accepts 1 image
@@ -506,13 +507,14 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   },
 
   // Sora 2 (non-Pro) I2V - docs.kie.ai/market/sora2/sora-2-image-to-video
+  // NOTE: remove_watermark causes KIE 500 — use sora-2-watermark-remove post-processing instead
   "sora2": {
     model: "sora-2-image-to-video",
     credits: 30,
     cost: 0.15,  // 30 KIE credits * $0.005 (Standard 10s)
     // NOTE: Standard 15s=35, stable 10s=35, stable 15s=40
     imageParam: "image_urls",  // Array format
-    extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+    extraParams: { aspect_ratio: "landscape", n_frames: "10" },
     allowedDurations: [5, 10],
     usesNFrames: true,
     supportsEndFrame: false,
@@ -638,11 +640,12 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   },
 
   // Sora 2 Pro
+  // NOTE: remove_watermark causes KIE 500 — use sora-2-watermark-remove post-processing instead
   "sora2-pro": {
     model: "sora-2-pro-text-to-video",
     credits: 150,
     cost: 0.75,  // 150 KIE credits * $0.005 (Pro Standard 10s)
-    extraParams: { aspect_ratio: "landscape", n_frames: "10", size: "standard", remove_watermark: true },
+    extraParams: { aspect_ratio: "landscape", n_frames: "10", size: "standard" },
     allowedDurations: [5, 10],  // Sora Pro n_frames: 10 (~5s), 15 (~10s)
     usesNFrames: true,  // Uses n_frames parameter instead of duration
   },
@@ -677,11 +680,12 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   },
 
   // Sora 2 (non-Pro) T2V - docs.kie.ai/market/sora2/sora-2-text-to-video
+  // NOTE: remove_watermark causes KIE 500 — use sora-2-watermark-remove post-processing instead
   "sora2": {
     model: "sora-2-text-to-video",
     credits: 30,
     cost: 0.15,  // 30 KIE credits * $0.005 (Standard 10s)
-    extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+    extraParams: { aspect_ratio: "landscape", n_frames: "10" },
     allowedDurations: [5, 10],
     usesNFrames: true,
   },
@@ -978,7 +982,8 @@ export const KIE_STORYBOARD_MODELS: Record<string, KieModelConfig> = {
     credits: 150,
     cost: 0.75,  // 150 KIE credits * $0.005 (10 frames default)
     // NOTE: 15/25 frames = 270 KIE credits ($1.35)
-    extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+    // NOTE: remove_watermark causes KIE 500 — use sora-2-watermark-remove post-processing instead
+    extraParams: { aspect_ratio: "landscape", n_frames: "10" },
   },
 }
 

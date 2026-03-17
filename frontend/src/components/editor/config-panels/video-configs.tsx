@@ -48,7 +48,11 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
-  const allowedDurations = KIE_VIDEO_DURATIONS[data.provider || "minimax"] || null
+  const baseDurations = KIE_VIDEO_DURATIONS[data.provider || "minimax"] || null
+  // Hailuo 2.3 Pro/Standard: 1080P only supports 6s duration
+  const allowedDurations = baseDurations && (data.provider === "hailuo-2.3-pro" || data.provider === "hailuo-2.3") && data.resolution === "1080P"
+    ? baseDurations.filter((d) => d <= 6)
+    : baseDurations
   const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(data.provider || "minimax")
 
   const connectedTextPrompts = useMemo(() => {
@@ -483,7 +487,14 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           <Label className="text-xs">Resolution</Label>
           <Select
             value={data.resolution || "768P"}
-            onValueChange={(v) => onUpdate({ resolution: v })}
+            onValueChange={(v) => {
+              const updates: Record<string, unknown> = { resolution: v }
+              // 1080P only supports 6s — snap duration if needed
+              if (v === "1080P" && data.duration && data.duration > 6) {
+                updates.duration = 6
+              }
+              onUpdate(updates)
+            }}
           >
             <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -495,7 +506,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               ) : (
                 <>
                   <SelectItem value="768P">768P</SelectItem>
-                  <SelectItem value="1080P">1080P</SelectItem>
+                  <SelectItem value="1080P">1080P (6s max)</SelectItem>
                 </>
               )}
             </SelectContent>
