@@ -34,6 +34,7 @@ import {
   KIE_LIP_SYNC_MODELS,
   KIE_SPEECH_TO_VIDEO_MODELS,
   KIE_STORYBOARD_MODELS,
+  KIE_CREDIT_USD,
   durationToNFrames,
 } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
@@ -153,7 +154,7 @@ async function runKling3(
   // Audit log for Kling 3.0 (known to have variable duration/audio pricing)
   logCreditAudit({
     modelKey: "kling-3.0",
-    expectedKieCredits: modelConfig.cost / 0.005, // Convert USD to KIE credits
+    expectedKieCredits: modelConfig.cost / KIE_CREDIT_USD, // Convert USD to KIE credits
     modelConfig: { duration: snappedDuration, sound, mode },
     notes: `kling-3.0 ${snappedDuration}s ${sound ? "audio" : "no-audio"} ${mode}`,
   })

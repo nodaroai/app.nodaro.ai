@@ -196,7 +196,7 @@ describe("transcribe handler", () => {
     expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
       output_data: { text: "Hello world", language: "en", segments: [] },
     }))
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", undefined)
   })
 
   it("passes language parameter", async () => {

@@ -1,7 +1,5 @@
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
-import { isCloud } from "../lib/config.js"
-
 // Job type from database
 export interface JobRecord {
   id: string
@@ -18,10 +16,11 @@ export interface JobRecord {
   provider_cost: number | null
   display_cost: number | null
   credits: number | null
+  credits_actual: number | null
   job_type: string | null
 }
 
-// Public job type (for cloud edition regular users)
+// Public job type (for regular users)
 export interface PublicJob {
   id: string
   status: string
@@ -40,19 +39,19 @@ export interface PublicJob {
 
 /**
  * Sanitize job data for public API response.
- * In cloud edition, hide provider details from regular users.
+ * Hide provider details from regular (non-admin) users:
  * - Remove `provider` field (internal implementation detail)
  * - Remove `provider_cost` field (our actual cost - sensitive)
  * - Rename `display_cost` to `cost` (what the user pays)
  */
 export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecord | PublicJob {
-  // Self-hosted edition or admin users: return full data
-  if (!isCloud() || isAdmin) {
+  // Admin users: return full data
+  if (isAdmin) {
     return job
   }
 
-  // Cloud edition regular users: hide sensitive provider details
-  const { provider, provider_cost, display_cost, ...rest } = job
+  // Regular users: hide sensitive provider/cost details
+  const { provider, provider_cost, display_cost, credits_actual, ...rest } = job
   return {
     ...rest,
     cost: display_cost,
@@ -72,7 +71,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits")
+      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual")
       .eq("id", id)
 
     if (!isAdmin) {
@@ -107,7 +106,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, job_type")
+      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type")
       .order("created_at", { ascending: false })
       .limit(limitNum)
 

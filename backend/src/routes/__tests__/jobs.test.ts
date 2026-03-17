@@ -50,6 +50,7 @@ const sampleJob: JobRecord = {
   provider_cost: 0.02,
   display_cost: 0.025,
   credits: 1,
+  credits_actual: null,
   job_type: "generate-image",
 }
 
@@ -58,36 +59,23 @@ const sampleJob: JobRecord = {
 // ---------------------------------------------------------------------------
 
 describe("sanitizeJobForPublic", () => {
-  beforeEach(() => {
-    mockIsCloud = false
-  })
-
-  it("returns the full job unchanged when not in cloud edition", () => {
-    mockIsCloud = false
-    const result = sanitizeJobForPublic(sampleJob, false)
-
-    expect(result).toEqual(sampleJob)
-    expect("provider" in result).toBe(true)
-    expect("provider_cost" in result).toBe(true)
-  })
-
-  it("returns the full job unchanged for admin users in cloud edition", () => {
-    mockIsCloud = true
+  it("returns the full job unchanged for admin users", () => {
     const result = sanitizeJobForPublic(sampleJob, true)
 
     expect(result).toEqual(sampleJob)
     expect("provider" in result).toBe(true)
     expect("provider_cost" in result).toBe(true)
+    expect("credits_actual" in result).toBe(true)
   })
 
-  it("strips provider details for regular users in cloud edition", () => {
-    mockIsCloud = true
+  it("strips provider and cost details for regular users", () => {
     const result = sanitizeJobForPublic(sampleJob, false)
 
     // Sensitive fields should be removed
     expect("provider" in result).toBe(false)
     expect("provider_cost" in result).toBe(false)
     expect("display_cost" in result).toBe(false)
+    expect("credits_actual" in result).toBe(false)
 
     // Public cost field should be present with display_cost value
     expect("cost" in result).toBe(true)
@@ -99,8 +87,7 @@ describe("sanitizeJobForPublic", () => {
     expect(result.credits).toBe(1)
   })
 
-  it("handles null display_cost correctly in cloud edition", () => {
-    mockIsCloud = true
+  it("handles null display_cost correctly for regular users", () => {
     const jobWithNullCost: JobRecord = {
       ...sampleJob,
       display_cost: null,

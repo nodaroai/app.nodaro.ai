@@ -2077,14 +2077,15 @@ export interface Job {
   started_at?: string
   completed_at?: string
   user_id?: string
-  // Cost fields - returned differently based on edition:
-  // SELF-HOSTED or admin: provider, provider_cost, display_cost
-  // CLOUD regular user: only cost (= display_cost)
-  provider?: string              // Which provider was used (self-hosted/admin only)
-  provider_cost?: number         // Actual cost from API response (self-hosted/admin only)
-  display_cost?: number          // provider_cost with markup (self-hosted/admin only)
-  cost?: number                  // What user pays (cloud edition regular users)
-  credits?: number | null // Credits charged (all editions)
+  // Cost fields - returned differently based on user role:
+  // Admin: provider, provider_cost, display_cost
+  // Regular user: only cost (= display_cost)
+  provider?: string              // Which provider was used (admin only)
+  provider_cost?: number         // Actual cost from API response (admin only)
+  display_cost?: number          // provider_cost with markup (admin only)
+  cost?: number                  // What user pays (regular users)
+  credits?: number | null        // Credits reserved/estimated (all users)
+  credits_actual?: number | null // Credits actually charged after anomaly correction (admin only)
   job_type?: string | null        // Job type (e.g. "generate-image")
 }
 

@@ -25,6 +25,7 @@ interface FastWhisperOutput {
 interface TranscribeResult {
   text: string
   language: string
+  cost?: number
   segments?: Array<{
     start: number
     end: number
@@ -57,6 +58,7 @@ export async function transcribe(
     return {
       text: result.text,
       language: result.language,
+      cost: result.cost,
     }
   }
 

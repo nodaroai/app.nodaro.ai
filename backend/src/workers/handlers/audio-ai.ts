@@ -149,7 +149,7 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
     output_data: { text: result.text, language: result.language, segments: result.segments },
     completed_at: new Date().toISOString(),
   }).eq("id", ctx.jobId)
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: transcribed ${result.text.length} chars (language: ${result.language})`)
 }
 

@@ -5,7 +5,7 @@
  * Used only in cloud edition when ai_provider=kie.
  *
  * Cost source: KIE.ai pricing page (https://kie.ai/pricing)
- * KIE.ai uses credits: 1 credit = $0.005
+ * KIE.ai uses credits: 1 credit = $0.005 (KIE_CREDIT_USD)
  *
  * Model catalog: https://kie.ai/market
  *
@@ -13,6 +13,9 @@
  * structure. The original file is kept for backward compatibility until
  * the migration is complete.
  */
+
+/** 1 KIE credit = $0.005 USD */
+export const KIE_CREDIT_USD = 0.005
 
 export interface KieModelConfig {
   model: string           // KIE.ai model identifier
@@ -436,8 +439,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Uses input_urls array (0-2 images for start/end frame)
   "seedance": {
     model: "bytedance/seedance-1.5-pro",
-    credits: 28,
-    cost: 0.14,  // 3.5 KIE cr/sec * 8s default = 28 KIE credits (actual from audit)
+    credits: 33,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "input_urls",  // Array format: [startFrame] or [startFrame, endFrame]
     extraParams: { resolution: "720p", fixed_lens: false, generate_audio: false },
     allowedDurations: [4, 8, 12],
@@ -470,9 +473,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Hailuo 2.3 Pro I2V - docs.kie.ai/market/hailuo/2-3-image-to-video-pro
   "hailuo-2.3-pro": {
     model: "hailuo/2-3-image-to-video-pro",
-    credits: 45,
-    cost: 0.225,  // 45 KIE credits * $0.005 (6s, 768p default)
-    // NOTE: 6s-1080p=80, 10s-768p=90
+    credits: 80,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",  // Single URL string
     extraParams: { resolution: "768P" },
     allowedDurations: [6, 10],
@@ -531,8 +533,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Bytedance V1 Pro I2V - docs.kie.ai/market/bytedance/v1-pro-image-to-video
   "bytedance-pro": {
     model: "bytedance/v1-pro-image-to-video",
-    credits: 30,
-    cost: 0.15,  // 30 KIE credits (actual from audit)
+    credits: 70,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",  // Single URL string
     extraParams: { resolution: "480p" },
     allowedDurations: [5, 10],
@@ -542,8 +544,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Bytedance V1 Pro Fast I2V - docs.kie.ai/market/bytedance/v1-pro-fast-image-to-video
   "bytedance-pro-fast": {
     model: "bytedance/v1-pro-fast-image-to-video",
-    credits: 60,
-    cost: 0.30,
+    credits: 36,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",  // Single URL string
     extraParams: { resolution: "720p" },
     allowedDurations: [5, 10],
@@ -649,8 +651,8 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Seedance 1.5 Pro T2V - docs.kie.ai/market/bytedance/seedance-1.5-pro
   "seedance": {
     model: "bytedance/seedance-1.5-pro",
-    credits: 28,
-    cost: 0.14,  // 3.5 KIE cr/sec * 8s default = 28 KIE credits (actual from audit)
+    credits: 33,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { resolution: "720p", fixed_lens: false, generate_audio: false },
     allowedDurations: [4, 8, 12],
   },
@@ -696,8 +698,8 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Bytedance V1 Pro T2V - docs.kie.ai/market/bytedance/v1-pro-text-to-video
   "bytedance-pro": {
     model: "bytedance/v1-pro-text-to-video",
-    credits: 30,
-    cost: 0.15,  // 30 KIE credits (actual from audit)
+    credits: 70,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspect_ratio: "16:9", resolution: "720p" },
     allowedDurations: [5, 10],
   },
@@ -793,9 +795,9 @@ export const KIE_MOTION_TRANSFER_MODELS: Record<string, KieModelConfig> = {
   // Moves character from image within the video scene (~1s output)
   "wan-animate-move": {
     model: "wan/2-2-animate-move",
-    credits: 6,
-    cost: 0.03,  // 6 KIE credits * $0.005 (480p default)
-    // NOTE: 580p = 9.5 KIE cr ($0.0475), 720p = 12.5 KIE cr ($0.0625)
+    credits: 102,
+    ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",  // Single URL string
     extraParams: { resolution: "480p" },
   },
@@ -805,9 +807,9 @@ export const KIE_MOTION_TRANSFER_MODELS: Record<string, KieModelConfig> = {
   // Replaces character in video with character from image (~1s output)
   "wan-animate-replace": {
     model: "wan/2-2-animate-replace",
-    credits: 6,
-    cost: 0.03,  // 6 KIE credits * $0.005 (480p default)
-    // NOTE: 580p = 9.5 KIE cr ($0.0475), 720p = 12.5 KIE cr ($0.0625)
+    credits: 102,
+    ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",  // Single URL string
     extraParams: { resolution: "480p" },
   },
@@ -915,8 +917,8 @@ export const KIE_SOUND_EFFECT_MODELS: Record<string, KieModelConfig> = {
 export const KIE_AUDIO_ISOLATION_MODELS: Record<string, KieModelConfig> = {
   "elevenlabs-isolation": {
     model: "elevenlabs/audio-isolation",
-    credits: 16,
-    cost: 0.08,  // 0.2 KIE cr/sec, variable; ~80s avg = 16 KIE credits
+    credits: 29.6,
+    ***REDACTED-OSS-SCRUB***
   },
 }
 
@@ -926,8 +928,8 @@ export const KIE_AUDIO_ISOLATION_MODELS: Record<string, KieModelConfig> = {
 export const KIE_STT_MODELS: Record<string, KieModelConfig> = {
   "elevenlabs-stt": {
     model: "elevenlabs/speech-to-text",
-    credits: 3.5,
-    cost: 0.0175,  // 3.5 KIE credits * $0.005 per minute
+    credits: 8.58,
+    ***REDACTED-OSS-SCRUB***
   },
 }
 

@@ -178,17 +178,17 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
-  "seedance:12s": 11,            // 42 KIE cr, $0.21
+  ***REDACTED-OSS-SCRUB***
   "wan-i2v": 22,                 // 70 KIE cr, $0.35 (5s 720p fallback)
   // Wan I2V duration-tiered pricing (720p default)
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   "wan-turbo": 13,               // 40 KIE cr, $0.20 (5s, 480p I2V default)
-  "hailuo-2.3-pro": 15,          // 45 KIE cr, $0.225 (6s fallback)
+  ***REDACTED-OSS-SCRUB***
   // Hailuo 2.3 Pro duration-tiered pricing (768p default)
-  "hailuo-2.3-pro:6s": 12,       // 45 KIE cr, $0.225
-  "hailuo-2.3-pro:10s": 23,      // 90 KIE cr, $0.45
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   "hailuo-2.3": 10,              // 30 KIE cr, $0.15 (6s fallback)
   // Hailuo 2.3 duration-tiered pricing
   ***REDACTED-OSS-SCRUB***
@@ -202,8 +202,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "sora2:5s": 8,                 // 30 KIE cr, $0.15
   "sora2:10s": 9,                // 35 KIE cr, $0.175
   ***REDACTED-OSS-SCRUB***
-  "bytedance-pro": 8,             // 30 KIE cr, $0.15 (actual from audit)
-  "bytedance-pro-fast": 19,      // 60 KIE cr, $0.30 (not in KIE pricing data)
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   "kling-master": 50,            // 160 KIE cr, $0.80 (5s fallback)
   // Kling Master duration-tiered pricing
   ***REDACTED-OSS-SCRUB***
@@ -252,12 +252,12 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "motion-transfer:1080p:15s": 43,   // 135 KIE cr, $0.675
   "motion-transfer:1080p:30s": 85,   // 270 KIE cr, $1.35
   // Wan Animate (Move + Replace) — resolution-tiered pricing
-  "wan-animate-move": 2,          // 6 KIE cr, $0.03 (480p default)
-  "wan-animate-move:580p": 3,     // 9.5 KIE cr, $0.0475
-  "wan-animate-move:720p": 4,     // 12.5 KIE cr, $0.0625
-  "wan-animate-replace": 2,       // 6 KIE cr, $0.03 (480p default)
-  "wan-animate-replace:580p": 3,  // 9.5 KIE cr, $0.0475
-  "wan-animate-replace:720p": 4,  // 12.5 KIE cr, $0.0625
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   // ── Lip Sync ──
   "kling-avatar": 28,            // 112 KIE cr, $0.56 (8 cr/sec * ~14s)
   "kling-avatar-pro": 56,        // 224 KIE cr, $1.12 (16 cr/sec * ~14s)
@@ -359,7 +359,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "loop-video": 0,
   "fade-video": 0,
   "transcode-video": 0,
-  "audio-isolation": 1,
+  "audio-isolation": 8,          // alias for elevenlabs-isolation
   "text-to-dialogue": 4,
   "image-to-text": 5,
   "character": 2,
