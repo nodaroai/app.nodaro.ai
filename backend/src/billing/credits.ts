@@ -322,6 +322,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   // "sora": 20,                    // Replicate, ~$0.30 typical
   // ── LLM ──
+  "prompt-helper": 1,            // Claude Haiku — prompt enhancement
   "ai-writer": 5,                // Claude Sonnet
   "scene-graph-ai": 10,          // Claude Sonnet
   "video-composer": 10,          // Claude Sonnet

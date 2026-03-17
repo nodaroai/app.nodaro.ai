@@ -15,6 +15,7 @@ import {
 import { CachedImage } from "@/components/ui/cached-image"
 import { uploadAudio, downloadYouTubeAudio } from "@/lib/api"
 import type { GenerateMusicData } from "@/types/nodes"
+import { PromptHelperButton } from "./prompt-helper-button"
 import type { ConfigProps } from "./types"
 
 export function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<GenerateMusicData>) {
@@ -71,7 +72,10 @@ export function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<Gen
         </Select>
       </div>
       <div>
-        <Label htmlFor="music-prompt">Prompt</Label>
+        <div className="flex items-center gap-1.5">
+          <Label htmlFor="music-prompt">Prompt</Label>
+          <PromptHelperButton nodeType="generate-music" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(v) => onUpdate({ prompt: v })} />
+        </div>
         {connectedPrompt ? (
           <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
             <span className="text-muted-foreground">From: </span>

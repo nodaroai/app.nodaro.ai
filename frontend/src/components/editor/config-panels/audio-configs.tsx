@@ -46,6 +46,7 @@ import type {
   ForcedAlignmentData,
 } from "@/types/nodes"
 import { MappableField } from "./mappable-field"
+import { PromptHelperButton } from "./prompt-helper-button"
 import type { ConfigProps } from "./types"
 
 export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<TextToSpeechData>) {
@@ -164,7 +165,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
 
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="text-to-audio" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(v) => onUpdate({ prompt: v })} />}>
         <TagTextarea
           rows={3}
           value={data.prompt}
@@ -235,7 +236,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
 export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoGenerateData>) {
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="suno-generate" currentPrompt={data.prompt || ""} onAccept={(v) => onUpdate({ prompt: v })} />}>
         <TagTextarea
           rows={3}
           value={data.prompt}

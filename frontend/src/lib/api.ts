@@ -2410,6 +2410,30 @@ export async function generateMotionGraphics(params: {
   return res.json()
 }
 
+// --- Prompt Helper ---
+
+export async function enhancePrompt(params: {
+  nodeType: string
+  prompt: string
+  provider?: string
+  model?: string
+  style?: string
+  aspectRatio?: string
+  duration?: number
+  additionalContext?: string
+}): Promise<{ jobId: string; enhancedPrompt: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/prompt-helper/enhance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(params)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Prompt enhancement failed")
+  }
+  return res.json()
+}
+
 // --- AI Writer ---
 
 

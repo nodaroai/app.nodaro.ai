@@ -21,6 +21,7 @@ export function MappableField({
   fieldMappings,
   onMapField,
   providerCategory,
+  labelAction,
   children,
 }: {
   readonly field: string
@@ -29,6 +30,7 @@ export function MappableField({
   readonly fieldMappings: FieldMappings
   readonly onMapField: (field: string, sourceNodeId: string | null) => void
   readonly providerCategory?: string
+  readonly labelAction?: React.ReactNode
   readonly children: React.ReactNode
 }) {
   const baseId = useId()
@@ -42,7 +44,10 @@ export function MappableField({
   return (
     <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
       <div className="flex items-center justify-between gap-2 mb-2">
-        <Label id={labelId} htmlFor={triggerId} className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{label}</Label>
+        <div className="flex items-center gap-1.5">
+          <Label id={labelId} htmlFor={triggerId} className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{label}</Label>
+          {labelAction}
+        </div>
         {compatible.length > 0 && (
           <Select
             value={mapping?.sourceNodeId ?? "__manual__"}

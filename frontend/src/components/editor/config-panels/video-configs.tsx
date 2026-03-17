@@ -40,6 +40,7 @@ import { Kling3StudioConfig } from "./kling3-studio-config"
 import { getConnectedProviderModel } from "./helpers"
 import { ConnectedMediaList } from "./connected-media-list"
 import type { ConfigProps } from "./types"
+import { PromptHelperButton } from "./prompt-helper-button"
 
 
 export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, onUpdateNode, nodeRefs }: ConfigProps<ImageToVideoData>) {
@@ -164,7 +165,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
 
       {connectedTextPrompts.length === 0 && (
         <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
-          <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(v) => onUpdate({ prompt: v })} />}>
             <Textarea
               value={data.prompt || ""}
               onChange={(e) => onUpdate({ prompt: e.target.value })}
@@ -561,7 +562,7 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         </Select>
       </MappableField>
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="video-to-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(v) => onUpdate({ prompt: v })} />}>
         <TagTextarea
           value={data.prompt}
           onChange={(v) => onUpdate({ prompt: v })}
@@ -635,7 +636,7 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
           </SelectContent>
         </Select>
       </MappableField>
-      <MappableField field="prompt" label="Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="prompt" label="Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="motion-transfer" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(v) => onUpdate({ prompt: v })} />}>
         <TagTextarea
           value={data.prompt}
           onChange={(v) => onUpdate({ prompt: v.slice(0, 2500) })}
@@ -782,7 +783,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           </SelectContent>
         </Select>
       </MappableField>
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="text-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(v) => onUpdate({ prompt: v })} />}>
         <TagTextarea
           rows={3}
           value={data.prompt}
@@ -927,7 +928,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </Select>
       </MappableField>
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="extend-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(v) => onUpdate({ prompt: v })} />}>
         <TagTextarea
           value={data.prompt || ""}
           onChange={(v) => onUpdate({ prompt: v })}
