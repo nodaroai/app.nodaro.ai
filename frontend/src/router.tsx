@@ -50,6 +50,7 @@ const AdminSettings = lazy(() => import("@/app/(admin)/admin/settings/page"))
 const AdminApps = lazy(() => import("@/app/(admin)/admin/apps/page"))
 const AdminCreditAudit = lazy(() => import("@/app/(admin)/admin/credit-audit/page"))
 const AdminCreditAnomalies = lazy(() => import("@/app/(admin)/admin/credit-anomalies/page"))
+const AdminKieCredits = lazy(() => import("@/app/(admin)/admin/kie-credits/page"))
 const AdminSubscriptions = lazy(() => import("@/app/(admin)/admin/subscriptions/page"))
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
@@ -217,6 +218,10 @@ export const router = createBrowserRouter([
       {
         path: "credit-anomalies",
         element: <SuspenseWrapper><AdminCreditAnomalies /></SuspenseWrapper>,
+      },
+      {
+        path: "kie-credits",
+        element: <SuspenseWrapper><AdminKieCredits /></SuspenseWrapper>,
       },
       {
         path: "subscriptions",
