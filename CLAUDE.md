@@ -100,7 +100,7 @@
 
 **Steps 8 and 9 are separate node lists — missing either means the node won't appear in that UI.**
 
-Full guide: `docs/adding-a-new-node.md`
+***REDACTED-OSS-SCRUB***
 
 ### Database Rules
 - RLS on all tables
@@ -147,6 +147,8 @@ Full guide: `docs/adding-a-new-node.md`
 | `transactions` | id, stripe_transaction_id, type, amount_usd, credits_granted | Payment history |
 | `social_connections` | id, user_id, platform, platform_user_id, access_token_encrypted, refresh_token_encrypted, token_expires_at, scopes, metadata | OAuth tokens (AES-256-GCM encrypted), one per user+platform |
 | `published_apps` | id, workflow_id, user_id, name, slug, version, nodes (JSONB), edges (JSONB), metadata, status | Versioned mini-app snapshots |
+| `credit_anomalies` | id, user_id, job_id, model, expected_credits, actual_credits, status | Credit charge anomaly tracking |
+| `kie_credit_snapshots` | id, balance, timestamp | KIE.ai account balance history (hourly) |
 
 ---
 
@@ -158,7 +160,7 @@ frontend/src/
   router.tsx              — React Router config (createBrowserRouter)
   app/(auth)/             — Login, signup
   app/(dashboard)/        — Projects, workflows, billing, settings, library, integrations
-  app/(admin)/            — Admin panel (cloud/business only): pricing, jobs, models, reports, settings, usage, users, credit-audit, alerts, apps, subscriptions
+  app/(admin)/            — Admin panel (cloud/business only): pricing, jobs, models, reports, settings, usage, users, credit-audit, kie-credits, alerts, apps, subscriptions
   app/pricing/            — Pricing page (Stripe Checkout)
   app/gallery/            — Public community gallery
   routes/                 — Route wrapper components (workflow-editor-page, etc.)
@@ -166,12 +168,13 @@ frontend/src/
   components/nodes/       — 100+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, extend-video-node, webhook-trigger-node, schedule-trigger-node, social-node, speech-to-video-node, sora-storyboard-node, 13 suno-*-nodes, preview-node)
   components/editor/
     config-panel.tsx      — Thin dispatcher (~520 lines), delegates to config-panels/
-    config-panels/        — 24 files: per-category node config components (image, video, audio, composition, entity, trigger, social, etc.) + tag-textarea.tsx (autocomplete for audio tags & Suno metatags)
+    config-panels/        — 24 files: per-category node config components (image, video, audio, composition, entity, trigger, social, etc.) + tag-textarea.tsx (autocomplete for audio tags & Suno metatags) + prompt-helper-dialog.tsx (AI prompt enhancement) + aspect-ratio-selector.tsx (visual SVG tile grid) + llm-model-select.tsx (tiered model dropdown)
     remotion-player-preview.tsx — Generic @remotion/player wrapper (lazy-loaded)
     after-effects-player-preview.tsx — AE composition preview (shows when sourceVideo exists)
     motion-graphics-player-preview.tsx — MG composition preview (always available)
     workflow-editor/      — 13 files: DAG execution engine, node executors, polling, main component
     editor-error-boundary.tsx — React error boundary for Canvas + ConfigPanel
+  components/presentation/ — App runner / presentation mode (presentation-view, node-picker-dialog, node-config-modal, node-section, sortable-card-wrapper)
   components/credits/     — CreditBalance, GenerateButton, etc.
   components/ui/          — shadcn/ui
   hooks/                  — useModelCredits, undo-flags (shared skip flag), use-undo-redo, use-workflow-store, etc.
@@ -185,8 +188,11 @@ frontend/src/
   components/integrations/ — Platform OAuth connect/disconnect cards
   types/nodes.ts          — Node data types
 
-packages/shared/          — Shared pure logic between frontend & backend (model-constants, prompt-templates, ancestor-refs, credit-identifiers, prompt-builder, llm-models, types)
+packages/shared/          — Shared pure logic between frontend & backend (model-constants, prompt-templates, ancestor-refs, credit-identifiers, prompt-builder, llm-models, types, presentation-utils)
 packages/remotion/        — Remotion compositions (slideshow, explainer, social-reel, documentary, scene-graph, after-effects, lottie-overlay, 3d-title, motion-graphics, composite)
+
+docs/                     — Public documentation (GitHub Pages); contains only nodes/ subfolder — NO pricing, KIE, or internal data
+specs/                    — Internal specs (FULL_SPEC, BILLING, adding-a-new-node, new-kie-models-spec, etc.) — NOT public
 
 backend/src/
   server.ts               — Entry point
@@ -194,7 +200,7 @@ backend/src/
   worker.ts               — BullMQ job processor (video-worker)
   render-worker.ts        — BullMQ render worker (Remotion, concurrency:1)
   orchestrator.ts         — BullMQ workflow orchestrator entry point (concurrency:2)
-  routes/                 — 93 API route files (jobs, workflows, projects, admin-*, billing, stripe-webhook, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones, voice-changer, dubbing, voice-remix, voice-design, forced-alignment, extend-video, workflow-execution, webhook-triggers, social-auth, social-publish, speech-to-video, sora-storyboard, suno, published-apps, app-runner, app-analytics, admin-subscription-health, admin-credit-audit, cancel-jobs)
+  routes/                 — 95 API route files (jobs, workflows, projects, admin-*, billing, stripe-webhook, gallery, download, user-settings, ai-writer, prompt-helper, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones, voice-changer, dubbing, voice-remix, voice-design, forced-alignment, extend-video, workflow-execution, webhook-triggers, social-auth, social-publish, speech-to-video, sora-storyboard, suno, published-apps, app-runner, app-analytics, admin-subscription-health, admin-credit-audit, admin-credit-anomalies, cancel-jobs)
   prompts/                — AI system prompts (after-effects-system.ts, lottie-overlay-system.ts, three-d-title-system.ts, motion-graphics-system.ts)
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction; KIE clients: `client.ts` (core + VEO), `kontext-client.ts` (Flux Kontext), `runway-client.ts` (Runway + Aleph), `luma-client.ts` (Luma Modify), `kling3-client.ts` (Kling 3.0), `suno-client.ts` (Suno ops), `credit-lookup.ts` (credit audit)
@@ -224,7 +230,7 @@ backend/src/
 | Execution model | Frontend DAG + Backend Orchestrator | Frontend: browser-based DAG engine; Backend: BullMQ orchestrator for autonomous/triggered execution |
 | Realtime updates | Polling (MVP) → SSE (Phase 2) | No extra infra needed |
 | Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
-| Credit pricing | 1 credit = $0.02 | Composite model identifiers for variable pricing (e.g., `"gpt-image:high"`, `"flux:2K"`); `VARIABLE_PRICING_MODELS` in `model-options.ts`; `buildCreditModelIdentifier()` in helpers.ts + route handlers |
+| Credit pricing | 1 credit = $0.02 | Composite model identifiers for variable pricing (e.g., `"gpt-image:high"`, `"flux:2K"`); `VARIABLE_PRICING_MODELS` in `model-options.ts`; `buildCreditModelIdentifier()` in helpers.ts + route handlers; dynamic markup via `cost_markup_percent` app setting; credit anomaly tracking via `credit_anomalies` table |
 | Voice Extractor | ElevenLabs via KIE.ai | Isolates voice from any audio, removes background noise |
 | Speech-to-Text | ElevenLabs STT via KIE.ai | Transcription with diarization + audio event tagging (provider option on transcribe node) |
 | Text-to-Dialogue | ElevenLabs Dialogue V3 via KIE.ai | Multi-speaker TTS — each dialogue line gets a different voice, outputs single audio file |
@@ -239,7 +245,8 @@ backend/src/
 | Video extend | VEO Extend + Runway Extend via KIE.ai | `POST /v1/extend-video` (40/32 credits), requires upstream `kieTaskId` from VEO/Runway generation; new `extend-video` node type with provider-specific params (model/seeds for VEO, quality for Runway) |
 | Media processing | FFmpeg in worker | 12 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale), 0 credits |
 | Image generation | Per-model params via `model-options.ts` | Config panel layout: Provider → Prompt → Style → Negative Prompt → Assets → Model Settings; style uses `IMAGE_STYLE_PRESETS` dropdown (16 presets) + "Custom..." free text; aspect ratios, resolution (Flux/Nano Banana 2), quality (GPT Image/Seedream) filtered per provider; Nano Banana v1 uses `image_size` (not `aspect_ratio`) and has no `resolution`; Nano Banana 2 uses native `aspect_ratio` with 1K/2K/4K resolution; `output_format` only sent to Nano Banana family; Flux Kontext/Max use own aspect ratio set (1:1, 16:9, 9:16, 4:3, 3:4, 21:9); style appended to prompt at execution; `negative_prompt` sent natively for imagen4/ideogram/qwen, appended as "Avoid: ..." for others; Ideogram uses `reference_image_urls` for character refs; reference image UI hidden for models that don't support it (`MODELS_WITH_REFERENCE_IMAGE_SUPPORT`: nano-banana, nano-banana-pro, ideogram only) |
-| LLM routing | KIE.ai unified client + Anthropic fallback | `packages/shared/src/llm-models.ts` (model registry), `backend/src/lib/llm-client.ts` (3 format adapters: chat-completions, messages, responses); 7 models across 3 tiers (economy/standard/premium); all 10 LLM routes + translate migrated; `LlmModelSelect` component in all LLM config panels |
+| LLM routing | KIE.ai unified client + Anthropic fallback | `packages/shared/src/llm-models.ts` (model registry), `backend/src/lib/llm-client.ts` (`llmComplete()` + `llmStream()`, 3 format adapters: chat-completions, messages, responses); 7 models across 3 tiers (economy/standard/premium); all 11 LLM routes + translate migrated; `LlmModelSelect` component in all LLM config panels; `LlmFeature` type covers 11 features; `buildLlmCreditIdentifier()` for tiered pricing; `resolveLlmCreditId()` reads `llmModel` from raw body before Zod strips it |
+| AI prompt helper | LLM-powered prompt enhancement | `POST /v1/prompt-helper/enhance` — node-type-aware prompt improvement with style dropdown (`IMAGE_PROMPT_STYLES`, `VIDEO_PROMPT_STYLES`, etc.); `PromptHelperButton` (pink sparkles, gated behind `hasCredits()`); `PromptHelperDialog` with LLM model selector; default model `gemini-3-flash` (economy tier) |
 | Translation | Gemini Flash via KIE.ai | Creative prompt translation (migrated from Replicate to unified LLM client) |
 | Composition preview | `@remotion/player` in frontend | Lazy-loaded Player preview for After Effects + Motion Graphics config panels; `@remotion-pkg` Vite alias resolves `packages/remotion/src`; `resolve.dedupe` prevents duplicate remotion bundles |
 | Undo/redo | Zustand snapshot stack (50 max), 300ms debounce | `undo-flags.ts` shared skip flag prevents execution updates (status/progress/results via `EXECUTION_DATA_KEYS`) from creating undo entries; `_isRestoring` flag prevents restore from triggering subscription; `loadGeneration` counter clears history only on workflow load/switch, not on auto-save `markClean()` |
@@ -254,7 +261,10 @@ backend/src/
 | Voice Design | ElevenLabs Text-to-Voice Design direct API | `POST /v1/voice-design` (5 credits), full controls: model (multilingual v2/english v2/turbo v2.5), loudness, guidance_scale, seed, quality, should_enhance; outputs audio + `generatedVoiceId`; uses `POST /v1/text-to-voice/design`; node has dual output handles (`audio` + `voiceId`) |
 | Forced Alignment | ElevenLabs Forced Alignment direct API | `POST /v1/forced-alignment` (3 credits), audio + transcript → word-level timestamps JSON; output is data (not audio) |
 | Suno metatags | `suno-tags.ts` + `TagTextarea` | Autocomplete for `[Verse]`, `[Chorus]`, genre tags, etc. in lyrics fields; `TagTextarea` component with portal-rendered dropdown, supports both Suno metatags and ElevenLabs audio tags via `customTags` prop |
-| Workflow orchestrator | BullMQ `"workflow-orchestration"` queue | Server-side DAG execution: topological sort → level-by-level parallel execution → per-node state tracking; 3 execution categories: worker-queued (40+ types via existing BullMQ queues), sync HTTP (13 routes: 7 AI + 6 social via internal fetch), inline (combine-text, split-text, composite); concurrency 2; 15min per-node timeout, 60min per-workflow; two stop modes: "cancelled" (immediate) and "stopping" (finish current level then stop) |
+| Aspect ratio selector | Visual SVG tile grid | `AspectRatioSelector` component with dynamically generated SVG ratio icons; responsive grid (2-col ≤2 options, 3-col otherwise); ARIA `radiogroup`; used across all image/video/composition config panels replacing plain `<Select>` dropdowns |
+| Canvas layout | ELKjs layered algorithm | `elkjs` replaces custom tidy-up; uses `node.measured` dimensions for size-aware layout; `elk.algorithm: "layered"`, direction RIGHT, orthogonal edge routing; supports selection-mode (2+ selected) or all-nodes mode; sticky notes excluded |
+| Flexible app I/O | Curated presentation inputs/outputs | Nodes opt in via `presentationInput`/`presentationOutput` flags on node data; `NodePickerDialog` for selection; `@dnd-kit/sortable` drag-and-drop ordering; `presentationSettings.inputOrder`/`outputOrder`/`cardMeta` in workflow store |
+| Workflow orchestrator | BullMQ `"workflow-orchestration"` queue | Server-side DAG execution: topological sort → level-by-level parallel execution → per-node state tracking; 3 execution categories: worker-queued (40+ types via existing BullMQ queues), sync HTTP (13 routes: 7 AI + 6 social via internal fetch), inline (combine-text, split-text, composite); concurrency 2; 30min per-node timeout, 60min per-workflow; two stop modes: "cancelled" (immediate) and "stopping" (finish current level then stop) |
 | Webhook triggers | Token-based auth, no user auth needed | `POST /v1/webhooks/:token` (public route), 32-byte hex token per trigger, rate limited 10/min per token; creates execution + enqueues orchestrator |
 | Schedule triggers | Cron expressions + interval strings | `schedule-cron.ts` checks every 60s, supports 5-field cron + simple intervals ("5m", "1h", "1d"); respects `maxExecutions` limit; skips if workflow already running |
 | Sub-workflow execution | Recursive with depth limit 5 | `sub-workflow-handler.ts`: loads referenced workflow, filters to selected route's reachable nodes (BFS), executes with same orchestrator logic; cycle detection via `workflowId:routeId` set |
@@ -266,16 +276,11 @@ backend/src/
 ---
 
 ## Active TODOs
-- [ ] Stripe production go-live (swap test keys for live keys)
 - [ ] Phase 6 Templates (preset workflow templates)
-- [ ] Landing page storage tier update
-- [ ] Project Folders
 - [ ] Version history per node
-- [ ] Video generation with start+end frames (2 images → video) for supporting models
 - [ ] /v1/available-models endpoint (filter by edition + API keys)
-- [ ] Translation: use AI (Gemini/Claude) not Google Translate
 - [ ] Build from Prompt: MVP + Director Mode versions
-- [ ] Scene Node + Shot Node as optional "Director Mode"
+- [ ] Shot Node as companion to Scene Node ("Director Mode")
 - [x] New KIE models: Nano Banana 2, Seedream 5 Lite (image); Flux Kontext/Max (image edit); Runway KIE (video); Luma Modify (V2V); VEO/Runway Extend (video extend); VEO 1080p/4K upscale
 - [x] New KIE models Phase 2: Ideogram V3 (image); Kling 3.0 motion control; Topaz 4K/8K tiers; Sora watermark remover; 7 Suno ops (mashup, replace-section, style-boost, add-instrumental, add-vocals, convert-wav, upload-extend); Speech-to-Video (Wan 2.2); Sora Storyboard
 - [x] TTS voice browser with categories, search, audio previews
@@ -288,8 +293,23 @@ backend/src/
 - [x] Preview node (inspect connected asset values in workflow editor)
 - [x] Copy/paste/cut workflow nodes + clipboard workflow import
 - [x] Credit audit across all KIE record endpoints
+- [x] Stripe production go-live
+- [x] Video generation with start+end frames (VEO, Kling, MiniMax, Hailuo, Bytedance)
+- [x] Translation: AI-powered via unified LLM client (replaced Google Translate)
+- [x] Project Folders (folder_id on workflows, drag-drop folder UI)
+- [x] Scene Node (visual scene editor with character/object/location refs)
+- [x] Unified LLM layer with tiered model selection (7 models, 3 tiers, 3 API formats)
+- [x] AI prompt helper for node config panels (LLM-powered prompt enhancement)
+- [x] Flexible app I/O — any node as curated input/output with config modals
+- [x] ELKjs size-aware layout (replaced custom tidy-up)
+- [x] Visual aspect ratio selector (SVG tile grid across all config panels)
+- [x] VEO 3/3.1 aspect ratio, seed config, generateAudio toggle, Fast T2V variant
+- [x] Credit audit: actual-charges mode, anomaly tracking, KIE credits dashboard
+- [x] Execution parity audit (frontend DAG ↔ backend orchestrator fully aligned)
+- [x] Dynamic credit pricing from admin markup setting
+- [x] Public docs site (GitHub Pages) — internal specs moved to `specs/`
 
 ---
 
 *Last updated: 2026-03-17*
-*Version: 1.57.0*
+*Version: 1.68.0*
