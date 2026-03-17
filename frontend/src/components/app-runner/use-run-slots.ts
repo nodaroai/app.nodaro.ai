@@ -147,7 +147,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
       }
       setShowHistory(isDesktop)
     }
-  }, [allSlots.length > 0, presNodes.length > 0]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [allSlots.length, presNodes.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load past runs from DB when app is ready and user is authenticated
   useEffect(() => {
@@ -184,11 +184,13 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     usePresentationStore.setState({ executionStatus, nodeStates, completedNodes, totalNodes })
 
     if (activeSlotId) {
-      setSlots((prev) => prev.map((s) =>
-        s.id === activeSlotId
-          ? { ...s, nodeStates: nodeStates as Record<string, RunSlotNodeState>, executionStatus: toSlotStatus(executionStatus), completedNodes, totalNodes }
-          : s,
-      ))
+      const mapped = toSlotStatus(executionStatus)
+      setSlots((prev) => prev.map((s) => {
+        if (s.id !== activeSlotId) return s
+        // Skip update when nothing changed to avoid unnecessary re-renders
+        if (s.nodeStates === nodeStates && s.executionStatus === mapped && s.completedNodes === completedNodes && s.totalNodes === totalNodes) return s
+        return { ...s, nodeStates: nodeStates as Record<string, RunSlotNodeState>, executionStatus: mapped, completedNodes, totalNodes }
+      }))
     }
   }, [executionStatus, nodeStates, completedNodes, totalNodes, activeSlotId])
 
