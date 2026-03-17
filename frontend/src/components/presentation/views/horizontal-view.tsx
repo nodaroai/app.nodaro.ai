@@ -8,8 +8,6 @@ interface HorizontalViewProps extends EditableViewProps {
   handleDividerMouseDown: (e: React.MouseEvent) => void
 }
 
-const CONTAINER_MIN_HEIGHT = { minHeight: 400 } as const
-
 export function HorizontalView({
   orderedInputNodes,
   orderedOutputNodes,
@@ -31,12 +29,12 @@ export function HorizontalView({
   const rightColumnStyle = useMemo(() => ({ width: `${100 - splitRatio}%` }), [splitRatio])
 
   return (
-    <div className="flex-1 overflow-auto p-3 md:p-6" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom))' }}>
-      <div ref={containerRef} className="pres-horiz-container max-w-7xl mx-auto flex gap-0 h-full" style={CONTAINER_MIN_HEIGHT}>
+    <div className="flex-1 flex flex-col overflow-auto p-3 md:p-6" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom))' }}>
+      <div ref={containerRef} className="pres-horiz-container max-w-7xl mx-auto flex gap-0 flex-1 min-h-[400px]">
         {/* Inputs column — width overridden to 100% on mobile via CSS */}
-        <div className="pres-horiz-column overflow-y-auto md:pr-3" style={leftColumnStyle}>
+        <div className="pres-horiz-column flex flex-col overflow-y-auto md:pr-3" style={leftColumnStyle}>
           <NodeSection
-            label="In"
+            label="Inputs"
             nodes={orderedInputNodes}
             isEditing={isEditing}
             sensors={sensors}
@@ -66,10 +64,15 @@ export function HorizontalView({
           )}
         </div>
 
+        {/* Mobile separator between In/Out — shown via CSS on <768px */}
+        <div className="pres-horiz-separator py-3">
+          <div className="border-t border-border" />
+        </div>
+
         {/* Outputs column — width overridden to 100% on mobile via CSS */}
-        <div className="pres-horiz-column overflow-y-auto md:pl-3" style={rightColumnStyle}>
+        <div className="pres-horiz-column flex flex-col overflow-y-auto md:pl-3" style={rightColumnStyle}>
           <NodeSection
-            label="Out"
+            label="Outputs"
             nodes={orderedOutputNodes}
             isEditing={isEditing}
             sensors={sensors}

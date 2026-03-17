@@ -1,37 +1,43 @@
 interface AppRunnerLayoutProps {
   showHistory: boolean
+  collapsed: boolean
   onCloseHistory: () => void
   sidebar: React.ReactNode
-  runsButton: React.ReactNode
   children: React.ReactNode
 }
 
 export function AppRunnerLayout({
   showHistory,
+  collapsed,
   onCloseHistory,
   sidebar,
-  runsButton,
   children,
 }: AppRunnerLayoutProps) {
   return (
     <div className="h-[100dvh] flex relative">
-      {/* Sidebar: overlay on mobile (<768px via CSS), inline on desktop */}
-      {showHistory && (
+      {/* Desktop sidebar: always visible when sidebar content exists */}
+      {sidebar && (
+        <div className="hidden md:block shrink-0">
+          <div className="h-full" style={{ paddingTop: 'var(--safe-area-top, 0px)' }}>
+            {sidebar}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile sidebar: overlay, toggle-able */}
+      {showHistory && sidebar && (
         <>
-          {/* Backdrop — visible on mobile only (styled by CSS media query), hidden on desktop */}
           <div
             className="app-runner-sidebar-backdrop md:hidden"
             onClick={onCloseHistory}
           />
-          {/* Panel — fixed overlay on mobile (CSS media query), inline flow on desktop */}
-          <div className="app-runner-sidebar-panel shrink-0">
+          <div className="app-runner-sidebar-panel md:hidden" style={{ paddingTop: 'var(--safe-area-top, 0px)' }}>
             {sidebar}
           </div>
         </>
       )}
 
       <div className="flex-1 flex flex-col min-w-0 relative">
-        {runsButton}
         {children}
       </div>
     </div>

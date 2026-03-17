@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { useParams, Link } from "react-router-dom"
+import { useEffect } from "react"
+import { useParams, useSearchParams, Link } from "react-router-dom"
 import { Loader2, Clock } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
@@ -15,11 +15,16 @@ import {
 } from "@/components/ui/dialog"
 import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "@/hooks/use-workflow-store"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import { useRunSlots, AppRunnerLayout, RunsSidebar } from "@/components/app-runner"
+import { useRunSlots, AppRunnerLayout, RunsSidebar, ORIGINAL_SLOT_ID } from "@/components/app-runner"
 
 export default function AppRunnerPage() {
   const { slug } = useParams<{ slug: string }>()
+  const [searchParams] = useSearchParams()
   const { user } = useAuth()
+
+  // Deep-linking query params
+  const initialRunId = searchParams.get("run") ?? undefined
+  const initialSidebar = searchParams.get("sidebar") as "open" | "closed" | null
 
   // App runner store
   const loadApp = useAppRunnerStore((s) => s.loadApp)
@@ -34,7 +39,8 @@ export default function AppRunnerPage() {
     return () => { reset() }
   }, [slug, loadApp, reset])
 
-  // Seed presentation store when app loads
+  // Seed presentation store when app loads (structural data only —
+  // nodeStates + executionStatus are managed by the auto-select in useRunSlots)
   useEffect(() => {
     if (!app) return
     const snapshotSettings = (app.snapshotSettings ?? {}) as Record<string, unknown>
@@ -47,13 +53,11 @@ export default function AppRunnerPage() {
       isOwner: false,
       estimatedCost: app.estimatedCredits,
       presentationSettings,
-      executionStatus: "idle",
-      nodeStates: {},
     })
   }, [app])
 
   // Run slots hook — all slot state, CRUD, DB sync
-  const runSlots = useRunSlots({ slug, user, persistRuns: !!user })
+  const runSlots = useRunSlots({ slug, user, persistRuns: !!user, initialRunId, initialSidebar })
 
   // Loading / error states — show spinner until app is loaded (no blank flash)
   if (errorMessage && !app) {
@@ -81,8 +85,9 @@ export default function AppRunnerPage() {
   return (
     <AppRunnerLayout
       showHistory={runSlots.showHistory && !!user}
+      collapsed={runSlots.sidebarCollapsed}
       onCloseHistory={() => runSlots.setShowHistory(false)}
-      sidebar={
+      sidebar={user ? (
         <RunsSidebar
           slots={runSlots.slots}
           activeSlotId={runSlots.activeSlotId}
@@ -91,28 +96,14 @@ export default function AppRunnerPage() {
           onDuplicateSlot={runSlots.handleDuplicateSlot}
           onDeleteSlot={runSlots.handleRequestDelete}
           onRenameSlot={runSlots.handleRenameSlot}
-          onClose={() => runSlots.setShowHistory(false)}
+          onClose={runSlots.handleCloseSidebar}
+          collapsed={runSlots.sidebarCollapsed}
           versions={runSlots.versions}
           selectedVersion={runSlots.selectedVersion}
           onSelectVersion={runSlots.setSelectedVersion}
           latestVersion={runSlots.latestVersion}
         />
-      }
-      runsButton={
-        user && runSlots.slots.length > 0 && !runSlots.showHistory ? (
-          <div className="absolute top-[5.5rem] md:top-[3.75rem] left-3 z-20">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => runSlots.setShowHistory(true)}
-              className="h-8 border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted touch-manipulation"
-            >
-              <Clock className="h-4 w-4 mr-1" />
-              Runs · {runSlots.slots.length}
-            </Button>
-          </div>
-        ) : null
-      }
+      ) : null}
     >
       <PresentationView
         mode="fullscreen"
@@ -121,8 +112,21 @@ export default function AppRunnerPage() {
         onNewRun={user ? runSlots.handleHeaderAction : undefined}
         newRunLabel={runSlots.newRunLabel}
         inputsReadOnly={runSlots.inputsReadOnlyValue}
-        suppressOutputFallback={runSlots.activeSlotId !== null}
+        suppressOutputFallback={runSlots.activeSlotId !== null && runSlots.activeSlotId !== ORIGINAL_SLOT_ID}
         showFullscreenToggle
+        headerLeft={
+          user && !runSlots.showHistory ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => runSlots.setShowHistory(true)}
+              className="h-8 border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted touch-manipulation shrink-0 md:hidden"
+            >
+              <Clock className="h-4 w-4 mr-1" />
+              Runs
+            </Button>
+          ) : null
+        }
       />
 
       {/* Delete confirmation dialog */}

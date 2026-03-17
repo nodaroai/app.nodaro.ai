@@ -153,7 +153,7 @@ export function FileDropZone({
   fileInputRef,
   onFileChange,
   label,
-  height = "h-40",
+  height = "h-28 sm:h-40",
   onShowUrl,
 }: {
   isDragOver: boolean
@@ -184,11 +184,11 @@ export function FileDropZone({
         <UploadSpinner size={height === "h-24" ? "sm" : "md"} />
       ) : (
         <>
-          <Upload className={height === "h-24" ? "w-6 h-6 text-muted-foreground/40 mb-1" : "w-8 h-8 text-muted-foreground/40 mb-2"} />
+          <Upload className={height === "h-24" ? "w-6 h-6 text-muted-foreground/40 mb-1" : "w-6 h-6 sm:w-8 sm:h-8 text-muted-foreground/40 mb-1 sm:mb-2"} />
           <span className="text-xs text-muted-foreground">{label}</span>
           <button
             type="button"
-            className="mt-2 text-[10px] text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-1 transition-colors"
+            className="mt-2 py-1.5 px-2 text-[11px] text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-1 transition-colors touch-manipulation"
             onClick={(e) => { e.stopPropagation(); onShowUrl() }}
           >
             <Link className="w-3 h-3" /> or paste URL

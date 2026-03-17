@@ -1,6 +1,15 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { ArrowLeftRight, Maximize2, X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { getOutputType, type OutputType } from "@/lib/presentation-utils"
 import { GlassCard } from "../output-cards/shared"
 import { WaveformBars } from "../input-cards/shared"
@@ -115,6 +124,24 @@ export function CompareView({
     outputItems: items.filter((i) => i.group === "Outputs"),
   }), [items])
 
+  // Auto-select first input + first output when nothing is selected
+  const itemIds = items.map((i) => i.id).join(",")
+  useEffect(() => {
+    if (leftId || rightId) return
+    if (items.length === 0) return
+    const inputItems = items.filter((i) => i.group === "Inputs")
+    const outputItems = items.filter((i) => i.group === "Outputs")
+    if (inputItems.length > 0 && outputItems.length > 0) {
+      setLeftId(inputItems[0].id)
+      setRightId(outputItems[0].id)
+      onSelectionChange?.(inputItems[0].id, outputItems[0].id)
+    } else if (items.length >= 2) {
+      setLeftId(items[0].id)
+      setRightId(items[1].id)
+      onSelectionChange?.(items[0].id, items[1].id)
+    }
+  }, [itemIds]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const bothVisual =
     leftItem &&
     rightItem &&
@@ -177,7 +204,7 @@ export function CompareView({
             </button>
           </div>
         ) : bothText ? (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <GlassCard>
               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">
                 {leftItem.title}
@@ -218,7 +245,7 @@ export function CompareView({
           </div>
         ) : (
           /* Mixed types — side by side */
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <CompareItemDisplay item={leftItem} />
             <CompareItemDisplay item={rightItem} />
           </div>
@@ -258,31 +285,33 @@ function ItemSelect({
       <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1 block">
         {label}
       </label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-[#ff0073]/50"
-      >
-        <option value="">Select item...</option>
-        {groups.inputItems.length > 0 && (
-          <optgroup label="Inputs">
-            {groups.inputItems.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.title}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {groups.outputItems.length > 0 && (
-          <optgroup label="Outputs">
-            {groups.outputItems.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.title}
-              </option>
-            ))}
-          </optgroup>
-        )}
-      </select>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Select item..." />
+        </SelectTrigger>
+        <SelectContent>
+          {groups.inputItems.length > 0 && (
+            <SelectGroup>
+              <SelectLabel>Inputs</SelectLabel>
+              {groups.inputItems.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.title}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          )}
+          {groups.outputItems.length > 0 && (
+            <SelectGroup>
+              <SelectLabel>Outputs</SelectLabel>
+              {groups.outputItems.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.title}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          )}
+        </SelectContent>
+      </Select>
     </div>
   )
 }

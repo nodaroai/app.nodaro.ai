@@ -547,6 +547,15 @@ html, body {
   pointer-events: all !important;
 }
 
+/* Hide scrollbar utility for horizontal-scroll action bars */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Touch-optimized React Flow handles for mobile */
 @media (pointer: coarse) {
   .react-flow__handle {
@@ -562,16 +571,38 @@ html, body {
 @media (max-width: 767px) {
   .pres-horiz-container {
     flex-direction: column !important;
-    gap: 1.5rem;
+    gap: 0;
+    height: auto !important;
+    min-height: 0 !important;
   }
   .pres-horiz-column {
     width: 100% !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
+    overflow-y: visible !important;
   }
   .pres-horiz-divider {
     display: none !important;
   }
+  .pres-horiz-separator {
+    display: block !important;
+  }
+}
+
+/* Presentation: mobile separator between In/Out (hidden on desktop) */
+.pres-horiz-separator {
+  display: none;
+}
+
+/* Touch devices: always show media overlay controls (no hover state) */
+@media (pointer: coarse) {
+  .media-overlay-controls {
+    opacity: 1 !important;
+  }
+}
+
+.group:focus-within .media-overlay-controls {
+  opacity: 1 !important;
 }
 
 /* App runner sidebar: overlay on mobile, inline on desktop */
