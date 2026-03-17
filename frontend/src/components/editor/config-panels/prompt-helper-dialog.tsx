@@ -18,6 +18,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { enhancePrompt } from "@/lib/api"
+import { useModelCredits } from "@/hooks/use-model-credits"
+import { buildLlmCreditIdentifier } from "@nodaro-shared/llm-models"
 import { getStylesForNodeType } from "./prompt-helper-styles"
 import { LlmModelSelect } from "./llm-model-select"
 
@@ -48,6 +50,8 @@ export function PromptHelperDialog({
   const [enhancedPrompt, setEnhancedPrompt] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+
+  const creditCost = useModelCredits(buildLlmCreditIdentifier("prompt-helper", llmModel), 1)
 
   const styles = getStylesForNodeType(nodeType)
 
@@ -166,7 +170,7 @@ export function PromptHelperDialog({
                 <>
                   <Sparkles className="w-3.5 h-3.5 mr-1.5" />
                   Enhance Prompt
-                  <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">1 CR</span>
+                  <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditCost} CR</span>
                 </>
               )}
             </Button>
