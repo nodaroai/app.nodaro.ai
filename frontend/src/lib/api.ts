@@ -2427,6 +2427,7 @@ export async function enhancePrompt(params: {
   prompt: string
   provider?: string
   model?: string
+  llmModel?: string
   style?: string
   aspectRatio?: string
   duration?: number
