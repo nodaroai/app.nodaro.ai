@@ -257,6 +257,22 @@ export function getAspectRatiosForModel(provider: string): readonly { value: str
   return IMAGE_ASPECT_RATIOS[provider] ?? DEFAULT_RATIOS
 }
 
+// =============================================================================
+// VIDEO / COMPOSITION ASPECT RATIO PRESETS
+// =============================================================================
+export const VIDEO_RATIOS = [
+  { value: "16:9", label: "16:9 (Landscape)" },
+  { value: "9:16", label: "9:16 (Portrait)" },
+  { value: "1:1", label: "1:1 (Square)" },
+] as const
+
+export const COMPOSITION_RATIOS = [
+  { value: "16:9", label: "16:9 (Landscape)" },
+  { value: "9:16", label: "9:16 (Portrait)" },
+  { value: "1:1", label: "1:1 (Square)" },
+  { value: "4:5", label: "4:5 (Social)" },
+] as const
+
 // Models that support resolution selection
 // Note: Base Nano Banana does NOT support resolution. Nano Banana Pro and v2 DO (1K/2K/4K).
 const NANO_BANANA_RESOLUTIONS = [

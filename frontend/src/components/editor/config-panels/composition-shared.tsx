@@ -22,6 +22,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import type { SourceNodeInfo } from "./types"
+import { AspectRatioSelector } from "./aspect-ratio-selector"
+import { COMPOSITION_RATIOS } from "./model-options"
 
 export function SortableAssetItem({ id, index, label, typeLabel }: { id: string; index: number; label: string; typeLabel: string }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
@@ -145,15 +147,11 @@ export function VideoSettingsAccordion({
         <AccordionContent className="space-y-3 pt-1">
           <div>
             <Label>Aspect Ratio</Label>
-            <Select value={aspectRatio} onValueChange={(v) => onUpdate({ aspectRatio: v })}>
-              <SelectTrigger aria-label="Aspect Ratio"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
-                <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
-                <SelectItem value="1:1">1:1 (Square)</SelectItem>
-                <SelectItem value="4:5">4:5 (Social)</SelectItem>
-              </SelectContent>
-            </Select>
+            <AspectRatioSelector
+              options={COMPOSITION_RATIOS}
+              value={aspectRatio}
+              onValueChange={(v) => onUpdate({ aspectRatio: v })}
+            />
           </div>
           <div>
             <Label htmlFor={`${idPrefix}-fps`}>FPS</Label>

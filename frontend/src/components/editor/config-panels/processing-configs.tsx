@@ -12,6 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { AspectRatioSelector } from "./aspect-ratio-selector"
+import { COMPOSITION_RATIOS } from "./model-options"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type {
   CombineVideosData,
@@ -158,18 +160,11 @@ export function ResizeVideoConfig({ data, onUpdate }: ConfigProps<ResizeVideoDat
     <div className="flex flex-col gap-3">
       <div>
         <Label>Target Aspect Ratio</Label>
-        <Select
+        <AspectRatioSelector
+          options={COMPOSITION_RATIOS}
           value={data.targetAspect}
           onValueChange={(v) => onUpdate({ targetAspect: v as ResizeVideoData["targetAspect"] })}
-        >
-          <SelectTrigger aria-label="Target aspect ratio"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="1:1">1:1 (Square)</SelectItem>
-            <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
-            <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
-            <SelectItem value="4:5">4:5</SelectItem>
-          </SelectContent>
-        </Select>
+        />
       </div>
       <div>
         <Label>Method</Label>
