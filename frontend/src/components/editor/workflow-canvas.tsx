@@ -13,7 +13,7 @@ import {
   type NodeMouseHandler,
   type IsValidConnection,
 } from "@xyflow/react"
-import { useSearchParams } from "react-router-dom"
+import { useSearchParams, useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import "@xyflow/react/dist/style.css"
 
@@ -32,10 +32,15 @@ const MediaLibraryModal = lazy(() => import("./media-library-modal").then(m => (
 import { SelectionActionBar } from "./selection-action-bar"
 import { FocusModeNav } from "./focus-mode-nav"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useUndoRedoActions } from "@/hooks/use-undo-redo"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { MobileCanvasContext } from "./mobile-canvas-context"
 import { CanvasZoomContext } from "./canvas-zoom-context"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
+import { createClient } from "@/lib/supabase"
 import type { WorkflowNode, WorkflowEdge, SceneNodeType } from "@/types/nodes"
 import type { LibraryAsset } from "@/lib/api"
 
@@ -304,6 +309,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [searchModalOpen, setSearchModalOpen] = useState(false)
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false)
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false)
+  const [pendingImportData, setPendingImportData] = useState<{ nodes: WorkflowNode[]; edges: WorkflowEdge[]; name: string; mousePos: { x: number; y: number } } | null>(null)
+  const navigate = useNavigate()
+  const createWorkflow = useProjectsStore((s) => s.createWorkflow)
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null)
   const wasDraggingRef = useRef(false)
   const [snapEnabled, setSnapEnabled] = useState(() => localStorage.getItem("nodaro:snapToGrid") === "true")
@@ -872,7 +880,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         e.preventDefault()
         const selectedIds = new Set(selected.map((n) => n.id))
         const connectedEdges = state.edges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target))
-        const payload = JSON.stringify({ __nodaro_clipboard: true, nodes: selected, edges: connectedEdges })
+        const payload = JSON.stringify({ __nodaro_clipboard: true, name: state.workflowName, nodes: selected, edges: connectedEdges })
         navigator.clipboard.writeText(payload).then(() => {
           if (e.key === "x") {
             useWorkflowStore.setState({
@@ -890,12 +898,13 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       if ((e.ctrlKey || e.metaKey) && e.key === "v") {
         e.preventDefault()
         navigator.clipboard.readText().then((text) => {
-          let parsed: { __nodaro_clipboard?: boolean; nodes?: WorkflowNode[]; edges?: WorkflowEdge[] }
+          let parsed: { __nodaro_clipboard?: boolean; name?: string; nodes?: WorkflowNode[]; edges?: WorkflowEdge[] }
           try { parsed = JSON.parse(text) } catch { return }
           if (!parsed.__nodaro_clipboard || !Array.isArray(parsed.nodes) || parsed.nodes.length === 0) return
 
           const nodesToPaste = parsed.nodes
           const edgesToPaste = parsed.edges ?? []
+          const clipboardName = parsed.name || "Workflow"
 
           // Generate new IDs and strip execution state
           const idMap: Record<string, string> = {}
@@ -922,30 +931,23 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             target: idMap[edge.target] || edge.target,
           }))
 
-          // Center pasted group on mouse position (if inside canvas) or viewport center
           const state = useWorkflowStore.getState()
-          const mousePos = lastMousePositionRef.current
-          const screenTarget = (mousePos.x !== 0 || mousePos.y !== 0) ? mousePos : getViewportCenter()
-          const flowPos = screenToFlowPosition(screenTarget)
-          const minX = Math.min(...newNodes.map((n) => n.position.x))
-          const maxX = Math.max(...newNodes.map((n) => n.position.x + (n.measured?.width ?? 200)))
-          const minY = Math.min(...newNodes.map((n) => n.position.y))
-          const maxY = Math.max(...newNodes.map((n) => n.position.y + (n.measured?.height ?? 100)))
-          const offsetX = flowPos.x - (minX + maxX) / 2
-          const offsetY = flowPos.y - (minY + maxY) / 2
+          const canvasEmpty = state.nodes.length === 0
 
-          const pastedNodes = newNodes.map((n) => ({
-            ...n,
-            position: { x: n.position.x + offsetX, y: n.position.y + offsetY },
-            selected: true,
-          }))
-
-          // Deselect existing nodes, add pasted nodes
-          useWorkflowStore.setState({
-            nodes: [...state.nodes.map((n) => n.selected ? { ...n, selected: false } : n), ...pastedNodes],
-            edges: [...state.edges, ...newEdges],
-            isDirty: true,
-          })
+          if (canvasEmpty) {
+            // Empty canvas: paste at original positions, update workflow name
+            const pastedNodes = newNodes.map((n) => ({ ...n, selected: true }))
+            useWorkflowStore.setState({
+              nodes: pastedNodes,
+              edges: newEdges,
+              workflowName: clipboardName,
+              isDirty: true,
+            })
+          } else {
+            // Canvas has items: show import dialog, capture mouse position now
+            const mousePos = lastMousePositionRef.current
+            setPendingImportData({ nodes: newNodes, edges: newEdges, name: clipboardName, mousePos: { ...mousePos } })
+          }
         }).catch(() => {})
         return
       }
@@ -1101,6 +1103,56 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     },
     [screenToFlowPosition, addNode, getViewportCenter],
   )
+
+  const dismissImportDialog = useCallback(() => setPendingImportData(null), [])
+
+  const handleImportPaste = useCallback(() => {
+    if (!pendingImportData) return
+    const { nodes: newNodes, edges: newEdges, mousePos } = pendingImportData
+    const state = useWorkflowStore.getState()
+    const screenTarget = (mousePos.x !== 0 || mousePos.y !== 0) ? mousePos : getViewportCenter()
+    const flowPos = screenToFlowPosition(screenTarget)
+    const minX = Math.min(...newNodes.map((n) => n.position.x))
+    const maxX = Math.max(...newNodes.map((n) => n.position.x + (n.measured?.width ?? 200)))
+    const minY = Math.min(...newNodes.map((n) => n.position.y))
+    const maxY = Math.max(...newNodes.map((n) => n.position.y + (n.measured?.height ?? 100)))
+    const offsetX = flowPos.x - (minX + maxX) / 2
+    const offsetY = flowPos.y - (minY + maxY) / 2
+    const pastedNodes = newNodes.map((n) => ({
+      ...n,
+      position: { x: n.position.x + offsetX, y: n.position.y + offsetY },
+      selected: true,
+    }))
+    useWorkflowStore.setState({
+      nodes: [...state.nodes.map((n) => n.selected ? { ...n, selected: false } : n), ...pastedNodes],
+      edges: [...state.edges, ...newEdges],
+      isDirty: true,
+    })
+    setPendingImportData(null)
+  }, [pendingImportData, screenToFlowPosition, getViewportCenter])
+
+  const handleImportNew = useCallback(async () => {
+    if (!pendingImportData) return
+    const { nodes: newNodes, edges: newEdges, name } = pendingImportData
+    const projectId = useWorkflowStore.getState().projectId
+    if (!projectId) return
+    const wf = await createWorkflow(projectId, `Imported: ${name}`)
+    if (!wf) {
+      toast.error("Failed to create workflow")
+      return
+    }
+    const supabase = createClient()
+    const { error } = await supabase.from("workflows").update({
+      nodes: JSON.parse(JSON.stringify(newNodes)),
+      edges: JSON.parse(JSON.stringify(newEdges)),
+    }).eq("id", wf.id)
+    if (error) {
+      toast.error("Failed to save imported nodes")
+      return
+    }
+    setPendingImportData(null)
+    navigate(`/projects/${projectId}/workflows/${wf.id}`)
+  }, [pendingImportData, createWorkflow, navigate])
 
   const hasSelection = nodes.some((n) => n.selected)
 
@@ -1264,6 +1316,26 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           hasSelection={hasSelection}
         />
       )}
+
+      {/* Import Dialog — shown when pasting into a non-empty canvas */}
+      <Dialog open={pendingImportData !== null} onOpenChange={(open) => { if (!open) dismissImportDialog() }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Import Nodes</DialogTitle>
+            <DialogDescription>
+              Your canvas already has nodes. How would you like to import?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 sm:justify-end">
+            <Button variant="outline" onClick={handleImportPaste}>
+              Paste Here
+            </Button>
+            <Button onClick={handleImportNew}>
+              New Workflow
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

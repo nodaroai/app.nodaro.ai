@@ -115,7 +115,7 @@ describe("text-to-speech handler", () => {
       output_data: { audioUrl: "https://r2.example.com/audio/job-1.mp3" },
       provider: "elevenlabs-turbo",
     }))
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", 0.01)
   })
 
   it("uses custom voice and options", async () => {
@@ -237,7 +237,7 @@ describe("audio-isolation handler", () => {
       output_data: { audioUrl: "https://r2.example.com/audio/job-1.mp3" },
       provider_cost: 0.01,
     }))
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", 0.01)
   })
 
   it("returns early when cancelled", async () => {
