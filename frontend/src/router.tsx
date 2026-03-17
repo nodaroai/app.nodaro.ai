@@ -52,6 +52,7 @@ const AdminCreditAudit = lazy(() => import("@/app/(admin)/admin/credit-audit/pag
 const AdminCreditAnomalies = lazy(() => import("@/app/(admin)/admin/credit-anomalies/page"))
 const AdminKieCredits = lazy(() => import("@/app/(admin)/admin/kie-credits/page"))
 const AdminSubscriptions = lazy(() => import("@/app/(admin)/admin/subscriptions/page"))
+const AdminLlmModels = lazy(() => import("@/app/(admin)/admin/llm-models/page"))
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -226,6 +227,10 @@ export const router = createBrowserRouter([
       {
         path: "subscriptions",
         element: <SuspenseWrapper><AdminSubscriptions /></SuspenseWrapper>,
+      },
+      {
+        path: "llm-models",
+        element: <SuspenseWrapper><AdminLlmModels /></SuspenseWrapper>,
       },
     ],
   },

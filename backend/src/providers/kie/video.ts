@@ -352,6 +352,11 @@ export class KieVideoProvider
     // Resolution override for models that support it
     if (options?.resolution) {
       input.resolution = options.resolution
+      // Hailuo 2.3 Pro/Standard: 1080P only supports 6s duration
+      if ((provider === "hailuo-2.3-pro" || provider === "hailuo-2.3") && options.resolution === "1080P" && input.duration && Number(input.duration) > 6) {
+        console.log(`[KIE.ai] Hailuo 2.3: 1080P does not support ${input.duration}s, snapping to 6s`)
+        input.duration = "6"
+      }
     }
 
     // Grok I2V mode (fun/normal/spicy)

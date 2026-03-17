@@ -501,11 +501,11 @@
       "type": "image-to-video",
       "position": { "x": 800, "y": 1800 },
       "data": {
-        "label": "grok-i2v 15s (10cr)",
+        "label": "grok-i2v 10s (10cr)",
         "provider": "grok-i2v",
         "model": "",
         "prompt": "Long form motion with evolving scene",
-        "duration": 15,
+        "duration": 10,
         "motion": "moderate",
         "cameraMotion": "zoom-out",
         "resolution": "720p",
@@ -533,14 +533,14 @@
       "type": "image-to-video",
       "position": { "x": 1400, "y": 1800 },
       "data": {
-        "label": "hailuo-2.3-pro 10s (23cr)",
+        "label": "hailuo-2.3-pro 10s 768P (23cr)",
         "provider": "hailuo-2.3-pro",
         "model": "",
         "prompt": "Professional extended tracking shot",
         "duration": 10,
         "motion": "moderate",
         "cameraMotion": "pan-left",
-        "resolution": "1080P",
+        "resolution": "768P",
         "fieldMappings": {}
       }
     },

@@ -60,6 +60,10 @@ vi.mock("@/lib/anthropic.js", () => ({
   CLAUDE_MODEL: "claude-test",
 }))
 
+vi.mock("@/lib/llm-client.js", () => ({
+  llmComplete: vi.fn(),
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -67,6 +71,7 @@ vi.mock("@/lib/anthropic.js", () => ({
 import { imageToTextRoutes } from "../image-to-text.js"
 import { supabase } from "../../lib/supabase.js"
 import { getAnthropicClient } from "../../lib/anthropic.js"
+import { llmComplete } from "../../lib/llm-client.js"
 import { CreditsService } from "../../billing/credits.js"
 
 // ---------------------------------------------------------------------------
@@ -80,9 +85,10 @@ const VALID_PAYLOAD = {
   userId: VALID_UUID,
 }
 
-const MOCK_ANTHROPIC_RESPONSE = {
-  content: [{ type: "text", text: "A beautiful sunset over the ocean" }],
-  usage: { input_tokens: 100, output_tokens: 50 },
+const MOCK_LLM_RESPONSE = {
+  text: "A beautiful sunset over the ocean",
+  usage: { inputTokens: 100, outputTokens: 50 },
+  model: "claude-test",
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +136,14 @@ function setupSuccessDbMocks() {
   return { mockInsert, mockUpdate, mockEq }
 }
 
-function setupAnthropicMock(response = MOCK_ANTHROPIC_RESPONSE) {
+function setupLlmMock(response = MOCK_LLM_RESPONSE) {
+  vi.mocked(llmComplete).mockResolvedValue(response)
+  return { mockLlmComplete: vi.mocked(llmComplete) }
+}
+
+/** @deprecated — kept for backward compat with Anthropic-specific error tests */
+function setupAnthropicMock(response = MOCK_LLM_RESPONSE) {
+  vi.mocked(llmComplete).mockResolvedValue(response)
   const mockCreate = vi.fn().mockResolvedValue(response)
   vi.mocked(getAnthropicClient).mockReturnValue({
     messages: { create: mockCreate },
@@ -246,7 +259,7 @@ describe("POST /v1/image-to-text/describe", () => {
 
   it("uses customPrompt as system prompt when provided", async () => {
     setupSuccessDbMocks()
-    const { mockCreate } = setupAnthropicMock()
+    setupLlmMock()
 
     await app.inject({
       method: "POST",
@@ -258,7 +271,7 @@ describe("POST /v1/image-to-text/describe", () => {
       },
     })
 
-    expect(mockCreate).toHaveBeenCalledWith(
+    expect(llmComplete).toHaveBeenCalledWith(
       expect.objectContaining({
         system: "Describe this image as if you were a poet",
       })
@@ -267,7 +280,7 @@ describe("POST /v1/image-to-text/describe", () => {
 
   it("defaults detailLevel to detailed", async () => {
     setupSuccessDbMocks()
-    const { mockCreate } = setupAnthropicMock()
+    setupLlmMock()
 
     await app.inject({
       method: "POST",
@@ -276,7 +289,7 @@ describe("POST /v1/image-to-text/describe", () => {
     })
 
     // The default detailLevel is "detailed", so the system prompt should match
-    expect(mockCreate).toHaveBeenCalledWith(
+    expect(llmComplete).toHaveBeenCalledWith(
       expect.objectContaining({
         system: expect.stringContaining("comprehensive description"),
       })
@@ -285,7 +298,7 @@ describe("POST /v1/image-to-text/describe", () => {
 
   it("marks job as completed and updates output_data on success", async () => {
     const { mockUpdate, mockEq } = setupSuccessDbMocks()
-    setupAnthropicMock()
+    setupLlmMock()
 
     await app.inject({
       method: "POST",
@@ -299,7 +312,7 @@ describe("POST /v1/image-to-text/describe", () => {
         output_data: expect.objectContaining({
           generatedText: "A beautiful sunset over the ocean",
           detailLevel: "detailed",
-          usage: { input_tokens: 100, output_tokens: 50 },
+          usage: { inputTokens: 100, outputTokens: 50 },
         }),
       })
     )
@@ -308,10 +321,7 @@ describe("POST /v1/image-to-text/describe", () => {
 
   it("returns 502 when Claude API throws and refunds credits", async () => {
     setupSuccessDbMocks()
-    const mockCreate = vi.fn().mockRejectedValue(new Error("Claude API error"))
-    vi.mocked(getAnthropicClient).mockReturnValue({
-      messages: { create: mockCreate },
-    } as never)
+    vi.mocked(llmComplete).mockRejectedValue(new Error("Claude API error"))
 
     const res = await app.inject({
       method: "POST",
@@ -330,10 +340,7 @@ describe("POST /v1/image-to-text/describe", () => {
 
   it("marks job as failed when Claude API throws", async () => {
     const { mockUpdate, mockEq } = setupSuccessDbMocks()
-    const mockCreate = vi.fn().mockRejectedValue(new Error("Claude API error"))
-    vi.mocked(getAnthropicClient).mockReturnValue({
-      messages: { create: mockCreate },
-    } as never)
+    vi.mocked(llmComplete).mockRejectedValue(new Error("Claude API error"))
 
     await app.inject({
       method: "POST",

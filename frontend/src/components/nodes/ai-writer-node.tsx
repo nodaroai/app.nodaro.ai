@@ -12,6 +12,7 @@ import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { buildLlmCreditIdentifier } from "@nodaro-shared/llm-models"
 import { getAIWriterTemplate } from "@/lib/ai-writer-templates"
 import { generateAIWriterStream } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
@@ -77,7 +78,7 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
   const activeText = activeResult?.text ?? nodeData.generatedText
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits("ai-writer", 5)
+  const credits = useModelCredits(buildLlmCreditIdentifier("ai-writer", nodeData.llmModel), 5)
   const template = getAIWriterTemplate(nodeData.templateId)
   const { user } = useAuth()
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
@@ -171,10 +172,10 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
       const result = await generateAIWriterStream({
         systemPrompt: processedPrompt,
         userInput,
-        model: writerData.model || "claude-sonnet-4-5-20250929",
         temperature: writerData.temperature ?? 0.7,
         maxTokens: writerData.maxTokens ?? 4096,
         userId: user.id,
+        llmModel: writerData.llmModel,
         signal: controller.signal,
         onToken: (token) => {
           // Accumulate in ref (synchronous, no overhead) and flush to

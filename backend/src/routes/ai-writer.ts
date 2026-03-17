@@ -8,13 +8,10 @@ import { createSSEStream } from "../lib/sse.js"
 import { llmComplete, llmStream } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
-import { AI_WRITER_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const aiWriterBody = z.object({
   systemPrompt: z.string().max(10000),
   userInput: z.string().min(1).max(10000),
-  provider: z.enum(AI_WRITER_PROVIDERS).default("claude"),
-  model: z.string().default("claude-sonnet-4-5-20250929"),
   temperature: z.number().min(0).max(2).default(0.7),
   maxTokens: z.number().min(1).max(16384).default(4096),
   userId: z.string().uuid().optional(),
