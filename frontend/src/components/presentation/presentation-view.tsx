@@ -54,6 +54,7 @@ import { toast } from "sonner"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { ShareDialog } from "./share-dialog"
 import { PublishDialog } from "./publish-dialog"
+import { PublishTemplateDialog } from "@/components/templates/publish-template-dialog"
 import { NodePickerDialog } from "./node-picker-dialog"
 import { NodeConfigModal, CONFIG_INPUT_TYPES } from "./node-config-modal"
 import { PlatformPreview, PLATFORM_COLORS } from "@/components/nodes/platform-preview"
@@ -135,6 +136,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false)
   const [showGetCreditsModal, setShowGetCreditsModal] = useState(false)
   const [isRemixing, setIsRemixing] = useState(false)
+  const [showPublishTemplate, setShowPublishTemplate] = useState(false)
   const [configNode, setConfigNode] = useState<WorkflowNode | null>(null)
 
   // Native fullscreen toggle (browser Fullscreen API)
@@ -990,6 +992,22 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 presentationSettings={settings}
                 updatePresentationSettings={updatePresentationSettings}
                 nodes={allPresentationNodes}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPublishTemplate(true)}
+                className="border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                <LayoutGrid className="h-4 w-4 mr-1" />
+                Template
+              </Button>
+              <PublishTemplateDialog
+                workflowId={workflowId}
+                nodes={nodes.map((n) => ({ id: n.id, type: n.type ?? "", data: (n.data ?? {}) as Record<string, unknown> }))}
+                edges={edges.map((e) => ({ id: e.id, source: e.source, target: e.target }))}
+                open={showPublishTemplate}
+                onOpenChange={setShowPublishTemplate}
               />
             </>
           )}

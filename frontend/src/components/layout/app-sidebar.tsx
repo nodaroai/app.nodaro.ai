@@ -16,6 +16,7 @@ import {
   History,
   Plug,
   Rocket,
+  LayoutTemplate,
   Coins,
   Sparkles,
 } from "lucide-react"
@@ -49,6 +50,7 @@ interface NavItem {
 const NAV_ITEMS: readonly NavItem[] = [
   { href: "/projects", label: "Projects", icon: FolderOpen },
   { href: "/apps", label: "Apps", icon: Rocket },
+  { href: "/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/executions", label: "Executions", icon: History },
   { href: "/library", label: "Library", icon: Archive },
   { href: "/_gallery", label: "Gallery", icon: Images },

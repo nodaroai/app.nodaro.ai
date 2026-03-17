@@ -39,6 +39,14 @@ export const queryKeys = {
     favorites: (userId: string) => ["app-marketplace", "favorites", userId] as const,
   },
 
+  // Template Marketplace
+  templateMarketplace: {
+    all: ["template-marketplace"] as const,
+    browse: (filter: string) => ["template-marketplace", "browse", filter] as const,
+    favorites: (userId: string) => ["template-marketplace", "favorites", userId] as const,
+    detail: (slug: string) => ["template-marketplace", "detail", slug] as const,
+  },
+
   // Gallery
   gallery: {
     all: ["gallery"] as const,
