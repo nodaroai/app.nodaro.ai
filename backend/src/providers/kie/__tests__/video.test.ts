@@ -97,6 +97,7 @@ describe("KieVideoProvider.imageToVideo", () => {
       "veo3",
       "cinematic",
       ["https://img.png"],
+      { aspectRatio: undefined, seed: undefined },
     )
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
     expect(result.url).toBe("https://cdn.kie.ai/veo-video.mp4")
@@ -109,6 +110,7 @@ describe("KieVideoProvider.imageToVideo", () => {
       "veo3_fast",
       "cinematic",
       ["https://img.png"],
+      { aspectRatio: undefined, seed: undefined },
     )
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
   })
@@ -224,6 +226,8 @@ describe("KieVideoProvider.textToVideo", () => {
     expect(mocks.mockRunVeoTask).toHaveBeenCalledWith(
       "veo3",
       "space exploration",
+      undefined,
+      { aspectRatio: undefined, seed: undefined },
     )
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
     expect(result.url).toBe("https://cdn.kie.ai/veo-video.mp4")

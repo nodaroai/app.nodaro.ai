@@ -656,7 +656,7 @@ describe("text-to-video", () => {
       "a sunset",
       expect.anything(),
       undefined,
-      undefined,
+      expect.objectContaining({ duration: undefined, aspectRatio: undefined }),
     )
   })
 })
