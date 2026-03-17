@@ -30,9 +30,10 @@ interface PlatformCardProps {
   readonly platform: SocialPlatformType
   readonly connections: readonly SocialConnection[]
   readonly onConnectionChange: () => void
+  readonly comingSoon?: boolean
 }
 
-export function PlatformCard({ platform, connections, onConnectionChange }: PlatformCardProps) {
+export function PlatformCard({ platform, connections, onConnectionChange, comingSoon }: PlatformCardProps) {
   const [connecting, setConnecting] = useState(false)
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
 
@@ -88,7 +89,12 @@ export function PlatformCard({ platform, connections, onConnectionChange }: Plat
   }, [platform, onConnectionChange])
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-5 flex flex-col gap-4">
+    <div className={`rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-5 flex flex-col gap-4 relative${comingSoon ? " opacity-60" : ""}`}>
+      {comingSoon && (
+        <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#333] text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+          Coming Soon
+        </div>
+      )}
       <div className="flex items-center gap-3">
         <div className="text-gray-600 dark:text-gray-400">
           {PLATFORM_ICONS[platform]}
@@ -104,7 +110,7 @@ export function PlatformCard({ platform, connections, onConnectionChange }: Plat
       </div>
 
       {/* Connected accounts */}
-      {connections.length > 0 && (
+      {!comingSoon && connections.length > 0 && (
         <div className="space-y-2">
           {connections.map((conn) => (
             <div key={conn.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-[#252525]">
@@ -133,15 +139,19 @@ export function PlatformCard({ platform, connections, onConnectionChange }: Plat
       {/* Add account button */}
       <Button
         onClick={handleConnect}
-        disabled={connecting}
-        variant={connections.length > 0 ? "outline" : "default"}
-        className={connections.length > 0
-          ? "w-full"
-          : "w-full bg-[#ff0073] hover:bg-[#e0005f] text-white"
+        disabled={connecting || comingSoon}
+        variant={connections.length > 0 && !comingSoon ? "outline" : "default"}
+        className={comingSoon
+          ? "w-full bg-gray-200 dark:bg-[#333] text-gray-400 dark:text-gray-500 cursor-not-allowed"
+          : connections.length > 0
+            ? "w-full"
+            : "w-full bg-[#ff0073] hover:bg-[#e0005f] text-white"
         }
       >
         {connecting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-        {connections.length > 0 ? (
+        {comingSoon ? (
+          "Coming Soon"
+        ) : connections.length > 0 ? (
           <>
             <Plus className="h-4 w-4 mr-2" />
             Add another account
