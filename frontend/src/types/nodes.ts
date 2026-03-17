@@ -530,8 +530,10 @@ export type ImageToVideoData = {
   provider: ImageToVideoProvider
   model: string
   duration: number
-  motion: "subtle" | "moderate" | "dynamic"
-  cameraMotion: "static" | "pan-left" | "pan-right" | "zoom-in" | "zoom-out"
+  motion?: "subtle" | "moderate" | "dynamic"
+  motionEnabled?: boolean
+  cameraMotion?: "static" | "pan-left" | "pan-right" | "zoom-in" | "zoom-out"
+  cameraMotionEnabled?: boolean
   prompt?: string  // Text description of desired motion/animation (required for Sora2)
   generateAudio?: boolean
   fieldMappings: FieldMappings
@@ -2404,7 +2406,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     width: 220,
     inputs: ["startFrame", "endFrame", "audio"],
     outputs: ["video"],
-    defaultData: { label: "Image to Video", provider: "veo3", model: "veo-3", duration: 5, motion: "moderate", cameraMotion: "static", fieldMappings: {} },
+    defaultData: { label: "Image to Video", provider: "veo3", model: "veo-3", duration: 5, fieldMappings: {} },
   },
   {
     type: "video-to-video",

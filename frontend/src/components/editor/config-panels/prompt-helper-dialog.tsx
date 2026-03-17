@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select"
 import { enhancePrompt } from "@/lib/api"
 import { getStylesForNodeType } from "./prompt-helper-styles"
+import { LlmModelSelect } from "./llm-model-select"
 
 interface PromptHelperDialogProps {
   readonly open: boolean
@@ -42,6 +43,7 @@ export function PromptHelperDialog({
   onAccept,
 }: PromptHelperDialogProps) {
   const [style, setStyle] = useState("__none__")
+  const [llmModel, setLlmModel] = useState<string | undefined>(undefined)
   const [additionalContext, setAdditionalContext] = useState("")
   const [enhancedPrompt, setEnhancedPrompt] = useState("")
   const [loading, setLoading] = useState(false)
@@ -58,6 +60,7 @@ export function PromptHelperDialog({
         nodeType,
         prompt: currentPrompt,
         provider: provider || undefined,
+        llmModel,
         style: style !== "__none__" ? style : undefined,
         aspectRatio: aspectRatio || undefined,
         duration: duration || undefined,
@@ -78,6 +81,7 @@ export function PromptHelperDialog({
 
   function handleClose() {
     setStyle("__none__")
+    setLlmModel(undefined)
     setAdditionalContext("")
     setEnhancedPrompt("")
     setError("")
@@ -125,6 +129,13 @@ export function PromptHelperDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {/* AI Model */}
+          <LlmModelSelect
+            feature="prompt-helper"
+            value={llmModel}
+            onChange={setLlmModel}
+          />
 
           {/* Additional context */}
           <div>

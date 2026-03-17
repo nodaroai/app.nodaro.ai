@@ -52,8 +52,8 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
           ) : undefined
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
-          { id: "out", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
+          { id: "in", type: "target", position: Position.Left, top: "50%", customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
+          { id: "out", type: "source", position: Position.Right, top: "50%" },
         ]}
       >
         <div className="p-3 flex flex-col items-center justify-center gap-2" style={{ minHeight: '100px' }}>

@@ -646,7 +646,13 @@ export function executeNode(
 
     if (audioUrl && !audioUrl.startsWith("http")) audioUrl = undefined;
 
-    const prompt = (inputs.prompt ?? resolveTextRefs(i2vData.motionPrompt as string | undefined, refMap)) as string | undefined;
+    let prompt = (inputs.prompt ?? resolveTextRefs(i2vData.prompt?.trim() || undefined, refMap)) as string | undefined;
+    // Inject motion/camera hints into prompt when enabled
+    const motionHints: string[] = [];
+    if (i2vData.motionEnabled && i2vData.motion) motionHints.push(`${i2vData.motion} motion`);
+    if (i2vData.cameraMotionEnabled && i2vData.cameraMotion && i2vData.cameraMotion !== "static") motionHints.push(`camera: ${i2vData.cameraMotion.replace("-", " ")}`);
+    if (motionHints.length > 0 && prompt) prompt = `${prompt}. ${motionHints.join(", ")}`;
+    else if (motionHints.length > 0) prompt = motionHints.join(", ");
     const kling3Mode = (i2vData as Record<string, unknown>).kling3Mode as
       | string
       | undefined;

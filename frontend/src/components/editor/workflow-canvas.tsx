@@ -13,6 +13,7 @@ import {
   type NodeMouseHandler,
   type IsValidConnection,
 } from "@xyflow/react"
+import ELK from "elkjs/lib/elk.bundled.js"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import "@xyflow/react/dist/style.css"
@@ -86,6 +87,8 @@ const TARGET_LABELS: Record<string, string> = {
   lottie: "Lottie",
   background: "Background",
   "ref-audio": "Ref Audio",
+  media: "Media",
+  caption: "Caption",
 }
 
 // Entity node types that always represent a reference connection
@@ -298,7 +301,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const addNode = useWorkflowStore((s) => s.addNode)
-  const { screenToFlowPosition, setNodes, getNode, setCenter } = useReactFlow()
+  const { screenToFlowPosition, setNodes, getNode, setCenter, fitView } = useReactFlow()
   const { undo, redo, canUndo, canRedo } = useUndoRedoActions()
   const [searchParams, setSearchParams] = useSearchParams()
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null)
@@ -610,12 +613,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     requestAnimationFrame(() => { wasDraggingRef.current = false })
   }, [])
 
-  const handleTidyUp = useCallback(() => {
-    const NODE_W = 250 // horizontal spacing between columns
-    const NODE_H = 160 // vertical spacing between rows within a column
-    const COMPONENT_GAP = 80 // vertical gap between disconnected flows
-    const START_X = 100
-    const START_Y = 100
+  const handleTidyUp = useCallback(async () => {
+    const elk = new ELK()
 
     // If nodes are selected, only tidy those; otherwise tidy all
     const selectedNodes = nodes.filter((n) => n.selected && n.type !== "sticky-note")
@@ -629,127 +628,67 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
     const targetIds = new Set(targetNodes.map((n) => n.id))
 
-    // Build adjacency from edges (only between target nodes)
-    const children = new Map<string, string[]>()
-    const parents = new Map<string, string[]>()
-    for (const n of targetNodes) {
-      children.set(n.id, [])
-      parents.set(n.id, [])
-    }
-    for (const e of edges) {
-      if (!targetIds.has(e.source) || !targetIds.has(e.target)) continue
-      children.get(e.source)!.push(e.target)
-      parents.get(e.target)!.push(e.source)
+    // Build ELK graph using actual measured node dimensions
+    const elkGraph = {
+      id: "root",
+      layoutOptions: {
+        "elk.algorithm": "layered",
+        "elk.direction": "RIGHT",
+        "elk.spacing.nodeNode": "40",
+        "elk.layered.spacing.nodeNodeBetweenLayers": "60",
+        "elk.edgeRouting": "ORTHOGONAL",
+        "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+        "elk.separateConnectedComponents": "true",
+        "elk.spacing.componentComponent": "80",
+      },
+      children: targetNodes.map((node) => ({
+        id: node.id,
+        width: node.measured?.width ?? 200,
+        height: node.measured?.height ?? 100,
+      })),
+      edges: edges
+        .filter((e) => targetIds.has(e.source) && targetIds.has(e.target))
+        .map((e) => ({
+          id: e.id,
+          sources: [e.source],
+          targets: [e.target],
+        })),
     }
 
-    // Find connected components via BFS
-    const componentOf = new Map<string, number>()
-    let componentIdx = 0
-    for (const n of targetNodes) {
-      if (componentOf.has(n.id)) continue
-      const queue = [n.id]
-      componentOf.set(n.id, componentIdx)
-      while (queue.length > 0) {
-        const cur = queue.shift()!
-        for (const neighbor of [...(children.get(cur) ?? []), ...(parents.get(cur) ?? [])]) {
-          if (!componentOf.has(neighbor)) {
-            componentOf.set(neighbor, componentIdx)
-            queue.push(neighbor)
-          }
+    try {
+      const layout = await elk.layout(elkGraph)
+
+      // For selection mode, offset to preserve original bounding box position
+      const offsetX = isSelectionMode
+        ? Math.min(...targetNodes.map((n) => n.position.x))
+        : 100
+      const offsetY = isSelectionMode
+        ? Math.min(...targetNodes.map((n) => n.position.y))
+        : 100
+
+      const arranged = (layout.children ?? []).map((elkNode) => {
+        const original = targetNodes.find((n) => n.id === elkNode.id)!
+        return {
+          ...original,
+          position: {
+            x: offsetX + (elkNode.x ?? 0),
+            y: offsetY + (elkNode.y ?? 0),
+          },
         }
-      }
-      componentIdx++
+      })
+
+      // Re-add untouched nodes (sticky notes + unselected nodes)
+      arranged.push(...untouchedNodes)
+
+      setNodes(arranged)
+      setCanvasContextMenu(null)
+
+      // Fit the view to use screen space optimally
+      requestAnimationFrame(() => fitView({ padding: 0.1, duration: 300 }))
+    } catch {
+      // Silently fail — layout is non-critical
     }
-
-    // Group nodes by component
-    const components = new Map<number, typeof targetNodes>()
-    for (const n of targetNodes) {
-      const ci = componentOf.get(n.id) ?? 0
-      if (!components.has(ci)) components.set(ci, [])
-      components.get(ci)!.push(n)
-    }
-
-    // Sort components by the min original Y of their nodes (top-most first)
-    const sortedComponentKeys = [...components.keys()].sort((a, b) => {
-      const minYA = Math.min(...components.get(a)!.map((n) => n.position.y))
-      const minYB = Math.min(...components.get(b)!.map((n) => n.position.y))
-      return minYA - minYB
-    })
-
-    // For selection mode, start at the top-left of the selection bounding box
-    const startX = isSelectionMode
-      ? Math.min(...targetNodes.map((n) => n.position.x))
-      : START_X
-    const startY = isSelectionMode
-      ? Math.min(...targetNodes.map((n) => n.position.y))
-      : START_Y
-
-    // Layout each component independently, stacking them vertically
-    const arranged: typeof nodes = []
-    let currentY = startY
-
-    for (const ci of sortedComponentKeys) {
-      const compNodes = components.get(ci)!
-
-      // Assign columns via longest-path from roots
-      const column = new Map<string, number>()
-      const visited = new Set<string>()
-
-      function assignColumn(id: string): number {
-        if (column.has(id)) return column.get(id)!
-        if (visited.has(id)) return 0 // cycle guard
-        visited.add(id)
-        const parentCols = (parents.get(id) ?? []).filter((p) => componentOf.get(p) === ci).map(assignColumn)
-        const col = parentCols.length > 0 ? Math.max(...parentCols) + 1 : 0
-        column.set(id, col)
-        return col
-      }
-
-      for (const n of compNodes) assignColumn(n.id)
-
-      // Group by column, preserve relative vertical order
-      const columns = new Map<number, typeof compNodes>()
-      for (const n of compNodes) {
-        const col = column.get(n.id) ?? 0
-        if (!columns.has(col)) columns.set(col, [])
-        columns.get(col)!.push(n)
-      }
-
-      for (const col of columns.values()) {
-        col.sort((a, b) => a.position.y - b.position.y)
-      }
-
-      // Position nodes within this component
-      const maxRows = Math.max(...[...columns.values()].map((c) => c.length))
-      const sortedCols = [...columns.keys()].sort((a, b) => a - b)
-
-      for (const colIdx of sortedCols) {
-        const col = columns.get(colIdx)!
-        const totalHeight = (col.length - 1) * NODE_H
-        const maxTotalHeight = (maxRows - 1) * NODE_H
-        const offsetY = (maxTotalHeight - totalHeight) / 2
-
-        col.forEach((node, rowIdx) => {
-          arranged.push({
-            ...node,
-            position: {
-              x: startX + colIdx * NODE_W,
-              y: currentY + offsetY + rowIdx * NODE_H,
-            },
-          })
-        })
-      }
-
-      // Advance Y for the next component
-      currentY += maxRows * NODE_H + COMPONENT_GAP
-    }
-
-    // Re-add untouched nodes (sticky notes + unselected nodes)
-    arranged.push(...untouchedNodes)
-
-    setNodes(arranged)
-    setCanvasContextMenu(null)
-  }, [nodes, edges, setNodes])
+  }, [nodes, edges, setNodes, fitView])
 
   const handleSelectAll = useCallback(() => {
     setNodes(nodes.map((n) => ({ ...n, selected: true })))

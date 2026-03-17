@@ -36,6 +36,7 @@ import { isVideoUrl } from "@/lib/media-type"
 import { PLATFORM_SPECS, CONTENT_TYPES_BY_PLATFORM, PLATFORM_LABELS, type SocialMediaPlatform } from "@/lib/social-media-specs"
 import { PlatformPreview } from "@/components/nodes/platform-preview"
 import { Textarea } from "@/components/ui/textarea"
+import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 
 export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<CombineVideosData>) {
@@ -667,7 +668,7 @@ export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVi
   )
 }
 
-export function SocialMediaFormatConfig({ data, onUpdate }: ConfigProps<SocialMediaFormatData>) {
+export function SocialMediaFormatConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SocialMediaFormatData>) {
   const platform = (data.platform ?? "instagram") as SocialMediaPlatform
   const contentTypes = CONTENT_TYPES_BY_PLATFORM[platform] ?? []
   const spec = PLATFORM_SPECS[data.specKey]
@@ -764,9 +765,14 @@ export function SocialMediaFormatConfig({ data, onUpdate }: ConfigProps<SocialMe
         </div>
       )}
 
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <Label>Caption / Post Text</Label>
+      <MappableField
+        field="formattedText"
+        label="Caption / Post Text"
+        sources={sources}
+        fieldMappings={fieldMappings}
+        onMapField={onMapField}
+      >
+        <div className="flex items-center justify-end mb-1">
           <span className={`text-[10px] font-mono ${isOverLimit ? "text-red-500 font-bold" : "text-muted-foreground"}`}>
             {textLen}/{textLimit}
           </span>
@@ -782,7 +788,7 @@ export function SocialMediaFormatConfig({ data, onUpdate }: ConfigProps<SocialMe
             Text exceeds {PLATFORM_LABELS[platform]}'s {textLimit} character limit by {textLen - textLimit} characters.
           </p>
         )}
-      </div>
+      </MappableField>
 
       <p className="text-[10px] text-muted-foreground">
         0 credits — FFmpeg processing. Reformats media to {PLATFORM_LABELS[platform]} specs.

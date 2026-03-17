@@ -1,6 +1,6 @@
 /**
- * Dialog for selecting which nodes appear in presentation mode.
- * Shows both inputs and outputs with the primary group first, grouped by type.
+ * Dialog for selecting which nodes appear as inputs or outputs in presentation mode.
+ * Each dialog shows only its own section's nodes.
  */
 
 import { useMemo } from "react"
@@ -15,7 +15,6 @@ import { Badge } from "@/components/ui/badge"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import {
   getInputNodes,
-  getOutputNodes,
   getNodeLabel,
   getOutputType,
 } from "@/lib/presentation-utils"
@@ -27,9 +26,9 @@ interface NodePickerDialogProps {
   section: "inputs" | "outputs"
 }
 
-function NodeRow({ node, onToggle }: { node: WorkflowNode; onToggle: (nodeId: string, checked: boolean) => void }) {
+function NodeRow({ node, section, onToggle }: { node: WorkflowNode; section: "inputs" | "outputs"; onToggle: (nodeId: string, checked: boolean) => void }) {
   const data = node.data as Record<string, unknown>
-  const isVisible = data.presentationVisible === true
+  const isVisible = section === "inputs" ? data.presentationInput === true : data.presentationOutput === true
   const label = getNodeLabel(node)
   const typeBadge = getOutputType(node.type)
 
@@ -49,22 +48,13 @@ function NodeRow({ node, onToggle }: { node: WorkflowNode; onToggle: (nodeId: st
 
 export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDialogProps) {
   const nodes = useWorkflowStore((s) => s.nodes)
-  const edges = useWorkflowStore((s) => s.edges)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
 
-  const inputNodes = useMemo(() => getInputNodes(nodes, false), [nodes])
-  const outputNodes = useMemo(() => getOutputNodes(nodes, edges, false), [nodes, edges])
-
-  // Show both groups, primary group first
-  const primaryNodes = section === "inputs" ? inputNodes : outputNodes
-  const secondaryNodes = section === "inputs" ? outputNodes : inputNodes
-  const primaryLabel = section === "inputs" ? "Inputs" : "Outputs"
-  const secondaryLabel = section === "inputs" ? "Outputs" : "Inputs"
-
-  const hasAny = primaryNodes.length > 0 || secondaryNodes.length > 0
+  const availableNodes = useMemo(() => getInputNodes(nodes, false), [nodes])
 
   const handleToggle = (nodeId: string, checked: boolean) => {
-    updateNodeData(nodeId, { presentationVisible: checked })
+    const field = section === "inputs" ? "presentationInput" : "presentationOutput"
+    updateNodeData(nodeId, { [field]: checked })
   }
 
   return (
@@ -76,37 +66,16 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
           </DialogTitle>
         </DialogHeader>
         <div className="max-h-80 overflow-auto py-2">
-          {!hasAny ? (
+          {availableNodes.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
               No nodes in this workflow
             </p>
           ) : (
-            <>
-              {primaryNodes.length > 0 && (
-                <div>
-                  <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {primaryLabel}
-                  </p>
-                  <div className="space-y-1">
-                    {primaryNodes.map((node) => (
-                      <NodeRow key={node.id} node={node} onToggle={handleToggle} />
-                    ))}
-                  </div>
-                </div>
-              )}
-              {secondaryNodes.length > 0 && (
-                <div className={primaryNodes.length > 0 ? "mt-3 pt-3 border-t border-border" : ""}>
-                  <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {secondaryLabel}
-                  </p>
-                  <div className="space-y-1">
-                    {secondaryNodes.map((node) => (
-                      <NodeRow key={node.id} node={node} onToggle={handleToggle} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
+            <div className="space-y-1">
+              {availableNodes.map((node) => (
+                <NodeRow key={node.id} node={node} section={section} onToggle={handleToggle} />
+              ))}
+            </div>
           )}
         </div>
       </DialogContent>
