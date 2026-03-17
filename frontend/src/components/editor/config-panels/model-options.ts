@@ -47,7 +47,7 @@ export const IMAGE_EDIT_MODELS = [
 
 export const VIDEO_I2V_MODELS = [
   { value: "minimax", label: "MiniMax", desc: "Fast, reliable 5s clips" },
-  { value: "veo3", label: "VEO 3", desc: "Top quality, 8s with audio" },
+  { value: "veo3", label: "VEO 3.1 (Quality)", desc: "Top quality, 8s with audio" },
   { value: "veo3.1", label: "VEO 3.1 (Fast)", desc: "Fast VEO, 8s with audio" },
   { value: "kling", label: "Kling", desc: "Versatile, 5-10s clips" },
   { value: "kling-turbo", label: "Kling Turbo", desc: "Fast generation, end frame support" },
@@ -74,7 +74,8 @@ export const VIDEO_I2V_MODELS = [
 
 export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: string; desc: string }[] = [
   { value: "minimax", label: "MiniMax", desc: "Fast, reliable 5s clips" },
-  { value: "veo3", label: "VEO 3", desc: "Top quality, 8s with audio" },
+  { value: "veo3", label: "VEO 3.1 (Quality)", desc: "Top quality, 8s with audio" },
+  { value: "veo3.1", label: "VEO 3.1 (Fast)", desc: "Fast VEO, 8s with audio" },
   { value: "kling", label: "Kling", desc: "Versatile, 5-10s clips" },
   { value: "kling-turbo", label: "Kling Turbo", desc: "Fast generation, 5-10s" },
   { value: "kling-3.0", label: "Kling 3.0", desc: "Latest Kling, 3-15s variable duration" },
@@ -380,6 +381,7 @@ export const PROVIDERS_WITH_END_FRAME: string[] = [
 export const KIE_T2V_DURATIONS: Record<string, number[]> = {
   "minimax": [5],
   "veo3": [8],
+  "veo3.1": [8],
   "kling": [5, 10],
   "kling-turbo": [5, 10],
   "grok": [6, 10],

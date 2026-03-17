@@ -748,9 +748,13 @@ export function executeNode(
             | undefined,
           ...(t2vRemoveWm && { removeWatermark: t2vRemoveWm }),
         }
-      : t2vData.negativePrompt || t2vRemoveWm
-        ? { ...(t2vData.negativePrompt && { negativePrompt: t2vData.negativePrompt }), ...(t2vRemoveWm && { removeWatermark: t2vRemoveWm }) }
-        : undefined;
+      : {
+          duration: t2vData.duration,
+          aspectRatio: t2vData.aspectRatio as string | undefined,
+          ...(t2vData.negativePrompt && { negativePrompt: t2vData.negativePrompt }),
+          ...(t2vRemoveWm && { removeWatermark: t2vRemoveWm }),
+          ...(t2vRaw.seed !== undefined && { seed: t2vRaw.seed as number }),
+        };
     return runTextToVideoGeneration(node.id, prompt, ctx, t2vProvider, t2vOptions);
   }
 
@@ -2167,6 +2171,7 @@ export function executeNode(
           provider: evData.provider || "veo-extend",
           model: evData.provider === "veo-extend" ? evData.model : undefined,
           quality: evData.provider === "runway-extend" ? evData.quality : undefined,
+          seeds: evData.provider === "veo-extend" ? evData.seeds : undefined,
           userId: ctx.userId,
         }),
       "generatedVideoUrl",

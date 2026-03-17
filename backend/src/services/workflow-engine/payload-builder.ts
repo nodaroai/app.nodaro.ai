@@ -639,6 +639,7 @@ export function buildPayload(
           shots: data.shots,
           elements: data.elements,
           removeWatermark: data.removeWatermark,
+          seed: data.seed,
           usageLogId,
         },
       }
@@ -789,6 +790,7 @@ export function buildPayload(
           provider: evProvider,
           model: evProvider === "veo-extend" ? (data.model ?? "fast") : undefined,
           quality: evProvider === "runway-extend" ? (data.quality ?? "720p") : undefined,
+          seeds: evProvider === "veo-extend" ? data.seeds : undefined,
           usageLogId,
         },
       }

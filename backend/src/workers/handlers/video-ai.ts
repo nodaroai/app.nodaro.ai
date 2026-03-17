@@ -175,7 +175,7 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 }
 
 const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
-  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark } = job.data as {
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed } = job.data as {
     jobId: string
     prompt: string
     provider?: string
@@ -189,6 +189,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     shots?: Array<{ prompt: string; duration: number }>
     elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
     removeWatermark?: boolean
+    seed?: number
   }
   console.log(`[worker] text-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${removeWatermark ? " [remove watermark]" : ""}`)
 
@@ -200,7 +201,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     ...(el.type === "image" ? { element_input_urls: el.urls } : { element_input_video_urls: el.urls }),
   }))
 
-  const result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements })
+  const result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed })
 
   // Sora 2 watermark removal post-processing step
   if (removeWatermark && (provider === "sora2" || provider === "sora2-pro")) {

@@ -21,6 +21,7 @@ const textToVideoBody = z.object({
   shots: shotsSchema.optional(),
   elements: elementsSchema.optional(),
   removeWatermark: z.boolean().optional(),
+  seed: z.number().int().min(10000).max(99999).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -36,7 +37,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark } = parsed.data
+    const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -55,7 +56,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, type: "text-to-video" },
+        input_data: { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, type: "text-to-video" },
       })
       .select("id")
       .single()
@@ -85,6 +86,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       shots,
       elements,
       removeWatermark,
+      seed,
       usageLogId,
     })
 

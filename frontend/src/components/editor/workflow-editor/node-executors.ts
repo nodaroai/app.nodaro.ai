@@ -694,6 +694,7 @@ export function runTextToVideoGeneration(
       urls: string[];
     }>;
     removeWatermark?: boolean;
+    seed?: number;
   },
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();

@@ -139,6 +139,7 @@ export type ImageToVideoProvider = typeof IMAGE_TO_VIDEO_PROVIDERS[number]
 export const TEXT_TO_VIDEO_PROVIDERS = [
   "minimax",
   "veo3",
+  "veo3.1",
   "kling",
   "kling-turbo",
   "kling-3.0",

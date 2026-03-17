@@ -21,6 +21,7 @@ import {
   Scale,
   HeartPulse,
   AlertTriangle,
+  Wallet,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -48,6 +49,7 @@ const ADMIN_NAV = [
   { href: "/admin/pricing", label: "Pricing", icon: DollarSign },
   { href: "/admin/credit-audit", label: "Credit Audit", icon: Scale },
   { href: "/admin/credit-anomalies", label: "Credit Anomalies", icon: AlertTriangle },
+  { href: "/admin/kie-credits", label: "KIE Credits", icon: Wallet },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: HeartPulse },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ] as const

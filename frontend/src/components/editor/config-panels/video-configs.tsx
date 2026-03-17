@@ -218,7 +218,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               />
               <label htmlFor="generateAudio" className="text-xs">Generate Audio</label>
             </div>
-            <p className="text-xs text-muted-foreground px-1">VEO 3/3.1 creates AI audio from the prompt. Disable for silent video, then use Add Audio node.</p>
+            <p className="text-xs text-muted-foreground px-1">VEO 3.1 creates AI audio from the prompt. Disable for silent video, then use Add Audio node.</p>
           </div>
         </>
       )}
@@ -248,7 +248,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
           {data.provider === "veo3" || data.provider === "veo3.1"
-            ? "VEO 3 produces ~8 second videos (not configurable)."
+            ? "VEO 3.1 produces ~8 second videos (not configurable)."
             : `${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
         </p>
       )}
@@ -750,8 +750,8 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="topaz">Topaz (factor-based)</SelectItem>
-            <SelectItem value="veo-1080p">VEO 1080p (25 CR)</SelectItem>
-            <SelectItem value="veo-4k">VEO 4K (79 CR)</SelectItem>
+            <SelectItem value="veo-1080p">VEO 1080p (2 CR)</SelectItem>
+            <SelectItem value="veo-4k">VEO 4K (38 CR)</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -864,10 +864,24 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
       </MappableField>
       {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
-          {data.provider === "veo3"
-            ? "VEO 3 produces ~8 second videos (not configurable)."
+          {data.provider === "veo3" || data.provider === "veo3.1"
+            ? "VEO 3.1 produces ~8 second videos (not configurable)."
             : `${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
         </p>
+      )}
+      {(data.provider === "veo3" || data.provider === "veo3.1") && (
+        <div>
+          <Label className="text-xs">Seed (optional)</Label>
+          <Input
+            type="number"
+            min={10000}
+            max={99999}
+            placeholder="10000–99999"
+            value={data.seed ?? ""}
+            onChange={(e) => onUpdate({ seed: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">Same seed produces similar results. Leave empty for random.</p>
+        </div>
       )}
       {data.provider === "kling" && (
         <div className="flex items-center gap-2 px-1">
@@ -978,6 +992,21 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
               <SelectItem value="quality">Quality</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+      )}
+
+      {data.provider === "veo-extend" && (
+        <div>
+          <Label className="text-xs">Seed (optional)</Label>
+          <Input
+            type="number"
+            min={10000}
+            max={99999}
+            placeholder="10000–99999"
+            value={(data.seeds as number | undefined) ?? ""}
+            onChange={(e) => onUpdate({ seeds: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">Same seed produces similar results. Leave empty for random.</p>
         </div>
       )}
 

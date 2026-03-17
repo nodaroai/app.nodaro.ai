@@ -490,7 +490,7 @@ export function handleExpandStoryboard(
       data: {
         label: `Scene ${scene.sceneNumber} Video`,
         provider: "veo3",
-        model: "veo-3.1",
+        model: "veo3",
         duration: scene.durationHint,
         motion: "moderate",
         cameraMotion: "static",

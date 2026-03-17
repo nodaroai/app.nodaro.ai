@@ -6,6 +6,7 @@ import {
   renewSubscriptionCredits,
   sendStorageWarnings,
 } from "./cleanup-service.js"
+import { recordKieCreditSnapshot } from "../routes/admin-kie-credits.js"
 
 /**
  * Start all billing cleanup cron jobs.
@@ -99,5 +100,21 @@ export function startCleanupCron(): void {
     }
   })
 
-  console.log("[cron] Billing cleanup cron jobs started (5 schedules)")
+  // KIE.ai credit balance snapshot -- every hour at :15
+  cron.schedule("15 * * * *", async () => {
+    console.log("[cron] Recording KIE credit snapshot...")
+    const start = Date.now()
+    try {
+      const result = await recordKieCreditSnapshot()
+      if (result) {
+        console.log(`[cron] KIE credit snapshot: ${result.credits} credits (${Date.now() - start}ms)`)
+      } else {
+        console.log(`[cron] KIE credit snapshot skipped (no API key or fetch failed)`)
+      }
+    } catch (err) {
+      console.error("[cron] KIE credit snapshot failed:", err)
+    }
+  })
+
+  console.log("[cron] Billing cleanup cron jobs started (6 schedules)")
 }
