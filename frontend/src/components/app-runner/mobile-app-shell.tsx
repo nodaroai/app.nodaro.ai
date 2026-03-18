@@ -146,6 +146,23 @@ export function MobileAppShell({
   const [isInputFocused, setIsInputFocused] = useState(false)
   const [isRemixing, setIsRemixing] = useState(false)
 
+  // Auto-create new run after login redirect (?newrun=1)
+  const newRunHandled = useRef(false)
+  useEffect(() => {
+    if (newRunHandled.current) return
+    if (!user) return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("newrun") === "1") {
+      newRunHandled.current = true
+      runSlots.handleCreateNew()
+      setActiveTab("inputs")
+      // Clean up the URL param
+      params.delete("newrun")
+      const clean = params.toString()
+      window.history.replaceState({}, "", window.location.pathname + (clean ? `?${clean}` : ""))
+    }
+  }, [user, runSlots])
+
   // Scroll position preservation per tab
   const scrollPositions = useRef<Record<string, number>>({ inputs: 0, outputs: 0, runs: 0 })
   const contentRef = useRef<HTMLDivElement>(null)
@@ -569,7 +586,16 @@ export function MobileAppShell({
         onSignIn={handleSignIn}
         onSignOut={signOut}
         onGetCredits={() => setShowGetCreditsModal(true)}
-        onNewRun={user ? () => { runSlots.handleCreateNew(); setActiveTab("inputs") } : undefined}
+        onNewRun={() => {
+          if (!user) {
+            const url = window.location.pathname + "?newrun=1"
+            localStorage.setItem(AUTH_REDIRECT_KEY, url)
+            navigate("/login")
+            return
+          }
+          runSlots.handleCreateNew()
+          setActiveTab("inputs")
+        }}
         supportsRemix={appSupportsRemix}
         onRemix={handleRemix}
         isRemixing={isRemixing}
