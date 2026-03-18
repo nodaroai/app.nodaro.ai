@@ -134,7 +134,7 @@ export function MobileAppHeader({
             <button
               type="button"
               onClick={() => setShowVersionPicker((v) => !v)}
-              className="shrink-0 flex items-center gap-0.5 text-[10px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 touch-manipulation hover:bg-muted/80 transition-colors min-h-[28px]"
+              className="shrink-0 flex items-center gap-0.5 text-[10px] text-muted-foreground px-0.5 py-0.5 touch-manipulation hover:text-foreground transition-colors min-h-[28px]"
               aria-label="Select version"
             >
               v{displayVersion}
@@ -142,7 +142,7 @@ export function MobileAppHeader({
             </button>
           )}
           {!hasMultipleVersions && versions.length === 1 && (
-            <span className="shrink-0 text-[10px] text-muted-foreground bg-muted rounded px-1.5 py-0.5">
+            <span className="shrink-0 text-[10px] text-muted-foreground px-0.5 py-0.5">
               v{displayVersion}
             </span>
           )}
