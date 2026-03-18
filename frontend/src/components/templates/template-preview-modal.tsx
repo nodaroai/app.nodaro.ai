@@ -28,6 +28,7 @@ import {
   type TemplateBrowseCard,
 } from "@/lib/api"
 import { useTemplateDetail } from "@/hooks/queries/use-template-marketplace-queries"
+import { nodeTypes } from "@/components/nodes"
 import { COMPLEXITY_CONFIG, getNodeTypeLabel, formatCount } from "@/lib/template-utils"
 import { APP_CATEGORIES, OUTPUT_TYPE_COLORS, CATEGORY_COLORS } from "@/lib/app-categories"
 import "@xyflow/react/dist/style.css"
@@ -51,6 +52,7 @@ function TemplateFlowCanvas({
     <ReactFlow
       nodes={nodes}
       edges={edges}
+      nodeTypes={nodeTypes}
       nodesDraggable={false}
       nodesConnectable={false}
       elementsSelectable={false}

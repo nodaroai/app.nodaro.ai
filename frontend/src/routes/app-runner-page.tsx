@@ -54,6 +54,14 @@ export default function AppRunnerPage() {
       isOwner: false,
       estimatedCost: app.estimatedCredits,
       presentationSettings,
+      // Clear stale state from previous app to prevent images/text bleeding through
+      inputValues: {},
+      nodeStates: {},
+      executionId: null,
+      executionStatus: "idle",
+      completedNodes: 0,
+      totalNodes: 0,
+      errorMessage: null,
     })
   }, [app])
 
