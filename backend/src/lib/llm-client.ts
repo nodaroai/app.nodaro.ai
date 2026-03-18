@@ -51,21 +51,14 @@ export interface LlmResponse {
 export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
   const model = resolveModel(req)
 
-  // Try KIE.ai first
-  if (config.KIE_API_KEY) {
-    try {
-      return await callKie(model, req)
-    } catch (err) {
-      if (model.directFallbackModel && config.ANTHROPIC_API_KEY) {
-        console.warn(`[llm-client] KIE.ai failed for ${model.id}, falling back to direct Anthropic: ${err instanceof Error ? err.message : err}`)
-      } else {
-        throw err
-      }
-    }
-  }
-
+  // Claude models: use direct Anthropic SDK (more reliable than KIE proxy)
   if (model.directFallbackModel && config.ANTHROPIC_API_KEY) {
     return callAnthropicDirect(model, req)
+  }
+
+  // Other models: use KIE.ai
+  if (config.KIE_API_KEY) {
+    return callKie(model, req)
   }
 
   throw new Error(`No LLM provider available for model ${model.id} (need KIE_API_KEY or ANTHROPIC_API_KEY)`)
@@ -78,20 +71,14 @@ export async function llmStream(
 ): Promise<LlmResponse> {
   const model = resolveModel(req)
 
-  if (config.KIE_API_KEY) {
-    try {
-      return await streamKie(model, req, onToken, signal)
-    } catch (err) {
-      if (model.directFallbackModel && config.ANTHROPIC_API_KEY) {
-        console.warn(`[llm-client] KIE.ai stream failed for ${model.id}, falling back to direct Anthropic: ${err instanceof Error ? err.message : err}`)
-      } else {
-        throw err
-      }
-    }
-  }
-
+  // Claude models: use direct Anthropic SDK (more reliable than KIE proxy)
   if (model.directFallbackModel && config.ANTHROPIC_API_KEY) {
     return streamAnthropicDirect(model, req, onToken, signal)
+  }
+
+  // Other models: use KIE.ai
+  if (config.KIE_API_KEY) {
+    return streamKie(model, req, onToken, signal)
   }
 
   throw new Error(`No LLM provider available for model ${model.id}`)
@@ -291,7 +278,7 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
 
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}`, "anthropic-version": "2023-06-01" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   })
@@ -322,7 +309,7 @@ async function streamKieMessages(
 
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}`, "anthropic-version": "2023-06-01" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
     signal: signal ?? AbortSignal.timeout(LLM_TIMEOUT_MS),
   })
