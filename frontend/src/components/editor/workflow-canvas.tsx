@@ -424,6 +424,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const handleConnectStart = useCallback((_: unknown, params: { handleType: "source" | "target" | null }) => {
     if (params.handleType) setConnectingFromType(params.handleType)
   }, [])
+  const edgeDropRef = useRef(false)
   const handleConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
       setConnectingFromType(null)
@@ -435,6 +436,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const fromHandle = connectionState.fromHandle
       const fromNode = connectionState.fromNode
       if (!fromHandle || !fromNode) return
+
+      // Flag to prevent handlePaneClick from immediately closing the popup
+      edgeDropRef.current = true
+      requestAnimationFrame(() => { edgeDropRef.current = false })
 
       const clientX = "clientX" in event ? event.clientX : event.changedTouches[0].clientX
       const clientY = "clientY" in event ? event.clientY : event.changedTouches[0].clientY
@@ -539,7 +544,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     selectNode(null)
     setNodeContextMenu(null)
     setCanvasContextMenu(null)
-    setAddNodePopupOpen(false)
+    // Don't close the popup if it was just opened by an edge drop
+    if (!edgeDropRef.current) setAddNodePopupOpen(false)
     setConnectingFromType(null)
   }, [selectNode])
 
