@@ -2,7 +2,7 @@
 
 import { memo, useState, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, LayoutGrid, Expand, Download } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, LayoutGrid, Expand, Download, Users } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -41,6 +41,7 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
   const useFull = zoom >= 0.8
 
   const shotCount = nodeData.shots?.length ?? 0
+  const charactersConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "characters").length
 
   // Check for connected image inputs
   const hasImageConnection = useMemo(() => {
@@ -125,7 +126,8 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "image", type: "target", position: Position.Left, customStyle: { top: '35%', left: '-29px' }, hideHandle: true },
+        { id: "image", type: "target", position: Position.Left, customStyle: { top: '30%', left: '-29px' }, hideHandle: true },
+        { id: "characters", type: "target" as const, position: Position.Left, customStyle: { top: '55%', left: '-29px' }, hideHandle: true },
         { id: "video", type: "source", position: Position.Right, customStyle: { top: 'calc(35% - 33px)', right: '-29px' }, hideHandle: true },
       ]}
     >
@@ -246,9 +248,23 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
     {/* image input handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(35% - 14px)', left: '-29px' }}
+      style={{ top: 'calc(30% - 14px)', left: '-29px' }}
     >
       <ImageIcon className="w-3.5 h-3.5 text-white" />
+    </div>
+
+    {/* characters input handle icon */}
+    <div
+      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
+      style={{ top: 'calc(55% - 14px)', left: '-29px' }}
+    >
+      <Users className="w-3.5 h-3.5 text-white" />
+      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">+</div>
+      {charactersConnectionCount >= 1 && (
+        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">
+          {charactersConnectionCount}
+        </div>
+      )}
     </div>
 
     {/* video output handle icon */}

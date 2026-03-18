@@ -63,6 +63,7 @@ const replicateInfo: ProviderInfo = {
     "audio-isolation": [],
     "transcription": [],
     "dialogue": [],
+    "character": [],
   },
 }
 

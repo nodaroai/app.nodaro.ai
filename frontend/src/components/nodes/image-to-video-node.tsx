@@ -3,7 +3,7 @@
 import { memo, useState, useMemo, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Maximize2, Download, Settings, LayoutGrid, Expand } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Maximize2, Download, Settings, LayoutGrid, Expand, Users } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -107,11 +107,16 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
   const supportsEndFrame = END_FRAME_SUPPORTED_PROVIDERS.includes(nodeData.provider)
   const isKling3 = nodeData.provider === "kling-3.0"
+  const isKling3MultiShot = isKling3 && nodeData.multiShot
+  const showEndFrame = supportsEndFrame && !isKling3MultiShot
+  const isSora = provider === "sora2" || provider === "sora2-pro"
+  const charactersConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "characters").length
 
   const resultHeight = videoDimensions?.height ?? 445
   const startFrameTop = 445 * 0.157
   const endFrameTop = 445 * 0.36
   const audioTop = 445 * 0.53
+  const charactersTop = 445 * 0.70
 
   useEffect(() => { if (activeUrl) setShowConfig(false) }, [activeUrl])
   useEffect(() => { setVideoDimensions(null) }, [activeUrl])
@@ -194,12 +199,13 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   // Build dynamic handles
   const handles = useMemo(() => [
     { id: "startFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${startFrameTop}px`, left: '-29px' }, hideHandle: true },
-    { id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${endFrameTop}px`, left: '-29px' }, hideHandle: true },
+    ...(showEndFrame ? [{ id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${endFrameTop}px`, left: '-29px' }, hideHandle: true }] : []),
     { id: "audio", type: "target" as const, position: Position.Left, customStyle: { top: `${audioTop}px`, left: '-29px' }, hideHandle: true },
+    ...(isSora ? [{ id: "characters", type: "target" as const, position: Position.Left, customStyle: { top: `${charactersTop}px`, left: '-29px' }, hideHandle: true }] : []),
     { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: `${videoTop}px`, right: '-29px' }, hideHandle: true },
-  ], [startFrameTop, endFrameTop, audioTop, videoTop, activeUrl, showConfig])
+  ], [startFrameTop, endFrameTop, audioTop, charactersTop, videoTop, activeUrl, showConfig, showEndFrame, isSora])
 
-  const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo
+  const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo || (isSora && charactersConnectionCount > 0)
 
   return (
     <div className="relative group/node" style={{ width: (activeUrl && !showConfig) ? (videoDimensions?.width ?? 245) : 245, height: (activeUrl && !showConfig) ? (videoDimensions?.height ?? 445) : 445, minHeight: 200, overflow: 'visible', position: 'relative' }}>
@@ -403,6 +409,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
           </div>
 
           {/* End Frame */}
+          {showEndFrame && (
           <div className="flex flex-col items-center gap-1 px-3">
             <span className="text-[10px] text-muted-foreground/60">End Frame</span>
             {endFrameInfo?.thumbnailUrl ? (
@@ -411,11 +418,12 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   className="w-full h-full object-cover" thumbnail={!useFull} thumbnailWidth={320} />
               </div>
             ) : (
-              <div className={`w-full h-[70px] rounded-md border border-dashed flex items-center justify-center ${supportsEndFrame ? "border-muted-foreground/20" : "border-muted-foreground/10 opacity-40"}`}>
+              <div className="w-full h-[70px] rounded-md border border-dashed border-muted-foreground/20 flex items-center justify-center">
                 <ImageIcon className="w-5 h-5 text-muted-foreground/20" />
               </div>
             )}
           </div>
+          )}
 
           {/* Audio */}
           <div className="flex flex-col items-center gap-1 px-3">
@@ -655,16 +663,30 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     </div>
 
     {/* endFrame handle icon */}
+    {showEndFrame && (
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
       style={{ top: `${endFrameTop - 14}px`, left: '-29px' }}>
       <ImageIcon className="w-3.5 h-3.5 text-white" />
     </div>
+    )}
 
     {/* audio handle icon */}
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
       style={{ top: `${audioTop - 14}px`, left: '-29px' }}>
       <Volume2 className="w-3.5 h-3.5 text-white" />
     </div>
+
+    {/* characters handle icon (Sora only) */}
+    {isSora && (
+      <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
+        style={{ top: `${charactersTop - 14}px`, left: '-29px' }}>
+        <Users className="w-3.5 h-3.5 text-white" />
+        <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">+</div>
+        {charactersConnectionCount >= 1 && (
+          <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">{charactersConnectionCount}</div>
+        )}
+      </div>
+    )}
 
     {/* video output handle icon */}
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"

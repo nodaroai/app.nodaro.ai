@@ -561,6 +561,7 @@ export type ImageToVideoData = {
   currentJobProgress?: number        // Progress percentage from backend (0-100)
   kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
   connectedImageOrder?: readonly string[]
+  characterIdList?: string[]
 }
 
 export type TextToSpeechData = {
@@ -608,6 +609,7 @@ export type TextToVideoData = {
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
   kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
+  characterIdList?: string[]
 }
 
 export type VideoToVideoData = {
@@ -688,6 +690,28 @@ export type SoraStoryboardData = {
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
+  characterIdList?: string[]
+}
+
+// Sora Character: Generate video with consistent character using KIE.ai sora-character API
+export type SoraCharacterData = {
+  [key: string]: unknown
+  label: string
+  mode: "video" | "sora-task"
+  characterPrompt: string
+  characterName?: string
+  timestamps?: string
+  safetyInstruction?: string
+  sourceVideoUrl?: string
+  sourceKieTaskId?: string
+  generatedCharacterId?: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
 }
 
 // Motion Transfer: Apply motion from video to image character
@@ -1603,6 +1627,7 @@ export type CharacterNodeData = {
   generatedResults: GeneratedResult[]
   activeResultIndex: number
   fieldMappings: FieldMappings
+  scriptCharacterIndex?: number
   // Asset sheets (combined grid images)
   expressionSheet: string
   poseSheet: string
@@ -1684,6 +1709,7 @@ export type LocationNodeData = {
   generatedResults: GeneratedResult[]
   activeResultIndex: number
   fieldMappings: FieldMappings
+  scriptLocationIndex?: number
   // Individual asset images
   timeOfDay: LocationAssetItem[]
   weather: LocationAssetItem[]
@@ -2046,6 +2072,7 @@ export type SceneNodeData =
   | LipSyncData
   | SpeechToVideoData
   | SoraStoryboardData
+  | SoraCharacterData
   | MotionTransferData
   | VideoUpscaleData
   | ExtendVideoData
@@ -2145,6 +2172,7 @@ export type SceneNodeType =
   | "lip-sync"
   | "speech-to-video"
   | "sora-storyboard"
+  | "sora-character"
   | "motion-transfer"
   | "video-upscale"
   | "extend-video"
@@ -2368,7 +2396,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 2,
     inputs: ["in"],
-    outputs: ["scenes"],
+    outputs: ["scenes", "images", "dialogue", "music", "sfx", "characters", "locations"],
     defaultData: { label: "Generate Script", provider: "gemini", model: "gemini-2.5-flash", sceneCount: 5, styleGuide: "", structure: "freeform", tone: "", targetLength: 60, fieldMappings: {} },
   },
   {
@@ -3031,6 +3059,24 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as SoraStoryboardData,
+  },
+  // Sora Character (consistent character generation)
+  {
+    type: "sora-character",
+    label: "Sora Character",
+    category: "ai",
+    creditCost: 5,
+    inputs: ["video"],
+    outputs: ["characterId"],
+    defaultData: {
+      label: "Sora Character",
+      mode: "video",
+      characterPrompt: "",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as SoraCharacterData,
   },
   // Motion Transfer (Kling 2.6 Motion Control)
   {

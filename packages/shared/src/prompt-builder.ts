@@ -330,3 +330,45 @@ export function buildScenePrompt(
 
   return result
 }
+
+// ---------------------------------------------------------------------------
+// Enriched scene prompt for Sora Storyboard (appends cinematography/location/mood)
+// ---------------------------------------------------------------------------
+
+export interface EnrichableScene {
+  readonly visualDescription: string
+  readonly cinematography?: {
+    readonly shotType?: string
+    readonly cameraAngle?: string
+    readonly cameraMovement?: string
+  }
+  readonly location?: {
+    readonly name?: string
+    readonly timeOfDay?: string
+  }
+  readonly mood?: string | readonly string[]
+}
+
+/** Build an enriched scene prompt by appending cinematography, location, and mood context. */
+export function buildEnrichedScenePrompt(scene: EnrichableScene): string {
+  let prompt = scene.visualDescription
+  if (scene.cinematography) {
+    const { shotType, cameraAngle, cameraMovement } = scene.cinematography
+    if (shotType || cameraAngle) {
+      prompt += `. Camera: ${[shotType, cameraAngle].filter(Boolean).join(" ")}`
+      if (cameraMovement) prompt += ` with ${cameraMovement}`
+    }
+  }
+  if (scene.location) {
+    const { name, timeOfDay } = scene.location
+    if (name) {
+      prompt += `. Setting: ${name}`
+      if (timeOfDay) prompt += `, ${timeOfDay}`
+    }
+  }
+  if (scene.mood) {
+    const moodStr = Array.isArray(scene.mood) ? scene.mood.join(", ") : scene.mood
+    if (moodStr) prompt += `. Mood: ${moodStr}`
+  }
+  return prompt
+}

@@ -16,6 +16,7 @@ const CREDIT_COSTS: Record<string, number> = {
   "trim-video": 0,
   "image-to-text": 1,
   "speech-to-video": 4,
+  "sora-character": 5,
   "sub-workflow": 0,
   "social-media-format": 0,
   "instagram-post": 1,

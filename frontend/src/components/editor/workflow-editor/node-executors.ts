@@ -432,6 +432,7 @@ export function runVideoGeneration(
   seed?: number,
   cameraFixed?: boolean,
   removeWatermark?: boolean,
+  characterIdList?: string[],
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
@@ -464,6 +465,7 @@ export function runVideoGeneration(
       seed,
       cameraFixed,
       removeWatermark,
+      characterIdList,
       userId: ctx.userId,
     })
       .then(({ jobId }) => {
@@ -696,6 +698,7 @@ export function runTextToVideoGeneration(
     removeWatermark?: boolean;
     seed?: number;
   },
+  characterIdList?: string[],
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
@@ -706,7 +709,7 @@ export function runTextToVideoGeneration(
   });
 
   return new Promise((resolve, reject) => {
-    textToVideo(prompt, provider, ctx.userId, kling3Options)
+    textToVideo(prompt, provider, ctx.userId, { ...kling3Options, characterIdList })
       .then(({ jobId }) => {
         toast.info("Text-to-video generation started", {
           description: `Job ID: ${jobId}`,

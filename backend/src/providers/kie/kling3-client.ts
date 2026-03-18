@@ -28,6 +28,7 @@ export interface Kling3Params {
   multiShots?: boolean
   multiPrompt?: Array<{ prompt: string; duration: number }>
   klingElements?: Array<{ name: string; description: string; type?: "image" | "video"; element_input_urls?: string[]; element_input_video_urls?: string[] }>
+  motionPrompt?: string
   onProgress?: (progress: number) => Promise<void> | void
 }
 
@@ -143,8 +144,11 @@ export async function kling3Generate(
     )
   }
 
+  // motionPrompt replaces prompt for single-shot Kling 3.0; ignored in multi-shot
+  const effectivePrompt = multiPrompt ? "" : (params.motionPrompt || params.prompt || "")
+
   const input: Record<string, unknown> = {
-    prompt: multiPrompt ? "" : params.prompt,
+    prompt: effectivePrompt,
     sound: soundOn,
     duration: String(durationNum),
     mode: params.mode ?? "pro",

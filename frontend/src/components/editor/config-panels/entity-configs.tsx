@@ -27,6 +27,8 @@ import type {
   FaceNodeData,
   ObjectNodeData,
   LocationNodeData,
+  GeneratedScript,
+  GeneratedScriptResult,
 } from "@/types/nodes"
 import {
   CharacterAssetButton,
@@ -36,8 +38,9 @@ import {
   LocationAssetButton,
   LocationAssetGrid,
 } from "./entity-shared"
+import type { ConfigProps } from "./types"
 
-export function CharacterConfig({ data, onUpdate }: { readonly data: CharacterNodeData; readonly onUpdate: (updates: Partial<CharacterNodeData>) => void }) {
+export function CharacterConfig({ data, onUpdate, sources }: ConfigProps<CharacterNodeData>) {
   const generateAsset = useWorkflowStore((s) => s.generateCharacterAssetFn)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
@@ -49,6 +52,32 @@ export function CharacterConfig({ data, onUpdate }: { readonly data: CharacterNo
     ((data.generatedResults ?? [])[data.activeResultIndex ?? 0]?.url) || data.sourceImageUrl,
   )
   const isRunning = data.executionStatus === "running"
+
+  const scriptCharSource = sources.find(
+    (s) => s.type === "generate-script" && s.sourceHandle === "characters"
+  )
+  const scriptCharacters = useMemo(() => {
+    if (!scriptCharSource?.nodeData) return []
+    const sd = scriptCharSource.nodeData as Record<string, unknown>
+    const results = sd.generatedResults as GeneratedScriptResult[] | undefined
+    const activeIndex = (sd.activeResultIndex as number | undefined) ?? 0
+    const script = results?.[activeIndex]?.script ?? (sd.generatedScript as GeneratedScript | undefined)
+    if (!script?.scenes) return []
+    const seen = new Map<string, { name: string; description: string }>()
+    for (const scene of script.scenes) {
+      if (!scene.characters) continue
+      for (const c of scene.characters) {
+        if (typeof c === "string") {
+          const key = c.toLowerCase()
+          if (!seen.has(key)) seen.set(key, { name: c, description: "" })
+        } else {
+          const key = c.name.toLowerCase()
+          if (!seen.has(key)) seen.set(key, { name: c.name, description: c.description })
+        }
+      }
+    }
+    return Array.from(seen.values())
+  }, [scriptCharSource])
 
   const existingNames = useMemo(() => {
     const names: string[] = []
@@ -117,6 +146,32 @@ export function CharacterConfig({ data, onUpdate }: { readonly data: CharacterNo
 
   return (
     <div className="flex flex-col gap-3">
+      {scriptCharacters.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">From Script</Label>
+          <Select
+            value={data.scriptCharacterIndex != null ? String(data.scriptCharacterIndex) : ""}
+            onValueChange={(v) => {
+              const idx = Number(v)
+              const char = scriptCharacters[idx]
+              if (char) {
+                onUpdate({
+                  scriptCharacterIndex: idx,
+                  characterName: char.name,
+                  description: char.description,
+                } as any)
+              }
+            }}
+          >
+            <SelectTrigger><SelectValue placeholder="Select character..." /></SelectTrigger>
+            <SelectContent>
+              {scriptCharacters.map((c, i) => (
+                <SelectItem key={i} value={String(i)}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <div>
         <Label htmlFor="char-name">Character Name</Label>
         <Input
@@ -553,7 +608,7 @@ export function ObjectConfig({ data, onUpdate }: { readonly data: ObjectNodeData
   )
 }
 
-export function LocationConfig({ data, onUpdate }: { readonly data: LocationNodeData; readonly onUpdate: (updates: Partial<LocationNodeData>) => void }) {
+export function LocationConfig({ data, onUpdate, sources }: ConfigProps<LocationNodeData>) {
   const generateAsset = useWorkflowStore((s) => s.generateLocationAssetFn)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
@@ -563,6 +618,31 @@ export function LocationConfig({ data, onUpdate }: { readonly data: LocationNode
 
   const hasImage = Boolean(((data.generatedResults ?? [])[data.activeResultIndex ?? 0]?.url) || data.sourceImageUrl)
   const isRunning = data.executionStatus === "running"
+
+  const scriptLocSource = sources.find(
+    (s) => s.type === "generate-script" && s.sourceHandle === "locations"
+  )
+  const scriptLocations = useMemo(() => {
+    if (!scriptLocSource?.nodeData) return []
+    const sd = scriptLocSource.nodeData as Record<string, unknown>
+    const results = sd.generatedResults as GeneratedScriptResult[] | undefined
+    const activeIndex = (sd.activeResultIndex as number | undefined) ?? 0
+    const script = results?.[activeIndex]?.script ?? (sd.generatedScript as GeneratedScript | undefined)
+    if (!script?.scenes) return []
+    const seen = new Map<string, { name: string; description: string; timeOfDay: string; weather?: string; lighting?: string }>()
+    for (const scene of script.scenes) {
+      if (!scene.location) continue
+      const key = scene.location.name.toLowerCase()
+      if (!seen.has(key)) seen.set(key, {
+        name: scene.location.name,
+        description: scene.location.description,
+        timeOfDay: scene.location.timeOfDay,
+        weather: scene.location.weather,
+        lighting: scene.location.lighting,
+      })
+    }
+    return Array.from(seen.values())
+  }, [scriptLocSource])
 
   const existingNames = useMemo(() => {
     const names: string[] = []
@@ -611,6 +691,32 @@ export function LocationConfig({ data, onUpdate }: { readonly data: LocationNode
 
   return (
     <div className="flex flex-col gap-3">
+      {scriptLocations.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">From Script</Label>
+          <Select
+            value={data.scriptLocationIndex != null ? String(data.scriptLocationIndex) : ""}
+            onValueChange={(v) => {
+              const idx = Number(v)
+              const loc = scriptLocations[idx]
+              if (loc) {
+                onUpdate({
+                  scriptLocationIndex: idx,
+                  locationName: loc.name,
+                  description: [loc.description, loc.timeOfDay, loc.weather, loc.lighting].filter(Boolean).join(". "),
+                } as any)
+              }
+            }}
+          >
+            <SelectTrigger><SelectValue placeholder="Select location..." /></SelectTrigger>
+            <SelectContent>
+              {scriptLocations.map((l, i) => (
+                <SelectItem key={i} value={String(i)}>{l.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <div>
         <Label htmlFor="loc-name">Location Name</Label>
         <Input id="loc-name" value={data.locationName} onChange={(e) => onUpdate({ locationName: e.target.value })} onBlur={(e) => handleNameChange(e.target.value)} placeholder="e.g. Ancient Forest" />

@@ -47,6 +47,8 @@ export interface NodeOutput {
   reason?: string
   /** QA-check: quality score 0.0-1.0 */
   score?: number
+  /** Sora-character: generated character ID for use in subsequent Sora tasks */
+  characterId?: string
 }
 
 export type NodeExecutionStatus =
@@ -137,6 +139,9 @@ export interface ResolvedInputs {
   }>
   referenceImageUrls?: string[]
   scriptData?: unknown
+  dialogueLines?: Array<{ speaker: string; text: string; emotion?: string }>
+  scriptCharacters?: Array<{ name: string; description: string; mood?: string; action?: string; position?: string }>
+  scriptLocations?: Array<{ name: string; description: string; timeOfDay: string; weather?: string; lighting?: string }>
   sunoTrackId?: string
   sunoTaskId?: string
   uploadUrl?: string
@@ -146,6 +151,7 @@ export interface ResolvedInputs {
   maskUrl?: string
   kieTaskId?: string
   caption?: string
+  characterIdList?: string[]
 }
 
 // ---------------------------------------------------------------------------

@@ -148,6 +148,7 @@ async function runKling3(
     multiShots: options?.multiShots,
     multiPrompt: options?.multiPrompt,
     klingElements: options?.klingElements,
+    motionPrompt: options?.motionPrompt,
     onProgress: options?.onProgress,
   })
 
@@ -369,6 +370,11 @@ export class KieVideoProvider
       input.size = options.videoSize
     }
 
+    // Sora2 / Sora2 Pro character IDs
+    if (options?.characterIdList?.length && (provider === "sora2" || provider === "sora2-pro")) {
+      input.character_id_list = options.characterIdList
+    }
+
     // Seed for deterministic generation (Wan Turbo, Bytedance Lite/Pro)
     if (options?.seed !== undefined && options.seed >= 0) {
       input.seed = options.seed
@@ -567,6 +573,11 @@ export class KieVideoProvider
     }
     if (options?.cfgScale !== undefined) {
       input.cfg_scale = options.cfgScale
+    }
+
+    // Sora2 / Sora2 Pro character IDs
+    if (options?.characterIdList?.length && (provider === "sora2" || provider === "sora2-pro")) {
+      input.character_id_list = options.characterIdList
     }
 
     console.log(
@@ -1105,7 +1116,8 @@ export class KieVideoProvider
     nFrames?: string,
     imageUrls?: string[],
     aspectRatio?: string,
-    onProgress?: (progress: number) => Promise<void>
+    onProgress?: (progress: number) => Promise<void>,
+    characterIdList?: string[]
   ): Promise<ProviderResult> {
     const modelConfig = KIE_STORYBOARD_MODELS["sora-storyboard"]
     if (!modelConfig) {
@@ -1149,6 +1161,10 @@ export class KieVideoProvider
 
     if (imageUrls && imageUrls.length > 0) {
       input.image_urls = imageUrls
+    }
+
+    if (characterIdList && characterIdList.length > 0) {
+      input.character_id_list = characterIdList
     }
 
     // Cost varies by n_frames: 10 = 150 KIE credits ($0.75), 15/25 = 270 KIE credits ($1.35)

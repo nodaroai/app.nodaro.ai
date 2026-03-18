@@ -66,6 +66,7 @@ import {
   Twitter,
   Facebook,
   StickyNote,
+  UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SceneNodeType } from "@/types/nodes";
@@ -288,6 +289,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "sora-storyboard",
     label: "Sora Storyboard",
     icon: <Clapperboard className="h-4 w-4" />,
+    category: "AI",
+    group: "Video",
+  },
+  {
+    type: "sora-character",
+    label: "Sora Character",
+    icon: <UserRound className="h-4 w-4" />,
     category: "AI",
     group: "Video",
   },

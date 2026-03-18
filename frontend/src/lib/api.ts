@@ -816,6 +816,7 @@ export interface GenerateVideoOptions {
   seed?: number            // Seed (Wan Turbo, Bytedance)
   cameraFixed?: boolean    // Camera fixed (Bytedance, Seedance)
   removeWatermark?: boolean // Sora2/Sora2-Pro watermark removal post-processing
+  characterIdList?: string[] // Sora character IDs from connected sora-character nodes
   userId?: string
 }
 
@@ -856,6 +857,7 @@ export async function generateVideo(
       seed: opts.seed,
       cameraFixed: opts.cameraFixed,
       removeWatermark: opts.removeWatermark,
+      characterIdList: opts.characterIdList,
     }
     if (opts.userId) {
       body.userId = opts.userId
@@ -909,6 +911,7 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
   removeWatermark?: boolean
   seed?: number
+  characterIdList?: string[]
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt, provider, ...options }
   if (userId) {
@@ -1918,6 +1921,7 @@ export async function soraStoryboardApi(opts: {
   nFrames?: string
   imageUrls?: string[]
   aspectRatio?: string
+  characterIdList?: string[]
   userId?: string
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = {
@@ -1926,6 +1930,7 @@ export async function soraStoryboardApi(opts: {
   if (opts.nFrames) body.nFrames = opts.nFrames
   if (opts.imageUrls && opts.imageUrls.length > 0) body.imageUrls = opts.imageUrls
   if (opts.aspectRatio) body.aspectRatio = opts.aspectRatio
+  if (opts.characterIdList && opts.characterIdList.length > 0) body.characterIdList = opts.characterIdList
   if (opts.userId) body.userId = opts.userId
   const res = await fetch(`${API_BASE_URL}/v1/sora-storyboard`, {
     method: "POST",
@@ -1935,6 +1940,38 @@ export async function soraStoryboardApi(opts: {
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to start Sora Storyboard generation")
+  }
+  return res.json()
+}
+
+export async function extractSoraCharacter(params: {
+  mode: "video" | "sora-task"
+  characterPrompt: string
+  characterName?: string
+  timestamps?: string
+  safetyInstruction?: string
+  videoUrl?: string
+  kieTaskId?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = {
+    mode: params.mode,
+    characterPrompt: params.characterPrompt,
+  }
+  if (params.characterName) body.characterName = params.characterName
+  if (params.timestamps) body.timestamps = params.timestamps
+  if (params.safetyInstruction) body.safetyInstruction = params.safetyInstruction
+  if (params.videoUrl) body.videoUrl = params.videoUrl
+  if (params.kieTaskId) body.kieTaskId = params.kieTaskId
+  if (params.userId) body.userId = params.userId
+  const res = await fetch(`${API_BASE_URL}/v1/sora-character`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start Sora Character extraction")
   }
   return res.json()
 }

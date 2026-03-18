@@ -1,6 +1,8 @@
 "use client"
 
-import { Plus, Trash2 } from "lucide-react"
+import { useMemo, useCallback } from "react"
+import { Plus, Trash2, Wand2 } from "lucide-react"
+import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -44,6 +46,7 @@ import type {
   VoiceRemixData,
   VoiceDesignData,
   ForcedAlignmentData,
+  GeneratedScript,
 } from "@/types/nodes"
 import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
@@ -854,9 +857,42 @@ export function AudioIsolationConfig({ data, onUpdate, nodeRefs }: ConfigProps<A
   )
 }
 
-export function TextToDialogueConfig({ data, onUpdate, nodeRefs }: ConfigProps<TextToDialogueData>) {
+export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs }: ConfigProps<TextToDialogueData>) {
   const dialogue = data.dialogue ?? [{ id: "1", text: "", voice: DEFAULT_DIALOGUE_VOICE }]
   const totalChars = dialogue.reduce((sum, l) => sum + l.text.length, 0)
+
+  const scriptSource = sources.find(
+    (s) => s.type === "generate-script" && s.sourceHandle === "dialogue"
+  )
+  const scriptDialogue = useMemo(() => {
+    if (!scriptSource?.nodeData) return []
+    const sd = scriptSource.nodeData as Record<string, unknown>
+    const results = sd.generatedResults as Array<{ script: unknown }> | undefined
+    const activeIndex = (sd.activeResultIndex as number | undefined) ?? 0
+    const script = (results?.[activeIndex]?.script ?? sd.generatedScript) as GeneratedScript | undefined
+    if (!script?.scenes) return []
+    const lines: Array<{ speaker: string; text: string }> = []
+    for (const scene of script.scenes) {
+      if (scene.dialogue) {
+        for (const d of scene.dialogue) {
+          lines.push({ speaker: d.speaker, text: d.text })
+        }
+      }
+    }
+    return lines
+  }, [scriptSource?.nodeData])
+
+  const fillFromScript = useCallback(() => {
+    if (!scriptDialogue.length) return
+    const newDialogue: DialogueLine[] = scriptDialogue.map((d) => ({
+      id: crypto.randomUUID(),
+      text: d.text,
+      voice: DEFAULT_DIALOGUE_VOICE,
+      voiceLabel: d.speaker,
+    }))
+    onUpdate({ dialogue: newDialogue })
+    toast.success(`Filled ${newDialogue.length} dialogue lines from script`)
+  }, [scriptDialogue, onUpdate])
 
   function updateLine(index: number, updates: Partial<DialogueLine>) {
     const newDialogue = dialogue.map((line, i) =>
@@ -883,6 +919,18 @@ export function TextToDialogueConfig({ data, onUpdate, nodeRefs }: ConfigProps<T
           {totalChars}/5000
         </span>
       </div>
+
+      {scriptDialogue.length > 0 && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full h-8 text-xs gap-1.5"
+          onClick={fillFromScript}
+        >
+          <Wand2 className="w-3.5 h-3.5" />
+          Fill {scriptDialogue.length} Lines from Script
+        </Button>
+      )}
 
       <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto">
         {dialogue.map((line, i) => (

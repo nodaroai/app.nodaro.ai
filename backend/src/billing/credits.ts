@@ -309,6 +309,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "sora-storyboard": 47,          // 150 KIE cr, $0.75 (10 frames)
   "sora-storyboard:15": 85,       // 270 KIE cr, $1.35 (15/25 frames)
   "sora-storyboard:25": 85,       // 270 KIE cr, $1.35 (25 frames, same cost as 15)
+  // ── Sora Character ──
+  "sora-character": 5,            // Character generation/processing
   // ── Speech-to-Video ──
   "speech-to-video": 4,           // 12 KIE cr, $0.06 (480p)
   "speech-to-video:580p": 6,      // 18 KIE cr, $0.09

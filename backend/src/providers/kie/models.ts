@@ -988,6 +988,25 @@ export const KIE_STORYBOARD_MODELS: Record<string, KieModelConfig> = {
 }
 
 // =============================================================================
+// SORA 2 CHARACTER MODELS (Extract reusable characters from video or Sora task)
+// =============================================================================
+export const KIE_CHARACTER_MODELS: Record<string, KieModelConfig> = {
+  // Sora 2 Characters — extract character from video file
+  // See: docs.kie.ai/market/sora2/sora-2-characters.md
+  "sora-character": {
+    model: "sora-2-characters",
+    credits: 20,
+    cost: 0.10,  // 20 KIE credits * $0.005
+  },
+  // Sora 2 Characters Pro — extract character from a prior Sora task (by task ID + timestamps)
+  "sora-character-pro": {
+    model: "sora-2-characters-pro",
+    credits: 20,
+    cost: 0.10,  // 20 KIE credits * $0.005
+  },
+}
+
+// =============================================================================
 // SPECIAL MODELS
 // =============================================================================
 export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
@@ -1012,7 +1031,7 @@ export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
 // HELPER FUNCTIONS
 // =============================================================================
 
-export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "speech-to-video" | "storyboard" | "music" | "tts" | "sound-effect" | "audio-isolation" | "stt" | "dialogue" | "special"
+export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "speech-to-video" | "storyboard" | "character" | "music" | "tts" | "sound-effect" | "audio-isolation" | "stt" | "dialogue" | "special"
 
 /**
  * Get KIE.ai model config for a given category and provider
@@ -1041,6 +1060,8 @@ export function getKieModelConfig(
       return KIE_SPEECH_TO_VIDEO_MODELS[provider] ?? null
     case "storyboard":
       return KIE_STORYBOARD_MODELS[provider] ?? null
+    case "character":
+      return KIE_CHARACTER_MODELS[provider] ?? null
     case "music":
       return KIE_MUSIC_MODELS[provider] ?? null
     case "tts":
