@@ -324,9 +324,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   // "sora": 20,                    // Replicate, ~$0.30 typical
   // ── LLM (standard tier = base entry, economy = 0.5x min 1, premium = 3x) ──
-  "prompt-helper": 1,            // standard (economy same: min 1)
+  "prompt-helper": 2,            // standard
   "prompt-helper:economy": 1,
-  "prompt-helper:premium": 3,
+  "prompt-helper:premium": 5,
   "ai-writer": 5,                // standard
   "ai-writer:economy": 3,
   "ai-writer:premium": 15,
