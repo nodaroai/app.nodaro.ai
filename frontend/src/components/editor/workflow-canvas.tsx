@@ -600,6 +600,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const handleOpenAddNodePopup = useCallback((position?: { x: number; y: number }, placeAtCenter = false) => {
     setAddNodePopupPosition(position ?? getViewportCenter())
     setAddNodeAtCenter(placeAtCenter)
+    setConnectionContext(null)
     setAddNodePopupOpen(true)
     setCanvasContextMenu(null)
     setNodeContextMenu(null)
