@@ -129,12 +129,12 @@ export function MobileAppHeader({
 
         {/* App name + version — pull closer to logo */}
         <div className="flex-1 min-w-0 flex items-center gap-1.5 -ml-2.5">
-          <span className="text-sm font-semibold truncate translate-y-px">{appName}</span>
+          <span className="text-sm font-semibold truncate translate-y-[2px]">{appName}</span>
           {hasMultipleVersions && (
             <button
               type="button"
               onClick={() => setShowVersionPicker((v) => !v)}
-              className="shrink-0 flex items-center gap-0.5 text-[10px] text-muted-foreground px-0.5 py-0.5 touch-manipulation hover:text-foreground transition-colors min-h-[28px] translate-y-px"
+              className="shrink-0 flex items-center gap-0.5 text-[10px] text-muted-foreground px-0.5 py-0.5 touch-manipulation hover:text-foreground transition-colors min-h-[28px] translate-y-[2px]"
               aria-label="Select version"
             >
               v{displayVersion}
@@ -142,7 +142,7 @@ export function MobileAppHeader({
             </button>
           )}
           {!hasMultipleVersions && versions.length === 1 && (
-            <span className="shrink-0 text-[10px] text-muted-foreground px-0.5 py-0.5 translate-y-px">
+            <span className="shrink-0 text-[10px] text-muted-foreground px-0.5 py-0.5 translate-y-[2px]">
               v{displayVersion}
             </span>
           )}
