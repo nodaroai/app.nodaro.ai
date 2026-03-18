@@ -117,7 +117,7 @@ export function MobileAppHeader({
       style={{ paddingTop: "var(--safe-area-top, 0px)" }}
     >
       {/* Top bar */}
-      <div className="flex items-center h-12 px-3 gap-1.5">
+      <div className="flex items-center h-12 px-3 gap-0">
         {/* Logo */}
         <a
           href="/"
