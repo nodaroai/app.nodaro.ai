@@ -90,6 +90,7 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { method: "GET", path: "/v1/embed/", prefix: true },
   { method: "GET", path: "/v1/apps/browse" },
   { method: "GET", path: "/v1/templates/browse" },
+  { method: "GET", path: "/v1/tutorials" },
   { method: "GET", path: "/v1/templates/", prefix: true },
   // IMPORTANT: trailing slash is deliberate — "/v1/api/" matches "/v1/api/run", "/v1/api/schema", etc.
   // but NOT "/v1/api-tokens" (CRUD routes that require JWT auth).

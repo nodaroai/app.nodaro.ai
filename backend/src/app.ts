@@ -108,6 +108,8 @@ import { qaCheckRoutes } from "./routes/qa-check.js"
 import { saveToStorageRoutes } from "./routes/save-to-storage.js"
 import { promptHelperRoutes } from "./routes/prompt-helper.js"
 import { adminLlmModelsRoutes } from "./routes/admin-llm-models.js"
+import { tutorialsRoutes } from "./routes/tutorials.js"
+import { adminTutorialsRoutes } from "./routes/admin-tutorials.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
@@ -242,6 +244,8 @@ export async function buildApp() {
   await app.register(saveToStorageRoutes)
   await app.register(promptHelperRoutes)
   await app.register(adminLlmModelsRoutes)
+  await app.register(tutorialsRoutes)
+  await app.register(adminTutorialsRoutes)
 
   return app
 }

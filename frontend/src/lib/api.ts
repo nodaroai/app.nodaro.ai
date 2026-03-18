@@ -4140,3 +4140,78 @@ export async function getTemplateFavorites(): Promise<string[]> {
   )
   return res.data
 }
+
+// --- Tutorials ---
+
+export interface Tutorial {
+  id: string
+  title: string
+  description: string | null
+  videoUrl: string
+  thumbnailUrl: string | null
+  category: string
+  sortOrder: number
+  isEnabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export async function fetchTutorials(category?: string): Promise<Tutorial[]> {
+  const params = category ? `?category=${encodeURIComponent(category)}` : ""
+  const res = await apiRequest<{ data: Tutorial[] }>(
+    `/v1/tutorials${params}`,
+    "Failed to fetch tutorials",
+    { skipAuth: true },
+  )
+  return res.data
+}
+
+export async function fetchAdminTutorials(): Promise<Tutorial[]> {
+  const res = await apiRequest<{ data: Tutorial[] }>(
+    "/v1/admin/tutorials",
+    "Failed to fetch tutorials",
+  )
+  return res.data
+}
+
+export async function createTutorial(data: {
+  title: string
+  video_url: string
+  description?: string
+  thumbnail_url?: string
+  category?: string
+  sort_order?: number
+  is_enabled?: boolean
+}): Promise<Tutorial> {
+  const res = await apiRequest<{ data: Tutorial }>(
+    "/v1/admin/tutorials",
+    "Failed to create tutorial",
+    { method: "POST", body: data },
+  )
+  return res.data
+}
+
+export async function updateTutorial(id: string, data: {
+  title?: string
+  video_url?: string
+  description?: string | null
+  thumbnail_url?: string | null
+  category?: string
+  sort_order?: number
+  is_enabled?: boolean
+}): Promise<Tutorial> {
+  const res = await apiRequest<{ data: Tutorial }>(
+    `/v1/admin/tutorials/${encodeURIComponent(id)}`,
+    "Failed to update tutorial",
+    { method: "PATCH", body: data },
+  )
+  return res.data
+}
+
+export async function deleteTutorial(id: string): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>(
+    `/v1/admin/tutorials/${encodeURIComponent(id)}`,
+    "Failed to delete tutorial",
+    { method: "DELETE" },
+  )
+}

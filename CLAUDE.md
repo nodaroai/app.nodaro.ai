@@ -149,6 +149,7 @@
 | `published_apps` | id, workflow_id, user_id, name, slug, version, nodes (JSONB), edges (JSONB), metadata, status | Versioned mini-app snapshots |
 | `credit_anomalies` | id, user_id, job_id, model, expected_credits, actual_credits, status | Credit charge anomaly tracking |
 | `kie_credit_snapshots` | id, balance, timestamp | KIE.ai account balance history (hourly) |
+| `tutorials` | id, title, description, video_url, thumbnail_url, category, sort_order, is_enabled, created_at, updated_at | Admin-managed video tutorials |
 
 ---
 
@@ -311,5 +312,5 @@ backend/src/
 
 ---
 
-*Last updated: 2026-03-17*
-*Version: 1.68.0*
+*Last updated: 2026-03-18*
+*Version: 1.69.0*
