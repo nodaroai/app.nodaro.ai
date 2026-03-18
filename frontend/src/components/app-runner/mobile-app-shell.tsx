@@ -8,7 +8,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { Plus, Inbox, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { useUserCredits } from "@/hooks/queries/use-credits-queries"
@@ -371,9 +371,7 @@ export function MobileAppShell({
   // ---- Run click ----
   const handleRunClick = useCallback(() => {
     if (!user) {
-      const returnUrl = window.location.pathname + window.location.search
-      localStorage.setItem(AUTH_REDIRECT_KEY, returnUrl)
-      navigate(`/login?redirect=${encodeURIComponent(returnUrl)}`)
+      openLoginPopup()
       return
     }
     presRun()
@@ -383,8 +381,7 @@ export function MobileAppShell({
   // ---- Remix ----
   const handleRemix = useCallback(async () => {
     if (!user) {
-      localStorage.setItem(AUTH_REDIRECT_KEY, window.location.pathname + window.location.search)
-      navigate("/login")
+      openLoginPopup()
       return
     }
     const appData = useAppRunnerStore.getState().app
@@ -458,12 +455,43 @@ export function MobileAppShell({
     }
   }, [user, navigate])
 
-  // ---- Sign-in redirect ----
-  const handleSignIn = useCallback(() => {
-    const returnUrl = window.location.pathname + window.location.search
-    localStorage.setItem(AUTH_REDIRECT_KEY, returnUrl)
-    navigate(`/login?redirect=${encodeURIComponent(returnUrl)}`)
+  // ---- Login popup (stays on app page) ----
+  const openLoginPopup = useCallback((onSuccess?: () => void) => {
+    const w = 500, h = 650
+    const left = window.screenX + (window.outerWidth - w) / 2
+    const top = window.screenY + (window.outerHeight - h) / 2
+    const popup = window.open(
+      `${window.location.origin}/login`,
+      "nodaro-login",
+      `width=${w},height=${h},left=${left},top=${top},popup=1`,
+    )
+    if (!popup) {
+      // Popup blocked — fall back to redirect
+      const returnUrl = window.location.pathname + window.location.search
+      localStorage.setItem(AUTH_REDIRECT_KEY, returnUrl)
+      navigate(`/login?redirect=${encodeURIComponent(returnUrl)}`)
+      return
+    }
+    const handleAuthMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return
+      if (event.data?.type === "nodaro:authComplete" && event.data.access_token) {
+        window.removeEventListener("message", handleAuthMessage)
+        clearInterval(interval)
+        setAuthFromTokens(event.data.access_token, event.data.refresh_token)
+        onSuccess?.()
+      }
+    }
+    window.addEventListener("message", handleAuthMessage)
+    const interval = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(interval)
+        window.removeEventListener("message", handleAuthMessage)
+        refreshAuth()
+      }
+    }, 500)
   }, [navigate])
+
+  const handleSignIn = useCallback(() => openLoginPopup(), [openLoginPopup])
 
   // ---- Render output card (replicate PresentationView logic) ----
   const renderOutputCard = useCallback((node: WorkflowNode) => {
@@ -594,10 +622,10 @@ export function MobileAppShell({
         onGetCredits={() => setShowGetCreditsModal(true)}
         onNewRun={() => {
           if (!user) {
-            const returnUrl = window.location.pathname + "?newrun=1"
-            localStorage.setItem(AUTH_REDIRECT_KEY, returnUrl)
-            // Also encode in URL as fallback in case localStorage is cleared during OAuth
-            navigate(`/login?redirect=${encodeURIComponent(returnUrl)}`)
+            openLoginPopup(() => {
+              runSlots.handleCreateNew()
+              setActiveTab("inputs")
+            })
             return
           }
           runSlots.handleCreateNew()
