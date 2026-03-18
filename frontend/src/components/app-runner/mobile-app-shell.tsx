@@ -569,6 +569,7 @@ export function MobileAppShell({
         onSignIn={handleSignIn}
         onSignOut={signOut}
         onGetCredits={() => setShowGetCreditsModal(true)}
+        onNewRun={user ? () => { runSlots.handleCreateNew(); setActiveTab("inputs") } : undefined}
         supportsRemix={appSupportsRemix}
         onRemix={handleRemix}
         isRemixing={isRemixing}
@@ -646,17 +647,6 @@ export function MobileAppShell({
         ) : activeTab === "runs" ? (
           // Runs tab
           <div className="flex flex-col">
-            {/* New Run button */}
-            <div className="p-4 pb-2">
-              <Button
-                onClick={() => { runSlots.handleCreateNew(); setActiveTab("inputs") }}
-                className="w-full h-11 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white rounded-full text-sm font-medium touch-manipulation"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                New Run
-              </Button>
-            </div>
-
             {/* Version picker (if multiple versions) */}
             {hasMultipleVersions && (
               <div className="px-4 pb-2">

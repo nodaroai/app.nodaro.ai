@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Menu, X, LogIn, LogOut, Shuffle, LayoutGrid, ChevronDown } from "lucide-react"
+import { Menu, X, LogIn, LogOut, Shuffle, LayoutGrid, ChevronDown, Plus, Sun, Moon } from "lucide-react"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { CreditBalance } from "@/components/credits/CreditBalance"
@@ -19,6 +19,7 @@ interface MobileAppHeaderProps {
   onSignIn: () => void
   onSignOut: () => void
   onGetCredits: () => void
+  onNewRun?: () => void
   supportsRemix: boolean
   onRemix: () => void
   isRemixing: boolean
@@ -44,6 +45,7 @@ export function MobileAppHeader({
   onSignIn,
   onSignOut,
   onGetCredits,
+  onNewRun,
   supportsRemix,
   onRemix,
   isRemixing,
@@ -149,7 +151,16 @@ export function MobileAppHeader({
         </div>
 
         {/* Right actions */}
-        <ThemeToggle />
+        {onNewRun && (
+          <button
+            type="button"
+            onClick={onNewRun}
+            className="shrink-0 h-8 px-3 rounded-full text-xs font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-1 transition-colors touch-manipulation"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
@@ -301,6 +312,16 @@ export function MobileAppHeader({
                   More apps
                 </a>
               </div>
+
+              {/* Theme */}
+              <div className="px-4 py-2">
+                <div className="flex items-center justify-between min-h-[44px]">
+                  <span className="text-sm text-foreground">Theme</span>
+                  <ThemeToggle />
+                </div>
+              </div>
+
+              <div className="border-t border-border" />
 
               {/* Auth */}
               <div className="px-4 py-3">
