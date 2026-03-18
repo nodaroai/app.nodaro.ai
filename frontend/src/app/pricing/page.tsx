@@ -227,7 +227,7 @@ export default function PricingPage() {
                   <p className="mt-1 text-sm text-muted-foreground">
                     {tier.priceMonthly > 0
                       ? billingCycle === "annual"
-                        ? <><span className="text-white font-medium">${tier.priceAnnual * 12}</span>/yr · <span className="text-emerald-400 font-medium">Save ${savingsDollars}</span></>
+                        ? <><span className="text-foreground font-medium">${tier.priceAnnual * 12}</span>/yr · <span className="text-emerald-400 font-medium">Save ${savingsDollars}</span></>
                         : "Billed monthly"
                       : <span className="text-emerald-400 font-medium">🎁 {tier.credits} free credits</span>}
                   </p>
@@ -239,7 +239,7 @@ export default function PricingPage() {
                       <Check className="h-4 w-4 text-[#ff0073] flex-shrink-0 mt-0.5" />
                       <span className="text-muted-foreground">
                         {/^\d[\d,]* credits \/ month/.test(feature)
-                          ? <><span className="text-white font-medium">{feature.replace(/ \/.*$/, '')}</span>{feature.match(/ \/.*$/)?.[0]}</>
+                          ? <><span className="text-foreground font-medium">{feature.replace(/ \/.*$/, '')}</span>{feature.match(/ \/.*$/)?.[0]}</>
                           : feature}
                       </span>
                     </li>

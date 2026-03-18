@@ -91,11 +91,15 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
 
   loadApp: async (slug: string) => {
     if (get().loading) return
-    set({ loading: true, slug, errorMessage: null })
+    // Clear stale app from previous navigation to prevent flash of old data
+    set({ loading: true, slug, errorMessage: null, app: null })
     try {
       const app = await getPublishedApp(slug)
+      // Guard: discard response if slug changed during fetch (navigation race)
+      if (get().slug !== slug) { set({ loading: false }); return }
       set({ app, loading: false })
     } catch (err) {
+      if (get().slug !== slug) { set({ loading: false }); return }
       set({
         loading: false,
         errorMessage: err instanceof Error ? err.message : "Failed to load app",
