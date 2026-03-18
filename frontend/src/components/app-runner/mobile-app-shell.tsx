@@ -146,6 +146,23 @@ export function MobileAppShell({
   const [isInputFocused, setIsInputFocused] = useState(false)
   const [isRemixing, setIsRemixing] = useState(false)
 
+  // Auto-create new run after login redirect (?newrun=1)
+  const newRunHandled = useRef(false)
+  useEffect(() => {
+    if (newRunHandled.current) return
+    if (!user) return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("newrun") === "1") {
+      newRunHandled.current = true
+      runSlots.handleCreateNew()
+      setActiveTab("inputs")
+      // Clean up the URL param
+      params.delete("newrun")
+      const clean = params.toString()
+      window.history.replaceState({}, "", window.location.pathname + (clean ? `?${clean}` : ""))
+    }
+  }, [user, runSlots])
+
   // Scroll position preservation per tab
   const scrollPositions = useRef<Record<string, number>>({ inputs: 0, outputs: 0, runs: 0 })
   const contentRef = useRef<HTMLDivElement>(null)
@@ -569,6 +586,16 @@ export function MobileAppShell({
         onSignIn={handleSignIn}
         onSignOut={signOut}
         onGetCredits={() => setShowGetCreditsModal(true)}
+        onNewRun={() => {
+          if (!user) {
+            const url = window.location.pathname + "?newrun=1"
+            localStorage.setItem(AUTH_REDIRECT_KEY, url)
+            navigate("/login")
+            return
+          }
+          runSlots.handleCreateNew()
+          setActiveTab("inputs")
+        }}
         supportsRemix={appSupportsRemix}
         onRemix={handleRemix}
         isRemixing={isRemixing}
@@ -646,17 +673,6 @@ export function MobileAppShell({
         ) : activeTab === "runs" ? (
           // Runs tab
           <div className="flex flex-col">
-            {/* New Run button */}
-            <div className="p-4 pb-2">
-              <Button
-                onClick={() => { runSlots.handleCreateNew(); setActiveTab("inputs") }}
-                className="w-full h-11 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white rounded-full text-sm font-medium touch-manipulation"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                New Run
-              </Button>
-            </div>
-
             {/* Version picker (if multiple versions) */}
             {hasMultipleVersions && (
               <div className="px-4 pb-2">
