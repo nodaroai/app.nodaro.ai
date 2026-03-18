@@ -22,12 +22,22 @@ vi.mock("lucide-react", () => {
     Smile: I, Sparkles: I, Repeat: I, Gauge: I, SunDim: I,
     RefreshCw: I, Shapes: I, Box: I, AudioWaveform: I, Eye: I,
     Languages: I, AlignLeft: I, Workflow: I, LogIn: I, LogOut: I, Share2: I,
-    Instagram: I, Youtube: I, Linkedin: I, Twitter: I, Facebook: I, StickyNote: I,
+    Instagram: I, Youtube: I, Linkedin: I, Twitter: I, Facebook: I, StickyNote: I, UserRound: I,
   }
 })
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
+}))
+
+vi.mock("@/lib/node-compatibility", () => ({
+  getCompatibleNodes: () => [],
+  resolveTargetHandle: () => undefined,
+  HANDLE_COMPATIBILITY: {},
+}))
+
+vi.mock("@/hooks/use-auth", () => ({
+  useAuth: () => ({ user: null, session: null }),
 }))
 
 // ---------------------------------------------------------------------------
