@@ -121,7 +121,7 @@ export function MobileAppHeader({
         {/* Logo */}
         <a
           href="/"
-          className="shrink-0 flex items-center min-w-[44px] min-h-[44px] justify-center touch-manipulation [&>span]:mt-px"
+          className="shrink-0 flex items-center min-w-[44px] min-h-[44px] justify-center touch-manipulation [&>span]:mt-0"
           aria-label="Nodaro home"
         >
           <NodaroLogo variant="icon" size="sm" />
@@ -129,7 +129,7 @@ export function MobileAppHeader({
 
         {/* App name + version — pull closer to logo */}
         <div className="flex-1 min-w-0 flex items-center gap-1.5 -ml-2.5">
-          <span className="text-sm font-semibold truncate">{appName}</span>
+          <span className="text-sm font-semibold truncate translate-y-px">{appName}</span>
           {hasMultipleVersions && (
             <button
               type="button"
