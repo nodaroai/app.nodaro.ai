@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Menu, X, LogIn, LogOut, Shuffle, LayoutGrid, ChevronDown, Plus, Sun, Moon } from "lucide-react"
+import { LogIn, LogOut, Shuffle, LayoutGrid, ChevronDown, Plus, Sun, Moon } from "lucide-react"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { CreditBalance } from "@/components/credits/CreditBalance"
@@ -182,7 +182,11 @@ export function MobileAppHeader({
           aria-label={menuOpen ? "Close menu" : "Open menu"}
           aria-expanded={menuOpen}
         >
-          {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          <div className="w-5 h-4 relative flex flex-col justify-between">
+            <span className={`block h-0.5 w-5 bg-current rounded-full transition-all duration-200 origin-center ${menuVisible ? "translate-y-[7px] rotate-45" : ""}`} />
+            <span className={`block h-0.5 w-5 bg-current rounded-full transition-all duration-200 ${menuVisible ? "opacity-0 scale-x-0" : ""}`} />
+            <span className={`block h-0.5 w-5 bg-current rounded-full transition-all duration-200 origin-center ${menuVisible ? "-translate-y-[7px] -rotate-45" : ""}`} />
+          </div>
         </button>
       </div>
 
