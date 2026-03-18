@@ -128,7 +128,7 @@ export function MobileAppHeader({
         </a>
 
         {/* App name + version — pull closer to logo */}
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 -ml-1">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 -ml-2.5">
           <span className="text-sm font-semibold truncate">{appName}</span>
           {hasMultipleVersions && (
             <button
