@@ -616,7 +616,7 @@ export function MobileAppShell({
             {/* New Run button */}
             <div className="p-4 pb-2">
               <Button
-                onClick={runSlots.handleCreateNew}
+                onClick={() => { runSlots.handleCreateNew(); setActiveTab("inputs") }}
                 className="w-full h-11 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white rounded-full text-sm font-medium touch-manipulation"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -676,7 +676,7 @@ export function MobileAppShell({
           costLabel={costLabel}
           onRun={handleRunClick}
           onCancel={cancel}
-          onNewRun={user ? runSlots.handleHeaderAction : undefined}
+          onNewRun={user ? () => { runSlots.handleHeaderAction(); setActiveTab("inputs") } : undefined}
           newRunLabel={runSlots.newRunLabel}
           onGetCredits={() => setShowGetCreditsModal(true)}
           inputsReadOnly={inputsReadOnly}
