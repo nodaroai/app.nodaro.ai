@@ -121,7 +121,7 @@ export function MobileAppHeader({
         {/* Logo */}
         <a
           href="/"
-          className="shrink-0 flex items-center min-w-[44px] min-h-[44px] justify-center touch-manipulation [&>span]:mt-0"
+          className="shrink-0 flex items-center min-w-[44px] min-h-[44px] justify-center touch-manipulation [&>span]:mt-px"
           aria-label="Nodaro home"
         >
           <NodaroLogo variant="icon" size="sm" />
