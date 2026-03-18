@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react"
-import { Menu, X, LogIn, LogOut, Shuffle, LayoutGrid, ChevronDown, Plus, Sun, Moon } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { LogIn, LogOut, Shuffle, LayoutGrid, ChevronDown, Plus, Sun, Moon } from "lucide-react"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { CreditBalance } from "@/components/credits/CreditBalance"
@@ -60,18 +60,32 @@ export function MobileAppHeader({
   onSelectVersion,
   latestVersion,
 }: MobileAppHeaderProps) {
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)     // controls mount
+  const [menuVisible, setMenuVisible] = useState(false) // controls CSS animation
   const [progressVisible, setProgressVisible] = useState(false)
   const [showVersionPicker, setShowVersionPicker] = useState(false)
+
+  // Animate menu open/close
+  const openMenu = useCallback(() => {
+    setMenuOpen(true)
+    // Trigger enter animation on next frame
+    requestAnimationFrame(() => requestAnimationFrame(() => setMenuVisible(true)))
+  }, [])
+
+  const closeMenu = useCallback(() => {
+    setMenuVisible(false)
+    // Wait for exit animation before unmounting
+    setTimeout(() => setMenuOpen(false), 200)
+  }, [])
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevStatusRef = useRef(executionStatus)
 
   // Auto-close menu when execution starts
   useEffect(() => {
-    if (executionStatus === "running") {
-      setMenuOpen(false)
+    if (executionStatus === "running" && menuOpen) {
+      closeMenu()
     }
-  }, [executionStatus])
+  }, [executionStatus, menuOpen, closeMenu])
 
   // Progress bar visibility logic
   useEffect(() => {
@@ -135,7 +149,7 @@ export function MobileAppHeader({
           {hasMultipleVersions && (
             <button
               type="button"
-              onClick={() => { setMenuOpen(true); setShowVersionPicker(true) }}
+              onClick={() => { openMenu(); setShowVersionPicker(true) }}
               className="shrink-0 flex items-center gap-0.5 text-[10px] text-muted-foreground px-0.5 py-0.5 touch-manipulation hover:text-foreground transition-colors min-h-[28px] translate-y-[3px]"
               aria-label="Select version"
             >
@@ -163,12 +177,16 @@ export function MobileAppHeader({
         )}
         <button
           type="button"
-          onClick={() => setMenuOpen((v) => !v)}
+          onClick={() => menuOpen ? closeMenu() : openMenu()}
           className="shrink-0 flex items-center justify-center w-11 h-11 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors touch-manipulation"
           aria-label={menuOpen ? "Close menu" : "Open menu"}
           aria-expanded={menuOpen}
         >
-          {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          <div className="w-5 h-4 relative flex flex-col justify-between">
+            <span className={`block h-0.5 w-5 bg-current rounded-full transition-all duration-200 origin-center ${menuVisible ? "translate-y-[7px] rotate-45" : ""}`} />
+            <span className={`block h-0.5 w-5 bg-current rounded-full transition-all duration-200 ${menuVisible ? "opacity-0 scale-x-0" : ""}`} />
+            <span className={`block h-0.5 w-5 bg-current rounded-full transition-all duration-200 origin-center ${menuVisible ? "-translate-y-[7px] -rotate-45" : ""}`} />
+          </div>
         </button>
       </div>
 
@@ -186,11 +204,11 @@ export function MobileAppHeader({
       {menuOpen && (
         <>
           <div
-            className="mobile-menu-backdrop"
-            onClick={() => setMenuOpen(false)}
+            className={`mobile-menu-backdrop transition-opacity duration-200 ${menuVisible ? "opacity-100" : "opacity-0"}`}
+            onClick={() => closeMenu()}
             aria-hidden="true"
           />
-          <div className="mobile-menu-sheet">
+          <div className={`mobile-menu-sheet transition-all duration-200 ${menuVisible ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0"}`}>
             <div className="flex flex-col divide-y divide-border">
               {/* Credits */}
               {isAuthenticated && hasCredits() && userId && (
@@ -245,7 +263,7 @@ export function MobileAppHeader({
                         onClick={() => {
                           onSelectVersion(null)
                           setShowVersionPicker(false)
-                          setMenuOpen(false)
+                          closeMenu()
                         }}
                         className={`w-full text-left px-3 py-2 rounded-md text-sm touch-manipulation transition-colors ${
                           selectedVersion === null
@@ -264,7 +282,7 @@ export function MobileAppHeader({
                             onClick={() => {
                               onSelectVersion(v.version)
                               setShowVersionPicker(false)
-                              setMenuOpen(false)
+                              closeMenu()
                             }}
                             className={`w-full text-left px-3 py-2 rounded-md text-sm touch-manipulation transition-colors ${
                               selectedVersion === v.version
@@ -290,7 +308,7 @@ export function MobileAppHeader({
                     type="button"
                     onClick={() => {
                       onRemix()
-                      setMenuOpen(false)
+                      closeMenu()
                     }}
                     disabled={isRemixing}
                     className="flex items-center gap-2 text-sm touch-manipulation min-h-[44px] text-foreground hover:text-[#ff0073] transition-colors disabled:opacity-50"
@@ -305,7 +323,7 @@ export function MobileAppHeader({
               <div className="px-4 py-3">
                 <a
                   href="/apps"
-                  onClick={() => setMenuOpen(false)}
+                  onClick={() => closeMenu()}
                   className="flex items-center gap-2 text-sm touch-manipulation min-h-[44px] text-foreground hover:text-[#ff0073] transition-colors"
                 >
                   <LayoutGrid className="h-4 w-4" />
@@ -334,7 +352,7 @@ export function MobileAppHeader({
                       type="button"
                       onClick={() => {
                         onSignOut()
-                        setMenuOpen(false)
+                        closeMenu()
                       }}
                       className="flex items-center gap-2 text-sm touch-manipulation text-muted-foreground hover:text-foreground transition-colors shrink-0"
                     >
@@ -347,7 +365,7 @@ export function MobileAppHeader({
                     type="button"
                     onClick={() => {
                       onSignIn()
-                      setMenuOpen(false)
+                      closeMenu()
                     }}
                     className="flex items-center gap-2 text-sm touch-manipulation min-h-[44px] text-foreground hover:text-[#ff0073] transition-colors"
                   >
