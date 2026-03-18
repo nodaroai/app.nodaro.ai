@@ -55,7 +55,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     vendor: "anthropic",
     supportsImages: true,
     maxOutputTokens: 16384,
-    directFallbackModel: "claude-sonnet-4-6-20250514",
+    directFallbackModel: "claude-sonnet-4-6",
   },
   {
     id: "gpt-5.2",
@@ -86,7 +86,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     vendor: "anthropic",
     supportsImages: true,
     maxOutputTokens: 16384,
-    directFallbackModel: "claude-opus-4-6-20250514",
+    directFallbackModel: "claude-opus-4-6",
   },
   {
     id: "gpt-5.4",
