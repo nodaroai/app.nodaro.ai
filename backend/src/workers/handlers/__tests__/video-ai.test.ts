@@ -632,7 +632,7 @@ describe("sora-storyboard handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockSoraStoryboard).toHaveBeenCalledWith(
-      shots, undefined, undefined, undefined, expect.any(Function),
+      shots, undefined, undefined, undefined, expect.any(Function), undefined,
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
@@ -650,7 +650,7 @@ describe("sora-storyboard handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockSoraStoryboard).toHaveBeenCalledWith(
-      shots, "15", ["https://img1.png"], "portrait", expect.any(Function),
+      shots, "15", ["https://img1.png"], "portrait", expect.any(Function), undefined,
     )
   })
 

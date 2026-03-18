@@ -597,6 +597,7 @@ describe("image-to-video", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
     )
   })
 })
@@ -659,6 +660,7 @@ describe("text-to-video", () => {
       expect.anything(),
       undefined,
       expect.objectContaining({ duration: undefined, aspectRatio: undefined }),
+      undefined,
     )
   })
 })
