@@ -770,7 +770,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 <ConfigPanel />
               </EditorErrorBoundary>
             </ReactFlowProvider>
-            <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 max-w-[calc(100%-2rem)] right-4${isMobile && selectedNodeId ? " hidden" : ""}`}>
+            <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 max-w-[calc(100%-2rem)]${isMobile && selectedNodeId ? " hidden" : ""}`}>
               {isRunning && activeExecutionId ? (
                 <ExecutionStatusBar
                   executionId={activeExecutionId}
