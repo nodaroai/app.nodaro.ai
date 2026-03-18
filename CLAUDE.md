@@ -166,7 +166,7 @@ frontend/src/
   app/gallery/            — Public community gallery
   routes/                 — Route wrapper components (workflow-editor-page, etc.)
   layouts/                — DashboardLayout, AdminLayout
-  components/nodes/       — 100+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, extend-video-node, webhook-trigger-node, schedule-trigger-node, social-node, speech-to-video-node, sora-storyboard-node, 13 suno-*-nodes, preview-node)
+  components/nodes/       — 100+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, extend-video-node, webhook-trigger-node, schedule-trigger-node, social-node, speech-to-video-node, sora-storyboard-node, sora-character-node, 13 suno-*-nodes, preview-node)
   components/editor/
     config-panel.tsx      — Thin dispatcher (~520 lines), delegates to config-panels/
     config-panels/        — 24 files: per-category node config components (image, video, audio, composition, entity, trigger, social, etc.) + tag-textarea.tsx (autocomplete for audio tags & Suno metatags) + prompt-helper-dialog.tsx (AI prompt enhancement) + aspect-ratio-selector.tsx (visual SVG tile grid) + llm-model-select.tsx (tiered model dropdown)
@@ -271,6 +271,7 @@ backend/src/
 | Sub-workflow execution | Recursive with depth limit 5 | `sub-workflow-handler.ts`: loads referenced workflow, filters to selected route's reachable nodes (BFS), executes with same orchestrator logic; cycle detection via `workflowId:routeId` set |
 | Single-node execution history | Jobs tagged with workflowId | Frontend `setCurrentWorkflowId()` + `withWorkflowId()` inject workflowId into all job-creating API calls; backend `extractWorkflowId(req.body)` reads it before Zod strips it; `GET /v1/workflows/:id/executions` merges `workflow_executions` + standalone `jobs` (where `workflow_execution_id IS NULL`); standalone jobs shown as `triggerType: "single-node"` with synthetic nodeStates |
 | Shared package | `packages/shared/` with relative imports | Deduplicates ~500 lines of pure logic (prompt building, model constants, templates, ancestor refs, credit identifiers) between frontend DAG executor and backend orchestrator. Frontend resolves via Vite alias; backend uses relative imports (NOT path aliases — `tsc` doesn't rewrite them). Backend `rootDir: ".."` so dist output is `dist/backend/src/`. Dockerfile copies `packages/shared/` into build stages. |
+| Sora Characters | KIE.ai `sora-2-characters` + `sora-2-characters-pro` | `sora-character` node: extract reusable `character_id` from video (standard: upload clip, pro: reference Sora task ID + timestamps). Output is non-URL string (follows voice-design pattern). `character_id_list` (max 5) supported on Sora I2V/T2V/Storyboard via `characters` input handle with multi-connection aggregation. 5 credits per extraction. |
 | Social media publishing | OAuth 2.0 + platform APIs | 6 platforms: Instagram, TikTok, YouTube, LinkedIn, X, Facebook. OAuth popup flow with PKCE (X), CSRF state param. Tokens AES-256-GCM encrypted at rest (`SOCIAL_ENCRYPTION_KEY`). `social_connections` table (1 account per user+platform). Publishing via sync HTTP nodes in orchestrator. 1 credit per post. |
 | Deployment | Railway + single Dockerfile | `dev` branch → staging (`next.nodaro.ai`); `main` branch → production (`app.nodaro.ai`). Single multi-stage Dockerfile at repo root builds backend, frontend, and Remotion. Caddy reverse proxy in front. |
 
@@ -309,8 +310,11 @@ backend/src/
 - [x] Execution parity audit (frontend DAG ↔ backend orchestrator fully aligned)
 - [x] Dynamic credit pricing from admin markup setting
 - [x] Public docs site (GitHub Pages) — internal specs moved to `specs/`
+- [x] Kling 3.0 multi-shot polish (config panel, motionPrompt, end frame hide)
+- [x] Sora Character node (extract reusable character IDs from video, standard + pro modes)
+- [x] Sora character_id_list integration (I2V, T2V, Storyboard — up to 5 characters per generation)
 
 ---
 
 *Last updated: 2026-03-18*
-*Version: 1.69.0*
+*Version: 1.70.0*

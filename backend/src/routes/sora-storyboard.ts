@@ -14,6 +14,7 @@ const soraStoryboardBody = z.object({
   nFrames: z.enum(["10", "15", "25"]).default("10"),
   imageUrls: z.array(safeUrlSchema).max(5).optional(),
   aspectRatio: z.enum(["portrait", "landscape"]).default("landscape"),
+  characterIdList: z.array(z.string()).max(5).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -35,7 +36,7 @@ export async function soraStoryboardRoutes(app: FastifyInstance) {
       })
     }
 
-    const { shots, nFrames, imageUrls, aspectRatio } = parsed.data
+    const { shots, nFrames, imageUrls, aspectRatio, characterIdList } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -57,6 +58,7 @@ export async function soraStoryboardRoutes(app: FastifyInstance) {
           nFrames,
           imageUrls,
           aspectRatio,
+          characterIdList,
         },
       })
       .select("id")
@@ -79,6 +81,7 @@ export async function soraStoryboardRoutes(app: FastifyInstance) {
       nFrames,
       imageUrls,
       aspectRatio,
+      characterIdList,
       usageLogId,
     })
 

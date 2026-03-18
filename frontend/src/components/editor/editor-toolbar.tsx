@@ -192,6 +192,13 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.connectedImageOrder = undefined
           break
 
+        case "sora-character":
+          data.generatedResults = []
+          data.generatedCharacterId = undefined
+          data.executionStatus = "idle"
+          data.errorMessage = undefined
+          break
+
         case "generate-script":
           // Clear generated script results, keep settings
           data.generatedResults = []

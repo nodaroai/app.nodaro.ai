@@ -93,6 +93,7 @@ import { webhookTriggerRoutes } from "./routes/webhook-triggers.js"
 import { extendVideoRoutes } from "./routes/extend-video.js"
 import { speechToVideoRoutes } from "./routes/speech-to-video.js"
 import { soraStoryboardRoutes } from "./routes/sora-storyboard.js"
+import { soraCharacterRoutes } from "./routes/sora-character.js"
 import { socialMediaFormatRoutes } from "./routes/social-media-format.js"
 import { webhookOutputRoutes } from "./routes/webhook-output.js"
 import { presentationRoutes } from "./routes/presentation.js"
@@ -230,6 +231,7 @@ export async function buildApp() {
   await app.register(extendVideoRoutes)
   await app.register(speechToVideoRoutes)
   await app.register(soraStoryboardRoutes)
+  await app.register(soraCharacterRoutes)
   await app.register(socialMediaFormatRoutes)
   await app.register(webhookOutputRoutes)
   await app.register(presentationRoutes)

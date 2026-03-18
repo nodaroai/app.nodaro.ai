@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
+const Kling3StudioConfig = lazy(() => import("./config-panels/kling3-studio-config").then(m => ({ default: m.Kling3StudioConfig })))
 import { GenerateButton } from "@/components/credits/GenerateButton"
 import { createClient } from "@/lib/supabase"
 import type {
@@ -55,6 +56,7 @@ import {
   ExtendVideoConfig,
   SpeechToVideoConfig,
   SoraStoryboardConfig,
+  SoraCharacterConfig,
   TextToVideoConfig,
   TextToSpeechConfig,
   TextToAudioConfig,
@@ -196,6 +198,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "extend-video": "Extend Video",
   "speech-to-video": "Speech to Video",
   "sora-storyboard": "Sora Storyboard",
+  "sora-character": "Sora Character",
   "combine-text": "Combine Text",
   "split-text": "Split Text",
   "preview": "Preview",
@@ -233,6 +236,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "ai-writer",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "image-to-text",
+  "sora-character",
 ])
 
 export const RUN_BUTTON_TYPES = new Set([
@@ -544,15 +548,9 @@ export function ConfigPanel() {
           {nodeType === "edit-image" && <EditImageConfig {...configProps} />}
           {nodeType === "image-to-image" && <ImageToImageConfig {...configProps} />}
           {nodeType === "image-to-video" && (
-            <>
-              <ImageToVideoConfig {...configProps} onUpdateNode={updateNodeData} />
-              {(nodeData as ImageToVideoData).provider === "kling-3.0" && (
-                <Button variant="outline" className="w-full mt-2" onClick={() => setExpandDirectorOpen(true)}>
-                  <Maximize2 className="w-4 h-4 mr-2" />
-                  Expand Director
-                </Button>
-              )}
-            </>
+            (nodeData as ImageToVideoData).provider === "kling-3.0"
+              ? <Suspense fallback={null}><Kling3StudioConfig {...configProps} /></Suspense>
+              : <ImageToVideoConfig {...configProps} onUpdateNode={updateNodeData} />
           )}
           {nodeType === "video-to-video" && <VideoToVideoConfig {...configProps} />}
           {nodeType === "text-to-video" && (
@@ -593,6 +591,7 @@ export function ConfigPanel() {
           {nodeType === "lip-sync" && <LipSyncConfig {...configProps} />}
           {nodeType === "speech-to-video" && <SpeechToVideoConfig {...configProps} />}
           {nodeType === "sora-storyboard" && <SoraStoryboardConfig {...configProps} />}
+          {nodeType === "sora-character" && <SoraCharacterConfig {...configProps} />}
           {nodeType === "motion-transfer" && <MotionTransferConfig {...configProps} />}
           {nodeType === "transcribe" && <TranscribeConfig {...configProps} />}
           {nodeType === "image-to-text" && <ImageToTextConfig {...configProps} />}

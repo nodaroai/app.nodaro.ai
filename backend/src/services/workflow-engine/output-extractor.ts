@@ -42,6 +42,7 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "approved",
   "reason",
   "score",
+  "characterId",
 ]
 
 // Job output_data keys that all map to NodeOutput.plan — derived from COMPOSER_PLAN_MAP + generic "plan"
@@ -279,6 +280,11 @@ export function getPrimaryOutput(
   if (sourceType === "forced-alignment") {
     if (output.alignment) return JSON.stringify(output.alignment)
     return output.text
+  }
+
+  // Sora-character outputs a characterId string (data, not media)
+  if (sourceType === "sora-character") {
+    return output.characterId || output.text
   }
 
   // Generate-script: prefer text (first scene imagePrompt), fall back to script existence
@@ -520,6 +526,12 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   if (type === "generate-script") {
     const result = getFirstSceneImagePrompt(data)
     return result ? { text: result.text, script: result.script } : undefined
+  }
+
+  // Sora-character → characterId from savedCharacterId node data field
+  if (type === "sora-character") {
+    const characterId = data.savedCharacterId as string | undefined
+    return characterId ? { characterId } : undefined
   }
 
   // Text-generating nodes

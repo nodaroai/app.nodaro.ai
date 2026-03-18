@@ -187,6 +187,9 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.generatedVideoUrl as string | undefined)
     );
   }
+  if (type === "sora-character") {
+    return (data.generatedCharacterId as string | undefined) || undefined;
+  }
   // Suno-separate: support stem routing via sourceHandle (matches backend)
   if (type === "suno-separate") {
     if (sourceHandle === "vocal") {

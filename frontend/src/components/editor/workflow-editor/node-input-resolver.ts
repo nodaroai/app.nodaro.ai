@@ -72,6 +72,7 @@ export interface FrontendResolvedInputs {
   endFrameUrl?: string;
   maskUrl?: string;
   kieTaskId?: string;
+  characterIdList?: string[];
 }
 
 /** Route audio to suno-mashup's dual-input fields (audioUrl + audioUrl2). */
@@ -320,6 +321,15 @@ export function resolveNodeInputs(
       inputs.maskUrl = output;
       continue;
     }
+    if (srcEdge.targetHandle === "characters") {
+      // Aggregate character IDs from sora-character nodes into characterIdList
+      const srcData = src.data as Record<string, unknown>;
+      const characterId = (srcData.generatedCharacterId as string | undefined);
+      if (characterId) {
+        inputs.characterIdList = [...(inputs.characterIdList ?? []), characterId];
+      }
+      continue;
+    }
     if (srcEdge.targetHandle === "audio") {
       if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
         inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
@@ -511,8 +521,8 @@ export function resolveNodeInputs(
       } else {
         inputs.videoUrl = output;
       }
-      // Pass through kieTaskId for VEO/Runway extend and upscale nodes (matches backend)
-      if (node.type === "extend-video" || node.type === "video-upscale") {
+      // Pass through kieTaskId for VEO/Runway extend, upscale, and sora-character nodes (matches backend)
+      if (node.type === "extend-video" || node.type === "video-upscale" || node.type === "sora-character") {
         const srcData = src.data as Record<string, unknown>;
         if (srcData.kieTaskId) {
           inputs.kieTaskId = srcData.kieTaskId as string;

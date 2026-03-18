@@ -751,6 +751,25 @@ export function buildPayload(
       }
     }
 
+    case "sora-character": {
+      return {
+        jobName: "sora-character",
+        queueName: "video-generation",
+        modelIdentifier: "sora-character",
+        payload: {
+          jobId,
+          mode: data.mode,
+          characterPrompt: data.characterPrompt,
+          characterName: data.characterName,
+          timestamps: data.timestamps,
+          safetyInstruction: data.safetyInstruction,
+          videoUrl: resolvedInputs.videoUrl || (data.videoUrl as string | undefined),
+          kieTaskId: resolvedInputs.kieTaskId || (data.kieTaskId as string | undefined),
+          usageLogId,
+        },
+      }
+    }
+
     case "motion-transfer": {
       const mtProvider = (data.provider as string) ?? "kling"
       const mtResolution = (data.resolution as string) ?? "720p"

@@ -47,6 +47,8 @@ export interface NodeOutput {
   reason?: string
   /** QA-check: quality score 0.0-1.0 */
   score?: number
+  /** Sora-character: generated character ID for use in subsequent Sora tasks */
+  characterId?: string
 }
 
 export type NodeExecutionStatus =
@@ -149,6 +151,7 @@ export interface ResolvedInputs {
   maskUrl?: string
   kieTaskId?: string
   caption?: string
+  characterIdList?: string[]
 }
 
 // ---------------------------------------------------------------------------

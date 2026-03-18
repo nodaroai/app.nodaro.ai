@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Type } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Type, Users } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -30,6 +30,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const edges = useWorkflowStore((s) => s.edges)
   const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -42,6 +43,8 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const provider = nodeData.provider ?? "minimax"
   const credits = useModelCredits(provider, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
+  const isSora = provider === "sora2" || provider === "sora2-pro"
+  const charactersConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "characters").length
   const { zoom } = useCanvasZoom()
   const useFull = zoom >= 0.8
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
@@ -127,7 +130,8 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: '75%', left: '-29px' }, hideHandle: true },
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: '60%', left: '-29px' }, hideHandle: true },
+        ...(isSora ? [{ id: "characters", type: "target" as const, position: Position.Left, customStyle: { top: '80%', left: '-29px' }, hideHandle: true }] : []),
         { id: "video", type: "source", position: Position.Right, customStyle: { top: 'calc(25% - 33px)', right: '-29px' }, hideHandle: true },
       ]}
     >
@@ -255,7 +259,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
     {/* Input handle icon (TYPE 1) */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(75% - 14px)', left: '-29px' }}
+      style={{ top: 'calc(60% - 14px)', left: '-29px' }}
     >
       <Type className="w-3.5 h-3.5 text-white" />
       <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
@@ -265,6 +269,22 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       )}
     </div>
+
+    {/* Characters handle icon (Sora only) */}
+    {isSora && (
+      <div
+        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
+        style={{ top: 'calc(80% - 14px)', left: '-29px' }}
+      >
+        <Users className="w-3.5 h-3.5 text-white" />
+        <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
+        {charactersConnectionCount >= 1 && (
+          <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
+            {charactersConnectionCount}
+          </div>
+        )}
+      </div>
+    )}
 
     {/* Video output handle icon */}
     <div

@@ -3,6 +3,7 @@ export { ToneConfig, StyleGuideConfig, ProviderConfig, SceneCountConfig, Duratio
 export { GenerateScriptConfig, QACheckConfig, ImageToTextConfig } from "./script-configs"
 export { GenerateImageConfig, EditImageConfig, ImageToImageConfig } from "./image-configs"
 export { ImageToVideoConfig, VideoToVideoConfig, MotionTransferConfig, VideoUpscaleConfig, TextToVideoConfig, ExtendVideoConfig, SpeechToVideoConfig, SoraStoryboardConfig } from "./video-configs"
+export { SoraCharacterConfig } from "./sora-configs"
 export { TextToSpeechConfig, TextToAudioConfig, AudioIsolationConfig, TextToDialogueConfig, VoiceChangerConfig, DubbingConfig, VoiceRemixConfig, VoiceDesignConfig, ForcedAlignmentConfig, SunoGenerateConfig, SunoCoverConfig, SunoExtendConfig, SunoLyricsConfig, SunoSeparateConfig, SunoMusicVideoConfig, SunoMashupConfig, SunoReplaceSectionConfig, SunoStyleBoostConfig, SunoAddInstrumentalConfig, SunoAddVocalsConfig, SunoConvertWavConfig, SunoUploadExtendConfig, TranscribeConfig, LipSyncConfig } from "./audio-configs"
 export { GenerateMusicConfig } from "./music-config"
 export { CombineVideosConfig, AddCaptionsConfig, ResizeVideoConfig, SocialMediaFormatConfig, TrimAudioConfig, MixAudioConfig, AdjustVolumeConfig, TrimVideoConfig, SpeedRampConfig, LoopVideoConfig, FadeVideoConfig, TranscodeVideoConfig, ManualEditConfig } from "./processing-configs"

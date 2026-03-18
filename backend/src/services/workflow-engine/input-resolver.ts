@@ -545,6 +545,15 @@ function routeOutput(
     inputs.maskUrl = output
     return
   }
+  if (edge.targetHandle === "characters") {
+    // Aggregate character IDs from sora-character nodes into characterIdList
+    const state = nodeStates[src.id]
+    const characterId = state?.output?.characterId || (src.data.savedCharacterId as string | undefined)
+    if (characterId) {
+      inputs.characterIdList = [...(inputs.characterIdList ?? []), characterId]
+    }
+    return
+  }
 
   // --- List node output mode routing (reads mode from edge data) ---
   if (srcType === "list") {
@@ -713,8 +722,8 @@ function routeOutput(
   if (VIDEO_OUTPUT_NODE_TYPES.has(srcType)) {
     routeVideoOutput(inputs, output, targetType, src.id)
 
-    // Pass through kieTaskId for VEO/Runway extend and upscale nodes
-    if (targetType === "extend-video" || targetType === "video-upscale") {
+    // Pass through kieTaskId for VEO/Runway extend, upscale, and sora-character nodes
+    if (targetType === "extend-video" || targetType === "video-upscale" || targetType === "sora-character") {
       const state = nodeStates[src.id]
       if (state?.output?.kieTaskId) {
         inputs.kieTaskId = state.output.kieTaskId

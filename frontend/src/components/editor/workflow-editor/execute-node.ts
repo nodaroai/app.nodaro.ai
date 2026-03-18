@@ -29,6 +29,7 @@ import {
   lipSyncApi,
   speechToVideoApi,
   soraStoryboardApi,
+  extractSoraCharacter,
   motionTransferApi,
   videoUpscaleApi,
   extendVideo,
@@ -96,6 +97,7 @@ import type {
   LipSyncData,
   SpeechToVideoData,
   SoraStoryboardData,
+  SoraCharacterData,
   MotionTransferData,
   VideoUpscaleData,
   ExtendVideoData,
@@ -689,6 +691,7 @@ export function executeNode(
       i2vData.seed,
       i2vData.cameraFixed,
       i2vData.removeWatermark,
+      inputs.characterIdList || (i2vData as unknown as Record<string, unknown>).characterIdList as string[] | undefined,
     );
   }
 
@@ -763,7 +766,14 @@ export function executeNode(
           ...(t2vRemoveWm && { removeWatermark: t2vRemoveWm }),
           ...(t2vRaw.seed !== undefined && { seed: t2vRaw.seed as number }),
         };
-    return runTextToVideoGeneration(node.id, prompt, ctx, t2vProvider, t2vOptions);
+    return runTextToVideoGeneration(
+      node.id,
+      prompt,
+      ctx,
+      t2vProvider,
+      t2vOptions,
+      inputs.characterIdList || (t2vData as unknown as Record<string, unknown>).characterIdList as string[] | undefined,
+    );
   }
 
   if (node.type === "text-to-speech") {
@@ -2101,12 +2111,159 @@ export function executeNode(
           nFrames: sbData.nFrames || "10",
           imageUrls: imageUrls.length > 0 ? imageUrls.slice(0, 5) : undefined,
           aspectRatio: sbData.aspectRatio || "landscape",
+          characterIdList: inputs.characterIdList || (sbData as unknown as Record<string, unknown>).characterIdList as string[] | undefined,
           userId: ctx.userId,
         }),
       "generatedVideoUrl",
       "Sora Storyboard",
       ctx,
     );
+  }
+
+  if (node.type === "sora-character") {
+    const scData = node.data as SoraCharacterData;
+
+    if (!scData.characterPrompt?.trim()) {
+      toast.error(`Node "${scData.label}": no character prompt provided`);
+      return Promise.reject(new Error("No character prompt"));
+    }
+
+    const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
+    const kieTaskId = resolveUpstreamKieTaskId(node.id, scData as unknown as Record<string, unknown>) ?? inputs.kieTaskId;
+
+    if (scData.mode === "sora-task" && !kieTaskId) {
+      toast.error(`Node "${scData.label}": no upstream kieTaskId found. Connect a Sora Storyboard node.`);
+      return Promise.reject(new Error("No kieTaskId"));
+    }
+    if (scData.mode === "video" && !videoUrl) {
+      toast.error(`Node "${scData.label}": no video input found. Connect a video node.`);
+      return Promise.reject(new Error("No video input"));
+    }
+
+    const { updateNodeData } = useWorkflowStore.getState();
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      generatedCharacterId: undefined,
+      errorMessage: undefined,
+      currentJobId: undefined,
+      currentJobProgress: 0,
+    });
+
+    return new Promise<void>((resolve, reject) => {
+      extractSoraCharacter({
+        mode: scData.mode,
+        characterPrompt: scData.characterPrompt,
+        characterName: scData.characterName || undefined,
+        timestamps: scData.timestamps || undefined,
+        safetyInstruction: scData.safetyInstruction || undefined,
+        videoUrl: scData.mode === "video" ? videoUrl : undefined,
+        kieTaskId: scData.mode === "sora-task" ? kieTaskId : undefined,
+        userId: ctx.userId,
+      })
+        .then(({ jobId }) => {
+          toast.info("Sora Character extraction started", { description: `Job ID: ${jobId}` });
+          updateNodeData(node.id, { currentJobId: jobId });
+
+          let pollFailures = 0;
+          const poll = ctx.trackInterval(
+            setInterval(async () => {
+              if (ctx.isWorkflowStale()) {
+                ctx.untrackInterval(poll);
+                reject(new WorkflowStaleError());
+                return;
+              }
+              try {
+                const job = await getJobStatus(jobId);
+                pollFailures = 0;
+                if (job.status === "processing" && job.progress != null) {
+                  updateNodeData(node.id, { currentJobProgress: job.progress });
+                }
+
+                if (job.status === "completed") {
+                  ctx.untrackInterval(poll);
+                  const characterId = (job.output_data as Record<string, unknown>)?.characterId as string | undefined;
+                  if (!characterId) {
+                    const errMsg = "No characterId returned from job";
+                    updateNodeData(node.id, {
+                      executionStatus: "failed",
+                      errorMessage: errMsg,
+                      currentJobId: undefined,
+                      currentJobProgress: undefined,
+                    });
+                    toast.error("Sora Character failed", { description: errMsg });
+                    reject(new Error(errMsg));
+                    return;
+                  }
+                  updateNodeData(node.id, {
+                    executionStatus: "completed",
+                    generatedCharacterId: characterId,
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  toast.success("Sora Character extraction complete");
+                  resolve();
+                } else if (job.status === "failed") {
+                  ctx.untrackInterval(poll);
+                  const errMsg = job.error_message ?? "Sora Character extraction failed";
+                  updateNodeData(node.id, {
+                    executionStatus: "failed",
+                    errorMessage: errMsg,
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  toast.error("Sora Character failed", { description: errMsg });
+                  reject(new Error(errMsg));
+                }
+              } catch (err) {
+                pollFailures++;
+                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                  ctx.untrackInterval(poll);
+                  // Final verification: make one last check before giving up
+                  try {
+                    const finalCheck = await getJobStatus(jobId);
+                    if (finalCheck.status === "completed") {
+                      const characterId = (finalCheck.output_data as Record<string, unknown>)?.characterId as string | undefined;
+                      if (characterId) {
+                        updateNodeData(node.id, {
+                          executionStatus: "completed",
+                          generatedCharacterId: characterId,
+                          currentJobId: undefined,
+                          currentJobProgress: undefined,
+                        });
+                        toast.success("Sora Character extraction complete");
+                        resolve();
+                        return;
+                      }
+                    }
+                  } catch {
+                    // Final check also failed — truly give up
+                  }
+                  updateNodeData(node.id, {
+                    executionStatus: "failed",
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  toast.error("Failed to check Sora Character status");
+                  reject(err);
+                }
+              }
+            }, 2000),
+          );
+        })
+        .catch((err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            currentJobId: undefined,
+            currentJobProgress: undefined,
+          });
+          if (!checkStorageError(err, ctx)) {
+            toast.error("Failed to start Sora Character extraction", {
+              description: err instanceof Error ? err.message : "Unknown error",
+            });
+          }
+          reject(err);
+        });
+    });
   }
 
   if (node.type === "motion-transfer") {

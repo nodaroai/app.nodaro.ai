@@ -21,6 +21,7 @@ export type ProviderCapability =
   | "audio-isolation" // audio -> isolated voice audio
   | "transcription" // audio -> text
   | "dialogue" // multi-speaker text -> dialogue audio
+  | "character" // video/task -> reusable character ID
 
 // Progress callback for long-running tasks
 export type ProgressCallback = (progress: number) => Promise<void>
@@ -31,6 +32,7 @@ export interface ProviderOptions {
   mode?: string   // Provider-specific quality mode (e.g. "pro" | "std" for Kling 3.0)
   sound?: boolean // Enable sound effects (Kling 2.6 / 3.0)
   negativePrompt?: string // Negative prompt (Kling Turbo / Kling Master)
+  motionPrompt?: string   // Motion prompt — replaces prompt in single-shot Kling 3.0
   cfgScale?: number       // CFG scale 0-1 (Kling Turbo / Kling Master)
   aspectRatio?: string
   multiShots?: boolean
@@ -46,6 +48,7 @@ export interface ProviderOptions {
   acceleration?: boolean   // Wan Turbo acceleration
   enablePromptExpansion?: boolean // Wan Turbo prompt expansion
   promptOptimizer?: boolean // Hailuo prompt optimizer
+  characterIdList?: string[] // Sora 2 / Sora 2 Pro character IDs (max 5)
 }
 
 // Each provider implements the capabilities it supports
