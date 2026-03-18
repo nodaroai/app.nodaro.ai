@@ -102,6 +102,7 @@ import { socialPublishRoutes } from "./routes/social-publish.js"
 import { publishedAppsRoutes } from "./routes/published-apps.js"
 import { workflowTemplatesRoutes } from "./routes/workflow-templates.js"
 import { appRunnerRoutes } from "./routes/app-runner.js"
+import { ogTagsRoutes } from "./routes/og-tags.js"
 import { appAnalyticsRoutes } from "./routes/app-analytics.js"
 import { embedRoutes } from "./routes/embed.js"
 import { qaCheckRoutes } from "./routes/qa-check.js"
@@ -238,6 +239,7 @@ export async function buildApp() {
   await app.register(publishedAppsRoutes)
   await app.register(workflowTemplatesRoutes)
   await app.register(appRunnerRoutes)
+  await app.register(ogTagsRoutes)
   await app.register(appAnalyticsRoutes)
   await app.register(embedRoutes)
   await app.register(qaCheckRoutes)

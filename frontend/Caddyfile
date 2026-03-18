@@ -17,6 +17,17 @@
 			flush_interval -1
 		}
 	}
+
+	# OG meta tags for social sharing bots (Telegram, WhatsApp, Twitter, Facebook, etc.)
+	@social_bot {
+		path /app/*
+		header_regexp User-Agent (?i)(telegrambot|whatsapp|twitterbot|facebookexternalhit|linkedinbot|slackbot|discordbot|pinterestbot|applebot|googlebot|bingbot)
+	}
+	handle @social_bot {
+		rewrite * /og{uri}
+		reverse_proxy 127.0.0.1:9000
+	}
+
 	# Bust stale CDN cache for favicon.ico by rewriting to a versioned file
 	rewrite /favicon.ico /favicon-v8.ico
 	handle {

@@ -87,6 +87,7 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { method: "GET", path: "/v1/social/callback", prefix: true },
   { method: "GET", path: "/v1/present/", prefix: true },
   { method: "GET", path: "/v1/app/", prefix: true },
+  { method: "GET", path: "/og/app/", prefix: true },
   { method: "GET", path: "/v1/embed/", prefix: true },
   { method: "GET", path: "/v1/apps/browse" },
   { method: "GET", path: "/v1/templates/browse" },
