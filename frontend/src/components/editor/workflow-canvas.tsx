@@ -428,6 +428,14 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
       setConnectingFromType(null)
 
+      // DEBUG: remove after fixing
+      console.log("[edge-drop] handleConnectEnd fired", {
+        toHandle: connectionState.toHandle,
+        fromHandle: connectionState.fromHandle,
+        fromNode: connectionState.fromNode?.id,
+        keys: Object.keys(connectionState),
+      })
+
       // If connection landed on a valid handle, normal flow — do nothing extra
       if (connectionState.toHandle) return
 
