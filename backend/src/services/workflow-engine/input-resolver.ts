@@ -546,6 +546,16 @@ function routeOutput(
     return
   }
 
+  // --- Generate-script → sora-storyboard: pass script data for auto-fill ---
+  if (srcType === "generate-script" && targetType === "sora-storyboard") {
+    inputs.prompt = output
+    const state = nodeStates[src.id]
+    if (state?.output?.script) {
+      inputs.scriptData = state.output.script
+    }
+    return
+  }
+
   // --- Text/prompt sources ---
   if (TEXT_SOURCE_NODE_TYPES.has(srcType)) {
     inputs.prompt = output
@@ -554,7 +564,7 @@ function routeOutput(
 
   // --- Upload image ---
   if (srcType === "upload-image") {
-    if (targetType === "generate-image") {
+    if (targetType === "generate-image" || targetType === "sora-storyboard") {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else {
       inputs.imageUrl = output
@@ -564,7 +574,7 @@ function routeOutput(
 
   // --- Entity nodes → reference images (or imageUrl for lip-sync) ---
   if (ENTITY_NODE_TYPES.has(srcType)) {
-    if (targetType === "lip-sync" || targetType === "speech-to-video" || targetType === "sora-storyboard") {
+    if (targetType === "lip-sync" || targetType === "speech-to-video") {
       inputs.imageUrl = output
     } else {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]

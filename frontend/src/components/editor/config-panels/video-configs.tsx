@@ -21,7 +21,8 @@ import {
   type ProviderCategory,
 } from "@/lib/providers-config"
 import { Button } from "@/components/ui/button"
-import { X, Plus } from "lucide-react"
+import { X, Plus, Wand2 } from "lucide-react"
+import { toast } from "sonner"
 import type {
   ImageToVideoData,
   VideoToVideoData,
@@ -31,6 +32,8 @@ import type {
   ExtendVideoData,
   SpeechToVideoData,
   SoraStoryboardData,
+  GeneratedScript,
+  GeneratedScriptResult,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
@@ -1199,11 +1202,53 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
 }
 
 
-export function SoraStoryboardConfig({ data, onUpdate }: ConfigProps<SoraStoryboardData>) {
+export function SoraStoryboardConfig({ data, onUpdate, sources }: ConfigProps<SoraStoryboardData>) {
   const shots = data.shots ?? [{ scene: "", duration: 5 }]
+
+  // Find connected generate-script source for "Fill from Script" button
+  const scriptSource = sources.find((s) => s.type === "generate-script")
+  const connectedScript = useMemo(() => {
+    if (!scriptSource?.nodeData) return undefined
+    const sd = scriptSource.nodeData as Record<string, unknown>
+    const results = sd.generatedResults as GeneratedScriptResult[] | undefined
+    const activeIndex = (sd.activeResultIndex as number | undefined) ?? 0
+    return results?.[activeIndex]?.script ?? (sd.generatedScript as GeneratedScript | undefined)
+  }, [scriptSource?.nodeData])
+
+  const fillFromScript = useCallback(() => {
+    if (!connectedScript?.scenes?.length) return
+    const newShots = connectedScript.scenes.slice(0, 10).map((scene) => ({
+      scene: scene.visualDescription ?? "",
+      duration: Math.max(1, Math.min(10, scene.durationHint ?? 5)),
+    }))
+    onUpdate({ shots: newShots })
+    toast.success(`Filled ${newShots.length} shots from script`)
+  }, [connectedScript, onUpdate])
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Connected Reference Images */}
+      <ConnectedMediaList
+        sources={sources}
+        mediaOrder={data.imageOrder ?? []}
+        onUpdateOrder={(order) => onUpdate({ imageOrder: order })}
+        mediaType="image"
+        emptyMessage="Connect image nodes for reference images"
+      />
+
+      {/* Fill from Script */}
+      {connectedScript && connectedScript.scenes.length > 0 && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full h-8 text-xs gap-1.5"
+          onClick={fillFromScript}
+        >
+          <Wand2 className="w-3.5 h-3.5" />
+          Fill {Math.min(connectedScript.scenes.length, 10)} Shots from Script
+        </Button>
+      )}
+
       {/* Frames / Duration */}
       <div className="flex flex-col gap-1.5">
         <Label className="text-xs text-muted-foreground">Duration (n_frames)</Label>

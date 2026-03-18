@@ -61,6 +61,7 @@ export interface FrontendResolvedInputs {
     sourceType?: "audio" | "video";
   }[];
   referenceImageUrls?: string[];
+  scriptData?: unknown;
   sunoTrackId?: string;
   sunoTaskId?: string;
   uploadUrl?: string;
@@ -323,7 +324,7 @@ export function resolveNodeInputs(
         }
       }
     } else if (src.type === "upload-image") {
-      if (node.type === "generate-image") {
+      if (node.type === "generate-image" || node.type === "sora-storyboard") {
         inputs.referenceImageUrls = [
           ...(inputs.referenceImageUrls ?? []),
           output,
@@ -337,8 +338,13 @@ export function resolveNodeInputs(
       src.type === "object" ||
       src.type === "location"
     ) {
-      if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "sora-storyboard") {
+      if (node.type === "lip-sync" || node.type === "speech-to-video") {
         inputs.imageUrl = output;
+      } else if (node.type === "sora-storyboard") {
+        inputs.referenceImageUrls = [
+          ...(inputs.referenceImageUrls ?? []),
+          output,
+        ];
       } else {
         inputs.referenceImageUrls = [
           ...(inputs.referenceImageUrls ?? []),
@@ -599,6 +605,16 @@ export function resolveNodeInputs(
       inputs.prompt = output;
     } else if (src.type === "generate-script") {
       inputs.prompt = output;
+      // Pass full script data for sora-storyboard auto-fill
+      if (node.type === "sora-storyboard") {
+        const scriptData = src.data as Record<string, unknown>;
+        const scriptResults = scriptData.generatedResults as Array<{ script: unknown }> | undefined;
+        const activeIndex = (scriptData.activeResultIndex as number | undefined) ?? 0;
+        const script = scriptResults?.[activeIndex]?.script ?? scriptData.generatedScript;
+        if (script) {
+          inputs.scriptData = script;
+        }
+      }
     } else if (src.type === "webhook-trigger") {
       // Route by param type using sourceHandle (matches backend)
       const srcData = src.data as Record<string, unknown>;

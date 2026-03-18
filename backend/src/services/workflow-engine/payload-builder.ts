@@ -723,15 +723,28 @@ export function buildPayload(
       const sbImageUrls: string[] = []
       if (resolvedInputs.imageUrl) sbImageUrls.push(resolvedInputs.imageUrl)
       if (resolvedInputs.referenceImageUrls) sbImageUrls.push(...resolvedInputs.referenceImageUrls)
+
+      // Auto-fill shots from connected generate-script if shots are empty
+      let sbShots = data.shots as Array<{ scene: string; duration: number }> | undefined
+      if (resolvedInputs.scriptData && (!sbShots || !sbShots.some((s: { scene: string }) => s.scene?.trim()?.length > 0))) {
+        const script = resolvedInputs.scriptData as { scenes?: Array<{ visualDescription?: string; durationHint?: number }> }
+        if (script.scenes && script.scenes.length > 0) {
+          sbShots = script.scenes.slice(0, 10).map((scene) => ({
+            scene: scene.visualDescription ?? "",
+            duration: Math.max(1, Math.min(10, scene.durationHint ?? 5)),
+          }))
+        }
+      }
+
       return {
         jobName: "sora-storyboard",
         queueName: "video-generation",
         modelIdentifier: sbModelId,
         payload: {
           jobId,
-          shots: data.shots,
+          shots: sbShots ?? data.shots,
           nFrames: sbNFrames,
-          imageUrls: sbImageUrls.length > 0 ? sbImageUrls : (data.imageUrls ?? undefined),
+          imageUrls: sbImageUrls.length > 0 ? sbImageUrls.slice(0, 5) : (data.imageUrls ?? undefined),
           aspectRatio: data.aspectRatio ?? "landscape",
           usageLogId,
         },

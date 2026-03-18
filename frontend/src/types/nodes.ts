@@ -679,6 +679,7 @@ export type SoraStoryboardData = {
   shots: SoraStoryboardShot[]
   nFrames: "10" | "15" | "25"
   aspectRatio: "portrait" | "landscape"
+  imageOrder?: string[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
