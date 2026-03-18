@@ -586,7 +586,11 @@ export function MobileAppShell({
         userId={user?.id}
         userEmail={user?.email ?? undefined}
         onSignIn={handleSignIn}
-        onSignOut={signOut}
+        onSignOut={async () => {
+          const supabase = (await import("@/lib/supabase")).createClient()
+          await supabase.auth.signOut()
+          // Stay on the app page instead of redirecting to /login
+        }}
         onGetCredits={() => setShowGetCreditsModal(true)}
         onNewRun={() => {
           if (!user) {
