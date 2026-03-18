@@ -126,6 +126,11 @@ export const queryKeys = {
     list: () => ["api-tokens", "list"] as const,
   },
 
+  // Tutorials
+  tutorials: {
+    all: ["tutorials"] as const,
+  },
+
   // Admin
   admin: {
     all: ["admin"] as const,
@@ -152,5 +157,6 @@ export const queryKeys = {
     kieCredits: (days: number) =>
       ["admin", "kie-credits", days] as const,
     llmModels: () => ["admin", "llm-models"] as const,
+    tutorials: () => ["admin", "tutorials"] as const,
   },
 } as const

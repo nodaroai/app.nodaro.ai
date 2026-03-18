@@ -17,6 +17,7 @@ import { createClient } from "@/lib/supabase"
 import { browseApps, browseTemplates, type TemplateBrowseCard } from "@/lib/api"
 import { useTemplateFavorites, useToggleTemplateFavoriteMutation } from "@/hooks/queries/use-template-marketplace-queries"
 import { TemplatePreviewModal } from "@/components/templates/template-preview-modal"
+import { TutorialsTab } from "@/components/dashboard/tutorials-tab"
 
 interface WorkflowSearchResult extends WorkflowMeta {
   readonly projectName: string
@@ -331,13 +332,24 @@ export default function ProjectsPage() {
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => navigate("/apps")}
-            className="flex items-center gap-1 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            See all apps <ArrowRight className="h-3 w-3" />
-          </button>
+          {activeTab === "apps" && (
+            <button
+              type="button"
+              onClick={() => navigate("/apps")}
+              className="flex items-center gap-1 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              See all apps <ArrowRight className="h-3 w-3" />
+            </button>
+          )}
+          {activeTab === "templates" && (
+            <button
+              type="button"
+              onClick={() => navigate("/templates")}
+              className="flex items-center gap-1 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              See all templates <ArrowRight className="h-3 w-3" />
+            </button>
+          )}
         </div>
 
         {/* Tab content */}
@@ -447,11 +459,7 @@ export default function ProjectsPage() {
         )}
 
         {activeTab === "tutorials" && (
-          <div className="text-center py-16 text-muted-foreground">
-            <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm font-medium">Tutorials coming soon</p>
-            <p className="text-xs mt-1 opacity-70">Step-by-step guides for building workflows.</p>
-          </div>
+          <TutorialsTab />
         )}
       </div>
 
