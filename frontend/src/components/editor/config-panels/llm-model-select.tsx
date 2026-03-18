@@ -1,8 +1,6 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { LLM_MODELS, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier } from "@nodaro-shared/llm-models"
+import { LLM_MODELS, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
 import type { LlmTier, LlmFeature } from "@nodaro-shared/llm-models"
-import { useModelCredits } from "@/hooks/use-model-credits"
-import { hasCredits } from "@/lib/edition"
 
 const TIER_LABELS: Record<LlmTier, string> = {
   economy: "Economy",
@@ -22,26 +20,6 @@ interface LlmModelSelectProps {
   onChange: (modelId: string) => void
 }
 
-function ModelOption({ modelId, displayName, tier, feature }: { modelId: string; displayName: string; tier: LlmTier; feature: LlmFeature }) {
-  const creditId = buildLlmCreditIdentifier(feature, modelId)
-  const cost = useModelCredits(creditId, 0)
-  const showCredits = hasCredits()
-
-  return (
-    <SelectItem key={modelId} value={modelId} className="text-xs">
-      <span className="flex items-center gap-2">
-        <span>{displayName}</span>
-        <span className={`text-[10px] font-medium ${TIER_COLORS[tier]}`}>
-          {TIER_LABELS[tier]}
-        </span>
-        {showCredits && cost > 0 && (
-          <span className="text-[10px] text-muted-foreground">{cost} CR</span>
-        )}
-      </span>
-    </SelectItem>
-  )
-}
-
 export function LlmModelSelect({ feature, value, onChange }: LlmModelSelectProps) {
   const defaultModel = LLM_FEATURE_DEFAULTS[feature]
   const currentValue = value || defaultModel
@@ -55,13 +33,14 @@ export function LlmModelSelect({ feature, value, onChange }: LlmModelSelectProps
         </SelectTrigger>
         <SelectContent>
           {LLM_MODELS.map((model) => (
-            <ModelOption
-              key={model.id}
-              modelId={model.id}
-              displayName={model.displayName}
-              tier={model.tier}
-              feature={feature}
-            />
+            <SelectItem key={model.id} value={model.id} className="text-xs">
+              <span className="flex items-center gap-2">
+                <span>{model.displayName}</span>
+                <span className={`text-[10px] font-medium ${TIER_COLORS[model.tier]}`}>
+                  {TIER_LABELS[model.tier]}
+                </span>
+              </span>
+            </SelectItem>
           ))}
         </SelectContent>
       </Select>
