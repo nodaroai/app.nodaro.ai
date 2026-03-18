@@ -9,7 +9,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { useSidebar } from "@/components/layout/sidebar-context"
 
 interface CanvasControlsProps {
   readonly showMiniMap: boolean
@@ -72,14 +71,11 @@ function ControlButton({ icon, label, onClick, active }: ControlButtonProps) {
 
 export function CanvasControls({ showMiniMap, onToggleMiniMap, snapEnabled, onToggleSnap, alignmentEnabled, onToggleAlignment, isMobile }: CanvasControlsProps) {
   const { fitView, zoomIn, zoomOut } = useReactFlow()
-  const { sidebarWidth } = useSidebar()
-  // Position to the right of the sidebar + 12px gap (desktop), or bottom-right (mobile)
-  const leftPosition = isMobile ? undefined : sidebarWidth + 12
 
   return (
     <div
       className={cn(
-        "absolute bottom-4 z-10",
+        "absolute bottom-4 right-4 z-10",
         "flex items-center gap-1 p-1",
         "rounded-xl backdrop-blur-md",
         "transition-all duration-300 ease-in-out",
@@ -87,10 +83,7 @@ export function CanvasControls({ showMiniMap, onToggleMiniMap, snapEnabled, onTo
         "bg-white/80 border border-[#E2E8F0] shadow-sm",
         // Dark mode
         "dark:bg-[#1E1E1E]/90 dark:border-[#2D2D2D] dark:shadow-xl",
-        // Mobile: bottom-right
-        isMobile && "right-4",
       )}
-      style={leftPosition != null ? { left: `${leftPosition}px` } : undefined}
     >
       <ControlButton
         icon={<Maximize2 className="w-4 h-4" />}

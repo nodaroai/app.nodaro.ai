@@ -286,11 +286,12 @@ async function streamKieChatCompletions(
 
 async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/claude/v1/messages`
-  const body = buildMessagesBody(model, req)
+  // KIE defaults stream to true for Claude — must explicitly set false
+  const body = { ...buildMessagesBody(model, req), stream: false }
 
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}`, "anthropic-version": "2023-06-01" },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   })
@@ -321,7 +322,7 @@ async function streamKieMessages(
 
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}`, "anthropic-version": "2023-06-01" },
     body: JSON.stringify(body),
     signal: signal ?? AbortSignal.timeout(LLM_TIMEOUT_MS),
   })
@@ -342,6 +343,7 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
     input: buildResponsesInput(req),
+    stream: false,
   }
   if (req.maxTokens) body.max_output_tokens = req.maxTokens
 
