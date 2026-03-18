@@ -598,7 +598,9 @@ export function MobileAppShell({
           viewMode === "gallery" ? (
             <GalleryView {...viewProps} />
           ) : viewMode === "fullscreen" ? (
-            <FullscreenView {...viewProps} onBack={handleExitViewOverride} />
+            <div onTouchStart={handleOutputTouchStart} onTouchEnd={handleOutputTouchEnd}>
+              <FullscreenView {...viewProps} onBack={handleExitViewOverride} />
+            </div>
           ) : viewMode === "compare" ? (
             <CompareView
               {...viewProps}
@@ -630,12 +632,8 @@ export function MobileAppShell({
             )}
           </div>
         ) : activeTab === "outputs" ? (
-          // Outputs tab — swipe up/down to navigate runs
-          <div
-            className="space-y-4 p-4"
-            onTouchStart={handleOutputTouchStart}
-            onTouchEnd={handleOutputTouchEnd}
-          >
+          // Outputs tab
+          <div className="space-y-4 p-4">
             {orderedOutputNodes.length === 0 && !isRunning ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Inbox className="h-8 w-8 mb-3 opacity-40" />
