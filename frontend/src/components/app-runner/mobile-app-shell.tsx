@@ -150,6 +150,37 @@ export function MobileAppShell({
   const scrollPositions = useRef<Record<string, number>>({ inputs: 0, outputs: 0, runs: 0 })
   const contentRef = useRef<HTMLDivElement>(null)
 
+  // ---- Swipe between runs on outputs tab ----
+  const touchStartY = useRef<number | null>(null)
+  const swipeHandled = useRef(false)
+
+  const handleOutputTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+    swipeHandled.current = false
+  }, [])
+
+  const handleOutputTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartY.current === null || swipeHandled.current) return
+    const deltaY = e.changedTouches[0].clientY - touchStartY.current
+    touchStartY.current = null
+    if (Math.abs(deltaY) < 80) return // threshold
+
+    const slots = runSlots.slots
+    if (slots.length < 2) return
+    const currentIdx = slots.findIndex((s) => s.id === runSlots.activeSlotId)
+    if (currentIdx === -1) return
+
+    if (deltaY > 0 && currentIdx > 0) {
+      // Swipe down → previous run
+      swipeHandled.current = true
+      runSlots.handleSelectSlot(slots[currentIdx - 1].id)
+    } else if (deltaY < 0 && currentIdx < slots.length - 1) {
+      // Swipe up → next run
+      swipeHandled.current = true
+      runSlots.handleSelectSlot(slots[currentIdx + 1].id)
+    }
+  }, [runSlots])
+
   // ---- View mode (URL-synced) ----
   const urlViewMode = searchParams.get("view") as PresentationViewMode | null
   const allowedModes = settings.shareAllowedModes ?? ALL_VIEW_MODES
@@ -599,8 +630,12 @@ export function MobileAppShell({
             )}
           </div>
         ) : activeTab === "outputs" ? (
-          // Outputs tab
-          <div className="space-y-4 p-4">
+          // Outputs tab — swipe up/down to navigate runs
+          <div
+            className="space-y-4 p-4"
+            onTouchStart={handleOutputTouchStart}
+            onTouchEnd={handleOutputTouchEnd}
+          >
             {orderedOutputNodes.length === 0 && !isRunning ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Inbox className="h-8 w-8 mb-3 opacity-40" />
