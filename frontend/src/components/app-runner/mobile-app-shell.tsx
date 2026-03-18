@@ -371,8 +371,9 @@ export function MobileAppShell({
   // ---- Run click ----
   const handleRunClick = useCallback(() => {
     if (!user) {
-      localStorage.setItem(AUTH_REDIRECT_KEY, window.location.pathname + window.location.search)
-      navigate("/login")
+      const returnUrl = window.location.pathname + window.location.search
+      localStorage.setItem(AUTH_REDIRECT_KEY, returnUrl)
+      navigate(`/login?redirect=${encodeURIComponent(returnUrl)}`)
       return
     }
     presRun()
@@ -459,8 +460,9 @@ export function MobileAppShell({
 
   // ---- Sign-in redirect ----
   const handleSignIn = useCallback(() => {
-    localStorage.setItem(AUTH_REDIRECT_KEY, window.location.pathname + window.location.search)
-    navigate("/login")
+    const returnUrl = window.location.pathname + window.location.search
+    localStorage.setItem(AUTH_REDIRECT_KEY, returnUrl)
+    navigate(`/login?redirect=${encodeURIComponent(returnUrl)}`)
   }, [navigate])
 
   // ---- Render output card (replicate PresentationView logic) ----
@@ -588,9 +590,10 @@ export function MobileAppShell({
         onGetCredits={() => setShowGetCreditsModal(true)}
         onNewRun={() => {
           if (!user) {
-            const url = window.location.pathname + "?newrun=1"
-            localStorage.setItem(AUTH_REDIRECT_KEY, url)
-            navigate("/login")
+            const returnUrl = window.location.pathname + "?newrun=1"
+            localStorage.setItem(AUTH_REDIRECT_KEY, returnUrl)
+            // Also encode in URL as fallback in case localStorage is cleared during OAuth
+            navigate(`/login?redirect=${encodeURIComponent(returnUrl)}`)
             return
           }
           runSlots.handleCreateNew()

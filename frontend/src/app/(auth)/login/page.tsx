@@ -1,8 +1,9 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useSearchParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { useAuth } from "@/hooks/use-auth"
+import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 
 const PENDING_PLAN_KEY = "nodaro_pending_plan"
 
@@ -11,6 +12,14 @@ export default function LoginPage() {
   const [searchParams] = useSearchParams()
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+
+  // Persist redirect param to localStorage (survives Google OAuth round-trip)
+  useEffect(() => {
+    const redirect = searchParams.get("redirect")
+    if (redirect && redirect.startsWith("/") && !redirect.startsWith("//")) {
+      localStorage.setItem(AUTH_REDIRECT_KEY, redirect)
+    }
+  }, [searchParams])
 
   async function handleGoogleSignIn() {
     setPending(true)
