@@ -40,6 +40,22 @@ export default function AppRunnerPage() {
     return () => { reset() }
   }, [slug, loadApp, reset])
 
+  // Clear presentation store immediately on slug change (before new app loads)
+  // This prevents stale images/text from the previous app showing during the fetch
+  useEffect(() => {
+    usePresentationStore.setState({
+      nodes: [],
+      edges: [],
+      inputValues: {},
+      nodeStates: {},
+      executionId: null,
+      executionStatus: "idle",
+      completedNodes: 0,
+      totalNodes: 0,
+      errorMessage: null,
+    })
+  }, [slug])
+
   // Seed presentation store when app loads (structural data only —
   // nodeStates + executionStatus are managed by the auto-select in useRunSlots)
   useEffect(() => {
