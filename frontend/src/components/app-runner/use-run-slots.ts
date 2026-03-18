@@ -8,6 +8,30 @@ import type { RunSlot, RunSlotNodeState } from "./types"
 import { ORIGINAL_SLOT_ID, makeEmptyInputs, makeSnapshotInputs, makeSnapshotNodeStates, toSlotStatus, dbStatusToSlotStatus } from "./types"
 import { isMediaUrl } from "./types"
 
+/** Reset presentation store to idle state with given inputs */
+function resetPresentationToIdle(inputValues: Record<string, Record<string, unknown>>) {
+  usePresentationStore.setState({
+    inputValues,
+    nodeStates: {},
+    executionStatus: "idle",
+    completedNodes: 0,
+    totalNodes: 0,
+    errorMessage: null,
+  })
+}
+
+/** Apply a slot's execution state to the presentation store */
+function applySlotToPresentation(slot: Pick<RunSlot, "inputValues" | "nodeStates" | "executionStatus" | "completedNodes" | "totalNodes">) {
+  usePresentationStore.setState({
+    inputValues: slot.inputValues,
+    nodeStates: slot.nodeStates,
+    executionStatus: slot.executionStatus,
+    completedNodes: slot.completedNodes,
+    totalNodes: slot.totalNodes,
+    errorMessage: null,
+  })
+}
+
 interface UseRunSlotsOptions {
   slug: string | undefined
   user: { id: string } | null
@@ -96,6 +120,17 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
   // Track whether initial params have been applied
   const initialAppliedRef = useRef(false)
 
+  // Reset local state when slug changes (prevents stale slots from previous app)
+  const prevSlugRef = useRef(slug)
+  useEffect(() => {
+    if (prevSlugRef.current === slug) return
+    prevSlugRef.current = slug
+    setSlots([])
+    setActiveSlotId(null)
+    setRunsLoaded(false)
+    initialAppliedRef.current = false
+  }, [slug])
+
   // Auto-open sidebar on desktop + apply initial run/sidebar params
   // Wait for presNodes to be seeded (otherwise originalSlot is built from empty nodes)
   useEffect(() => {
@@ -109,13 +144,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     if (target) {
       // Apply slot data directly (handleSelectSlot checks activeSlotId which is null)
       setActiveSlotId(target.id)
-      usePresentationStore.setState({
-        inputValues: target.inputValues,
-        nodeStates: target.nodeStates,
-        executionStatus: target.executionStatus,
-        completedNodes: target.completedNodes,
-        totalNodes: target.totalNodes,
-      })
+      applySlotToPresentation(target)
       useAppRunnerStore.setState({
         activeRunId: target.id,
         executionId: target.executionId ?? null,
@@ -266,13 +295,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         setSlots((prev) => [slot, ...prev])
         setActiveSlotId(slot.id)
         newRun()
-        usePresentationStore.setState({
-          inputValues: emptyInputs,
-          nodeStates: {},
-          executionStatus: "idle",
-          completedNodes: 0,
-          totalNodes: 0,
-        })
+        resetPresentationToIdle(emptyInputs)
         return
       } catch {
         // Fallback to local slot
@@ -297,13 +320,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     setSlots((prev) => [slot, ...prev])
     setActiveSlotId(slot.id)
     newRun()
-    usePresentationStore.setState({
-      inputValues: emptyInputs,
-      nodeStates: {},
-      executionStatus: "idle",
-      completedNodes: 0,
-      totalNodes: 0,
-    })
+    resetPresentationToIdle(emptyInputs)
   }, [saveCurrentSlotInputs, inputNodes, newRun, slug, user, selectedVersion, latestVersion, persistRuns])
 
   // Clear — reset current slot's inputs
@@ -316,13 +333,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         : s,
     ))
     newRun()
-    usePresentationStore.setState({
-      inputValues: emptyInputs,
-      nodeStates: {},
-      executionStatus: "idle",
-      completedNodes: 0,
-      totalNodes: 0,
-    })
+    resetPresentationToIdle(emptyInputs)
     // Persist cleared inputs to DB
     if (slug && persistRuns) {
       updateAppRunInputs(slug, activeSlotId, emptyInputs).catch(() => {})
@@ -338,13 +349,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         : s,
     ))
     newRun()
-    usePresentationStore.setState({
-      inputValues: activeSlot?.inputValues ?? {},
-      nodeStates: {},
-      executionStatus: "idle",
-      completedNodes: 0,
-      totalNodes: 0,
-    })
+    resetPresentationToIdle(activeSlot?.inputValues ?? {})
   }, [activeSlotId, activeSlot?.inputValues, newRun])
 
   // Duplicate — create a new draft with same inputs as given slot
@@ -374,13 +379,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         setSlots((prev) => [newSlot, ...prev])
         setActiveSlotId(newSlot.id)
         newRun()
-        usePresentationStore.setState({
-          inputValues: newSlot.inputValues,
-          nodeStates: {},
-          executionStatus: "idle",
-          completedNodes: 0,
-          totalNodes: 0,
-        })
+        resetPresentationToIdle(newSlot.inputValues)
         return
       } catch {
         // silently fail
@@ -405,13 +404,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     setSlots((prev) => [newSlot, ...prev])
     setActiveSlotId(newSlot.id)
     newRun()
-    usePresentationStore.setState({
-      inputValues: newSlot.inputValues,
-      nodeStates: {},
-      executionStatus: "idle",
-      completedNodes: 0,
-      totalNodes: 0,
-    })
+    resetPresentationToIdle(newSlot.inputValues)
   }, [allSlots, slug, user, newRun, selectedVersion, latestVersion, persistRuns])
 
   // Header button: "Clear" when idle, "Retry" when failed, "Create New" otherwise
@@ -440,13 +433,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     setActiveSlotId(slotId)
 
     // Apply slot data to presentation store
-    usePresentationStore.setState({
-      inputValues: slot.inputValues,
-      nodeStates: slot.nodeStates,
-      executionStatus: slot.executionStatus,
-      completedNodes: slot.completedNodes,
-      totalNodes: slot.totalNodes,
-    })
+    applySlotToPresentation(slot)
 
     // Set app runner store — changing executionId causes poll guard to
     // discard any in-flight responses from a previous execution
@@ -489,13 +476,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     if (activeSlotId === slotId) {
       setActiveSlotId(null)
       newRun()
-      usePresentationStore.setState({
-        inputValues: {},
-        nodeStates: {},
-        executionStatus: "idle",
-        completedNodes: 0,
-        totalNodes: 0,
-      })
+      resetPresentationToIdle({})
     }
     // Delete from DB
     if (slug && persistRuns) {
