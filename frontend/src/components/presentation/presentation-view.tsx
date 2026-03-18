@@ -94,7 +94,7 @@ interface PresentationViewProps {
 }
 
 export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle, headerLeft }: PresentationViewProps) {
-  const { user, signOut } = useAuth()
+  const { user, signOut: globalSignOut } = useAuth()
   const navigate = useNavigate()
   const [isEditMode, setIsEditMode] = useState(false)
   const [pickerSection, setPickerSection] = useState<"inputs" | "outputs" | null>(null)
@@ -174,6 +174,16 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // Read-only enforcement for shared viewers (not app runner — app runner provides onNewRun)
   const isAppRunner = isFullscreen && !!onNewRun
   const isShareReadOnly = isFullscreen && !!settings.shareReadOnly && !isAppRunner
+
+  // App runner / shared pages: sign out without navigating away
+  const signOut = useCallback(async () => {
+    if (isAppRunner || isFullscreen) {
+      const supabase = createClient()
+      await supabase.auth.signOut()
+    } else {
+      globalSignOut()
+    }
+  }, [isAppRunner, isFullscreen, globalSignOut])
 
   // Credit check for app runner "Get Credits" button (hooks must be unconditional)
   const appRunnerInsufficientCredits = useAppRunnerStore((s) => s.insufficientCredits)
@@ -279,44 +289,37 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const handleRunClick = useCallback(() => {
     if (isFullscreen) {
       if (!user) {
-        const isInIframe = window.parent !== window
-        if (isInIframe) {
-          // Google OAuth blocks loading inside iframes — open login in a popup.
-          // Poll for popup close, then refresh auth state.
-          const w = 500, h = 650
-          const left = window.screenX + (window.outerWidth - w) / 2
-          const top = window.screenY + (window.outerHeight - h) / 2
-          const popup = window.open(
-            `${window.location.origin}/login`,
-            "nodaro-login",
-            `width=${w},height=${h},left=${left},top=${top},popup=1`,
-          )
-          if (popup) {
-            // Listen for session tokens from popup via postMessage.
-            // This is necessary because cross-origin iframes have partitioned
-            // localStorage — the popup's session is invisible to us.
-            const handleAuthMessage = (event: MessageEvent) => {
-              if (event.origin !== window.location.origin) return
-              if (event.data?.type === "nodaro:authComplete" && event.data.access_token) {
-                window.removeEventListener("message", handleAuthMessage)
-                clearInterval(interval)
-                setAuthFromTokens(event.data.access_token, event.data.refresh_token)
-              }
+        // Open login as popup so user stays on the app/share page.
+        // Required for iframes (OAuth blocks inside iframes) and also
+        // better UX for app runner pages (avoids redirect to /projects).
+        const w = 500, h = 650
+        const left = window.screenX + (window.outerWidth - w) / 2
+        const top = window.screenY + (window.outerHeight - h) / 2
+        const popup = window.open(
+          `${window.location.origin}/login`,
+          "nodaro-login",
+          `width=${w},height=${h},left=${left},top=${top},popup=1`,
+        )
+        if (popup) {
+          const handleAuthMessage = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin) return
+            if (event.data?.type === "nodaro:authComplete" && event.data.access_token) {
+              window.removeEventListener("message", handleAuthMessage)
+              clearInterval(interval)
+              setAuthFromTokens(event.data.access_token, event.data.refresh_token)
             }
-            window.addEventListener("message", handleAuthMessage)
-
-            const interval = setInterval(() => {
-              if (popup.closed) {
-                clearInterval(interval)
-                window.removeEventListener("message", handleAuthMessage)
-                // Fallback: try refreshAuth in case message was missed
-                refreshAuth()
-              }
-            }, 500)
           }
+          window.addEventListener("message", handleAuthMessage)
+          const interval = setInterval(() => {
+            if (popup.closed) {
+              clearInterval(interval)
+              window.removeEventListener("message", handleAuthMessage)
+              refreshAuth()
+            }
+          }, 500)
           return
         }
-        // Save current URL so user returns here after login (consumed by auth-callback)
+        // Fallback if popup blocked: redirect
         localStorage.setItem(AUTH_REDIRECT_KEY, window.location.pathname + window.location.search)
         navigate("/login")
         return
