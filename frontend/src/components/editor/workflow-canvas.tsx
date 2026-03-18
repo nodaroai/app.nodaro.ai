@@ -12,6 +12,7 @@ import {
   useStore,
   type NodeMouseHandler,
   type IsValidConnection,
+  type FinalConnectionState,
 } from "@xyflow/react"
 import ELK from "elkjs/lib/elk.bundled.js"
 import { useSearchParams, useNavigate } from "react-router-dom"
@@ -43,6 +44,7 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase"
 import type { WorkflowNode, WorkflowEdge, SceneNodeType } from "@/types/nodes"
+import type { ConnectionContext } from "@/lib/node-compatibility"
 import type { LibraryAsset } from "@/lib/api"
 
 // Source handle → media type label
@@ -309,6 +311,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [showMiniMap, setShowMiniMap] = useState(true)
   const [addNodePopupOpen, setAddNodePopupOpen] = useState(false)
   const [addNodePopupPosition, setAddNodePopupPosition] = useState<{ x: number; y: number } | undefined>(undefined)
+  const [connectionContext, setConnectionContext] = useState<ConnectionContext | null>(null)
   const [searchModalOpen, setSearchModalOpen] = useState(false)
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false)
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false)
@@ -415,9 +418,32 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const handleConnectStart = useCallback((_: unknown, params: { handleType: "source" | "target" | null }) => {
     if (params.handleType) setConnectingFromType(params.handleType)
   }, [])
-  const handleConnectEnd = useCallback(() => {
-    setConnectingFromType(null)
-  }, [])
+  const handleConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+      setConnectingFromType(null)
+
+      // If connection landed on a valid handle, normal flow — do nothing extra
+      if (connectionState.toHandle) return
+
+      // Dropped on empty canvas — open filtered popup
+      const fromHandle = connectionState.fromHandle
+      const fromNode = connectionState.fromNode
+      if (!fromHandle || !fromNode) return
+
+      const clientX = "clientX" in event ? event.clientX : event.changedTouches[0].clientX
+      const clientY = "clientY" in event ? event.clientY : event.changedTouches[0].clientY
+      setAddNodePopupPosition({ x: clientX, y: clientY })
+
+      setConnectionContext({
+        nodeId: fromNode.id,
+        handleId: fromHandle.id ?? "in",
+        direction: (fromHandle.type as "source" | "target") ?? "source",
+        dropPosition: screenToFlowPosition({ x: clientX, y: clientY }),
+      })
+      setAddNodePopupOpen(true)
+    },
+    [screenToFlowPosition],
+  )
   // Click-to-connect (mobile connectOnClick mode)
   const handleClickConnectStart = useCallback((_: unknown, params: { handleType: "source" | "target" | null }) => {
     if (params.handleType) setConnectingFromType(params.handleType)
@@ -574,6 +600,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const handleCloseAddNodePopup = useCallback(() => {
     setAddNodePopupOpen(false)
     setAddNodePopupPosition(undefined)
+    setConnectionContext(null)
   }, [])
   const handleToggleSnap = useCallback(() => {
     setSnapEnabled((prev) => {
@@ -1130,6 +1157,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         onClose={handleCloseAddNodePopup}
         onAddNode={handleAddNode}
         position={addNodePopupPosition}
+        connectionContext={connectionContext}
+        storeAddNode={addNode}
+        storeOnConnect={onConnect}
       />
 
       {/* Search Modal */}

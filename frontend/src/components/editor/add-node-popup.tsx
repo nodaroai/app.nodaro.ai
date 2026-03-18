@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Type,
   List,
@@ -68,18 +68,14 @@ import {
   StickyNote,
   UserRound,
 } from "lucide-react";
+import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 import type { SceneNodeType } from "@/types/nodes";
+import type { ConnectionContext, NodeOption } from "@/lib/node-compatibility";
+import { getCompatibleNodes, resolveTargetHandle } from "@/lib/node-compatibility";
 import { useAuth } from "@/hooks/use-auth";
 
-interface NodeOption {
-  readonly type: SceneNodeType;
-  readonly label: string;
-  readonly icon: React.ReactNode;
-  readonly category: string;
-  readonly group?: string;
-  readonly adminOnly?: boolean;
-}
+const EMPTY_SET = new Set<string>();
 
 export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Input
@@ -840,6 +836,9 @@ interface AddNodePopupProps {
   readonly onClose: () => void;
   readonly onAddNode: (type: SceneNodeType) => void;
   readonly position?: { x: number; y: number };
+  readonly connectionContext?: ConnectionContext | null;
+  readonly storeAddNode?: (type: SceneNodeType, position: { x: number; y: number }) => string | undefined;
+  readonly storeOnConnect?: (connection: Connection) => void;
 }
 
 export function AddNodePopup({
@@ -847,6 +846,9 @@ export function AddNodePopup({
   onClose,
   onAddNode,
   position,
+  connectionContext,
+  storeAddNode,
+  storeOnConnect,
 }: AddNodePopupProps) {
   const { isAdmin } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
@@ -857,30 +859,85 @@ export function AddNodePopup({
 
   const visibleNodes = useMemo(() => NODE_OPTIONS.filter((n) => !n.adminOnly || isAdmin), [isAdmin]);
 
+  // Compatibility filtering for smart edge-drop
+  const { compatibilityNodes, isFiltered } = useMemo(() => {
+    if (!connectionContext) return { compatibilityNodes: null, isFiltered: false };
+    const result = getCompatibleNodes(connectionContext.handleId, connectionContext.direction, visibleNodes);
+    if (result.direct.length === 0 && result.compatible.length === 0) {
+      return { compatibilityNodes: null, isFiltered: false };
+    }
+    return { compatibilityNodes: result, isFiltered: true };
+  }, [connectionContext, visibleNodes]);
+
+  // Handle node selection — auto-connects edge when connectionContext is present
+  const handleNodeSelect = useCallback(
+    (type: SceneNodeType) => {
+      if (connectionContext && storeAddNode && storeOnConnect) {
+        const newNodeId = storeAddNode(type, connectionContext.dropPosition);
+        if (!newNodeId) {
+          onClose();
+          return;
+        }
+        const resolvedHandle = resolveTargetHandle(type, connectionContext.handleId, connectionContext.direction);
+        const connection: Connection =
+          connectionContext.direction === "source"
+            ? {
+                source: connectionContext.nodeId,
+                sourceHandle: connectionContext.handleId,
+                target: newNodeId,
+                targetHandle: resolvedHandle,
+              }
+            : {
+                source: newNodeId,
+                sourceHandle: resolvedHandle,
+                target: connectionContext.nodeId,
+                targetHandle: connectionContext.handleId,
+              };
+        storeOnConnect(connection);
+        onClose();
+      } else {
+        onAddNode(type);
+        onClose();
+      }
+    },
+    [connectionContext, storeAddNode, storeOnConnect, onAddNode, onClose],
+  );
+
+  // Effective node pool: filtered by compatibility when edge-dropping, otherwise all visible
+  const effectivePool = useMemo(() => {
+    if (!isFiltered || !compatibilityNodes) return visibleNodes;
+    return [...compatibilityNodes.direct, ...compatibilityNodes.compatible];
+  }, [visibleNodes, isFiltered, compatibilityNodes]);
+
+  const directMatchTypes = isFiltered && compatibilityNodes
+    ? compatibilityNodes.directTypes
+    : EMPTY_SET;
+
   // Filter nodes based on search query
   const filteredNodes = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const query = searchQuery.toLowerCase();
-    return visibleNodes.filter(
+    return effectivePool.filter(
       (node) =>
         node.label.toLowerCase().includes(query) ||
         node.type.toLowerCase().includes(query) ||
         node.category.toLowerCase().includes(query),
     );
-  }, [searchQuery, visibleNodes]);
+  }, [searchQuery, effectivePool]);
 
   // Get nodes for selected category
   const categoryNodes = useMemo(() => {
     if (!selectedCategory) return [];
-    return visibleNodes.filter((node) => node.category === selectedCategory);
-  }, [selectedCategory, visibleNodes]);
+    return effectivePool.filter((node) => node.category === selectedCategory);
+  }, [selectedCategory, effectivePool]);
 
-  // Items to display (search results, category nodes, or categories)
-  const displayItems = searchQuery.trim()
-    ? filteredNodes
-    : selectedCategory
-      ? categoryNodes
-      : CATEGORIES;
+  // Items to display (search results, compatibility tiers, category nodes, or categories)
+  const displayItems = useMemo(() => {
+    if (searchQuery.trim()) return filteredNodes;
+    if (isFiltered && !selectedCategory) return effectivePool;
+    if (selectedCategory) return categoryNodes;
+    return CATEGORIES;
+  }, [searchQuery, filteredNodes, isFiltered, selectedCategory, effectivePool, categoryNodes]);
 
   // Reset state when opening/closing
   useEffect(() => {
@@ -934,9 +991,7 @@ export function AddNodePopup({
         const item = displayItems[highlightedIndex];
         if (item) {
           if ("type" in item) {
-            // It's a node
-            onAddNode(item.type);
-            onClose();
+            handleNodeSelect(item.type);
           } else {
             // It's a category
             setSelectedCategory(item.id);
@@ -958,7 +1013,7 @@ export function AddNodePopup({
     selectedCategory,
     searchQuery,
     onClose,
-    onAddNode,
+    handleNodeSelect,
   ]);
 
   // Reset highlighted index when items change
@@ -995,6 +1050,15 @@ export function AddNodePopup({
               <ArrowLeft className="w-4 h-4" />
               {selectedCategory}
             </button>
+          ) : isFiltered && connectionContext ? (
+            <div className="flex items-center gap-2">
+              <span>Connect to</span>
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-[#a78bfa]/20 text-[#a78bfa] border border-[#a78bfa]/30">
+                {connectionContext.direction === "source"
+                  ? `${connectionContext.handleId} →`
+                  : `→ ${connectionContext.handleId}`}
+              </span>
+            </div>
           ) : (
             "What do you want to create?"
           )}
@@ -1033,10 +1097,7 @@ export function AddNodePopup({
               <button
                 key={node.type}
                 type="button"
-                onClick={() => {
-                  onAddNode(node.type);
-                  onClose();
-                }}
+                onClick={() => handleNodeSelect(node.type)}
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-2.5 text-left",
                   "transition-colors",
@@ -1060,6 +1121,12 @@ export function AddNodePopup({
                   </div>
                   <div className="text-xs text-[#94A3B8]">{node.category}</div>
                 </div>
+                {directMatchTypes.has(node.type) && (
+                  <span className="ml-auto text-[10px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
+                    direct
+                  </span>
+                )}
               </button>
             ))
           ) : (
@@ -1067,6 +1134,76 @@ export function AddNodePopup({
               No nodes found
             </div>
           )
+        ) : isFiltered && compatibilityNodes && !selectedCategory ? (
+          // Smart edge-drop: show direct matches then compatible
+          <>
+            {compatibilityNodes.direct.length > 0 && (
+              <>
+                <div className="text-[10px] uppercase tracking-wider text-[#4ade80]/80 font-medium px-4 pt-2 pb-1 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
+                  Direct Match
+                </div>
+                {compatibilityNodes.direct.map((node, index) => (
+                  <button
+                    key={node.type}
+                    type="button"
+                    onClick={() => handleNodeSelect(node.type)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
+                      index === highlightedIndex
+                        ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
+                        : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
+                    )}
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                  >
+                    <span className={cn("text-[#64748B] dark:text-[#94A3B8]", CATEGORY_COLORS[node.category])}>
+                      {node.icon}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-[#1E293B] dark:text-white truncate">{node.label}</div>
+                      <div className="text-xs text-[#94A3B8]">{node.category}</div>
+                    </div>
+                    <span className="text-[10px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
+                      direct
+                    </span>
+                  </button>
+                ))}
+              </>
+            )}
+            {compatibilityNodes.compatible.length > 0 && (
+              <>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
+                  Compatible
+                </div>
+                {compatibilityNodes.compatible.map((node, rawIndex) => {
+                  const index = compatibilityNodes.direct.length + rawIndex;
+                  return (
+                    <button
+                      key={node.type}
+                      type="button"
+                      onClick={() => handleNodeSelect(node.type)}
+                      className={cn(
+                        "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
+                        index === highlightedIndex
+                          ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
+                          : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
+                      )}
+                      onMouseEnter={() => setHighlightedIndex(index)}
+                    >
+                      <span className={cn("text-[#64748B] dark:text-[#94A3B8]", CATEGORY_COLORS[node.category])}>
+                        {node.icon}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-[#1E293B] dark:text-white/70 truncate">{node.label}</div>
+                        <div className="text-xs text-[#94A3B8]">{node.category}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </>
+            )}
+          </>
         ) : selectedCategory ? (
           // Category nodes — with optional group sub-headers
           categoryNodes.map((node, index) => {
@@ -1087,10 +1224,7 @@ export function AddNodePopup({
                 )}
                 <button
                   type="button"
-                  onClick={() => {
-                    onAddNode(node.type);
-                    onClose();
-                  }}
+                  onClick={() => handleNodeSelect(node.type)}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-2.5 text-left",
                     "transition-colors",
@@ -1111,6 +1245,12 @@ export function AddNodePopup({
                   <span className="text-sm text-[#1E293B] dark:text-white">
                     {node.label}
                   </span>
+                  {directMatchTypes.has(node.type) && (
+                    <span className="ml-auto text-[10px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
+                      direct
+                    </span>
+                  )}
                 </button>
               </div>
             );
