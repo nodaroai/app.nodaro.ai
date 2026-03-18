@@ -94,7 +94,7 @@ interface PresentationViewProps {
 }
 
 export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle, headerLeft }: PresentationViewProps) {
-  const { user, signOut } = useAuth()
+  const { user, signOut: globalSignOut } = useAuth()
   const navigate = useNavigate()
   const [isEditMode, setIsEditMode] = useState(false)
   const [pickerSection, setPickerSection] = useState<"inputs" | "outputs" | null>(null)
@@ -174,6 +174,16 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // Read-only enforcement for shared viewers (not app runner — app runner provides onNewRun)
   const isAppRunner = isFullscreen && !!onNewRun
   const isShareReadOnly = isFullscreen && !!settings.shareReadOnly && !isAppRunner
+
+  // App runner / shared pages: sign out without navigating away
+  const signOut = useCallback(async () => {
+    if (isAppRunner || isFullscreen) {
+      const supabase = createClient()
+      await supabase.auth.signOut()
+    } else {
+      globalSignOut()
+    }
+  }, [isAppRunner, isFullscreen, globalSignOut])
 
   // Credit check for app runner "Get Credits" button (hooks must be unconditional)
   const appRunnerInsufficientCredits = useAppRunnerStore((s) => s.insufficientCredits)
