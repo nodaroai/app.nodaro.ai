@@ -290,7 +290,7 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
 
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Api-Key": config.KIE_API_KEY, "anthropic-version": "2023-06-01" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   })
@@ -321,7 +321,7 @@ async function streamKieMessages(
 
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Api-Key": config.KIE_API_KEY, "anthropic-version": "2023-06-01" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
     signal: signal ?? AbortSignal.timeout(LLM_TIMEOUT_MS),
   })
@@ -338,12 +338,12 @@ async function streamKieMessages(
 
 async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/api/v1/responses`
-  const body = {
+  // Responses API models (GPT-5.4) are reasoning models — temperature is unsupported
+  const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
     input: buildResponsesInput(req),
-    max_output_tokens: req.maxTokens ?? model.maxOutputTokens,
-    temperature: req.temperature,
   }
+  if (req.maxTokens) body.max_output_tokens = req.maxTokens
 
   const response = await fetch(url, {
     method: "POST",
@@ -376,13 +376,13 @@ async function streamKieResponses(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
 ): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/api/v1/responses`
-  const body = {
+  // Responses API models (GPT-5.4) are reasoning models — temperature is unsupported
+  const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
     input: buildResponsesInput(req),
-    max_output_tokens: req.maxTokens ?? model.maxOutputTokens,
-    temperature: req.temperature,
     stream: true,
   }
+  if (req.maxTokens) body.max_output_tokens = req.maxTokens
 
   const response = await fetch(url, {
     method: "POST",
