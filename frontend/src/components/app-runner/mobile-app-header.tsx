@@ -75,7 +75,7 @@ export function MobileAppHeader({
   const closeMenu = useCallback(() => {
     setMenuVisible(false)
     // Wait for exit animation before unmounting
-    setTimeout(() => closeMenu(), 200)
+    setTimeout(() => setMenuOpen(false), 200)
   }, [])
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevStatusRef = useRef(executionStatus)
