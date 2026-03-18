@@ -1160,7 +1160,8 @@ export class KieVideoProvider
     }
 
     if (imageUrls && imageUrls.length > 0) {
-      input.image_urls = imageUrls
+      // KIE API accepts exactly 1 image for storyboard — send only the first
+      input.image_urls = [imageUrls[0]]
     }
 
     if (characterIdList && characterIdList.length > 0) {
