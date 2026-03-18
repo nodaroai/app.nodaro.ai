@@ -33,8 +33,8 @@ function HandleIconComponent({ icon, color = "cyan", side = "right", top = "50%"
     >
       <span className="[&>svg]:w-3.5 [&>svg]:h-3.5 text-white flex items-center justify-center">{icon}</span>
       {label && (
-        <span className="absolute text-[8px] leading-none text-muted-foreground/70 whitespace-nowrap pointer-events-none"
-          style={{ [side === "right" ? "right" : "left"]: "14px", top: "50%", transform: "translateY(-50%)" }}>
+        <span className="absolute text-[9px] leading-none text-muted-foreground whitespace-nowrap pointer-events-none"
+          style={{ [side === "right" ? "left" : "right"]: "32px", top: "50%", transform: "translateY(-50%)" }}>
           {label}
         </span>
       )}
