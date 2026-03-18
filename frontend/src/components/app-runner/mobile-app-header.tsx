@@ -114,7 +114,7 @@ export function MobileAppHeader({
   return (
     <header
       className="fixed top-0 left-0 right-0 z-30 bg-card border-b border-border"
-      style={{ paddingTop: "max(0.5rem, var(--safe-area-top, 0px))" }}
+      style={{ paddingTop: "var(--safe-area-top, 0px)" }}
     >
       {/* Top bar */}
       <div className="flex items-center h-12 px-3 gap-2">
