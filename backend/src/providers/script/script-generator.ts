@@ -156,15 +156,20 @@ export async function generateScript(
   console.log(`[generateScript] Model: ${resolvedModelId} (${modelDef?.displayName ?? "unknown"})`)
   console.log(`[generateScript] Prompt: "${prompt}", scenes: ${sceneCount}, tone: "${tone ?? "none"}"`)
 
+  const modelMaxTokens = modelDef?.maxOutputTokens ?? 16384
   const response = await llmComplete({
     modelId: resolvedModelId,
     system: SYSTEM_PROMPT,
     messages: [{ role: "user", content: userPrompt }],
-    maxTokens: 8192,
+    maxTokens: Math.min(modelMaxTokens, 16384),
   })
 
   const raw = response.text
   console.log(`[generateScript] Raw output length: ${raw.length}`)
+
+  if (!raw || raw.trim().length === 0) {
+    throw new Error("LLM returned empty response — try a different model")
+  }
 
   const cleaned = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim()
 

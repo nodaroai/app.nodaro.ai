@@ -60,19 +60,6 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
 
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="script">
-        <Select
-          value={data.provider || "gemini"}
-          onValueChange={(v) => onUpdate({ provider: v as GenerateScriptData["provider"] })}
-        >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="gemini">Gemini Flash (default)</SelectItem>
-            <SelectItem value="claude">Claude</SelectItem>
-            <SelectItem value="gpt">GPT</SelectItem>
-          </SelectContent>
-        </Select>
-      </MappableField>
       <LlmModelSelect
         feature="generate-script"
         value={data.llmModel}
@@ -235,19 +222,6 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
 export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <Label>Provider</Label>
-        <Select
-          value={data.provider}
-          onValueChange={(v) => onUpdate({ provider: v as QACheckData["provider"] })}
-        >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="claude">Claude</SelectItem>
-            <SelectItem value="gpt">GPT</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
       <LlmModelSelect
         feature="qa-check"
         value={data.llmModel}
