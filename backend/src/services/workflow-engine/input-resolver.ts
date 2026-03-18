@@ -610,6 +610,18 @@ function routeOutput(
     const scenes = (script?.scenes as Array<Record<string, unknown>>) ?? []
 
     if (handle === "images" && scenes.length > 0) {
+      // Pass generated image URLs as referenceImageUrls (for sora-storyboard, etc.)
+      const imageUrls: string[] = []
+      for (const s of scenes) {
+        const genImages = s.generatedImages as Array<{ url: string }> | undefined
+        const activeIdx = (s.activeImageIndex as number | undefined) ?? 0
+        const url = genImages?.[activeIdx]?.url
+        if (url) imageUrls.push(url)
+      }
+      if (imageUrls.length > 0) {
+        inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), ...imageUrls]
+      }
+      // Also pass imagePrompts as text for generate-image list mode
       inputs.prompt = scenes.map((s) => (s.imagePrompt as string) ?? "").join("\n")
     } else if (handle === "dialogue") {
       const lines: Array<{ speaker: string; text: string; emotion?: string }> = []
