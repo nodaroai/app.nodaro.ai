@@ -1603,6 +1603,7 @@ export type CharacterNodeData = {
   generatedResults: GeneratedResult[]
   activeResultIndex: number
   fieldMappings: FieldMappings
+  scriptCharacterIndex?: number
   // Asset sheets (combined grid images)
   expressionSheet: string
   poseSheet: string
@@ -1684,6 +1685,7 @@ export type LocationNodeData = {
   generatedResults: GeneratedResult[]
   activeResultIndex: number
   fieldMappings: FieldMappings
+  scriptLocationIndex?: number
   // Individual asset images
   timeOfDay: LocationAssetItem[]
   weather: LocationAssetItem[]
@@ -2368,7 +2370,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 2,
     inputs: ["in"],
-    outputs: ["scenes"],
+    outputs: ["scenes", "images", "dialogue", "music", "sfx", "characters", "locations"],
     defaultData: { label: "Generate Script", provider: "gemini", model: "gemini-2.5-flash", sceneCount: 5, styleGuide: "", structure: "freeform", tone: "", targetLength: 60, fieldMappings: {} },
   },
   {

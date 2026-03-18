@@ -10,6 +10,9 @@ const COLOR_MAP = {
   steel: { bg: "bg-[#475569]", shadow: "shadow-slate-500/30" },
   green: { bg: "bg-[#22c55e]", shadow: "shadow-green-500/30" },
   red: { bg: "bg-[#ef4444]", shadow: "shadow-red-500/30" },
+  orange: { bg: "bg-orange-400", shadow: "shadow-orange-500/30" },
+  purple: { bg: "bg-purple-400", shadow: "shadow-purple-500/30" },
+  emerald: { bg: "bg-emerald-400", shadow: "shadow-emerald-500/30" },
 } as const
 
 interface HandleIconProps {
@@ -17,10 +20,11 @@ interface HandleIconProps {
   readonly color?: keyof typeof COLOR_MAP
   readonly side?: "left" | "right"
   readonly top?: string
+  readonly label?: string
   readonly children?: ReactNode
 }
 
-function HandleIconComponent({ icon, color = "cyan", side = "right", top = "50%", children }: HandleIconProps) {
+function HandleIconComponent({ icon, color = "cyan", side = "right", top = "50%", label, children }: HandleIconProps) {
   const { bg, shadow } = COLOR_MAP[color]
   return (
     <div
@@ -28,6 +32,12 @@ function HandleIconComponent({ icon, color = "cyan", side = "right", top = "50%"
       style={{ top, [side]: '-29px', transform: 'translateY(-50%)' }}
     >
       <span className="[&>svg]:w-3.5 [&>svg]:h-3.5 text-white flex items-center justify-center">{icon}</span>
+      {label && (
+        <span className="absolute text-[8px] leading-none text-muted-foreground/70 whitespace-nowrap pointer-events-none"
+          style={{ [side === "right" ? "right" : "left"]: "14px", top: "50%", transform: "translateY(-50%)" }}>
+          {label}
+        </span>
+      )}
       {children}
     </div>
   )

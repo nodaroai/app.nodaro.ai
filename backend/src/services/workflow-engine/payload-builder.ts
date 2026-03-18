@@ -7,7 +7,7 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from 
 
 // Shared logic from packages/shared — single source of truth
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "../../../../packages/shared/src/ancestor-refs.js"
-import { buildImagePrompt, buildScenePrompt } from "../../../../packages/shared/src/prompt-builder.js"
+import { buildImagePrompt, buildScenePrompt, buildEnrichedScenePrompt, type EnrichableScene } from "../../../../packages/shared/src/prompt-builder.js"
 import { resolveTemplate, applyTemplate } from "../../../../packages/shared/src/prompt-templates.js"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
@@ -730,7 +730,7 @@ export function buildPayload(
         const script = resolvedInputs.scriptData as { scenes?: Array<{ visualDescription?: string; durationHint?: number }> }
         if (script.scenes && script.scenes.length > 0) {
           sbShots = script.scenes.slice(0, 10).map((scene) => ({
-            scene: scene.visualDescription ?? "",
+            scene: buildEnrichedScenePrompt(scene as EnrichableScene),
             duration: Math.max(1, Math.min(10, scene.durationHint ?? 5)),
           }))
         }

@@ -62,6 +62,7 @@ import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP } from "@nodaro-shared/model-constants";
 import { getAIWriterTemplate } from "@/lib/ai-writer-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
+import { buildEnrichedScenePrompt, type EnrichableScene } from "@nodaro-shared/prompt-builder";
 import type {
   WorkflowNode,
   GenerateScriptData,
@@ -883,7 +884,18 @@ export function executeNode(
 
   if (node.type === "text-to-dialogue") {
     const d = node.data as TextToDialogueData;
-    const dialogue = d.dialogue?.filter((l) => l.text.trim());
+    let dialogue = d.dialogue?.filter((l) => l.text.trim());
+
+    // Auto-fill from connected generate-script if dialogue is empty
+    if ((!dialogue || dialogue.length === 0) && inputs.dialogueLines && inputs.dialogueLines.length > 0) {
+      dialogue = inputs.dialogueLines.map((line) => ({
+        id: crypto.randomUUID(),
+        text: line.text,
+        voice: (d.dialogue?.[0]?.voice) || "",
+        voiceLabel: line.speaker,
+      }));
+    }
+
     if (!dialogue || dialogue.length === 0) {
       toast.error(`Node "${d.label}": no dialogue lines`);
       return Promise.reject(new Error("No dialogue lines"));
@@ -2067,7 +2079,7 @@ export function executeNode(
       const script = inputs.scriptData as { scenes?: Array<{ visualDescription?: string; durationHint?: number }> };
       if (script.scenes && script.scenes.length > 0) {
         shots = script.scenes.slice(0, 10).map((scene) => ({
-          scene: scene.visualDescription ?? "",
+          scene: buildEnrichedScenePrompt(scene as EnrichableScene),
           duration: Math.max(1, Math.min(10, scene.durationHint ?? 5)),
         }));
         // Update node data so user sees the auto-filled shots

@@ -236,6 +236,15 @@ export function getListInputForNode(
       continue
     }
 
+    // generate-script "images" handle fan-out — each scene imagePrompt becomes one item
+    if (sourceNode.type === "generate-script" && edge.sourceHandle === "images") {
+      const script = getActiveScriptFromState(nodeStates, edge.source)
+      const scenesList = (script?.scenes as Array<Record<string, unknown>>) ?? []
+      if (scenesList.length > 1) {
+        return scenesList.map((s) => (s.imagePrompt as string) ?? "")
+      }
+    }
+
     // Check outputMode from edge data — only fan-out if mode is "each"
     // List/loop/split-text edges default to "each"; all other edges default to "last"
     const edgeOutputMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined
@@ -384,7 +393,6 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "combine-text",
   "split-text",
   "suno-style-boost",
-  "generate-script",
   "forced-alignment",
   "qa-check",
 ])
@@ -459,6 +467,46 @@ const SUNO_TRACK_NODE_TYPES = new Set([
   "suno-convert-wav",
   "suno-upload-extend",
 ])
+
+// ---------------------------------------------------------------------------
+// Generate-script helpers
+// ---------------------------------------------------------------------------
+
+function getActiveScriptFromState(nodeStates: Record<string, NodeExecutionState>, nodeId: string): Record<string, unknown> | undefined {
+  const state = nodeStates[nodeId]
+  return state?.output?.script as Record<string, unknown> | undefined
+}
+
+function deduplicateCharacters(scenes: Array<Record<string, unknown>>): Array<{ name: string; description: string; mood?: string; action?: string; position?: string }> {
+  const seen = new Map<string, { name: string; description: string; mood?: string; action?: string; position?: string }>()
+  for (const scene of scenes) {
+    const chars = scene.characters as Array<string | Record<string, unknown>> | undefined
+    if (!chars) continue
+    for (const c of chars) {
+      if (typeof c === "string") {
+        const key = c.toLowerCase()
+        if (!seen.has(key)) seen.set(key, { name: c, description: "" })
+      } else {
+        const name = (c.name as string) ?? ""
+        const key = name.toLowerCase()
+        if (!seen.has(key)) seen.set(key, { name, description: (c.description as string) ?? "", mood: (c.mood as string) ?? undefined, action: (c.action as string) ?? undefined, position: (c.position as string) ?? undefined })
+      }
+    }
+  }
+  return Array.from(seen.values())
+}
+
+function deduplicateLocations(scenes: Array<Record<string, unknown>>): Array<{ name: string; description: string; timeOfDay: string; weather?: string; lighting?: string }> {
+  const seen = new Map<string, { name: string; description: string; timeOfDay: string; weather?: string; lighting?: string }>()
+  for (const scene of scenes) {
+    const loc = scene.location as Record<string, unknown> | undefined
+    if (!loc) continue
+    const name = (loc.name as string) ?? ""
+    const key = name.toLowerCase()
+    if (!seen.has(key)) seen.set(key, { name, description: (loc.description as string) ?? "", timeOfDay: (loc.timeOfDay as string) ?? "", weather: (loc.weather as string) ?? undefined, lighting: (loc.lighting as string) ?? undefined })
+  }
+  return Array.from(seen.values())
+}
 
 // ---------------------------------------------------------------------------
 // Main routing function
@@ -546,12 +594,54 @@ function routeOutput(
     return
   }
 
-  // --- Generate-script → sora-storyboard: pass script data for auto-fill ---
-  if (srcType === "generate-script" && targetType === "sora-storyboard") {
-    inputs.prompt = output
-    const state = nodeStates[src.id]
-    if (state?.output?.script) {
-      inputs.scriptData = state.output.script
+  // --- Generate-script: handle-based routing ---
+  if (srcType === "generate-script") {
+    const handle = edge.sourceHandle
+    const script = getActiveScriptFromState(nodeStates, src.id)
+    const scenes = (script?.scenes as Array<Record<string, unknown>>) ?? []
+
+    if (handle === "images" && scenes.length > 0) {
+      inputs.prompt = scenes.map((s) => (s.imagePrompt as string) ?? "").join("\n")
+    } else if (handle === "dialogue") {
+      const lines: Array<{ speaker: string; text: string; emotion?: string }> = []
+      for (const s of scenes) {
+        const dlg = s.dialogue as Array<Record<string, unknown>> | undefined
+        if (dlg) {
+          for (const d of dlg) {
+            lines.push({
+              speaker: (d.speaker as string) ?? "",
+              text: (d.text as string) ?? "",
+              emotion: (d.emotion as string) ?? undefined,
+            })
+          }
+        }
+      }
+      if (lines.length > 0) inputs.dialogueLines = lines
+    } else if (handle === "music") {
+      const moods = new Set<string>()
+      for (const s of scenes) {
+        const m = s.musicMood as string | undefined
+        if (m?.trim()) moods.add(m.trim())
+      }
+      if (moods.size > 0) inputs.prompt = Array.from(moods).join(", ")
+    } else if (handle === "sfx") {
+      const effects: string[] = []
+      for (const s of scenes) {
+        const fx = s.soundEffects as string[] | undefined
+        if (fx) effects.push(...fx)
+      }
+      if (effects.length > 0) inputs.prompt = effects.join(", ")
+    } else if (handle === "characters") {
+      const chars = deduplicateCharacters(scenes)
+      if (chars.length > 0) inputs.scriptCharacters = chars
+    } else if (handle === "locations") {
+      const locs = deduplicateLocations(scenes)
+      if (locs.length > 0) inputs.scriptLocations = locs
+    } else {
+      inputs.prompt = output
+    }
+    if (targetType === "sora-storyboard" && script) {
+      inputs.scriptData = script
     }
     return
   }

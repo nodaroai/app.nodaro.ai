@@ -137,6 +137,9 @@ export interface ResolvedInputs {
   }>
   referenceImageUrls?: string[]
   scriptData?: unknown
+  dialogueLines?: Array<{ speaker: string; text: string; emotion?: string }>
+  scriptCharacters?: Array<{ name: string; description: string; mood?: string; action?: string; position?: string }>
+  scriptLocations?: Array<{ name: string; description: string; timeOfDay: string; weather?: string; lighting?: string }>
   sunoTrackId?: string
   sunoTaskId?: string
   uploadUrl?: string

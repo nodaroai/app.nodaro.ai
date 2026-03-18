@@ -3,7 +3,7 @@
 import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { BookOpen, Loader2, AlertCircle, X, FileText, Sparkles, ImageIcon, Film, Maximize2, Type } from "lucide-react"
+import { BookOpen, Loader2, AlertCircle, X, FileText, Sparkles, ImageIcon, Film, Maximize2, Type, MessageSquare, Music, Volume2, User, MapPin } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -77,7 +77,13 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
-        { id: "scenes", type: "source", position: Position.Right, customStyle: { top: '25%', right: '-29px' }, hideHandle: true },
+        { id: "scenes", type: "source", position: Position.Right, customStyle: { top: '10%', right: '-29px' }, hideHandle: true },
+        { id: "images", type: "source", position: Position.Right, customStyle: { top: '24%', right: '-29px' }, hideHandle: true },
+        { id: "dialogue", type: "source", position: Position.Right, customStyle: { top: '38%', right: '-29px' }, hideHandle: true },
+        { id: "music", type: "source", position: Position.Right, customStyle: { top: '52%', right: '-29px' }, hideHandle: true },
+        { id: "sfx", type: "source", position: Position.Right, customStyle: { top: '66%', right: '-29px' }, hideHandle: true },
+        { id: "characters", type: "source", position: Position.Right, customStyle: { top: '80%', right: '-29px' }, hideHandle: true },
+        { id: "locations", type: "source", position: Position.Right, customStyle: { top: '94%', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1.5">
@@ -234,7 +240,13 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
     <HandleIcon icon={<Type />} color="pink" side="left" top="50%" />
-    <HandleIcon icon={<BookOpen />} color="pink" side="right" top="25%" />
+    <HandleIcon icon={<BookOpen />} color="pink" side="right" top="10%" label="scenes" />
+    <HandleIcon icon={<ImageIcon />} color="cyan" side="right" top="24%" label="images" />
+    <HandleIcon icon={<MessageSquare />} color="orange" side="right" top="38%" label="dialogue" />
+    <HandleIcon icon={<Music />} color="purple" side="right" top="52%" label="music" />
+    <HandleIcon icon={<Volume2 />} color="emerald" side="right" top="66%" label="sfx" />
+    <HandleIcon icon={<User />} color="pink" side="right" top="80%" label="characters" />
+    <HandleIcon icon={<MapPin />} color="cyan" side="right" top="94%" label="locations" />
     {activeScript && showFullscreen && (
       <Suspense fallback={null}>
       <ScriptPreviewModal

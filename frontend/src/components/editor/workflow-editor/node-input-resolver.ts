@@ -62,6 +62,9 @@ export interface FrontendResolvedInputs {
   }[];
   referenceImageUrls?: string[];
   scriptData?: unknown;
+  dialogueLines?: Array<{ speaker: string; text: string; emotion?: string }>;
+  scriptCharacters?: Array<{ name: string; description: string; mood?: string; action?: string; position?: string }>;
+  scriptLocations?: Array<{ name: string; description: string; timeOfDay: string; weather?: string; lighting?: string }>;
   sunoTrackId?: string;
   sunoTaskId?: string;
   uploadUrl?: string;
@@ -128,6 +131,16 @@ export function getListInputForNode(
   for (const edge of incomingEdges) {
     const sourceNode = nodes.find((n) => n.id === edge.source);
     if (!sourceNode) continue;
+
+    // generate-script "images" handle → list of imagePrompts
+    if (sourceNode.type === "generate-script" && edge.sourceHandle === "images") {
+      const sd = sourceNode.data as Record<string, unknown>;
+      const activeScript = getActiveScriptFromData(sd);
+      const scenesList = (activeScript?.scenes as Array<Record<string, unknown>>) ?? [];
+      if (scenesList.length > 1) {
+        return scenesList.map((s) => (s.imagePrompt as string) ?? "");
+      }
+    }
 
     if (sourceNode.type === "loop") {
       const loopData = sourceNode.data as LoopNodeData;
@@ -207,6 +220,58 @@ export function getListInputForNode(
   }
 
   return undefined;
+}
+
+/** Extract the active GeneratedScript from generate-script node data. */
+function getActiveScriptFromData(data: Record<string, unknown>): Record<string, unknown> | undefined {
+  const results = data.generatedResults as Array<{ script: unknown }> | undefined;
+  const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+  return (results?.[activeIndex]?.script ?? data.generatedScript) as Record<string, unknown> | undefined;
+}
+
+/** Deduplicate characters by lowercase name, first occurrence wins. Handles string[] fallback. */
+function deduplicateCharacters(scenes: Array<Record<string, unknown>>): Array<{ name: string; description: string; mood?: string; action?: string; position?: string }> {
+  const seen = new Map<string, { name: string; description: string; mood?: string; action?: string; position?: string }>();
+  for (const scene of scenes) {
+    const chars = scene.characters as Array<string | Record<string, unknown>> | undefined;
+    if (!chars) continue;
+    for (const c of chars) {
+      if (typeof c === "string") {
+        const key = c.toLowerCase();
+        if (!seen.has(key)) seen.set(key, { name: c, description: "" });
+      } else {
+        const name = (c.name as string) ?? "";
+        const key = name.toLowerCase();
+        if (!seen.has(key)) seen.set(key, {
+          name,
+          description: (c.description as string) ?? "",
+          mood: (c.mood as string) ?? undefined,
+          action: (c.action as string) ?? undefined,
+          position: (c.position as string) ?? undefined,
+        });
+      }
+    }
+  }
+  return Array.from(seen.values());
+}
+
+/** Deduplicate locations by lowercase name, first occurrence wins. */
+function deduplicateLocations(scenes: Array<Record<string, unknown>>): Array<{ name: string; description: string; timeOfDay: string; weather?: string; lighting?: string }> {
+  const seen = new Map<string, { name: string; description: string; timeOfDay: string; weather?: string; lighting?: string }>();
+  for (const scene of scenes) {
+    const loc = scene.location as Record<string, unknown> | undefined;
+    if (!loc) continue;
+    const name = (loc.name as string) ?? "";
+    const key = name.toLowerCase();
+    if (!seen.has(key)) seen.set(key, {
+      name,
+      description: (loc.description as string) ?? "",
+      timeOfDay: (loc.timeOfDay as string) ?? "",
+      weather: (loc.weather as string) ?? undefined,
+      lighting: (loc.lighting as string) ?? undefined,
+    });
+  }
+  return Array.from(seen.values());
 }
 
 export function resolveNodeInputs(
@@ -604,16 +669,56 @@ export function resolveNodeInputs(
     } else if (src.type === "split-text") {
       inputs.prompt = output;
     } else if (src.type === "generate-script") {
-      inputs.prompt = output;
-      // Pass full script data for sora-storyboard auto-fill
-      if (node.type === "sora-storyboard") {
-        const scriptData = src.data as Record<string, unknown>;
-        const scriptResults = scriptData.generatedResults as Array<{ script: unknown }> | undefined;
-        const activeIndex = (scriptData.activeResultIndex as number | undefined) ?? 0;
-        const script = scriptResults?.[activeIndex]?.script ?? scriptData.generatedScript;
-        if (script) {
-          inputs.scriptData = script;
+      const handle = srcEdge.sourceHandle;
+      const scriptNodeData = src.data as Record<string, unknown>;
+      const script = getActiveScriptFromData(scriptNodeData);
+      const scenes = (script?.scenes as Array<Record<string, unknown>>) ?? [];
+
+      if (handle === "images" && scenes.length > 0) {
+        inputs.prompt = scenes.map((s) => (s.imagePrompt as string) ?? "").join("\n");
+      } else if (handle === "dialogue") {
+        const lines: Array<{ speaker: string; text: string; emotion?: string }> = [];
+        for (const s of scenes) {
+          const dlg = s.dialogue as Array<Record<string, unknown>> | undefined;
+          if (dlg) {
+            for (const d of dlg) {
+              lines.push({
+                speaker: (d.speaker as string) ?? "",
+                text: (d.text as string) ?? "",
+                emotion: (d.emotion as string) ?? undefined,
+              });
+            }
+          }
         }
+        if (lines.length > 0) inputs.dialogueLines = lines;
+      } else if (handle === "music") {
+        const moods = new Set<string>();
+        for (const s of scenes) {
+          const m = s.musicMood as string | undefined;
+          if (m?.trim()) moods.add(m.trim());
+        }
+        if (moods.size > 0) inputs.prompt = Array.from(moods).join(", ");
+      } else if (handle === "sfx") {
+        const effects: string[] = [];
+        for (const s of scenes) {
+          const fx = s.soundEffects as string[] | undefined;
+          if (fx) effects.push(...fx);
+        }
+        if (effects.length > 0) inputs.prompt = effects.join(", ");
+      } else if (handle === "characters") {
+        const chars = deduplicateCharacters(scenes);
+        if (chars.length > 0) inputs.scriptCharacters = chars;
+      } else if (handle === "locations") {
+        const locs = deduplicateLocations(scenes);
+        if (locs.length > 0) inputs.scriptLocations = locs;
+      } else {
+        // Default "scenes" handle or null — existing behavior
+        inputs.prompt = output;
+      }
+
+      // Always pass scriptData for sora-storyboard regardless of handle
+      if (node.type === "sora-storyboard" && script) {
+        inputs.scriptData = script;
       }
     } else if (src.type === "webhook-trigger") {
       // Route by param type using sourceHandle (matches backend)

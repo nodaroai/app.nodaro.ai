@@ -45,6 +45,7 @@ import { getConnectedProviderModel } from "./helpers"
 import { ConnectedMediaList } from "./connected-media-list"
 import type { ConfigProps } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
+import { buildEnrichedScenePrompt, type EnrichableScene } from "@nodaro-shared/prompt-builder"
 
 
 export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, onUpdateNode, nodeRefs }: ConfigProps<ImageToVideoData>) {
@@ -1218,7 +1219,7 @@ export function SoraStoryboardConfig({ data, onUpdate, sources }: ConfigProps<So
   const fillFromScript = useCallback(() => {
     if (!connectedScript?.scenes?.length) return
     const newShots = connectedScript.scenes.slice(0, 10).map((scene) => ({
-      scene: scene.visualDescription ?? "",
+      scene: buildEnrichedScenePrompt(scene as EnrichableScene),
       duration: Math.max(1, Math.min(10, scene.durationHint ?? 5)),
     }))
     onUpdate({ shots: newShots })

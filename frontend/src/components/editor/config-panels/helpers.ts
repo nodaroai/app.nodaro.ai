@@ -59,6 +59,7 @@ export function getConnectedSources(
       label: (d.label as string) ?? source.type ?? source.id,
       value: extractDisplayValue(d, source.type as string),
       providerCategory: source.type === "provider" ? (d.category as string) : undefined,
+      sourceHandle: edge.sourceHandle ?? undefined,
       targetHandle: edge.targetHandle ?? undefined,
       nodeData: d,
       edgeOutputMode: (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined,

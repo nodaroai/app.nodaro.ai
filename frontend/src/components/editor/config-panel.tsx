@@ -639,10 +639,10 @@ export function ConfigPanel() {
           {nodeType === "sub-workflow-output" && <SubWorkflowOutputConfig {...configProps} />}
           {nodeType === "sub-workflow" && <SubWorkflowConfig {...configProps} />}
 
-          {nodeType === "character" && <CharacterConfig data={nodeData as any} onUpdate={update} />}
+          {nodeType === "character" && <CharacterConfig {...configProps} />}
           {nodeType === "face" && <FaceConfig data={nodeData as any} onUpdate={update} />}
           {nodeType === "object" && <ObjectConfig data={nodeData as any} onUpdate={update} />}
-          {nodeType === "location" && <LocationConfig data={nodeData as any} onUpdate={update} />}
+          {nodeType === "location" && <LocationConfig {...configProps} />}
 
           {nodeType === "scene" && (
             <>

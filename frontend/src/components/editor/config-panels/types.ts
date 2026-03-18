@@ -7,6 +7,7 @@ export interface SourceNodeInfo {
   readonly label: string
   readonly value: string
   readonly providerCategory?: string
+  readonly sourceHandle?: string
   readonly targetHandle?: string
   readonly nodeData?: Record<string, unknown>
   readonly edgeOutputMode?: string
