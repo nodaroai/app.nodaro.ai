@@ -2060,7 +2060,21 @@ export function executeNode(
       }
     }
 
-    const shots = sbData.shots ?? [{ scene: "", duration: 5 }];
+    let shots = sbData.shots ?? [{ scene: "", duration: 5 }];
+
+    // Auto-fill shots from connected generate-script if shots are empty
+    if (inputs.scriptData && !shots.some((s) => s.scene.trim().length > 0)) {
+      const script = inputs.scriptData as { scenes?: Array<{ visualDescription?: string; durationHint?: number }> };
+      if (script.scenes && script.scenes.length > 0) {
+        shots = script.scenes.slice(0, 10).map((scene) => ({
+          scene: scene.visualDescription ?? "",
+          duration: Math.max(1, Math.min(10, scene.durationHint ?? 5)),
+        }));
+        // Update node data so user sees the auto-filled shots
+        useWorkflowStore.getState().updateNodeData(node.id, { shots });
+      }
+    }
+
     const hasScenes = shots.some((s) => s.scene.trim().length > 0);
     if (!hasScenes) {
       toast.error(`Node "${sbData.label}": at least one shot needs a scene description`);
@@ -2073,7 +2087,7 @@ export function executeNode(
         soraStoryboardApi({
           shots,
           nFrames: sbData.nFrames || "10",
-          imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+          imageUrls: imageUrls.length > 0 ? imageUrls.slice(0, 5) : undefined,
           aspectRatio: sbData.aspectRatio || "landscape",
           userId: ctx.userId,
         }),

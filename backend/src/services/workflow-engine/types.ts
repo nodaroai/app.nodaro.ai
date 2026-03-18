@@ -136,6 +136,7 @@ export interface ResolvedInputs {
     sourceType?: "audio" | "video"
   }>
   referenceImageUrls?: string[]
+  scriptData?: unknown
   sunoTrackId?: string
   sunoTaskId?: string
   uploadUrl?: string

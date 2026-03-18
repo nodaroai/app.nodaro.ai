@@ -39,6 +39,7 @@ const EXECUTION_DATA_KEYS = new Set([
   "__listResults",
   "subWorkflowProgress",
   "outputResults",
+  "shots",
 ])
 
 /**

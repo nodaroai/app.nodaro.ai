@@ -1129,11 +1129,16 @@ export class KieVideoProvider
       `[KIE.ai] ==============================================`
     )
 
+    // KIE API requires total shot duration ≤ n_frames value
+    const nFramesNum = Number(effectiveNFrames)
+    const totalDuration = shots.reduce((sum, s) => sum + s.duration, 0)
+    const scale = totalDuration > nFramesNum ? nFramesNum / totalDuration : 1
+
     const input: Record<string, unknown> = {
       ...(modelConfig.extraParams ?? {}),
       shots: shots.map((s) => ({
-        scene: s.scene,
-        duration: s.duration,
+        Scene: s.scene,
+        duration: Math.round(s.duration * scale * 10) / 10,
       })),
       n_frames: effectiveNFrames,
     }
