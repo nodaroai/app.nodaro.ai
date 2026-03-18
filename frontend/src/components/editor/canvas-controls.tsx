@@ -75,7 +75,7 @@ export function CanvasControls({ showMiniMap, onToggleMiniMap, snapEnabled, onTo
   return (
     <div
       className={cn(
-        "absolute bottom-4 right-4 z-10",
+        "absolute bottom-4 left-4 z-10",
         "flex items-center gap-1 p-1",
         "rounded-xl backdrop-blur-md",
         "transition-all duration-300 ease-in-out",
