@@ -405,9 +405,9 @@ describe("resolveNodeInputs", () => {
       [img1, img2, target],
       edges,
     )
-    // sora-storyboard treats images as imageUrl (last wins) or referenceImageUrls
-    // depending on source type; upload-image resolves as imageUrl for storyboard
-    expect(inputs.imageUrl).toBeDefined()
+    // sora-storyboard treats upload-image as referenceImageUrls (same as generate-image)
+    expect(inputs.referenceImageUrls).toBeDefined()
+    expect(inputs.referenceImageUrls).toEqual(["http://ref1.png", "http://ref2.png"])
   })
 
   it("resolves audio input for suno-mashup", () => {
