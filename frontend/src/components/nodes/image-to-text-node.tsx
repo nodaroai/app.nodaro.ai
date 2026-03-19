@@ -8,6 +8,8 @@ import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useConnectionCount } from "@/hooks/use-connection-count"
+import { useModelCredits } from "@/hooks/use-model-credits"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
 import type { ImageToTextData } from "@/types/nodes"
@@ -77,6 +79,7 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const inConnectionCount = useConnectionCount(id, "image")
+  const credits = useModelCredits(buildLlmCreditIdentifier("image-to-text", nodeData.llmModel || LLM_FEATURE_DEFAULTS["image-to-text"]), 1)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -116,13 +119,13 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Eye className="h-4 w-4" />}
       category="ai"
-      credits={1}
+      credits={credits}
       selected={selected}
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
         status !== "running" ? (
-          <RunNodeButton nodeId={id} credits={1} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined
       }
       handles={[

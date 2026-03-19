@@ -484,7 +484,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
 
           return result
       })
-      const results = await settledWithLimit(tasks, MAX_CONCURRENT_NODES_PER_EXECUTION)
+      const results = await settledWithLimit(tasks, MAX_CONCURRENT_NODES_PER_EXECUTION, ctx)
 
       // Check for failures
       for (let i = 0; i < results.length; i++) {
@@ -771,16 +771,25 @@ function emitExecutionEvent(event: ExecutionEvent): void {
 /**
  * Like Promise.allSettled but limits how many tasks run concurrently.
  * Uses a worker-pool pattern so a new task starts as soon as a slot frees up.
+ * When `cancelledRef` is provided and becomes truthy, remaining un-started
+ * tasks are skipped (already-running tasks continue to completion/rejection).
  */
 async function settledWithLimit<T>(
   tasks: (() => Promise<T>)[],
   limit: number,
+  cancelledRef?: { cancelled: boolean },
 ): Promise<PromiseSettledResult<T>[]> {
   const results: PromiseSettledResult<T>[] = new Array(tasks.length)
   let nextIndex = 0
 
   async function worker(): Promise<void> {
     while (nextIndex < tasks.length) {
+      // Skip remaining tasks if execution was cancelled
+      if (cancelledRef?.cancelled) {
+        const idx = nextIndex++
+        results[idx] = { status: "rejected", reason: new Error("Execution cancelled") }
+        continue
+      }
       const idx = nextIndex++
       try {
         const value = await tasks[idx]()

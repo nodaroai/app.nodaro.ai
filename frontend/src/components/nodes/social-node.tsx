@@ -8,6 +8,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import { PLATFORM_LABELS } from "@/lib/social-media-specs"
 import type { SocialPostData, SocialPlatformType } from "@/types/nodes"
 
@@ -27,6 +28,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
   const platform = nodeData.platform
   const icon = PLATFORM_ICONS[platform] || PLATFORM_ICONS.instagram
   const status = nodeData.executionStatus ?? "idle"
+  const credits = useModelCredits("social-publish", 1)
 
   return (
     <div className="relative max-w-[220px]">
@@ -40,7 +42,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
         label={nodeData.label}
         icon={icon}
         category="output"
-        credits={1}
+        credits={credits}
         selected={selected}
         isRunning={status === "running"}
         minWidth={220}
@@ -48,7 +50,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         topToolbarContent={
           status !== "running" ? (
-            <RunNodeButton nodeId={id} credits={1} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+            <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
           ) : undefined
         }
         handles={[

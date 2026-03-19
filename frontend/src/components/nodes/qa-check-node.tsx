@@ -4,14 +4,20 @@ import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ShieldCheck, Type, Check, X } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useModelCredits } from "@/hooks/use-model-credits"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
 import type { QACheckData } from "@/types/nodes"
 
 function QACheckNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as QACheckData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const status = nodeData.executionStatus ?? "idle"
+  const credits = useModelCredits(buildLlmCreditIdentifier("qa-check", nodeData.llmModel || LLM_FEATURE_DEFAULTS["qa-check"]), 1)
 
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>
@@ -25,10 +31,16 @@ function QACheckNodeComponent({ id, data, selected }: NodeProps) {
         label={nodeData.label}
         icon={<ShieldCheck className="h-4 w-4" />}
         category="ai"
-        credits={1}
+        credits={credits}
         selected={selected}
+        isRunning={status === "running"}
         hideHeader
         minWidth={220}
+        topToolbarContent={
+          status !== "running" ? (
+            <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+          ) : undefined
+        }
         handles={[
           { id: "in", type: "target", position: Position.Left, hideHandle: true, customStyle: { top: '50%', left: '-29px' } },
           { id: "approved", type: "source", position: Position.Right, label: "Approved", hideHandle: true, customStyle: { top: '35%', right: '-29px' } },

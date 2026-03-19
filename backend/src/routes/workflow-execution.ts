@@ -9,6 +9,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { tryRemoveFromQueue } from "../lib/queue.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { createSSEStream } from "../lib/sse.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
@@ -314,9 +315,12 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         })
       }
 
+      // Try to remove from BullMQ queue before marking cancelled
+      tryRemoveFromQueue(parsed.data.id).catch(() => {})
+
       await supabase
         .from("jobs")
-        .update({ status: "failed", output_data: { error: "Cancelled by user" } })
+        .update({ status: "cancelled" })
         .eq("id", parsed.data.id)
 
       return { success: true }
@@ -342,6 +346,29 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       .from("workflow_executions")
       .update(updates)
       .eq("id", parsed.data.id)
+
+    // For immediate cancellation, also cancel all pending/queued/processing jobs
+    // belonging to this execution so the BullMQ worker discards their results.
+    // Fire-and-forget — the DB status is already set, so the orchestrator will
+    // pick up the cancellation regardless.
+    if (mode === "cancelled") {
+      void (async () => {
+        const { data: activeJobs } = await supabase
+          .from("jobs")
+          .select("id")
+          .eq("workflow_execution_id", parsed.data.id)
+          .in("status", ["pending", "queued", "processing"])
+
+        if (activeJobs && activeJobs.length > 0) {
+          const jobIds = activeJobs.map((j) => j.id)
+          await Promise.allSettled(jobIds.map((jid) => tryRemoveFromQueue(jid)))
+          await supabase
+            .from("jobs")
+            .update({ status: "cancelled" })
+            .in("id", jobIds)
+        }
+      })().catch(() => {})
+    }
 
     return { success: true }
   })

@@ -235,16 +235,17 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
   "ai-writer",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
-  "image-to-text",
+  "image-to-text", "qa-check", "transcribe",
   "sora-character",
+  "render-video",
+  "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post",
 ])
 
 export const RUN_BUTTON_TYPES = new Set([
   "merge-video-audio", "combine-videos", "trim-audio", "trim-video",
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "manual-edit", "resize-video", "social-media-format", "adjust-volume",
-  "add-captions", "mix-audio", "combine-text", "split-text", "preview", "composite", "render-video",
+  "add-captions", "mix-audio", "combine-text", "split-text", "preview", "composite",
   "sub-workflow",
-  "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post",
 ])
 
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video"])
@@ -257,7 +258,7 @@ const RESULT_PRODUCING_TYPES = new Set([
   t !== "combine-text" && t !== "split-text" && t !== "preview" && t !== "sub-workflow" &&
   t !== "instagram-post" && t !== "tiktok-post" && t !== "youtube-upload" &&
   t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post" &&
-  t !== "image-to-text"
+  t !== "image-to-text" && t !== "qa-check" && t !== "transcribe"
 ))
 
 export function ConfigPanel() {

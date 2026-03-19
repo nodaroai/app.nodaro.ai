@@ -14,3 +14,22 @@ export const videoQueue = new Queue("video-generation", {
     priority: 1, // interactive single-node jobs get high priority over orchestrator batch jobs
   },
 })
+
+/**
+ * Best-effort removal of a job from the BullMQ video queue.
+ * Waiting/delayed jobs are removed outright; active jobs cannot be stopped
+ * mid-execution but will be discarded by the worker via shouldSaveJobResult().
+ */
+export async function tryRemoveFromQueue(jobId: string): Promise<void> {
+  try {
+    const bullJob = await videoQueue.getJob(jobId)
+    if (bullJob) {
+      const state = await bullJob.getState()
+      if (state === "waiting" || state === "delayed") {
+        await bullJob.remove()
+      }
+    }
+  } catch {
+    // Best-effort — job may already be gone or active
+  }
+}
