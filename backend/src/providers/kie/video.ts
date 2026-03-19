@@ -116,6 +116,63 @@ async function ensureAudioDuration(
   }
 }
 
+// Max input video duration (seconds) for motion-transfer models.
+// KIE.ai Kling 2.6/3.0 motion control enforces 3–30s; use 29.5s safety margin.
+const MOTION_TRANSFER_MAX_VIDEO_SECONDS = 29.5
+
+/**
+ * If video exceeds the max duration, trim it with FFmpeg
+ * and upload the trimmed version to R2. Returns the (possibly new) video URL.
+ */
+async function ensureVideoDuration(
+  videoUrl: string,
+  maxSeconds: number,
+): Promise<string> {
+  let workDir: string | undefined
+  try {
+    workDir = await createWorkDir("motion-trim")
+    const ext = videoUrl.split("?")[0].match(/\.(mp4|mov|mkv|webm)$/i)?.[1]?.toLowerCase() ?? "mp4"
+    const inputPath = join(workDir, `input.${ext}`)
+    const outputPath = join(workDir, `trimmed.mp4`)
+
+    console.log(`[KIE.ai] Downloading video for duration check: ${videoUrl.substring(0, 120)}...`)
+    await downloadFile(videoUrl, inputPath)
+    const duration = await getVideoDuration(inputPath)
+    console.log(`[KIE.ai] Video duration: ${duration.toFixed(1)}s (limit: ${maxSeconds}s)`)
+
+    if (duration <= maxSeconds) {
+      return videoUrl
+    }
+
+    console.log(
+      `[KIE.ai] Video duration (${duration.toFixed(1)}s) exceeds ${maxSeconds}s limit — trimming`
+    )
+
+    await runFfmpeg([
+      "-i", inputPath,
+      "-t", String(maxSeconds),
+      "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+      "-c:a", "aac", "-b:a", "128k",
+      "-y",
+      outputPath,
+    ])
+
+    const trimmedBuffer = await readFile(outputPath)
+    const key = `video/motion-trimmed-${Date.now()}.mp4`
+    const trimmedUrl = await uploadBufferToR2(trimmedBuffer, key, "video/mp4")
+    console.log(`[KIE.ai] Trimmed video uploaded: ${trimmedUrl}`)
+    return trimmedUrl
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(`[KIE.ai] Video trim failed: ${msg}`)
+    throw new Error(
+      `Motion transfer requires video ≤ ${maxSeconds}s. Auto-trim failed: ${msg}`
+    )
+  } finally {
+    if (workDir) await cleanupWorkDir(workDir)
+  }
+}
+
 function snapToAllowedDuration(requested: number, allowed: number[]): number {
   if (!allowed || allowed.length === 0) return requested
   if (allowed.includes(requested)) return requested
@@ -765,16 +822,21 @@ export class KieVideoProvider
 
     // Kling 3.0 Motion Control — uses createTask with mode + character_orientation
     if (provider === "kling-3.0") {
+      // Auto-trim video if it exceeds the 30-second motion-transfer limit
+      const effectiveVideoUrl = await ensureVideoDuration(videoUrl, MOTION_TRANSFER_MAX_VIDEO_SECONDS)
+
+      // Kling 3.0 uses "std"/"pro" mode (NOT "720p"/"1080p" like Kling 2.6)
+      const kling3Mode = resolution === "1080p" ? "pro" : "std"
+
       const input: Record<string, unknown> = {
         input_urls: [imageUrl],
-        video_urls: [videoUrl],
+        video_urls: [effectiveVideoUrl],
         character_orientation: characterOrientation,
-        mode: resolution,  // "720p" or "1080p"
+        mode: kling3Mode,
       }
 
-      if (options?.backgroundSource) {
-        input.background_source = options.backgroundSource
-      }
+      // Always send background_source explicitly — KIE defaults to input_image if omitted
+      input.background_source = options?.backgroundSource ?? "input_video"
 
       if (prompt) {
         input.prompt = prompt
@@ -848,9 +910,12 @@ export class KieVideoProvider
 
     // Kling 2.6 Motion Control — original behavior
     // NOTE: Field is "mode" not "resolution" per KIE.ai API docs
+    // Auto-trim video if it exceeds the 30-second motion-transfer limit
+    const effectiveVideoUrl = await ensureVideoDuration(videoUrl, MOTION_TRANSFER_MAX_VIDEO_SECONDS)
+
     const input: Record<string, unknown> = {
       input_urls: [imageUrl], // Array of image URLs (character reference)
-      video_urls: [videoUrl], // Array of video URLs (motion source)
+      video_urls: [effectiveVideoUrl], // Array of video URLs (motion source)
       character_orientation: characterOrientation,
       mode: resolution, // KIE.ai uses "mode" for resolution (720p/1080p)
     }
