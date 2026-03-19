@@ -30,6 +30,14 @@ export function makeEmptyInputs(inputNodes: WorkflowNode[]): Record<string, Reco
     const t = node.type ?? ""
     if (t === "text-prompt") empty[node.id] = { text: "" }
     else if (t === "upload-image" || t === "upload-video" || t === "upload-audio") empty[node.id] = { url: "" }
+    else if (t === "list") {
+      empty[node.id] = { items: [""] }
+    } else if (t === "loop") {
+      const loopData = node.data as Record<string, unknown>
+      const columns = (loopData.columns as Array<Record<string, unknown>>) ?? []
+      const emptyRow = columns.map(() => "")
+      empty[node.id] = { rows: [emptyRow] }
+    }
   }
   return empty
 }
@@ -59,6 +67,15 @@ export function makeSnapshotInputs(inputNodes: WorkflowNode[]): Record<string, R
       inputs[node.id] = { text: (node.data.text as string) ?? "" }
     } else if (t === "upload-image" || t === "upload-video" || t === "upload-audio") {
       inputs[node.id] = { url: (node.data.url as string) ?? "" }
+    } else if (t === "list") {
+      const items = ((node.data as Record<string, unknown>).items as string || "")
+        .split("\n").map((s: string) => s.trim()).filter(Boolean)
+      inputs[node.id] = { items: items.length > 0 ? items : [""] }
+    } else if (t === "loop") {
+      const loopData = node.data as Record<string, unknown>
+      const rows = (loopData.rows as string[][]) ?? []
+      const columns = (loopData.columns as Array<Record<string, unknown>>) ?? []
+      inputs[node.id] = { rows: rows.length > 0 ? rows : [columns.map(() => "")] }
     }
   }
   return inputs

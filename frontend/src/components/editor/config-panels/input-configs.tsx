@@ -16,17 +16,18 @@ import {
 import { CachedImage } from "@/components/ui/cached-image"
 import { uploadAudio, fetchYouTubeOEmbed, extractYouTubeAudioApi, getJobStatus, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
 import type { DownloadProgressEvent } from "@/lib/api"
-import type {
-  TextPromptData,
-  ListNodeData,
-  LoopNodeData,
-  LoopColumn,
-  UploadImageData,
-  UploadVideoData,
-  UploadAudioData,
-  RSSFeedData,
-  YouTubeVideoData,
-  ReferenceAudioData,
+import {
+  LOOP_COLUMN_TYPE_META,
+  type TextPromptData,
+  type ListNodeData,
+  type LoopNodeData,
+  type LoopColumn,
+  type UploadImageData,
+  type UploadVideoData,
+  type UploadAudioData,
+  type RSSFeedData,
+  type YouTubeVideoData,
+  type ReferenceAudioData,
 } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
@@ -114,9 +115,26 @@ export function ListConfig({ data, onUpdate }: { data: ListNodeData; onUpdate: (
       <p className="text-xs text-muted-foreground">
         {itemList.length} item{itemList.length !== 1 ? "s" : ""}
       </p>
+      <div className="flex items-center gap-2 mt-3">
+        <label className="text-xs text-muted-foreground">Max items in app mode</label>
+        <input
+          type="number"
+          min={1}
+          max={20}
+          value={data.maxItems ?? 10}
+          onChange={(e) => onUpdate({ maxItems: parseInt(e.target.value, 10) || 10 })}
+          className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
+        />
+      </div>
     </div>
   )
 }
+
+const COLUMN_TYPES = Object.entries(LOOP_COLUMN_TYPE_META).map(([value, meta]) => ({
+  value,
+  label: meta.label,
+  color: meta.color,
+}))
 
 export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (patch: Partial<LoopNodeData>) => void }) {
   const columns = data.columns ?? []
@@ -125,7 +143,7 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
   function addColumn() {
     const id = crypto.randomUUID()
     const name = `Column ${columns.length + 1}`
-    const newCol: LoopColumn = { id, name, handleId: `col_${id}` }
+    const newCol: LoopColumn = { id, name, handleId: `col_${id}`, type: "text" }
     const updatedRows = rows.map((row) => [...row, ""])
     onUpdate({ columns: [...columns, newCol], rows: updatedRows })
   }
@@ -141,6 +159,13 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
       i === colIndex ? { ...col, name } : col,
     )
     onUpdate({ columns: updatedCols })
+  }
+
+  function updateColumnType(colIndex: number, type: LoopColumn["type"]) {
+    const newColumns = columns.map((c, i) =>
+      i === colIndex ? { ...c, type } : c
+    )
+    onUpdate({ columns: newColumns })
   }
 
   function addRow() {
@@ -200,6 +225,32 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
                         <X className="w-3 h-3" />
                       </button>
                     </div>
+                    <Select
+                      value={col.type ?? "text"}
+                      onValueChange={(v) => updateColumnType(ci, v as LoopColumn["type"])}
+                    >
+                      <SelectTrigger className="h-5 mt-0.5 px-1.5 text-[10px] border-none bg-transparent hover:bg-muted/30 gap-0.5">
+                        <span
+                          className="inline-block rounded-full px-1.5 py-0 text-[10px] font-medium leading-4 text-white"
+                          style={{ backgroundColor: COLUMN_TYPES.find((t) => t.value === (col.type ?? "text"))?.color ?? "#38BDF8" }}
+                        >
+                          {COLUMN_TYPES.find((t) => t.value === (col.type ?? "text"))?.label ?? "Text"}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COLUMN_TYPES.map((ct) => (
+                          <SelectItem key={ct.value} value={ct.value}>
+                            <span className="flex items-center gap-1.5">
+                              <span
+                                className="inline-block w-2 h-2 rounded-full"
+                                style={{ backgroundColor: ct.color }}
+                              />
+                              {ct.label}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </th>
                 ))}
               </tr>
@@ -248,6 +299,17 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
       <p className="text-xs text-muted-foreground">
         {rows.length} row{rows.length !== 1 ? "s" : ""} &times; {columns.length} column{columns.length !== 1 ? "s" : ""}
       </p>
+      <div className="flex items-center gap-2 mt-3">
+        <label className="text-xs text-muted-foreground">Max items in app mode</label>
+        <input
+          type="number"
+          min={1}
+          max={20}
+          value={data.maxItems ?? 10}
+          onChange={(e) => onUpdate({ maxItems: parseInt(e.target.value, 10) || 10 })}
+          className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
+        />
+      </div>
     </div>
   )
 }

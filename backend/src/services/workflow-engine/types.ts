@@ -70,6 +70,10 @@ export interface NodeExecutionState {
   error?: string
   startedAt?: string
   completedAt?: string
+  /** Total fan-out iterations (when node runs via list/loop) */
+  iterationTotal?: number
+  /** Completed fan-out iterations so far */
+  iterationCompleted?: number
 }
 
 // ---------------------------------------------------------------------------
