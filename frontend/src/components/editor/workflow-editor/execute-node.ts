@@ -1080,7 +1080,10 @@ export function executeNode(
                 const job = await getJobStatus(jobId);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
-                  updateNodeData(node.id, { currentJobProgress: job.progress });
+                  const prev = (useWorkflowStore.getState().nodes.find(n => n.id === node.id)?.data as Record<string, unknown>)?.currentJobProgress;
+                  if (job.progress !== prev) {
+                    updateNodeData(node.id, { currentJobProgress: job.progress });
+                  }
                 }
 
                 if (job.status === "completed") {
@@ -1276,10 +1279,12 @@ export function executeNode(
               try {
                 const job = await getJobStatus(jobId);
                 pollFailures = 0;
-                if (job.progress)
-                  updateNodeData(node.id, {
-                    currentJobProgress: job.progress,
-                  });
+                if (job.progress) {
+                  const prev = (useWorkflowStore.getState().nodes.find(n => n.id === node.id)?.data as Record<string, unknown>)?.currentJobProgress;
+                  if (job.progress !== prev) {
+                    updateNodeData(node.id, { currentJobProgress: job.progress });
+                  }
+                }
 
                 if (job.status === "completed") {
                   ctx.untrackInterval(poll);
@@ -1678,9 +1683,10 @@ export function executeNode(
                 const job = await getJobStatus(jobId);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
-                  updateNodeData(node.id, {
-                    currentJobProgress: job.progress,
-                  });
+                  const prev = (useWorkflowStore.getState().nodes.find(n => n.id === node.id)?.data as Record<string, unknown>)?.currentJobProgress;
+                  if (job.progress !== prev) {
+                    updateNodeData(node.id, { currentJobProgress: job.progress });
+                  }
                 }
                 if (job.status === "completed") {
                   ctx.untrackInterval(poll);
@@ -2177,7 +2183,10 @@ export function executeNode(
                 const job = await getJobStatus(jobId);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
-                  updateNodeData(node.id, { currentJobProgress: job.progress });
+                  const prev = (useWorkflowStore.getState().nodes.find(n => n.id === node.id)?.data as Record<string, unknown>)?.currentJobProgress;
+                  if (job.progress !== prev) {
+                    updateNodeData(node.id, { currentJobProgress: job.progress });
+                  }
                 }
 
                 if (job.status === "completed") {

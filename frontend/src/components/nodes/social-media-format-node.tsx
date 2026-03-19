@@ -78,7 +78,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
       <div className="relative w-full group">
         {/* Running state */}
         {status === "running" && (
-          <div className="flex items-center justify-center bg-muted/30 rounded-xl h-[180px]">
+          <div className="flex flex-col items-center justify-center gap-2 bg-muted/30 rounded-xl h-[180px]">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>

@@ -74,8 +74,12 @@ function SunoAddVocalsNodeComponent({ id, data, selected }: NodeProps) {
       handles={[]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
-        {status === "running" && !activeUrl && (<div className="flex flex-col items-center justify-center gap-2 h-12 rounded-md bg-muted/30"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-            <NodeJobProgress progress={nodeData.currentJobProgress} /></div>)}
+        {status === "running" && !activeUrl && (
+          <div className="flex flex-col items-center justify-center gap-2 h-12 rounded-md bg-muted/30">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            <NodeJobProgress progress={nodeData.currentJobProgress} />
+          </div>
+        )}
         {activeUrl && results.length > 0 && (
           <div className="flex justify-end px-3">
             <button
