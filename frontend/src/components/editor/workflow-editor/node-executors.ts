@@ -13,18 +13,11 @@ import {
   getJobStatus,
 } from "@/lib/api";
 import type {
-  GeneratedResult,
   GeneratedScript,
   GeneratedScriptResult,
-  GenerateImageData,
   EditImageData,
   ImageToImageData,
-  ImageToVideoData,
-  VideoToVideoData,
-  TextToVideoData,
-  TextToSpeechData,
   GenerateScriptData,
-  CombineVideosData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -32,6 +25,13 @@ import {
   checkStorageError,
   type ExecutionContext,
 } from "./types";
+import { pollJobWithNodeUpdate } from "./poll-job";
+
+/** Extract kieTaskId from output data for downstream video chaining. */
+const extractKieTaskId = (od: Record<string, unknown>) => {
+  const kieTaskId = od.kieTaskId as string | undefined;
+  return kieTaskId ? { kieTaskId } : {};
+};
 
 // --- Image generation ---
 
@@ -50,118 +50,28 @@ export function runImageGeneration(
   styleType?: string,
   expandPrompt?: boolean,
 ): Promise<void> {
-  const { updateNodeData } = useWorkflowStore.getState();
-  updateNodeData(nodeId, {
-    executionStatus: "running",
-    generatedImageUrl: undefined,
-  });
-
-  return new Promise((resolve, reject) => {
-    generateImage(
-      prompt,
-      referenceImageUrls,
-      provider,
-      undefined,
-      aspectRatio,
-      ctx.userId,
-      resolution,
-      quality,
-      negativePrompt,
-      seed,
-      renderingSpeed,
-      styleType,
-      expandPrompt,
-    )
-      .then(({ jobId }) => {
-        toast.info("Image generation started", {
-          description: `Job ID: ${jobId}`,
-        });
-        updateNodeData(nodeId, { currentJobId: jobId });
-
-        let pollFailures = 0;
-        const poll = ctx.trackInterval(
-          setInterval(async () => {
-            if (ctx.isWorkflowStale()) {
-              ctx.untrackInterval(poll);
-              reject(new WorkflowStaleError());
-              return;
-            }
-            try {
-              const job = await getJobStatus(jobId);
-              pollFailures = 0;
-              if (job.status === "completed") {
-                ctx.untrackInterval(poll);
-                const imageUrl = job.output_data?.imageUrl;
-                const existingResults =
-                  (
-                    useWorkflowStore
-                      .getState()
-                      .nodes.find((n) => n.id === nodeId)?.data as
-                      | GenerateImageData
-                      | undefined
-                  )?.generatedResults ?? [];
-                const newResult: GeneratedResult = {
-                  url: imageUrl ?? "",
-                  timestamp: new Date().toISOString(),
-                  jobId,
-                };
-                updateNodeData(nodeId, {
-                  executionStatus: "completed",
-                  generatedImageUrl: imageUrl,
-                  generatedResults: [newResult, ...existingResults],
-                  activeResultIndex: 0,
-                  currentJobId: undefined,
-                });
-                toast.success("Image generated");
-                resolve();
-              } else if (job.status === "failed") {
-                ctx.untrackInterval(poll);
-                const errMsg = job.error_message ?? "Unknown error";
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  errorMessage: errMsg,
-                  currentJobId: undefined,
-                });
-                toast.error("Image generation failed", {
-                  description: errMsg,
-                });
-                reject(new Error(errMsg));
-              }
-            } catch (err) {
-              pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
-                ctx.untrackInterval(poll);
-                const errMsg =
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to check job status";
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  errorMessage: errMsg,
-                  currentJobId: undefined,
-                });
-                toast.error("Failed to check job status");
-                reject(err);
-              }
-            }
-          }, 2000),
-        );
-      })
-      .catch((err) => {
-        const errMsg = err instanceof Error ? err.message : "Unknown error";
-        updateNodeData(nodeId, {
-          executionStatus: "failed",
-          errorMessage: errMsg,
-          currentJobId: undefined,
-        });
-        if (!checkStorageError(err, ctx)) {
-          toast.error("Failed to start image generation", {
-            description: errMsg,
-          });
-        }
-        reject(err);
-      });
-  });
+  return pollJobWithNodeUpdate(
+    nodeId,
+    () =>
+      generateImage(
+        prompt,
+        referenceImageUrls,
+        provider,
+        undefined,
+        aspectRatio,
+        ctx.userId,
+        resolution,
+        quality,
+        negativePrompt,
+        seed,
+        renderingSpeed,
+        styleType,
+        expandPrompt,
+      ),
+    "generatedImageUrl",
+    "Image generation",
+    ctx,
+  );
 }
 
 // --- Edit image ---
@@ -182,102 +92,13 @@ export function runEditImage(
     referenceImageUrls?: string[]
   },
 ): Promise<void> {
-  const { updateNodeData } = useWorkflowStore.getState();
-  updateNodeData(nodeId, {
-    executionStatus: "running",
-    generatedImageUrl: undefined,
-  });
-
-  return new Promise((resolve, reject) => {
-    editImage(imageUrl, prompt, provider, ctx.userId, options)
-      .then(({ jobId }) => {
-        toast.info("Image editing started", {
-          description: `Job ID: ${jobId}`,
-        });
-        updateNodeData(nodeId, { currentJobId: jobId });
-
-        let pollFailures = 0;
-        const poll = ctx.trackInterval(
-          setInterval(async () => {
-            if (ctx.isWorkflowStale()) {
-              ctx.untrackInterval(poll);
-              reject(new WorkflowStaleError());
-              return;
-            }
-            try {
-              const job = await getJobStatus(jobId);
-              pollFailures = 0;
-              if (job.status === "completed") {
-                ctx.untrackInterval(poll);
-                const outputUrl = job.output_data?.imageUrl;
-                const existingResults =
-                  (
-                    useWorkflowStore
-                      .getState()
-                      .nodes.find((n) => n.id === nodeId)?.data as
-                      | EditImageData
-                      | undefined
-                  )?.generatedResults ?? [];
-                const newResult: GeneratedResult = {
-                  url: outputUrl ?? "",
-                  timestamp: new Date().toISOString(),
-                  jobId,
-                };
-                updateNodeData(nodeId, {
-                  executionStatus: "completed",
-                  generatedImageUrl: outputUrl,
-                  generatedResults: [newResult, ...existingResults],
-                  activeResultIndex: 0,
-                  currentJobId: undefined,
-                });
-                toast.success("Image edited");
-                resolve();
-              } else if (job.status === "failed") {
-                ctx.untrackInterval(poll);
-                const errMsg = job.error_message ?? "Unknown error";
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  errorMessage: errMsg,
-                  currentJobId: undefined,
-                });
-                toast.error("Image editing failed", { description: errMsg });
-                reject(new Error(errMsg));
-              }
-            } catch (err) {
-              pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
-                ctx.untrackInterval(poll);
-                const errMsg =
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to check job status";
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  errorMessage: errMsg,
-                  currentJobId: undefined,
-                });
-                toast.error("Failed to check job status");
-                reject(err);
-              }
-            }
-          }, 2000),
-        );
-      })
-      .catch((err) => {
-        const errMsg = err instanceof Error ? err.message : "Unknown error";
-        updateNodeData(nodeId, {
-          executionStatus: "failed",
-          errorMessage: errMsg,
-          currentJobId: undefined,
-        });
-        if (!checkStorageError(err, ctx)) {
-          toast.error("Failed to start image editing", {
-            description: errMsg,
-          });
-        }
-        reject(err);
-      });
-  });
+  return pollJobWithNodeUpdate(
+    nodeId,
+    () => editImage(imageUrl, prompt, provider, ctx.userId, options),
+    "generatedImageUrl",
+    "Image editing",
+    ctx,
+  );
 }
 
 // --- Image to image ---
@@ -301,104 +122,13 @@ export function runImageToImage(
     maskUrl?: string
   },
 ): Promise<void> {
-  const { updateNodeData } = useWorkflowStore.getState();
-  updateNodeData(nodeId, {
-    executionStatus: "running",
-    generatedImageUrl: undefined,
-  });
-
-  return new Promise((resolve, reject) => {
-    imageToImage(imageUrl, prompt, provider, ctx.userId, referenceImageUrls, options)
-      .then(({ jobId }) => {
-        toast.info("Image transformation started", {
-          description: `Job ID: ${jobId}`,
-        });
-        updateNodeData(nodeId, { currentJobId: jobId });
-
-        let pollFailures = 0;
-        const poll = ctx.trackInterval(
-          setInterval(async () => {
-            if (ctx.isWorkflowStale()) {
-              ctx.untrackInterval(poll);
-              reject(new WorkflowStaleError());
-              return;
-            }
-            try {
-              const job = await getJobStatus(jobId);
-              pollFailures = 0;
-              if (job.status === "completed") {
-                ctx.untrackInterval(poll);
-                const outputUrl = job.output_data?.imageUrl;
-                const existingResults =
-                  (
-                    useWorkflowStore
-                      .getState()
-                      .nodes.find((n) => n.id === nodeId)?.data as
-                      | ImageToImageData
-                      | undefined
-                  )?.generatedResults ?? [];
-                const newResult: GeneratedResult = {
-                  url: outputUrl ?? "",
-                  timestamp: new Date().toISOString(),
-                  jobId,
-                };
-                updateNodeData(nodeId, {
-                  executionStatus: "completed",
-                  generatedImageUrl: outputUrl,
-                  generatedResults: [newResult, ...existingResults],
-                  activeResultIndex: 0,
-                  currentJobId: undefined,
-                });
-                toast.success("Image transformed");
-                resolve();
-              } else if (job.status === "failed") {
-                ctx.untrackInterval(poll);
-                const errMsg = job.error_message ?? "Unknown error";
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  errorMessage: errMsg,
-                  currentJobId: undefined,
-                });
-                toast.error("Image transformation failed", {
-                  description: errMsg,
-                });
-                reject(new Error(errMsg));
-              }
-            } catch (err) {
-              pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
-                ctx.untrackInterval(poll);
-                const errMsg =
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to check job status";
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  errorMessage: errMsg,
-                  currentJobId: undefined,
-                });
-                toast.error("Failed to check job status");
-                reject(err);
-              }
-            }
-          }, 2000),
-        );
-      })
-      .catch((err) => {
-        const errMsg = err instanceof Error ? err.message : "Unknown error";
-        updateNodeData(nodeId, {
-          executionStatus: "failed",
-          errorMessage: errMsg,
-          currentJobId: undefined,
-        });
-        if (!checkStorageError(err, ctx)) {
-          toast.error("Failed to start image transformation", {
-            description: errMsg,
-          });
-        }
-        reject(err);
-      });
-  });
+  return pollJobWithNodeUpdate(
+    nodeId,
+    () => imageToImage(imageUrl, prompt, provider, ctx.userId, referenceImageUrls, options),
+    "generatedImageUrl",
+    "Image transformation",
+    ctx,
+  );
 }
 
 // --- Video generation ---
@@ -434,132 +164,39 @@ export function runVideoGeneration(
   removeWatermark?: boolean,
   characterIdList?: string[],
 ): Promise<void> {
-  const { updateNodeData } = useWorkflowStore.getState();
-  updateNodeData(nodeId, {
-    executionStatus: "running",
-    generatedVideoUrl: undefined,
-    currentJobId: undefined,
-    currentJobProgress: undefined,
-  });
-
-  return new Promise((resolve, reject) => {
-    generateVideo({
-      startFrameUrl,
-      endFrameUrl,
-      audioUrl,
-      prompt,
-      provider,
-      generateAudio,
-      duration,
-      mode,
-      sound,
-      negativePrompt,
-      cfgScale,
-      aspectRatio,
-      multiShot,
-      shots,
-      elements,
-      resolution,
-      grokMode,
-      videoSize,
-      seed,
-      cameraFixed,
-      removeWatermark,
-      characterIdList,
-      userId: ctx.userId,
-    })
-      .then(({ jobId }) => {
-        toast.info("Video generation started", {
-          description: `Job ID: ${jobId}`,
-        });
-        updateNodeData(nodeId, { currentJobId: jobId });
-
-        let pollFailures = 0;
-        const poll = ctx.trackInterval(
-          setInterval(async () => {
-            if (ctx.isWorkflowStale()) {
-              ctx.untrackInterval(poll);
-              reject(new WorkflowStaleError());
-              return;
-            }
-            try {
-              const job = await getJobStatus(jobId);
-              pollFailures = 0;
-              if (job.progress != null && job.progress > 0) {
-                updateNodeData(nodeId, { currentJobProgress: job.progress });
-              }
-              if (job.status === "completed") {
-                ctx.untrackInterval(poll);
-                const videoUrl = job.output_data?.videoUrl;
-                const kieTaskId = job.output_data?.kieTaskId as string | undefined;
-                const existingResults =
-                  (
-                    useWorkflowStore
-                      .getState()
-                      .nodes.find((n) => n.id === nodeId)?.data as
-                      | ImageToVideoData
-                      | undefined
-                  )?.generatedResults ?? [];
-                const newResult: GeneratedResult = {
-                  url: videoUrl ?? "",
-                  timestamp: new Date().toISOString(),
-                  jobId,
-                };
-                updateNodeData(nodeId, {
-                  executionStatus: "completed",
-                  generatedVideoUrl: videoUrl,
-                  generatedResults: [newResult, ...existingResults],
-                  activeResultIndex: 0,
-                  currentJobId: undefined,
-                  currentJobProgress: undefined,
-                  ...(kieTaskId && { kieTaskId }),
-                });
-                toast.success("Video generated");
-                resolve();
-              } else if (job.status === "failed") {
-                ctx.untrackInterval(poll);
-                const errMsg = job.error_message ?? "Unknown error";
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  errorMessage: errMsg,
-                  currentJobId: undefined,
-                  currentJobProgress: undefined,
-                });
-                toast.error("Video generation failed", {
-                  description: errMsg,
-                });
-                reject(new Error(errMsg));
-              }
-            } catch (err) {
-              pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
-                ctx.untrackInterval(poll);
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  currentJobId: undefined,
-                  currentJobProgress: undefined,
-                });
-                toast.error("Failed to check video job status");
-                reject(err);
-              }
-            }
-          }, 2000),
-        );
-      })
-      .catch((err) => {
-        updateNodeData(nodeId, {
-          executionStatus: "failed",
-          currentJobId: undefined,
-          currentJobProgress: undefined,
-        });
-        if (!checkStorageError(err, ctx)) {
-          toast.error("Failed to start video generation", {
-            description: err instanceof Error ? err.message : "Unknown error",
-          });
-        }
-        reject(err);
-      });
-  });
+  return pollJobWithNodeUpdate(
+    nodeId,
+    () =>
+      generateVideo({
+        startFrameUrl,
+        endFrameUrl,
+        audioUrl,
+        prompt,
+        provider,
+        generateAudio,
+        duration,
+        mode,
+        sound,
+        negativePrompt,
+        cfgScale,
+        aspectRatio,
+        multiShot,
+        shots,
+        elements,
+        resolution,
+        grokMode,
+        videoSize,
+        seed,
+        cameraFixed,
+        removeWatermark,
+        characterIdList,
+        userId: ctx.userId,
+      }),
+    "generatedVideoUrl",
+    "Video generation",
+    ctx,
+    extractKieTaskId,
+  );
 }
 
 // --- Video to video ---
@@ -571,106 +208,13 @@ export function runVideoToVideoGeneration(
   prompt?: string,
   provider?: string,
 ): Promise<void> {
-  const { updateNodeData } = useWorkflowStore.getState();
-  updateNodeData(nodeId, {
-    executionStatus: "running",
-    generatedVideoUrl: undefined,
-    currentJobId: undefined,
-    currentJobProgress: undefined,
-  });
-
-  return new Promise((resolve, reject) => {
-    videoToVideo(sourceVideoUrl, prompt, provider, ctx.userId)
-      .then(({ jobId }) => {
-        toast.info("Video-to-video generation started", {
-          description: `Job ID: ${jobId}`,
-        });
-        updateNodeData(nodeId, { currentJobId: jobId });
-
-        let pollFailures = 0;
-        const poll = ctx.trackInterval(
-          setInterval(async () => {
-            if (ctx.isWorkflowStale()) {
-              ctx.untrackInterval(poll);
-              reject(new WorkflowStaleError());
-              return;
-            }
-            try {
-              const job = await getJobStatus(jobId);
-              pollFailures = 0;
-              if (job.progress != null && job.progress > 0) {
-                updateNodeData(nodeId, { currentJobProgress: job.progress });
-              }
-              if (job.status === "completed") {
-                ctx.untrackInterval(poll);
-                const videoUrl = job.output_data?.videoUrl;
-                const existingResults =
-                  (
-                    useWorkflowStore
-                      .getState()
-                      .nodes.find((n) => n.id === nodeId)?.data as
-                      | VideoToVideoData
-                      | undefined
-                  )?.generatedResults ?? [];
-                const newResult: GeneratedResult = {
-                  url: videoUrl ?? "",
-                  timestamp: new Date().toISOString(),
-                  jobId,
-                };
-                updateNodeData(nodeId, {
-                  executionStatus: "completed",
-                  generatedVideoUrl: videoUrl,
-                  generatedResults: [newResult, ...existingResults],
-                  activeResultIndex: 0,
-                  currentJobId: undefined,
-                  currentJobProgress: undefined,
-                });
-                toast.success("Video-to-video generated");
-                resolve();
-              } else if (job.status === "failed") {
-                ctx.untrackInterval(poll);
-                const errMsg = job.error_message ?? "Unknown error";
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  errorMessage: errMsg,
-                  currentJobId: undefined,
-                  currentJobProgress: undefined,
-                });
-                toast.error("Video-to-video generation failed", {
-                  description: errMsg,
-                });
-                reject(new Error(errMsg));
-              }
-            } catch (err) {
-              pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
-                ctx.untrackInterval(poll);
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  currentJobId: undefined,
-                  currentJobProgress: undefined,
-                });
-                toast.error("Failed to check video-to-video job status");
-                reject(err);
-              }
-            }
-          }, 2000),
-        );
-      })
-      .catch((err) => {
-        updateNodeData(nodeId, {
-          executionStatus: "failed",
-          currentJobId: undefined,
-          currentJobProgress: undefined,
-        });
-        if (!checkStorageError(err, ctx)) {
-          toast.error("Failed to start video-to-video generation", {
-            description: err instanceof Error ? err.message : "Unknown error",
-          });
-        }
-        reject(err);
-      });
-  });
+  return pollJobWithNodeUpdate(
+    nodeId,
+    () => videoToVideo(sourceVideoUrl, prompt, provider, ctx.userId),
+    "generatedVideoUrl",
+    "Video-to-video generation",
+    ctx,
+  );
 }
 
 // --- Text to video ---
@@ -700,108 +244,14 @@ export function runTextToVideoGeneration(
   },
   characterIdList?: string[],
 ): Promise<void> {
-  const { updateNodeData } = useWorkflowStore.getState();
-  updateNodeData(nodeId, {
-    executionStatus: "running",
-    generatedVideoUrl: undefined,
-    currentJobId: undefined,
-    currentJobProgress: undefined,
-  });
-
-  return new Promise((resolve, reject) => {
-    textToVideo(prompt, provider, ctx.userId, { ...kling3Options, characterIdList })
-      .then(({ jobId }) => {
-        toast.info("Text-to-video generation started", {
-          description: `Job ID: ${jobId}`,
-        });
-        updateNodeData(nodeId, { currentJobId: jobId });
-
-        let pollFailures = 0;
-        const poll = ctx.trackInterval(
-          setInterval(async () => {
-            if (ctx.isWorkflowStale()) {
-              ctx.untrackInterval(poll);
-              reject(new WorkflowStaleError());
-              return;
-            }
-            try {
-              const job = await getJobStatus(jobId);
-              pollFailures = 0;
-              if (job.progress != null && job.progress > 0) {
-                updateNodeData(nodeId, { currentJobProgress: job.progress });
-              }
-              if (job.status === "completed") {
-                ctx.untrackInterval(poll);
-                const videoUrl = job.output_data?.videoUrl;
-                const kieTaskId = job.output_data?.kieTaskId as string | undefined;
-                const existingResults =
-                  (
-                    useWorkflowStore
-                      .getState()
-                      .nodes.find((n) => n.id === nodeId)?.data as
-                      | TextToVideoData
-                      | undefined
-                  )?.generatedResults ?? [];
-                const newResult: GeneratedResult = {
-                  url: videoUrl ?? "",
-                  timestamp: new Date().toISOString(),
-                  jobId,
-                };
-                updateNodeData(nodeId, {
-                  executionStatus: "completed",
-                  generatedVideoUrl: videoUrl,
-                  generatedResults: [newResult, ...existingResults],
-                  activeResultIndex: 0,
-                  currentJobId: undefined,
-                  currentJobProgress: undefined,
-                  ...(kieTaskId && { kieTaskId }),
-                });
-                toast.success("Text-to-video generated");
-                resolve();
-              } else if (job.status === "failed") {
-                ctx.untrackInterval(poll);
-                const errMsg = job.error_message ?? "Unknown error";
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  errorMessage: errMsg,
-                  currentJobId: undefined,
-                  currentJobProgress: undefined,
-                });
-                toast.error("Text-to-video generation failed", {
-                  description: errMsg,
-                });
-                reject(new Error(errMsg));
-              }
-            } catch (err) {
-              pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
-                ctx.untrackInterval(poll);
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  currentJobId: undefined,
-                  currentJobProgress: undefined,
-                });
-                toast.error("Failed to check text-to-video job status");
-                reject(err);
-              }
-            }
-          }, 2000),
-        );
-      })
-      .catch((err) => {
-        updateNodeData(nodeId, {
-          executionStatus: "failed",
-          currentJobId: undefined,
-          currentJobProgress: undefined,
-        });
-        if (!checkStorageError(err, ctx)) {
-          toast.error("Failed to start text-to-video generation", {
-            description: err instanceof Error ? err.message : "Unknown error",
-          });
-        }
-        reject(err);
-      });
-  });
+  return pollJobWithNodeUpdate(
+    nodeId,
+    () => textToVideo(prompt, provider, ctx.userId, { ...kling3Options, characterIdList }),
+    "generatedVideoUrl",
+    "Text-to-video generation",
+    ctx,
+    extractKieTaskId,
+  );
 }
 
 // --- Text to speech ---
@@ -821,94 +271,13 @@ export function runTextToSpeechGeneration(
     voiceType?: "premade" | "custom" | "library";
   },
 ): Promise<void> {
-  const { updateNodeData } = useWorkflowStore.getState();
-  updateNodeData(nodeId, { executionStatus: "running" });
-
-  return new Promise((resolve, reject) => {
-    textToSpeech(text, voice, provider, ctx.userId, options)
-      .then(({ jobId }) => {
-        toast.info("Text-to-speech generation started", {
-          description: `Job ID: ${jobId}`,
-        });
-        updateNodeData(nodeId, { currentJobId: jobId });
-
-        let pollFailures = 0;
-        const poll = ctx.trackInterval(
-          setInterval(async () => {
-            if (ctx.isWorkflowStale()) {
-              ctx.untrackInterval(poll);
-              reject(new WorkflowStaleError());
-              return;
-            }
-            try {
-              const job = await getJobStatus(jobId);
-              pollFailures = 0;
-              if (job.status === "completed") {
-                ctx.untrackInterval(poll);
-                const audioUrl = job.output_data?.audioUrl;
-                const existingResults =
-                  (
-                    useWorkflowStore
-                      .getState()
-                      .nodes.find((n) => n.id === nodeId)?.data as
-                      | TextToSpeechData
-                      | undefined
-                  )?.generatedResults ?? [];
-                const newResult: GeneratedResult = {
-                  url: audioUrl ?? "",
-                  timestamp: new Date().toISOString(),
-                  jobId,
-                };
-                updateNodeData(nodeId, {
-                  executionStatus: "completed",
-                  generatedAudioUrl: audioUrl,
-                  generatedResults: [newResult, ...existingResults],
-                  activeResultIndex: 0,
-                  currentJobId: undefined,
-                });
-                toast.success("Audio generated");
-                resolve();
-              } else if (job.status === "failed") {
-                ctx.untrackInterval(poll);
-                const errMsg = job.error_message ?? "Unknown error";
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  errorMessage: errMsg,
-                  currentJobId: undefined,
-                });
-                toast.error("Text-to-speech generation failed", {
-                  description: errMsg,
-                });
-                reject(new Error(errMsg));
-              }
-            } catch (err) {
-              pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
-                ctx.untrackInterval(poll);
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  currentJobId: undefined,
-                });
-                toast.error("Failed to check text-to-speech job status");
-                reject(err);
-              }
-            }
-          }, 2000),
-        );
-      })
-      .catch((err) => {
-        updateNodeData(nodeId, {
-          executionStatus: "failed",
-          currentJobId: undefined,
-        });
-        if (!checkStorageError(err, ctx)) {
-          toast.error("Failed to start text-to-speech generation", {
-            description: err instanceof Error ? err.message : "Unknown error",
-          });
-        }
-        reject(err);
-      });
-  });
+  return pollJobWithNodeUpdate(
+    nodeId,
+    () => textToSpeech(text, voice, provider, ctx.userId, options),
+    "generatedAudioUrl",
+    "Text-to-speech generation",
+    ctx,
+  );
 }
 
 // --- Script generation ---
@@ -1031,93 +400,11 @@ export function runCombineVideos(
   audioMode: "keep" | "crossfade" | "remove",
   ctx: ExecutionContext,
 ): Promise<void> {
-  const { updateNodeData } = useWorkflowStore.getState();
-  updateNodeData(nodeId, {
-    executionStatus: "running",
-    generatedVideoUrl: undefined,
-  });
-
-  return new Promise((resolve, reject) => {
-    combineVideos(videoUrls, transition, transitionDuration, audioMode, ctx.userId)
-      .then(({ jobId }) => {
-        toast.info("Combine videos started", {
-          description: `Job ID: ${jobId}`,
-        });
-        updateNodeData(nodeId, { currentJobId: jobId });
-
-        let pollFailures = 0;
-        const poll = ctx.trackInterval(
-          setInterval(async () => {
-            if (ctx.isWorkflowStale()) {
-              ctx.untrackInterval(poll);
-              reject(new WorkflowStaleError());
-              return;
-            }
-            try {
-              const job = await getJobStatus(jobId);
-              pollFailures = 0;
-              if (job.status === "completed") {
-                ctx.untrackInterval(poll);
-                const videoUrl = job.output_data?.videoUrl;
-                const existingResults =
-                  (
-                    useWorkflowStore
-                      .getState()
-                      .nodes.find((n) => n.id === nodeId)?.data as
-                      | CombineVideosData
-                      | undefined
-                  )?.generatedResults ?? [];
-                const newResult: GeneratedResult = {
-                  url: videoUrl ?? "",
-                  timestamp: new Date().toISOString(),
-                  jobId,
-                };
-                updateNodeData(nodeId, {
-                  executionStatus: "completed",
-                  generatedVideoUrl: videoUrl,
-                  generatedResults: [newResult, ...existingResults],
-                  activeResultIndex: 0,
-                  currentJobId: undefined,
-                });
-                toast.success("Videos combined");
-                resolve();
-              } else if (job.status === "failed") {
-                ctx.untrackInterval(poll);
-                const errMsg = job.error_message ?? "Unknown error";
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  errorMessage: errMsg,
-                  currentJobId: undefined,
-                });
-                toast.error("Combine videos failed", { description: errMsg });
-                reject(new Error(errMsg));
-              }
-            } catch (err) {
-              pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
-                ctx.untrackInterval(poll);
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  currentJobId: undefined,
-                });
-                toast.error("Failed to check combine videos status");
-                reject(err);
-              }
-            }
-          }, 2000),
-        );
-      })
-      .catch((err) => {
-        updateNodeData(nodeId, {
-          executionStatus: "failed",
-          currentJobId: undefined,
-        });
-        if (!checkStorageError(err, ctx)) {
-          toast.error("Failed to start combine videos", {
-            description: err instanceof Error ? err.message : "Unknown error",
-          });
-        }
-        reject(err);
-      });
-  });
+  return pollJobWithNodeUpdate(
+    nodeId,
+    () => combineVideos(videoUrls, transition, transitionDuration, audioMode, ctx.userId),
+    "generatedVideoUrl",
+    "Combine videos",
+    ctx,
+  );
 }

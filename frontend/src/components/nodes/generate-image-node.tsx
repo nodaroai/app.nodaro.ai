@@ -4,6 +4,7 @@ import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, Settings, LayoutGrid, Expand, Download, Type } from "lucide-react"
+import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -151,8 +152,9 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       <div className="relative w-full group">
         {/* Running state */}
         {status === "running" && (
-          <div className="flex items-center justify-center bg-muted/30 rounded-xl h-[180px]">
+          <div className="flex flex-col items-center justify-center gap-2 bg-muted/30 rounded-xl h-[180px]">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
         )}
 
