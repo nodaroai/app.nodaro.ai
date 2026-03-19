@@ -26,6 +26,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 
 vi.mock("@/lib/api", () => ({
   getJobStatus: (...args: unknown[]) => mockGetJobStatus(...args),
+  getExecutionEstimate: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock("../types", () => ({
@@ -34,6 +35,13 @@ vi.mock("../types", () => ({
   },
   MAX_CONSECUTIVE_POLL_FAILURES: 3,
   checkStorageError: () => false,
+  updateProgressIfChanged: (nodeId: string, progress: number, updateFn: (id: string, data: Record<string, unknown>) => void) => {
+    updateFn(nodeId, { currentJobProgress: progress })
+  },
+}))
+
+vi.mock("@nodaro-shared/progress-curve", () => ({
+  calculateProgress: (_elapsed: number, _estimate: number) => 0,
 }))
 
 import { pollJobToCompletion, pollJobWithNodeUpdate } from "../poll-job"
