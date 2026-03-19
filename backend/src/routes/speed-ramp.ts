@@ -14,7 +14,7 @@ const speedRampBody = z.object({
 })
 
 export async function speedRampRoutes(app: FastifyInstance) {
-  app.post("/v1/speed-ramp", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
+  app.post("/v1/speed-ramp", { preHandler: creditGuard(() => "speed-ramp") }, async (req, reply) => {
     const parsed = speedRampBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -31,7 +31,7 @@ export async function speedRampRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = "ffmpeg"
+    const modelIdentifier = "speed-ramp"
 
     const { data: job, error } = await supabase
       .from("jobs")

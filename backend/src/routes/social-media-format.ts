@@ -21,7 +21,7 @@ const socialMediaFormatBody = z.object({
 })
 
 export async function socialMediaFormatRoutes(app: FastifyInstance) {
-  app.post("/v1/social-media-format", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
+  app.post("/v1/social-media-format", { preHandler: creditGuard(() => "social-media-format") }, async (req, reply) => {
     const parsed = socialMediaFormatBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -38,7 +38,7 @@ export async function socialMediaFormatRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = "ffmpeg"
+    const modelIdentifier = "social-media-format"
 
     const { data: job, error } = await supabase
       .from("jobs")

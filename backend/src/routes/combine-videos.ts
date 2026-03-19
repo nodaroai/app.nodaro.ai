@@ -15,7 +15,7 @@ const combineVideosBody = z.object({
 })
 
 export async function combineVideosRoutes(app: FastifyInstance) {
-  app.post("/v1/combine-videos", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
+  app.post("/v1/combine-videos", { preHandler: creditGuard(() => "combine-videos") }, async (req, reply) => {
     const parsed = combineVideosBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -35,8 +35,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       })
     }
 
-    // Model identifier for credit check (FFmpeg processing = 0 credits)
-    const modelIdentifier = "ffmpeg"
+    const modelIdentifier = "combine-videos"
 
     const { data: job, error } = await supabase
       .from("jobs")

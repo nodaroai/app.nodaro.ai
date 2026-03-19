@@ -4,7 +4,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 
 const generateObjectBody = z.object({
   name: z.string().min(1).max(200),
@@ -12,11 +12,12 @@ const generateObjectBody = z.object({
   category: z.enum(["furniture", "vehicle", "weapon", "food", "clothing", "electronics", "nature", "tool", "other"]).optional(),
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
+  provider: z.string().optional().default("nano-banana"),
   userId: z.string().uuid().optional(),
 })
 
 export async function generateObjectRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-object", { preHandler: creditGuard(() => "nano-banana") }, async (req, reply) => {
+  app.post("/v1/generate-object", { preHandler: creditGuard((req) => extractProvider(req.body, "nano-banana")) }, async (req, reply) => {
     const parsed = generateObjectBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -36,8 +37,7 @@ export async function generateObjectRoutes(app: FastifyInstance) {
       })
     }
 
-    // Model identifier for credit check (hardcoded to nano-banana)
-    const modelIdentifier = "nano-banana"
+    const modelIdentifier = parsed.data.provider
 
     // Build single front view object prompt
     const categoryDesc = category ?? "object"
@@ -81,7 +81,7 @@ export async function generateObjectRoutes(app: FastifyInstance) {
       jobId: job.id,
       prompt,
       sourceImageUrl,
-      provider: "nano-banana",
+      provider: parsed.data.provider,
       usageLogId,
     })
 

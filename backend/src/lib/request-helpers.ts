@@ -26,3 +26,15 @@ export function extractForcePrivate(body: unknown): boolean {
   }
   return false
 }
+
+/**
+ * Extracts a provider string from the raw request body before Zod parsing.
+ * Used in creditGuard preHandlers where the parsed body isn't yet available.
+ */
+export function extractProvider(body: unknown, fallback: string): string {
+  if (body && typeof body === "object" && "provider" in body) {
+    const val = (body as Record<string, unknown>).provider
+    if (typeof val === "string" && val.length > 0) return val
+  }
+  return fallback
+}

@@ -239,12 +239,14 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "sora-character",
   "render-video",
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post",
+  // FFmpeg processing (tiered credits)
+  "merge-video-audio", "combine-videos", "trim-audio", "trim-video",
+  "speed-ramp", "loop-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume",
+  "add-captions", "mix-audio",
 ])
 
 export const RUN_BUTTON_TYPES = new Set([
-  "merge-video-audio", "combine-videos", "trim-audio", "trim-video",
-  "speed-ramp", "loop-video", "fade-video", "transcode-video", "manual-edit", "resize-video", "social-media-format", "adjust-volume",
-  "add-captions", "mix-audio", "combine-text", "split-text", "preview", "composite",
+  "manual-edit", "combine-text", "split-text", "preview", "composite",
   "sub-workflow",
 ])
 

@@ -16,7 +16,7 @@ const trimAudioBody = z.object({
 })
 
 export async function trimAudioRoutes(app: FastifyInstance) {
-  app.post("/v1/trim-audio", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
+  app.post("/v1/trim-audio", { preHandler: creditGuard(() => "trim-audio") }, async (req, reply) => {
     const parsed = trimAudioBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -33,8 +33,7 @@ export async function trimAudioRoutes(app: FastifyInstance) {
       })
     }
 
-    // Model identifier for credit check (FFmpeg processing = 0 credits)
-    const modelIdentifier = "ffmpeg"
+    const modelIdentifier = "trim-audio"
 
     const { data: job, error } = await supabase
       .from("jobs")

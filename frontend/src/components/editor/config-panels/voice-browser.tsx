@@ -21,6 +21,7 @@ import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { useVoices } from "@/hooks/use-voices"
 import { useVoiceLibrary } from "@/hooks/use-voices"
 import { useVoiceClones, useCreateVoiceClone, useDeleteVoiceClone } from "@/hooks/use-voice-clones"
+import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits"
 import { toast } from "sonner"
 
 interface VoiceBrowserProps {
@@ -564,6 +565,7 @@ function MyVoicesTab({
   readonly onPlay: (previewUrl: string, id: string) => void
   readonly onSelect: (voiceId: string, voiceName: string) => void
 }) {
+  useEffect(() => { prefetchModelCredits(["voice-clone"]) }, [])
   const { data: voiceClones = [], isLoading } = useVoiceClones()
   const createMutation = useCreateVoiceClone()
   const deleteMutation = useDeleteVoiceClone()
@@ -800,7 +802,7 @@ function MyVoicesTab({
               {createMutation.isPending ? (
                 <Loader2 className="h-3 w-3 animate-spin mr-1" />
               ) : null}
-              Clone Voice (5 CR)
+              {`Clone Voice (${getCachedCredits("voice-clone") ?? 5} CR)`}
             </Button>
             <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={cancelRecording}>
               Cancel

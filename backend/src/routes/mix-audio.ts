@@ -13,7 +13,7 @@ const mixAudioBody = z.object({
 })
 
 export async function mixAudioRoutes(app: FastifyInstance) {
-  app.post("/v1/mix-audio", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
+  app.post("/v1/mix-audio", { preHandler: creditGuard(() => "mix-audio") }, async (req, reply) => {
     const parsed = mixAudioBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -30,8 +30,7 @@ export async function mixAudioRoutes(app: FastifyInstance) {
       })
     }
 
-    // Model identifier for credit check (FFmpeg processing = 0 credits)
-    const modelIdentifier = "ffmpeg"
+    const modelIdentifier = "mix-audio"
 
     const { data: job, error } = await supabase
       .from("jobs")

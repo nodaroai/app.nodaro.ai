@@ -144,6 +144,12 @@ export function getModelIdentifier(node: WorkflowNode): string {
     return (data.type as string) === "split_stem" ? "suno-separate-stem" : "suno-separate"
   }
 
+  // Entity nodes: use provider field (default nano-banana)
+  if (nodeType === "character" || nodeType === "face" || nodeType === "object" || nodeType === "location") {
+    const entityProvider = (data.provider as string) || "nano-banana"
+    return buildCreditModelIdentifier(entityProvider, data)
+  }
+
   const provider = data.provider as string | undefined
   if (!provider) return nodeType
 

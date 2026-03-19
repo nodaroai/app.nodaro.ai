@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select"
 import { CachedImage } from "@/components/ui/cached-image"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
-import { prefetchModelCredits } from "@/hooks/use-model-credits"
+import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits"
 import {
   getModels,
   getFirstModel,
@@ -49,7 +49,7 @@ import { buildEnrichedScenePrompt, type EnrichableScene } from "@nodaro-shared/p
 
 
 export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, onUpdateNode, nodeRefs }: ConfigProps<ImageToVideoData>) {
-  useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
+  useEffect(() => { prefetchModelCredits([...VIDEO_I2V_MODELS.map((m) => m.value), "sora-watermark-remove"]) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
   const baseDurations = KIE_VIDEO_DURATIONS[data.provider || "minimax"] || null
@@ -432,7 +432,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               onChange={(e) => onUpdate({ removeWatermark: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="i2vRemoveWatermark" className="text-xs">Remove Watermark (+4 CR)</label>
+            <label htmlFor="i2vRemoveWatermark" className="text-xs">{`Remove Watermark (+${getCachedCredits("sora-watermark-remove") ?? 4} CR)`}</label>
           </div>
           <p className="text-[10px] text-muted-foreground px-1">Runs a post-processing step to remove the Sora watermark.</p>
         </div>
@@ -779,6 +779,7 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
 }
 
 export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VideoUpscaleData>) {
+  useEffect(() => { prefetchModelCredits(["veo-1080p", "veo-4k"]) }, [])
   const provider = data.provider || "topaz"
   return (
     <div className="flex flex-col gap-3">
@@ -790,8 +791,8 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="topaz">Topaz (factor-based)</SelectItem>
-            <SelectItem value="veo-1080p">VEO 1080p (2 CR)</SelectItem>
-            <SelectItem value="veo-4k">VEO 4K (38 CR)</SelectItem>
+            <SelectItem value="veo-1080p">{`VEO 1080p (${getCachedCredits("veo-1080p") ?? 2} CR)`}</SelectItem>
+            <SelectItem value="veo-4k">{`VEO 4K (${getCachedCredits("veo-4k") ?? 38} CR)`}</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -822,7 +823,7 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
 }
 
 export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, nodeRefs }: ConfigProps<TextToVideoData>) {
-  useEffect(() => { prefetchModelCredits(VIDEO_T2V_MODELS.map((m) => m.value)) }, [])
+  useEffect(() => { prefetchModelCredits([...VIDEO_T2V_MODELS.map((m) => m.value), "sora-watermark-remove"]) }, [])
   const category: ProviderCategory = "video"
   const models = getModels(category, data.provider)
   const connectedModel = getConnectedProviderModel(fieldMappings, sources, nodes)
@@ -961,7 +962,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
               onChange={(e) => onUpdate({ removeWatermark: e.target.checked })}
               className="rounded border-muted-foreground/40"
             />
-            <label htmlFor="t2vRemoveWatermark" className="text-xs">Remove Watermark (+4 CR)</label>
+            <label htmlFor="t2vRemoveWatermark" className="text-xs">{`Remove Watermark (+${getCachedCredits("sora-watermark-remove") ?? 4} CR)`}</label>
           </div>
           <p className="text-[10px] text-muted-foreground px-1">Runs a post-processing step to remove the Sora watermark.</p>
         </div>
@@ -1069,6 +1070,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 
 
 export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SpeechToVideoData>) {
+  useEffect(() => { prefetchModelCredits(["speech-to-video", "speech-to-video:580p", "speech-to-video:720p"]) }, [])
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   return (
@@ -1082,9 +1084,9 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="480p">480p (4 credits)</SelectItem>
-            <SelectItem value="580p">580p (6 credits)</SelectItem>
-            <SelectItem value="720p">720p (8 credits)</SelectItem>
+            <SelectItem value="480p">{`480p (${getCachedCredits("speech-to-video") ?? 4} credits)`}</SelectItem>
+            <SelectItem value="580p">{`580p (${getCachedCredits("speech-to-video:580p") ?? 6} credits)`}</SelectItem>
+            <SelectItem value="720p">{`720p (${getCachedCredits("speech-to-video:720p") ?? 8} credits)`}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -1204,6 +1206,7 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
 
 
 export function SoraStoryboardConfig({ data, onUpdate, sources }: ConfigProps<SoraStoryboardData>) {
+  useEffect(() => { prefetchModelCredits(["sora-storyboard", "sora-storyboard:15", "sora-storyboard:25"]) }, [])
   const shots = data.shots ?? [{ scene: "", duration: 5 }]
 
   // Find connected generate-script source for "Fill from Script" button
@@ -1259,9 +1262,9 @@ export function SoraStoryboardConfig({ data, onUpdate, sources }: ConfigProps<So
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="10">10 frames (~5s) - 47 credits</SelectItem>
-            <SelectItem value="15">15 frames (~10s) - 85 credits</SelectItem>
-            <SelectItem value="25">25 frames (~15s) - 85 credits</SelectItem>
+            <SelectItem value="10">{`10 frames (~5s) - ${getCachedCredits("sora-storyboard") ?? 47} credits`}</SelectItem>
+            <SelectItem value="15">{`15 frames (~10s) - ${getCachedCredits("sora-storyboard:15") ?? 85} credits`}</SelectItem>
+            <SelectItem value="25">{`25 frames (~15s) - ${getCachedCredits("sora-storyboard:25") ?? 85} credits`}</SelectItem>
           </SelectContent>
         </Select>
       </div>

@@ -22,6 +22,8 @@ import { useAuth } from "@/hooks/use-auth"
 import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDialogueEntry, SceneLocationEntry, GenerateScriptData, WorkflowNode, AudioAssignment } from "@/types/nodes"
 import { mapScriptSceneToNodeData, getSceneCharacterNames } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS } from "@/components/editor/config-panels/model-options"
+import { ModelSelectOption } from "@/components/editor/config-panels/model-select-option"
+import { prefetchModelCredits } from "@/hooks/use-model-credits"
 
 type WizardStep = 1 | 2 | 3 | 4
 
@@ -184,6 +186,13 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
   const [expandQuickAdd, setExpandQuickAdd] = useState<"character" | "location" | "object" | null>(null)
   const [generatingAudio, setGeneratingAudio] = useState<Set<number>>(new Set())
   const [importFeedback, setImportFeedback] = useState<string | null>(null)
+
+  useEffect(() => {
+    prefetchModelCredits([
+      ...VIDEO_I2V_MODELS.map(m => m.value),
+      ...VIDEO_T2V_MODELS.map(m => m.value),
+    ])
+  }, [])
 
   const characterAssets = allAssets.filter((a) => !a.category || a.category === "character")
   const locationAssets = allAssets.filter((a) => a.category === "location")
@@ -1214,12 +1223,12 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
           <SelectContent position="popper" className="z-[9999] max-h-72">
             <p className="px-2 py-1 text-[10px] font-medium text-muted-foreground">Image to Video</p>
             {VIDEO_I2V_MODELS.map((m) => (
-              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
             ))}
             <SelectSeparator />
             <p className="px-2 py-1 text-[10px] font-medium text-muted-foreground">Text to Video</p>
             {VIDEO_T2V_MODELS.filter((m) => !VIDEO_I2V_MODELS.some((i) => i.value === m.value)).map((m) => (
-              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
             ))}
           </SelectContent>
         </Select>

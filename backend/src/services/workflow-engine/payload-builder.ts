@@ -118,7 +118,7 @@ function ffmpegResult(
   return {
     jobName,
     queueName: "video-generation",
-    modelIdentifier: "ffmpeg",
+    modelIdentifier: jobName,
     payload,
   }
 }

@@ -16,7 +16,7 @@ const transcodeVideoBody = z.object({
 })
 
 export async function transcodeVideoRoutes(app: FastifyInstance) {
-  app.post("/v1/transcode-video", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
+  app.post("/v1/transcode-video", { preHandler: creditGuard(() => "transcode-video") }, async (req, reply) => {
     const parsed = transcodeVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -33,7 +33,7 @@ export async function transcodeVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = "ffmpeg"
+    const modelIdentifier = "transcode-video"
 
     const { data: job, error } = await supabase
       .from("jobs")

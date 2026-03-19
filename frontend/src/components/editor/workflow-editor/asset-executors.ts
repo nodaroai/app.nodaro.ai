@@ -49,6 +49,7 @@ export function runCharacterGeneration(
       style: data.style || undefined,
       baseOutfit: data.baseOutfit || undefined,
       sourceImageUrl: data.sourceImageUrl || undefined,
+      provider: data.provider,
       userId: ctx.userId,
     })
       .then(({ jobId }) => {
@@ -199,6 +200,7 @@ export function runFaceGeneration(
       style: data.style || undefined,
       prompt: facePrompt,
       sourceImageUrl: data.sourceImageUrl || undefined,
+      provider: data.provider,
       userId: ctx.userId,
     })
       .then(({ jobId }) => {
@@ -329,6 +331,7 @@ export function runObjectGeneration(
       category: data.category || undefined,
       style: data.style || undefined,
       sourceImageUrl: data.sourceImageUrl || undefined,
+      provider: data.provider,
       userId: ctx.userId,
     })
       .then(({ jobId }) => {
@@ -463,6 +466,7 @@ export function runLocationGeneration(
       category: data.category || undefined,
       style: data.style || undefined,
       sourceImageUrl: data.sourceImageUrl || undefined,
+      provider: data.provider,
       userId: ctx.userId,
     })
       .then(({ jobId }) => {
@@ -694,6 +698,7 @@ export async function handleGenerateCharacterAsset(
         style: data.style || undefined,
         baseOutfit: data.baseOutfit || undefined,
         sourceImageUrl: portraitUrl,
+        provider: data.provider,
         userId: ctx.userId,
       });
 
@@ -804,6 +809,7 @@ export async function handleGenerateObjectAsset(
         category: data.category || undefined,
         style: data.style || undefined,
         sourceImageUrl: imageUrl,
+        provider: data.provider,
         userId: ctx.userId,
       });
 
@@ -914,6 +920,7 @@ export async function handleGenerateLocationAsset(
         category: data.category || undefined,
         style: data.style || undefined,
         sourceImageUrl: imageUrl,
+        provider: data.provider,
         userId: ctx.userId,
       });
 

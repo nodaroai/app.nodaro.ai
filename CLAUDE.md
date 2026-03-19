@@ -231,7 +231,7 @@ backend/src/
 | Execution model | Frontend DAG + Backend Orchestrator | Frontend: browser-based DAG engine; Backend: BullMQ orchestrator for autonomous/triggered execution |
 | Realtime updates | Polling (MVP) → SSE (Phase 2) | No extra infra needed |
 | Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
-| Credit pricing | 1 credit = $0.02 | Composite model identifiers for variable pricing (e.g., `"gpt-image:high"`, `"flux:2K"`); `VARIABLE_PRICING_MODELS` in `model-options.ts`; `buildCreditModelIdentifier()` in helpers.ts + route handlers; dynamic markup via `cost_markup_percent` app setting; credit anomaly tracking via `credit_anomalies` table |
+| Credit pricing | 1 credit = $0.02 | Composite model identifiers for variable pricing (e.g., `"gpt-image:high"`, `"flux:2K"`); `VARIABLE_PRICING_MODELS` in `model-options.ts`; `buildCreditModelIdentifier()` in helpers.ts + route handlers; dynamic markup via `cost_markup_percent` app setting; credit anomaly tracking via `credit_anomalies` table; FFmpeg processing nodes tiered: light 1 CR (trim, fade, loop, transcode, adjust-volume, trim-audio), medium 2 CR (resize, speed-ramp, merge, mix, social-format), heavy 3 CR (combine-videos, add-captions); entity nodes (character, face, object, location) support model selection for reference image generation |
 | Voice Extractor | ElevenLabs via KIE.ai | Isolates voice from any audio, removes background noise |
 | Speech-to-Text | ElevenLabs STT via KIE.ai | Transcription with diarization + audio event tagging (provider option on transcribe node) |
 | Text-to-Dialogue | ElevenLabs Dialogue V3 via KIE.ai | Multi-speaker TTS — each dialogue line gets a different voice, outputs single audio file |
@@ -313,8 +313,9 @@ backend/src/
 - [x] Kling 3.0 multi-shot polish (config panel, motionPrompt, end frame hide)
 - [x] Sora Character node (extract reusable character IDs from video, standard + pro modes)
 - [x] Sora character_id_list integration (I2V, T2V, Storyboard — up to 5 characters per generation)
+- [x] Credit system improvements: FFmpeg tiered pricing (1/2/3 CR), dynamic credit labels, entity node model selection, scene node credit badges
 
 ---
 
-*Last updated: 2026-03-18*
-*Version: 1.70.0*
+*Last updated: 2026-03-19*
+*Version: 1.71.0*

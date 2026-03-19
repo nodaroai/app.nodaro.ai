@@ -301,6 +301,7 @@ export async function generateCharacter(data: {
   style?: string
   baseOutfit?: string
   sourceImageUrl?: string
+  provider?: string
   userId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character`, {
@@ -324,6 +325,7 @@ export async function generateCharacterAsset(data: {
   style?: string
   baseOutfit?: string
   sourceImageUrl?: string
+  provider?: string
   userId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character-asset`, {
@@ -440,6 +442,7 @@ export async function generateFace(data: {
   style?: string
   prompt?: string
   sourceImageUrl?: string
+  provider?: string
   userId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-face`, {
@@ -523,6 +526,7 @@ export async function generateObject(data: {
   category?: string
   style?: string
   sourceImageUrl?: string
+  provider?: string
   userId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-object`, {
@@ -545,6 +549,7 @@ export async function generateObjectAsset(data: {
   category?: string
   style?: string
   sourceImageUrl: string
+  provider?: string
   userId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-object-asset`, {
@@ -653,6 +658,7 @@ export async function generateLocation(data: {
   category?: string
   style?: string
   sourceImageUrl?: string
+  provider?: string
   userId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-location`, {
@@ -675,6 +681,7 @@ export async function generateLocationAsset(data: {
   category?: string
   style?: string
   sourceImageUrl: string
+  provider?: string
   userId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-location-asset`, {
