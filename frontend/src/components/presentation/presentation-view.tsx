@@ -855,20 +855,22 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         {/* App runner: action buttons — scrollable row on mobile, centered on desktop */}
         {isAppRunner && (
           <div className="flex items-center gap-2 pb-2 md:pb-0 md:absolute md:left-1/2 md:-translate-x-1/2 overflow-x-auto scrollbar-none -mx-3 px-3 md:mx-0 md:px-0 md:overflow-x-visible">
-            <button
-              type="button"
-              onClick={onNewRun}
-              className={`shrink-0 whitespace-nowrap h-10 md:h-8 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all duration-200 touch-manipulation ${
-                newRunLabel === "Retry" || newRunLabel === "Clear"
-                  ? "text-foreground bg-muted hover:bg-muted/80 border border-border"
-                  : "text-white bg-[#ff0073] hover:bg-[#ff0073]/90"
-              }`}
-            >
-              {newRunLabel === "Retry" || newRunLabel === "Clear"
-                ? <RotateCcw className="h-4 w-4" />
-                : <Plus className="h-4 w-4" />}
-              <span className="hidden sm:inline">{newRunLabel ?? "New Run"}</span>
-            </button>
+            {user && (
+              <button
+                type="button"
+                onClick={onNewRun}
+                className={`shrink-0 whitespace-nowrap h-10 md:h-8 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all duration-200 touch-manipulation ${
+                  newRunLabel === "Retry" || newRunLabel === "Clear"
+                    ? "text-foreground bg-muted hover:bg-muted/80 border border-border"
+                    : "text-white bg-[#ff0073] hover:bg-[#ff0073]/90"
+                }`}
+              >
+                {newRunLabel === "Retry" || newRunLabel === "Clear"
+                  ? <RotateCcw className="h-4 w-4" />
+                  : <Plus className="h-4 w-4" />}
+                <span className="hidden sm:inline">{newRunLabel ?? "New Run"}</span>
+              </button>
+            )}
 
             {isRunning ? (
               <button
