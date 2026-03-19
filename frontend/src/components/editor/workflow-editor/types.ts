@@ -1,5 +1,6 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes";
 import { StorageExceededError } from "@/lib/api";
+import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers";
 
 /** Sentinel error thrown when a polling callback detects that the active
@@ -202,6 +203,18 @@ export const EXECUTABLE_TYPES = new Set([
 ]);
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 20;
+
+/** Update currentJobProgress only if value changed, avoiding no-op store updates. */
+export function updateProgressIfChanged(
+  nodeId: string,
+  newProgress: number,
+  updateNodeData: (id: string, data: Record<string, unknown>) => void,
+): void {
+  const prev = (useWorkflowStore.getState().nodes.find(n => n.id === nodeId)?.data as Record<string, unknown>)?.currentJobProgress;
+  if (newProgress !== prev) {
+    updateNodeData(nodeId, { currentJobProgress: newProgress });
+  }
+}
 
 export function isExecutableNode(node: WorkflowNode): boolean {
   return EXECUTABLE_TYPES.has(node.type ?? "");
