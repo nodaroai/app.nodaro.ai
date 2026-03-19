@@ -112,6 +112,7 @@ import { promptHelperRoutes } from "./routes/prompt-helper.js"
 import { adminLlmModelsRoutes } from "./routes/admin-llm-models.js"
 import { tutorialsRoutes } from "./routes/tutorials.js"
 import { adminTutorialsRoutes } from "./routes/admin-tutorials.js"
+import { executionStatsRoutes } from "./routes/execution-stats.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
@@ -190,6 +191,7 @@ export async function buildApp() {
   await app.register(motionTransferRoutes)
   await app.register(videoUpscaleRoutes)
   await app.register(statsRoutes)
+  await app.register(executionStatsRoutes)
   await app.register(cancelJobsRoutes)
   await app.register(creditsRoutes)
   await app.register(adminRoutes)

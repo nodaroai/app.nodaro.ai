@@ -15,7 +15,10 @@ import {
   InsufficientCreditsError,
   type PublishedApp,
   type AppRun,
+  batchExecutionEstimates,
 } from "@/lib/api"
+import { buildProgressSegments, calculateCombinedProgress, type ProgressSegment, CATEGORY_DURATION_DEFAULTS } from "@nodaro-shared/progress-curve"
+import { getOutputNodes } from "@nodaro-shared/presentation-utils"
 
 export type AppRunnerStatus = "idle" | "loading" | "running" | "completed" | "failed"
 
@@ -48,6 +51,8 @@ interface AppRunnerState {
   totalNodes: number
   errorMessage: string | null
   insufficientCredits: boolean
+  progressSegments: Record<string, ProgressSegment[]>
+  combinedProgress: Record<string, number>
 
   // Actions
   loadApp: (slug: string) => Promise<void>
@@ -88,6 +93,8 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
   totalNodes: 0,
   errorMessage: null,
   insufficientCredits: false,
+  progressSegments: {},
+  combinedProgress: {},
 
   loadApp: async (slug: string) => {
     if (get().loading) return
@@ -144,6 +151,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     // If still running, resume polling
     if (!isTerminal) {
       startPolling(set, get)
+      computeProgressSegments(set, get).catch(() => {})
     }
   },
 
@@ -159,6 +167,8 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       totalNodes: 0,
       errorMessage: null,
       insufficientCredits: false,
+      progressSegments: {},
+      combinedProgress: {},
     })
   },
 
@@ -184,6 +194,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       )
       set({ executionId, activeRunId: runId })
       startPolling(set, get)
+      computeProgressSegments(set, get).catch(() => {})
     } catch (err) {
       const isInsufficientCredits = err instanceof InsufficientCreditsError
       set({
@@ -224,6 +235,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     clearPollTimeout()
     set({ executionId, executionStatus: "running", errorMessage: null })
     startPolling(set, get)
+    computeProgressSegments(set, get).catch(() => {})
   },
 
   setSelectedVersion: (version: number | null) => {
@@ -258,6 +270,8 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       totalNodes: 0,
       errorMessage: null,
       insufficientCredits: false,
+      progressSegments: {},
+      combinedProgress: {},
     })
   },
 }))
@@ -306,6 +320,19 @@ function startPolling(
         totalNodes: status.total_nodes,
       })
 
+      // Calculate combined progress for each visible output node
+      const { progressSegments } = get()
+      if (Object.keys(progressSegments).length > 0) {
+        const combined: Record<string, number> = {}
+        for (const [visibleId, segs] of Object.entries(progressSegments)) {
+          combined[visibleId] = calculateCombinedProgress(
+            segs,
+            nodeStates as Record<string, { status: "pending" | "running" | "completed" | "failed" | "skipped"; startedAt?: string }>,
+          )
+        }
+        set({ combinedProgress: combined })
+      }
+
       if (status.status === "completed") {
         set({ executionStatus: "completed" })
         // Refresh runs list
@@ -335,4 +362,77 @@ function startPolling(
   }
 
   pollTimeoutId = setTimeout(poll, 1000)
+}
+
+async function computeProgressSegments(
+  set: (partial: Partial<AppRunnerState>) => void,
+  get: () => AppRunnerState,
+) {
+  const { app } = get()
+  if (!app) return
+
+  const nodes = app.snapshotNodes as WorkflowNode[]
+  const edges = app.snapshotEdges as WorkflowEdge[]
+
+  const visibleOutputs = getOutputNodes(nodes, edges, true)
+  if (visibleOutputs.length === 0) return
+
+  // Build edge map: targetId -> sourceIds
+  const edgeMap = new Map<string, string[]>()
+  for (const edge of edges) {
+    const sources = edgeMap.get(edge.target) ?? []
+    sources.push(edge.source)
+    edgeMap.set(edge.target, sources)
+  }
+
+  const allAncestorIds = new Set<string>()
+  const segmentNodeIds: Record<string, string[]> = {}
+
+  for (const outputNode of visibleOutputs) {
+    const ancestors: string[] = []
+    const visited = new Set<string>()
+    const queue = [outputNode.id]
+
+    while (queue.length > 0) {
+      const nodeId = queue.shift()!
+      if (visited.has(nodeId)) continue
+      visited.add(nodeId)
+      ancestors.push(nodeId)
+      allAncestorIds.add(nodeId)
+
+      const parents = edgeMap.get(nodeId) ?? []
+      for (const p of parents) {
+        if (!visited.has(p)) queue.push(p)
+      }
+    }
+
+    ancestors.reverse()
+    segmentNodeIds[outputNode.id] = ancestors
+  }
+
+  const nodeMap = new Map(nodes.map(n => [n.id, n]))
+  const estimateRequests = Array.from(allAncestorIds).map(nodeId => {
+    const node = nodeMap.get(nodeId)
+    const data = (node?.data ?? {}) as Record<string, unknown>
+    return {
+      nodeId,
+      model: (data.provider as string) ?? (data.ttsModel as string) ?? (data.llmModel as string) ?? node?.type ?? "unknown",
+      aspectRatio: (data.aspect_ratio as string) ?? (data.aspectRatio as string),
+      quality: (data.resolution as string) ?? (data.quality as string),
+      duration: Number(data.duration) || undefined,
+    }
+  })
+
+  const estimates = await batchExecutionEstimates(estimateRequests)
+
+  const segments: Record<string, ProgressSegment[]> = {}
+  for (const [visibleId, ancestorIds] of Object.entries(segmentNodeIds)) {
+    const nodeEstimates = ancestorIds.map(id => ({
+      nodeId: id,
+      estimatedMs: estimates[id]?.estimatedMs ?? CATEGORY_DURATION_DEFAULTS.image!,
+    }))
+    segments[visibleId] = buildProgressSegments(nodeEstimates)
+  }
+
+  set({ progressSegments: segments })
 }

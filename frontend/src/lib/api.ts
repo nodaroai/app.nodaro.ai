@@ -4252,3 +4252,54 @@ export async function deleteTutorial(id: string): Promise<{ success: boolean }> 
     { method: "DELETE" },
   )
 }
+
+// --- Execution stats (progress bar estimation) ---
+
+export interface ExecutionEstimate {
+  estimatedMs: number
+  confidence: "exact" | "partial" | "model" | "default"
+  sampleCount: number
+}
+
+const DEFAULT_ESTIMATE: ExecutionEstimate = {
+  estimatedMs: 30000, confidence: "default", sampleCount: 0
+}
+
+export async function getExecutionEstimate(
+  model: string,
+  aspectRatio?: string,
+  quality?: string,
+  duration?: number,
+): Promise<ExecutionEstimate> {
+  const params = new URLSearchParams({ model })
+  if (aspectRatio) params.set("aspectRatio", aspectRatio)
+  if (quality) params.set("quality", quality)
+  if (duration) params.set("duration", String(duration))
+  const res = await fetch(`${API_BASE_URL}/v1/execution-stats/estimate?${params}`, {
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    return DEFAULT_ESTIMATE
+  }
+  return res.json()
+}
+
+export async function batchExecutionEstimates(
+  nodes: { nodeId: string; model: string; aspectRatio?: string; quality?: string; duration?: number }[],
+): Promise<Record<string, ExecutionEstimate>> {
+  if (nodes.length === 0) return {}
+  const res = await fetch(`${API_BASE_URL}/v1/execution-stats/batch-estimate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
+    body: JSON.stringify({ nodes }),
+  })
+  if (!res.ok) {
+    const defaults: Record<string, ExecutionEstimate> = {}
+    for (const n of nodes) {
+      defaults[n.nodeId] = DEFAULT_ESTIMATE
+    }
+    return defaults
+  }
+  const { estimates } = await res.json()
+  return estimates
+}

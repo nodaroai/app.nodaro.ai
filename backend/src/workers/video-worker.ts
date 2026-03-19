@@ -12,6 +12,7 @@ import { ffmpegHandlers } from "./handlers/ffmpeg.js"
 import { audioAIHandlers } from "./handlers/audio-ai.js"
 import { sunoHandlers } from "./handlers/suno.js"
 import { entityHandlers } from "./handlers/entity.js"
+import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 
 const allHandlers: Record<string, HandlerFn> = {
   ...imageAIHandlers,
@@ -85,6 +86,23 @@ export function createVideoWorker() {
         }
 
         await handler(job, ctx)
+
+        // Record execution duration for progress bar estimation
+        // (started_at was set on the job record at the start of processing above)
+        try {
+          const statsKey = buildStatsKey(job.name, job.data as Record<string, unknown>)
+          if (statsKey) {
+            const { data: completedJob } = await supabase
+              .from("jobs")
+              .select("started_at")
+              .eq("id", jobId)
+              .single()
+            if (completedJob?.started_at) {
+              const durationMs = Date.now() - new Date(completedJob.started_at).getTime()
+              upsertExecutionStats(statsKey, durationMs).catch(() => {})
+            }
+          }
+        } catch { /* non-critical — don't block job completion */ }
 
         // Create asset records so generated media appears in /library
         await createAssetFromJob(jobId, jobUserId)
