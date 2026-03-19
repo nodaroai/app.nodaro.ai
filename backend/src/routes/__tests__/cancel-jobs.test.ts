@@ -26,6 +26,7 @@ vi.mock("@/lib/queue.js", () => ({
     getJob: vi.fn(),
     remove: vi.fn(),
   },
+  tryRemoveFromQueue: vi.fn().mockResolvedValue(undefined),
   redis: {},
 }))
 
@@ -53,7 +54,7 @@ vi.mock("@/lib/admin-check.js", () => ({
 
 import { cancelJobsRoutes } from "../cancel-jobs.js"
 import { supabase } from "../../lib/supabase.js"
-import { videoQueue } from "../../lib/queue.js"
+import { tryRemoveFromQueue } from "../../lib/queue.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -185,13 +186,6 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
       update: mockUpdate,
     } as never)
 
-    // Mock BullMQ getJob
-    const mockBullJob = {
-      getState: vi.fn().mockResolvedValue("waiting"),
-      remove: vi.fn().mockResolvedValue(undefined),
-    }
-    vi.mocked(videoQueue.getJob).mockResolvedValue(mockBullJob as never)
-
     const res = await app.inject({
       method: "POST",
       url: "/v1/jobs/job-1/cancel",
@@ -204,8 +198,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
     expect(body.cancelled).toBe(1)
 
     // Verify queue removal was attempted
-    expect(videoQueue.getJob).toHaveBeenCalledWith("job-1")
-    expect(mockBullJob.remove).toHaveBeenCalled()
+    expect(tryRemoveFromQueue).toHaveBeenCalledWith("job-1")
   })
 })
 
@@ -259,9 +252,6 @@ describe("POST /v1/jobs/cancel-all", () => {
       update: mockUpdate,
     } as never)
 
-    // Mock BullMQ — jobs not found in queue
-    vi.mocked(videoQueue.getJob).mockResolvedValue(null as never)
-
     const res = await app.inject({
       method: "POST",
       url: "/v1/jobs/cancel-all",
@@ -272,5 +262,9 @@ describe("POST /v1/jobs/cancel-all", () => {
     const body = res.json()
     expect(body.success).toBe(true)
     expect(body.cancelled).toBe(2)
+
+    // Verify queue removal was attempted for each job
+    expect(tryRemoveFromQueue).toHaveBeenCalledWith("job-1")
+    expect(tryRemoveFromQueue).toHaveBeenCalledWith("job-2")
   })
 })
