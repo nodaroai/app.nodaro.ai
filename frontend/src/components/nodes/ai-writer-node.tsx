@@ -2,7 +2,7 @@
 
 import { memo, useState, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Sparkles, Loader2, AlertCircle, X, FileText, Square, Type } from "lucide-react"
+import { Sparkles, Loader2, AlertCircle, X, FileText, Square, Type, Copy, Download } from "lucide-react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
 import { BaseNode } from "./base-node"
@@ -307,19 +307,50 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
                     <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                   </div>
                 )}
-                {results.length > 0 && !isStreaming && (
+                <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     type="button"
-                    aria-label="Remove" className="absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Copy text"
+                    className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
                     onClick={(e) => {
                       e.stopPropagation()
-                      setDeleteConfirm(activeIndex)
+                      navigator.clipboard.writeText(displayText ?? "").then(() => toast.success("Text copied")).catch(() => {})
                     }}
-                    title="Delete this result"
                   >
-                    <X className="w-3 h-3" />
+                    <Copy className="w-3 h-3" />
                   </button>
-                )}
+                  <button
+                    type="button"
+                    aria-label="Download"
+                    className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const blob = new Blob([displayText ?? ""], { type: "text/plain" })
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement("a")
+                      a.href = url
+                      a.download = `${nodeData.label || "output"}.txt`
+                      a.click()
+                      URL.revokeObjectURL(url)
+                    }}
+                  >
+                    <Download className="w-3 h-3" />
+                  </button>
+                  {results.length > 0 && !isStreaming && (
+                    <button
+                      type="button"
+                      aria-label="Remove"
+                      className="w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setDeleteConfirm(activeIndex)
+                      }}
+                      title="Delete this result"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 

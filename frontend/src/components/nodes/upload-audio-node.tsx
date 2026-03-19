@@ -9,6 +9,8 @@ import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
+import { AudioResultOverlay } from "./audio-result-overlay"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { UploadAudioData } from "@/types/nodes"
 
 const HANDLES = [
@@ -31,6 +33,7 @@ function formatDuration(seconds: number): string {
 function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as UploadAudioData
   const [mode, setMode] = useState<"upload" | "url">(nodeData.externalUrl ? "url" : "upload")
+  const [previewOpen, setPreviewOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
@@ -167,13 +170,15 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                       <X className="w-3 h-3" />
                     </button>
                   </div>
-                  {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                  <audio
-                    src={audioUrl}
-                    controls
-                    className="w-full mt-2 h-8 [&::-webkit-media-controls-panel]:bg-muted/50"
-                    onMouseDown={(e) => e.stopPropagation()}
-                  />
+                  <div className="mt-2">
+                    <AudioResultOverlay
+                      url={audioUrl}
+                      label={nodeData.label}
+                      hasResults={false}
+                      onExpand={() => setPreviewOpen(true)}
+                      onDelete={() => {}}
+                    />
+                  </div>
                 </div>
               ) : (
                 <>
@@ -229,13 +234,15 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                 />
               </div>
               {(nodeData.externalUrl || nodeData.url) && (
-                /* eslint-disable-next-line jsx-a11y/media-has-caption */
-                <audio
-                  src={nodeData.externalUrl || nodeData.url}
-                  controls
-                  className="w-full mt-2 h-8 [&::-webkit-media-controls-panel]:bg-muted/50"
-                  onMouseDown={(e) => e.stopPropagation()}
-                />
+                <div className="mt-2">
+                  <AudioResultOverlay
+                    url={nodeData.externalUrl || nodeData.url}
+                    label={nodeData.label}
+                    hasResults={false}
+                    onExpand={() => setPreviewOpen(true)}
+                    onDelete={() => {}}
+                  />
+                </div>
               )}
               <button
                 type="button"
@@ -262,6 +269,14 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
       quotaBytes={storageExceeded.quotaBytes}
       tier={storageExceeded.tier}
     />
+    {(audioUrl || nodeData.externalUrl || nodeData.url) && (
+      <MediaPreviewModal
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        type="audio"
+        url={audioUrl || nodeData.externalUrl || nodeData.url}
+      />
+    )}
     </>
   )
 }

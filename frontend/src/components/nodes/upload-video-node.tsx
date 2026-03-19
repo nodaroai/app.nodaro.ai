@@ -2,12 +2,14 @@
 
 import { memo, useRef, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Video, Upload, Link, Loader2, AlertCircle, X, Play } from "lucide-react"
+import { Video, Upload, Link, Loader2, AlertCircle, X, Play, Expand, Download } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { toast } from "sonner"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -204,6 +206,46 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                   >
                     <X className="w-3 h-3" />
                   </button>
+                  {/* Action buttons row */}
+                  <div className="absolute bottom-1 left-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      aria-label="Expand video"
+                      className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
+                      onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+                      title="Expand"
+                    >
+                      <Expand className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Download video"
+                      className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const a = document.createElement('a')
+                        a.href = '/v1/image-proxy?url=' + encodeURIComponent(videoUrl) + '&download=1'
+                        a.download = (nodeData.label || 'video') + '.mp4'
+                        a.click()
+                      }}
+                      title="Download"
+                    >
+                      <Download className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Copy URL"
+                      className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        navigator.clipboard.writeText(videoUrl).then(() => toast.success("URL copied"))
+                      }}
+                      title="Copy URL"
+                    >
+                      <Link className="w-3 h-3" />
+                    </button>
+                    <SaveToLibraryButton url={videoUrl} type="video" />
+                  </div>
                   {nodeData.filename && (
                     <div className="mt-1.5 space-y-0.5">
                       <p className="text-[10px] text-muted-foreground truncate">{nodeData.filename}</p>

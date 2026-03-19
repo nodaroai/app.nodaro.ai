@@ -10,6 +10,8 @@ import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { AudioResultOverlay } from "./audio-result-overlay"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { AdjustVolumeData } from "@/types/nodes"
 
 function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
@@ -25,6 +27,7 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
   const isVideoOutput = nodeData.lastInputType === "video"
   const activeUrl = activeResult?.url ?? (isVideoOutput ? nodeData.generatedVideoUrl : nodeData.generatedAudioUrl)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -64,12 +67,13 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
         {status !== "running" && activeUrl && !isVideoOutput && (
-          <div className="relative group">
-            <audio src={activeUrl} controls className="w-full h-10" />
-            {results.length > 0 && (
-              <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
-            )}
-          </div>
+          <AudioResultOverlay
+            url={activeUrl}
+            label={nodeData.label}
+            hasResults={results.length > 0}
+            onExpand={() => setPreviewOpen(true)}
+            onDelete={() => setDeleteConfirm(activeIndex)}
+          />
         )}
         {status === "failed" && !activeUrl && (
           <div className="flex flex-col items-center justify-center gap-1 h-16 rounded-md bg-red-500/5 text-red-500 p-2">
@@ -111,6 +115,9 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
     <HandleIcon icon={<AudioLines />} color="steel" side="left" />
     <HandleIcon icon={<AudioLines />} color="steel" />
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
+    {activeUrl && !isVideoOutput && (
+      <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="audio" url={activeUrl} />
+    )}
     </div>
   )
 }

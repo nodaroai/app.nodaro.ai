@@ -2,13 +2,15 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps, NodeResizer, Handle } from "@xyflow/react"
-import { Wand2, Loader2, AlertCircle, X, Volume2, Type, LayoutGrid, Copy, Check } from "lucide-react"
+import { Wand2, Loader2, AlertCircle, Volume2, Type, LayoutGrid, Copy, Check } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { AudioResultOverlay } from "./audio-result-overlay"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { VoiceDesignData } from "@/types/nodes"
 
 function VoiceDesignNodeComponent({ id, data, selected }: NodeProps) {
@@ -22,6 +24,7 @@ function VoiceDesignNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const credits = useModelCredits("elevenlabs-voice-design", 5)
 
@@ -110,34 +113,26 @@ function VoiceDesignNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
+        {activeUrl && results.length > 0 && (
+          <div className="flex justify-end px-3">
+            <button type="button"
+              className="flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md"
+              onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
+            >
+              <LayoutGrid className="w-3 h-3" />
+              <span>{results.length}</span>
+            </button>
+          </div>
+        )}
         {activeUrl && (
-          <div className="relative group/audio px-3 py-2">
-            <audio
-              src={activeUrl}
-              controls
-              className="w-full h-8"
-              onClick={(e) => e.stopPropagation()}
+          <div className="px-3 py-2">
+            <AudioResultOverlay
+              url={activeUrl}
+              label={nodeData.label}
+              hasResults={results.length > 0}
+              onExpand={() => setPreviewOpen(true)}
+              onDelete={() => setDeleteConfirm(activeIndex)}
             />
-            {results.length > 0 && (
-              <button
-                type="button"
-                className="absolute -top-1 left-3 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/audio:opacity-100 transition-opacity"
-                onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
-              >
-                <LayoutGrid className="w-3 h-3" />
-                <span>{results.length}</span>
-              </button>
-            )}
-            {results.length > 0 && (
-              <button
-                type="button"
-                aria-label="Remove"
-                className="absolute -top-1 right-3 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover/audio:opacity-100 transition-opacity"
-                onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
           </div>
         )}
 
@@ -230,6 +225,9 @@ function VoiceDesignNodeComponent({ id, data, selected }: NodeProps) {
         if (deleteConfirm !== null) handleDeleteResult(deleteConfirm)
       }}
     />
+    {activeUrl && (
+      <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="audio" url={activeUrl} />
+    )}
     </div>
   )
 }

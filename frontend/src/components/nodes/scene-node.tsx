@@ -3,7 +3,7 @@
 import { memo, useState, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Users, MapPin, Box, Loader2, AlertCircle, X, Maximize2, Scissors, Type } from "lucide-react"
+import { Clapperboard, Users, MapPin, Box, Loader2, AlertCircle, X, Maximize2, Scissors, Type, Download, Link } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -16,6 +16,7 @@ const SceneEditorModal = lazy(() => import("@/components/editor/scene-editor-mod
 const ExtractReferencesModal = lazy(() => import("@/components/editor/extract-references-modal").then(m => ({ default: m.ExtractReferencesModal })))
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { toast } from "sonner"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import type { SceneNodeDataType, ExtractedReference } from "@/types/nodes"
@@ -158,7 +159,34 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
                 </button>
               )}
             </div>
-            <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute bottom-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                type="button"
+                aria-label="Download image"
+                className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const a = document.createElement('a')
+                  a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl ?? '')}&download=1`
+                  a.download = `${nodeData.label || 'scene'}.png`
+                  a.click()
+                }}
+                title="Download"
+              >
+                <Download className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                aria-label="Copy URL"
+                className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  navigator.clipboard.writeText(activeUrl ?? '').then(() => toast.success("URL copied")).catch(() => {})
+                }}
+                title="Copy URL"
+              >
+                <Link className="w-3 h-3" />
+              </button>
               <SaveToLibraryButton url={activeUrl} type="image" />
             </div>
           </div>

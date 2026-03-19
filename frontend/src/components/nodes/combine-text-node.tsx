@@ -2,8 +2,9 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Merge, FileText, X } from "lucide-react"
+import { Merge, FileText, X, Copy } from "lucide-react"
 import { createPortal } from "react-dom"
+import { toast } from "sonner"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -104,19 +105,34 @@ function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
       >
         <div className="flex flex-col gap-1">
           {combinedText ? (
-            <div
-              className="w-full rounded-md bg-muted/30 p-2 cursor-pointer hover:bg-muted/50 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation()
-                setPreviewOpen(true)
-              }}
-            >
-              <p className="text-xs text-foreground/80 line-clamp-3 break-words">
-                {lineCount} line{lineCount !== 1 ? "s" : ""} combined
-              </p>
-              <span className="text-[10px] text-muted-foreground mt-1 block">
-                Click to expand
-              </span>
+            <div className="relative group">
+              <div
+                className="w-full rounded-md bg-muted/30 p-2 cursor-pointer hover:bg-muted/50 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setPreviewOpen(true)
+                }}
+              >
+                <p className="text-xs text-foreground/80 line-clamp-3 break-words">
+                  {lineCount} line{lineCount !== 1 ? "s" : ""} combined
+                </p>
+                <span className="text-[10px] text-muted-foreground mt-1 block">
+                  Click to expand
+                </span>
+              </div>
+              <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  type="button"
+                  aria-label="Copy text"
+                  className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigator.clipboard.writeText(combinedText ?? "").then(() => toast.success("Text copied")).catch(() => {})
+                  }}
+                >
+                  <Copy className="w-3 h-3" />
+                </button>
+              </div>
             </div>
           ) : (
             <div className="flex items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">

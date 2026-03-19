@@ -2,7 +2,8 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Link } from "lucide-react"
+import { toast } from "sonner"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -222,6 +223,17 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
               onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }}
             >
               <Download className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label="Copy URL"
+              className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                navigator.clipboard.writeText(activeUrl!).then(() => toast.success("URL copied")).catch(() => {})
+              }}
+            >
+              <Link className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
