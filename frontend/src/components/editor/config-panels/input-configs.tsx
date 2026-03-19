@@ -237,7 +237,7 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
                           {COLUMN_TYPES.find((t) => t.value === (col.type ?? "text"))?.label ?? "Text"}
                         </span>
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper">
                         {COLUMN_TYPES.map((ct) => (
                           <SelectItem key={ct.value} value={ct.value}>
                             <span className="flex items-center gap-1.5">
