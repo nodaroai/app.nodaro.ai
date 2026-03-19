@@ -23,7 +23,7 @@ vi.mock("../base-node", () => ({
 
 vi.mock("lucide-react", () => {
   const I = (p: any) => <span data-testid="mock-icon" {...p} />
-  return { Merge: I, FileText: I, X: I }
+  return { Merge: I, FileText: I, X: I, Copy: I }
 })
 
 vi.mock("../run-node-button", () => ({

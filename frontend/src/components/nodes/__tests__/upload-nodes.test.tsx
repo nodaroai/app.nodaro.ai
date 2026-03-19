@@ -48,6 +48,8 @@ vi.mock("lucide-react", () => ({
   Video: MockIcon,
   Play: MockIcon,
   Music: MockIcon,
+  Download: MockIcon,
+  Expand: MockIcon,
 }))
 
 vi.mock("@/hooks/use-workflow-store", () => ({
@@ -83,6 +85,19 @@ vi.mock("@/components/credits/StorageExceededModal", () => ({
 
 vi.mock("@/components/editor/media-preview-modal", () => ({
   MediaPreviewModal: () => null,
+}))
+
+vi.mock("@/components/editor/save-to-library-button", () => ({
+  SaveToLibraryButton: () => null,
+}))
+
+vi.mock("@/lib/utils", () => ({
+  cn: (...args: any[]) => args.filter(Boolean).join(" "),
+  copyToClipboard: vi.fn(),
+}))
+
+vi.mock("../audio-result-overlay", () => ({
+  AudioResultOverlay: ({ url }: any) => <div data-testid="audio-overlay"><audio src={url} controls /></div>,
 }))
 
 import { UploadImageNode } from "../upload-image-node"

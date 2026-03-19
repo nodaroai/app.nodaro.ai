@@ -74,6 +74,10 @@ vi.mock("@/components/ui/delete-confirmation-dialog", () => ({
   DeleteConfirmationDialog: () => null,
 }))
 
+vi.mock("../audio-result-overlay", () => ({
+  AudioResultOverlay: ({ url }: any) => <div data-testid="audio-overlay"><audio src={url} controls /></div>,
+}))
+
 // ---------------------------------------------------------------------------
 // Component import (after all mocks)
 // ---------------------------------------------------------------------------
