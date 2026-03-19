@@ -667,5 +667,304 @@ describe("CreditsService", () => {
       expect(result.allowed).toBe(true)
       expect(result.balance).toBe(0)
     })
+
+    it("blocks free tier on app run when no app credits allowance", async () => {
+      mockTable("model_pricing", { credit_cost: 2, is_enabled: true, tier_restriction: null })
+      const freeAppProfile: CreditProfile = {
+        tier: "free", subscription_credits: 30, topup_credits: 0,
+        daily_spent_credits: 0, last_daily_reset: new Date().toISOString(),
+        app_credits_allowance: 0,
+      }
+      const result = await CreditsService.checkCreditsWithProfile(userId, freeAppProfile, "flux", true)
+      expect(result.allowed).toBe(false)
+      expect(result.error).toContain("Insufficient app credits")
+      expect(result.appCreditsAllowance).toBe(0)
+    })
+
+    it("allows free tier app run when app credits allowance is sufficient", async () => {
+      mockTable("model_pricing", { credit_cost: 2, is_enabled: true, tier_restriction: null })
+      const freeAppProfile: CreditProfile = {
+        tier: "free", subscription_credits: 30, topup_credits: 0,
+        daily_spent_credits: 0, last_daily_reset: new Date().toISOString(),
+        app_credits_allowance: 10,
+      }
+      const result = await CreditsService.checkCreditsWithProfile(userId, freeAppProfile, "flux", true)
+      expect(result.allowed).toBe(true)
+      expect(result.watermark).toBe(true)
+    })
+
+    it("skips app allowance check for free tier with topup credits", async () => {
+      mockTable("model_pricing", { credit_cost: 2, is_enabled: true, tier_restriction: null })
+      const freeWithTopup: CreditProfile = {
+        tier: "free", subscription_credits: 10, topup_credits: 20,
+        daily_spent_credits: 0, last_daily_reset: new Date().toISOString(),
+        app_credits_allowance: 0,
+      }
+      const result = await CreditsService.checkCreditsWithProfile(userId, freeWithTopup, "flux", true)
+      expect(result.allowed).toBe(true)
+    })
+
+    it("allows paid tier even with high daily spend (no daily cap for paid)", async () => {
+      mockTable("model_pricing", { credit_cost: 10, is_enabled: true, tier_restriction: null })
+      const paidDailyProfile: CreditProfile = {
+        tier: "pro", subscription_credits: 500, topup_credits: 100,
+        daily_spent_credits: 45, last_daily_reset: new Date().toISOString(),
+      }
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidDailyProfile, "model")
+      expect(result.allowed).toBe(true)
+    })
+
+    it("defaults to 1 credit for unknown model with no DB or static cost", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "totally-unknown-model-xyz")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(1)
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // estimateWorkflowCredits — composite model identifiers from node data
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("estimateWorkflowCredits with composite identifiers", () => {
+    it("resolves gpt-image:high", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "generate-image", data: { provider: "gpt-image", quality: "high" } },
+      ])).toBe(7)
+    })
+
+    it("resolves gpt-image with medium quality (base)", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "generate-image", data: { provider: "gpt-image", quality: "medium" } },
+      ])).toBe(4)
+    })
+
+    it("resolves flux:2K", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "generate-image", data: { provider: "flux", resolution: "2K" } },
+      ])).toBe(3)
+    })
+
+    it("resolves flux with 1K (base)", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "generate-image", data: { provider: "flux", resolution: "1K" } },
+      ])).toBe(2)
+    })
+
+    it("resolves nano-banana-2:2K", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "generate-image", data: { provider: "nano-banana-2", resolution: "2K" } },
+      ])).toBe(5)
+    })
+
+    it("resolves nano-banana-2:4K", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "generate-image", data: { provider: "nano-banana-2", resolution: "4K" } },
+      ])).toBe(7)
+    })
+
+    it("resolves nano-banana-pro:4K", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "generate-image", data: { provider: "nano-banana-pro", resolution: "4K" } },
+      ])).toBe(8)
+    })
+
+    it("resolves ideogram-edit:TURBO", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "image-to-image", data: { provider: "ideogram-edit", renderingSpeed: "TURBO" } },
+      ])).toBe(4)
+    })
+
+    it("resolves ideogram-edit:QUALITY", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "image-to-image", data: { provider: "ideogram-edit", renderingSpeed: "QUALITY" } },
+      ])).toBe(8)
+    })
+
+    it("resolves topaz-image-upscale:4K", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "edit-image", data: { provider: "topaz-image-upscale", targetResolution: "4K" } },
+      ])).toBe(7)
+    })
+
+    it("resolves topaz-image-upscale:8K", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "edit-image", data: { provider: "topaz-image-upscale", targetResolution: "8K" } },
+      ])).toBe(13)
+    })
+
+    it("resolves topaz-image-upscale at default 2K (base)", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "edit-image", data: { provider: "topaz-image-upscale", targetResolution: "2K" } },
+      ])).toBe(4)
+    })
+
+    it("resolves seedream:high", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "generate-image", data: { provider: "seedream", quality: "high" } },
+      ])).toBe(4)
+    })
+
+    it("resolves ai-writer directly", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "ai-writer", data: { provider: "claude" } },
+      ])).toBe(5)
+    })
+
+    it("resolves suno-separate split_stem", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "suno-separate", data: { type: "split_stem" } },
+      ])).toBe(16)
+    })
+
+    it("resolves suno-separate default type", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "suno-separate", data: { type: "separate" } },
+      ])).toBe(5)
+    })
+
+    it("resolves suno-generate V5", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "suno-generate", data: { model: "V5" } },
+      ])).toBe(4)
+    })
+
+    it("resolves suno-generate V4", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "suno-generate", data: { model: "V4" } },
+      ])).toBe(4)
+    })
+
+    it("resolves suno-cover V5", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "suno-cover", data: { model: "V5" } },
+      ])).toBe(4)
+    })
+
+    it("resolves suno-lyrics (exempted from V5 check)", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "suno-lyrics", data: { model: "V5" } },
+      ])).toBe(2)
+    })
+
+    it("resolves suno-music-video (exempted from V5 check)", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "suno-music-video", data: { model: "V5" } },
+      ])).toBe(5)
+    })
+
+    it("resolves extend-video veo-extend:quality", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "extend-video", data: { provider: "veo-extend", model: "quality" } },
+      ])).toBe(79)
+    })
+
+    it("resolves extend-video veo-extend fast (base)", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "extend-video", data: { provider: "veo-extend", model: "fast" } },
+      ])).toBe(19)
+    })
+
+    it("resolves I2V kling-3.0:5s", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "image-to-video", data: { provider: "kling-3.0", duration: 5 } },
+      ])).toBe(43)
+    })
+
+    it("resolves I2V kling-3.0:5s:audio", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "image-to-video", data: { provider: "kling-3.0", duration: 5, sound: true } },
+      ])).toBe(63)
+    })
+
+    it("resolves T2V grok (override to grok-i2v)", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "text-to-video", data: { provider: "grok" } },
+      ])).toBe(5)
+    })
+
+    it("resolves T2V wan (override to wan-t2v)", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "text-to-video", data: { provider: "wan" } },
+      ])).toBe(33)
+    })
+
+    it("resolves motion-transfer kling-3.0 1080p 5s", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "motion-transfer", data: { provider: "kling-3.0", resolution: "1080p", videoDuration: 5 } },
+      ])).toBe(32)
+    })
+
+    it("resolves motion-transfer wan-animate-move 720p", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "motion-transfer", data: { provider: "wan-animate-move", resolution: "720p" } },
+      ])).toBe(41)
+    })
+
+    it("resolves motion-transfer wan-animate-move default 480p", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "motion-transfer", data: { provider: "wan-animate-move", resolution: "480p" } },
+      ])).toBe(26)
+    })
+
+    it("resolves I2V sora2-pro:5s:high", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "image-to-video", data: { provider: "sora2-pro", duration: 5, videoSize: "high" } },
+      ])).toBe(83)
+    })
+
+    it("resolves I2V seedance:12s", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "image-to-video", data: { provider: "seedance", duration: 12 } },
+      ])).toBe(15)
+    })
+
+    it("falls back for unknown provider", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "generate-image", data: { provider: "future-provider" } },
+      ])).toBe(2)
+    })
+
+    it("handles nodes with empty data object", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "generate-image", data: {} },
+      ])).toBe(2)
+    })
+
+    it("sums mixed composite and simple nodes", () => {
+      const nodes = [
+        { type: "generate-image", data: { provider: "gpt-image", quality: "high" } }, // 7
+        { type: "text-to-speech" },                                                     // 4
+        { type: "image-to-video", data: { provider: "kling-3.0", duration: 10, sound: true } }, // 126
+        { type: "suno-separate", data: { type: "split_stem" } },                        // 16
+      ]
+      expect(CreditsService.estimateWorkflowCredits(nodes)).toBe(153)
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // model pricing cache (TtlCache behavior)
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("model pricing cache", () => {
+    it("returns cached result on second call without hitting DB", async () => {
+      mockTable("model_pricing", { credit_cost: 5, is_enabled: true, tier_restriction: null })
+      const cost1 = await CreditsService.getModelCreditCost("cache-test-model")
+      tableResponses.clear()
+      const cost2 = await CreditsService.getModelCreditCost("cache-test-model")
+      expect(cost1).toBe(5)
+      expect(cost2).toBe(5)
+    })
+
+    it("returns fresh data after cache invalidation", async () => {
+      mockTable("model_pricing", { credit_cost: 5, is_enabled: true, tier_restriction: null })
+      const cost1 = await CreditsService.getModelCreditCost("invalidate-test")
+      expect(cost1).toBe(5)
+      invalidateModelPricingCache()
+      mockTable("model_pricing", { credit_cost: 10, is_enabled: true, tier_restriction: null })
+      const cost2 = await CreditsService.getModelCreditCost("invalidate-test")
+      expect(cost2).toBe(10)
+    })
   })
 })
