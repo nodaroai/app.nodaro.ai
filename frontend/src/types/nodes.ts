@@ -920,6 +920,8 @@ export type SunoSeparateData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
   vocalUrl?: string
   instrumentalUrl?: string
   stems?: Record<string, string>
@@ -936,6 +938,8 @@ export type SunoMusicVideoData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
   fieldMappings?: FieldMappings

@@ -16,7 +16,7 @@ const SceneEditorModal = lazy(() => import("@/components/editor/scene-editor-mod
 const ExtractReferencesModal = lazy(() => import("@/components/editor/extract-references-modal").then(m => ({ default: m.ExtractReferencesModal })))
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
-import { toast } from "sonner"
+import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import type { SceneNodeDataType, ExtractedReference } from "@/types/nodes"
@@ -63,18 +63,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
   }, [autoOpenEditorNodeId, id, setAutoOpenEditorNodeId])
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) {
-      newActiveIndex = 0
-    } else if (indexToDelete < activeIndex) {
-      newActiveIndex = activeIndex - 1
-    }
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedImageUrl: newResults[newActiveIndex]?.url ?? "",
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedImageUrl"))
   }
 
   return (
@@ -181,7 +170,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
                 className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded transition-colors"
                 onClick={(e) => {
                   e.stopPropagation()
-                  navigator.clipboard.writeText(activeUrl ?? '').then(() => toast.success("URL copied")).catch(() => {})
+                  copyToClipboard(activeUrl ?? '', "URL copied")
                 }}
                 title="Copy URL"
               >

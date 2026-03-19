@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { computeDeleteResultUpdates } from "@/lib/utils"
 import { useConnectionCount } from "@/hooks/use-connection-count"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
@@ -31,18 +32,7 @@ function SunoExtendNodeComponent({ id, data, selected }: NodeProps) {
   const credits = useModelCredits(creditModel, nodeData.model === "V5" ? 13 : 7)
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) {
-      newActiveIndex = 0
-    } else if (indexToDelete < activeIndex) {
-      newActiveIndex = activeIndex - 1
-    }
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedAudioUrl: newResults[newActiveIndex]?.url,
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))
   }
 
   return (

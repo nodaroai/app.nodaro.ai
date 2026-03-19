@@ -8,6 +8,7 @@ import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { computeDeleteResultUpdates } from "@/lib/utils"
 import { getVoiceName } from "@/lib/tts-voices"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
@@ -30,18 +31,7 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
   const credits = useModelCredits(nodeData.provider ?? "elevenlabs-turbo", 4)
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) {
-      newActiveIndex = 0
-    } else if (indexToDelete < activeIndex) {
-      newActiveIndex = activeIndex - 1
-    }
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedAudioUrl: newResults[newActiveIndex]?.url,
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))
   }
 
   return (

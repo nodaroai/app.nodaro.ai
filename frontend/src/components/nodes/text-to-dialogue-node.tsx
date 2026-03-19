@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
@@ -32,18 +33,7 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
   const summary = `${dialogue.length} line${dialogue.length !== 1 ? "s" : ""}, ${uniqueVoices.size} speaker${uniqueVoices.size !== 1 ? "s" : ""}`
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) {
-      newActiveIndex = 0
-    } else if (indexToDelete < activeIndex) {
-      newActiveIndex = activeIndex - 1
-    }
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedAudioUrl: newResults[newActiveIndex]?.url,
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))
   }
 
   return (

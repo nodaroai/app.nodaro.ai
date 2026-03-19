@@ -2,7 +2,7 @@
 
 import { memo } from "react"
 import { X, Expand, Download, Link } from "lucide-react"
-import { toast } from "sonner"
+import { copyToClipboard } from "@/lib/utils"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 
 interface VideoResultOverlayProps {
@@ -91,7 +91,7 @@ function VideoResultOverlayComponent({
           className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
           onClick={(e) => {
             e.stopPropagation()
-            navigator.clipboard.writeText(url).then(() => toast.success("URL copied")).catch(() => {})
+            copyToClipboard(url, "URL copied")
           }}
         >
           <Link className="w-3.5 h-3.5" />

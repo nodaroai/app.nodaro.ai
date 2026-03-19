@@ -9,7 +9,7 @@ import { HandleIcon } from "./handle-icon"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { toast } from "sonner"
+import { copyToClipboard } from "@/lib/utils"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -238,7 +238,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                       className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
                       onClick={(e) => {
                         e.stopPropagation()
-                        navigator.clipboard.writeText(videoUrl).then(() => toast.success("URL copied"))
+                        copyToClipboard(videoUrl, "URL copied")
                       }}
                       title="Copy URL"
                     >

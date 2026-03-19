@@ -5,6 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Sparkles, Loader2, AlertCircle, X, FileText, Square, Type, Copy, Download } from "lucide-react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
+import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -96,18 +97,7 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
   const flushTimerRef = useRef<number | null>(null)
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) {
-      newActiveIndex = 0
-    } else if (indexToDelete < activeIndex) {
-      newActiveIndex = activeIndex - 1
-    }
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedText: newResults[newActiveIndex]?.text,
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedText", "text"))
   }
 
   const handleStreamingRun = useCallback(async () => {
@@ -314,7 +304,7 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
                     className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
                     onClick={(e) => {
                       e.stopPropagation()
-                      navigator.clipboard.writeText(displayText ?? "").then(() => toast.success("Text copied")).catch(() => {})
+                      copyToClipboard(displayText ?? "", "Text copied")
                     }}
                   >
                     <Copy className="w-3 h-3" />
@@ -325,13 +315,7 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
                     className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
                     onClick={(e) => {
                       e.stopPropagation()
-                      const blob = new Blob([displayText ?? ""], { type: "text/plain" })
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement("a")
-                      a.href = url
-                      a.download = `${nodeData.label || "output"}.txt`
-                      a.click()
-                      URL.revokeObjectURL(url)
+                      downloadTextFile(displayText ?? "", `${nodeData.label || "output"}.txt`)
                     }}
                   >
                     <Download className="w-3 h-3" />

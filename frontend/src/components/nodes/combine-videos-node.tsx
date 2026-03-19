@@ -13,6 +13,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
 import { VideoResultOverlay } from "./video-result-overlay"
+import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { CombineVideosData } from "@/types/nodes"
 
 function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
@@ -38,18 +39,7 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
   const hasResult = status !== "running" && !!activeUrl
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) {
-      newActiveIndex = 0
-    } else if (indexToDelete < activeIndex) {
-      newActiveIndex = activeIndex - 1
-    }
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedVideoUrl: newResults[newActiveIndex]?.url,
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
   }
 
   return (

@@ -15,6 +15,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
+import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { TextToVideoData } from "@/types/nodes"
 
 // Fallback credit costs per video provider (shown until API responds)
@@ -56,18 +57,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
     : undefined
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) {
-      newActiveIndex = 0
-    } else if (indexToDelete < activeIndex) {
-      newActiveIndex = activeIndex - 1
-    }
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedVideoUrl: newResults[newActiveIndex]?.url,
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
   }
 
   return (

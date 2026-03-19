@@ -2,9 +2,9 @@
 
 import { memo, useState, useRef, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Eye, Type, Loader2, AlertCircle, X, ImageIcon, Copy } from "lucide-react"
+import { Eye, Type, Loader2, AlertCircle, X, ImageIcon, Copy, Download } from "lucide-react"
 import { createPortal } from "react-dom"
-import { toast } from "sonner"
+import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -90,18 +90,7 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) {
-      newActiveIndex = 0
-    } else if (indexToDelete < activeIndex) {
-      newActiveIndex = activeIndex - 1
-    }
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedText: newResults[newActiveIndex]?.text,
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedText", "text"))
   }
 
   const truncatedText = activeText && activeText.length > 100
@@ -171,10 +160,21 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
                 className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
                 onClick={(e) => {
                   e.stopPropagation()
-                  navigator.clipboard.writeText(activeText ?? "").then(() => toast.success("Text copied")).catch(() => {})
+                  copyToClipboard(activeText ?? "", "Text copied")
                 }}
               >
                 <Copy className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                aria-label="Download"
+                className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  downloadTextFile(activeText ?? "", `${nodeData.label || "description"}.txt`)
+                }}
+              >
+                <Download className="w-3 h-3" />
               </button>
               {results.length > 0 && (
                 <button
