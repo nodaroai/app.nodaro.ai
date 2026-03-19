@@ -140,6 +140,7 @@ import type {
   SocialPostData,
   SaveToStorageData,
   QACheckData,
+  GeneratedResult,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -3533,7 +3534,15 @@ export function executeNode(
     updateNodeData(node.id, { executionStatus: "running" });
     return import("@/lib/api").then(({ sendWebhookOutput }) =>
       sendWebhookOutput({ url, payload }).then(
-        () => { updateNodeData(node.id, { executionStatus: "completed" }); },
+        (result) => {
+          updateNodeData(node.id, {
+            executionStatus: "completed",
+            currentJobId: result.jobId,
+            webhookSuccess: result.success,
+            webhookStatusCode: result.statusCode,
+            webhookResponseBody: result.responseBody,
+          });
+        },
         (err) => {
           updateNodeData(node.id, {
             executionStatus: "failed",
@@ -3572,10 +3581,17 @@ export function executeNode(
         privacy: d.privacy,
       }).then(
         (result) => {
+          const prev = ((node.data as SocialPostData).generatedResults ?? []) as readonly GeneratedResult[];
           updateNodeData(node.id, {
             executionStatus: "completed",
+            currentJobId: result.jobId,
             platformPostId: result.platformPostId,
             platformPostUrl: result.platformPostUrl,
+            generatedResults: [{
+              jobId: result.jobId,
+              url: result.platformPostUrl ?? "",
+              timestamp: new Date().toISOString(),
+            }, ...prev],
           });
         },
         (err) => {
@@ -3607,9 +3623,16 @@ export function executeNode(
       filename: d.filename || undefined,
     }).then(
       (result) => {
+        const prev = ((node.data as SaveToStorageData).generatedResults ?? []) as readonly GeneratedResult[];
         updateNodeData(node.id, {
           executionStatus: "completed",
+          currentJobId: result.jobId,
           savedUrl: result.url,
+          generatedResults: [{
+            jobId: result.jobId,
+            url: result.url,
+            timestamp: new Date().toISOString(),
+          }, ...prev],
         });
       },
       (err) => {
@@ -3644,6 +3667,7 @@ export function executeNode(
       (result) => {
         updateNodeData(node.id, {
           executionStatus: "completed",
+          currentJobId: result.jobId,
           score: result.score,
           approved: result.approved,
           reason: result.reason,

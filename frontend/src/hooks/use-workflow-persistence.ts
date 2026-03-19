@@ -211,6 +211,34 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
         newData.generatedAudioUrl = job.output_data.audioUrl
       } else if (job.output_data?.script) {
         newData.generatedScript = job.output_data.script
+      } else if (job.output_data) {
+        // Node-type-specific restoration for sync nodes without media URLs
+        const outputData = job.output_data as Record<string, unknown>
+        switch (nodeType) {
+          case "instagram-post":
+          case "tiktok-post":
+          case "youtube-upload":
+          case "linkedin-post":
+          case "x-post":
+          case "facebook-post":
+            newData.platformPostId = outputData.platformPostId
+            newData.platformPostUrl = outputData.platformPostUrl
+            break
+          case "qa-check":
+            newData.score = outputData.score
+            newData.approved = outputData.approved
+            newData.reason = outputData.reason
+            break
+          case "save-to-storage":
+            // Backend stores `url`, frontend uses `savedUrl`
+            newData.savedUrl = outputData.url
+            break
+          case "webhook-output":
+            newData.webhookSuccess = outputData.success
+            newData.webhookStatusCode = outputData.statusCode
+            newData.webhookResponseBody = outputData.responseBody
+            break
+        }
       }
 
       return { ...node, data: newData }

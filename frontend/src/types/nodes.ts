@@ -786,6 +786,12 @@ export type QACheckData = {
   threshold: number
   llmModel?: string
   fieldMappings: FieldMappings
+  currentJobId?: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  score?: number
+  approved?: boolean
+  reason?: string
 }
 
 export type GenerateMusicData = {
@@ -1332,6 +1338,8 @@ export type SocialPostData = {
   errorMessage?: string
   platformPostId?: string
   platformPostUrl?: string
+  currentJobId?: string
+  generatedResults?: readonly GeneratedResult[]
 }
 
 export type TrimAudioData = {
@@ -1594,6 +1602,11 @@ export type SaveToStorageData = {
   format: "mp4" | "webm" | "mov"
   quality: "draft" | "standard" | "high" | "4k"
   fieldMappings: FieldMappings
+  currentJobId?: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  savedUrl?: string
+  generatedResults?: readonly GeneratedResult[]
 }
 
 export type WebhookOutputData = {
@@ -1601,6 +1614,12 @@ export type WebhookOutputData = {
   label: string
   url: string
   params: WebhookParam[]
+  currentJobId?: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  webhookSuccess?: boolean
+  webhookStatusCode?: number
+  webhookResponseBody?: string
 }
 
 // --- Character Node Data ---

@@ -393,6 +393,14 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     if (!sourceHandle) return qaReason;
     return undefined;
   }
+  if (type === "save-to-storage") {
+    return (data.savedUrl as string) || undefined;
+  }
+
+  if (type === "webhook-output") {
+    return (data.webhookResponseBody as string) || undefined;
+  }
+
   if (type === "ai-writer") {
     return data.generatedText as string | undefined;
   }

@@ -1515,11 +1515,11 @@ export async function forcedAlignmentApi(audioUrl: string, transcript: string, u
   return res.json()
 }
 
-export async function sendWebhookOutput(data: { url: string; payload: Record<string, unknown> }): Promise<{ success: boolean }> {
+export async function sendWebhookOutput(data: { url: string; payload: Record<string, unknown> }): Promise<{ jobId: string; success: boolean; statusCode: number; responseBody: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/webhook-output/send`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(data),
+    body: JSON.stringify(withWorkflowId(data)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
