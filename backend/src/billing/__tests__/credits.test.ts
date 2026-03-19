@@ -126,14 +126,14 @@ describe("CreditsService", () => {
       expect(CreditsService.estimateWorkflowCredits(nodes)).toBe(86)
     })
 
-    it("returns 0 for all zero-cost nodes", () => {
+    it("returns correct cost for FFmpeg nodes", () => {
       const nodes = [
-        { type: "adjust-volume" },
-        { type: "trim-video" },
-        { type: "speed-ramp" },
-        { type: "combine-videos" },
+        { type: "adjust-volume" },   // 1
+        { type: "trim-video" },      // 1
+        { type: "speed-ramp" },      // 2
+        { type: "combine-videos" },  // 3
       ]
-      expect(CreditsService.estimateWorkflowCredits(nodes)).toBe(0)
+      expect(CreditsService.estimateWorkflowCredits(nodes)).toBe(7)
     })
   })
 

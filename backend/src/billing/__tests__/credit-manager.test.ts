@@ -59,12 +59,12 @@ describe("credit-manager", () => {
       expect(estimateWorkflowCredits(nodes)).toBe(6)
     })
 
-    it("returns 0 for all zero-cost nodes", () => {
+    it("returns correct cost for FFmpeg nodes", () => {
       const nodes = [
-        { type: "adjust-volume" },  // 0
-        { type: "trim-video" },     // 0
+        { type: "adjust-volume" },  // 1
+        { type: "trim-video" },     // 1
       ]
-      expect(estimateWorkflowCredits(nodes)).toBe(0)
+      expect(estimateWorkflowCredits(nodes)).toBe(2)
     })
 
     it("handles a large workflow with many nodes", () => {
@@ -74,14 +74,14 @@ describe("credit-manager", () => {
         { type: "generate-image" },      // 5
         { type: "image-to-video" },      // 20
         { type: "video-to-video" },      // 25
-        { type: "merge-video-audio" },   // 1
-        { type: "combine-videos" },      // 2
-        { type: "add-captions" },        // 2
-        { type: "resize-video" },        // 1
-        { type: "adjust-volume" },       // 0
-        { type: "trim-video" },          // 0
+        { type: "merge-video-audio" },   // 2
+        { type: "combine-videos" },      // 3
+        { type: "add-captions" },        // 3
+        { type: "resize-video" },        // 2
+        { type: "adjust-volume" },       // 1
+        { type: "trim-video" },          // 1
       ]
-      expect(estimateWorkflowCredits(nodes)).toBe(63)
+      expect(estimateWorkflowCredits(nodes)).toBe(69)
     })
 
     it("does not mutate the input array", () => {
