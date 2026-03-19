@@ -835,9 +835,8 @@ export class KieVideoProvider
         mode: kling3Mode,
       }
 
-      if (options?.backgroundSource) {
-        input.background_source = options.backgroundSource
-      }
+      // Always send background_source explicitly — KIE defaults to input_image if omitted
+      input.background_source = options?.backgroundSource ?? "input_video"
 
       if (prompt) {
         input.prompt = prompt
