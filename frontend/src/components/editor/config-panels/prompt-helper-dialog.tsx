@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select"
 import { enhancePrompt } from "@/lib/api"
 import { useModelCredits } from "@/hooks/use-model-credits"
-import { buildLlmCreditIdentifier } from "@nodaro-shared/llm-models"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
 import { getStylesForNodeType } from "./prompt-helper-styles"
 import { LlmModelSelect } from "./llm-model-select"
 
@@ -51,7 +51,8 @@ export function PromptHelperDialog({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
-  const creditCost = useModelCredits(buildLlmCreditIdentifier("prompt-helper", llmModel), 1)
+  const effectiveModel = llmModel || LLM_FEATURE_DEFAULTS["prompt-helper"]
+  const creditCost = useModelCredits(buildLlmCreditIdentifier("prompt-helper", effectiveModel), 1)
 
   const styles = getStylesForNodeType(nodeType)
 
@@ -203,7 +204,14 @@ export function PromptHelperDialog({
                   disabled={loading}
                   className="flex-shrink-0"
                 >
-                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Retry"}
+                  {loading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <>
+                      Retry
+                      <span className="ml-1.5 text-[10px] opacity-60">{creditCost} CR</span>
+                    </>
+                  )}
                 </Button>
               </div>
             </div>

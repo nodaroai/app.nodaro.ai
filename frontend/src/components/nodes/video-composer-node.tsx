@@ -7,14 +7,14 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
-import { buildLlmCreditIdentifier } from "@nodaro-shared/llm-models"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
 import type { VideoComposerData } from "@/types/nodes"
 
 function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as VideoComposerData | undefined
   const nodeData = currentNodeData ?? (data as VideoComposerData)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const credits = useModelCredits(buildLlmCreditIdentifier("scene-graph-ai", nodeData.llmModel), 10)
+  const credits = useModelCredits(buildLlmCreditIdentifier("scene-graph-ai", nodeData.llmModel || LLM_FEATURE_DEFAULTS["scene-graph-ai"]), 10)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const isRunning = status === "running"

@@ -40,7 +40,7 @@ export function PromptHelperButton({
             AI
           </button>
         </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">AI Prompt Helper (1 CR)</TooltipContent>
+        <TooltipContent side="top" className="text-xs">AI Prompt Helper</TooltipContent>
       </Tooltip>
       {open && (
         <PromptHelperDialog

@@ -1,7 +1,7 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
 import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
-import { buildLlmCreditIdentifier } from "@nodaro-shared/llm-models"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
 import type { LlmFeature } from "@nodaro-shared/llm-models"
 
 export const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = {
@@ -129,7 +129,7 @@ export function getModelIdentifier(node: WorkflowNode): string {
   // LLM-powered nodes: use composite credit identifier based on selected model tier
   const llmFeature = LLM_NODE_FEATURE_MAP[node.type ?? ""]
   if (llmFeature) {
-    return buildLlmCreditIdentifier(llmFeature, data.llmModel as string | undefined)
+    return buildLlmCreditIdentifier(llmFeature, (data.llmModel as string | undefined) || LLM_FEATURE_DEFAULTS[llmFeature])
   }
 
   const nodeType = node.type ?? "unknown"
