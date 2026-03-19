@@ -791,7 +791,7 @@ export function SocialMediaFormatConfig({ data, onUpdate, sources, fieldMappings
       </MappableField>
 
       <p className="text-[10px] text-muted-foreground">
-        0 credits — FFmpeg processing. Reformats media to {PLATFORM_LABELS[platform]} specs.
+        FFmpeg processing. Reformats media to {PLATFORM_LABELS[platform]} specs.
       </p>
     </div>
   )

@@ -17,7 +17,7 @@ const fadeVideoBody = z.object({
 })
 
 export async function fadeVideoRoutes(app: FastifyInstance) {
-  app.post("/v1/fade-video", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
+  app.post("/v1/fade-video", { preHandler: creditGuard(() => "fade-video") }, async (req, reply) => {
     const parsed = fadeVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -34,7 +34,7 @@ export async function fadeVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = "ffmpeg"
+    const modelIdentifier = "fade-video"
 
     const { data: job, error } = await supabase
       .from("jobs")

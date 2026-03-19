@@ -20,6 +20,8 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "z-image", label: "Z-Image", desc: "Fast, lightweight generation" },
 ]
 
+export const IMAGE_GEN_MODEL_IDS = IMAGE_GEN_MODELS.map(m => m.value)
+
 export const IMAGE_I2I_MODELS: readonly { value: ImageI2IProvider; label: string; desc: string }[] = [
   { value: "nano-banana", label: "Nano Banana", desc: "Fast iteration, quick transforms" },
   { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production images" },

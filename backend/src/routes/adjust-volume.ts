@@ -19,7 +19,7 @@ const adjustVolumeBody = z.object({
 })
 
 export async function adjustVolumeRoutes(app: FastifyInstance) {
-  app.post("/v1/adjust-volume", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
+  app.post("/v1/adjust-volume", { preHandler: creditGuard(() => "adjust-volume") }, async (req, reply) => {
     const parsed = adjustVolumeBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -36,8 +36,7 @@ export async function adjustVolumeRoutes(app: FastifyInstance) {
       })
     }
 
-    // Model identifier for credit check (FFmpeg processing = 0 credits)
-    const modelIdentifier = "ffmpeg"
+    const modelIdentifier = "adjust-volume"
 
     // Determine input type for the job
     const inputType = restData.videoUrl ? "video" : "audio"

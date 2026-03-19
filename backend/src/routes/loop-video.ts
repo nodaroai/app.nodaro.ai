@@ -15,7 +15,7 @@ const loopVideoBody = z.object({
 })
 
 export async function loopVideoRoutes(app: FastifyInstance) {
-  app.post("/v1/loop-video", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
+  app.post("/v1/loop-video", { preHandler: creditGuard(() => "loop-video") }, async (req, reply) => {
     const parsed = loopVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -32,7 +32,7 @@ export async function loopVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = "ffmpeg"
+    const modelIdentifier = "loop-video"
 
     const { data: job, error } = await supabase
       .from("jobs")

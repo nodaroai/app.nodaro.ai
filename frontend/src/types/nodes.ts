@@ -1648,6 +1648,7 @@ export type CharacterNodeData = {
   gender: "male" | "female" | "other"
   style: "realistic" | "anime" | "3d-pixar" | "illustration"
   baseOutfit: string
+  provider?: string
   characterSheet: CharacterSheet | null
   projectId: string
   createdAt: string
@@ -1693,6 +1694,7 @@ export type ObjectNodeData = {
   description: string
   category: "furniture" | "vehicle" | "weapon" | "food" | "clothing" | "electronics" | "nature" | "tool" | "other"
   style: "realistic" | "anime" | "3d-pixar" | "illustration"
+  provider?: string
   sourceImageUrl: string
   projectId: string
   createdAt: string
@@ -1730,6 +1732,7 @@ export type LocationNodeData = {
   description: string
   category: "indoor" | "outdoor" | "urban" | "nature" | "fantasy" | "sci-fi" | "historical" | "futuristic" | "other"
   style: "realistic" | "anime" | "3d-pixar" | "illustration"
+  provider?: string
   sourceImageUrl: string
   projectId: string
   createdAt: string
@@ -1761,6 +1764,7 @@ export type FaceNodeData = {
   description: string
   sourceImageUrl: string
   style: "realistic" | "anime" | "3d-pixar" | "illustration"
+  provider?: string
   projectId: string
   createdAt: string
   executionStatus: "idle" | "running" | "completed" | "failed"

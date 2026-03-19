@@ -18,7 +18,7 @@ const addCaptionsBody = z.object({
 })
 
 export async function addCaptionsRoutes(app: FastifyInstance) {
-  app.post("/v1/add-captions", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
+  app.post("/v1/add-captions", { preHandler: creditGuard(() => "add-captions") }, async (req, reply) => {
     const parsed = addCaptionsBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -35,8 +35,7 @@ export async function addCaptionsRoutes(app: FastifyInstance) {
       })
     }
 
-    // Model identifier for credit check (FFmpeg processing = 0 credits)
-    const modelIdentifier = "ffmpeg"
+    const modelIdentifier = "add-captions"
 
     const { data: job, error } = await supabase
       .from("jobs")

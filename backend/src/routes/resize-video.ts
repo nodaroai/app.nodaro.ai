@@ -15,7 +15,7 @@ const resizeVideoBody = z.object({
 })
 
 export async function resizeVideoRoutes(app: FastifyInstance) {
-  app.post("/v1/resize-video", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
+  app.post("/v1/resize-video", { preHandler: creditGuard(() => "resize-video") }, async (req, reply) => {
     const parsed = resizeVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -32,8 +32,7 @@ export async function resizeVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    // Model identifier for credit check (FFmpeg processing = 0 credits)
-    const modelIdentifier = "ffmpeg"
+    const modelIdentifier = "resize-video"
 
     const { data: job, error } = await supabase
       .from("jobs")

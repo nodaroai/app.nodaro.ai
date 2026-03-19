@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useMemo } from "react"
+import { useState, useRef, useMemo, useEffect } from "react"
 import { Play, Loader2, Sparkles, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,15 +38,24 @@ import {
   LocationAssetButton,
   LocationAssetGrid,
 } from "./entity-shared"
+import { IMAGE_GEN_MODELS, IMAGE_GEN_MODEL_IDS } from "./model-options"
+import { ModelSelectOption } from "./model-select-option"
+import { MappableField } from "./mappable-field"
+import { prefetchModelCredits, useModelCredits } from "@/hooks/use-model-credits"
 import type { ConfigProps } from "./types"
 
-export function CharacterConfig({ data, onUpdate, sources }: ConfigProps<CharacterNodeData>) {
+export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<CharacterNodeData>) {
   const generateAsset = useWorkflowStore((s) => s.generateCharacterAssetFn)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const nodes = useWorkflowStore((s) => s.nodes)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+
+  useEffect(() => {
+    prefetchModelCredits(IMAGE_GEN_MODEL_IDS)
+  }, [])
+  const creditCost = useModelCredits(data.provider || "nano-banana")
 
   const hasPortrait = Boolean(
     ((data.generatedResults ?? [])[data.activeResultIndex ?? 0]?.url) || data.sourceImageUrl,
@@ -246,6 +255,17 @@ export function CharacterConfig({ data, onUpdate, sources }: ConfigProps<Charact
         </div>
       </div>
 
+      <MappableField field="provider" label="Image Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select value={data.provider || "nano-banana"} onValueChange={(v) => onUpdate({ provider: v })}>
+          <SelectTrigger className="h-8 text-xs" aria-label="Image model"><SelectValue /></SelectTrigger>
+          <SelectContent position="popper" className="z-[9999] max-h-72">
+            {IMAGE_GEN_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
+          </SelectContent>
+        </Select>
+      </MappableField>
+
       <Separator />
 
       <Button
@@ -255,7 +275,7 @@ export function CharacterConfig({ data, onUpdate, sources }: ConfigProps<Charact
         disabled={isRunning || !data.characterName}
         onClick={() => { if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId) }}
       >
-        {isRunning ? (<><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Generating...</>) : (<><Play className="w-3 h-3 mr-1.5" />Generate Portrait</>)}
+        {isRunning ? (<><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Generating...</>) : (<><Play className="w-3 h-3 mr-1.5" />Generate Portrait{creditCost > 0 ? ` (${creditCost} CR)` : ""}</>)}
       </Button>
 
       <Separator />
@@ -324,6 +344,11 @@ export function FaceConfig({ data, onUpdate }: { readonly data: FaceNodeData; re
   const edges = useWorkflowStore((s) => s.edges)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+
+  useEffect(() => {
+    prefetchModelCredits(IMAGE_GEN_MODEL_IDS)
+  }, [])
+  const creditCost = useModelCredits(data.provider || "nano-banana")
 
   const isRunning = data.executionStatus === "running"
 
@@ -427,6 +452,18 @@ export function FaceConfig({ data, onUpdate }: { readonly data: FaceNodeData; re
         </div>
       </div>
 
+      <div>
+        <Label className="text-xs">Image Model</Label>
+        <Select value={data.provider || "nano-banana"} onValueChange={(v) => onUpdate({ provider: v })}>
+          <SelectTrigger className="h-8 text-xs mt-1" aria-label="Image model"><SelectValue /></SelectTrigger>
+          <SelectContent position="popper" className="z-[9999] max-h-72">
+            {IMAGE_GEN_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <Separator />
 
       <Button
@@ -436,7 +473,7 @@ export function FaceConfig({ data, onUpdate }: { readonly data: FaceNodeData; re
         disabled={isRunning || !data.faceName || (!data.sourceImageUrl && !hasConnectedImage)}
         onClick={() => { if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId) }}
       >
-        {isRunning ? (<><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Generating...</>) : (<><Play className="w-3 h-3 mr-1.5" />Generate Headshot</>)}
+        {isRunning ? (<><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Generating...</>) : (<><Play className="w-3 h-3 mr-1.5" />Generate Headshot{creditCost > 0 ? ` (${creditCost} CR)` : ""}</>)}
       </Button>
       {!data.sourceImageUrl && !hasConnectedImage && data.faceName && (
         <p className="text-[10px] text-muted-foreground">Upload a reference photo or connect an Upload Image node to enable headshot generation.</p>
@@ -452,6 +489,11 @@ export function ObjectConfig({ data, onUpdate }: { readonly data: ObjectNodeData
   const nodes = useWorkflowStore((s) => s.nodes)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+
+  useEffect(() => {
+    prefetchModelCredits(IMAGE_GEN_MODEL_IDS)
+  }, [])
+  const creditCost = useModelCredits(data.provider || "nano-banana")
 
   const hasImage = Boolean(((data.generatedResults ?? [])[data.activeResultIndex ?? 0]?.url) || data.sourceImageUrl)
   const isRunning = data.executionStatus === "running"
@@ -553,6 +595,18 @@ export function ObjectConfig({ data, onUpdate }: { readonly data: ObjectNodeData
         </div>
       </div>
 
+      <div>
+        <Label className="text-xs">Image Model</Label>
+        <Select value={data.provider || "nano-banana"} onValueChange={(v) => onUpdate({ provider: v })}>
+          <SelectTrigger className="h-8 text-xs mt-1" aria-label="Image model"><SelectValue /></SelectTrigger>
+          <SelectContent position="popper" className="z-[9999] max-h-72">
+            {IMAGE_GEN_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <Separator />
 
       <Button
@@ -562,7 +616,7 @@ export function ObjectConfig({ data, onUpdate }: { readonly data: ObjectNodeData
         disabled={isRunning || !data.objectName}
         onClick={() => { if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId) }}
       >
-        {isRunning ? (<><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Generating...</>) : (<><Play className="w-3 h-3 mr-1.5" />Generate Image</>)}
+        {isRunning ? (<><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Generating...</>) : (<><Play className="w-3 h-3 mr-1.5" />Generate Image{creditCost > 0 ? ` (${creditCost} CR)` : ""}</>)}
       </Button>
 
       <Separator />
@@ -608,13 +662,18 @@ export function ObjectConfig({ data, onUpdate }: { readonly data: ObjectNodeData
   )
 }
 
-export function LocationConfig({ data, onUpdate, sources }: ConfigProps<LocationNodeData>) {
+export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<LocationNodeData>) {
   const generateAsset = useWorkflowStore((s) => s.generateLocationAssetFn)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const nodes = useWorkflowStore((s) => s.nodes)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+
+  useEffect(() => {
+    prefetchModelCredits(IMAGE_GEN_MODEL_IDS)
+  }, [])
+  const creditCost = useModelCredits(data.provider || "nano-banana")
 
   const hasImage = Boolean(((data.generatedResults ?? [])[data.activeResultIndex ?? 0]?.url) || data.sourceImageUrl)
   const isRunning = data.executionStatus === "running"
@@ -767,6 +826,17 @@ export function LocationConfig({ data, onUpdate, sources }: ConfigProps<Location
         </div>
       </div>
 
+      <MappableField field="provider" label="Image Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select value={data.provider || "nano-banana"} onValueChange={(v) => onUpdate({ provider: v })}>
+          <SelectTrigger className="h-8 text-xs" aria-label="Image model"><SelectValue /></SelectTrigger>
+          <SelectContent position="popper" className="z-[9999] max-h-72">
+            {IMAGE_GEN_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
+          </SelectContent>
+        </Select>
+      </MappableField>
+
       <Separator />
 
       <Button
@@ -776,7 +846,7 @@ export function LocationConfig({ data, onUpdate, sources }: ConfigProps<Location
         disabled={isRunning || !data.locationName}
         onClick={() => { if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId) }}
       >
-        {isRunning ? (<><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Generating...</>) : (<><Play className="w-3 h-3 mr-1.5" />Generate Image</>)}
+        {isRunning ? (<><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Generating...</>) : (<><Play className="w-3 h-3 mr-1.5" />Generate Image{creditCost > 0 ? ` (${creditCost} CR)` : ""}</>)}
       </Button>
 
       <Separator />

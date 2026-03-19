@@ -348,7 +348,7 @@ describe.each(FFMPEG_ROUTES)(
       expect(body.error.code).toBe("unauthorized")
     })
 
-    it("creates job with modelIdentifier=ffmpeg and enqueues to videoQueue", async () => {
+    it("creates job with node-specific modelIdentifier and enqueues to videoQueue", async () => {
       const { mockFrom, mockInsert } = mockJobInsert({
         data: { id: "job-1" },
         error: null,

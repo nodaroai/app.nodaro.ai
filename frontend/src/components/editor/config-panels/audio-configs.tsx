@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useCallback } from "react"
+import { useMemo, useCallback, useEffect } from "react"
 import { Plus, Trash2, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
@@ -50,6 +50,7 @@ import type {
 } from "@/types/nodes"
 import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
+import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits"
 import type { ConfigProps } from "./types"
 
 export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<TextToSpeechData>) {
@@ -808,15 +809,19 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
 }
 
 export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<LipSyncData>) {
+  useEffect(() => {
+    prefetchModelCredits(["kling-avatar", "kling-avatar-pro", "infinitalk", "infinitalk:480p"])
+  }, [])
+
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.provider || "kling-avatar"} onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"] })}>
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="kling-avatar">Kling Avatar (28 credits)</SelectItem>
-            <SelectItem value="kling-avatar-pro">Kling Avatar Pro (56 credits)</SelectItem>
-            <SelectItem value="infinitalk">Infinitalk (11–42 credits)</SelectItem>
+            <SelectItem value="kling-avatar">{`Kling Avatar (${getCachedCredits("kling-avatar") ?? 28} credits)`}</SelectItem>
+            <SelectItem value="kling-avatar-pro">{`Kling Avatar Pro (${getCachedCredits("kling-avatar-pro") ?? 56} credits)`}</SelectItem>
+            <SelectItem value="infinitalk">{`Infinitalk (${getCachedCredits("infinitalk:480p") ?? 11}–${getCachedCredits("infinitalk") ?? 42} credits)`}</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>

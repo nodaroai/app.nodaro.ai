@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { resolveTemplate, applyTemplate } from "../config/prompt-templates.js"
-import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 
 const generateFaceBody = z.object({
   name: z.string().min(1).max(200),
@@ -13,11 +13,12 @@ const generateFaceBody = z.object({
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   prompt: z.string().max(4000).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
+  provider: z.string().optional().default("nano-banana"),
   userId: z.string().uuid().optional(),
 })
 
 export async function generateFaceRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-face", { preHandler: creditGuard(() => "nano-banana") }, async (req, reply) => {
+  app.post("/v1/generate-face", { preHandler: creditGuard((req) => extractProvider(req.body, "nano-banana")) }, async (req, reply) => {
     const parsed = generateFaceBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -37,8 +38,7 @@ export async function generateFaceRoutes(app: FastifyInstance) {
       })
     }
 
-    // Model identifier for credit check
-    const modelIdentifier = "nano-banana"
+    const modelIdentifier = parsed.data.provider
 
     // Use client-provided prompt (which includes flow+user template resolution)
     // or fall back to server-side template resolution (for direct API calls)
@@ -98,7 +98,7 @@ export async function generateFaceRoutes(app: FastifyInstance) {
       jobId: job.id,
       prompt,
       sourceImageUrl,
-      provider: "nano-banana",
+      provider: parsed.data.provider,
       usageLogId,
     })
 
