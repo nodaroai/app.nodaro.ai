@@ -3552,6 +3552,8 @@ export async function socialPublishApi(params: {
   description?: string
   tags?: string[]
   privacy?: string
+  chatId?: string
+  parseMode?: string
 }): Promise<{ jobId: string; success: boolean; platformPostId?: string; platformPostUrl?: string }> {
   const body: Record<string, unknown> = { platform: params.platform, action: params.action }
   if (params.connectionId) body.connectionId = params.connectionId
@@ -3561,6 +3563,8 @@ export async function socialPublishApi(params: {
   if (params.description) body.description = params.description
   if (params.tags && params.tags.length > 0) body.tags = params.tags
   if (params.privacy) body.privacy = params.privacy
+  if (params.chatId) body.chatId = params.chatId
+  if (params.parseMode) body.parseMode = params.parseMode
 
   const res = await fetch(`${API_BASE_URL}/v1/social/publish`, {
     method: "POST",
@@ -3606,6 +3610,49 @@ export async function disconnectSocial(connectionId: string): Promise<{ success:
     throwApiError(err, "Failed to disconnect")
   }
   return res.json()
+}
+
+export async function connectTelegram(botToken: string) {
+  const res = await fetch(`${API_BASE_URL}/v1/social/telegram/connect`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify({ botToken }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to connect Telegram bot")
+  }
+  return res.json() as Promise<{ success: boolean; botName: string; botUsername: string }>
+}
+
+export async function activateTelegramTrigger(params: {
+  workflowId: string
+  connectionId: string
+  chatIdFilter?: string
+  messageTypeFilters?: string[]
+}) {
+  const res = await fetch(`${API_BASE_URL}/v1/telegram/triggers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to activate Telegram trigger")
+  }
+  return res.json() as Promise<{ triggerId: string; webhookToken: string }>
+}
+
+export async function deactivateTelegramTrigger(triggerId: string) {
+  const res = await fetch(`${API_BASE_URL}/v1/telegram/triggers/${encodeURIComponent(triggerId)}`, {
+    method: "DELETE",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to deactivate Telegram trigger")
+  }
+  return res.json() as Promise<{ success: boolean }>
 }
 
 // ---------------------------------------------------------------------------

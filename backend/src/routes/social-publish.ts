@@ -12,15 +12,17 @@ const VALID_ACTIONS = [
   "post-image", "post-reel", "post-story", "post-carousel",
   "post-video", "upload-video", "upload-short",
   "post-text", "post-tweet",
+  "send-message", "send-photo", "send-video",
 ] as const
 
 const MEDIA_REQUIRED_ACTIONS = new Set([
   "post-image", "post-reel", "post-story", "post-carousel",
   "post-video", "upload-video", "upload-short",
+  "send-photo", "send-video",
 ])
 
 const publishSchema = z.object({
-  platform: z.enum(["instagram", "tiktok", "youtube", "linkedin", "x", "facebook"]),
+  platform: z.enum(["instagram", "tiktok", "youtube", "linkedin", "x", "facebook", "telegram"]),
   action: z.enum(VALID_ACTIONS),
   connectionId: z.string().uuid().optional(),
   caption: z.string().optional(),
@@ -29,6 +31,8 @@ const publishSchema = z.object({
   description: z.string().optional(),
   tags: z.array(z.string()).optional(),
   privacy: z.enum(["private", "unlisted", "public"]).optional(),
+  chatId: z.string().optional(),
+  parseMode: z.enum(["Markdown", "HTML"]).optional(),
 })
 
 export async function socialPublishRoutes(app: FastifyInstance) {
@@ -44,7 +48,7 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.message } })
     }
 
-    const { platform, action, connectionId, caption, mediaUrl, title, description, tags, privacy } = parsed.data
+    const { platform, action, connectionId, caption, mediaUrl, title, description, tags, privacy, chatId, parseMode } = parsed.data
 
     if (MEDIA_REQUIRED_ACTIONS.has(action) && !mediaUrl) {
       return reply.status(400).send({
@@ -142,6 +146,10 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       if (metadata.page_access_token && typeof metadata.page_access_token === "string") {
         metadata.page_access_token = decryptToken(metadata.page_access_token)
       }
+
+      // Pass Telegram-specific fields via metadata
+      if (chatId) metadata.chatId = chatId
+      if (parseMode) metadata.parseMode = parseMode
 
       const publishReq: PublishRequest = { action, caption, mediaUrl, title, description, tags, privacy }
       const result = await publisher.publish(accessToken, publishReq, metadata)

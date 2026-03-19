@@ -120,12 +120,14 @@ import {
   SubWorkflowConfig,
   WebhookTriggerConfig,
   ScheduleTriggerConfig,
+  TelegramTriggerConfig,
   InstagramPostConfig,
   TiktokPostConfig,
   YoutubeUploadConfig,
   LinkedinPostConfig,
   XPostConfig,
   FacebookPostConfig,
+  TelegramPostConfig,
   ResultsGallery,
 } from "./config-panels"
 
@@ -220,6 +222,8 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "linkedin-post": "LinkedIn Post",
   "x-post": "X Post",
   "facebook-post": "Facebook Post",
+  "telegram-post": "Telegram Post",
+  "telegram-trigger": "Telegram Trigger",
 }
 
 export function getNodeTypeDisplayName(type: string): string {
@@ -238,7 +242,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "image-to-text", "qa-check", "transcribe",
   "sora-character",
   "render-video",
-  "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post",
+  "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post",
   // FFmpeg processing (tiered credits)
   "merge-video-audio", "combine-videos", "trim-audio", "trim-video",
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume",
@@ -259,7 +263,7 @@ const RESULT_PRODUCING_TYPES = new Set([
 ].filter(t =>
   t !== "combine-text" && t !== "split-text" && t !== "preview" && t !== "sub-workflow" &&
   t !== "instagram-post" && t !== "tiktok-post" && t !== "youtube-upload" &&
-  t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post" &&
+  t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post" && t !== "telegram-post" &&
   t !== "image-to-text" && t !== "qa-check" && t !== "transcribe"
 ))
 
@@ -636,6 +640,8 @@ export function ConfigPanel() {
           {nodeType === "linkedin-post" && <LinkedinPostConfig {...configProps} />}
           {nodeType === "x-post" && <XPostConfig {...configProps} />}
           {nodeType === "facebook-post" && <FacebookPostConfig {...configProps} />}
+          {nodeType === "telegram-post" && <TelegramPostConfig {...configProps} />}
+          {nodeType === "telegram-trigger" && <TelegramTriggerConfig {...configProps} />}
 
           {nodeType === "sub-workflow-input" && <SubWorkflowInputConfig {...configProps} />}
           {nodeType === "sub-workflow-output" && <SubWorkflowOutputConfig {...configProps} />}

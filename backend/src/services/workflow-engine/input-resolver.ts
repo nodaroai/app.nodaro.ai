@@ -462,7 +462,7 @@ const AUDIO_OUTPUT_NODE_TYPES = new Set([
 
 const SOCIAL_POST_NODE_TYPES = new Set([
   "instagram-post", "tiktok-post", "youtube-upload",
-  "linkedin-post", "x-post", "facebook-post",
+  "linkedin-post", "x-post", "facebook-post", "telegram-post",
 ])
 
 const SUNO_TRACK_NODE_TYPES = new Set([

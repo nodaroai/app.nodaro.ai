@@ -96,6 +96,7 @@ const SOURCE_NODE_TYPES = new Set([
   "loop",
   "webhook-trigger",
   "schedule-trigger",
+  "telegram-trigger",
   "sub-workflow-input",
 ])
 

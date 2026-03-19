@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto"
 import { config } from "../../lib/config.js"
 
-export type SocialPlatform = "instagram" | "tiktok" | "youtube" | "linkedin" | "x" | "facebook"
+export type SocialPlatform = "instagram" | "tiktok" | "youtube" | "linkedin" | "x" | "facebook" | "telegram"
 
 interface OAuthConfig {
   clientId: string
@@ -68,6 +68,14 @@ const OAUTH_CONFIGS: Record<SocialPlatform, () => OAuthConfig> = {
     tokenUrl: "https://api.x.com/2/oauth2/token",
     scopes: ["tweet.write", "tweet.read", "users.read", "offline.access"],
     redirectUri: getRedirectUri("x"),
+  }),
+  telegram: () => ({
+    clientId: "",
+    clientSecret: "",
+    authUrl: "",
+    tokenUrl: "",
+    scopes: [],
+    redirectUri: "",
   }),
 }
 

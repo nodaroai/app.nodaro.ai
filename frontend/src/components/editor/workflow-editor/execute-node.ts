@@ -3570,7 +3570,8 @@ export function executeNode(
     node.type === "youtube-upload" ||
     node.type === "linkedin-post" ||
     node.type === "x-post" ||
-    node.type === "facebook-post"
+    node.type === "facebook-post" ||
+    node.type === "telegram-post"
   ) {
     const { updateNodeData } = useWorkflowStore.getState();
     const d = node.data as SocialPostData;
@@ -3589,6 +3590,8 @@ export function executeNode(
         description: d.description || undefined,
         tags: d.tags,
         privacy: d.privacy,
+        chatId: d.chatId,
+        parseMode: d.parseMode,
       }).then(
         (result) => {
           const prev = ((node.data as SocialPostData).generatedResults ?? []) as readonly GeneratedResult[];

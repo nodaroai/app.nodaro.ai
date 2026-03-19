@@ -49,6 +49,7 @@ const SYNC_HTTP_NODES = new Set([
   "linkedin-post",
   "x-post",
   "facebook-post",
+  "telegram-post",
   "qa-check",
   "save-to-storage",
 ])
@@ -71,6 +72,7 @@ const SYNC_HTTP_ROUTES: Record<string, string> = {
   "linkedin-post": "/v1/social/publish",
   "x-post": "/v1/social/publish",
   "facebook-post": "/v1/social/publish",
+  "telegram-post": "/v1/social/publish",
 }
 
 // Maps social node type to platform name
@@ -81,6 +83,7 @@ const SOCIAL_NODE_TO_PLATFORM: Record<string, string> = {
   "linkedin-post": "linkedin",
   "x-post": "x",
   "facebook-post": "facebook",
+  "telegram-post": "telegram",
 }
 
 // ---------------------------------------------------------------------------
@@ -392,7 +395,8 @@ function buildSyncHttpBody(
     case "youtube-upload":
     case "linkedin-post":
     case "x-post":
-    case "facebook-post": {
+    case "facebook-post":
+    case "telegram-post": {
       return {
         platform: SOCIAL_NODE_TO_PLATFORM[node.type],
         action: data.action,
@@ -403,6 +407,8 @@ function buildSyncHttpBody(
         description: data.description,
         tags: data.tags,
         privacy: data.privacy,
+        chatId: data.chatId,
+        parseMode: data.parseMode,
         userId: ctx.userId,
       }
     }

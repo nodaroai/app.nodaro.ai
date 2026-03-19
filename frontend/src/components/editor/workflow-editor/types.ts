@@ -83,6 +83,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "linkedin-post": 1,
   "x-post": 1,
   "facebook-post": 1,
+  "telegram-post": 1,
   "save-to-storage": 0,
   "qa-check": 5,
 };
@@ -198,6 +199,7 @@ export const EXECUTABLE_TYPES = new Set([
   "linkedin-post",
   "x-post",
   "facebook-post",
+  "telegram-post",
   "save-to-storage",
   "qa-check",
 ]);

@@ -6,6 +6,7 @@ import { nanoid } from "nanoid"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -13,8 +14,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { WebhookParam } from "@/types/nodes"
+import type { WebhookParam, TelegramTriggerData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
+import { useSocialConnections } from "./social-configs"
 
 // ── Webhook Trigger ────────────────────────────────────────────
 
@@ -249,6 +251,121 @@ export function ScheduleTriggerConfig({ data, onUpdate }: ConfigProps<ScheduleTr
           Leave empty for unlimited executions.
         </p>
       </div>
+    </div>
+  )
+}
+
+// ── Telegram Trigger ────────────────────────────────────────────
+
+const TELEGRAM_MESSAGE_TYPES = [
+  { value: "text", label: "Text" },
+  { value: "photo", label: "Photo" },
+  { value: "video", label: "Video" },
+  { value: "audio", label: "Audio" },
+  { value: "document", label: "Document" },
+]
+
+const DEFAULT_MESSAGE_TYPE_FILTERS = TELEGRAM_MESSAGE_TYPES.map((t) => t.value)
+
+export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTriggerData>) {
+  const d = data as TelegramTriggerData
+  const { connections, loading: loadingConnections } = useSocialConnections("telegram")
+
+  const selectedFilters: string[] = d.messageTypeFilters ?? DEFAULT_MESSAGE_TYPE_FILTERS
+
+  const toggleMessageType = (value: string, checked: boolean) => {
+    const next = checked
+      ? [...selectedFilters, value]
+      : selectedFilters.filter((v) => v !== value)
+    onUpdate({ messageTypeFilters: next })
+  }
+
+  const isActive = d.isActive ?? false
+
+  const handleToggleActive = () => {
+    onUpdate({ isActive: !isActive })
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Status indicator */}
+      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium ${
+        isActive
+          ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400"
+          : "bg-gray-50 dark:bg-[#2D2D2D] border-gray-200 dark:border-[#2D2D2D] text-gray-500 dark:text-[#64748B]"
+      }`}>
+        <div className={`h-2 w-2 rounded-full ${isActive ? "bg-green-500" : "bg-gray-400"}`} />
+        {isActive ? "Active — listening for messages" : "Inactive"}
+      </div>
+
+      {/* Connection selector */}
+      <div>
+        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Telegram Bot</Label>
+        {!loadingConnections && connections.length === 0 ? (
+          <p className="text-xs text-muted-foreground mt-1.5 p-2 bg-muted/30 rounded-md border border-dashed border-border">
+            No Telegram bot connected.{" "}
+            <a href="/integrations" className="underline">Connect in Integrations</a>.
+          </p>
+        ) : (
+          <Select
+            value={d.connectionId || ""}
+            onValueChange={(v) => onUpdate({ connectionId: v })}
+          >
+            <SelectTrigger className="mt-1.5">
+              <SelectValue placeholder="Select bot..." />
+            </SelectTrigger>
+            <SelectContent>
+              {connections.map((conn) => (
+                <SelectItem key={conn.id} value={conn.id}>
+                  {conn.display_name || conn.platform_username || "Telegram Bot"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      {/* Chat ID filter */}
+      <div>
+        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Chat ID Filter</Label>
+        <Input
+          value={d.chatIdFilter || ""}
+          onChange={(e) => onUpdate({ chatIdFilter: e.target.value })}
+          placeholder="Optional — leave blank to receive from all chats"
+          className="mt-1.5"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Restrict to a specific chat ID (e.g. @channel or -100xxx).
+        </p>
+      </div>
+
+      {/* Message type filters */}
+      <div>
+        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Message Types</Label>
+        <div className="flex flex-col gap-2 mt-2">
+          {TELEGRAM_MESSAGE_TYPES.map((type) => (
+            <div key={type.value} className="flex items-center gap-2">
+              <Checkbox
+                id={`msg-type-${type.value}`}
+                checked={selectedFilters.includes(type.value)}
+                onCheckedChange={(checked) => toggleMessageType(type.value, !!checked)}
+              />
+              <label htmlFor={`msg-type-${type.value}`} className="text-sm cursor-pointer">
+                {type.label}
+              </label>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Activate / Deactivate */}
+      <Button
+        variant={isActive ? "outline" : "default"}
+        className={isActive ? "w-full border-destructive/30 text-destructive hover:bg-destructive/10" : "w-full bg-[#ff0073] hover:bg-[#e0005f] text-white"}
+        onClick={handleToggleActive}
+      >
+        {isActive ? "Deactivate Trigger" : "Activate Trigger"}
+      </Button>
     </div>
   )
 }

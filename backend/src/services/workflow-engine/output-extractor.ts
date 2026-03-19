@@ -153,6 +153,21 @@ export function extractSourceNodeOutput(
       return { text: (triggerData.timestamp as string) ?? new Date().toISOString() }
     }
 
+    case "telegram-trigger": {
+      const td = triggerData || {}
+      const output: NodeOutput = {}
+      if (td.text) output.text = td.text as string
+      if (td.imageUrl) output.imageUrl = td.imageUrl as string
+      if (td.videoUrl) output.videoUrl = td.videoUrl as string
+      if (td.audioUrl) output.audioUrl = td.audioUrl as string
+      // Store Telegram-specific fields in paramOutputs for downstream access
+      const paramOutputs: Record<string, string> = {}
+      if (td.chatId) paramOutputs["chatId"] = td.chatId as string
+      if (td.messageId) paramOutputs["messageId"] = td.messageId as string
+      if (Object.keys(paramOutputs).length > 0) output.paramOutputs = paramOutputs
+      return Object.keys(output).length > 0 ? output : { text: JSON.stringify(td) }
+    }
+
     default:
       return undefined
   }

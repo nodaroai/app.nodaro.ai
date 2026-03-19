@@ -94,6 +94,7 @@ import { SubWorkflowNode } from "./sub-workflow-node";
 import { WebhookTriggerNode } from "./webhook-trigger-node";
 import { ScheduleTriggerNode } from "./schedule-trigger-node";
 import { SocialNode } from "./social-node";
+import { TelegramTriggerNode } from "./telegram-trigger-node";
 import type { SceneNodeType } from "@/types/nodes";
 
 export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
@@ -211,4 +212,6 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "linkedin-post": SocialNode,
   "x-post": SocialNode,
   "facebook-post": SocialNode,
+  "telegram-post": SocialNode,
+  "telegram-trigger": TelegramTriggerNode,
 };

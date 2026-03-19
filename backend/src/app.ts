@@ -100,6 +100,7 @@ import { presentationRoutes } from "./routes/presentation.js"
 import { apiTokenRoutes } from "./routes/api-tokens.js"
 import { socialAuthRoutes } from "./routes/social-auth.js"
 import { socialPublishRoutes } from "./routes/social-publish.js"
+import { telegramWebhookRoutes } from "./routes/telegram-webhook.js"
 import { publishedAppsRoutes } from "./routes/published-apps.js"
 import { workflowTemplatesRoutes } from "./routes/workflow-templates.js"
 import { appRunnerRoutes } from "./routes/app-runner.js"
@@ -240,6 +241,7 @@ export async function buildApp() {
   await app.register(apiTokenRoutes)
   await app.register(socialAuthRoutes)
   await app.register(socialPublishRoutes)
+  await app.register(telegramWebhookRoutes)
   await app.register(publishedAppsRoutes)
   await app.register(workflowTemplatesRoutes)
   await app.register(appRunnerRoutes)

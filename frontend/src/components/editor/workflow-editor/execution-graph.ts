@@ -129,6 +129,22 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   if (type === "schedule-trigger") {
     return (data.text as string | undefined)?.trim();
   }
+  if (type === "telegram-trigger") {
+    const triggerData = data.__triggerData as Record<string, unknown> | undefined;
+    const fields: Record<string, string> = {
+      text: String((triggerData?.text ?? data.text) || ""),
+      imageUrl: String((triggerData?.imageUrl ?? data.imageUrl) || ""),
+      videoUrl: String((triggerData?.videoUrl ?? data.videoUrl) || ""),
+      audioUrl: String((triggerData?.audioUrl ?? data.audioUrl) || ""),
+      chatId: String((triggerData?.chatId ?? data.chatId) || ""),
+      messageId: String((triggerData?.messageId ?? data.messageId) || ""),
+    };
+    if (sourceHandle && fields[sourceHandle] !== undefined) {
+      return fields[sourceHandle] || undefined;
+    }
+    // Fallback: return text as primary output
+    return fields.text || undefined;
+  }
   if (type === "generate-image") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];

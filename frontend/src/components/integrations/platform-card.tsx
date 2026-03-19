@@ -2,8 +2,10 @@
 
 import { useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { Loader2, Unlink, Plus, Instagram, Video, Youtube, Linkedin, Twitter, Facebook } from "lucide-react"
-import { getSocialAuthUrl, disconnectSocial } from "@/lib/api"
+import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Loader2, Unlink, Plus, Instagram, Video, Youtube, Linkedin, Twitter, Facebook, Send } from "lucide-react"
+import { getSocialAuthUrl, disconnectSocial, connectTelegram } from "@/lib/api"
 import { PLATFORM_LABELS } from "@/lib/social-media-specs"
 import { toast } from "sonner"
 import type { SocialPlatformType, SocialConnection } from "@/types/nodes"
@@ -15,6 +17,7 @@ const PLATFORM_ICONS: Record<SocialPlatformType, React.ReactNode> = {
   linkedin: <Linkedin className="h-6 w-6" />,
   x: <Twitter className="h-6 w-6" />,
   facebook: <Facebook className="h-6 w-6" />,
+  telegram: <Send className="h-6 w-6" />,
 }
 
 const PLATFORM_DESCRIPTIONS: Record<SocialPlatformType, string> = {
@@ -24,6 +27,7 @@ const PLATFORM_DESCRIPTIONS: Record<SocialPlatformType, string> = {
   linkedin: "Share posts with text, images, or video",
   x: "Post tweets with media",
   facebook: "Post to your page",
+  telegram: "Send messages to channels and chats",
 }
 
 interface PlatformCardProps {
@@ -36,8 +40,17 @@ interface PlatformCardProps {
 export function PlatformCard({ platform, connections, onConnectionChange, comingSoon }: PlatformCardProps) {
   const [connecting, setConnecting] = useState(false)
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
+  const [telegramDialogOpen, setTelegramDialogOpen] = useState(false)
+  const [botToken, setBotToken] = useState("")
+  const [telegramConnecting, setTelegramConnecting] = useState(false)
+  const [telegramError, setTelegramError] = useState<string | null>(null)
 
   const handleConnect = useCallback(async () => {
+    if (platform === "telegram") {
+      setTelegramDialogOpen(true)
+      return
+    }
+
     setConnecting(true)
     try {
       const { url } = await getSocialAuthUrl(platform)
@@ -87,6 +100,22 @@ export function PlatformCard({ platform, connections, onConnectionChange, coming
       setDisconnectingId(null)
     }
   }, [platform, onConnectionChange])
+
+  const handleTelegramConnect = useCallback(async () => {
+    setTelegramError(null)
+    setTelegramConnecting(true)
+    try {
+      await connectTelegram(botToken)
+      toast.success("Connected to Telegram!")
+      setTelegramDialogOpen(false)
+      setBotToken("")
+      onConnectionChange()
+    } catch (err) {
+      setTelegramError(err instanceof Error ? err.message : "Failed to connect bot")
+    } finally {
+      setTelegramConnecting(false)
+    }
+  }, [botToken, onConnectionChange])
 
   return (
     <div className={`rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-5 flex flex-col gap-4 relative${comingSoon ? " opacity-60" : ""}`}>
@@ -160,6 +189,42 @@ export function PlatformCard({ platform, connections, onConnectionChange, coming
           "Connect"
         )}
       </Button>
+
+      <Dialog open={telegramDialogOpen} onOpenChange={(open) => {
+        setTelegramDialogOpen(open)
+        if (!open) {
+          setBotToken("")
+          setTelegramError(null)
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Connect Telegram Bot</DialogTitle>
+            <DialogDescription>
+              Create a bot via @BotFather on Telegram, then paste the bot token below.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 pt-2">
+            <Input
+              placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
+              value={botToken}
+              onChange={(e) => setBotToken(e.target.value)}
+              disabled={telegramConnecting}
+            />
+            {telegramError && (
+              <p className="text-sm text-red-500 dark:text-red-400">{telegramError}</p>
+            )}
+            <Button
+              onClick={handleTelegramConnect}
+              disabled={telegramConnecting || !botToken.trim()}
+              className="w-full bg-[#ff0073] hover:bg-[#e0005f] text-white"
+            >
+              {telegramConnecting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Connect
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

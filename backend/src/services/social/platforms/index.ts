@@ -5,6 +5,7 @@ import { youtubePublisher } from "./youtube.js"
 import { linkedinPublisher } from "./linkedin.js"
 import { xPublisher } from "./x.js"
 import { facebookPublisher } from "./facebook.js"
+import { telegramPublisher } from "./telegram.js"
 
 export interface PublishRequest {
   action: string
@@ -38,4 +39,5 @@ export const platformPublishers: Record<SocialPlatform, PlatformPublisher> = {
   linkedin: linkedinPublisher,
   x: xPublisher,
   facebook: facebookPublisher,
+  telegram: telegramPublisher,
 }
