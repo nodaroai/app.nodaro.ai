@@ -25,12 +25,18 @@ export function HorizontalView({
   containerRef,
   handleDividerMouseDown,
 }: HorizontalViewProps) {
-  const leftColumnStyle = useMemo(() => ({ width: `${splitRatio}%` }), [splitRatio])
-  const rightColumnStyle = useMemo(() => ({ width: `${100 - splitRatio}%` }), [splitRatio])
+  const leftColumnStyle = useMemo(() => ({
+    width: `calc(${splitRatio}% - 8px)`,
+    minWidth: '280px',
+  }), [splitRatio])
+  const rightColumnStyle = useMemo(() => ({
+    width: `calc(${100 - splitRatio}% - 8px)`,
+    minWidth: '280px',
+  }), [splitRatio])
 
   return (
     <div className="flex-1 flex flex-col overflow-auto p-3 md:p-6" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom))' }}>
-      <div ref={containerRef} className="pres-horiz-container max-w-7xl mx-auto flex gap-0 flex-1 min-h-[400px]">
+      <div ref={containerRef} className="pres-horiz-container max-w-7xl mx-auto flex gap-0 flex-1 min-h-[400px] overflow-x-auto">
         {/* Inputs column — width overridden to 100% on mobile via CSS */}
         <div className="pres-horiz-column flex flex-col overflow-y-auto md:pr-3" style={leftColumnStyle}>
           <NodeSection
