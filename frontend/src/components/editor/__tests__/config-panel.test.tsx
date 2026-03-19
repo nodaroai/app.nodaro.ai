@@ -76,17 +76,23 @@ function getNodeTypeDisplayName(type: string): string {
 const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "edit-image", "image-to-image",
   "image-to-video", "video-to-video", "text-to-video", "text-to-speech",
-  "text-to-audio", "audio-isolation", "generate-music", "motion-transfer", "lip-sync",
-  "video-upscale", "suno-generate", "suno-cover", "suno-extend",
-  "suno-lyrics", "suno-separate", "suno-music-video", "ai-writer",
+  "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video", "sora-storyboard",
+  "video-upscale", "extend-video", "suno-generate", "suno-cover", "suno-extend",
+  "suno-lyrics", "suno-separate", "suno-music-video",
+  "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
+  "ai-writer",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
-  "image-to-text",
+  "image-to-text", "qa-check", "transcribe",
+  "sora-character",
+  "render-video",
+  "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post",
 ])
 
 const RUN_BUTTON_TYPES = new Set([
   "merge-video-audio", "combine-videos", "trim-audio", "trim-video",
-  "speed-ramp", "loop-video", "fade-video", "transcode-video", "manual-edit", "resize-video", "adjust-volume",
-  "add-captions", "mix-audio", "combine-text", "split-text", "composite", "render-video",
+  "speed-ramp", "loop-video", "fade-video", "transcode-video", "manual-edit", "resize-video", "social-media-format", "adjust-volume",
+  "add-captions", "mix-audio", "combine-text", "split-text", "preview", "composite",
+  "sub-workflow",
 ])
 
 // ---------------------------------------------------------------------------
@@ -153,17 +159,29 @@ describe("GENERATE_BUTTON_TYPES", () => {
       "3d-title",
       "motion-graphics",
       "image-to-text",
+      "qa-check",
+      "transcribe",
+      "render-video",
     ]
     for (const type of expected) {
       expect(GENERATE_BUTTON_TYPES.has(type)).toBe(true)
     }
   })
 
-  it("does NOT contain processing nodes", () => {
+  it("contains social post nodes", () => {
+    const socialTypes = [
+      "instagram-post", "tiktok-post", "youtube-upload",
+      "linkedin-post", "x-post", "facebook-post",
+    ]
+    for (const type of socialTypes) {
+      expect(GENERATE_BUTTON_TYPES.has(type)).toBe(true)
+    }
+  })
+
+  it("does NOT contain zero-cost processing nodes", () => {
     const processingTypes = [
       "combine-videos",
       "trim-video",
-      "render-video",
       "merge-video-audio",
       "trim-audio",
       "add-captions",
@@ -174,8 +192,8 @@ describe("GENERATE_BUTTON_TYPES", () => {
     }
   })
 
-  it("contains at least 20 node types", () => {
-    expect(GENERATE_BUTTON_TYPES.size).toBeGreaterThanOrEqual(20)
+  it("contains at least 40 node types", () => {
+    expect(GENERATE_BUTTON_TYPES.size).toBeGreaterThanOrEqual(40)
   })
 })
 
@@ -188,7 +206,6 @@ describe("RUN_BUTTON_TYPES", () => {
     const expected = [
       "combine-videos",
       "trim-video",
-      "render-video",
       "merge-video-audio",
       "trim-audio",
       "mix-audio",
@@ -202,21 +219,19 @@ describe("RUN_BUTTON_TYPES", () => {
     }
   })
 
-  it("does NOT contain AI nodes", () => {
-    const aiTypes = [
+  it("does NOT contain AI or credit-costing nodes", () => {
+    const nonRunTypes = [
       "generate-image",
       "ai-writer",
       "text-to-speech",
       "image-to-video",
       "text-to-video",
+      "render-video",
+      "instagram-post",
     ]
-    for (const type of aiTypes) {
+    for (const type of nonRunTypes) {
       expect(RUN_BUTTON_TYPES.has(type)).toBe(false)
     }
-  })
-
-  it("contains at least 10 node types", () => {
-    expect(RUN_BUTTON_TYPES.size).toBeGreaterThanOrEqual(10)
   })
 })
 
