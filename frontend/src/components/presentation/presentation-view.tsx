@@ -498,7 +498,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       if (!isDraggingDivider.current || !containerRef.current) return
       const rect = containerRef.current.getBoundingClientRect()
       const ratio = Math.round(((ev.clientX - rect.left) / rect.width) * 100)
-      const clamped = Math.max(20, Math.min(80, ratio))
+      const clamped = Math.max(25, Math.min(75, ratio))
       updatePresentationSettings({ splitRatio: clamped })
     }
 

@@ -1,0 +1,159 @@
+{
+  "nodes": [
+    {
+      "id": "concept",
+      "type": "text-prompt",
+      "position": { "x": 50, "y": 550 },
+      "data": {
+        "label": "Commercial Concept",
+        "text": "A premium skincare brand commercial showcasing natural ingredients and visible results. Tone: luxurious, confident, aspirational. 30 seconds."
+      }
+    },
+
+    { "id": "ref_1", "type": "upload-image", "position": { "x": 50, "y": 0 }, "data": { "label": "Shot 1 – Hero Product", "url": "" } },
+    { "id": "ref_2", "type": "upload-image", "position": { "x": 50, "y": 100 }, "data": { "label": "Shot 2 – Ingredient Close-up", "url": "" } },
+    { "id": "ref_3", "type": "upload-image", "position": { "x": 50, "y": 200 }, "data": { "label": "Shot 3 – Texture Detail", "url": "" } },
+    { "id": "ref_4", "type": "upload-image", "position": { "x": 50, "y": 300 }, "data": { "label": "Shot 4 – Application", "url": "" } },
+    { "id": "ref_5", "type": "upload-image", "position": { "x": 50, "y": 400 }, "data": { "label": "Shot 5 – Model Close-up", "url": "" } },
+    { "id": "ref_6", "type": "upload-image", "position": { "x": 50, "y": 700 }, "data": { "label": "Shot 6 – Before/After", "url": "" } },
+    { "id": "ref_7", "type": "upload-image", "position": { "x": 50, "y": 800 }, "data": { "label": "Shot 7 – Lifestyle", "url": "" } },
+    { "id": "ref_8", "type": "upload-image", "position": { "x": 50, "y": 900 }, "data": { "label": "Shot 8 – Brand Story", "url": "" } },
+    { "id": "ref_9", "type": "upload-image", "position": { "x": 50, "y": 1000 }, "data": { "label": "Shot 9 – Social Proof", "url": "" } },
+    { "id": "ref_10", "type": "upload-image", "position": { "x": 50, "y": 1100 }, "data": { "label": "Shot 10 – CTA / Logo", "url": "" } },
+
+    {
+      "id": "script",
+      "type": "generate-script",
+      "position": { "x": 500, "y": 550 },
+      "data": {
+        "label": "Voiceover Script",
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "sceneCount": 10,
+        "styleGuide": "Write a single continuous voiceover narration for a 30-second commercial. Each scene line should be 2-3 seconds of spoken content. Tone: luxurious and aspirational. Do NOT include scene directions or stage notes — only the spoken words.",
+        "structure": "freeform",
+        "tone": "luxurious",
+        "targetLength": 30,
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "i2v_1", "type": "image-to-video", "position": { "x": 500, "y": 0 },
+      "data": { "label": "Clip 1 – Slow Reveal", "provider": "kling-turbo", "prompt": "Slow cinematic dolly forward revealing the product, soft studio lighting, shallow depth of field", "duration": 5, "motion": "low", "cameraMotion": "zoom-in", "fieldMappings": {} }
+    },
+    {
+      "id": "i2v_2", "type": "image-to-video", "position": { "x": 500, "y": 100 },
+      "data": { "label": "Clip 2 – Macro Pan", "provider": "kling-turbo", "prompt": "Macro close-up panning across natural ingredients, morning dew drops glistening", "duration": 5, "motion": "low", "cameraMotion": "pan-right", "fieldMappings": {} }
+    },
+    {
+      "id": "i2v_3", "type": "image-to-video", "position": { "x": 500, "y": 200 },
+      "data": { "label": "Clip 3 – Texture", "provider": "kling-turbo", "prompt": "Silky cream texture swirling in slow motion, elegant and luxurious feel", "duration": 5, "motion": "moderate", "cameraMotion": "static", "fieldMappings": {} }
+    },
+    {
+      "id": "i2v_4", "type": "image-to-video", "position": { "x": 500, "y": 300 },
+      "data": { "label": "Clip 4 – Application", "provider": "kling-turbo", "prompt": "Gentle application of cream on skin, soft natural lighting, beauty cinematography", "duration": 5, "motion": "low", "cameraMotion": "static", "fieldMappings": {} }
+    },
+    {
+      "id": "i2v_5", "type": "image-to-video", "position": { "x": 500, "y": 400 },
+      "data": { "label": "Clip 5 – Model", "provider": "kling-turbo", "prompt": "Model turns toward camera with confident smile, golden hour lighting, shallow DOF", "duration": 5, "motion": "moderate", "cameraMotion": "pan-left", "fieldMappings": {} }
+    },
+    {
+      "id": "i2v_6", "type": "image-to-video", "position": { "x": 500, "y": 700 },
+      "data": { "label": "Clip 6 – Transformation", "provider": "kling-turbo", "prompt": "Subtle glow appearing on skin, radiant transformation effect, beauty commercial style", "duration": 5, "motion": "low", "cameraMotion": "zoom-in", "fieldMappings": {} }
+    },
+    {
+      "id": "i2v_7", "type": "image-to-video", "position": { "x": 500, "y": 800 },
+      "data": { "label": "Clip 7 – Lifestyle", "provider": "kling-turbo", "prompt": "Elegant woman in natural setting, breeze in hair, aspirational lifestyle moment", "duration": 5, "motion": "moderate", "cameraMotion": "pan-right", "fieldMappings": {} }
+    },
+    {
+      "id": "i2v_8", "type": "image-to-video", "position": { "x": 500, "y": 900 },
+      "data": { "label": "Clip 8 – Brand", "provider": "kling-turbo", "prompt": "Artisanal craftsmanship, hands carefully preparing ingredients, warm tones", "duration": 5, "motion": "low", "cameraMotion": "zoom-in", "fieldMappings": {} }
+    },
+    {
+      "id": "i2v_9", "type": "image-to-video", "position": { "x": 500, "y": 1000 },
+      "data": { "label": "Clip 9 – Testimonial", "provider": "kling-turbo", "prompt": "Happy customers, genuine smiles, bright natural lighting, social proof montage", "duration": 5, "motion": "moderate", "cameraMotion": "static", "fieldMappings": {} }
+    },
+    {
+      "id": "i2v_10", "type": "image-to-video", "position": { "x": 500, "y": 1100 },
+      "data": { "label": "Clip 10 – Logo CTA", "provider": "kling-turbo", "prompt": "Logo elegantly appears with subtle particle effect, premium brand reveal", "duration": 5, "motion": "low", "cameraMotion": "static", "fieldMappings": {} }
+    },
+
+    {
+      "id": "combine",
+      "type": "combine-videos",
+      "position": { "x": 1000, "y": 500 },
+      "data": {
+        "label": "Combine All Clips",
+        "transition": "crossfade",
+        "transitionDuration": 0.5,
+        "audioMode": "crossfade",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "voiceover",
+      "type": "text-to-speech",
+      "position": { "x": 1000, "y": 700 },
+      "data": {
+        "label": "Voiceover",
+        "provider": "elevenlabs-v3",
+        "voiceId": "Rachel",
+        "voiceType": "premade",
+        "voiceDisplayName": "Rachel",
+        "language": "en",
+        "speed": 0.9,
+        "stability": 0.6,
+        "similarityBoost": 0.8,
+        "style": 0.3,
+        "languageCode": "",
+        "textSource": "connected",
+        "directText": "",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "final",
+      "type": "merge-video-audio",
+      "position": { "x": 1500, "y": 550 },
+      "data": {
+        "label": "Final Commercial",
+        "audioVolume": 1,
+        "videoAudioVolume": 0,
+        "fieldMappings": {}
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e_concept_script", "source": "concept", "target": "script", "sourceHandle": "out", "targetHandle": "in" },
+
+    { "id": "e_r1_i2v1", "source": "ref_1", "target": "i2v_1", "sourceHandle": "image", "targetHandle": "in" },
+    { "id": "e_r2_i2v2", "source": "ref_2", "target": "i2v_2", "sourceHandle": "image", "targetHandle": "in" },
+    { "id": "e_r3_i2v3", "source": "ref_3", "target": "i2v_3", "sourceHandle": "image", "targetHandle": "in" },
+    { "id": "e_r4_i2v4", "source": "ref_4", "target": "i2v_4", "sourceHandle": "image", "targetHandle": "in" },
+    { "id": "e_r5_i2v5", "source": "ref_5", "target": "i2v_5", "sourceHandle": "image", "targetHandle": "in" },
+    { "id": "e_r6_i2v6", "source": "ref_6", "target": "i2v_6", "sourceHandle": "image", "targetHandle": "in" },
+    { "id": "e_r7_i2v7", "source": "ref_7", "target": "i2v_7", "sourceHandle": "image", "targetHandle": "in" },
+    { "id": "e_r8_i2v8", "source": "ref_8", "target": "i2v_8", "sourceHandle": "image", "targetHandle": "in" },
+    { "id": "e_r9_i2v9", "source": "ref_9", "target": "i2v_9", "sourceHandle": "image", "targetHandle": "in" },
+    { "id": "e_r10_i2v10", "source": "ref_10", "target": "i2v_10", "sourceHandle": "image", "targetHandle": "in" },
+
+    { "id": "e_i2v1_combine", "source": "i2v_1", "target": "combine", "sourceHandle": "video", "targetHandle": "in" },
+    { "id": "e_i2v2_combine", "source": "i2v_2", "target": "combine", "sourceHandle": "video", "targetHandle": "in" },
+    { "id": "e_i2v3_combine", "source": "i2v_3", "target": "combine", "sourceHandle": "video", "targetHandle": "in" },
+    { "id": "e_i2v4_combine", "source": "i2v_4", "target": "combine", "sourceHandle": "video", "targetHandle": "in" },
+    { "id": "e_i2v5_combine", "source": "i2v_5", "target": "combine", "sourceHandle": "video", "targetHandle": "in" },
+    { "id": "e_i2v6_combine", "source": "i2v_6", "target": "combine", "sourceHandle": "video", "targetHandle": "in" },
+    { "id": "e_i2v7_combine", "source": "i2v_7", "target": "combine", "sourceHandle": "video", "targetHandle": "in" },
+    { "id": "e_i2v8_combine", "source": "i2v_8", "target": "combine", "sourceHandle": "video", "targetHandle": "in" },
+    { "id": "e_i2v9_combine", "source": "i2v_9", "target": "combine", "sourceHandle": "video", "targetHandle": "in" },
+    { "id": "e_i2v10_combine", "source": "i2v_10", "target": "combine", "sourceHandle": "video", "targetHandle": "in" },
+
+    { "id": "e_script_tts", "source": "script", "target": "voiceover", "sourceHandle": "scenes", "targetHandle": "in" },
+
+    { "id": "e_combine_final", "source": "combine", "target": "final", "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "e_tts_final", "source": "voiceover", "target": "final", "sourceHandle": "audio", "targetHandle": "audio" }
+  ]
+}
