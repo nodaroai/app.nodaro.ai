@@ -10,7 +10,7 @@ import type {
   NodeExecutionState,
   ResolvedInputs,
 } from "./types.js"
-import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, getPrimaryOutput } from "./output-extractor.js"
+import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, getPrimaryOutput } from "./output-extractor.js"
 import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
@@ -59,16 +59,19 @@ export function resolveNodeInputs(
     const state = nodeStates[sourceNode.id]
 
     // Check for item:N/last/all output mode on nodes with fan-out list results
+    // or accumulated generatedResults from multiple manual runs
     const edgeOutputMode = (edge.data as Record<string, unknown> | undefined)
       ?.outputMode as string | undefined
-    if (edgeOutputMode && state?.output?.listResults && state.output.listResults.length > 0) {
+    const effectiveListResults = state?.output?.listResults
+      ?? extractAllGeneratedResults(sourceNode.data as Record<string, unknown>)
+    if (edgeOutputMode && effectiveListResults && effectiveListResults.length > 0) {
       if (edgeOutputMode.startsWith("item:")) {
         const idx = parseInt(edgeOutputMode.split(":")[1], 10)
-        output = state.output.listResults[idx] ?? state.output.listResults[0]
+        output = effectiveListResults[idx] ?? effectiveListResults[0]
       } else if (edgeOutputMode === "last") {
-        output = state.output.listResults[state.output.listResults.length - 1]
+        output = effectiveListResults[effectiveListResults.length - 1]
       } else if (edgeOutputMode === "all") {
-        output = state.output.listResults.join(", ")
+        output = effectiveListResults.join(", ")
       }
     }
 
@@ -272,6 +275,12 @@ export function getListInputForNode(
     if (state?.output?.listResults && state.output.listResults.length > 1) {
       return state.output.listResults
     }
+
+    // 5. Fallback: accumulated generatedResults from multiple manual runs
+    const savedResults = extractAllGeneratedResults(
+      sourceNode.data as Record<string, unknown>,
+    )
+    if (savedResults) return savedResults
   }
 
   // Transitive fan-out: if a direct parent is a text-prompt whose own upstream

@@ -115,8 +115,28 @@ export function extractNodeOutputAsList(
   }
   const listResults = data.__listResults as string[] | undefined;
   if (listResults && listResults.length > 0) return listResults;
+  // Fall back to accumulated generatedResults (multiple manual runs)
+  const allResults = extractAllGeneratedResults(data);
+  if (allResults) return allResults;
   const single = extractNodeOutput(node);
   return single ? [single] : undefined;
+}
+
+/**
+ * Extract all output values from a node's accumulated generatedResults.
+ * Returns undefined if fewer than 2 results (no fan-out benefit).
+ */
+function extractAllGeneratedResults(
+  data: Record<string, unknown>,
+): string[] | undefined {
+  const results = data.generatedResults as
+    | Array<{ url?: string; text?: string }>
+    | undefined;
+  if (!results || results.length <= 1) return undefined;
+  const outputs = results
+    .map((r) => r.url || r.text || "")
+    .filter((v) => v.length > 0);
+  return outputs.length > 1 ? outputs : undefined;
 }
 
 /**
@@ -288,10 +308,12 @@ export function resolveNodeInputs(
     if (!src) continue;
 
     // Check for item:N/last/all output mode on nodes with fan-out list results
+    // or accumulated generatedResults from multiple manual runs
     const edgeMode = (srcEdge.data as Record<string, unknown> | undefined)
       ?.outputMode as string | undefined;
-    const srcListResults = (src.data as Record<string, unknown>)
-      .__listResults as string[] | undefined;
+    const srcData = src.data as Record<string, unknown>;
+    const srcListResults = (srcData.__listResults as string[] | undefined)
+      ?? extractAllGeneratedResults(srcData);
     let output: string | undefined;
     if (edgeMode && srcListResults && srcListResults.length > 0) {
       if (edgeMode.startsWith("item:")) {
