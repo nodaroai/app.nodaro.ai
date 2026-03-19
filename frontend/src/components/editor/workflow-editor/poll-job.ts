@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { getJobStatus } from "@/lib/api";
+import { getJobStatus, getExecutionEstimate } from "@/lib/api";
+import { calculateProgress } from "@nodaro-shared/progress-curve";
 import type { GeneratedResult } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -69,6 +70,7 @@ export function pollJobWithNodeUpdate(
   extraOutputFields?: (
     outputData: Record<string, unknown>,
   ) => Record<string, unknown>,
+  estimatedMs?: number,
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
@@ -79,10 +81,32 @@ export function pollJobWithNodeUpdate(
   });
 
   return new Promise((resolve, reject) => {
+    const pollStartTime = Date.now();
     apiCall()
-      .then(({ jobId }) => {
+      .then(async ({ jobId }) => {
         toast.info(`${label} started`, { description: `Job ID: ${jobId}` });
         updateNodeData(nodeId, { currentJobId: jobId });
+
+        // Auto-fetch estimate for smooth progress if not provided
+        let resolvedEstimate = estimatedMs
+        if (!resolvedEstimate) {
+          try {
+            const nodeData = (useWorkflowStore.getState().nodes.find(n => n.id === nodeId)?.data ?? {}) as Record<string, unknown>
+            const model = (nodeData.provider as string) ??
+              (nodeData.ttsModel as string) ??
+              (nodeData.llmModel as string) ??
+              label.toLowerCase()
+            if (model) {
+              const est = await getExecutionEstimate(
+                model,
+                (nodeData.aspect_ratio as string) ?? (nodeData.aspectRatio as string),
+                (nodeData.resolution as string) ?? (nodeData.quality as string),
+                Number(nodeData.duration) || undefined,
+              )
+              resolvedEstimate = est.estimatedMs
+            }
+          } catch { /* use raw progress if estimate fetch fails */ }
+        }
 
         let pollFailures = 0;
         const poll = ctx.trackInterval(
@@ -96,8 +120,15 @@ export function pollJobWithNodeUpdate(
               const job = await getJobStatus(jobId);
               pollFailures = 0;
 
-              if (job.status === "processing" && job.progress != null) {
-                updateNodeData(nodeId, { currentJobProgress: job.progress });
+              if (job.status === "processing") {
+                if (resolvedEstimate && resolvedEstimate > 0) {
+                  const elapsed = Date.now() - pollStartTime
+                  const simulated = calculateProgress(elapsed, resolvedEstimate)
+                  const real = job.progress ?? 0
+                  updateNodeData(nodeId, { currentJobProgress: Math.max(simulated, real) })
+                } else if (job.progress != null) {
+                  updateNodeData(nodeId, { currentJobProgress: job.progress })
+                }
               }
 
               if (job.status === "completed") {

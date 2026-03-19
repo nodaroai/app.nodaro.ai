@@ -65,3 +65,11 @@ export {
   type KieApiFormat,
   type LlmModelDef,
 } from "./llm-models.js"
+
+export {
+  calculateProgress,
+  buildProgressSegments,
+  calculateCombinedProgress,
+  CATEGORY_DURATION_DEFAULTS,
+  type ProgressSegment,
+} from "./progress-curve.js"

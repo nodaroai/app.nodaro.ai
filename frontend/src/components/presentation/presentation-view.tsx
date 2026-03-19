@@ -188,6 +188,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // Credit check for app runner "Get Credits" button (hooks must be unconditional)
   const appRunnerInsufficientCredits = useAppRunnerStore((s) => s.insufficientCredits)
   const appSupportsRemix = useAppRunnerStore((s) => s.app?.supportsRemix ?? false)
+  const combinedProgress = useAppRunnerStore((s) => s.combinedProgress)
   const { data: userCredits } = useUserCredits(user?.id)
 
   const handleViewModeChange = useCallback((newMode: PresentationViewMode) => {
@@ -668,6 +669,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     const outputType = getOutputType(node.type)
     const status = getNodeStatus(node.id)
     const result = getResult(node.id)
+    const progress = combinedProgress[node.id]
     return (
       <OutputCard
         nodeId={node.id}
@@ -677,9 +679,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         url={result.url}
         text={result.text}
         onOpenMedia={handleOpenMedia}
+        progress={progress}
       />
     )
-  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia])
+  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress])
 
   const costLabel = hasCredits() && estimatedCost > 0 ? ` (${estimatedCost} CR)` : ""
 

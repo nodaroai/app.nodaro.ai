@@ -31,6 +31,7 @@ import type {
 } from "../services/workflow-engine/types.js"
 import { WORKFLOW_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { filterCloneNodes } from "../../../packages/shared/src/clone-utils.js"
+import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 
 /** Max nodes a single workflow execution can run concurrently. Prevents one large workflow from starving other users. */
 const MAX_CONCURRENT_NODES_PER_EXECUTION = config.MAX_CONCURRENT_NODES_PER_EXECUTION
@@ -442,6 +443,20 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
             startedAt: nodeStates[node.id]?.startedAt,
             completedAt: new Date().toISOString(),
           }
+
+          // Record execution duration for progress bar estimation
+          try {
+            const startedAt = nodeStates[node.id]?.startedAt
+            const completedAt = nodeStates[node.id]?.completedAt
+            if (startedAt && completedAt && node.type) {
+              const nodeData = (node.data ?? {}) as Record<string, unknown>
+              const statsKey = buildStatsKey(node.type, nodeData)
+              if (statsKey) {
+                const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime()
+                upsertExecutionStats(statsKey, durationMs).catch(() => {})
+              }
+            }
+          } catch { /* non-critical */ }
 
           // For fan-out nodes, per-iteration progress was already emitted via callback;
           // for normal nodes, increment by 1 here.
