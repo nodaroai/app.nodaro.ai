@@ -637,6 +637,18 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             iterationCompleted: data.__listCompleted as number | undefined,
           }
         }
+        // Fallback: accumulated generatedResults from multiple manual runs
+        const results = data.generatedResults as
+          | Array<{ url?: string; text?: string }>
+          | undefined
+        if (results && results.length > 1) {
+          const allOutputs = results
+            .map((r) => r.url || r.text || "")
+            .filter((v) => v.length > 0)
+          if (allOutputs.length > 1) {
+            return { listResults: allOutputs }
+          }
+        }
       }
       return {}
     },

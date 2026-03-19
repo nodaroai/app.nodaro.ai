@@ -3362,6 +3362,18 @@ export function executeNode(
         continue;
       }
 
+      // Fallback: accumulated generatedResults from multiple manual runs
+      const genResults = srcData.generatedResults as
+        | Array<{ url?: string; text?: string }>
+        | undefined;
+      if (genResults && genResults.length > 1) {
+        for (const r of genResults) {
+          const val = r.url || r.text || "";
+          if (val.trim()) textParts.push(val.trim());
+        }
+        continue;
+      }
+
       const output = extractNodeOutput(sourceNode);
       if (output?.trim()) textParts.push(output.trim());
     }

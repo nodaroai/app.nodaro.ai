@@ -197,6 +197,24 @@ export function extractSourceNodeOutputAsList(
 }
 
 /**
+ * Extract all output values from a node's accumulated generatedResults.
+ * Returns undefined if fewer than 2 results (no fan-out benefit).
+ * Mirrors frontend extractAllGeneratedResults().
+ */
+export function extractAllGeneratedResults(
+  data: Record<string, unknown>,
+): string[] | undefined {
+  const results = data.generatedResults as
+    | Array<{ url?: string; text?: string }>
+    | undefined
+  if (!results || results.length <= 1) return undefined
+  const outputs = results
+    .map((r) => r.url || r.text || "")
+    .filter((v) => v.length > 0)
+  return outputs.length > 1 ? outputs : undefined
+}
+
+/**
  * Get the primary media URL or text from a NodeOutput, given the source node type.
  * Uses the media type sets from execution-graph.ts for consistency.
  */
