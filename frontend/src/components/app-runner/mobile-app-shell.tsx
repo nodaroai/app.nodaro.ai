@@ -100,6 +100,7 @@ export function MobileAppShell({
 
   const appRunnerInsufficientCredits = useAppRunnerStore((s) => s.insufficientCredits)
   const appSupportsRemix = useAppRunnerStore((s) => s.app?.supportsRemix ?? false)
+  const combinedProgress = useAppRunnerStore((s) => s.combinedProgress)
 
   const { data: userCredits } = useUserCredits(user?.id)
 
@@ -566,6 +567,7 @@ export function MobileAppShell({
     const outputType = getOutputType(node.type)
     const status = getNodeStatus(node.id)
     const result = getFullscreenResult(node.id)
+    const progress = combinedProgress[node.id]
     return (
       <OutputCard
         key={node.id}
@@ -576,9 +578,10 @@ export function MobileAppShell({
         url={result.url}
         text={result.text}
         onOpenMedia={handleOpenMedia}
+        progress={progress}
       />
     )
-  }, [getNodeStatus, getFullscreenResult, getCardTitle, handleOpenMedia])
+  }, [getNodeStatus, getFullscreenResult, getCardTitle, handleOpenMedia, combinedProgress])
 
   // ---- View props for override views (gallery/fullscreen/compare) ----
   const viewProps = useMemo(() => ({
