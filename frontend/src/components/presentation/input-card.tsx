@@ -7,6 +7,11 @@ import { ImageUploadCard } from "./input-cards/image-upload-card"
 import { VideoUploadCard } from "./input-cards/video-upload-card"
 import { AudioUploadCard } from "./input-cards/audio-upload-card"
 import { ParameterCard } from "./input-cards/parameter-card"
+import { ListInputCard } from "./input-cards/list-input-card"
+import { LoopInputCard } from "./input-cards/loop-input-card"
+
+/** System-wide ceiling for fan-out items. Will be fetched from app_settings in future. */
+export const DEFAULT_SYSTEM_MAX_FANOUT = 20
 
 export interface InputCardProps {
   node: WorkflowNode
@@ -30,6 +35,7 @@ export function InputCard({
 }: InputCardProps) {
   const label = getNodeLabel(node)
   const data = node.data as Record<string, unknown>
+  const effectiveMaxItems = Math.min((data.maxItems as number) ?? 10, DEFAULT_SYSTEM_MAX_FANOUT)
 
   // Config-type nodes open a modal with their full config panel
   if (node.type && CONFIG_INPUT_TYPES.has(node.type)) {
@@ -100,6 +106,30 @@ export function InputCard({
           inputValues={inputValues}
           onUpdateInput={onUpdateInput}
           readOnly={readOnly}
+        />
+      )
+
+    case "list":
+      return (
+        <ListInputCard
+          node={node}
+          isFullscreen={isFullscreen}
+          inputValues={inputValues}
+          onUpdateInput={onUpdateInput}
+          readOnly={readOnly}
+          maxItems={effectiveMaxItems}
+        />
+      )
+
+    case "loop":
+      return (
+        <LoopInputCard
+          node={node}
+          isFullscreen={isFullscreen}
+          inputValues={inputValues}
+          onUpdateInput={onUpdateInput}
+          readOnly={readOnly}
+          maxItems={effectiveMaxItems}
         />
       )
 

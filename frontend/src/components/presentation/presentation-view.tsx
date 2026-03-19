@@ -608,6 +608,41 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     />
   ), [isFullscreen, presInputValues, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia])
 
+  // Extract listResults for a node from either fullscreen nodeStates or tab-mode node data
+  const getListResults = useCallback(
+    (node: WorkflowNode): { listResults?: string[]; iterationTotal?: number; iterationCompleted?: number } => {
+      if (isFullscreen) {
+        const nodeState = presNodeStates[node.id]
+        if (nodeState?.output) {
+          const output = nodeState.output as Record<string, unknown>
+          const listResults = output.listResults as string[] | undefined
+          if (listResults && listResults.length > 0) {
+            // iterationTotal/iterationCompleted come from the backend orchestrator
+            // but are not part of the typed NodeState interface
+            const stateRecord = nodeState as unknown as Record<string, unknown>
+            return {
+              listResults,
+              iterationTotal: stateRecord.iterationTotal as number | undefined,
+              iterationCompleted: stateRecord.iterationCompleted as number | undefined,
+            }
+          }
+        }
+      } else {
+        const data = node.data as Record<string, unknown>
+        const listResults = data.__listResults as string[] | undefined
+        if (listResults && listResults.length > 0) {
+          return {
+            listResults,
+            iterationTotal: data.__listTotal as number | undefined,
+            iterationCompleted: data.__listCompleted as number | undefined,
+          }
+        }
+      }
+      return {}
+    },
+    [isFullscreen, presNodeStates],
+  )
+
   const renderOutputCard = useCallback((node: WorkflowNode) => {
     // Social media format: show PlatformPreview with platform badge
     if (node.type === "social-media-format") {
@@ -670,6 +705,50 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     const status = getNodeStatus(node.id)
     const result = getResult(node.id)
     const progress = combinedProgress[node.id]
+    const displayMode = settings.outputDisplayModes?.[node.id] ?? "individual"
+    const { listResults, iterationTotal, iterationCompleted } = getListResults(node)
+
+    // Gallery mode: single card with all results
+    if (listResults && listResults.length > 1 && displayMode === "gallery") {
+      return (
+        <OutputCard
+          nodeId={node.id}
+          label={getCardTitle(node)}
+          outputType={outputType}
+          status={status}
+          url={result.url}
+          text={result.text}
+          onOpenMedia={handleOpenMedia}
+          progress={progress}
+          listResults={listResults}
+          displayMode="gallery"
+          iterationTotal={iterationTotal}
+          iterationCompleted={iterationCompleted}
+        />
+      )
+    }
+
+    // Individual mode with listResults: render multiple OutputCard instances
+    if (listResults && listResults.length > 1 && displayMode === "individual") {
+      return (
+        <div className="flex flex-col gap-2">
+          {listResults.filter(Boolean).map((resultUrl, i) => (
+            <OutputCard
+              key={`${node.id}-${i}`}
+              nodeId={node.id}
+              label={`${getCardTitle(node)} #${i + 1}`}
+              outputType={outputType}
+              status={status}
+              url={outputType !== "text" ? resultUrl : undefined}
+              text={outputType === "text" ? resultUrl : undefined}
+              onOpenMedia={handleOpenMedia}
+            />
+          ))}
+        </div>
+      )
+    }
+
+    // Single result (default)
     return (
       <OutputCard
         nodeId={node.id}
@@ -682,7 +761,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         progress={progress}
       />
     )
-  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress])
+  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults])
 
   const costLabel = hasCredits() && estimatedCost > 0 ? ` (${estimatedCost} CR)` : ""
 

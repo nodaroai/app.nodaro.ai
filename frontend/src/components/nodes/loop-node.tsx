@@ -8,7 +8,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import type { LoopNodeData, LoopColumn } from "@/types/nodes"
+import { LOOP_COLUMN_TYPE_META, type LoopNodeData, type LoopColumn } from "@/types/nodes"
 
 function buildHandles(columns: ReadonlyArray<LoopColumn>) {
   const target = {
@@ -105,6 +105,22 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
           <p className="text-sm text-muted-foreground">
             {statusText}
           </p>
+          {columns.length > 0 && (
+            <div className="flex gap-1 flex-wrap mt-1">
+              {columns.map((col) => {
+                const colColor = LOOP_COLUMN_TYPE_META[col.type ?? "text"]?.color ?? "#38BDF8"
+                return (
+                  <span key={col.id} className="text-[9px] px-1.5 py-0.5 rounded font-semibold"
+                    style={{
+                      background: `${colColor}20`,
+                      color: colColor,
+                    }}>
+                    {col.name}
+                  </span>
+                )
+              })}
+            </div>
+          )}
         </div>
       </BaseNode>
       {hasTarget && <HandleIcon icon={<Type />} side="left" />}

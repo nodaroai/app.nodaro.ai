@@ -49,12 +49,21 @@ export type ListNodeData = {
   label: string
   items: string
   fieldMappings: Record<string, string>
+  maxItems?: number
 }
 
 export interface LoopColumn {
   readonly id: string
   readonly name: string
   readonly handleId: string
+  readonly type: "text" | "image-url" | "video-url" | "audio-url"
+}
+
+export const LOOP_COLUMN_TYPE_META: Record<LoopColumn["type"], { label: string; shortLabel: string; color: string }> = {
+  text: { label: "Text", shortLabel: "TXT", color: "#38BDF8" },
+  "image-url": { label: "Image", shortLabel: "IMG", color: "#F472B6" },
+  "video-url": { label: "Video", shortLabel: "VID", color: "#818CF8" },
+  "audio-url": { label: "Audio", shortLabel: "AUD", color: "#22c55e" },
 }
 
 export type LoopNodeData = {
@@ -63,6 +72,7 @@ export type LoopNodeData = {
   columns: LoopColumn[]
   rows: string[][]
   fieldMappings: Record<string, string>
+  maxItems?: number
 }
 
 export type UploadImageData = {

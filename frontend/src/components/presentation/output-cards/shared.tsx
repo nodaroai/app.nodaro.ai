@@ -2,6 +2,23 @@ import { toast } from "sonner"
 
 export type OutputStatus = "idle" | "running" | "completed" | "failed"
 
+export interface GalleryOutputProps {
+  results: string[]
+  status: OutputStatus
+  iterationTotal?: number
+  iterationCompleted?: number
+  onOpenMedia?: (url: string) => void
+}
+
+export function IterationProgress({ status, iterationTotal, iterationCompleted }: { status: OutputStatus; iterationTotal?: number; iterationCompleted?: number }) {
+  if (status !== "running" || iterationTotal == null) return null
+  return (
+    <div className="text-xs text-muted-foreground mb-2">
+      {iterationCompleted ?? 0}/{iterationTotal} generated
+    </div>
+  )
+}
+
 const STATUS_COLORS: Record<string, string> = {
   running: "bg-blue-500/10 text-blue-500 border border-blue-500/20",
   completed: "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20",

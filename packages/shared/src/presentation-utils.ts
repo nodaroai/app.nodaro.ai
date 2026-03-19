@@ -34,8 +34,6 @@ const ALWAYS_EXCLUDED_TYPES = new Set([
   "sticky-note",
   "webhook-trigger",
   "schedule-trigger",
-  "loop",
-  "list",
   "sub-workflow-input",
   "sub-workflow-output",
 ])

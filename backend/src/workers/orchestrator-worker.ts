@@ -610,55 +610,68 @@ async function executeNodeForList(
   let lastJobId: string | undefined
   let lastUsageLogId: string | undefined
 
+  // Set iteration total so frontend can show "0/N" progress
+  nodeStates[node.id] = {
+    ...nodeStates[node.id],
+    iterationTotal: items.length,
+    iterationCompleted: 0,
+  }
+
   for (let i = 0; i < items.length; i++) {
-    if (ctx.cancelled) {
-      throw new Error("Execution cancelled")
-    }
+    if (ctx.cancelled) break // Preserve partial results on cancel
 
     const item = items[i]
 
-    // Resolve normal inputs from upstream
-    const inputs = resolveNodeInputs(
-      node,
-      edges,
-      nodeStates,
-      allNodes,
-      triggerData,
-    )
+    try {
+      // Resolve normal inputs from upstream
+      const inputs = resolveNodeInputs(
+        node,
+        edges,
+        nodeStates,
+        allNodes,
+        triggerData,
+      )
 
-    // Override the appropriate input field based on item content
-    overrideInputWithListItem(inputs, item)
+      // Override the appropriate input field based on item content
+      overrideInputWithListItem(inputs, item)
 
-    // Execute the node with the overridden input
-    const result = await executeNode(
-      node,
-      inputs,
-      edges,
-      allNodes,
-      nodeStates,
-      ctx,
-    )
+      // Execute the node with the overridden input
+      const result = await executeNode(
+        node,
+        inputs,
+        edges,
+        allNodes,
+        nodeStates,
+        ctx,
+      )
 
-    // Extract the primary result URL/text from the output
-    const output = result.output
-    const resultValue =
-      output.imageUrl ||
-      output.videoUrl ||
-      output.audioUrl ||
-      output.text ||
-      ""
-    allResults.push(resultValue)
+      // Extract the primary result URL/text from the output
+      const output = result.output
+      const resultValue =
+        output.imageUrl ||
+        output.videoUrl ||
+        output.audioUrl ||
+        output.text ||
+        ""
+      allResults.push(resultValue)
 
-    if (i === 0) {
-      firstOutput = output
+      if (i === 0) {
+        firstOutput = output
+      }
+
+      totalCreditsUsed += result.creditsUsed ?? 0
+      if (result.jobId) {
+        lastJobId = result.jobId
+        allJobIds.push(result.jobId)
+      }
+      if (result.usageLogId) lastUsageLogId = result.usageLogId
+    } catch (err) {
+      allResults.push("") // Empty string for failed iteration
+      break // Fail-fast: stop at first failure, preserve completed results
     }
 
-    totalCreditsUsed += result.creditsUsed ?? 0
-    if (result.jobId) {
-      lastJobId = result.jobId
-      allJobIds.push(result.jobId)
-    }
-    if (result.usageLogId) lastUsageLogId = result.usageLogId
+    // Update iteration progress
+    nodeStates[node.id] = { ...nodeStates[node.id], iterationCompleted: i + 1 }
 
     // Emit progress update for fan-out + notify caller
     onIterationComplete?.(i)
