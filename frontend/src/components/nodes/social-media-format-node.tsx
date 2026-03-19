@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Share2, Loader2, AlertCircle, X, Expand, FileVideo, FileImage, Type } from "lucide-react"
+import { Share2, Loader2, AlertCircle, X, Expand, FileVideo, FileImage, Type, Download, Link } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { HandleIcon } from "./handle-icon"
@@ -10,7 +10,9 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { PlatformPreview } from "./platform-preview"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { toast } from "sonner"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { isVideoUrl } from "@/lib/media-type"
 import { PLATFORM_SPECS, PLATFORM_LABELS } from "@/lib/social-media-specs"
@@ -105,15 +107,45 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
             {/* Hover overlay buttons */}
             {activeUrl && (
               <>
-                <button
-                  type="button"
-                  aria-label="Expand preview"
-                  className="absolute bottom-8 left-2 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
-                  title="Fullscreen"
-                >
-                  <Expand className="w-3.5 h-3.5" />
-                </button>
+                <div className="absolute bottom-8 left-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    aria-label="Expand preview"
+                    className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                    onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+                    title="Fullscreen"
+                  >
+                    <Expand className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Download"
+                    className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const a = document.createElement('a')
+                      a.href = '/v1/image-proxy?url=' + encodeURIComponent(activeUrl) + '&download=1'
+                      a.download = (nodeData.label || 'video') + '.mp4'
+                      a.click()
+                    }}
+                    title="Download"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Copy URL"
+                    className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      navigator.clipboard.writeText(activeUrl).then(() => toast.success("URL copied"))
+                    }}
+                    title="Copy URL"
+                  >
+                    <Link className="w-3.5 h-3.5" />
+                  </button>
+                  <SaveToLibraryButton url={activeUrl} type="video" className="w-7 h-7 rounded-full" />
+                </div>
                 {results.length > 0 && (
                   <button
                     type="button"

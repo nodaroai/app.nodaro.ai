@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { SmilePlus, Loader2, AlertCircle, X, ImageIcon, Maximize2, Type } from "lucide-react"
+import { SmilePlus, Loader2, AlertCircle, X, ImageIcon, Maximize2, Type, Download, Link } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -15,6 +15,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { toast } from "sonner"
 import type { FaceNodeData } from "@/types/nodes"
 
 const STYLE_LABELS: Record<string, string> = {
@@ -119,6 +120,35 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
             <div className="absolute bottom-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <SaveToLibraryButton url={activeUrl} type="image" />
             </div>
+            {/* Download button */}
+            <button
+              type="button"
+              aria-label="Download image"
+              className="absolute bottom-1 right-[49px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation()
+                const a = document.createElement('a')
+                a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl ?? '')}&download=1`
+                a.download = `${nodeData.label || 'image'}.png`
+                a.click()
+              }}
+              title="Download"
+            >
+              <Download className="w-3 h-3" />
+            </button>
+            {/* Copy URL button */}
+            <button
+              type="button"
+              aria-label="Copy URL"
+              className="absolute bottom-1 right-[25px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation()
+                navigator.clipboard.writeText(activeUrl ?? '').then(() => toast.success("URL copied")).catch(() => {})
+              }}
+              title="Copy URL"
+            >
+              <Link className="w-3 h-3" />
+            </button>
             {/* Enlarge button */}
             <button
               type="button"

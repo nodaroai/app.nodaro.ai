@@ -2,7 +2,8 @@
 
 import { memo, useState, useMemo, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { MessageSquare, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, LayoutGrid, Expand, Download, Type } from "lucide-react"
+import { MessageSquare, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, LayoutGrid, Expand, Download, Type, Link } from "lucide-react"
+import { toast } from "sonner"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -310,6 +311,17 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }}
                 >
                   <Download className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Copy URL"
+                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigator.clipboard.writeText(activeUrl!).then(() => toast.success("URL copied")).catch(() => {})
+                  }}
+                >
+                  <Link className="w-3.5 h-3.5" />
                 </button>
               </div>
 

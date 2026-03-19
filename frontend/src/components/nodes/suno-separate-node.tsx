@@ -1,6 +1,6 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useState } from "react"
 import { Position, type NodeProps, NodeResizer, Handle } from "@xyflow/react"
 import { Scissors, Loader2, AlertCircle, Volume2 } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -8,6 +8,8 @@ import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { AudioResultOverlay } from "./audio-result-overlay"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { SunoSeparateData } from "@/types/nodes"
 
 function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
@@ -18,6 +20,7 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
   const audioUrl = nodeData.generatedAudioUrl ?? nodeData.vocalUrl
   const separateCreditId = nodeData.type === "split_stem" ? "suno-separate-stem" : "suno-separate"
   const credits = useModelCredits(separateCreditId, nodeData.type === "split_stem" ? 10 : 5)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   return (
     <div className="relative" style={{ width: 220, minHeight: 220, overflow: 'visible' }}>
@@ -58,13 +61,13 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {audioUrl && (
-          <div className="relative group/audio px-3 py-2">
-            <audio
-              src={audioUrl}
-              controls
-              className="w-full h-8"
-              preload="none"
-              onClick={(e) => e.stopPropagation()}
+          <div className="px-3 py-2">
+            <AudioResultOverlay
+              url={audioUrl}
+              label={nodeData.label}
+              hasResults={false}
+              onExpand={() => setPreviewOpen(true)}
+              onDelete={() => {}}
             />
           </div>
         )}
@@ -124,6 +127,14 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
     >
       <Scissors className="w-3.5 h-3.5 text-white" />
     </div>
+    {audioUrl && (
+      <MediaPreviewModal
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        type="audio"
+        url={audioUrl}
+      />
+    )}
     </div>
   )
 }
