@@ -468,6 +468,8 @@ export type GenerateImageData = {
   generatedImageUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
   characterDefinitionIds?: readonly string[]
 }
 
@@ -493,6 +495,8 @@ export type EditImageData = {
   generatedImageUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
 }
 
 // Image-to-Image providers (transform source image with prompt)
@@ -522,6 +526,8 @@ export type ImageToImageData = {
   generatedImageUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
 }
 
 export type ImageToVideoData = {

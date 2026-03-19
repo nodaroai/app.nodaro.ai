@@ -10,6 +10,15 @@ import {
   type ExecutionContext,
 } from "./types";
 
+export type OutputKey = "generatedVideoUrl" | "generatedAudioUrl" | "generatedImageUrl";
+
+/** Map store output key → backend output_data field. */
+const OUTPUT_URL_KEY: Record<OutputKey, string> = {
+  generatedVideoUrl: "videoUrl",
+  generatedImageUrl: "imageUrl",
+  generatedAudioUrl: "audioUrl",
+};
+
 export function pollJobToCompletion(
   jobId: string,
   ctx: ExecutionContext,
@@ -58,13 +67,71 @@ export function pollJobToCompletion(
 }
 
 /**
+ * Handle a completed job: extract URL, build result, update store.
+ * Shared between the normal completion path and the error-recovery path.
+ * Returns true if the completion was handled, false if no URL was found.
+ */
+function handleJobCompleted(
+  job: Awaited<ReturnType<typeof getJobStatus>>,
+  nodeId: string,
+  jobId: string,
+  outputKey: OutputKey,
+  label: string,
+  extraOutputFields: ((od: Record<string, unknown>) => Record<string, unknown>) | undefined,
+  updateNodeData: ReturnType<typeof useWorkflowStore.getState>["updateNodeData"],
+  resolve: () => void,
+): boolean {
+  const url = job.output_data?.[OUTPUT_URL_KEY[outputKey]];
+
+  if (!url) return false;
+
+  // Only video jobs return thumbnailUrl from the backend
+  const thumbnailUrl =
+    outputKey === "generatedVideoUrl"
+      ? (job.output_data?.thumbnailUrl as string | undefined)
+      : undefined;
+
+  const existingResults =
+    ((
+      useWorkflowStore
+        .getState()
+        .nodes.find((n) => n.id === nodeId)?.data as Record<string, unknown>
+    )?.generatedResults as readonly GeneratedResult[] | undefined) ?? [];
+
+  const newResult: GeneratedResult = {
+    url: url as string,
+    thumbnailUrl,
+    timestamp: new Date().toISOString(),
+    jobId,
+  };
+
+  const extraFields =
+    extraOutputFields && job.output_data
+      ? extraOutputFields(job.output_data as Record<string, unknown>)
+      : {};
+
+  updateNodeData(nodeId, {
+    executionStatus: "completed",
+    [outputKey]: url,
+    generatedResults: [newResult, ...existingResults],
+    activeResultIndex: 0,
+    currentJobId: undefined,
+    currentJobProgress: undefined,
+    ...extraFields,
+  });
+  toast.success(`${label} complete`);
+  resolve();
+  return true;
+}
+
+/**
  * Generic poll-based node executor. Starts an API call, polls until
  * completed/failed, and updates the node in the store.
  */
 export function pollJobWithNodeUpdate(
   nodeId: string,
   apiCall: () => Promise<{ jobId: string }>,
-  outputKey: "generatedVideoUrl" | "generatedAudioUrl",
+  outputKey: OutputKey,
   label: string,
   ctx: ExecutionContext,
   extraOutputFields?: (
@@ -81,33 +148,34 @@ export function pollJobWithNodeUpdate(
   });
 
   return new Promise((resolve, reject) => {
-    const pollStartTime = Date.now();
     apiCall()
       .then(async ({ jobId }) => {
         toast.info(`${label} started`, { description: `Job ID: ${jobId}` });
         updateNodeData(nodeId, { currentJobId: jobId });
 
         // Auto-fetch estimate for smooth progress if not provided
-        let resolvedEstimate = estimatedMs
+        let resolvedEstimate = estimatedMs;
         if (!resolvedEstimate) {
           try {
-            const nodeData = (useWorkflowStore.getState().nodes.find(n => n.id === nodeId)?.data ?? {}) as Record<string, unknown>
+            const nodeData = (useWorkflowStore.getState().nodes.find(n => n.id === nodeId)?.data ?? {}) as Record<string, unknown>;
             const model = (nodeData.provider as string) ??
               (nodeData.ttsModel as string) ??
               (nodeData.llmModel as string) ??
-              label.toLowerCase()
+              label.toLowerCase();
             if (model) {
               const est = await getExecutionEstimate(
                 model,
                 (nodeData.aspect_ratio as string) ?? (nodeData.aspectRatio as string),
                 (nodeData.resolution as string) ?? (nodeData.quality as string),
                 Number(nodeData.duration) || undefined,
-              )
-              resolvedEstimate = est.estimatedMs
+              );
+              resolvedEstimate = est.estimatedMs;
             }
           } catch { /* use raw progress if estimate fetch fails */ }
         }
 
+        // Start timing AFTER job creation + estimate fetch, not before
+        const pollStartTime = Date.now();
         let pollFailures = 0;
         const poll = ctx.trackInterval(
           setInterval(async () => {
@@ -122,23 +190,23 @@ export function pollJobWithNodeUpdate(
 
               if (job.status === "processing") {
                 if (resolvedEstimate && resolvedEstimate > 0) {
-                  const elapsed = Date.now() - pollStartTime
-                  const simulated = calculateProgress(elapsed, resolvedEstimate)
-                  const real = job.progress ?? 0
-                  updateNodeData(nodeId, { currentJobProgress: Math.max(simulated, real) })
+                  const elapsed = Date.now() - pollStartTime;
+                  const simulated = calculateProgress(elapsed, resolvedEstimate);
+                  const real = job.progress ?? 0;
+                  const next = Math.max(simulated, real);
+                  // Only update store if progress actually changed (avoids no-op re-renders)
+                  const prev = (useWorkflowStore.getState().nodes.find(n => n.id === nodeId)?.data as Record<string, unknown>)?.currentJobProgress;
+                  if (next !== prev) {
+                    updateNodeData(nodeId, { currentJobProgress: next });
+                  }
                 } else if (job.progress != null) {
-                  updateNodeData(nodeId, { currentJobProgress: job.progress })
+                  updateNodeData(nodeId, { currentJobProgress: job.progress });
                 }
               }
 
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
-                const url =
-                  outputKey === "generatedVideoUrl"
-                    ? job.output_data?.videoUrl
-                    : job.output_data?.audioUrl;
-
-                if (!url) {
+                if (!handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve)) {
                   const errMsg = "No output URL returned from job";
                   updateNodeData(nodeId, {
                     executionStatus: "failed",
@@ -148,48 +216,7 @@ export function pollJobWithNodeUpdate(
                   });
                   toast.error(`${label} failed`, { description: errMsg });
                   reject(new Error(errMsg));
-                  return;
                 }
-
-                const thumbnailUrl =
-                  outputKey === "generatedVideoUrl"
-                    ? (job.output_data?.thumbnailUrl as string | undefined)
-                    : undefined;
-
-                const existingResults =
-                  ((
-                    useWorkflowStore
-                      .getState()
-                      .nodes.find((n) => n.id === nodeId)?.data as Record<
-                      string,
-                      unknown
-                    >
-                  )?.generatedResults as
-                    | readonly GeneratedResult[]
-                    | undefined) ?? [];
-                const newResult: GeneratedResult = {
-                  url: url as string,
-                  thumbnailUrl,
-                  timestamp: new Date().toISOString(),
-                  jobId,
-                };
-                const extraFields =
-                  extraOutputFields && job.output_data
-                    ? extraOutputFields(
-                        job.output_data as Record<string, unknown>,
-                      )
-                    : {};
-                updateNodeData(nodeId, {
-                  executionStatus: "completed",
-                  [outputKey]: url,
-                  generatedResults: [newResult, ...existingResults],
-                  activeResultIndex: 0,
-                  currentJobId: undefined,
-                  currentJobProgress: undefined,
-                  ...extraFields,
-                });
-                toast.success(`${label} complete`);
-                resolve();
               } else if (job.status === "failed") {
                 ctx.untrackInterval(poll);
                 const errMsg = job.error_message ?? "Unknown error";
@@ -210,42 +237,7 @@ export function pollJobWithNodeUpdate(
                 try {
                   const job = await getJobStatus(jobId);
                   if (job.status === "completed") {
-                    const url =
-                      outputKey === "generatedVideoUrl"
-                        ? job.output_data?.videoUrl
-                        : job.output_data?.audioUrl;
-                    if (url) {
-                      const thumbnailUrl =
-                        outputKey === "generatedVideoUrl"
-                          ? (job.output_data?.thumbnailUrl as string | undefined)
-                          : undefined;
-                      const existingResults =
-                        ((
-                          useWorkflowStore
-                            .getState()
-                            .nodes.find((n) => n.id === nodeId)?.data as Record<string, unknown>
-                        )?.generatedResults as readonly GeneratedResult[] | undefined) ?? [];
-                      const newResult: GeneratedResult = {
-                        url: url as string,
-                        thumbnailUrl,
-                        timestamp: new Date().toISOString(),
-                        jobId,
-                      };
-                      const extraFields =
-                        extraOutputFields && job.output_data
-                          ? extraOutputFields(job.output_data as Record<string, unknown>)
-                          : {};
-                      updateNodeData(nodeId, {
-                        executionStatus: "completed",
-                        [outputKey]: url,
-                        generatedResults: [newResult, ...existingResults],
-                        activeResultIndex: 0,
-                        currentJobId: undefined,
-                        currentJobProgress: undefined,
-                        ...extraFields,
-                      });
-                      toast.success(`${label} complete`);
-                      resolve();
+                    if (handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve)) {
                       return;
                     }
                   }

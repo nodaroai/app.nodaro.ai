@@ -3,6 +3,7 @@
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Loader2, AlertCircle, X, Clapperboard } from "lucide-react"
+import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -75,19 +76,7 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
         {status === "running" && (
           <div className="flex flex-col items-center justify-center h-28 rounded-md bg-muted/30 gap-2">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            {nodeData.currentJobProgress != null && nodeData.currentJobProgress > 0 && (
-              <div className="flex flex-col items-center gap-1 w-full px-4">
-                <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary transition-all duration-300 ease-out"
-                    style={{ width: `${nodeData.currentJobProgress}%` }}
-                  />
-                </div>
-                <span className="text-[11px] text-muted-foreground font-medium">
-                  {nodeData.currentJobProgress}%
-                </span>
-              </div>
-            )}
+            <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
         )}
 

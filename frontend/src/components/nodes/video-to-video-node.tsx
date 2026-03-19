@@ -3,6 +3,7 @@
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand } from "lucide-react"
+import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -163,19 +164,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
         {status === "running" && (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10" style={{ minHeight: 180 }}>
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
-            {nodeData.currentJobProgress != null && nodeData.currentJobProgress > 0 && (
-              <div className="flex flex-col items-center gap-1 w-full px-8">
-                <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-[#ff0073] transition-all duration-300 ease-out"
-                    style={{ width: `${nodeData.currentJobProgress}%` }}
-                  />
-                </div>
-                <span className="text-[11px] text-muted-foreground">
-                  {nodeData.currentJobProgress}%
-                </span>
-              </div>
-            )}
+            <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
         )}
 

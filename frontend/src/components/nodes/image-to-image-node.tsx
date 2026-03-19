@@ -3,6 +3,7 @@
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, Layers } from "lucide-react"
+import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -127,8 +128,9 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Running state */}
         {status === "running" && (
-          <div className="flex items-center justify-center rounded-xl bg-muted/10" style={{ minHeight: 180 }}>
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10" style={{ minHeight: 180 }}>
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
+            <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
         )}
 
