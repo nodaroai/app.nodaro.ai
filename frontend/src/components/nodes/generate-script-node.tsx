@@ -15,12 +15,12 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
-import { buildLlmCreditIdentifier } from "@nodaro-shared/llm-models"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
 import type { GenerateScriptData, GeneratedScriptResult } from "@/types/nodes"
 
 function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateScriptData
-  const credits = useModelCredits(buildLlmCreditIdentifier("generate-script", nodeData.llmModel), 10)
+  const credits = useModelCredits(buildLlmCreditIdentifier("generate-script", nodeData.llmModel || LLM_FEATURE_DEFAULTS["generate-script"]), 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const generateSceneImage = useWorkflowStore((s) => s.generateSceneImage)

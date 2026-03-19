@@ -7,13 +7,13 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
-import { buildLlmCreditIdentifier } from "@nodaro-shared/llm-models"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
 import type { MotionGraphicsData } from "@/types/nodes"
 
 function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as MotionGraphicsData | undefined
   const nodeData = currentNodeData ?? (data as MotionGraphicsData)
-  const credits = useModelCredits(buildLlmCreditIdentifier("motion-graphics", nodeData.llmModel), 10)
+  const credits = useModelCredits(buildLlmCreditIdentifier("motion-graphics", nodeData.llmModel || LLM_FEATURE_DEFAULTS["motion-graphics"]), 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

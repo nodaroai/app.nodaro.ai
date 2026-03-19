@@ -7,13 +7,13 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
-import { buildLlmCreditIdentifier } from "@nodaro-shared/llm-models"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
 import type { ThreeDTitleData } from "@/types/nodes"
 
 function ThreeDTitleNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as ThreeDTitleData | undefined
   const nodeData = currentNodeData ?? (data as ThreeDTitleData)
-  const credits = useModelCredits(buildLlmCreditIdentifier("3d-title", nodeData.llmModel), 15)
+  const credits = useModelCredits(buildLlmCreditIdentifier("3d-title", nodeData.llmModel || LLM_FEATURE_DEFAULTS["3d-title"]), 15)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
