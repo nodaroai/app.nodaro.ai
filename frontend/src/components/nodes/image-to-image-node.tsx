@@ -2,7 +2,8 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, Layers } from "lucide-react"
+import { ImageIcon, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, Link, Layers } from "lucide-react"
+import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -44,18 +45,7 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
   const useFull = zoom >= 0.8
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) {
-      newActiveIndex = 0
-    } else if (indexToDelete < activeIndex) {
-      newActiveIndex = activeIndex - 1
-    }
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedImageUrl: newResults[newActiveIndex]?.url,
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedImageUrl"))
   }
 
   return (
@@ -178,6 +168,13 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
             <button type="button" aria-label="Download" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'image'}.png`; a.click() }}>
               <Download className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" aria-label="Copy URL" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                copyToClipboard(activeUrl!, "URL copied")
+              }}>
+              <Link className="w-3.5 h-3.5" />
             </button>
           </div>
         )}

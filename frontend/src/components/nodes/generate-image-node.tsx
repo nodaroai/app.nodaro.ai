@@ -3,7 +3,8 @@
 import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, Settings, LayoutGrid, Expand, Download, Type } from "lucide-react"
+import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, Settings, LayoutGrid, Expand, Download, Link, Type } from "lucide-react"
+import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -60,27 +61,12 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
     : undefined
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) {
-      newActiveIndex = 0
-    } else if (indexToDelete < activeIndex) {
-      newActiveIndex = activeIndex - 1
-    }
-    const updates: Record<string, unknown> = {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedImageUrl: newResults[newActiveIndex]?.url,
-    }
-    // Keep __listResults in sync so the config panel's iteration results
-    // panel reflects deletions.  Remove the deleted URL; clear all __list*
-    // metadata when no results remain.
+    const updates = computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedImageUrl")
+    // Keep __listResults in sync
     const listResults = (nodeData as Record<string, unknown>).__listResults as string[] | undefined
     if (listResults) {
       const deletedUrl = results[indexToDelete]?.url
-      const newListResults = deletedUrl
-        ? listResults.filter((u) => u !== deletedUrl)
-        : listResults
+      const newListResults = deletedUrl ? listResults.filter((u) => u !== deletedUrl) : listResults
       if (newListResults.length <= 1) {
         updates.__listResults = undefined
         updates.__listInputs = undefined
@@ -207,41 +193,33 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                 </button>
               )}
             </div>
-            <button
-              type="button"
-              aria-label="Expand preview"
-              className="absolute bottom-2 left-2 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
-              title="Fullscreen"
-            >
-              <Expand className="w-3.5 h-3.5" />
-            </button>
-            <div className="absolute bottom-2 left-11 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                type="button"
-                aria-label="Settings"
-                className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => { e.stopPropagation(); selectNode(id) }}
-                title="Settings"
-              >
+            <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button type="button" aria-label="Expand preview" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Fullscreen">
+                <Expand className="w-3.5 h-3.5" />
+              </button>
+              <button type="button" aria-label="Settings" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => { e.stopPropagation(); selectNode(id) }} title="Settings">
                 <Settings className="w-3.5 h-3.5" />
               </button>
+              <button type="button" aria-label="Download" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const a = document.createElement('a')
+                  a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`
+                  a.download = `${nodeData.label || 'image'}.png`
+                  a.click()
+                }} title="Download">
+                <Download className="w-3.5 h-3.5" />
+              </button>
+              <button type="button" aria-label="Copy URL" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  copyToClipboard(activeUrl!, "URL copied")
+                }} title="Copy URL">
+                <Link className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <button
-              type="button"
-              aria-label="Download"
-              className="absolute bottom-2 left-20 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={(e) => {
-                e.stopPropagation()
-                const a = document.createElement('a')
-                a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`
-                a.download = `${nodeData.label || 'image'}.png`
-                a.click()
-              }}
-              title="Download"
-            >
-              <Download className="w-3.5 h-3.5" />
-            </button>
             <div className="absolute bottom-8 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <SaveToLibraryButton url={activeUrl} type="image" className="bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" />
             </div>

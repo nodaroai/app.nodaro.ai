@@ -4,7 +4,7 @@ import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
 import { BookOpen, Loader2, AlertCircle, X, FileText, Sparkles, ImageIcon, Film, Maximize2, Type, MessageSquare, Music, Volume2, User, MapPin, Copy } from "lucide-react"
-import { toast } from "sonner"
+import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -41,18 +41,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
   const totalEstimatedCredits = 2 + sceneCount * creditsPerScene // script + scenes
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) {
-      newActiveIndex = 0
-    } else if (indexToDelete < activeIndex) {
-      newActiveIndex = activeIndex - 1
-    }
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedScript: newResults[newActiveIndex]?.script,
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedScript", "script"))
   }
 
   return (
@@ -181,7 +170,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
                         ),
                       ].join("\n")
                     : ""
-                  navigator.clipboard.writeText(scriptText).then(() => toast.success("Script copied")).catch(() => {})
+                  copyToClipboard(scriptText, "Script copied")
                 }}
               >
                 <Copy className="w-3 h-3" />

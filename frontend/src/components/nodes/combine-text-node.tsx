@@ -4,7 +4,7 @@ import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Merge, FileText, X, Copy } from "lucide-react"
 import { createPortal } from "react-dom"
-import { toast } from "sonner"
+import { copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -127,7 +127,7 @@ function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
                   className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
                   onClick={(e) => {
                     e.stopPropagation()
-                    navigator.clipboard.writeText(combinedText ?? "").then(() => toast.success("Text copied")).catch(() => {})
+                    copyToClipboard(combinedText ?? "", "Text copied")
                   }}
                 >
                   <Copy className="w-3 h-3" />

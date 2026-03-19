@@ -4,7 +4,7 @@ import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { FileText, Loader2, AlertCircle, X, Type, Volume2, Copy, Download } from "lucide-react"
 import { createPortal } from "react-dom"
-import { toast } from "sonner"
+import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -77,18 +77,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
   const credits = useModelCredits(nodeData.provider ?? "whisper", 4)
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) {
-      newActiveIndex = 0
-    } else if (indexToDelete < activeIndex) {
-      newActiveIndex = activeIndex - 1
-    }
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedText: newResults[newActiveIndex]?.text,
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedText", "text"))
   }
 
   const truncatedText = activeText && activeText.length > 100
@@ -159,7 +148,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
                     className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
                     onClick={(e) => {
                       e.stopPropagation()
-                      navigator.clipboard.writeText(activeText ?? "").then(() => toast.success("Text copied")).catch(() => {})
+                      copyToClipboard(activeText ?? "", "Text copied")
                     }}
                   >
                     <Copy className="w-3 h-3" />
@@ -170,13 +159,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
                     className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
                     onClick={(e) => {
                       e.stopPropagation()
-                      const blob = new Blob([activeText ?? ""], { type: "text/plain" })
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement("a")
-                      a.href = url
-                      a.download = `${nodeData.label || "transcript"}.txt`
-                      a.click()
-                      URL.revokeObjectURL(url)
+                      downloadTextFile(activeText ?? "", `${nodeData.label || "transcript"}.txt`)
                     }}
                   >
                     <Download className="w-3 h-3" />

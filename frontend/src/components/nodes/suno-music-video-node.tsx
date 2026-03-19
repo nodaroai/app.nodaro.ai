@@ -2,7 +2,7 @@
 
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps, NodeResizer, Handle } from "@xyflow/react"
-import { Film, Loader2, AlertCircle, Volume2, Clapperboard } from "lucide-react"
+import { Film, Loader2, AlertCircle, Volume2, Clapperboard, LayoutGrid } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -11,6 +11,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { VideoResultOverlay } from "./video-result-overlay"
+import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { SunoMusicVideoData } from "@/types/nodes"
 
 function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
@@ -20,13 +21,15 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const status = nodeData.executionStatus ?? "idle"
   const videoUrl = nodeData.generatedVideoUrl
-  const results = (nodeData as Record<string, unknown>).generatedResults as readonly import("@/types/nodes").GeneratedResult[] | undefined
-  const activeIndex = 0
-  const activeUrl = videoUrl
+  const results = nodeData.generatedResults
+  const activeIndex = nodeData.activeResultIndex ?? 0
+  const activeResult = results?.[activeIndex]
+  const activeUrl = activeResult?.url ?? videoUrl
   const credits = useModelCredits("suno-music-video", 5)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [videoError, setVideoError] = useState(false)
+  const [showThumbnails, setShowThumbnails] = useState(false)
   const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
 
   useEffect(() => {
@@ -37,12 +40,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
   const hasResult = status !== "running" && !!activeUrl && !videoError
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results ? results.filter((_, i) => i !== indexToDelete) : []
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: 0,
-      generatedVideoUrl: newResults[0]?.url,
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results ?? [], activeIndex, indexToDelete, "generatedVideoUrl"))
   }
 
   return (
@@ -73,6 +71,27 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
         topToolbarContent={
           status !== "running" ? (
             <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+          ) : undefined
+        }
+        bottomToolbarContent={
+          showThumbnails && results && results.length > 1 ? (
+            <div className="flex gap-1.5 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
+              {results.slice(0, 8).map((r, i) => (
+                <video
+                  key={`${r.jobId}-${i}`}
+                  src={r.url}
+                  muted
+                  playsInline
+                  className={`w-12 h-12 object-cover rounded-lg cursor-pointer transition-all ${
+                    i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
+                  }}
+                />
+              ))}
+            </div>
           ) : undefined
         }
         handles={[]}
@@ -110,6 +129,17 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </BaseNode>
 
+      {hasResult && results && results.length > 1 && (
+        <button
+          type="button"
+          className="absolute top-2 left-2 z-20 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/node:opacity-100 transition-opacity"
+          onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
+          title="Show versions"
+        >
+          <LayoutGrid className="w-3 h-3" />
+          <span className="font-medium">{results.length}</span>
+        </button>
+      )}
       {hasResult && (
         <VideoResultOverlay
           url={activeUrl}

@@ -12,11 +12,11 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { toast } from "sonner"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { isVideoUrl } from "@/lib/media-type"
 import { PLATFORM_SPECS, PLATFORM_LABELS } from "@/lib/social-media-specs"
 import type { SocialMediaFormatData } from "@/types/nodes"
+import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { SocialMediaPlatform } from "@/lib/social-media-specs"
 
 function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
@@ -40,16 +40,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
   const platformLabel = PLATFORM_LABELS[nodeData.platform as SocialMediaPlatform] ?? nodeData.platform
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) { newActiveIndex = 0 }
-    else if (indexToDelete < activeIndex) { newActiveIndex = activeIndex - 1 }
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedVideoUrl: newResults[newActiveIndex]?.url,
-      generatedImageUrl: undefined,
-    })
+    updateNodeData(id, { ...computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"), generatedImageUrl: undefined })
   }
 
   return (
@@ -138,7 +129,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
-                      navigator.clipboard.writeText(activeUrl).then(() => toast.success("URL copied"))
+                      copyToClipboard(activeUrl, "URL copied")
                     }}
                     title="Copy URL"
                   >

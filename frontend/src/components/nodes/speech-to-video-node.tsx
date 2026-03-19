@@ -3,7 +3,6 @@
 import { memo, useState, useMemo, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { MessageSquare, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, LayoutGrid, Expand, Download, Type, Link } from "lucide-react"
-import { toast } from "sonner"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -14,6 +13,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { EditableNodeLabel } from "./editable-node-label"
+import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { SpeechToVideoData, GeneratedResult } from "@/types/nodes"
 
 const IMAGE_OUTPUT_TYPES = [
@@ -133,15 +133,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const hasRequiredInputs = hasImageConnection && hasAudioConnection
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) newActiveIndex = 0
-    else if (indexToDelete < activeIndex) newActiveIndex = activeIndex - 1
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedVideoUrl: newResults[newActiveIndex]?.url,
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
   }
 
   return (
@@ -318,7 +310,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
-                    navigator.clipboard.writeText(activeUrl!).then(() => toast.success("URL copied")).catch(() => {})
+                    copyToClipboard(activeUrl!, "URL copied")
                   }}
                 >
                   <Link className="w-3.5 h-3.5" />

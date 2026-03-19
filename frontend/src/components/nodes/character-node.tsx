@@ -15,7 +15,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
-import { toast } from "sonner"
+import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { CharacterNodeData } from "@/types/nodes"
 
 const STYLE_LABELS: Record<string, string> = {
@@ -50,17 +50,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const anyAssetRunning = nodeData.expressionStatus === "running" || nodeData.poseStatus === "running" || nodeData.lightingStatus === "running" || nodeData.anglesStatus === "running"
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) {
-      newActiveIndex = 0
-    } else if (indexToDelete < activeIndex) {
-      newActiveIndex = activeIndex - 1
-    }
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete))
   }
 
   return (
@@ -151,7 +141,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
               className="absolute bottom-1 right-[25px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={(e) => {
                 e.stopPropagation()
-                navigator.clipboard.writeText(activeUrl ?? '').then(() => toast.success("URL copied")).catch(() => {})
+                copyToClipboard(activeUrl ?? '', "URL copied")
               }}
               title="Copy URL"
             >

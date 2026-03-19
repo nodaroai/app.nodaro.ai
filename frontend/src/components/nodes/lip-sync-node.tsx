@@ -20,7 +20,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { EditableNodeLabel } from "./editable-node-label"
-import { toast } from "sonner"
+import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { LipSyncData, GeneratedResult } from "@/types/nodes"
 
 // Node types that output images (for portrait/face)
@@ -178,18 +178,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   }, [imageNodes, audioNodes, nodeData.selectedImageNodeId, nodeData.selectedAudioNodeId, id, updateNodeData])
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) {
-      newActiveIndex = 0
-    } else if (indexToDelete < activeIndex) {
-      newActiveIndex = activeIndex - 1
-    }
-    updateNodeData(id, {
-      generatedResults: newResults,
-      activeResultIndex: newActiveIndex,
-      generatedVideoUrl: newResults[newActiveIndex]?.url,
-    })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
   }
 
   const selectedImage = imageNodes.find((n) => n.id === nodeData.selectedImageNodeId)
@@ -459,7 +448,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                   type="button"
                   aria-label="Copy URL"
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(activeUrl!).then(() => toast.success("URL copied")).catch(() => {}) }}
+                  onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }}
                 >
                   <Link className="w-3.5 h-3.5" />
                 </button>

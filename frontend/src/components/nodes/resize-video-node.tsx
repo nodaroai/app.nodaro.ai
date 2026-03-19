@@ -13,6 +13,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
+import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ResizeVideoData } from "@/types/nodes"
 
 function ResizeVideoNodeComponent({ id, data, selected }: NodeProps) {
@@ -40,11 +41,7 @@ function ResizeVideoNodeComponent({ id, data, selected }: NodeProps) {
   const hasResult = status !== "running" && !!activeUrl && !videoError
 
   function handleDeleteResult(indexToDelete: number) {
-    const newResults = results.filter((_, i) => i !== indexToDelete)
-    let newActiveIndex = activeIndex
-    if (indexToDelete === activeIndex) { newActiveIndex = 0 }
-    else if (indexToDelete < activeIndex) { newActiveIndex = activeIndex - 1 }
-    updateNodeData(id, { generatedResults: newResults, activeResultIndex: newActiveIndex, generatedVideoUrl: newResults[newActiveIndex]?.url })
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
   }
 
   return (

@@ -13,7 +13,7 @@ import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
-import { toast } from "sonner"
+import { copyToClipboard } from "@/lib/utils"
 import type { UploadImageData } from "@/types/nodes"
 
 const HANDLES = [
@@ -180,7 +180,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                       className="absolute bottom-1 right-[49px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={(e) => {
                         e.stopPropagation()
-                        navigator.clipboard.writeText(imageUrl ?? '').then(() => toast.success("URL copied")).catch(() => {})
+                        copyToClipboard(imageUrl ?? '', "URL copied")
                       }}
                       title="Copy URL"
                     >
