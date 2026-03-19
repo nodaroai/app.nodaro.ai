@@ -166,6 +166,8 @@ export interface OrchestratorContext {
   triggerData?: Record<string, unknown>
   /** Abort signal — set when execution is cancelled */
   cancelled: boolean
+  /** Epoch ms of last cancel-check DB query (shared across parallel nodes to avoid duplicate queries) */
+  lastCancelCheckMs?: number
   /** Workflow settings (character definitions, prompt templates) */
   workflowSettings?: Record<string, unknown>
   /** Called when a worker-queued node creates its job — allows the orchestrator

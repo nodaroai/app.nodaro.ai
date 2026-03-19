@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
-import { videoQueue } from "../lib/queue.js"
+import { tryRemoveFromQueue } from "../lib/queue.js"
 
 export async function cancelJobsRoutes(app: FastifyInstance) {
   // Cancel a single job
@@ -128,23 +128,4 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       })
     }
   })
-}
-
-async function tryRemoveFromQueue(jobId: string): Promise<void> {
-  try {
-    const bullJob = await videoQueue.getJob(jobId)
-    if (bullJob) {
-      const state = await bullJob.getState()
-      if (state === "waiting" || state === "delayed") {
-        await bullJob.remove()
-        console.log(`[cancel] Removed job ${jobId} from queue (was ${state})`)
-      } else if (state === "active") {
-        // Job is currently being processed - can't stop mid-execution
-        // The worker should check job status before saving results
-        console.log(`[cancel] Job ${jobId} is active - marked as cancelled, worker will discard result`)
-      }
-    }
-  } catch (err) {
-    console.log(`[cancel] Could not remove BullMQ job ${jobId}: ${err}`)
-  }
 }

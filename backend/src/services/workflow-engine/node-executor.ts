@@ -526,6 +526,21 @@ async function executeWorkerNode(
 // Job polling
 // ---------------------------------------------------------------------------
 
+/** How often (in poll cycles) to re-check execution status from the DB.
+ *  Every 5th cycle = every ~15 seconds. */
+const CANCEL_CHECK_INTERVAL = 5
+
+/** Cancel the underlying job, refund credits, and throw. */
+async function cancelJobAndThrow(
+  jobId: string,
+  usageLogId: string | undefined,
+  reason: string,
+): Promise<never> {
+  await supabase.from("jobs").update({ status: "cancelled" }).eq("id", jobId)
+  await refundJobCredits(usageLogId, jobId, reason)
+  throw new Error(reason)
+}
+
 async function pollJobToCompletion(
   jobId: string,
   nodeType: string,
@@ -534,11 +549,30 @@ async function pollJobToCompletion(
   creditsUsed?: number,
 ): Promise<ExecuteNodeResult> {
   let processingStartTime: number | null = null
+  let pollCycle = 0
 
   while (true) {
-    // Check cancellation
+    // Check cancellation (fast path — already flagged by orchestrator or sibling node)
     if (ctx.cancelled) {
-      throw new Error("Execution cancelled")
+      await cancelJobAndThrow(jobId, usageLogId, "Execution cancelled")
+    }
+
+    // Periodically re-check execution status from DB so mid-level cancellation
+    // is detected without waiting for the level to finish.  Shared timestamp on
+    // ctx ensures only one parallel node queries the DB per interval.
+    pollCycle++
+    const now = Date.now()
+    if (pollCycle % CANCEL_CHECK_INTERVAL === 0 && now - (ctx.lastCancelCheckMs ?? 0) >= CANCEL_CHECK_INTERVAL * JOB_POLL_INTERVAL_MS) {
+      ctx.lastCancelCheckMs = now
+      const { data: execRow } = await supabase
+        .from("workflow_executions")
+        .select("status")
+        .eq("id", ctx.executionId)
+        .single()
+      if (execRow?.status === "cancelled" || execRow?.status === "stopping") {
+        ctx.cancelled = true
+        await cancelJobAndThrow(jobId, usageLogId, "Execution cancelled")
+      }
     }
 
     // Poll job status
@@ -574,9 +608,7 @@ async function pollJobToCompletion(
     // Check processing timeout — only starts once the worker picks up the job.
     // Queue wait time is bounded by the workflow-level timeout (WORKFLOW_TIMEOUT_MS).
     if (processingStartTime !== null && Date.now() - processingStartTime > NODE_TIMEOUT_MS) {
-      await supabase.from("jobs").update({ status: "cancelled" }).eq("id", jobId)
-      await refundJobCredits(usageLogId, jobId, "Node timeout")
-      throw new Error(`Node timeout after ${NODE_TIMEOUT_MS / 1000}s of processing`)
+      await cancelJobAndThrow(jobId, usageLogId, `Node timeout after ${NODE_TIMEOUT_MS / 1000}s of processing`)
     }
 
     // Wait before next poll

@@ -30,7 +30,7 @@ import { useUndoRedoSubscription } from "@/hooks/use-undo-redo";
 import { useProjectsStore } from "@/hooks/use-projects-store";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase";
-import { StorageExceededError, uploadFile, setCurrentWorkflowId, cancelWorkflowExecution } from "@/lib/api";
+import { StorageExceededError, uploadFile, setCurrentWorkflowId, cancelWorkflowExecution, cancelJob } from "@/lib/api";
 import { queryClient } from "@/lib/query-client";
 import { hasCredits } from "@/lib/edition";
 import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits";
@@ -497,19 +497,21 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const jobIdsToCancel: string[] = [];
     for (const node of nodes) {
       const d = node.data as Record<string, unknown>;
-      if (d.executionStatus === "running") {
+      if (d.executionStatus === "running" || d.executionStatus === "pending") {
         updateNodeData(node.id, { executionStatus: "idle" });
         if (d.currentJobId) jobIdsToCancel.push(d.currentJobId as string);
       }
     }
 
-    // Cancel workflow execution or standalone jobs in background
+    // Cancel workflow execution (covers backend orchestrator runs)
     if (executionId) {
       cancelWorkflowExecution(executionId).catch(() => {});
     }
+    // Cancel individual standalone jobs via the dedicated job-cancel route
+    // which also removes them from the BullMQ queue
     for (const jobId of jobIdsToCancel) {
       if (jobId !== executionId) {
-        cancelWorkflowExecution(jobId).catch(() => {});
+        cancelJob(jobId).catch(() => {});
       }
     }
 
