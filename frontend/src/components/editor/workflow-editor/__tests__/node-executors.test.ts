@@ -128,7 +128,7 @@ describe("runImageGeneration", () => {
         generatedImageUrl: "http://img.png",
       }),
     )
-    expect(mockToastSuccess).toHaveBeenCalledWith("Image generated")
+    expect(mockToastSuccess).toHaveBeenCalledWith("Image generation complete")
   })
 
   it("rejects when API call fails", async () => {
@@ -178,7 +178,7 @@ describe("runEditImage", () => {
         generatedImageUrl: "http://edited.png",
       }),
     )
-    expect(mockToastSuccess).toHaveBeenCalledWith("Image edited")
+    expect(mockToastSuccess).toHaveBeenCalledWith("Image editing complete")
   })
 
   it("rejects when API call fails", async () => {
@@ -228,7 +228,7 @@ describe("runImageToImage", () => {
         generatedImageUrl: "http://transformed.png",
       }),
     )
-    expect(mockToastSuccess).toHaveBeenCalledWith("Image transformed")
+    expect(mockToastSuccess).toHaveBeenCalledWith("Image transformation complete")
   })
 
   it("rejects when API call fails", async () => {
@@ -278,7 +278,7 @@ describe("runVideoGeneration", () => {
         generatedVideoUrl: "http://vid.mp4",
       }),
     )
-    expect(mockToastSuccess).toHaveBeenCalledWith("Video generated")
+    expect(mockToastSuccess).toHaveBeenCalledWith("Video generation complete")
   })
 
   it("rejects when API call fails", async () => {
@@ -328,7 +328,7 @@ describe("runVideoToVideoGeneration", () => {
         generatedVideoUrl: "http://v2v.mp4",
       }),
     )
-    expect(mockToastSuccess).toHaveBeenCalledWith("Video-to-video generated")
+    expect(mockToastSuccess).toHaveBeenCalledWith("Video-to-video generation complete")
   })
 
   it("rejects when API call fails", async () => {
@@ -378,7 +378,7 @@ describe("runTextToVideoGeneration", () => {
         generatedVideoUrl: "http://t2v.mp4",
       }),
     )
-    expect(mockToastSuccess).toHaveBeenCalledWith("Text-to-video generated")
+    expect(mockToastSuccess).toHaveBeenCalledWith("Text-to-video generation complete")
   })
 
   it("rejects when API call fails", async () => {
@@ -428,7 +428,7 @@ describe("runTextToSpeechGeneration", () => {
         generatedAudioUrl: "http://audio.mp3",
       }),
     )
-    expect(mockToastSuccess).toHaveBeenCalledWith("Audio generated")
+    expect(mockToastSuccess).toHaveBeenCalledWith("Text-to-speech generation complete")
   })
 
   it("rejects when API call fails", async () => {
@@ -531,7 +531,7 @@ describe("runCombineVideos", () => {
         generatedVideoUrl: "http://combined.mp4",
       }),
     )
-    expect(mockToastSuccess).toHaveBeenCalledWith("Videos combined")
+    expect(mockToastSuccess).toHaveBeenCalledWith("Combine videos complete")
   })
 
   it("rejects when API call fails", async () => {
