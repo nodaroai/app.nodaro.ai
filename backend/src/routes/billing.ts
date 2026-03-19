@@ -146,6 +146,7 @@ export async function billingRoutes(app: FastifyInstance) {
         line_items: [{ price: priceId, quantity: 1 }],
         metadata: { userId },
         subscription_data: checkoutMode === "subscription" ? { metadata: { userId } } : undefined,
+        allow_promotion_codes: true,
         success_url: successUrl,
         cancel_url: `${baseUrl}/pricing`,
       })
