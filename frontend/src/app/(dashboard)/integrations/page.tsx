@@ -6,7 +6,7 @@ import { PlatformCard } from "@/components/integrations/platform-card"
 import { getSocialConnections } from "@/lib/api"
 import type { SocialPlatformType, SocialConnection } from "@/types/nodes"
 
-const PLATFORMS: SocialPlatformType[] = ["instagram", "facebook", "tiktok", "youtube", "linkedin", "x"]
+const PLATFORMS: SocialPlatformType[] = ["instagram", "facebook", "tiktok", "youtube", "linkedin", "x", "telegram"]
 
 const COMING_SOON_PLATFORMS: ReadonlySet<SocialPlatformType> = new Set(["tiktok", "youtube", "linkedin", "x"])
 
