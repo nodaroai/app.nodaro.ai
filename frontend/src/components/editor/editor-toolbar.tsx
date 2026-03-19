@@ -333,10 +333,15 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         case "linkedin-post":
         case "x-post":
         case "facebook-post":
+        case "telegram-post":
           data.executionStatus = undefined
           data.errorMessage = undefined
           data.platformPostId = undefined
           data.platformPostUrl = undefined
+          break
+
+        case "telegram-trigger":
+          data.isActive = false
           break
 
         default:

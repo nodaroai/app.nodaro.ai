@@ -3,6 +3,7 @@ import { buildApp } from "./app.js"
 import { startCleanupCron } from "./billing/cleanup-cron.js"
 import { startScheduleCron, stopScheduleCron } from "./lib/schedule-cron.js"
 import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
+import { initTelegramRoutingTable } from "./lib/telegram-router.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err)
@@ -14,6 +15,13 @@ process.on("uncaughtException", (err) => {
 
 async function main() {
   const app = await buildApp()
+
+  // Load Telegram routing table before accepting traffic
+  try {
+    await initTelegramRoutingTable()
+  } catch (err) {
+    console.error("[telegram] Failed to load routing table:", err)
+  }
 
   await app.listen({ port: config.PORT, host: config.HOST })
 

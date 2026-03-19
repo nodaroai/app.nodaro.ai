@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { generateAuthUrl, validateState, exchangeCodeForTokens, type SocialPlatform } from "../services/social/oauth.js"
 import { encryptToken, decryptToken } from "../services/social/encryption.js"
 
-const PLATFORMS = ["instagram", "tiktok", "youtube", "linkedin", "x", "facebook"] as const
+const PLATFORMS = ["instagram", "tiktok", "youtube", "linkedin", "x", "facebook", "telegram"] as const
 
 export async function socialAuthRoutes(app: FastifyInstance) {
   // GET /v1/social/auth-url?platform=instagram
@@ -115,6 +115,59 @@ export async function socialAuthRoutes(app: FastifyInstance) {
     if (error) return reply.status(500).send({ error: { code: "internal_error" } })
     return { success: true }
   })
+
+  // POST /v1/social/telegram/connect — Direct bot token connection (no OAuth)
+  app.post("/v1/social/telegram/connect", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return reply.status(401).send({ error: { code: "unauthorized" } })
+
+    const schema = z.object({ botToken: z.string().min(10) })
+    const parsed = schema.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "Invalid bot token" } })
+    }
+
+    const { botToken } = parsed.data
+
+    // Validate token via Telegram getMe API
+    let botInfo: { id: number; first_name: string; username?: string }
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/getMe`)
+      const data = await res.json() as { ok: boolean; result?: { id: number; first_name: string; username?: string }; description?: string }
+      if (!data.ok || !data.result) {
+        return reply.status(400).send({ error: { code: "invalid_token", message: data.description || "Invalid bot token" } })
+      }
+      botInfo = data.result
+    } catch {
+      return reply.status(500).send({ error: { code: "telegram_error", message: "Failed to validate bot token" } })
+    }
+
+    // Encrypt and store
+    const accessTokenEncrypted = encryptToken(botToken)
+
+    const { error: upsertErr } = await supabase
+      .from("social_connections")
+      .upsert({
+        user_id: userId,
+        platform: "telegram",
+        platform_user_id: String(botInfo.id),
+        platform_username: botInfo.username || botInfo.first_name,
+        display_name: botInfo.first_name,
+        access_token_encrypted: accessTokenEncrypted,
+        refresh_token_encrypted: null,
+        token_expires_at: null,
+        scopes: [],
+        metadata: {},
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,platform,platform_user_id" })
+
+    if (upsertErr) {
+      app.log.error({ upsertErr }, "Failed to save Telegram connection")
+      return reply.status(500).send({ error: { code: "internal_error" } })
+    }
+
+    return { success: true, botName: botInfo.first_name, botUsername: botInfo.username }
+  })
 }
 
 async function fetchPlatformUserInfo(
@@ -214,6 +267,10 @@ async function fetchPlatformUserInfo(
         username: data.data.user.display_name,
         avatarUrl: data.data.user.avatar_url,
       }
+    }
+    case "telegram": {
+      // Telegram uses bot tokens, not OAuth — this path is never reached
+      throw new Error("Telegram does not use OAuth user info fetch")
     }
   }
 }

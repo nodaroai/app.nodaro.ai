@@ -15,6 +15,7 @@ export const PLATFORM_COLORS: Record<SocialMediaPlatform, string> = {
   youtube: "#FF0000",
   facebook: "#1877F2",
   linkedin: "#0A66C2",
+  telegram: "#2AABEE",
 }
 
 const SIZE_CONFIG = {

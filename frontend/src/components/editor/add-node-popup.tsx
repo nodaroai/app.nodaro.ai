@@ -67,6 +67,7 @@ import {
   Facebook,
   StickyNote,
   UserRound,
+  Send,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -739,6 +740,20 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Facebook className="h-4 w-4" />,
     category: "Output",
     group: "Social Media",
+  },
+  {
+    type: "telegram-post",
+    label: "Telegram Post",
+    icon: <Send className="h-4 w-4" />,
+    category: "Output",
+    group: "Social Media",
+  },
+  {
+    type: "telegram-trigger",
+    label: "Telegram Trigger",
+    icon: <Send className="h-4 w-4" />,
+    category: "Input",
+    group: "Triggers",
   },
   // Sub-Workflow
   {

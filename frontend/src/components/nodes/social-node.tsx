@@ -20,6 +20,7 @@ const PLATFORM_ICONS: Record<SocialPlatformType, React.ReactNode> = {
   linkedin: <Linkedin className="h-4 w-4" />,
   x: <Twitter className="h-4 w-4" />,
   facebook: <Facebook className="h-4 w-4" />,
+  telegram: <Send className="h-4 w-4" />,
 }
 
 function SocialNodeComponent({ id, data, selected }: NodeProps) {

@@ -37,6 +37,11 @@ const PLATFORM_ACTIONS: Record<SocialPlatformType, Array<{ value: string; label:
     { value: "post-video", label: "Post Video" },
     { value: "post-story", label: "Post Story" },
   ],
+  telegram: [
+    { value: "send-message", label: "Send Message" },
+    { value: "send-photo", label: "Send Photo" },
+    { value: "send-video", label: "Send Video" },
+  ],
 }
 
 const CAPTION_LIMITS: Record<SocialPlatformType, number> = {
@@ -46,9 +51,10 @@ const CAPTION_LIMITS: Record<SocialPlatformType, number> = {
   linkedin: 3000,
   x: 280,
   facebook: 63206,
+  telegram: 4096,
 }
 
-function useSocialConnections(platform: SocialPlatformType) {
+export function useSocialConnections(platform: SocialPlatformType) {
   const [connections, setConnections] = useState<SocialConnection[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -148,6 +154,39 @@ function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, on
               {actions.map((a) => (
                 <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {/* Telegram-specific: Chat ID */}
+      {platform === "telegram" && (
+        <div>
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Chat ID</Label>
+          <Input
+            value={d.chatId || ""}
+            onChange={(e) => onUpdate({ chatId: e.target.value })}
+            placeholder="@channelname or -100..."
+            className="mt-1.5"
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Channel: @username or -100xxx. Group/DM: numeric ID.
+          </p>
+        </div>
+      )}
+
+      {/* Telegram-specific: Parse Mode */}
+      {platform === "telegram" && (
+        <div>
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Parse Mode</Label>
+          <Select value={d.parseMode || "none"} onValueChange={(v) => onUpdate({ parseMode: v === "none" ? undefined : v })}>
+            <SelectTrigger className="mt-1.5">
+              <SelectValue placeholder="None (plain text)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              <SelectItem value="Markdown">Markdown</SelectItem>
+              <SelectItem value="HTML">HTML</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -265,4 +304,8 @@ export function XPostConfig(props: ConfigProps<SocialPostData>) {
 
 export function FacebookPostConfig(props: ConfigProps<SocialPostData>) {
   return <SocialConfigBase {...props} platform="facebook" />
+}
+
+export function TelegramPostConfig(props: ConfigProps<SocialPostData>) {
+  return <SocialConfigBase {...props} platform="telegram" />
 }

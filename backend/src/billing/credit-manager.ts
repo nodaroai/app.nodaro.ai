@@ -29,6 +29,7 @@ const CREDIT_COSTS: Record<string, number> = {
   "linkedin-post": 1,
   "x-post": 1,
   "facebook-post": 1,
+  "telegram-post": 1,
 }
 
 export function estimateWorkflowCredits(

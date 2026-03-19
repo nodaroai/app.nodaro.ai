@@ -1337,7 +1337,7 @@ export type SocialMediaFormatData = {
   activeResultIndex?: number
 }
 
-export type SocialPlatformType = "instagram" | "tiktok" | "youtube" | "linkedin" | "x" | "facebook"
+export type SocialPlatformType = "instagram" | "tiktok" | "youtube" | "linkedin" | "x" | "facebook" | "telegram"
 
 export interface SocialConnection {
   id: string
@@ -1359,6 +1359,8 @@ export type SocialPostData = {
   description?: string
   tags?: string[]
   privacy?: string
+  chatId?: string        // Telegram only
+  parseMode?: string     // Telegram only
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   currentJobProgress?: number
@@ -2077,6 +2079,17 @@ export type ScheduleTriggerData = {
   maxExecutions?: number
 }
 
+export type TelegramTriggerData = {
+  [key: string]: unknown
+  label: string
+  connectionId?: string
+  chatIdFilter?: string
+  messageTypeFilters?: string[]
+  triggerId?: string
+  isActive?: boolean
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+}
+
 // --- Union Types ---
 
 export type SceneNodeData =
@@ -2175,6 +2188,7 @@ export type SceneNodeData =
   | SubWorkflowData
   | WebhookTriggerData
   | ScheduleTriggerData
+  | TelegramTriggerData
   | SocialPostData
 
 export type SceneNodeType =
@@ -2279,6 +2293,8 @@ export type SceneNodeType =
   | "linkedin-post"
   | "x-post"
   | "facebook-post"
+  | "telegram-post"
+  | "telegram-trigger"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
 export type WorkflowEdge = Edge
@@ -3629,5 +3645,32 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       caption: "",
       fieldMappings: {},
     } as SocialPostData,
+  },
+  {
+    type: "telegram-post",
+    label: "Telegram Post",
+    category: "output",
+    creditCost: 1,
+    inputs: ["in"],
+    outputs: [],
+    defaultData: {
+      label: "Telegram Post",
+      platform: "telegram",
+      action: "send-message",
+      caption: "",
+      fieldMappings: {},
+    } as SocialPostData,
+  },
+  {
+    type: "telegram-trigger",
+    label: "Telegram Trigger",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["text", "imageUrl", "videoUrl", "audioUrl", "chatId", "messageId"],
+    defaultData: {
+      label: "Telegram Trigger",
+      messageTypeFilters: ["text", "photo", "video", "audio", "document"],
+    } as TelegramTriggerData,
   },
 ]

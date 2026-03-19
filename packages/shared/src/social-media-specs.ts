@@ -1,4 +1,4 @@
-export type SocialMediaPlatform = "instagram" | "tiktok" | "x" | "youtube" | "facebook" | "linkedin"
+export type SocialMediaPlatform = "instagram" | "tiktok" | "x" | "youtube" | "facebook" | "linkedin" | "telegram"
 
 export type SocialMediaContentType =
   | "feed-square" | "feed-portrait" | "feed-landscape" | "story-reel"  // Instagram
@@ -105,6 +105,9 @@ export const CONTENT_TYPES_BY_PLATFORM: Record<SocialMediaPlatform, ReadonlyArra
     { key: "linkedin:li-image-square", label: "Image Square (1080×1080)" },
     { key: "linkedin:li-video", label: "Video (1920×1080)" },
   ],
+  telegram: [
+    { key: "telegram:message", label: "Message (text)" },
+  ],
 }
 
 export const PLATFORM_LABELS: Record<SocialMediaPlatform, string> = {
@@ -114,4 +117,5 @@ export const PLATFORM_LABELS: Record<SocialMediaPlatform, string> = {
   youtube: "YouTube",
   facebook: "Facebook",
   linkedin: "LinkedIn",
+  telegram: "Telegram",
 }
