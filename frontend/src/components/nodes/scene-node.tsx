@@ -16,6 +16,7 @@ const SceneEditorModal = lazy(() => import("@/components/editor/scene-editor-mod
 const ExtractReferencesModal = lazy(() => import("@/components/editor/extract-references-modal").then(m => ({ default: m.ExtractReferencesModal })))
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { NodeJobProgress } from "./node-job-progress"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
@@ -104,8 +105,9 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       <div className="flex flex-col gap-1.5">
         {/* Generated image or location thumbnail or placeholder */}
         {status === "running" && (
-          <div className="flex items-center justify-center h-24 rounded-md bg-muted/30">
+          <div className="flex flex-col items-center justify-center gap-2 h-24 rounded-md bg-muted/30">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
         )}
 

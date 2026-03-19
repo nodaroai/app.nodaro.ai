@@ -9,6 +9,7 @@ import { HandleIcon } from "./handle-icon"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { NodeJobProgress } from "./node-job-progress"
 import { PLATFORM_LABELS } from "@/lib/social-media-specs"
 import type { SocialPostData, SocialPlatformType } from "@/types/nodes"
 
@@ -62,6 +63,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
           {status === "running" && (
             <div className="flex flex-col items-center gap-2">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              <NodeJobProgress progress={nodeData.currentJobProgress} />
               <span className="text-[11px] text-muted-foreground">Publishing...</span>
             </div>
           )}

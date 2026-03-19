@@ -11,6 +11,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
+import { NodeJobProgress } from "./node-job-progress"
 import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
@@ -233,6 +234,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
           {status === "running" && (
             <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10" style={{ minHeight: 180 }}>
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
+              <NodeJobProgress progress={nodeData.currentJobProgress} />
             </div>
           )}
 

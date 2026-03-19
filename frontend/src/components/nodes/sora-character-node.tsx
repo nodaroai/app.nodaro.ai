@@ -8,6 +8,7 @@ import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { NodeJobProgress } from "./node-job-progress"
 import type { SoraCharacterData } from "@/types/nodes"
 
 function SoraCharacterNodeComponent({ id, data, selected }: NodeProps) {
@@ -82,8 +83,9 @@ function SoraCharacterNodeComponent({ id, data, selected }: NodeProps) {
 
           {/* Running state */}
           {status === "running" && (
-            <div className="flex items-center justify-center h-12 rounded-md bg-muted/30">
+            <div className="flex flex-col items-center justify-center gap-2 h-12 rounded-md bg-muted/30">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              <NodeJobProgress progress={nodeData.currentJobProgress} />
             </div>
           )}
 

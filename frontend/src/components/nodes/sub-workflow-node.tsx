@@ -13,6 +13,7 @@ import { WorkflowViewerModal } from "@/components/editor/workflow-viewer-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { NodeJobProgress } from "./node-job-progress"
 import type { SubWorkflowData, SubWorkflowPort, GeneratedResult } from "@/types/nodes"
 
 function buildHandles(
@@ -135,9 +136,12 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
 
           {status === "running" && progress && (
             <div className="mt-2">
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                <span>{progress.completed}/{progress.total}</span>
+              <div className="flex flex-col items-center gap-1.5 text-[10px] text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>{progress.completed}/{progress.total}</span>
+                </div>
+                <NodeJobProgress progress={nodeData.currentJobProgress} />
               </div>
               <div className="mt-1 h-1 bg-[#2D2D2D] rounded-full overflow-hidden">
                 <div

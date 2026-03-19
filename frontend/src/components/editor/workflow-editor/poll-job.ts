@@ -7,6 +7,7 @@ import {
   WorkflowStaleError,
   MAX_CONSECUTIVE_POLL_FAILURES,
   checkStorageError,
+  updateProgressIfChanged,
   type ExecutionContext,
 } from "./types";
 
@@ -194,13 +195,9 @@ export function pollJobWithNodeUpdate(
                   const simulated = calculateProgress(elapsed, resolvedEstimate);
                   const real = job.progress ?? 0;
                   const next = Math.max(simulated, real);
-                  // Only update store if progress actually changed (avoids no-op re-renders)
-                  const prev = (useWorkflowStore.getState().nodes.find(n => n.id === nodeId)?.data as Record<string, unknown>)?.currentJobProgress;
-                  if (next !== prev) {
-                    updateNodeData(nodeId, { currentJobProgress: next });
-                  }
+                  updateProgressIfChanged(nodeId, next, updateNodeData);
                 } else if (job.progress != null) {
-                  updateNodeData(nodeId, { currentJobProgress: job.progress });
+                  updateProgressIfChanged(nodeId, job.progress, updateNodeData);
                 }
               }
 

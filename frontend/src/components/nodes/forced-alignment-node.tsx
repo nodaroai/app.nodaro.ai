@@ -9,6 +9,7 @@ import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { NodeJobProgress } from "./node-job-progress"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import type { ForcedAlignmentData, AlignmentWord } from "@/types/nodes"
 
@@ -54,8 +55,9 @@ function ForcedAlignmentNodeComponent({ id, data, selected }: NodeProps) {
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
         {status === "running" && (
-          <div className="flex items-center justify-center h-12 rounded-md bg-muted/30">
+          <div className="flex flex-col items-center justify-center gap-2 h-12 rounded-md bg-muted/30">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
         )}
 

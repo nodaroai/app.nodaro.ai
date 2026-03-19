@@ -445,6 +445,7 @@ export type GenerateScriptData = {
   targetLength: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
   generatedScript?: GeneratedScript
   generatedResults?: GeneratedScriptResult[]
@@ -581,6 +582,7 @@ export type ImageToVideoData = {
 }
 
 export type TextToSpeechData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   provider: TtsProvider
@@ -653,6 +655,7 @@ export type LipSyncData = {
   prompt: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
@@ -805,6 +808,7 @@ export type QACheckData = {
 }
 
 export type GenerateMusicData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   prompt: string
@@ -827,6 +831,7 @@ export type GenerateMusicData = {
 }
 
 export type TextToAudioData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   prompt: string
@@ -843,6 +848,7 @@ export type TextToAudioData = {
 }
 
 export type SunoGenerateData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   prompt: string
@@ -866,6 +872,7 @@ export type SunoGenerateData = {
 }
 
 export type SunoCoverData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   prompt: string
@@ -999,6 +1006,7 @@ export type SunoReplaceSectionData = {
 }
 
 export type SunoStyleBoostData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   content: string
@@ -1073,6 +1081,7 @@ export type SunoUploadExtendData = {
 }
 
 export type AudioIsolationData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   fieldMappings: FieldMappings
@@ -1092,6 +1101,7 @@ export type TranscribeData = {
   tagAudioEvents?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
   generatedText?: string
   generatedResults?: Array<{ text: string; language: string; jobId: string; timestamp: string }>
@@ -1219,6 +1229,7 @@ export type ImageToTextData = {
   llmModel?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
   generatedText?: string
   generatedResults?: Array<{ text: string; jobId: string; timestamp: string }>
@@ -1228,6 +1239,7 @@ export type ImageToTextData = {
 // --- Processing Node Data ---
 
 export type CombineVideosData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"
@@ -1253,6 +1265,7 @@ export interface MergeAudioTrack {
 }
 
 export type MergeVideoAudioData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   // Main video's embedded audio
@@ -1275,6 +1288,7 @@ export type MergeVideoAudioData = {
 }
 
 export type AddCaptionsData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   style: "subtitle" | "word-highlight" | "karaoke"
@@ -1290,6 +1304,7 @@ export type AddCaptionsData = {
 }
 
 export type ResizeVideoData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   targetAspect: "1:1" | "16:9" | "9:16" | "4:5"
@@ -1304,6 +1319,7 @@ export type ResizeVideoData = {
 }
 
 export type SocialMediaFormatData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   platform: string
@@ -1345,6 +1361,7 @@ export type SocialPostData = {
   privacy?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
   platformPostId?: string
   platformPostUrl?: string
@@ -1353,6 +1370,7 @@ export type SocialPostData = {
 }
 
 export type TrimAudioData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   outputSilentVideo: boolean
@@ -1367,6 +1385,7 @@ export type TrimAudioData = {
 }
 
 export type MixAudioData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   trackCount: number
@@ -1381,6 +1400,7 @@ export type MixAudioData = {
 }
 
 export type AdjustVolumeData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   volume: number
@@ -1398,6 +1418,7 @@ export type AdjustVolumeData = {
 }
 
 export type TrimVideoData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   startTime: number
@@ -1423,6 +1444,7 @@ export type VideoComposerData = {
   llmModel?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
 }
 
@@ -1438,6 +1460,7 @@ export type AfterEffectsData = {
   fps: number
   durationSeconds: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
 }
 
@@ -1454,6 +1477,7 @@ export type LottieOverlayData = {
   fps: number
   durationSeconds: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
 }
 
@@ -1469,6 +1493,7 @@ export type ThreeDTitleData = {
   fps: number
   durationSeconds: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
 }
 
@@ -1483,6 +1508,7 @@ export type MotionGraphicsData = {
   fps: number
   durationSeconds: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
 }
 
@@ -1511,6 +1537,7 @@ export type CompositeData = {
   durationSeconds: number
   backgroundColor: string
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
 }
 
@@ -1533,6 +1560,7 @@ export type RenderVideoData = {
 }
 
 export type SpeedRampData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   speed: number
@@ -1546,6 +1574,7 @@ export type SpeedRampData = {
 }
 
 export type LoopVideoData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   mode: "repeat" | "duration"
@@ -1560,6 +1589,7 @@ export type LoopVideoData = {
 }
 
 export type FadeVideoData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   fadeIn: boolean
@@ -1576,6 +1606,7 @@ export type FadeVideoData = {
 }
 
 export type TranscodeVideoData = {
+  currentJobProgress?: number
   [key: string]: unknown
   label: string
   codec: "h264" | "h265"
@@ -1663,6 +1694,7 @@ export type CharacterNodeData = {
   projectId: string
   createdAt: string
   executionStatus: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
   generatedResults: GeneratedResult[]
   activeResultIndex: number
@@ -1709,6 +1741,7 @@ export type ObjectNodeData = {
   projectId: string
   createdAt: string
   executionStatus: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
   generatedResults: GeneratedResult[]
   activeResultIndex: number
@@ -1747,6 +1780,7 @@ export type LocationNodeData = {
   projectId: string
   createdAt: string
   executionStatus: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
   generatedResults: GeneratedResult[]
   activeResultIndex: number
@@ -1778,6 +1812,7 @@ export type FaceNodeData = {
   projectId: string
   createdAt: string
   executionStatus: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
   generatedResults: GeneratedResult[]
   activeResultIndex: number
@@ -1948,6 +1983,7 @@ export type SceneNodeDataType = {
   referenceUrls: string[]
   generatedPrompt: string
   executionStatus: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
   generatedResults: GeneratedResult[]
   activeResultIndex: number
@@ -2006,6 +2042,7 @@ export type SubWorkflowData = {
   routeSnapshot: SubWorkflowRouteSnapshot | null
   fieldMappings: Record<string, FieldMapping>
   executionStatus: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
   errorMessage?: string
   outputResults?: Record<string, string>
   generatedResults?: GeneratedResult[]

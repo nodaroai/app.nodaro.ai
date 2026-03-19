@@ -10,6 +10,7 @@ import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useConnectionCount } from "@/hooks/use-connection-count"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { NodeJobProgress } from "./node-job-progress"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -125,8 +126,9 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
     >
       <div className="flex flex-col gap-1">
         {status === "running" && !activeText && (
-          <div className="flex items-center justify-center h-12 rounded-md bg-muted/30">
+          <div className="flex flex-col items-center justify-center gap-2 h-12 rounded-md bg-muted/30">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
         )}
 

@@ -146,6 +146,7 @@ import {
   WorkflowStaleError,
   MAX_CONSECUTIVE_POLL_FAILURES,
   checkStorageError,
+  updateProgressIfChanged,
   type ExecutionContext,
 } from "./types";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
@@ -1080,7 +1081,7 @@ export function executeNode(
                 const job = await getJobStatus(jobId);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
-                  updateNodeData(node.id, { currentJobProgress: job.progress });
+                  updateProgressIfChanged(node.id, job.progress, updateNodeData);
                 }
 
                 if (job.status === "completed") {
@@ -1276,10 +1277,9 @@ export function executeNode(
               try {
                 const job = await getJobStatus(jobId);
                 pollFailures = 0;
-                if (job.progress)
-                  updateNodeData(node.id, {
-                    currentJobProgress: job.progress,
-                  });
+                if (job.progress) {
+                  updateProgressIfChanged(node.id, job.progress, updateNodeData);
+                }
 
                 if (job.status === "completed") {
                   ctx.untrackInterval(poll);
@@ -1678,9 +1678,7 @@ export function executeNode(
                 const job = await getJobStatus(jobId);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
-                  updateNodeData(node.id, {
-                    currentJobProgress: job.progress,
-                  });
+                  updateProgressIfChanged(node.id, job.progress, updateNodeData);
                 }
                 if (job.status === "completed") {
                   ctx.untrackInterval(poll);
@@ -2177,7 +2175,7 @@ export function executeNode(
                 const job = await getJobStatus(jobId);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
-                  updateNodeData(node.id, { currentJobProgress: job.progress });
+                  updateProgressIfChanged(node.id, job.progress, updateNodeData);
                 }
 
                 if (job.status === "completed") {

@@ -15,6 +15,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { NodeJobProgress } from "./node-job-progress"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { FaceNodeData } from "@/types/nodes"
 
@@ -81,8 +82,9 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Image preview / status */}
         {status === "running" && !activeUrl && (
-          <div className="flex items-center justify-center h-24 rounded-md bg-muted/30">
+          <div className="flex flex-col items-center justify-center gap-2 h-24 rounded-md bg-muted/30">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
         )}
 
