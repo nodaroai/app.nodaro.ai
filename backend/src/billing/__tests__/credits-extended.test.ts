@@ -312,5 +312,248 @@ describe("CreditsService — extended", () => {
 
       expect(mockFrom).toHaveBeenCalledWith("credit_transactions")
     })
+
+    it("returns true on success", async () => {
+      const result = await CreditsService.logTransaction({
+        userId: "user-123",
+        amount: 100,
+        creditType: "subscription",
+        source: "subscription_created",
+        balanceAfter: 100,
+      })
+      expect(result).toBe(true)
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // reserveCredits — zero-cost models
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("reserveCredits — zero-cost models", () => {
+    it("creates usage log but skips credit deduction for zero-cost models", async () => {
+      mockTable("model_pricing", {
+        credit_cost: 0,
+        is_enabled: true,
+        tier_restriction: null,
+      })
+
+      const result = await CreditsService.reserveCredits(
+        "user-123", "job-456", "composite", 0, 0,
+        { watermarkOverride: false },
+      )
+
+      expect(result.creditsReserved).toBe(0)
+      expect(result.watermark).toBe(false)
+      // Should NOT call reserve_credits RPC for zero-cost
+      expect(mockRpc).not.toHaveBeenCalledWith("reserve_credits", expect.anything())
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // reserveCredits — self-hosted skip
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("reserveCredits — self-hosted mode", () => {
+    it("returns skip result when credits disabled", async () => {
+      mockHasCreditsRef.value = false
+      const result = await CreditsService.reserveCredits(
+        "user-123", "job-456", "flux", 0.05, 0.0625,
+      )
+      expect(result.usageLogId).toBe("self-hosted-skip")
+      expect(result.creditsReserved).toBe(0)
+      expect(result.watermark).toBe(false)
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // commitCredits — self-hosted and fallback
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("commitCredits — edge cases", () => {
+    it("is a no-op when credits disabled", async () => {
+      mockHasCreditsRef.value = false
+      await CreditsService.commitCredits("usage-log-abc")
+      expect(mockRpc).not.toHaveBeenCalled()
+    })
+
+    it("is a no-op for self-hosted-skip usage log ID", async () => {
+      await CreditsService.commitCredits("self-hosted-skip")
+      expect(mockRpc).not.toHaveBeenCalled()
+    })
+
+    it("falls back to manual update when RPC fails", async () => {
+      mockRpc.mockResolvedValueOnce({
+        data: null,
+        error: { message: "function not found" },
+      })
+
+      await CreditsService.commitCredits("usage-log-abc")
+
+      // Should call from("usage_logs").update(...)
+      expect(mockFrom).toHaveBeenCalledWith("usage_logs")
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // refundCredits — self-hosted and edge cases
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("refundCredits — edge cases", () => {
+    it("is a no-op when credits disabled", async () => {
+      mockHasCreditsRef.value = false
+      await CreditsService.refundCredits("usage-log-abc")
+      expect(mockRpc).not.toHaveBeenCalled()
+    })
+
+    it("is a no-op for self-hosted-skip usage log ID", async () => {
+      await CreditsService.refundCredits("self-hosted-skip")
+      expect(mockRpc).not.toHaveBeenCalled()
+    })
+
+    it("restores credits from sub pool in fallback path", async () => {
+      // RPC fails
+      mockRpc
+        .mockResolvedValueOnce({ data: null, error: { message: "not found" } })
+        // add_subscription_credits RPC
+        .mockResolvedValueOnce({ data: null, error: null })
+
+      // usage_logs query returns sub-only deduction
+      mockTable("usage_logs", {
+        user_id: "user-123",
+        job_id: "job-456",
+        credits_used: 5,
+        metadata: { status: "reserved", from_sub: 5, from_topup: 0 },
+      })
+
+      await CreditsService.refundCredits("usage-log-abc")
+
+      expect(mockRpc).toHaveBeenCalledWith("add_subscription_credits", {
+        p_user_id: "user-123",
+        p_credits: 5,
+      })
+    })
+
+    it("restores credits from topup pool in fallback path", async () => {
+      mockRpc
+        .mockResolvedValueOnce({ data: null, error: { message: "not found" } })
+        .mockResolvedValueOnce({ data: null, error: null })
+
+      mockTable("usage_logs", {
+        user_id: "user-123",
+        job_id: "job-456",
+        credits_used: 3,
+        metadata: { status: "reserved", from_sub: 0, from_topup: 3 },
+      })
+
+      await CreditsService.refundCredits("usage-log-topup")
+
+      expect(mockRpc).toHaveBeenCalledWith("add_topup_credits", {
+        p_user_id: "user-123",
+        p_credits: 3,
+      })
+    })
+
+    it("restores to topup as fallback when metadata has no pool split", async () => {
+      mockRpc
+        .mockResolvedValueOnce({ data: null, error: { message: "not found" } })
+        .mockResolvedValueOnce({ data: null, error: null })
+
+      mockTable("usage_logs", {
+        user_id: "user-123",
+        job_id: "job-456",
+        credits_used: 4,
+        metadata: { status: "reserved" },
+      })
+
+      await CreditsService.refundCredits("usage-log-no-pool")
+
+      expect(mockRpc).toHaveBeenCalledWith("add_topup_credits", {
+        p_user_id: "user-123",
+        p_credits: 4,
+      })
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // adminAdjustCredits
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("adminAdjustCredits", () => {
+    it("returns 999999 when credits disabled", async () => {
+      mockHasCreditsRef.value = false
+      const result = await CreditsService.adminAdjustCredits({
+        userId: "user-123",
+        amount: 100,
+        creditType: "subscription",
+        description: "Test adjustment",
+        adminUserId: "admin-1",
+      })
+      expect(result.newBalance).toBe(999999)
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // checkAppRunEligibility
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("checkAppRunEligibility", () => {
+    it("returns allowed when credits disabled", async () => {
+      mockHasCreditsRef.value = false
+      const result = await CreditsService.checkAppRunEligibility("user-123")
+      expect(result.allowed).toBe(true)
+    })
+
+    it("returns allowed for paid tier users", async () => {
+      mockTable("profiles", {
+        tier: "pro",
+        subscription_tier: null,
+        topup_credits: 0,
+        app_credits_allowance: 0,
+      })
+      const result = await CreditsService.checkAppRunEligibility("user-123")
+      expect(result.allowed).toBe(true)
+    })
+
+    it("returns allowed for free tier with topup credits", async () => {
+      mockTable("profiles", {
+        tier: "free",
+        subscription_tier: null,
+        topup_credits: 50,
+        app_credits_allowance: 0,
+      })
+      const result = await CreditsService.checkAppRunEligibility("user-123")
+      expect(result.allowed).toBe(true)
+    })
+
+    it("returns not allowed for free tier with no app credits", async () => {
+      mockTable("profiles", {
+        tier: "free",
+        subscription_tier: null,
+        topup_credits: 0,
+        app_credits_allowance: 0,
+      })
+      const result = await CreditsService.checkAppRunEligibility("user-123")
+      expect(result.allowed).toBe(false)
+      expect(result.error).toContain("app credits")
+      expect(result.appCreditsAllowance).toBe(0)
+    })
+
+    it("returns allowed for free tier with positive app allowance", async () => {
+      mockTable("profiles", {
+        tier: "free",
+        subscription_tier: null,
+        topup_credits: 0,
+        app_credits_allowance: 10,
+      })
+      const result = await CreditsService.checkAppRunEligibility("user-123")
+      expect(result.allowed).toBe(true)
+      expect(result.appCreditsAllowance).toBe(10)
+    })
+
+    it("returns allowed when profile not found (fail open)", async () => {
+      mockTable("profiles", null, { code: "PGRST116" })
+      const result = await CreditsService.checkAppRunEligibility("user-123")
+      expect(result.allowed).toBe(true)
+    })
   })
 })

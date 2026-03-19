@@ -112,11 +112,24 @@ vi.mock("@/billing/stripe-config.js", async () => {
   return actual
 })
 
+const mockLogTransaction = vi.hoisted(() => vi.fn().mockResolvedValue(true))
+const mockInvalidateBalanceCache = vi.hoisted(() => vi.fn())
+
+vi.mock("@/billing/credits.js", () => ({
+  CreditsService: {
+    logTransaction: mockLogTransaction,
+  },
+}))
+
+vi.mock("@/routes/credits.js", () => ({
+  invalidateBalanceCache: mockInvalidateBalanceCache,
+}))
+
 // ---------------------------------------------------------------------------
 // Import module under test (after mocks are registered)
 // ---------------------------------------------------------------------------
 
-import { expireSubscriptions, cleanupFreeUserMedia, sendStorageWarnings } from "../cleanup-service.js"
+import { expireSubscriptions, cleanupFreeUserMedia, cleanupCanceledUserMedia, renewSubscriptionCredits, sendStorageWarnings } from "../cleanup-service.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -134,6 +147,8 @@ function resetMocks(): void {
   mockBatchDeleteFromR2.mockClear()
   mockDeleteFromR2.mockClear()
   mockUpdateStorageUsage.mockClear()
+  mockLogTransaction.mockClear()
+  mockInvalidateBalanceCache.mockClear()
 }
 
 // ---------------------------------------------------------------------------
@@ -293,6 +308,384 @@ describe("cleanup-service", () => {
       expect(result.warnings80).toBe(1)
       expect(result.warnings95).toBe(1)
       expect(result.warningsFull).toBe(1)
+    })
+
+    it("returns all zeros when no profiles found", async () => {
+      mockTableQueue("profiles", [
+        { data: [], error: null },
+      ])
+      const result = await sendStorageWarnings()
+      expect(result.warnings80).toBe(0)
+      expect(result.warnings95).toBe(0)
+      expect(result.warningsFull).toBe(0)
+    })
+
+    it("returns all zeros on query error", async () => {
+      mockTableQueue("profiles", [
+        { data: null, error: { message: "query failed" } },
+      ])
+      const result = await sendStorageWarnings()
+      expect(result.warnings80).toBe(0)
+      expect(result.warnings95).toBe(0)
+      expect(result.warningsFull).toBe(0)
+    })
+
+    it("skips profiles with limit <= 0", async () => {
+      mockTableQueue("profiles", [
+        {
+          data: [
+            { id: "user-1", email: "a@test.com", storage_used_bytes: 100, storage_limit_bytes: 0, tier: "free" },
+          ],
+          error: null,
+        },
+      ])
+      const result = await sendStorageWarnings()
+      expect(result.warnings80).toBe(0)
+      expect(result.warnings95).toBe(0)
+      expect(result.warningsFull).toBe(0)
+    })
+
+    it("does not warn for users below 80%", async () => {
+      const gb = 1024 * 1024 * 1024
+      mockTableQueue("profiles", [
+        {
+          data: [
+            { id: "user-1", email: "a@test.com", storage_used_bytes: 5 * gb, storage_limit_bytes: 10 * gb, tier: "basic" }, // 50%
+          ],
+          error: null,
+        },
+      ])
+      const result = await sendStorageWarnings()
+      expect(result.warnings80).toBe(0)
+      expect(result.warnings95).toBe(0)
+      expect(result.warningsFull).toBe(0)
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // cleanupCanceledUserMedia
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("cleanupCanceledUserMedia", () => {
+    it("returns zeros when no expired users", async () => {
+      mockTableQueue("profiles", [
+        { data: [], error: null },
+      ])
+      const result = await cleanupCanceledUserMedia()
+      expect(result.filesDeleted).toBe(0)
+      expect(result.bytesFreed).toBe(0)
+      expect(result.errors).toBe(0)
+    })
+
+    it("returns error on users query failure", async () => {
+      mockTableQueue("profiles", [
+        { data: null, error: { message: "query failed" } },
+      ])
+      const result = await cleanupCanceledUserMedia()
+      expect(result.errors).toBe(1)
+    })
+
+    it("deletes assets and jobs for expired canceled users", async () => {
+      // Step 1: expired users query
+      mockTableQueue("profiles", [
+        {
+          data: [{ id: "user-expired", tier: "pro", subscription_tier: null }],
+          error: null,
+        },
+      ])
+
+      // Step 2: assets query (one batch then empty)
+      mockTableQueue("assets", [
+        {
+          data: [
+            { id: "asset-1", r2_key: "files/a.png", size_bytes: 2048 },
+          ],
+          error: null,
+        },
+        { data: [], error: null },
+      ])
+
+      // Step 3: jobs query (one batch with output then empty)
+      mockTableQueue("jobs", [
+        {
+          data: [
+            {
+              id: "job-1",
+              output_data: {
+                videoUrl: "https://cdn.example.com/videos/out.mp4",
+              },
+            },
+          ],
+          error: null,
+        },
+        { data: [], error: null },
+      ])
+
+      mockBatchDeleteFromR2
+        .mockResolvedValueOnce({ deleted: 1, errors: 0 }) // assets batch
+        .mockResolvedValueOnce({ deleted: 1, errors: 0 }) // jobs batch
+
+      const result = await cleanupCanceledUserMedia()
+      expect(result.filesDeleted).toBe(2)
+      expect(result.bytesFreed).toBe(2048)
+      expect(result.errors).toBe(0)
+    })
+
+    it("handles already cleaned job outputs (_cleaned flag)", async () => {
+      mockTableQueue("profiles", [
+        {
+          data: [{ id: "user-expired", tier: "basic", subscription_tier: null }],
+          error: null,
+        },
+      ])
+      mockTableQueue("assets", [
+        { data: [], error: null },
+      ])
+      mockTableQueue("jobs", [
+        {
+          data: [
+            {
+              id: "job-1",
+              output_data: { _cleaned: true, videoUrl: null },
+            },
+          ],
+          error: null,
+        },
+        { data: [], error: null },
+      ])
+
+      const result = await cleanupCanceledUserMedia()
+      // _cleaned jobs should be skipped
+      expect(result.filesDeleted).toBe(0)
+      expect(mockBatchDeleteFromR2).not.toHaveBeenCalled()
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // renewSubscriptionCredits
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("renewSubscriptionCredits", () => {
+    it("returns zeros when no renewable subscriptions", async () => {
+      mockTableQueue("subscriptions", [
+        { data: [], error: null },
+      ])
+      const result = await renewSubscriptionCredits()
+      expect(result.usersRenewed).toBe(0)
+      expect(result.errors).toBe(0)
+    })
+
+    it("returns error on query failure", async () => {
+      mockTableQueue("subscriptions", [
+        { data: null, error: { message: "query failed" } },
+      ])
+      const result = await renewSubscriptionCredits()
+      expect(result.errors).toBe(1)
+    })
+
+    it("renews credits for users whose period has ended", async () => {
+      mockTableQueue("subscriptions", [
+        {
+          data: [
+            {
+              id: "sub-1",
+              user_id: "user-1",
+              tier: "pro",
+              current_period_end: "2026-01-01T00:00:00Z",
+            },
+          ],
+          error: null,
+        },
+      ])
+
+      // Batch profile fetch: credits_reset_at is before period end
+      mockTableQueue("profiles", [
+        {
+          data: [
+            { id: "user-1", credits_reset_at: "2025-12-01T00:00:00Z" },
+          ],
+          error: null,
+        },
+      ])
+
+      const result = await renewSubscriptionCredits()
+      expect(result.usersRenewed).toBe(1)
+      expect(result.errors).toBe(0)
+      expect(mockLogTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "user-1",
+          creditType: "subscription",
+          source: "subscription_renewal",
+        })
+      )
+      expect(mockInvalidateBalanceCache).toHaveBeenCalledWith("user-1")
+    })
+
+    it("skips users already renewed (credits_reset_at >= period_end)", async () => {
+      mockTableQueue("subscriptions", [
+        {
+          data: [
+            {
+              id: "sub-1",
+              user_id: "user-1",
+              tier: "basic",
+              current_period_end: "2026-01-01T00:00:00Z",
+            },
+          ],
+          error: null,
+        },
+      ])
+
+      mockTableQueue("profiles", [
+        {
+          data: [
+            { id: "user-1", credits_reset_at: "2026-01-15T00:00:00Z" }, // already renewed
+          ],
+          error: null,
+        },
+      ])
+
+      const result = await renewSubscriptionCredits()
+      expect(result.usersRenewed).toBe(0)
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // expireSubscriptions — edge cases
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("expireSubscriptions — edge cases", () => {
+    it("returns error on query failure", async () => {
+      mockTableQueue("subscriptions", [
+        { data: null, error: { message: "db error" } },
+      ])
+      const result = await expireSubscriptions()
+      expect(result.errors).toBe(1)
+      expect(result.usersDowngraded).toBe(0)
+    })
+
+    it("skips users already on free tier", async () => {
+      mockTableQueue("subscriptions", [
+        {
+          data: [
+            { id: "sub-1", user_id: "user-1", stripe_subscription_id: "ps-1" },
+          ],
+          error: null,
+        },
+      ])
+      // Profile already on free tier — webhook already handled
+      mockTableQueue("profiles", [
+        {
+          data: [{ id: "user-1", tier: "free" }],
+          error: null,
+        },
+      ])
+      const result = await expireSubscriptions()
+      expect(result.usersDowngraded).toBe(0)
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // cleanupFreeUserMedia — additional edge cases
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("cleanupFreeUserMedia — edge cases", () => {
+    it("returns zeros when no free users", async () => {
+      mockTableQueue("profiles", [
+        { data: [], error: null },
+      ])
+      const result = await cleanupFreeUserMedia()
+      expect(result.filesDeleted).toBe(0)
+      expect(result.bytesFreed).toBe(0)
+      expect(result.errors).toBe(0)
+    })
+
+    it("returns error when free users query fails", async () => {
+      mockTableQueue("profiles", [
+        { data: null, error: { message: "profiles query failed" } },
+      ])
+      const result = await cleanupFreeUserMedia()
+      expect(result.errors).toBe(1)
+    })
+
+    it("cleans job output R2 files", async () => {
+      mockTableQueue("profiles", [
+        { data: [{ id: "free-user-1" }], error: null },
+      ])
+      // No assets to clean — need 2 responses: one at .in() terminal, one at .limit()
+      mockTableQueue("assets", [
+        { data: [], error: null },
+        { data: [], error: null },
+      ])
+      // Jobs with R2 output URLs — need enough responses for both .in() and .limit() terminals
+      mockTableQueue("jobs", [
+        {
+          data: [
+            {
+              id: "job-1",
+              user_id: "free-user-1",
+              output_data: {
+                imageUrl: "https://cdn.example.com/images/out.png",
+                videoUrl: "https://cdn.example.com/videos/out.mp4",
+              },
+            },
+          ],
+          error: null,
+        },
+        // Repeated to handle .limit() terminal after .in()
+        {
+          data: [
+            {
+              id: "job-1",
+              user_id: "free-user-1",
+              output_data: {
+                imageUrl: "https://cdn.example.com/images/out.png",
+                videoUrl: "https://cdn.example.com/videos/out.mp4",
+              },
+            },
+          ],
+          error: null,
+        },
+        { data: [], error: null },
+        { data: [], error: null },
+      ])
+
+      mockBatchDeleteFromR2.mockResolvedValue({ deleted: 2, errors: 0 })
+
+      const result = await cleanupFreeUserMedia()
+      // At least some files were deleted via batch
+      expect(result.filesDeleted).toBeGreaterThan(0)
+    })
+
+    it("handles assets query error gracefully", async () => {
+      mockTableQueue("profiles", [
+        { data: [{ id: "free-user-1" }], error: null },
+      ])
+      mockTableQueue("assets", [
+        { data: null, error: { message: "assets query error" } },
+      ])
+      mockTableQueue("jobs", [
+        { data: [], error: null },
+      ])
+
+      const result = await cleanupFreeUserMedia()
+      expect(result.errors).toBe(1)
+    })
+
+    it("handles jobs query error gracefully", async () => {
+      mockTableQueue("profiles", [
+        { data: [{ id: "free-user-1" }], error: null },
+      ])
+      mockTableQueue("assets", [
+        { data: [], error: null },
+      ])
+      mockTableQueue("jobs", [
+        { data: null, error: { message: "jobs query error" } },
+      ])
+
+      const result = await cleanupFreeUserMedia()
+      expect(result.errors).toBe(1)
     })
   })
 })
