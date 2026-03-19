@@ -16,6 +16,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { NodeJobProgress } from "./node-job-progress"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
 import type { GenerateScriptData, GeneratedScriptResult } from "@/types/nodes"
 
@@ -79,8 +80,9 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
     >
       <div className="flex flex-col gap-1.5">
         {status === "running" && !activeScript && (
-          <div className="flex items-center justify-center h-16 rounded-md bg-muted/30">
+          <div className="flex flex-col items-center justify-center gap-2 h-16 rounded-md bg-muted/30">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
         )}
 

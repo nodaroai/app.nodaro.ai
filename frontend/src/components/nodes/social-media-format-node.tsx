@@ -4,6 +4,7 @@ import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Share2, Loader2, AlertCircle, X, Expand, FileVideo, FileImage, Type, Download, Link } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { HandleIcon } from "./handle-icon"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -79,6 +80,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
         {status === "running" && (
           <div className="flex items-center justify-center bg-muted/30 rounded-xl h-[180px]">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
         )}
 

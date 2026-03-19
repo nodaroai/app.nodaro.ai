@@ -4,6 +4,7 @@ import { memo, useState, useMemo, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Volume2, Loader2, AlertCircle, X, Film, Mic, Music, AudioWaveform, Clapperboard } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
@@ -101,8 +102,9 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
         {hasResult ? null : (
           <div className="flex flex-col gap-1">
             {status === "running" && (
-              <div className="flex items-center justify-center h-28 rounded-md bg-muted/30">
+              <div className="flex flex-col items-center justify-center gap-2 h-28 rounded-md bg-muted/30">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <NodeJobProgress progress={nodeData.currentJobProgress} />
               </div>
             )}
 
