@@ -174,38 +174,59 @@ async function ensureVideoDuration(
   }
 }
 
-// Kling motion control only accepts JPEG/PNG — NOT WebP/GIF.
-// Wan Animate accepts JPEG/PNG/WebP but not GIF.
-const KLING_MOTION_ACCEPTED_FORMATS = new Set(["jpeg", "png"])
-const WAN_MOTION_ACCEPTED_FORMATS = new Set(["jpeg", "png", "webp"])
+// Accepted image formats per provider family (from KIE API docs).
+// Kling 3.0 (both I2V and motion control) only accepts JPEG/PNG — NOT WebP.
+// Most other models accept JPEG/PNG/WebP.
+const JPEG_PNG_ONLY = new Set(["jpeg", "png"])
+const JPEG_PNG_WEBP = new Set(["jpeg", "png", "webp"])
 
-// Max image file size for motion transfer (10 MB per KIE docs)
-const MOTION_IMAGE_MAX_BYTES = 10 * 1024 * 1024
+// Providers that only accept JPEG/PNG (no WebP).
+// Kling 2.6 motion control also rejects WebP but its I2V endpoint accepts it.
+// Motion-transfer always goes through this check; I2V only for kling-3.0 and wan-i2v.
+const JPEG_PNG_ONLY_PROVIDERS = new Set(["kling-3.0"])
+
+// Max image file size (10 MB per KIE docs, applies to all models)
+const IMAGE_MAX_BYTES = 10 * 1024 * 1024
+
+interface ImageConstraints {
+  /** Human-readable context for error messages */
+  context: string
+  /** Override accepted formats (defaults to provider-based lookup) */
+  acceptedFormats?: Set<string>
+  /** Minimum pixel dimension (width AND height must be >= this) */
+  minDimension?: number
+  /** Minimum aspect ratio (width/height) */
+  minAspectRatio?: number
+  /** Maximum aspect ratio (width/height) */
+  maxAspectRatio?: number
+}
 
 /**
- * Ensure the image is in a format accepted by the motion-transfer provider.
+ * Ensure the image is in a format/size accepted by the target provider.
  *
- * - Kling 2.6/3.0: JPEG/PNG only (rejects WebP/GIF) — convert if needed
- * - Wan Animate: JPEG/PNG/WebP (rejects GIF) — convert if needed
- * - Kling 2.6: min 300px, aspect ratio 2:5–5:2
- * - All: max 10 MB — compress if needed
+ * - Kling 3.0: JPEG/PNG only (auto-converts WebP/GIF to JPEG)
+ * - Wan 2.6 I2V: min 256×256px
+ * - Kling 2.6 motion: min 300px, aspect ratio 2:5–5:2
+ * - All: max 10 MB (progressive JPEG compression + resize)
  *
- * Returns the original URL if no conversion is needed, or a new R2 URL if converted.
+ * Returns the original URL if no processing is needed, or a new R2 URL.
  */
-async function ensureImageForMotionTransfer(
+async function ensureImageForProvider(
   imageUrl: string,
   provider: string,
+  constraints?: ImageConstraints,
 ): Promise<string> {
-  const acceptedFormats = provider.startsWith("wan-animate")
-    ? WAN_MOTION_ACCEPTED_FORMATS
-    : KLING_MOTION_ACCEPTED_FORMATS
+  const acceptedFormats = constraints?.acceptedFormats
+    ?? (JPEG_PNG_ONLY_PROVIDERS.has(provider) ? JPEG_PNG_ONLY : JPEG_PNG_WEBP)
+
+  const context = constraints?.context ?? "Video generation"
 
   // Download and inspect the image
   const res = await fetch(imageUrl, { signal: AbortSignal.timeout(30_000) })
   if (!res.ok) {
     throw createSanitizedError(
-      `Failed to download motion-transfer image: HTTP ${res.status}`,
-      "Motion transfer"
+      `Failed to download image: HTTP ${res.status}`,
+      context
     )
   }
   const buffer = Buffer.from(await res.arrayBuffer())
@@ -217,38 +238,42 @@ async function ensureImageForMotionTransfer(
   if (!format || !width || !height) {
     throw createSanitizedError(
       "Could not read image metadata — unsupported image file",
-      "Motion transfer"
+      context
     )
   }
 
-  // Kling 2.6: enforce min 300px and aspect ratio 2:5–5:2
-  if (provider === "kling") {
-    if (width < 300 || height < 300) {
-      throw createSanitizedError(
-        `Kling 2.6 motion control requires images larger than 300×300px (got ${width}×${height})`,
-        "Motion transfer"
-      )
-    }
+  // Enforce minimum dimension
+  if (constraints?.minDimension && (width < constraints.minDimension || height < constraints.minDimension)) {
+    throw createSanitizedError(
+      `${provider} requires images at least ${constraints.minDimension}×${constraints.minDimension}px (got ${width}×${height})`,
+      context
+    )
+  }
+
+  // Enforce aspect ratio bounds
+  if (constraints?.minAspectRatio || constraints?.maxAspectRatio) {
     const ratio = width / height
-    if (ratio < 2 / 5 || ratio > 5 / 2) {
+    const min = constraints.minAspectRatio ?? 0
+    const max = constraints.maxAspectRatio ?? Infinity
+    if (ratio < min || ratio > max) {
       throw createSanitizedError(
-        `Kling 2.6 motion control requires aspect ratio between 2:5 and 5:2 (got ${width}:${height})`,
-        "Motion transfer"
+        `${provider} requires aspect ratio between ${min.toFixed(1)}:1 and ${max.toFixed(1)}:1 (got ${width}:${height})`,
+        context
       )
     }
   }
 
   const needsConversion = !acceptedFormats.has(format)
-  const needsCompress = buffer.length > MOTION_IMAGE_MAX_BYTES
+  const needsCompress = buffer.length > IMAGE_MAX_BYTES
 
   if (!needsConversion && !needsCompress) {
     return imageUrl
   }
 
   console.log(
-    `[KIE.ai] Motion transfer image preprocessing: format=${format}, size=${(buffer.length / 1024 / 1024).toFixed(1)}MB, ${width}×${height}` +
-    `${needsConversion ? ` → converting to JPEG (${format} not accepted by ${provider})` : ""}` +
-    `${needsCompress ? ` → compressing (>${MOTION_IMAGE_MAX_BYTES / 1024 / 1024}MB)` : ""}`
+    `[KIE.ai] Image preprocessing for ${provider}: format=${format}, size=${(buffer.length / 1024 / 1024).toFixed(1)}MB, ${width}×${height}` +
+    `${needsConversion ? ` → converting to JPEG (${format} not accepted)` : ""}` +
+    `${needsCompress ? ` → compressing (>${IMAGE_MAX_BYTES / 1024 / 1024}MB)` : ""}`
   )
 
   // Convert to JPEG — good balance of compatibility and compression
@@ -258,7 +283,7 @@ async function ensureImageForMotionTransfer(
     .toBuffer()
 
   // If still over 10 MB, progressively lower quality
-  while (converted.length > MOTION_IMAGE_MAX_BYTES && quality > 50) {
+  while (converted.length > IMAGE_MAX_BYTES && quality > 50) {
     quality -= 10
     converted = await sharp(buffer)
       .jpeg({ quality, mozjpeg: true })
@@ -266,8 +291,8 @@ async function ensureImageForMotionTransfer(
   }
 
   // If still over limit after quality reduction, resize down
-  if (converted.length > MOTION_IMAGE_MAX_BYTES) {
-    const scale = Math.sqrt(MOTION_IMAGE_MAX_BYTES / converted.length)
+  if (converted.length > IMAGE_MAX_BYTES) {
+    const scale = Math.sqrt(IMAGE_MAX_BYTES / converted.length)
     const newWidth = Math.round(width * scale)
     converted = await sharp(buffer)
       .resize(newWidth)
@@ -275,10 +300,10 @@ async function ensureImageForMotionTransfer(
       .toBuffer()
   }
 
-  const key = `images/motion-converted-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
+  const key = `images/provider-converted-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
   const newUrl = await uploadBufferToR2(converted, key, "image/jpeg")
   console.log(
-    `[KIE.ai] Motion transfer image converted: ${(converted.length / 1024 / 1024).toFixed(1)}MB → ${newUrl.substring(0, 80)}...`
+    `[KIE.ai] Image converted: ${(converted.length / 1024 / 1024).toFixed(1)}MB → ${newUrl.substring(0, 80)}...`
   )
   return newUrl
 }
@@ -391,11 +416,23 @@ export class KieVideoProvider
       `[KIE.ai] ==============================================`
     )
 
+    // Auto-convert image format if provider requires it:
+    // - Kling 3.0: JPEG/PNG only (no WebP)
+    // - Wan 2.6: min 256×256px
+    let effectiveImageUrl = imageUrl
+    if (provider === "kling-3.0" || provider === "wan-i2v") {
+      const i2vConstraints: ImageConstraints = { context: "Video generation" }
+      if (provider === "wan-i2v") {
+        i2vConstraints.minDimension = 256
+      }
+      effectiveImageUrl = await ensureImageForProvider(imageUrl, provider, i2vConstraints)
+    }
+
     // Kling 3.0 uses the unified createTask/getTaskDetail endpoints
     if (provider === "kling-3.0") {
       const imageUrls = (endFrameUrl && !options?.multiShots)
-        ? [imageUrl, endFrameUrl]
-        : [imageUrl]
+        ? [effectiveImageUrl, endFrameUrl]
+        : [effectiveImageUrl]
       return runKling3(
         modelConfig,
         prompt ?? "smooth cinematic motion",
@@ -472,10 +509,10 @@ export class KieVideoProvider
 
     if (imageParamName === "image_urls" || imageParamName === "input_urls") {
       // Array format for kling, grok, sora, seedance, wan-i2v
-      input[imageParamName] = [imageUrl]
+      input[imageParamName] = [effectiveImageUrl]
     } else {
       // Single URL format for hailuo, kling-turbo, bytedance, wan-turbo, kling-master
-      input[imageParamName] = imageUrl
+      input[imageParamName] = effectiveImageUrl
     }
 
     // Override duration if provided
@@ -910,8 +947,18 @@ export class KieVideoProvider
       options?.characterOrientation ?? "image"
     const resolution = options?.resolution ?? "720p"
 
-    // Auto-convert image format/size if needed (Kling: JPEG/PNG only; all: max 10MB)
-    const effectiveImageUrl = await ensureImageForMotionTransfer(imageUrl, provider)
+    // Auto-convert image format/size if needed (Kling 2.6/3.0: JPEG/PNG only; all: max 10MB)
+    const motionConstraints: ImageConstraints = { context: "Motion transfer" }
+    // Kling 2.6 motion control rejects WebP (even though Kling 2.6 I2V accepts it)
+    if (provider === "kling" || provider === "kling-3.0") {
+      motionConstraints.acceptedFormats = JPEG_PNG_ONLY
+    }
+    if (provider === "kling") {
+      motionConstraints.minDimension = 300
+      motionConstraints.minAspectRatio = 2 / 5
+      motionConstraints.maxAspectRatio = 5 / 2
+    }
+    const effectiveImageUrl = await ensureImageForProvider(imageUrl, provider, motionConstraints)
 
     console.log(
       `[KIE.ai] ========== MOTION TRANSFER REQUEST ==========`
