@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useState } from "react"
-import { Position, type NodeProps, NodeResizer, Handle } from "@xyflow/react"
+import { Position, type NodeProps } from "@xyflow/react"
 import { FileText, Loader2, AlertCircle, Type, Copy, X } from "lucide-react"
 import { copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
@@ -23,14 +23,7 @@ function SunoLyricsNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   return (
-    <div className="relative" style={{ width: 220, minHeight: 220, overflow: 'visible' }}>
-    <NodeResizer
-      isVisible={!!selected}
-      minWidth={180}
-      minHeight={180}
-      lineClassName="!border-[#ff0073]"
-      handleClassName="!w-2.5 !h-2.5 !bg-[#ff0073] !border-none !rounded-sm"
-    />
+    <div className="relative" style={{ maxWidth: '220px' }}>
     {/* Floating label above node */}
     <EditableNodeLabel
       label={nodeData.label}
@@ -51,7 +44,10 @@ function SunoLyricsNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined
       }
-      handles={[]}
+      handles={[
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "text", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+      ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
         {status === "running" && !activeText && (
@@ -118,33 +114,17 @@ function SunoLyricsNodeComponent({ id, data, selected }: NodeProps) {
         <span className="text-xs text-muted-foreground">Lyrics</span>
       </div>
     </BaseNode>
-    {/* Invisible input handle */}
-    <Handle
-      id="in"
-      type="target"
-      position={Position.Left}
-      className="!w-7 !h-7 !bg-transparent !border-0 !opacity-0 touch-manipulation"
-      style={{ top: '155px', left: '-29px', transform: 'none' }}
-    />
-    {/* Invisible output handle */}
-    <Handle
-      id="text"
-      type="source"
-      position={Position.Right}
-      className="!w-7 !h-7 !bg-transparent !border-0 !opacity-0 touch-manipulation"
-      style={{ top: '50px', right: '-29px', transform: 'none', left: 'auto' }}
-    />
     {/* Input handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '155px', left: '-29px' }}
+      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
     >
       <Type className="w-3.5 h-3.5 text-white" />
     </div>
     {/* Output handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '50px', right: '-29px' }}
+      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
     >
       <FileText className="w-3.5 h-3.5 text-white" />
     </div>

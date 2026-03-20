@@ -30,16 +30,16 @@ function SaveToStorageNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         minWidth={220}
         handles={[
-          { id: "in", type: "target", position: Position.Left, hideHandle: true, customStyle: { top: '50%', left: '-29px' } },
-          { id: "out", type: "source", position: Position.Right, hideHandle: true, customStyle: { top: '50%', right: '-29px' } },
+          { id: "in", type: "target", position: Position.Left, hideHandle: true, customStyle: { top: 'calc(100% - 20px)', left: '-29px' } },
+          { id: "out", type: "source", position: Position.Right, hideHandle: true, customStyle: { top: '20px', right: '-29px' } },
         ]}
       >
         <p className="text-muted-foreground truncate max-w-[180px]">
           {nodeData.format} ({nodeData.quality})
         </p>
       </BaseNode>
-      <HandleIcon icon={<HardDrive />} color="green" side="left" />
-      <HandleIcon icon={<HardDrive />} color="green" />
+      <HandleIcon icon={<HardDrive />} color="green" side="left" top="calc(100% - 20px)" />
+      <HandleIcon icon={<HardDrive />} color="green" top="20px" />
     </div>
   )
 }

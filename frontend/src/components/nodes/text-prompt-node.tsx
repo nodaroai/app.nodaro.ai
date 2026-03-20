@@ -67,7 +67,6 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
       <NodeResizer
         isVisible={!!selected}
         minWidth={160}
-        minHeight={100}
         lineClassName="!border-[#38BDF8]"
         handleClassName="!w-2.5 !h-2.5 !bg-[#38BDF8] !border-none !rounded-sm"
         onResize={handleResize}

@@ -36,14 +36,14 @@ function TelegramTriggerNodeComponent({ id, data, selected }: NodeProps) {
             id: "in",
             type: "target",
             position: Position.Left,
-            customStyle: { top: "50%", left: "-29px" },
+            customStyle: { top: "calc(100% - 20px)", left: "-29px" },
             hideHandle: true,
           },
           {
             id: "out",
             type: "source",
             position: Position.Right,
-            top: "50%",
+            top: "20px",
           },
         ]}
       >
@@ -58,8 +58,8 @@ function TelegramTriggerNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleIcon icon={<Send />} color="cyan" side="left" />
-      <HandleIcon icon={<Send />} top="50%" />
+      <HandleIcon icon={<Send />} color="cyan" side="left" top="calc(100% - 20px)" />
+      <HandleIcon icon={<Send />} top="20px" />
     </div>
   )
 }

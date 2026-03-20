@@ -14,8 +14,8 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { UploadAudioData } from "@/types/nodes"
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
-  { id: "audio", type: "source" as const, position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
+  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+  { id: "audio", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
 ] as const
 
 function formatBytes(bytes: number): string {
@@ -258,8 +258,8 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleIcon icon={<Music />} color="cyan" side="left" />
-      <HandleIcon icon={<Music />} />
+      <HandleIcon icon={<Music />} color="cyan" side="left" top="calc(100% - 20px)" />
+      <HandleIcon icon={<Music />} top="20px" />
     </div>
 
     <StorageExceededModal

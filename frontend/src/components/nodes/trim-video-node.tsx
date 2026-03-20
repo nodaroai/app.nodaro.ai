@@ -54,8 +54,8 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
         minWidth={220}
         topToolbarContent={status !== "running" ? (<RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />) : undefined}
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
-          { id: "video-out", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
+          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+          { id: "video-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
         ]}
       >
         {hasResult ? null : (
@@ -126,8 +126,8 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
         />
       )}
 
-      <HandleIcon icon={<Clapperboard />} color="steel" side="left" />
-      <HandleIcon icon={<Film />} color="steel" />
+      <HandleIcon icon={<Clapperboard />} color="steel" side="left" top="calc(100% - 20px)" />
+      <HandleIcon icon={<Film />} color="steel" top="20px" />
       {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} />}
       <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>

@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useState, useEffect } from "react"
-import { Position, type NodeProps, NodeResizer, Handle } from "@xyflow/react"
+import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Loader2, AlertCircle, Volume2, Clapperboard, LayoutGrid } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
@@ -45,14 +45,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/node" style={{ width: hasResult ? (videoDimensions?.width ?? 220) : 220, height: hasResult ? (videoDimensions?.height ?? 160) : undefined, overflow: 'visible' }}>
-      <NodeResizer
-        isVisible={!!selected}
-        minWidth={180}
-        minHeight={180}
-        lineClassName="!border-[#ff0073]"
-        handleClassName="!w-2.5 !h-2.5 !bg-[#ff0073] !border-none !rounded-sm"
-      />
+    <div className="relative group/node" style={{ maxWidth: '220px' }}>
       {/* Floating label above node */}
       <EditableNodeLabel
         label={nodeData.label}
@@ -95,7 +88,10 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           ) : undefined
         }
-        handles={[]}
+        handles={[
+          { id: "audio", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+          { id: "video-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        ]}
       >
         {hasResult ? null : (
           <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -156,33 +152,17 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
         />
       )}
 
-      {/* Invisible input handle */}
-      <Handle
-        id="audio"
-        type="target"
-        position={Position.Left}
-        className="!w-7 !h-7 !bg-transparent !border-0 !opacity-0 touch-manipulation"
-        style={{ top: '155px', left: '-29px', transform: 'none' }}
-      />
-      {/* Invisible output handle */}
-      <Handle
-        id="video-out"
-        type="source"
-        position={Position.Right}
-        className="!w-7 !h-7 !bg-transparent !border-0 !opacity-0 touch-manipulation"
-        style={{ top: '50px', right: '-29px', transform: 'none', left: 'auto' }}
-      />
       {/* Input handle icon */}
       <div
         className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-        style={{ top: '155px', left: '-29px' }}
+        style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
       >
         <Volume2 className="w-3.5 h-3.5 text-white" />
       </div>
       {/* Output handle icon */}
       <div
         className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-        style={{ top: '50px', right: '-29px' }}
+        style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
       >
         <Clapperboard className="w-3.5 h-3.5 text-white" />
       </div>

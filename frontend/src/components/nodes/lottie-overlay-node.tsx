@@ -48,9 +48,9 @@ function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: '30%', left: '-29px' }, hideHandle: true },
-        { id: "lottie", type: "target", position: Position.Left, customStyle: { top: '70%', left: '-29px' }, hideHandle: true },
-        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
+        { id: "lottie", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -99,9 +99,9 @@ function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleIcon icon={<Film />} color="steel" side="left" top="30%" />
-    <HandleIcon icon={<Layers />} color="steel" side="left" top="70%" />
-    <HandleIcon icon={<Film />} color="steel" />
+    <HandleIcon icon={<Film />} color="steel" side="left" top="calc(100% - 50px)" />
+    <HandleIcon icon={<Layers />} color="steel" side="left" top="calc(100% - 20px)" />
+    <HandleIcon icon={<Film />} color="steel" top="20px" />
     </div>
   )
 }

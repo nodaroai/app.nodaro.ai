@@ -56,8 +56,8 @@ function buildHandles(
   // Fallback handles if no snapshot
   if (targets.length === 0 && sources.length === 0) {
     return [
-      { id: "in", type: "target" as const, position: Position.Left, label: "In", top: "50%", hideHandle: true, customStyle: { top: '50%', left: '-29px' } },
-      { id: "out", type: "source" as const, position: Position.Right, label: "Out", top: "50%", hideHandle: true, customStyle: { top: '50%', right: '-29px' } },
+      { id: "in", type: "target" as const, position: Position.Left, label: "In", top: "calc(100% - 20px)", hideHandle: true, customStyle: { top: 'calc(100% - 20px)', left: '-29px' } },
+      { id: "out", type: "source" as const, position: Position.Right, label: "Out", top: "20px", hideHandle: true, customStyle: { top: '20px', right: '-29px' } },
     ]
   }
 
@@ -180,10 +180,10 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       {handles.filter(h => h.type === "target").map(h => (
-        <HandleIcon key={h.id} icon={<Workflow />} color="steel" side="left" top={h.top ?? "50%"} />
+        <HandleIcon key={h.id} icon={<Workflow />} color="steel" side="left" top={h.top ?? "calc(100% - 20px)"} />
       ))}
       {handles.filter(h => h.type === "source").map(h => (
-        <HandleIcon key={h.id} icon={<Workflow />} color="steel" top={h.top ?? "50%"} />
+        <HandleIcon key={h.id} icon={<Workflow />} color="steel" top={h.top ?? "20px"} />
       ))}
       {nodeData.referencedWorkflowId && status !== "running" && (
         <button

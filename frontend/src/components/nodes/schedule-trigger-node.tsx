@@ -10,8 +10,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ScheduleTriggerData } from "@/types/nodes"
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
-  { id: "payload", type: "source" as const, position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
+  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+  { id: "payload", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
 ] as const
 
 function ScheduleTriggerNodeComponent({ id, data, selected }: NodeProps) {
@@ -44,8 +44,8 @@ function ScheduleTriggerNodeComponent({ id, data, selected }: NodeProps) {
           </p>
         </div>
       </BaseNode>
-      <HandleIcon icon={<Clock />} color="cyan" side="left" />
-      <HandleIcon icon={<Type />} />
+      <HandleIcon icon={<Clock />} color="cyan" side="left" top="calc(100% - 20px)" />
+      <HandleIcon icon={<Type />} top="20px" />
     </div>
   )
 }

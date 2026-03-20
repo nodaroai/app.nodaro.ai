@@ -68,8 +68,8 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
           ) : undefined
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
-          { id: "video", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
+          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+          { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
         ]}
       >
         {hasResult ? null : (
@@ -188,8 +188,8 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
         />
       )}
 
-      <HandleIcon icon={<Clapperboard />} color="steel" side="left" />
-      <HandleIcon icon={<Film />} color="steel" />
+      <HandleIcon icon={<Clapperboard />} color="steel" side="left" top="calc(100% - 20px)" />
+      <HandleIcon icon={<Film />} color="steel" top="20px" />
       {activeUrl && (
         <MediaPreviewModal
           isOpen={previewOpen}

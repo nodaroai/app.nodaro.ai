@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useState } from "react"
-import { Position, type NodeProps, NodeResizer, Handle } from "@xyflow/react"
+import { Position, type NodeProps } from "@xyflow/react"
 import { Combine, Loader2, AlertCircle, Volume2, LayoutGrid } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
@@ -34,14 +34,7 @@ function SunoMashupNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative" style={{ width: 220, minHeight: 220, overflow: 'visible' }}>
-    <NodeResizer
-      isVisible={!!selected}
-      minWidth={180}
-      minHeight={180}
-      lineClassName="!border-[#ff0073]"
-      handleClassName="!w-2.5 !h-2.5 !bg-[#ff0073] !border-none !rounded-sm"
-    />
+    <div className="relative" style={{ maxWidth: '220px' }}>
     <EditableNodeLabel
       label={nodeData.label}
       icon={<Combine className="w-3.5 h-3.5" />}
@@ -85,7 +78,11 @@ function SunoMashupNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         ) : undefined
       }
-      handles={[]}
+      handles={[
+        { id: "audio1", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
+        { id: "audio2", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "audio-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+      ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
         {status === "running" && !activeUrl && (
@@ -144,47 +141,23 @@ function SunoMashupNodeComponent({ id, data, selected }: NodeProps) {
         </span>
       </div>
     </BaseNode>
-    {/* Input handle 1 (audio1) */}
-    <Handle
-      id="audio1"
-      type="target"
-      position={Position.Left}
-      className="!w-7 !h-7 !bg-transparent !border-0 !opacity-0 touch-manipulation"
-      style={{ top: '120px', left: '-29px', transform: 'none' }}
-    />
-    {/* Input handle 2 (audio2) */}
-    <Handle
-      id="audio2"
-      type="target"
-      position={Position.Left}
-      className="!w-7 !h-7 !bg-transparent !border-0 !opacity-0 touch-manipulation"
-      style={{ top: '180px', left: '-29px', transform: 'none' }}
-    />
-    {/* Output handle */}
-    <Handle
-      id="audio-out"
-      type="source"
-      position={Position.Right}
-      className="!w-7 !h-7 !bg-transparent !border-0 !opacity-0 touch-manipulation"
-      style={{ top: '50px', right: '-29px', transform: 'none', left: 'auto' }}
-    />
     {/* Input handle icons */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '120px', left: '-29px' }}
+      style={{ top: 'calc(100% - 50px)', left: '-29px', transform: 'translateY(-50%)' }}
     >
       <Volume2 className="w-3.5 h-3.5 text-white" />
     </div>
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '180px', left: '-29px' }}
+      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
     >
       <Volume2 className="w-3.5 h-3.5 text-white" />
     </div>
     {/* Output handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '50px', right: '-29px' }}
+      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
     >
       <Combine className="w-3.5 h-3.5 text-white" />
     </div>

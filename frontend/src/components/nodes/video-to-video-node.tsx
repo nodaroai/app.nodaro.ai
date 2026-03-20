@@ -110,8 +110,8 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: '75%', left: '-29px' }, hideHandle: true },
-        { id: "video", type: "source", position: Position.Right, customStyle: { top: 'calc(25% - 33px)', right: '-29px' }, hideHandle: true },
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="relative w-full group/video" style={{ minHeight: 180 }}>
@@ -239,7 +239,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
     {/* Input handle icon (TYPE 1) */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(75% - 14px)', left: '-29px' }}
+      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
     >
       <Clapperboard className="w-3.5 h-3.5 text-white" />
       <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
@@ -253,7 +253,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
     {/* Video output handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(25% - 47px)', right: '-29px' }}
+      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
     >
       <Clapperboard className="w-3.5 h-3.5 text-white" />
     </div>
