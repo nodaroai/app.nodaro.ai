@@ -398,11 +398,19 @@ function buildSyncHttpBody(
     case "facebook-post":
     case "telegram-post": {
       const mediaUrl = resolvedInputs.videoUrl || resolvedInputs.imageUrl || resolvedInputs.audioUrl
-      // Auto-detect Telegram action based on connected media
+      // Auto-detect Telegram action and collect all connected media
       let action = data.action as string
+      let mediaItems: Array<{ type: string; url: string }> | undefined
       if (node.type === "telegram-post") {
-        if (mediaUrl) {
-          action = resolvedInputs.videoUrl ? "send-video" : "send-photo"
+        const items: Array<{ type: "photo" | "video"; url: string }> = []
+        if (resolvedInputs.imageUrl) items.push({ type: "photo", url: resolvedInputs.imageUrl })
+        if (resolvedInputs.videoUrl) items.push({ type: "video", url: resolvedInputs.videoUrl })
+
+        if (items.length >= 2) {
+          action = "send-media-group"
+          mediaItems = items
+        } else if (items.length === 1) {
+          action = items[0].type === "video" ? "send-video" : "send-photo"
         } else {
           action = "send-message"
         }
@@ -411,8 +419,9 @@ function buildSyncHttpBody(
         platform: SOCIAL_NODE_TO_PLATFORM[node.type],
         action,
         connectionId: data.connectionId,
-        caption: (resolvedInputs.caption as string | undefined) || data.caption || data.text,
+        caption: resolvedInputs.prompt || (resolvedInputs.caption as string | undefined) || data.caption || data.text,
         mediaUrl,
+        mediaItems,
         title: data.title,
         description: data.description,
         tags: data.tags,

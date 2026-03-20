@@ -3577,11 +3577,22 @@ export function executeNode(
     const d = node.data as SocialPostData;
     const mediaUrl = overrideMediaUrl ?? inputs.videoUrl ?? inputs.imageUrl ?? inputs.audioUrl;
 
-    // Auto-detect Telegram action based on connected media
+    // Resolve {Node Label} refs in caption
+    const resolvedCaption = resolveTextRefs(d.caption?.trim(), refMap) || inputs.prompt || undefined;
+
+    // Auto-detect Telegram action and collect all connected media
     let action = d.action;
+    let mediaItems: Array<{ type: "photo" | "video"; url: string }> | undefined;
     if (d.platform === "telegram") {
-      if (mediaUrl) {
-        action = inputs.videoUrl ? "send-video" : "send-photo";
+      const items: Array<{ type: "photo" | "video"; url: string }> = [];
+      if (inputs.imageUrl) items.push({ type: "photo", url: inputs.imageUrl });
+      if (inputs.videoUrl) items.push({ type: "video", url: inputs.videoUrl });
+
+      if (items.length >= 2) {
+        action = "send-media-group";
+        mediaItems = items;
+      } else if (items.length === 1) {
+        action = items[0].type === "video" ? "send-video" : "send-photo";
       } else {
         action = "send-message";
       }
@@ -3595,7 +3606,8 @@ export function executeNode(
         action,
         connectionId: d.connectionId,
         mediaUrl,
-        caption: d.caption || inputs.prompt || undefined,
+        mediaItems,
+        caption: resolvedCaption,
         title: d.title || undefined,
         description: d.description || undefined,
         tags: d.tags,
