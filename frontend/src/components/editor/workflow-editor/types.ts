@@ -2,6 +2,7 @@ import type { WorkflowNode, WorkflowEdge } from "@/types/nodes";
 import { StorageExceededError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers";
+import { applyRange } from "@nodaro-shared/edge-range";
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -246,11 +247,18 @@ export function getFanOutMultiplier(
       (FAN_OUT_EACH_TYPES.has(sourceNode.type ?? "") ? "each" : "last");
     if (mode !== "each") continue;
 
+    const edgeData = edge.data as Record<string, unknown> | undefined;
+    const rangeFrom = edgeData?.rangeFrom as string | undefined;
+    const rangeTo = edgeData?.rangeTo as string | undefined;
+    const rangeStep = edgeData?.rangeStep as number | undefined;
+    const hasRange = !!(rangeFrom || rangeTo || rangeStep != null);
+
     // Direct fan-out from list node
     if (sourceNode.type === "list") {
       const items = ((sourceNode.data as Record<string, unknown>).items as string || "")
         .split("\n").map((s) => s.trim()).filter(Boolean);
-      if (items.length > 1) return items.length;
+      if (!hasRange) { if (items.length > 1) return items.length; }
+      else { const filtered = applyRange(items, rangeFrom, rangeTo, rangeStep); if (filtered.length > 1) return filtered.length; }
     }
 
     // Direct fan-out from loop node
@@ -258,7 +266,11 @@ export function getFanOutMultiplier(
       const rows = (sourceNode.data as Record<string, unknown>).rows as
         | string[][]
         | undefined;
-      if (rows && rows.length > 1) return rows.length;
+      if (rows && rows.length > 1) {
+        if (!hasRange) return rows.length;
+        const rowStrs = rows.map((_, i) => String(i + 1));
+        return applyRange(rowStrs, rangeFrom, rangeTo, rangeStep).length;
+      }
     }
 
     // Transitive: text-prompt upstream of list/loop
@@ -271,16 +283,28 @@ export function getFanOutMultiplier(
           ?.outputMode as string | undefined;
         if ((gpMode ?? "each") !== "each") continue;
 
+        // Use range from the upstream edge (srcEdge) for transitive fan-out
+        const gpData = srcEdge.data as Record<string, unknown> | undefined;
+        const gpRangeFrom = gpData?.rangeFrom as string | undefined;
+        const gpRangeTo = gpData?.rangeTo as string | undefined;
+        const gpRangeStep = gpData?.rangeStep as number | undefined;
+        const gpHasRange = !!(gpRangeFrom || gpRangeTo || gpRangeStep != null);
+
         if (listNode.type === "list") {
           const items = ((listNode.data as Record<string, unknown>).items as string || "")
             .split("\n").map((s) => s.trim()).filter(Boolean);
-          if (items.length > 1) return items.length;
+          if (!gpHasRange) { if (items.length > 1) return items.length; }
+          else { const filtered = applyRange(items, gpRangeFrom, gpRangeTo, gpRangeStep); if (filtered.length > 1) return filtered.length; }
         }
         if (listNode.type === "loop") {
           const rows = (listNode.data as Record<string, unknown>).rows as
             | string[][]
             | undefined;
-          if (rows && rows.length > 1) return rows.length;
+          if (rows && rows.length > 1) {
+            if (!gpHasRange) return rows.length;
+            const rowStrs = rows.map((_, i) => String(i + 1));
+            return applyRange(rowStrs, gpRangeFrom, gpRangeTo, gpRangeStep).length;
+          }
         }
       }
     }

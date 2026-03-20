@@ -75,3 +75,10 @@ export {
 } from "./progress-curve.js"
 
 export { getRouteReachableNodeIds, type MinimalNode, type MinimalEdge } from "./route-filter.js"
+
+export {
+  resolveIndex,
+  applyRange,
+  buildRangeLabel,
+  migrateEdgeOutputMode,
+} from "./edge-range.js"

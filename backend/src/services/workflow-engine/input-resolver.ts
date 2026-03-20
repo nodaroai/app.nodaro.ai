@@ -15,6 +15,7 @@ import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
+import { applyRange, resolveIndex } from "../../../../packages/shared/src/edge-range.js"
 
 /**
  * Resolve a node's primary output from execution state or source node data.
@@ -59,20 +60,30 @@ export function resolveNodeInputs(
     let output: string | undefined
     const state = nodeStates[sourceNode.id]
 
-    // Check for item:N/last/all output mode on nodes with fan-out list results
+    // Check for item/item:N/last/all output mode on nodes with fan-out list results
     // or accumulated generatedResults from multiple manual runs
-    const edgeOutputMode = (edge.data as Record<string, unknown> | undefined)
-      ?.outputMode as string | undefined
+    const edgeData = edge.data as Record<string, unknown> | undefined
+    const edgeOutputMode = edgeData?.outputMode as string | undefined
     const effectiveListResults = state?.output?.listResults
       ?? extractAllGeneratedResults(sourceNode.data as Record<string, unknown>)
     if (edgeOutputMode && effectiveListResults && effectiveListResults.length > 0) {
-      if (edgeOutputMode.startsWith("item:")) {
+      if (edgeOutputMode === "item") {
+        // Structured item mode: use resolveIndex on itemIndex expression
+        const itemIndex = edgeData?.itemIndex as string | undefined
+        const idx = resolveIndex(itemIndex ?? "1", effectiveListResults.length)
+        output = effectiveListResults[idx] ?? effectiveListResults[0]
+      } else if (edgeOutputMode.startsWith("item:")) {
+        // Legacy item:N mode (0-based index baked into mode string)
         const idx = parseInt(edgeOutputMode.split(":")[1], 10)
         output = effectiveListResults[idx] ?? effectiveListResults[0]
       } else if (edgeOutputMode === "last") {
         output = effectiveListResults[effectiveListResults.length - 1]
       } else if (edgeOutputMode === "all") {
-        output = effectiveListResults.join(", ")
+        // Apply range filtering before joining for "all" mode
+        const rangeFrom = edgeData?.rangeFrom as string | undefined
+        const rangeTo = edgeData?.rangeTo as string | undefined
+        const filtered = applyRange(effectiveListResults, rangeFrom, rangeTo)
+        output = filtered.join(", ")
       }
     }
 
@@ -201,6 +212,12 @@ export function getListInputForNode(
     const sourceNode = allNodes.find((n) => n.id === edge.source)
     if (!sourceNode) continue
 
+    // Read range config from the edge
+    const edgeData = edge.data as Record<string, unknown> | undefined
+    const rangeFrom = edgeData?.rangeFrom as string | undefined
+    const rangeTo = edgeData?.rangeTo as string | undefined
+    const rangeStep = edgeData?.rangeStep as number | undefined
+
     // 1. Loop node — column routing via sourceHandle
     if (sourceNode.type === "loop") {
       const columns = sourceNode.data.columns as
@@ -224,7 +241,8 @@ export function getListInputForNode(
               .split("\n")
               .map((s) => s.trim())
               .filter((s) => s.length > 0)
-            if (items.length > 1) return items
+            const filtered = applyRange(items, rangeFrom, rangeTo, rangeStep)
+            if (filtered.length > 1) return filtered
           }
         }
       } else if (colIndex >= 0) {
@@ -234,7 +252,8 @@ export function getListInputForNode(
           const items = rows
             .map((row) => row[colIndex]?.trim())
             .filter(Boolean) as string[]
-          if (items.length > 1) return items
+          const filtered = applyRange(items, rangeFrom, rangeTo, rangeStep)
+          if (filtered.length > 1) return filtered
         }
       }
       continue
@@ -245,20 +264,24 @@ export function getListInputForNode(
       const script = getActiveScriptFromState(nodeStates, edge.source)
       const scenesList = (script?.scenes as Array<Record<string, unknown>>) ?? []
       if (scenesList.length > 1) {
-        return scenesList.map((s) => (s.imagePrompt as string) ?? "")
+        const items = scenesList.map((s) => (s.imagePrompt as string) ?? "")
+        return applyRange(items, rangeFrom, rangeTo, rangeStep)
       }
     }
 
     // Check outputMode from edge data — only fan-out if mode is "each"
     // List/loop/split-text edges default to "each"; all other edges default to "last"
-    const edgeOutputMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined
+    const edgeOutputMode = edgeData?.outputMode as string | undefined
     const outputMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type) ? "each" : "last")
     if (outputMode !== "each") continue
 
     // 2. List node — parse items by newline
     if (sourceNode.type === "list") {
       const items = extractSourceNodeOutputAsList(sourceNode, triggerData)
-      if (items && items.length > 1) return items
+      if (items && items.length > 1) {
+        const filtered = applyRange(items, rangeFrom, rangeTo, rangeStep)
+        if (filtered.length > 1) return filtered
+      }
       continue
     }
 
@@ -266,7 +289,8 @@ export function getListInputForNode(
     if (sourceNode.type === "split-text") {
       const state = nodeStates[sourceNode.id]
       if (state?.output?.splitResults && state.output.splitResults.length > 1) {
-        return state.output.splitResults
+        const filtered = applyRange(state.output.splitResults, rangeFrom, rangeTo, rangeStep)
+        if (filtered.length > 1) return filtered
       }
       continue
     }
@@ -274,14 +298,18 @@ export function getListInputForNode(
     // 4. Any node with listResults from a prior fan-out execution
     const state = nodeStates[sourceNode.id]
     if (state?.output?.listResults && state.output.listResults.length > 1) {
-      return state.output.listResults
+      const filtered = applyRange(state.output.listResults, rangeFrom, rangeTo, rangeStep)
+      if (filtered.length > 1) return filtered
     }
 
     // 5. Fallback: accumulated generatedResults from multiple manual runs
     const savedResults = extractAllGeneratedResults(
       sourceNode.data as Record<string, unknown>,
     )
-    if (savedResults) return savedResults
+    if (savedResults) {
+      const filtered = applyRange(savedResults, rangeFrom, rangeTo, rangeStep)
+      if (filtered.length > 1) return filtered
+    }
   }
 
   // Transitive fan-out: if a direct parent is a text-prompt whose own upstream
@@ -299,6 +327,12 @@ export function getListInputForNode(
         ?.outputMode as string | undefined
       if ((gpEdgeMode ?? "each") !== "each") continue
 
+      // Read range config from the upstream edge
+      const gpData = srcEdge.data as Record<string, unknown> | undefined
+      const gpRangeFrom = gpData?.rangeFrom as string | undefined
+      const gpRangeTo = gpData?.rangeTo as string | undefined
+      const gpRangeStep = gpData?.rangeStep as number | undefined
+
       // Get list items
       let listItems: string[] | undefined
       if (listNode.type === "list") {
@@ -311,6 +345,10 @@ export function getListInputForNode(
       }
       if (!listItems || listItems.length <= 1) continue
 
+      // Apply range from the upstream edge
+      const filtered = applyRange(listItems, gpRangeFrom, gpRangeTo, gpRangeStep)
+      if (filtered.length <= 1) continue
+
       // Build ref map for the text-prompt to resolve nested refs
       const refMap = buildNodeRefMap(sourceNode.id, {
         nodes: allNodes,
@@ -321,7 +359,7 @@ export function getListInputForNode(
       const sourceText = (sourceNode.data.text as string) || ""
 
       const resolvedItems: string[] = []
-      for (const item of listItems) {
+      for (const item of filtered) {
         const itemMap = new Map(refMap)
         itemMap.set(listLabel, item)
         resolvedItems.push(resolveNodeRefs(sourceText, itemMap))
