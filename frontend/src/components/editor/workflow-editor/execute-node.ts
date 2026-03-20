@@ -3613,7 +3613,6 @@ export function executeNode(
         tags: d.tags,
         privacy: d.privacy,
         chatId: d.chatId,
-        parseMode: d.parseMode,
       }).then(
         (result) => {
           const prev = ((node.data as SocialPostData).generatedResults ?? []) as readonly GeneratedResult[];
