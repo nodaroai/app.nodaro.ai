@@ -30,6 +30,15 @@ vi.mock("../models.js", async () => {
   return actual
 })
 
+// Mock sharp so ensureImageForProvider doesn't need real image data
+vi.mock("sharp", () => {
+  const mockSharp = () => ({
+    metadata: () => Promise.resolve({ format: "jpeg", width: 1024, height: 1024 }),
+  })
+  mockSharp.default = mockSharp
+  return { default: mockSharp }
+})
+
 // ---------------------------------------------------------------------------
 // Import class under test
 // ---------------------------------------------------------------------------
@@ -44,6 +53,11 @@ let provider: KieVideoProvider
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Mock global fetch for ensureImageForProvider (returns a tiny fake buffer)
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+    ok: true,
+    arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
+  }))
   mocks.mockRunKieTask.mockResolvedValue({
     resultJson: { resultUrls: ["https://cdn.kie.ai/video.mp4"] },
   })
