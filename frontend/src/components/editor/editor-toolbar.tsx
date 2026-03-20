@@ -344,6 +344,12 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.isActive = false
           break
 
+        case "teleport-send":
+        case "teleport-receive":
+          data.result = undefined
+          data.executionStatus = undefined
+          break
+
         default:
           // For any other node type, clear common generated fields
           if ('generatedResults' in data) {

@@ -487,6 +487,9 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     const values = Object.values(injected);
     return values.length > 0 ? values[0] : undefined;
   }
+  if (type === "teleport-send" || type === "teleport-receive") {
+    return (data.result as string | undefined)
+  }
   return undefined;
 }
 
@@ -579,9 +582,9 @@ export const AUDIO_SOURCE_TYPES = new Set([
   "audio-isolation",
 ]);
 
-const IMAGE_URL_RE = /^https?:\/\/.*\.(png|jpe?g|gif|webp|svg|bmp)/i
-const VIDEO_URL_RE = /^https?:\/\/.*\.(mp4|mov|webm|avi|mkv)/i
-const AUDIO_URL_RE = /^https?:\/\/.*\.(mp3|wav|ogg|aac|flac|m4a)/i
+export const IMAGE_URL_RE = /^https?:\/\/.*\.(png|jpe?g|gif|webp|svg|bmp)/i
+export const VIDEO_URL_RE = /^https?:\/\/.*\.(mp4|mov|webm|avi|mkv)/i
+export const AUDIO_URL_RE = /^https?:\/\/.*\.(mp3|wav|ogg|aac|flac|m4a)/i
 
 /** Determine the preview item type from a node type and/or its output URL. */
 export function detectPreviewItemType(

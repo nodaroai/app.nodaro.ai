@@ -10,7 +10,7 @@ import type {
   GeneratedResult,
   LoopNodeData,
 } from "@/types/nodes";
-import { extractNodeOutput } from "./execution-graph";
+import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
 
 /** Node types whose edges default to "each" output mode (fan-out) */
 const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"]);
@@ -372,7 +372,18 @@ export function resolveNodeInputs(
       continue;
     }
 
-    if (src.type === "text-prompt") {
+    if (src.type === "teleport-send" || src.type === "teleport-receive") {
+      // Teleporter passthrough — detect media type from URL
+      if (IMAGE_URL_RE.test(output)) {
+        inputs.imageUrl = output
+      } else if (VIDEO_URL_RE.test(output)) {
+        inputs.videoUrl = output
+      } else if (AUDIO_URL_RE.test(output)) {
+        inputs.audioUrl = output
+      } else {
+        inputs.prompt = output
+      }
+    } else if (src.type === "text-prompt") {
       inputs.prompt = output;
     } else if (src.type === "list") {
       // Read output mode from the edge, not the node

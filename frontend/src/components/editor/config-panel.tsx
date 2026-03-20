@@ -115,6 +115,7 @@ import {
   WebhookOutputConfig,
   SplitTextConfig,
   PreviewConfig,
+  TeleporterConfig,
   SubWorkflowInputConfig,
   SubWorkflowOutputConfig,
   SubWorkflowConfig,
@@ -224,6 +225,8 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "facebook-post": "Facebook Post",
   "telegram-post": "Telegram Post",
   "telegram-trigger": "Telegram Trigger",
+  "teleport-send": "Teleport Send",
+  "teleport-receive": "Teleport Receive",
 }
 
 export function getNodeTypeDisplayName(type: string): string {
@@ -630,6 +633,7 @@ export function ConfigPanel() {
           {nodeType === "combine-text" && <CombineTextConfig {...configProps} />}
           {nodeType === "split-text" && <SplitTextConfig {...configProps} />}
           {nodeType === "preview" && <PreviewConfig {...configProps} />}
+          {(nodeType === "teleport-send" || nodeType === "teleport-receive") && <TeleporterConfig {...configProps} nodeType={nodeType} />}
 
           {nodeType === "save-to-storage" && <SaveToStorageConfig {...configProps} />}
           {nodeType === "webhook-output" && <WebhookOutputConfig {...configProps} />}

@@ -22,10 +22,13 @@ import type {
   SplitTextData,
   PreviewNodeData,
   PreviewItem,
+  TeleportSendData,
+  TeleportReceiveData,
 } from "@/types/nodes"
 import { isMediaUrl } from "@/lib/media-type"
 import { downloadFile } from "@/components/presentation/output-cards/shared"
 import type { ConfigProps } from "./types"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 const SEPARATOR_OPTIONS = [
   { value: "newline", label: "New Line (\\n)" },
@@ -424,6 +427,105 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+export function TeleporterConfig({ data, onUpdate, nodeType }: { data: TeleportSendData | TeleportReceiveData; onUpdate: (patch: Partial<TeleportSendData | TeleportReceiveData>) => void; nodeType: string }) {
+  const { nodes, updateNodeData, syncTeleporterEdges } = useWorkflowStore()
+  const isSend = nodeType === "teleport-send"
+
+  const partners = nodes.filter((n) => {
+    if (isSend) return n.type === "teleport-receive" && (n.data as TeleportReceiveData).channel === data.channel
+    return n.type === "teleport-send" && (n.data as TeleportSendData).channel === data.channel
+  })
+
+  const availableChannels = nodes
+    .filter((n) => n.type === "teleport-send")
+    .map((n) => ({
+      channel: (n.data as Record<string, unknown>).channel as string,
+      channelColor: (n.data as Record<string, unknown>).channelColor as string,
+      label: (n.data as Record<string, unknown>).label as string,
+    }))
+    .filter((c, i, arr) => arr.findIndex((a) => a.channel === c.channel) === i)
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <label className="text-xs font-medium text-muted-foreground">Channel</label>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded-full" style={{ backgroundColor: data.channelColor }} />
+          <span className="text-sm font-semibold" style={{ color: data.channelColor }}>{data.channel}</span>
+        </div>
+      </div>
+
+      {!isSend && availableChannels.length > 0 && (
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">Switch Channel</label>
+          <select
+            className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background"
+            value={data.channel}
+            onChange={(e) => {
+              const selected = availableChannels.find((c) => c.channel === e.target.value)
+              if (!selected) return
+              const oldChannel = data.channel
+              onUpdate({
+                channel: selected.channel,
+                channelColor: selected.channelColor,
+              })
+              // Sync hidden edges: remove from old channel, add to new
+              syncTeleporterEdges(oldChannel)
+              syncTeleporterEdges(selected.channel)
+            }}
+          >
+            {availableChannels.map((ch) => (
+              <option key={ch.channel} value={ch.channel}>
+                Channel {ch.channel} — {ch.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <label className="text-xs font-medium text-muted-foreground">Label</label>
+        <input
+          type="text"
+          className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background"
+          value={data.label}
+          onChange={(e) => {
+            onUpdate({ label: e.target.value })
+            for (const partner of partners) {
+              updateNodeData(partner.id, { label: e.target.value })
+            }
+          }}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-xs font-medium text-muted-foreground">
+          {isSend ? "Receives on this channel" : "Send node"}
+        </label>
+        {partners.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">No partner nodes found</p>
+        ) : (
+          <div className="space-y-1">
+            {partners.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className="w-full text-left text-xs px-2 py-1 rounded hover:bg-accent/10 text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => {
+                  const event = new CustomEvent("teleporter-pan-to", { detail: { nodeId: p.id } })
+                  window.dispatchEvent(event)
+                }}
+              >
+                {p.data.label as string} ({p.id})
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

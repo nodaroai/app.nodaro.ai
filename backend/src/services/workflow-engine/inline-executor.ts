@@ -248,9 +248,9 @@ export function executeComposite(
 }
 
 // URL-based media type detection (matches frontend regex patterns)
-const IMAGE_URL_RE = /^https?:\/\/.*\.(png|jpe?g|gif|webp|svg|bmp)/i
-const VIDEO_URL_RE = /^https?:\/\/.*\.(mp4|mov|webm|avi|mkv)/i
-const AUDIO_URL_RE = /^https?:\/\/.*\.(mp3|wav|ogg|aac|flac|m4a)/i
+export const IMAGE_URL_RE = /^https?:\/\/.*\.(png|jpe?g|gif|webp|svg|bmp)/i
+export const VIDEO_URL_RE = /^https?:\/\/.*\.(mp4|mov|webm|avi|mkv)/i
+export const AUDIO_URL_RE = /^https?:\/\/.*\.(mp3|wav|ogg|aac|flac|m4a)/i
 
 /**
  * Detect preview item type from source node type and value (matches frontend detectPreviewItemType).
@@ -312,6 +312,18 @@ export function executePreview(
   // Also set text to first value for backwards compatibility
   const firstValue = previewItems.length > 0 ? previewItems[0].value : undefined
   return { text: firstValue, previewItems }
+}
+
+/**
+ * Execute teleport-send or teleport-receive node: pass through the upstream value unchanged.
+ * The teleporter acts as a transparent wire — it forwards whatever media type it receives.
+ */
+export function executeTeleporterPassthrough(
+  node: SimpleNode,
+  resolvedInputs: ResolvedInputs,
+): NodeOutput {
+  const value = resolvedInputs.prompt || resolvedInputs.imageUrl || resolvedInputs.videoUrl || resolvedInputs.audioUrl || ""
+  return { text: value }
 }
 
 /**

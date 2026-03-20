@@ -13,6 +13,7 @@ import type {
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, getPrimaryOutput } from "./output-extractor.js"
 import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
+import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 
 /**
@@ -672,6 +673,21 @@ function routeOutput(
     }
     if (targetType === "sora-storyboard" && script) {
       inputs.scriptData = script
+    }
+    return
+  }
+
+  // --- Teleporter passthrough — detect media type from the resolved output value ---
+  if (srcType === "teleport-send" || srcType === "teleport-receive") {
+    if (!output) return
+    if (IMAGE_URL_RE.test(output)) {
+      inputs.imageUrl = output
+    } else if (VIDEO_URL_RE.test(output)) {
+      routeVideoOutput(inputs, output, targetType, src.id)
+    } else if (AUDIO_URL_RE.test(output)) {
+      routeAudioOutput(inputs, output, targetType, src.id)
+    } else {
+      inputs.prompt = output
     }
     return
   }
