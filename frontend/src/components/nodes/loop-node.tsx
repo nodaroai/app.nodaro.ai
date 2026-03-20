@@ -15,7 +15,7 @@ function buildHandles(columns: ReadonlyArray<LoopColumn>) {
     id: "in",
     type: "target" as const,
     position: Position.Left,
-    customStyle: { top: '50%', left: '-29px' },
+    customStyle: { top: 'calc(100% - 20px)', left: '-29px' },
     hideHandle: true,
   }
 
@@ -123,7 +123,7 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      {hasTarget && <HandleIcon icon={<Type />} side="left" />}
+      {hasTarget && <HandleIcon icon={<Type />} side="left" top="calc(100% - 20px)" />}
       {sourceHandles.map((h) => (
         <HandleIcon key={h.id} icon={<Type />} top={h.top} />
       ))}

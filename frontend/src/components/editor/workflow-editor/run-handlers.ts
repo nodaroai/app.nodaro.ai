@@ -180,6 +180,8 @@ export async function handleRunSingleNode(
 // handleRunFromHere
 // ---------------------------------------------------------------------------
 
+let _runFromHereLock = false;
+
 export async function handleRunFromHere(
   nodeId: string,
   ctx: ExecutionContext,
@@ -189,6 +191,10 @@ export async function handleRunFromHere(
   onExecutionStarted?: (id: string) => void,
   onExecutionEnded?: () => void,
 ): Promise<void> {
+  if (_runFromHereLock) return;
+  _runFromHereLock = true;
+
+  try {
   rejectAllManualEdits();
   const { nodes, edges } = collapseExpandedClones();
   const startNode = nodes.find((n) => n.id === nodeId);
@@ -254,6 +260,9 @@ export async function handleRunFromHere(
     toast.error("Failed to start execution", {
       description: err instanceof Error ? err.message : "Unknown error",
     });
+  }
+  } finally {
+    _runFromHereLock = false;
   }
 }
 

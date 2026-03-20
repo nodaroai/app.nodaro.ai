@@ -17,8 +17,8 @@ interface ParameterNodeShellProps {
 }
 
 const makeHandles = (id: string) => [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-6px' }, hideHandle: true },
-  { id, type: "source" as const, position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
+  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-6px' }, hideHandle: true },
+  { id, type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
 ] as const
 
 export function ParameterNodeShell({ id, label, icon, handleId, selected, children }: ParameterNodeShellProps) {
@@ -47,7 +47,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
           {children}
         </div>
       </BaseNode>
-      <HandleIcon icon={icon} color="indigo" />
+      <HandleIcon icon={icon} color="indigo" top="20px" />
     </div>
   )
 }

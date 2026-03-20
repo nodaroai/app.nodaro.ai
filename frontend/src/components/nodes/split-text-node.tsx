@@ -43,8 +43,8 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
           ) : undefined
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
-          { id: "out", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
+          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+          { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
         ]}
       >
         <div className="flex flex-col gap-1">
@@ -68,8 +68,8 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </BaseNode>
-      <HandleIcon icon={<FileText />} color="steel" side="left" />
-      <HandleIcon icon={<FileText />} color="steel" />
+      <HandleIcon icon={<FileText />} color="steel" side="left" top="calc(100% - 20px)" />
+      <HandleIcon icon={<FileText />} color="steel" top="20px" />
     </div>
   )
 }

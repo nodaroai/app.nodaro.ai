@@ -9,7 +9,7 @@ import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WebhookOutputData, WebhookParam } from "@/types/nodes"
 
-const SOURCE_HANDLE = { id: "out", type: "source" as const, position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true }
+const SOURCE_HANDLE = { id: "out", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true }
 
 function buildHandles(params: ReadonlyArray<WebhookParam>) {
   if (params.length === 0) {
@@ -75,7 +75,7 @@ function WebhookOutputNodeComponent({ id, data, selected }: NodeProps) {
         </p>
       )}
       </BaseNode>
-      <HandleIcon icon={<Webhook />} color="green" />
+      <HandleIcon icon={<Webhook />} color="green" top="20px" />
     </div>
   )
 }

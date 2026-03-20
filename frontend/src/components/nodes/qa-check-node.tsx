@@ -42,18 +42,18 @@ function QACheckNodeComponent({ id, data, selected }: NodeProps) {
           ) : undefined
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, hideHandle: true, customStyle: { top: '50%', left: '-29px' } },
-          { id: "approved", type: "source", position: Position.Right, label: "Approved", hideHandle: true, customStyle: { top: '35%', right: '-29px' } },
-          { id: "rejected", type: "source", position: Position.Right, label: "Rejected", hideHandle: true, customStyle: { top: '65%', right: '-29px' } },
+          { id: "in", type: "target", position: Position.Left, hideHandle: true, customStyle: { top: 'calc(100% - 20px)', left: '-29px' } },
+          { id: "approved", type: "source", position: Position.Right, label: "Approved", hideHandle: true, customStyle: { top: '20px', right: '-29px' } },
+          { id: "rejected", type: "source", position: Position.Right, label: "Rejected", hideHandle: true, customStyle: { top: '50px', right: '-29px' } },
         ]}
       >
         <p className="text-muted-foreground truncate max-w-[180px]">
           {nodeData.checkType} ({nodeData.provider})
         </p>
       </BaseNode>
-      <HandleIcon icon={<Type />} color="pink" side="left" />
-      <HandleIcon icon={<Check />} color="green" top="35%" />
-      <HandleIcon icon={<X />} color="red" top="65%" />
+      <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)" />
+      <HandleIcon icon={<Check />} color="green" top="20px" />
+      <HandleIcon icon={<X />} color="red" top="50px" />
     </div>
   )
 }

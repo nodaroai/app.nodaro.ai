@@ -61,21 +61,20 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       isRunning={status === "running"}
       hideHeader
-      minHeight={280}
       topToolbarContent={
         status !== "running" ? (
           <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
-        { id: "scenes", type: "source", position: Position.Right, customStyle: { top: '10%', right: '-29px' }, hideHandle: true },
-        { id: "images", type: "source", position: Position.Right, customStyle: { top: '24%', right: '-29px' }, hideHandle: true },
-        { id: "dialogue", type: "source", position: Position.Right, customStyle: { top: '38%', right: '-29px' }, hideHandle: true },
-        { id: "music", type: "source", position: Position.Right, customStyle: { top: '52%', right: '-29px' }, hideHandle: true },
-        { id: "sfx", type: "source", position: Position.Right, customStyle: { top: '66%', right: '-29px' }, hideHandle: true },
-        { id: "characters", type: "source", position: Position.Right, customStyle: { top: '80%', right: '-29px' }, hideHandle: true },
-        { id: "locations", type: "source", position: Position.Right, customStyle: { top: '94%', right: '-29px' }, hideHandle: true },
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "scenes", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "images", type: "source", position: Position.Right, customStyle: { top: '50px', right: '-29px' }, hideHandle: true },
+        { id: "dialogue", type: "source", position: Position.Right, customStyle: { top: '80px', right: '-29px' }, hideHandle: true },
+        { id: "music", type: "source", position: Position.Right, customStyle: { top: '110px', right: '-29px' }, hideHandle: true },
+        { id: "sfx", type: "source", position: Position.Right, customStyle: { top: '140px', right: '-29px' }, hideHandle: true },
+        { id: "characters", type: "source", position: Position.Right, customStyle: { top: '170px', right: '-29px' }, hideHandle: true },
+        { id: "locations", type: "source", position: Position.Right, customStyle: { top: '200px', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1.5">
@@ -255,14 +254,14 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleIcon icon={<Type />} color="pink" side="left" top="50%" />
-    <HandleIcon icon={<BookOpen />} color="pink" side="right" top="10%" label="scenes" />
-    <HandleIcon icon={<ImageIcon />} color="cyan" side="right" top="24%" label="images" />
-    <HandleIcon icon={<MessageSquare />} color="orange" side="right" top="38%" label="dialogue" />
-    <HandleIcon icon={<Music />} color="purple" side="right" top="52%" label="music" />
-    <HandleIcon icon={<Volume2 />} color="emerald" side="right" top="66%" label="sfx" />
-    <HandleIcon icon={<User />} color="pink" side="right" top="80%" label="characters" />
-    <HandleIcon icon={<MapPin />} color="cyan" side="right" top="94%" label="locations" />
+    <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)" />
+    <HandleIcon icon={<BookOpen />} color="pink" side="right" top="20px" label="scenes" />
+    <HandleIcon icon={<ImageIcon />} color="cyan" side="right" top="50px" label="images" />
+    <HandleIcon icon={<MessageSquare />} color="orange" side="right" top="80px" label="dialogue" />
+    <HandleIcon icon={<Music />} color="purple" side="right" top="110px" label="music" />
+    <HandleIcon icon={<Volume2 />} color="emerald" side="right" top="140px" label="sfx" />
+    <HandleIcon icon={<User />} color="pink" side="right" top="170px" label="characters" />
+    <HandleIcon icon={<MapPin />} color="cyan" side="right" top="200px" label="locations" />
     {activeScript && showFullscreen && (
       <Suspense fallback={null}>
       <ScriptPreviewModal

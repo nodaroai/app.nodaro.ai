@@ -76,8 +76,8 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
-        { id: "characterRef", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "characterRef", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1.5">
@@ -264,7 +264,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
     </BaseNode>
 
     {/* Input handle icon */}
-    <HandleIcon icon={<Type />} color="pink" side="left" top="50%">
+    <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)">
       <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
       {inConnectionCount >= 2 && (
         <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
@@ -273,7 +273,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
       )}
     </HandleIcon>
     {/* Output handle icon */}
-    <HandleIcon icon={<UserCircle />} color="pink" side="right" top="50%" />
+    <HandleIcon icon={<UserCircle />} color="pink" side="right" top="20px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

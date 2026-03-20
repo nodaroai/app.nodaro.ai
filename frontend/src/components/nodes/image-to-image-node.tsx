@@ -91,9 +91,9 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "image", type: "target", position: Position.Left, top: "calc(75% + 33px)", customStyle: { top: 'calc(75% + 33px)', left: '-29px' }, hideHandle: true },
-        ...(supportsMask ? [{ id: "mask", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true }] : []),
-        { id: "out", type: "source", position: Position.Right, customStyle: { top: 'calc(25% - 33px)', right: '-29px' }, hideHandle: true },
+        { id: "image", type: "target", position: Position.Left, top: "calc(100% - 20px)", customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        ...(supportsMask ? [{ id: "mask", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true }] : []),
+        { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="relative w-full group" style={{ minHeight: 180 }}>
@@ -190,7 +190,7 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
     {/* Input handle icon (TYPE 1) */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(75% + 19px)', left: '-29px' }}
+      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
     >
       <ImageIcon className="w-3.5 h-3.5 text-white" />
       <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
@@ -204,7 +204,7 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
     {supportsMask && (
       <div
         className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#a855f7]"
-        style={{ top: 'calc(50% - 14px)', left: '-29px' }}
+        style={{ top: 'calc(100% - 50px)', left: '-29px', transform: 'translateY(-50%)' }}
       >
         <Layers className="w-3.5 h-3.5 text-white" />
         <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#a855f7] text-[#a855f7] text-[8px] font-black flex items-center justify-center">+</div>
@@ -213,7 +213,7 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
     {/* Output handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: 'calc(25% - 47px)', right: '-29px' }}
+      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
     >
       <ImageIcon className="w-3.5 h-3.5 text-white" />
     </div>

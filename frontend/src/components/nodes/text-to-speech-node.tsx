@@ -82,8 +82,8 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: '141px', left: '-29px' }, hideHandle: true },
-        { id: "audio", type: "source", position: Position.Right, customStyle: { top: '36px', right: '-29px', left: 'auto' }, hideHandle: true },
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "audio", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px', left: 'auto' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -144,8 +144,8 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleIcon icon={<Type />} color="pink" side="left" top="141px" />
-    <HandleIcon icon={<Volume2 />} color="pink" side="right" top="36px" />
+    <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)" />
+    <HandleIcon icon={<Volume2 />} color="pink" side="right" top="20px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

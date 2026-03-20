@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useState } from "react"
-import { Position, type NodeProps, NodeResizer, Handle } from "@xyflow/react"
+import { Position, type NodeProps } from "@xyflow/react"
 import { Sparkles, Loader2, AlertCircle, Type, Copy, X } from "lucide-react"
 import { copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
@@ -23,14 +23,7 @@ function SunoStyleBoostNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   return (
-    <div className="relative" style={{ width: 220, minHeight: 220, overflow: 'visible' }}>
-    <NodeResizer
-      isVisible={!!selected}
-      minWidth={180}
-      minHeight={180}
-      lineClassName="!border-[#ff0073]"
-      handleClassName="!w-2.5 !h-2.5 !bg-[#ff0073] !border-none !rounded-sm"
-    />
+    <div className="relative" style={{ maxWidth: '220px' }}>
     <EditableNodeLabel
       label={nodeData.label}
       icon={<Sparkles className="w-3.5 h-3.5" />}
@@ -50,7 +43,10 @@ function SunoStyleBoostNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined
       }
-      handles={[]}
+      handles={[
+        { id: "text", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "text-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+      ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
         {status === "running" && !generatedText && (
@@ -113,12 +109,10 @@ function SunoStyleBoostNodeComponent({ id, data, selected }: NodeProps) {
         <span className="text-xs text-muted-foreground">Style Boost</span>
       </div>
     </BaseNode>
-    <Handle id="text" type="target" position={Position.Left} className="!w-7 !h-7 !bg-transparent !border-0 !opacity-0 touch-manipulation" style={{ top: '155px', left: '-29px', transform: 'none' }} />
-    <Handle id="text-out" type="source" position={Position.Right} className="!w-7 !h-7 !bg-transparent !border-0 !opacity-0 touch-manipulation" style={{ top: '50px', right: '-29px', transform: 'none', left: 'auto' }} />
-    <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30" style={{ top: '155px', left: '-29px' }}>
+    <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30" style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}>
       <Type className="w-3.5 h-3.5 text-white" />
     </div>
-    <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30" style={{ top: '50px', right: '-29px' }}>
+    <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30" style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}>
       <Sparkles className="w-3.5 h-3.5 text-white" />
     </div>
     <DeleteConfirmationDialog

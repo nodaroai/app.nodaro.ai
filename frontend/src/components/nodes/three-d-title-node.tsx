@@ -47,8 +47,8 @@ function ThreeDTitleNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "background", type: "target", position: Position.Left, customStyle: { top: '75%', left: '-29px' }, hideHandle: true },
-        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '25%', right: '-29px' }, hideHandle: true },
+        { id: "background", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -97,8 +97,8 @@ function ThreeDTitleNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleIcon icon={<ImageIcon />} color="pink" side="left" top="75%" />
-    <HandleIcon icon={<Box />} color="pink" side="right" top="25%" />
+    <HandleIcon icon={<ImageIcon />} color="pink" side="left" top="calc(100% - 20px)" />
+    <HandleIcon icon={<Box />} color="pink" side="right" top="20px" />
     </div>
   )
 }

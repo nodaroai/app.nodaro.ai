@@ -251,8 +251,8 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "image", type: "target", position: Position.Left, customStyle: { top: '25%', left: '-29px' }, hideHandle: true },
-        { id: "audio", type: "target", position: Position.Left, customStyle: { top: '75%', left: '-29px' }, hideHandle: true },
+        { id: "image", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
+        { id: "audio", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
@@ -486,7 +486,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
     {/* image input handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(25% - 14px)', left: '-29px' }}
+      style={{ top: 'calc(100% - 50px)', left: '-29px', transform: 'translateY(-50%)' }}
     >
       <ImageIcon className="w-3.5 h-3.5 text-white" />
     </div>
@@ -494,7 +494,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
     {/* audio input handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(75% - 14px)', left: '-29px' }}
+      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
     >
       <Volume2 className="w-3.5 h-3.5 text-white" />
     </div>
@@ -502,7 +502,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
     {/* video output handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: '6px', right: '-29px' }}
+      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
     >
       <Clapperboard className="w-3.5 h-3.5 text-white" />
     </div>

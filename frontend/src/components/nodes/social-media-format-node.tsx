@@ -61,7 +61,6 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       isRunning={status === "running"}
       minWidth={220}
-      minHeight={200}
       hideHeader
       topToolbarContent={
         status !== "running" ? (
@@ -69,10 +68,10 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "media-in", type: "target", position: Position.Left, top: "35%", customStyle: { top: '35%', left: '-29px' }, hideHandle: true },
-        { id: "text-in", type: "target", position: Position.Left, top: "65%", customStyle: { top: '65%', left: '-29px' }, hideHandle: true },
-        { id: "media-out", type: "source", position: Position.Right, top: "35%", customStyle: { top: '35%', right: '-29px' }, hideHandle: true },
-        { id: "text-out", type: "source", position: Position.Right, top: "65%", customStyle: { top: '65%', right: '-29px' }, hideHandle: true },
+        { id: "media-in", type: "target", position: Position.Left, top: "calc(100% - 50px)", customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
+        { id: "text-in", type: "target", position: Position.Left, top: "calc(100% - 20px)", customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "media-out", type: "source", position: Position.Right, top: "20px", customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "text-out", type: "source", position: Position.Right, top: "50px", customStyle: { top: '50px', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="relative w-full group">
@@ -176,12 +175,12 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
     </BaseNode>
 
     {/* Input handle icons */}
-    <HandleIcon icon={specIsVideo ? <FileVideo /> : <FileImage />} color="steel" side="left" top="35%"  />
-    <HandleIcon icon={<Type />} color="steel" side="left" top="65%" />
+    <HandleIcon icon={specIsVideo ? <FileVideo /> : <FileImage />} color="steel" side="left" top="calc(100% - 50px)" />
+    <HandleIcon icon={<Type />} color="steel" side="left" top="calc(100% - 20px)" />
 
     {/* Output handle icons */}
-    <HandleIcon icon={specIsVideo ? <FileVideo /> : <FileImage />} color="steel" side="right" top="35%" />
-    <HandleIcon icon={<Type />} color="steel" side="right" top="65%" />
+    <HandleIcon icon={specIsVideo ? <FileVideo /> : <FileImage />} color="steel" side="right" top="20px" />
+    <HandleIcon icon={<Type />} color="steel" side="right" top="50px" />
 
     {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type={urlIsVideo ? "video" : "image"} url={activeUrl} />}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />

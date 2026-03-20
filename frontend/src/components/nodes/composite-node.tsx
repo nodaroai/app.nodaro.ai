@@ -44,11 +44,11 @@ function CompositeNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "video1", type: "target", position: Position.Left, customStyle: { top: '20%', left: '-29px' }, hideHandle: true },
-        { id: "video2", type: "target", position: Position.Left, customStyle: { top: '40%', left: '-29px' }, hideHandle: true },
-        { id: "video3", type: "target", position: Position.Left, customStyle: { top: '60%', left: '-29px' }, hideHandle: true },
-        { id: "video4", type: "target", position: Position.Left, customStyle: { top: '80%', left: '-29px' }, hideHandle: true },
-        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
+        { id: "video1", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 110px)', left: '-29px' }, hideHandle: true },
+        { id: "video2", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 80px)', left: '-29px' }, hideHandle: true },
+        { id: "video3", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
+        { id: "video4", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -97,11 +97,11 @@ function CompositeNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleIcon icon={<Film />} color="steel" side="left" top="20%" />
-    <HandleIcon icon={<Film />} color="steel" side="left" top="40%" />
-    <HandleIcon icon={<Film />} color="steel" side="left" top="60%" />
-    <HandleIcon icon={<Film />} color="steel" side="left" top="80%" />
-    <HandleIcon icon={<Film />} color="steel" />
+    <HandleIcon icon={<Film />} color="steel" side="left" top="calc(100% - 110px)" />
+    <HandleIcon icon={<Film />} color="steel" side="left" top="calc(100% - 80px)" />
+    <HandleIcon icon={<Film />} color="steel" side="left" top="calc(100% - 50px)" />
+    <HandleIcon icon={<Film />} color="steel" side="left" top="calc(100% - 20px)" />
+    <HandleIcon icon={<Film />} color="steel" top="20px" />
     </div>
   )
 }

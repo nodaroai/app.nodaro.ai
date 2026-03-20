@@ -109,6 +109,12 @@ function BaseNodeComponent({
   topToolbarContent,
   className,
 }: BaseNodeProps) {
+  // Auto-compute minHeight from handle count: handles need 30px each + 20px padding
+  const leftCount = handles.filter((h) => h.position === Position.Left).length
+  const rightCount = handles.filter((h) => h.position === Position.Right).length
+  const handleMinHeight = (leftCount + rightCount) * 30 + 20
+  const effectiveMinHeight = Math.max(minHeight, handleMinHeight)
+
   const [isHovered, setIsHovered] = useState(false)
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const outerRef = useRef<HTMLDivElement>(null)
@@ -214,7 +220,7 @@ function BaseNodeComponent({
           isSkipped && "opacity-40 border-dashed",
           className,
         )}
-        style={{ minHeight }}
+        style={{ minHeight: effectiveMinHeight }}
         /* Selection handled by onNodeClick in workflow-canvas (has drag guard) */
       >
       {(!hideHeader || isSkipped) && (
@@ -357,7 +363,7 @@ function BaseNodeComponent({
       {!isMobile && selected && (
         <NodeResizer
           minWidth={minWidth}
-          minHeight={minHeight}
+          minHeight={effectiveMinHeight}
           isVisible={true}
           onResize={handleResize}
           lineClassName="!border-blue-400"

@@ -712,7 +712,7 @@ export function ConfigPanel() {
               <button
                 type="button"
                 onClick={() => runFromHere?.(selectedNode.id)}
-                disabled={nodeData.executionStatus === "running"}
+                disabled={nodeData.executionStatus === "running" || nodeData.executionStatus === "pending"}
                 className="w-full flex items-center justify-center gap-2 h-9 rounded-lg text-xs font-medium border border-[#ff0073]/30 text-[#ff0073] hover:bg-[#ff0073]/10 disabled:opacity-50 transition-colors"
                 title="Runs this node and all connected downstream nodes in sequence"
               >

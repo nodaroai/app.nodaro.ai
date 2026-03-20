@@ -108,8 +108,8 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
             ) : undefined
           }
           handles={[
-            { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
-            { id: "text", type: "source", position: Position.Right, customStyle: { top: '25%', right: '-29px' }, hideHandle: true },
+            { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+            { id: "text", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
           ]}
         >
           <div className="flex flex-col gap-1">
@@ -244,8 +244,8 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           </div>
         </BaseNode>
-        <HandleIcon icon={<Volume2 />} color="pink" side="left" top="50%" />
-        <HandleIcon icon={<Type />} color="pink" side="right" top="25%" />
+        <HandleIcon icon={<Volume2 />} color="pink" side="left" top="calc(100% - 20px)" />
+        <HandleIcon icon={<Type />} color="pink" side="right" top="20px" />
         <DeleteConfirmationDialog
           isOpen={deleteConfirm !== null}
           onClose={() => setDeleteConfirm(null)}

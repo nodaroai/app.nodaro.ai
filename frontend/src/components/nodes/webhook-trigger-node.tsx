@@ -9,13 +9,13 @@ import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WebhookTriggerData, WebhookParam } from "@/types/nodes"
 
-const TARGET_HANDLE = { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true }
+const TARGET_HANDLE = { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true }
 
 function buildHandles(params: ReadonlyArray<WebhookParam>) {
   if (params.length === 0) {
     return [
       TARGET_HANDLE,
-      { id: "payload", type: "source" as const, position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
+      { id: "payload", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
     ]
   }
 
@@ -79,7 +79,7 @@ function WebhookTriggerNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleIcon icon={<Webhook />} color="cyan" side="left" />
+      <HandleIcon icon={<Webhook />} color="cyan" side="left" top="calc(100% - 20px)" />
       {handles.filter(h => h.type === "source").map((h) => (
         <HandleIcon key={h.id} icon={<Type />} top={h.customStyle?.top as string ?? '50%'} />
       ))}

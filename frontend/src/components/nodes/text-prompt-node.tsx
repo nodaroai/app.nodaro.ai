@@ -67,7 +67,6 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
       <NodeResizer
         isVisible={!!selected}
         minWidth={160}
-        minHeight={100}
         lineClassName="!border-[#38BDF8]"
         handleClassName="!w-2.5 !h-2.5 !bg-[#38BDF8] !border-none !rounded-sm"
         onResize={handleResize}
@@ -226,13 +225,13 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         id="in"
         type="target"
         position={Position.Left}
-        style={{ opacity: 0, width: 28, height: 28, minWidth: 0, minHeight: 0, background: "transparent", border: "none", top: "50%", left: "-29px", transform: "translateY(-50%)" }}
+        style={{ opacity: 0, width: 28, height: 28, minWidth: 0, minHeight: 0, background: "transparent", border: "none", top: "calc(100% - 20px)", left: "-29px", transform: "translateY(-50%)" }}
       />
 
       {/* Input handle icon */}
       <div
         className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#38BDF8] shadow-lg shadow-sky-500/30"
-        style={{ top: '50%', left: '-29px', transform: 'translateY(-50%)' }}
+        style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
       >
         <Type className="w-3.5 h-3.5 text-white" />
       </div>
@@ -242,13 +241,13 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         id="prompt"
         type="source"
         position={Position.Right}
-        style={{ opacity: 0, width: 28, height: 28, minWidth: 0, minHeight: 0, background: "transparent", border: "none", top: "calc(25% - 47px)", right: "-43px", transform: "none" }}
+        style={{ opacity: 0, width: 28, height: 28, minWidth: 0, minHeight: 0, background: "transparent", border: "none", top: "20px", right: "-43px", transform: "translateY(-50%)" }}
       />
 
       {/* Output handle icon */}
       <div
         className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#38BDF8] shadow-lg shadow-sky-500/30"
-        style={{ top: 'calc(25% - 47px)', right: '-29px' }}
+        style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
       >
         <Type className="w-3.5 h-3.5 text-white" />
       </div>

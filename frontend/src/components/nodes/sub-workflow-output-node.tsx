@@ -17,11 +17,11 @@ const MEDIA_TYPE_COLORS: Record<string, string> = {
   any: "bg-gray-400",
 }
 
-const SOURCE_HANDLE = { id: "out", type: "source" as const, position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true }
+const SOURCE_HANDLE = { id: "out", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true }
 
 function buildHandles(ports: ReadonlyArray<SubWorkflowPort>) {
   if (ports.length === 0) {
-    return [{ id: "in", type: "target" as const, position: Position.Left, label: "In", top: "50%", hideHandle: true, customStyle: { top: '50%', left: '-29px' } }, SOURCE_HANDLE]
+    return [{ id: "in", type: "target" as const, position: Position.Left, label: "In", top: "calc(100% - 20px)", hideHandle: true, customStyle: { top: 'calc(100% - 20px)', left: '-29px' } }, SOURCE_HANDLE]
   }
 
   const startPct = 42
@@ -102,9 +102,9 @@ function SubWorkflowOutputNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       {handles.filter(h => h.type === "target").map(h => (
-        <HandleIcon key={h.id} icon={<LogOut />} color="steel" side="left" top={h.top ?? "50%"} />
+        <HandleIcon key={h.id} icon={<LogOut />} color="steel" side="left" top={h.top ?? "calc(100% - 20px)"} />
       ))}
-      <HandleIcon icon={<LogOut />} color="steel" />
+      <HandleIcon icon={<LogOut />} color="steel" top="20px" />
     </div>
   )
 }

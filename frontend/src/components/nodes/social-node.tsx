@@ -48,7 +48,6 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
         selected={selected}
         isRunning={status === "running"}
         minWidth={220}
-        minHeight={120}
         hideHeader
         topToolbarContent={
           status !== "running" ? (
@@ -56,8 +55,8 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
           ) : undefined
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, top: "50%", customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
-          { id: "out", type: "source", position: Position.Right, top: "50%" },
+          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+          { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
         ]}
       >
         <div className="p-3 flex flex-col items-center justify-center gap-2" style={{ minHeight: '100px' }}>
@@ -111,8 +110,8 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleIcon icon={icon} color="green" side="left" top="50%" />
-      <HandleIcon icon={icon} color="green" top="50%" />
+      <HandleIcon icon={icon} color="green" side="left" top="calc(100% - 20px)" />
+      <HandleIcon icon={icon} color="green" top="20px" />
     </div>
   )
 }
