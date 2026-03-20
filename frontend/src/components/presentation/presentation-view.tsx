@@ -453,6 +453,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       const state = presNodeStates[nodeId]
       if (state?.output) {
         const output = state.output as Record<string, unknown>
+        // Preview node: delegate to getNodeResult which handles previewItems
+        if (output.previewItems) {
+          const result = getNodeResult(output)
+          if (result.url || result.text) return result
+        }
         const url = (output.imageUrl ?? output.videoUrl ?? output.audioUrl) as string | undefined
         const text = output.text as string | undefined
         if (url || text) return { url, text }
@@ -656,6 +661,40 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   )
 
   const renderOutputCard = useCallback((node: WorkflowNode) => {
+    // Preview node: show all visible items with their actual values
+    if (node.type === "preview") {
+      const nodeData = node.data as Record<string, unknown>
+      // Tab mode: read from node data; fullscreen mode: prefer execution state
+      let previewItems = (nodeData.previewItems as
+        | Array<{ type: string; value: string; sourceNodeLabel: string; visible?: boolean }>
+        | undefined) ?? []
+      if (isFullscreen) {
+        const execState = presNodeStates[node.id]
+        const execItems = (execState?.output as Record<string, unknown> | undefined)?.previewItems as typeof previewItems | undefined
+        if (execItems && execItems.length > 0) previewItems = execItems
+      }
+      const visibleItems = previewItems.filter((item) => item.visible !== false)
+      const status = getNodeStatus(node.id)
+      if (visibleItems.length === 0) {
+        return <OutputCard nodeId={node.id} label={getCardTitle(node)} outputType="text" status={status} />
+      }
+      return (
+        <div className="flex flex-col gap-2">
+          {visibleItems.map((item, i) => (
+            <OutputCard
+              key={`${node.id}-preview-${i}`}
+              nodeId={node.id}
+              label={item.sourceNodeLabel || getCardTitle(node)}
+              outputType={item.type === "data" ? "text" : item.type}
+              status={status}
+              url={["image", "video", "audio"].includes(item.type) ? item.value : undefined}
+              text={["text", "data"].includes(item.type) ? item.value : undefined}
+              onOpenMedia={handleOpenMedia}
+            />
+          ))}
+        </div>
+      )
+    }
     // Social media format: show PlatformPreview with platform badge
     if (node.type === "social-media-format") {
       const nodeData = node.data as Record<string, unknown>
@@ -773,7 +812,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         progress={progress}
       />
     )
-  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults])
+  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates])
 
   const costLabel = hasCredits() && estimatedCost > 0 ? ` (${estimatedCost} CR)` : ""
 

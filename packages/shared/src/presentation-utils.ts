@@ -192,6 +192,20 @@ export function getOutputType(nodeType: string | undefined): OutputType {
 export function getNodeResult(
   nodeData: Record<string, unknown>,
 ): { url?: string; text?: string } {
+  // Preview node: extract first visible item from previewItems
+  const previewItems = nodeData.previewItems as
+    | Array<{ type: string; value: string; visible?: boolean }>
+    | undefined
+  if (previewItems && previewItems.length > 0) {
+    const first = previewItems.find((item) => item.visible !== false) ?? previewItems[0]
+    if (first) {
+      if (first.type === "image" || first.type === "video" || first.type === "audio") {
+        return { url: first.value }
+      }
+      return { text: first.value }
+    }
+  }
+
   const results = nodeData.generatedResults as
     | Array<Record<string, unknown>>
     | undefined
