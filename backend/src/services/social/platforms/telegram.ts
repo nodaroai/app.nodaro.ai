@@ -1,5 +1,35 @@
 import type { PublishRequest, PublishResult, PlatformPublisher } from "./index.js"
 
+/**
+ * Convert standard markdown to Telegram-compatible HTML.
+ * Telegram's legacy "Markdown" parse mode doesn't support standard markdown
+ * (**bold**, ## headings, etc.), so we convert to HTML which is fully reliable.
+ */
+function markdownToTelegramHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+    .replace(/__(.+?)__/g, "<b>$1</b>")
+    .replace(/~~(.+?)~~/g, "<s>$1</s>")
+    .replace(/`(.+?)`/g, "<code>$1</code>")
+    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>')
+    .replace(/(?<!\w)\*(.+?)\*(?!\w)/g, "<i>$1</i>")
+    .replace(/(?<!\w)_(.+?)_(?!\w)/g, "<i>$1</i>")
+}
+
+/** Resolve parse_mode + text: convert Markdown to HTML for reliability. */
+function resolveFormat(text: string, parseMode?: string): { text: string; parse_mode?: string } {
+  if (parseMode === "Markdown") {
+    return { text: markdownToTelegramHtml(text), parse_mode: "HTML" }
+  }
+  if (parseMode === "HTML") {
+    return { text, parse_mode: "HTML" }
+  }
+  return { text }
+}
+
 export const telegramPublisher: PlatformPublisher = {
   async publish(accessToken: string, request: PublishRequest, metadata: Record<string, unknown>): Promise<PublishResult> {
     const chatId = metadata.chatId as string
@@ -10,11 +40,13 @@ export const telegramPublisher: PlatformPublisher = {
     const baseUrl = `https://api.telegram.org/bot${accessToken}`
 
     if (action === "send-message") {
+      const raw = caption || ""
+      const fmt = resolveFormat(raw, parseMode)
       const body: Record<string, unknown> = {
         chat_id: chatId,
-        text: caption || "",
+        text: fmt.text,
       }
-      if (parseMode) body.parse_mode = parseMode
+      if (fmt.parse_mode) body.parse_mode = fmt.parse_mode
 
       const res = await fetch(`${baseUrl}/sendMessage`, {
         method: "POST",
@@ -31,8 +63,11 @@ export const telegramPublisher: PlatformPublisher = {
         chat_id: chatId,
         photo: mediaUrl,
       }
-      if (caption) body.caption = caption.slice(0, 1024)
-      if (parseMode) body.parse_mode = parseMode
+      if (caption) {
+        const fmt = resolveFormat(caption.slice(0, 1024), parseMode)
+        body.caption = fmt.text
+        if (fmt.parse_mode) body.parse_mode = fmt.parse_mode
+      }
 
       const res = await fetch(`${baseUrl}/sendPhoto`, {
         method: "POST",
@@ -64,8 +99,11 @@ export const telegramPublisher: PlatformPublisher = {
       const form = new FormData()
       form.append("chat_id", chatId)
       form.append("video", videoBlob, "video.mp4")
-      if (caption) form.append("caption", caption.slice(0, 1024))
-      if (parseMode) form.append("parse_mode", parseMode)
+      if (caption) {
+        const fmt = resolveFormat(caption.slice(0, 1024), parseMode)
+        form.append("caption", fmt.text)
+        if (fmt.parse_mode) form.append("parse_mode", fmt.parse_mode)
+      }
 
       const res = await fetch(`${baseUrl}/sendVideo`, {
         method: "POST",
@@ -85,8 +123,11 @@ export const telegramPublisher: PlatformPublisher = {
           type: item.type,
           media: item.url,
         }
-        if (i === 0 && caption) entry.caption = caption.slice(0, 1024)
-        if (i === 0 && parseMode) entry.parse_mode = parseMode
+        if (i === 0 && caption) {
+          const fmt = resolveFormat(caption.slice(0, 1024), parseMode)
+          entry.caption = fmt.text
+          if (fmt.parse_mode) entry.parse_mode = fmt.parse_mode
+        }
         return entry
       })
 
