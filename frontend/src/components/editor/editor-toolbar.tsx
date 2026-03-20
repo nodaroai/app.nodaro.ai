@@ -350,6 +350,12 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.executionStatus = undefined
           break
 
+        case "router":
+          data.activeRoutes = undefined
+          data.routeOutputs = undefined
+          data.executionStatus = undefined
+          break
+
         default:
           // For any other node type, clear common generated fields
           if ('generatedResults' in data) {

@@ -490,6 +490,10 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   if (type === "teleport-send" || type === "teleport-receive") {
     return (data.result as string | undefined)
   }
+  if (type === "router") {
+    if (!sourceHandle) return (data.result as string | undefined)
+    return (data.routeOutputs as Record<string, string | undefined> | undefined)?.[sourceHandle]
+  }
   return undefined;
 }
 

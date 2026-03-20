@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Plus, Trash2, FileText, ImageIcon, Film, Music, GripVertical, Eye, EyeOff, ChevronUp, ChevronDown, Copy, Check, Download } from "lucide-react"
+import { Plus, Trash2, FileText, ImageIcon, Film, Music, GripVertical, Eye, EyeOff, ChevronUp, ChevronDown, Copy, Check, Download, X } from "lucide-react"
 import { nanoid } from "nanoid"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -525,6 +525,108 @@ export function TeleporterConfig({ data, onUpdate, nodeType }: { data: TeleportS
               </button>
             ))}
           </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function RouterConfig({ data, onUpdate }: { data: Record<string, unknown>; onUpdate: (d: Record<string, unknown>) => void }) {
+  const mode = (data.mode as string) ?? "radio"
+  const routes = (data.routes as Array<{ id: string; name: string; active: boolean }>) ?? []
+
+  const updateRoute = (index: number, patch: Partial<{ name: string; active: boolean }>) => {
+    const updated = routes.map((r, i) => {
+      if (i !== index) {
+        if (patch.active && mode === "radio") return { ...r, active: false }
+        return r
+      }
+      return { ...r, ...patch }
+    })
+    onUpdate({ routes: updated })
+  }
+
+  const addRoute = () => {
+    if (routes.length >= 10) return
+    const letter = String.fromCharCode(65 + routes.length)
+    onUpdate({
+      routes: [...routes, { id: crypto.randomUUID(), name: `Route ${letter}`, active: false }],
+    })
+  }
+
+  const removeRoute = (index: number) => {
+    if (routes.length <= 2) return
+    const updated = routes.filter((_, i) => i !== index)
+    // If radio mode and we removed the active one, activate first
+    if (mode === "radio" && !updated.some((r) => r.active) && updated.length > 0) {
+      updated[0] = { ...updated[0], active: true }
+    }
+    onUpdate({ routes: updated })
+  }
+
+  const switchMode = (newMode: string) => {
+    if (newMode === "radio" && routes.filter((r) => r.active).length > 1) {
+      const firstActiveIdx = routes.findIndex((r) => r.active)
+      const updated = routes.map((r, i) => ({ ...r, active: i === firstActiveIdx }))
+      onUpdate({ mode: newMode, routes: updated })
+    } else {
+      onUpdate({ mode: newMode })
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">Mode</Label>
+        <Select value={mode} onValueChange={switchMode}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="radio">Radio (one active)</SelectItem>
+            <SelectItem value="checkbox">Checkbox (any combination)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">Routes</Label>
+        <div className="flex flex-col gap-2">
+          {routes.map((route, i) => (
+            <div key={route.id} className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => updateRoute(i, { active: mode === "radio" ? true : !route.active })}
+                className="shrink-0"
+              >
+                {mode === "radio" ? (
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${route.active ? "border-green-500" : "border-muted-foreground/40"}`}>
+                    {route.active && <div className="w-2 h-2 rounded-full bg-green-500" />}
+                  </div>
+                ) : (
+                  <div className={`w-7 h-4 rounded-full relative transition-colors ${route.active ? "bg-green-500" : "bg-muted-foreground/30"}`}>
+                    <div className={`w-3 h-3 rounded-full bg-white absolute top-0.5 transition-all ${route.active ? "right-0.5" : "left-0.5"}`} />
+                  </div>
+                )}
+              </button>
+              <Input
+                value={route.name}
+                onChange={(e) => updateRoute(i, { name: e.target.value })}
+                className="h-8 text-sm flex-1"
+              />
+              {routes.length > 2 && (
+                <button type="button" onClick={() => removeRoute(i)} className="text-muted-foreground hover:text-destructive">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        {routes.length < 10 && (
+          <button
+            type="button"
+            onClick={addRoute}
+            className="mt-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+          >
+            <Plus className="w-3 h-3" /> Add Route
+          </button>
         )}
       </div>
     </div>

@@ -432,6 +432,15 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       }
     }
 
+    // Generate fresh UUIDs for router route IDs
+    if (type === "router") {
+      const d = nodeData as Record<string, unknown>
+      const routes = d.routes as Array<{ id: string; name: string; active: boolean }> | undefined
+      if (routes) {
+        d.routes = routes.map((r) => ({ ...r, id: crypto.randomUUID() }))
+      }
+    }
+
     const newNode: WorkflowNode = {
       id,
       type,
@@ -549,6 +558,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         }
         // Clear paired routeId on output so user must re-pair
         if (source.type === "sub-workflow-output") d.routeId = ""
+      }
+
+      // Generate fresh UUIDs for router route IDs
+      if (source.type === "router") {
+        const routes = d.routes as Array<{ id: string; name: string; active: boolean }> | undefined
+        if (routes) {
+          d.routes = routes.map((r) => ({ ...r, id: crypto.randomUUID() }))
+        }
       }
 
       const newNode: WorkflowNode = {

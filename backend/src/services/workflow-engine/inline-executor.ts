@@ -327,6 +327,50 @@ export function executeTeleporterPassthrough(
 }
 
 /**
+ * Execute router node: route upstream data to active output handles.
+ * Radio mode: exactly one active. Checkbox mode: any combination.
+ */
+export function executeRouter(
+  node: SimpleNode,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): NodeOutput {
+  const routes = (node.data.routes as Array<{ id: string; name: string; active: boolean }>) ?? []
+
+  // Resolve upstream input (passthrough)
+  const incomingEdges = edges.filter((e) => e.target === node.id)
+  let inputValue: string | undefined
+  for (const edge of incomingEdges) {
+    const srcNode = allNodes.find((n) => n.id === edge.source)
+    if (!srcNode) continue
+    const state = nodeStates[srcNode.id]
+    if (state?.output) {
+      const val = getPrimaryOutput(state.output, srcNode.type, edge.sourceHandle)
+      if (val) { inputValue = val; break }
+    } else if (isSourceNode(srcNode.type)) {
+      const srcOutput = extractSourceNodeOutput(srcNode)
+      if (srcOutput) {
+        const val = getPrimaryOutput(srcOutput, srcNode.type, edge.sourceHandle)
+        if (val) { inputValue = val; break }
+      }
+    }
+  }
+
+  const activeRoutes = routes.filter((r) => r.active).map((r) => r.id)
+  const routeOutputs: Record<string, string | undefined> = {}
+  for (const route of routes) {
+    routeOutputs[route.id] = route.active ? (inputValue ?? "gate") : undefined
+  }
+
+  return {
+    text: activeRoutes.length > 0 ? "routed" : undefined,
+    activeRoutes,
+    routeOutputs,
+  }
+}
+
+/**
  * Execute webhook-output node: collect upstream outputs and POST to configured URL.
  */
 export async function executeWebhookOutput(

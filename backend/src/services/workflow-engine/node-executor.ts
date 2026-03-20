@@ -17,7 +17,7 @@ import { refundJobCredits } from "../../workers/shared.js"
 import { buildPayload, type WorkflowSettings } from "./payload-builder.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
 
-import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough } from "./inline-executor.js"
+import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
 import type {
   SimpleNode,
@@ -98,6 +98,7 @@ const INLINE_NODES = new Set([
   "preview",
   "teleport-send",
   "teleport-receive",
+  "router",
 ])
 
 // ---------------------------------------------------------------------------
@@ -187,6 +188,9 @@ async function executeInlineNode(
     case "teleport-send":
     case "teleport-receive":
       output = executeTeleporterPassthrough(node, resolvedInputs)
+      break
+    case "router":
+      output = executeRouter(node, edges, allNodes, nodeStates)
       break
     default:
       throw new Error(`Unknown inline node type: ${node.type}`)

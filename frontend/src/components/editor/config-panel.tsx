@@ -116,6 +116,7 @@ import {
   SplitTextConfig,
   PreviewConfig,
   TeleporterConfig,
+  RouterConfig,
   SubWorkflowInputConfig,
   SubWorkflowOutputConfig,
   SubWorkflowConfig,
@@ -227,6 +228,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "telegram-trigger": "Telegram Trigger",
   "teleport-send": "Teleport Send",
   "teleport-receive": "Teleport Receive",
+  "router": "Router",
 }
 
 export function getNodeTypeDisplayName(type: string): string {
@@ -254,7 +256,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
 
 export const RUN_BUTTON_TYPES = new Set([
   "manual-edit", "combine-text", "split-text", "preview", "composite",
-  "sub-workflow",
+  "sub-workflow", "router",
 ])
 
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video"])
@@ -634,6 +636,7 @@ export function ConfigPanel() {
           {nodeType === "split-text" && <SplitTextConfig {...configProps} />}
           {nodeType === "preview" && <PreviewConfig {...configProps} />}
           {(nodeType === "teleport-send" || nodeType === "teleport-receive") && <TeleporterConfig {...configProps} nodeType={nodeType} />}
+          {nodeType === "router" && <RouterConfig {...configProps} />}
 
           {nodeType === "save-to-storage" && <SaveToStorageConfig {...configProps} />}
           {nodeType === "webhook-output" && <WebhookOutputConfig {...configProps} />}

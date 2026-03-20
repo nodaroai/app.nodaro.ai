@@ -68,6 +68,7 @@ import {
   StickyNote,
   UserRound,
   Send,
+  GitBranch,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -788,6 +789,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Download className="h-4 w-4" />,
     category: "Processing",
     group: "Text",
+  },
+  {
+    type: "router",
+    label: "Router",
+    icon: <GitBranch className="h-4 w-4" />,
+    category: "Processing",
+    group: "Control Flow",
   },
   {
     type: "preview",

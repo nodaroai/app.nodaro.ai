@@ -405,6 +405,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "facebook-post": 1,
   "telegram-post": 1,
   "save-to-storage": 0,
+  "router": 0,
 }
 
 // Tier order for restriction checks

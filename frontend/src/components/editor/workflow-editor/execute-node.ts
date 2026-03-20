@@ -3341,6 +3341,36 @@ export function executeNode(
     return Promise.resolve()
   }
 
+  if (node.type === "router") {
+    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState()
+    const routerData = node.data as Record<string, unknown>
+    const routes = (routerData.routes as Array<{ id: string; name: string; active: boolean }>) ?? []
+
+    // Resolve upstream input (passthrough)
+    const incomingEdges = currentEdges.filter((e) => e.target === node.id)
+    let inputValue: string | undefined
+    for (const edge of incomingEdges) {
+      const src = currentNodes.find((n) => n.id === edge.source)
+      if (!src) continue
+      const output = extractNodeOutput(src, edge.sourceHandle ?? undefined)
+      if (output) { inputValue = output; break }
+    }
+
+    const activeRoutes = routes.filter((r) => r.active).map((r) => r.id)
+    const routeOutputs: Record<string, string | undefined> = {}
+    for (const route of routes) {
+      routeOutputs[route.id] = route.active ? (inputValue ?? "gate") : undefined
+    }
+
+    updateNodeData(node.id, {
+      activeRoutes,
+      routeOutputs,
+      result: activeRoutes.length > 0 ? "routed" : undefined,
+      executionStatus: "completed",
+    })
+    return Promise.resolve()
+  }
+
   if (node.type === "combine-text") {
     const {
       nodes: currentNodes,
