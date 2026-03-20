@@ -154,6 +154,26 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       const publishReq: PublishRequest = { action, caption, mediaUrl, title, description, tags, privacy }
       const result = await publisher.publish(accessToken, publishReq, metadata)
 
+      if (!result.success) {
+        const message = result.error ?? "Publish failed"
+        app.log.error({ platform, action, error: message }, "Social publish returned failure")
+
+        await supabase
+          .from("jobs")
+          .update({ status: "failed", output_data: { error: message } })
+          .eq("id", job.id)
+
+        if (reservation?.usageLogId) {
+          try {
+            await CreditsService.refundCredits(reservation.usageLogId)
+          } catch (refundErr) {
+            app.log.error({ refundErr, jobId: job.id }, "Failed to refund credits after social publish failure")
+          }
+        }
+
+        return reply.status(400).send({ error: { code: "publish_failed", message } })
+      }
+
       // Update job as completed
       await supabase
         .from("jobs")

@@ -3577,15 +3577,25 @@ export function executeNode(
     const d = node.data as SocialPostData;
     const mediaUrl = overrideMediaUrl ?? inputs.videoUrl ?? inputs.imageUrl ?? inputs.audioUrl;
 
+    // Auto-detect Telegram action based on connected media
+    let action = d.action;
+    if (d.platform === "telegram") {
+      if (mediaUrl) {
+        action = inputs.videoUrl ? "send-video" : "send-photo";
+      } else {
+        action = "send-message";
+      }
+    }
+
     updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
 
     return import("@/lib/api").then(({ socialPublishApi }) =>
       socialPublishApi({
         platform: d.platform,
-        action: d.action,
+        action,
         connectionId: d.connectionId,
         mediaUrl,
-        caption: d.caption || undefined,
+        caption: d.caption || inputs.prompt || undefined,
         title: d.title || undefined,
         description: d.description || undefined,
         tags: d.tags,
