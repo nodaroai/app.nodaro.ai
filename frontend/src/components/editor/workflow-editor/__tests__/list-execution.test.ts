@@ -288,7 +288,7 @@ describe("expandLoopResults", () => {
         id: "loop1",
         type: "loop",
         data: {
-          label: "Loop",
+          label: "Table",
           __listResults: ["a", "b"],
           __listInputs: ["x", "y"],
         },

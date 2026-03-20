@@ -205,7 +205,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "combine-text": "Combine Text",
   "split-text": "Split Text",
   "preview": "Preview",
-  "loop": "Loop",
+  "loop": "Table",
   "save-to-storage": "Save to Storage",
   "webhook-output": "Webhook Output",
   "character": "Character",

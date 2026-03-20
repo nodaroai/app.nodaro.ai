@@ -31,6 +31,7 @@ import type {
 } from "../services/workflow-engine/types.js"
 import { WORKFLOW_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { filterCloneNodes } from "../../../packages/shared/src/clone-utils.js"
+import { migrateEdgeOutputMode } from "../../../packages/shared/src/edge-range.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 
 /** Max nodes a single workflow execution can run concurrently. Prevents one large workflow from starving other users. */
@@ -128,7 +129,10 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
 
     // Filter out hidden nodes (from loop expansion) and expanded clones that were persisted
     const allNodes = (workflowData.nodes as (SimpleNode & { hidden?: boolean })[]) ?? []
-    const allEdges: SimpleEdge[] = (workflowData.edges as SimpleEdge[]) ?? []
+    const allEdges: SimpleEdge[] = ((workflowData.edges as SimpleEdge[]) ?? []).map(e => ({
+      ...e,
+      data: migrateEdgeOutputMode(e.data as Record<string, unknown> | undefined),
+    }))
     const cleaned = filterCloneNodes(allNodes, allEdges)
     // Also filter nodes still marked hidden after clone cleanup
     const nodes: SimpleNode[] = cleaned.nodes.filter((n) => !(n as { hidden?: boolean }).hidden)

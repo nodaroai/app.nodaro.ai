@@ -50,7 +50,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 function renderNode(overrides: Record<string, unknown> = {}) {
   const defaultProps = {
     id: "node-1",
-    data: { label: "Loop", columns: [], rows: [] },
+    data: { label: "Table", columns: [], rows: [] },
     selected: false,
     ...overrides,
   } as any
@@ -65,7 +65,7 @@ describe("LoopNode", () => {
 
   it("passes correct label", () => {
     renderNode()
-    expect(screen.getByTestId("base-node")).toHaveAttribute("data-label", "Loop")
+    expect(screen.getByTestId("base-node")).toHaveAttribute("data-label", "Table")
   })
 
   it("passes correct category", () => {
@@ -86,7 +86,7 @@ describe("LoopNode", () => {
   it("shows row x col count when columns exist", () => {
     renderNode({
       data: {
-        label: "Loop",
+        label: "Table",
         columns: [
           { name: "A", handleId: "col_a" },
           { name: "B", handleId: "col_b" },
@@ -103,7 +103,7 @@ describe("LoopNode", () => {
   it("renders handle for each column", () => {
     renderNode({
       data: {
-        label: "Loop",
+        label: "Table",
         columns: [
           { name: "A", handleId: "col_a" },
           { name: "B", handleId: "col_b" },

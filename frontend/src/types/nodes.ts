@@ -2364,12 +2364,12 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   },
   {
     type: "loop",
-    label: "Loop",
+    label: "Table",
     category: "input",
     creditCost: 0,
     inputs: ["in"],
     outputs: [],
-    defaultData: { label: "Loop", columns: [], rows: [], fieldMappings: {} } as LoopNodeData,
+    defaultData: { label: "Table", columns: [], rows: [], fieldMappings: {} } as LoopNodeData,
   },
   {
     type: "upload-image",

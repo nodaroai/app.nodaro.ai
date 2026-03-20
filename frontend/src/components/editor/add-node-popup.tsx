@@ -94,7 +94,7 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
   {
     type: "loop",
-    label: "Loop",
+    label: "Table",
     icon: <Repeat className="h-4 w-4" />,
     category: "Input",
   },

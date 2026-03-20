@@ -60,7 +60,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "manual-edit": "Manual Edit",
   "combine-text": "Combine Text",
   "split-text": "Split Text",
-  "loop": "Loop",
+  "loop": "Table",
   "save-to-storage": "Save to Storage",
   "webhook-output": "Webhook Output",
   "character": "Character",

@@ -212,7 +212,7 @@ export function LoopInputCard({
   )
 
   const atMax = rows.length >= maxItems
-  const label = (node.data.label as string) || "Loop"
+  const label = (node.data.label as string) || "Table"
 
   return (
     <GlassCard>

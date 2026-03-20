@@ -1,10 +1,10 @@
-# Loop
+# Table
 
-> Table-based loop with columns and rows for structured batch iteration.
+> Table-based input with columns and rows for structured batch iteration.
 
 ## Overview
 
-The Loop node provides a spreadsheet-like interface for structured batch data. Define columns (variables) and rows (iterations), and each row is processed through the workflow independently. More powerful than List when you need multiple variables per iteration.
+The Table node provides a spreadsheet-like interface for structured batch data. Define columns (variables) and rows (iterations), and each row is processed through the workflow independently. More powerful than List when you need multiple variables per iteration.
 
 ## Configuration
 

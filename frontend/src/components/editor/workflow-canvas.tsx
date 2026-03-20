@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, useMemo, useRef, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
+import { buildRangeLabel as buildRangeLabelShared } from "@nodaro-shared/edge-range"
 import {
   ReactFlow,
   MiniMap,
@@ -135,17 +136,34 @@ function getEdgeOutputMode(edge: WorkflowEdge, sourceNode: { type?: string } | u
   return undefined
 }
 
-/** Get the output mode suffix for an edge label. Returns undefined when default (no label needed). */
+/** Get the output mode label for display (separate from the edge label).
+ *  Returns undefined when default mode (no badge needed). */
 function getOutputModeLabel(edge: WorkflowEdge, sourceNode: { type?: string } | undefined): string | undefined {
-  const explicitMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined
+  const edgeDataRaw = edge.data as Record<string, unknown> | undefined
+  const explicitMode = edgeDataRaw?.outputMode as string | undefined
   // Only show label when explicitly set (overriding default)
   if (!explicitMode) return undefined
   // Default-each types: don't show if still "each"
   if (sourceNode?.type && DEFAULT_EACH_EDGE_TYPES.has(sourceNode.type) && explicitMode === "each") return undefined
-  // Non-list types: don't show if no override (shouldn't reach here, but safety)
-  // Format item:N as "item 1" (1-indexed display)
-  if (explicitMode.startsWith("item:")) return `item ${parseInt(explicitMode.split(":")[1], 10) + 1}`
+  // Normalize legacy "item:N" to "item"
+  if (explicitMode.startsWith("item:")) return "item"
   return explicitMode
+}
+
+/** Build a range/step label pill from edge data. Returns undefined when no range is configured. */
+function getEdgeRangeLabel(edge: WorkflowEdge): string | undefined {
+  const d = edge.data as Record<string, unknown> | undefined
+  if (!d) return undefined
+  const mode = d.outputMode as string | undefined
+  if (!mode) return undefined
+  const normalizedMode = mode.startsWith("item:") ? "item" : mode
+  // For legacy item:N, compute 1-based itemIndex for the label
+  let itemIndex = d.itemIndex as string | undefined
+  if (!itemIndex && mode.startsWith("item:")) {
+    const legacyIdx = parseInt(mode.split(":")[1], 10)
+    if (!isNaN(legacyIdx)) itemIndex = String(legacyIdx + 1)
+  }
+  return buildRangeLabelShared(normalizedMode, d.rangeFrom as string | undefined, d.rangeTo as string | undefined, d.rangeStep as number | undefined, itemIndex)
 }
 
 function getEdgeLabel(
@@ -155,24 +173,22 @@ function getEdgeLabel(
 ): { label: string } | undefined {
   const srcHandle = edge.sourceHandle
   const tgtHandle = edge.targetHandle
-  const modeLabel = getOutputModeLabel(edge, sourceNode)
-  const modeSuffix = modeLabel ? ` (${modeLabel})` : ""
 
   // If target has a named handle (not generic "in"), prefer the target role label
   if (tgtHandle && tgtHandle !== "in" && TARGET_LABELS[tgtHandle]) {
-    return { label: TARGET_LABELS[tgtHandle] + modeSuffix }
+    return { label: TARGET_LABELS[tgtHandle] }
   }
 
   // Entity nodes always represent a reference
   const srcType = sourceNode?.type
   if (srcType && ENTITY_NODE_TYPES.has(srcType)) {
-    return { label: "Reference" + modeSuffix }
+    return { label: "Reference" }
   }
 
   // Image → generate-image/edit-image/image-to-image = "Reference"
   const tgtType = targetNode?.type
   if (srcHandle === "image" && tgtType && REFERENCE_IMAGE_TARGETS.has(tgtType)) {
-    return { label: "Reference" + modeSuffix }
+    return { label: "Reference" }
   }
 
   // Check fieldMappings on target node — shows which field(s) this source is mapped to
@@ -186,19 +202,14 @@ function getEdgeLabel(
         }
       }
       if (matchedLabels.length > 0) {
-        return { label: matchedLabels.join(", ") + modeSuffix }
+        return { label: matchedLabels.join(", ") }
       }
     }
   }
 
   // Otherwise use source handle label
   if (srcHandle && SOURCE_LABELS[srcHandle]) {
-    return { label: SOURCE_LABELS[srcHandle] + modeSuffix }
-  }
-
-  // No handle label but we still want to show mode
-  if (modeLabel) {
-    return { label: modeLabel }
+    return { label: SOURCE_LABELS[srcHandle] }
   }
 
   return undefined
@@ -519,12 +530,14 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const edgeLabelResult = getEdgeLabel(edge, sourceNode, nodeMap.get(edge.target))
       const edgeLabel = edgeLabelResult?.label
       const edgeLabelColor = edgeLabel && sourceNode ? getMiniMapNodeColor(sourceNode) : undefined
+      const edgeModeLabel = getOutputModeLabel(edge, sourceNode)
+      const edgeRangeLabel = getEdgeRangeLabel(edge)
 
       return {
         ...edge,
         type: 'default', // Explicitly set type to use our AnimatedFlowEdge
         animated: hasAnimation, // Only animate for execution, not for dragging
-        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, outputMode: getEdgeOutputMode(edge, sourceNode) },
+        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode: getEdgeOutputMode(edge, sourceNode) },
         style: shouldHighlight ? {
           ...edge.style,
           stroke: edgeColor,
