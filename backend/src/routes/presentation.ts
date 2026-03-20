@@ -31,8 +31,9 @@ const statusParams = z.object({
 
 const runBody = z.object({
   inputOverrides: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
-  runTarget: z.enum(["workflow", "sub-workflow"]).optional(),
+  runTarget: z.enum(["workflow", "sub-workflow", "route"]).optional(),
   subWorkflowNodeId: z.string().optional(),
+  selectedRouteId: z.string().optional(),
 })
 
 export async function presentationRoutes(app: FastifyInstance) {
@@ -204,12 +205,12 @@ export async function presentationRoutes(app: FastifyInstance) {
     }
 
     const { token } = paramsParsed.data
-    const { inputOverrides, runTarget, subWorkflowNodeId } = bodyParsed.data
+    const { inputOverrides, runTarget, subWorkflowNodeId, selectedRouteId } = bodyParsed.data
 
     // Look up workflow by share token
     const { data: workflow, error: wfError } = await supabase
       .from("workflows")
-      .select("id, user_id, nodes, settings, is_presentation_enabled")
+      .select("id, user_id, nodes, edges, settings, is_presentation_enabled")
       .eq("share_token", token)
       .eq("is_presentation_enabled", true)
       .single()
@@ -270,6 +271,15 @@ export async function presentationRoutes(app: FastifyInstance) {
     let nodeIds: string[] | undefined
     if (runTarget === "sub-workflow" && subWorkflowNodeId) {
       nodeIds = [subWorkflowNodeId]
+    } else if (runTarget === "route" && selectedRouteId) {
+      const { getRouteReachableNodeIds } = await import("../../../packages/shared/src/route-filter.js")
+      const wfNodes = (workflow.nodes ?? []) as Array<{ id: string; type?: string; data: Record<string, unknown> }>
+      const wfEdges = (workflow.edges ?? []) as Array<{ source: string; target: string }>
+      const reachable = getRouteReachableNodeIds(wfNodes, wfEdges, selectedRouteId)
+      if (reachable.size > 0) {
+        nodeIds = [...reachable]
+      }
+      // If empty (stale routeId), fall through with nodeIds=undefined → runs entire workflow
     }
 
     // Enqueue orchestration job
