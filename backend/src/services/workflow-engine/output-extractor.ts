@@ -320,6 +320,11 @@ export function getPrimaryOutput(
     return output.characterId || output.text
   }
 
+  // Teleporter passthrough — return the stored text value
+  if (sourceType === "teleport-send" || sourceType === "teleport-receive") {
+    return output.text
+  }
+
   // Generate-script: prefer text (first scene imagePrompt), fall back to script existence
   if (sourceType === "generate-script") {
     return output.text

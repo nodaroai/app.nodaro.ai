@@ -7,8 +7,8 @@ import {
   type EdgeChange,
   type Connection,
 } from "@xyflow/react"
-import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition, LoopNodeData, PreviewItem, PreviewNodeData } from "@/types/nodes"
-import { NODE_DEFINITIONS } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition, LoopNodeData, PreviewItem, PreviewNodeData, TeleportSendData, TeleportReceiveData } from "@/types/nodes"
+import { NODE_DEFINITIONS, TELEPORTER_CHANNEL_COLORS } from "@/types/nodes"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
 import { filterCloneNodes } from "@nodaro-shared/clone-utils"
@@ -40,6 +40,7 @@ const EXECUTION_DATA_KEYS = new Set([
   "subWorkflowProgress",
   "outputResults",
   "shots",
+  "result",
 ])
 
 /**
@@ -199,6 +200,26 @@ interface WorkflowState {
   readonly setRunAllWriterImageNodes: (fn: ((writerNodeId: string) => void) | null) => void
   readonly setWorkflowThumbnail: (url: string) => void
   readonly updatePresentationSettings: (settings: Partial<PresentationSettings>) => void
+  readonly syncTeleporterEdges: (channel: string) => void
+  readonly replaceEdgeWithTeleporter: (edgeId: string) => void
+}
+
+function getNextChannel(nodes: WorkflowNode[]): { channel: string; channelColor: string } {
+  const usedChannels = new Set(
+    nodes
+      .filter((n) => n.type === "teleport-send")
+      .map((n) => (n.data as Record<string, unknown>).channel as string)
+  )
+  for (let i = 0; i < 702; i++) {
+    const letter = i < 26
+      ? String.fromCharCode(65 + i)
+      : String.fromCharCode(65 + Math.floor(i / 26) - 1) + String.fromCharCode(65 + (i % 26))
+    if (!usedChannels.has(letter)) {
+      const colorIndex = i % TELEPORTER_CHANNEL_COLORS.length
+      return { channel: letter, channelColor: TELEPORTER_CHANNEL_COLORS[colorIndex] }
+    }
+  }
+  return { channel: "A", channelColor: TELEPORTER_CHANNEL_COLORS[0] }
 }
 
 let nextNodeId = 1
@@ -209,7 +230,7 @@ function generateNodeId(): string {
   return id
 }
 
-export const useWorkflowStore = create<WorkflowState>((set) => ({
+export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   workflowId: null,
   projectId: null,
   workflowName: "Untitled Workflow",
@@ -419,6 +440,15 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       ...(definition.height ? { height: definition.height } : {}),
       // Sticky notes should appear behind other nodes
       ...(type === "sticky-note" ? { zIndex: -1 } : {}),
+    }
+
+    if (type === "teleport-send") {
+      const { channel, channelColor } = getNextChannel(get().nodes)
+      newNode.data = { ...newNode.data, channel, channelColor, label: `Send ${channel}` }
+    }
+    if (type === "teleport-receive") {
+      const { channel, channelColor } = getNextChannel(get().nodes)
+      newNode.data = { ...newNode.data, channel, channelColor, label: `Recv ${channel}` }
     }
 
     set((state) => ({
@@ -835,4 +865,82 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       presentationSettings: { ...state.presentationSettings, ...settings },
       isDirty: true,
     })),
+
+  syncTeleporterEdges: (channel) => {
+    set((state) => {
+      const sendNode = state.nodes.find(
+        (n) => n.type === "teleport-send" && (n.data as Record<string, unknown>).channel === channel
+      )
+      if (!sendNode) return state
+
+      const recvNodes = state.nodes.filter(
+        (n) => n.type === "teleport-receive" && (n.data as Record<string, unknown>).channel === channel
+      )
+
+      // Remove existing teleporter edges from this send
+      const cleanedEdges = state.edges.filter(
+        (e) => !(e.source === sendNode.id && (e.data as Record<string, unknown> | undefined)?.teleporter)
+      )
+
+      // Create new hidden edges
+      const newEdges = recvNodes.map((recv) => ({
+        id: `teleport_${sendNode.id}_${recv.id}`,
+        source: sendNode.id,
+        sourceHandle: "out",
+        target: recv.id,
+        targetHandle: "in",
+        data: { teleporter: true },
+      }))
+
+      return { edges: [...cleanedEdges, ...newEdges], isDirty: true }
+    })
+  },
+
+  replaceEdgeWithTeleporter: (edgeId) => {
+    set((state) => {
+      const edge = state.edges.find((e) => e.id === edgeId)
+      if (!edge) return state
+      const sourceNode = state.nodes.find((n) => n.id === edge.source)
+      const targetNode = state.nodes.find((n) => n.id === edge.target)
+      if (!sourceNode || !targetNode) return state
+
+      const { channel, channelColor } = getNextChannel(state.nodes)
+      const sendId = generateNodeId()
+      const recvId = generateNodeId()
+
+      const sendNode: WorkflowNode = {
+        id: sendId,
+        type: "teleport-send",
+        position: {
+          x: (sourceNode.position?.x ?? 0) + (sourceNode.measured?.width ?? 200) + 30,
+          y: sourceNode.position?.y ?? 0,
+        },
+        data: { label: `Send ${channel}`, channel, channelColor } as TeleportSendData,
+      }
+
+      const recvNode: WorkflowNode = {
+        id: recvId,
+        type: "teleport-receive",
+        position: {
+          x: (targetNode.position?.x ?? 0) - 180,
+          y: targetNode.position?.y ?? 0,
+        },
+        data: { label: `Recv ${channel}`, channel, channelColor } as TeleportReceiveData,
+      }
+
+      const newEdges = state.edges
+        .filter((e) => e.id !== edgeId)
+        .concat([
+          { id: `edge_${Date.now()}_1`, source: edge.source, sourceHandle: edge.sourceHandle ?? null, target: sendId, targetHandle: "in", data: {} },
+          { id: `edge_${Date.now()}_2`, source: recvId, sourceHandle: "out", target: edge.target, targetHandle: edge.targetHandle ?? null, data: {} },
+          { id: `teleport_${sendId}_${recvId}`, source: sendId, sourceHandle: "out", target: recvId, targetHandle: "in", data: { teleporter: true } },
+        ])
+
+      return {
+        nodes: [...state.nodes, sendNode, recvNode],
+        edges: newEdges,
+        isDirty: true,
+      }
+    })
+  },
 }))

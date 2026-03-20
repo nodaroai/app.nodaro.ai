@@ -3326,6 +3326,21 @@ export function executeNode(
     );
   }
 
+  if (node.type === "teleport-send" || node.type === "teleport-receive") {
+    // Passthrough: extract upstream output directly (same pattern as combine-text)
+    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState()
+    const incomingEdges = currentEdges.filter((e) => e.target === node.id)
+    let value = ""
+    for (const edge of incomingEdges) {
+      const src = currentNodes.find((n) => n.id === edge.source)
+      if (!src) continue
+      const output = extractNodeOutput(src, edge.sourceHandle ?? undefined)
+      if (output) { value = output; break }
+    }
+    updateNodeData(node.id, { result: value, executionStatus: "completed" })
+    return Promise.resolve()
+  }
+
   if (node.type === "combine-text") {
     const {
       nodes: currentNodes,

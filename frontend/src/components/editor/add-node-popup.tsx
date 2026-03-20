@@ -776,6 +776,20 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
   // Utility
   {
+    type: "teleport-send",
+    label: "Teleport Send",
+    icon: <Send className="h-4 w-4" />,
+    category: "Processing",
+    group: "Text",
+  },
+  {
+    type: "teleport-receive",
+    label: "Teleport Receive",
+    icon: <Download className="h-4 w-4" />,
+    category: "Processing",
+    group: "Text",
+  },
+  {
     type: "preview",
     label: "Preview",
     icon: <Eye className="h-4 w-4" />,

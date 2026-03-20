@@ -1906,6 +1906,33 @@ export type StickyNoteData = {
   alignment: "left" | "center" | "right"
 }
 
+// --- Teleporter Node Data ---
+
+export const TELEPORTER_CHANNEL_COLORS = [
+  "#f59e0b", // A = amber
+  "#10b981", // B = emerald
+  "#8b5cf6", // C = violet
+  "#ef4444", // D = red
+  "#06b6d4", // E = cyan
+  "#ec4899", // F = pink
+] as const
+
+export type TeleportSendData = {
+  [key: string]: unknown
+  label: string
+  channel: string
+  channelColor: string
+  result?: string
+}
+
+export type TeleportReceiveData = {
+  [key: string]: unknown
+  label: string
+  channel: string
+  channelColor: string
+  result?: string
+}
+
 // --- Scene Node Data ---
 
 export interface SceneCharacterEntry {
@@ -2183,6 +2210,8 @@ export type SceneNodeData =
   | SplitTextData
   | PreviewNodeData
   | StickyNoteData
+  | TeleportSendData
+  | TeleportReceiveData
   | SubWorkflowInputData
   | SubWorkflowOutputData
   | SubWorkflowData
@@ -2282,6 +2311,8 @@ export type SceneNodeType =
   | "split-text"
   | "preview"
   | "sticky-note"
+  | "teleport-send"
+  | "teleport-receive"
   | "sub-workflow-input"
   | "sub-workflow-output"
   | "sub-workflow"
@@ -3505,6 +3536,34 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       italic: false,
       alignment: "left",
     } as StickyNoteData,
+  },
+  {
+    type: "teleport-send",
+    label: "Teleport Send",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: {
+      label: "Send",
+      channel: "A",
+      channelColor: "#f59e0b",
+    } as TeleportSendData,
+    width: 150,
+  },
+  {
+    type: "teleport-receive",
+    label: "Teleport Receive",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: {
+      label: "Receive",
+      channel: "A",
+      channelColor: "#f59e0b",
+    } as TeleportReceiveData,
+    width: 150,
   },
   // Sub-Workflow
   {

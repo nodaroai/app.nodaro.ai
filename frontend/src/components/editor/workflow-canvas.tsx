@@ -309,11 +309,13 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const addNode = useWorkflowStore((s) => s.addNode)
+  const replaceEdgeWithTeleporter = useWorkflowStore((s) => s.replaceEdgeWithTeleporter)
   const { screenToFlowPosition, setNodes, getNode, setCenter, fitView } = useReactFlow()
   const { undo, redo, canUndo, canRedo } = useUndoRedoActions()
   const [searchParams, setSearchParams] = useSearchParams()
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null)
   const [canvasContextMenu, setCanvasContextMenu] = useState<CanvasContextMenuState | null>(null)
+  const [edgeContextMenu, setEdgeContextMenu] = useState<{ edgeId: string; x: number; y: number } | null>(null)
   const [showMiniMap, setShowMiniMap] = useState(true)
   const [addNodePopupOpen, setAddNodePopupOpen] = useState(false)
   const [addNodePopupPosition, setAddNodePopupPosition] = useState<{ x: number; y: number } | undefined>(undefined)
@@ -532,6 +534,17 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     })
   }, [nodes, edges, draggingNodeId])
 
+  // Filter out teleporter edges from rendering — store keeps all edges for DAG execution
+  const visibleEdges = useMemo(
+    () => animatedEdges.filter((e) => !(e.data as Record<string, unknown> | undefined)?.teleporter),
+    [animatedEdges]
+  )
+
+  const onEdgeContextMenu = useCallback((event: React.MouseEvent, edge: WorkflowEdge) => {
+    event.preventDefault()
+    setEdgeContextMenu({ edgeId: edge.id, x: event.clientX, y: event.clientY })
+  }, [])
+
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
       if (wasDraggingRef.current) return
@@ -544,6 +557,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     selectNode(null)
     setNodeContextMenu(null)
     setCanvasContextMenu(null)
+    setEdgeContextMenu(null)
     // Don't close the popup if it was just opened by an edge drop
     if (!edgeDropRef.current) setAddNodePopupOpen(false)
     setConnectingFromType(null)
@@ -1012,6 +1026,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         setAddNodePopupOpen(false)
         setCanvasContextMenu(null)
         setNodeContextMenu(null)
+        setEdgeContextMenu(null)
         if (useWorkflowStore.getState().selectedNodeId) {
           // Step 1: close settings panel, keep node focused
           useWorkflowStore.setState({ selectedNodeId: null })
@@ -1025,6 +1040,23 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [selectedNodeId, duplicateNode, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment, alignmentEnabled, computeGuides, getNode])
+
+  // Listen for pan-to events dispatched from teleporter config panel "Pan to" buttons
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ nodeId: string }>).detail
+      const node = useWorkflowStore.getState().nodes.find((n) => n.id === detail.nodeId)
+      if (node) {
+        setCenter(
+          node.position.x + (node.measured?.width ?? 150) / 2,
+          node.position.y + (node.measured?.height ?? 40) / 2,
+          { zoom: 1, duration: 500 }
+        )
+      }
+    }
+    window.addEventListener("teleporter-pan-to", handler)
+    return () => window.removeEventListener("teleporter-pan-to", handler)
+  }, [setCenter])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (e.dataTransfer.types.includes("application/nodaro-image")) {
@@ -1211,7 +1243,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop} onMouseMove={(e) => { lastMousePositionRef.current = { x: e.clientX, y: e.clientY } }}>
         <ReactFlow
           nodes={nodes}
-          edges={animatedEdges}
+          edges={visibleEdges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
@@ -1224,6 +1256,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           onPaneClick={handlePaneClick}
           onNodeContextMenu={isMobile ? undefined : handleNodeContextMenu}
           onPaneContextMenu={isMobile ? undefined : handlePaneContextMenu}
+          onEdgeContextMenu={isMobile ? undefined : onEdgeContextMenu}
           onMoveStart={handleMoveStart}
           onNodeDragStart={handleNodeDragStart}
           onNodeDrag={handleNodeDrag}
@@ -1283,6 +1316,31 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           y={nodeContextMenu.y}
           onClose={() => setNodeContextMenu(null)}
         />
+      )}
+
+      {edgeContextMenu && (
+        <>
+          {/* Backdrop to close menu on click outside */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setEdgeContextMenu(null)}
+          />
+          <div
+            className="fixed z-50 bg-popover border border-border rounded-md shadow-lg py-1"
+            style={{ left: edgeContextMenu.x, top: edgeContextMenu.y }}
+          >
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+              onClick={() => {
+                replaceEdgeWithTeleporter(edgeContextMenu.edgeId)
+                setEdgeContextMenu(null)
+              }}
+            >
+              Replace with Teleporter
+            </button>
+          </div>
+        </>
       )}
 
       {canvasContextMenu && (
