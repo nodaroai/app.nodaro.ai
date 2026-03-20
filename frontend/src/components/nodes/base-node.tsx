@@ -98,7 +98,7 @@ function BaseNodeComponent({
   children,
   selected,
   minWidth = 200,
-  minHeight = 80,
+  minHeight = 100,
   isRunning = false,
   listCount,
   listProgress,
@@ -214,6 +214,7 @@ function BaseNodeComponent({
           isSkipped && "opacity-40 border-dashed",
           className,
         )}
+        style={{ minHeight }}
         /* Selection handled by onNodeClick in workflow-canvas (has drag guard) */
       >
       {(!hideHeader || isSkipped) && (
