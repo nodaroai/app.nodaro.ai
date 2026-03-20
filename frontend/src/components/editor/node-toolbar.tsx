@@ -30,7 +30,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Input
   { type: "text-prompt", label: "Text Prompt", icon: <Type className="h-4 w-4" />, category: "Input" },
   { type: "list", label: "List", icon: <List className="h-4 w-4" />, category: "Input" },
-  { type: "loop", label: "Loop", icon: <Repeat className="h-4 w-4" />, category: "Input" },
+  { type: "loop", label: "Table", icon: <Repeat className="h-4 w-4" />, category: "Input" },
   { type: "upload-image", label: "Upload Image", icon: <Upload className="h-4 w-4" />, category: "Input" },
   { type: "upload-video", label: "Upload Video", icon: <Video className="h-4 w-4" />, category: "Input" },
   { type: "upload-audio", label: "Upload Audio", icon: <Music className="h-4 w-4" />, category: "Input" },

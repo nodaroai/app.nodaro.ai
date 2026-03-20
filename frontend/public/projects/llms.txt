@@ -116,7 +116,7 @@ Manual or connected data table for iteration. Each column becomes a separate out
 {
   "type": "loop",
   "data": {
-    "label": "Loop",
+    "label": "Table",
     "columns": [
       { "id": "col_1", "name": "Prompt", "handleId": "h_1" },
       { "id": "col_2", "name": "Style", "handleId": "h_2" }

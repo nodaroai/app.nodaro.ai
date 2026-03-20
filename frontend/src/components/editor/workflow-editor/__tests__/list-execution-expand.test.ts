@@ -375,7 +375,7 @@ describe("expandLoopResults — fan-out edges from list source", () => {
         id: "loop1",
         type: "loop",
         data: {
-          label: "Loop",
+          label: "Table",
           __listResults: ["a", "b", "c"],
           __listInputs: ["x", "y", "z"],
         },

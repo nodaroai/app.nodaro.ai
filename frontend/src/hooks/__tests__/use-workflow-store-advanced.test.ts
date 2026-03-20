@@ -193,7 +193,7 @@ describe("useWorkflowStore advanced", () => {
         id: "loop_1",
         type: "loop",
         position: { x: 200, y: 0 },
-        data: { label: "Loop", columns: [], rows: [], fieldMappings: {} },
+        data: { label: "Table", columns: [], rows: [], fieldMappings: {} },
       }
       useWorkflowStore.setState({
         nodes: [
@@ -222,7 +222,7 @@ describe("useWorkflowStore advanced", () => {
         type: "loop",
         position: { x: 200, y: 0 },
         data: {
-          label: "Loop",
+          label: "Table",
           columns: [{ id: "col1", name: "Existing", handleId: "existing" }],
           rows: [["hello"]],
           fieldMappings: {},
