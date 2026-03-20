@@ -214,7 +214,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
     }
 
-    const appRow = await loadAppVersion(workflowId, "id, workflow_id, max_runs_per_user_per_day, snapshot_nodes, snapshot_edges", version)
+    const appRow = await loadAppVersion(workflowId, "id, workflow_id, max_runs_per_user_per_day, snapshot_nodes, snapshot_edges, snapshot_settings", version)
     if (!appRow) {
       return reply.status(404).send({
         error: { code: "not_found", message: version ? `Version ${version} not found` : "App not found" },
@@ -323,6 +323,21 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       appRunId = appRun.id
     }
 
+    // Compute nodeIds if baked presentation settings target a specific route
+    let nodeIds: string[] | undefined
+    const snapshotSettings = (appRow.snapshot_settings ?? {}) as Record<string, unknown>
+    const presSettings = snapshotSettings.presentationSettings as { runTarget?: string; selectedRouteId?: string } | undefined
+    if (presSettings?.runTarget === "route" && presSettings?.selectedRouteId) {
+      const { getRouteReachableNodeIds } = await import("../../../packages/shared/src/route-filter.js")
+      const nodes = (appRow.snapshot_nodes ?? []) as Array<{ id: string; type?: string; data: Record<string, unknown> }>
+      const edges = (appRow.snapshot_edges ?? []) as Array<{ source: string; target: string }>
+      const reachable = getRouteReachableNodeIds(nodes, edges, presSettings.selectedRouteId)
+      if (reachable.size > 0) {
+        nodeIds = [...reachable]
+      }
+      // If empty (stale routeId in snapshot), fall through → runs entire workflow
+    }
+
     // Enqueue orchestration job — use the app's workflow_id since the orchestrator loads by workflow ID
     // Pass appVersionId so the orchestrator uses the snapshot from this specific version
     const jobData: WorkflowExecutionJob = {
@@ -332,6 +347,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       triggerType: "manual",
       inputOverrides,
       appVersionId: appRow.id,
+      nodeIds,
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {

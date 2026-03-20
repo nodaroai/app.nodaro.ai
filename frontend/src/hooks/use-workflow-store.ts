@@ -109,8 +109,9 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error"
 export type PresentationViewMode = "horizontal" | "vertical" | "gallery" | "fullscreen" | "compare"
 
 export interface PresentationSettings {
-  runTarget: "workflow" | "sub-workflow"
+  runTarget: "workflow" | "sub-workflow" | "route"
   subWorkflowNodeId?: string
+  selectedRouteId?: string
   splitRatio?: number // 20-80, default 50
   inputOrder?: string[] // node IDs in display order
   outputOrder?: string[] // node IDs in display order

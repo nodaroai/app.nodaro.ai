@@ -3460,7 +3460,7 @@ export async function runSharedWorkflow(
   return apiRequest(
     `/v1/present/${encodeURIComponent(token)}/run`,
     "Failed to run shared workflow",
-    { method: "POST", body: { inputOverrides, runTarget: presentationSettings?.runTarget, subWorkflowNodeId: presentationSettings?.subWorkflowNodeId } },
+    { method: "POST", body: { inputOverrides, runTarget: presentationSettings?.runTarget, subWorkflowNodeId: presentationSettings?.subWorkflowNodeId, selectedRouteId: presentationSettings?.selectedRouteId } },
   )
 }
 

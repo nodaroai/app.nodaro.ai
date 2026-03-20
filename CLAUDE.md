@@ -314,8 +314,9 @@ backend/src/
 - [x] Sora Character node (extract reusable character IDs from video, standard + pro modes)
 - [x] Sora character_id_list integration (I2V, T2V, Storyboard — up to 5 characters per generation)
 - [x] Credit system improvements: FFmpeg tiered pricing (1/2/3 CR), dynamic credit labels, entity node model selection, scene node credit badges
+- [x] Route-scoped preset mode (run only a route in presentation mode + published apps)
 
 ---
 
-*Last updated: 2026-03-19*
-*Version: 1.71.0*
+*Last updated: 2026-03-20*
+*Version: 1.72.0*

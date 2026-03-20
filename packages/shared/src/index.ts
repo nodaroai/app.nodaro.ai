@@ -73,3 +73,5 @@ export {
   CATEGORY_DURATION_DEFAULTS,
   type ProgressSegment,
 } from "./progress-curve.js"
+
+export { getRouteReachableNodeIds, type MinimalNode, type MinimalEdge } from "./route-filter.js"
