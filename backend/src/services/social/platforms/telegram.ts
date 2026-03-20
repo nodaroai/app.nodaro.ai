@@ -76,6 +76,30 @@ export const telegramPublisher: PlatformPublisher = {
       return { success: true, platformPostId: String(data.result?.message_id) }
     }
 
+    if (action === "send-media-group") {
+      const { mediaItems } = request
+      if (!mediaItems || mediaItems.length === 0) throw new Error("No media items for send-media-group")
+
+      const media = mediaItems.map((item, i) => {
+        const entry: Record<string, unknown> = {
+          type: item.type,
+          media: item.url,
+        }
+        if (i === 0 && caption) entry.caption = caption.slice(0, 1024)
+        if (i === 0 && parseMode) entry.parse_mode = parseMode
+        return entry
+      })
+
+      const res = await fetch(`${baseUrl}/sendMediaGroup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, media }),
+      })
+      const data = await res.json() as { ok: boolean; result?: Array<{ message_id: number }>; description?: string }
+      if (!data.ok) return { success: false, error: data.description ?? "Telegram sendMediaGroup failed" }
+      return { success: true, platformPostId: String(data.result?.[0]?.message_id) }
+    }
+
     throw new Error(`Unsupported Telegram action: ${action}`)
   },
 }

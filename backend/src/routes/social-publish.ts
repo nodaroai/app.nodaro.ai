@@ -12,13 +12,13 @@ const VALID_ACTIONS = [
   "post-image", "post-reel", "post-story", "post-carousel",
   "post-video", "upload-video", "upload-short",
   "post-text", "post-tweet",
-  "send-message", "send-photo", "send-video",
+  "send-message", "send-photo", "send-video", "send-media-group",
 ] as const
 
 const MEDIA_REQUIRED_ACTIONS = new Set([
   "post-image", "post-reel", "post-story", "post-carousel",
   "post-video", "upload-video", "upload-short",
-  "send-photo", "send-video",
+  "send-photo", "send-video", "send-media-group",
 ])
 
 const publishSchema = z.object({
@@ -27,6 +27,7 @@ const publishSchema = z.object({
   connectionId: z.string().uuid().optional(),
   caption: z.string().optional(),
   mediaUrl: z.string().url().optional(),
+  mediaItems: z.array(z.object({ type: z.enum(["photo", "video"]), url: z.string().url() })).optional(),
   title: z.string().optional(),
   description: z.string().optional(),
   tags: z.array(z.string()).optional(),
@@ -48,11 +49,11 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.message } })
     }
 
-    const { platform, action, connectionId, caption, mediaUrl, title, description, tags, privacy, chatId, parseMode } = parsed.data
+    const { platform, action, connectionId, caption, mediaUrl, mediaItems, title, description, tags, privacy, chatId, parseMode } = parsed.data
 
-    if (MEDIA_REQUIRED_ACTIONS.has(action) && !mediaUrl) {
+    if (MEDIA_REQUIRED_ACTIONS.has(action) && !mediaUrl && (!mediaItems || mediaItems.length === 0)) {
       return reply.status(400).send({
-        error: { code: "validation_error", message: `Action "${action}" requires a media URL` },
+        error: { code: "validation_error", message: `Action "${action}" requires media` },
       })
     }
 
@@ -151,7 +152,7 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       if (chatId) metadata.chatId = chatId
       if (parseMode) metadata.parseMode = parseMode
 
-      const publishReq: PublishRequest = { action, caption, mediaUrl, title, description, tags, privacy }
+      const publishReq: PublishRequest = { action, caption, mediaUrl, mediaItems, title, description, tags, privacy }
       const result = await publisher.publish(accessToken, publishReq, metadata)
 
       if (!result.success) {

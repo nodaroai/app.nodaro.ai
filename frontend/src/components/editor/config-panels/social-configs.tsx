@@ -142,8 +142,8 @@ function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, on
         </div>
       )}
 
-      {/* Action selector */}
-      {actions.length > 1 && (
+      {/* Action selector (hidden for Telegram — auto-detected from connected media) */}
+      {actions.length > 1 && platform !== "telegram" && (
         <div>
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Action</Label>
           <Select value={d.action} onValueChange={(v) => onUpdate({ action: v })}>

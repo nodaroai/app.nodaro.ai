@@ -7,10 +7,16 @@ import { xPublisher } from "./x.js"
 import { facebookPublisher } from "./facebook.js"
 import { telegramPublisher } from "./telegram.js"
 
+export interface MediaItem {
+  type: "photo" | "video"
+  url: string
+}
+
 export interface PublishRequest {
   action: string
   caption?: string
   mediaUrl?: string
+  mediaItems?: MediaItem[]
   title?: string
   description?: string
   tags?: string[]

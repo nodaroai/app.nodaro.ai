@@ -3547,6 +3547,7 @@ export async function socialPublishApi(params: {
   action: string
   connectionId?: string
   mediaUrl?: string
+  mediaItems?: Array<{ type: "photo" | "video"; url: string }>
   caption?: string
   title?: string
   description?: string
@@ -3558,6 +3559,7 @@ export async function socialPublishApi(params: {
   const body: Record<string, unknown> = { platform: params.platform, action: params.action }
   if (params.connectionId) body.connectionId = params.connectionId
   if (params.mediaUrl) body.mediaUrl = params.mediaUrl
+  if (params.mediaItems && params.mediaItems.length > 0) body.mediaItems = params.mediaItems
   if (params.caption) body.caption = params.caption
   if (params.title) body.title = params.title
   if (params.description) body.description = params.description
