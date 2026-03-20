@@ -93,7 +93,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
               key={c}
               onClick={(e) => { e.stopPropagation(); updateNodeData(id, { color: c }) }}
               className={`w-4 h-4 rounded-full cursor-pointer border-2 transition-transform hover:scale-110 ${color === c ? "border-foreground dark:border-white" : "border-foreground/15 dark:border-white/20"}`}
-              style={{ backgroundColor: c }}
+              style={{ backgroundColor: getEffectiveColor(c, isDark) }}
             />
           ))}
 
