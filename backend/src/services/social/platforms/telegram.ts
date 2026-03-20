@@ -13,6 +13,7 @@ function toTelegramHtml(text: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
+    .replace(/^(#{1,6})\s+(.+)$/gm, "<b>$2</b>")
     .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
     .replace(/__(.+?)__/g, "<b>$1</b>")
     .replace(/~~(.+?)~~/g, "<s>$1</s>")
