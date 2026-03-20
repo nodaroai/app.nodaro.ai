@@ -397,12 +397,22 @@ function buildSyncHttpBody(
     case "x-post":
     case "facebook-post":
     case "telegram-post": {
+      const mediaUrl = resolvedInputs.videoUrl || resolvedInputs.imageUrl || resolvedInputs.audioUrl
+      // Auto-detect Telegram action based on connected media
+      let action = data.action as string
+      if (node.type === "telegram-post") {
+        if (mediaUrl) {
+          action = resolvedInputs.videoUrl ? "send-video" : "send-photo"
+        } else {
+          action = "send-message"
+        }
+      }
       return {
         platform: SOCIAL_NODE_TO_PLATFORM[node.type],
-        action: data.action,
+        action,
         connectionId: data.connectionId,
         caption: (resolvedInputs.caption as string | undefined) || data.caption || data.text,
-        mediaUrl: resolvedInputs.videoUrl || resolvedInputs.imageUrl || resolvedInputs.audioUrl,
+        mediaUrl,
         title: data.title,
         description: data.description,
         tags: data.tags,
