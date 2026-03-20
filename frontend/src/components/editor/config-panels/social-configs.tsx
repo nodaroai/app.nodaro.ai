@@ -175,23 +175,6 @@ function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, on
         </div>
       )}
 
-      {/* Telegram-specific: Parse Mode */}
-      {platform === "telegram" && (
-        <div>
-          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Parse Mode</Label>
-          <Select value={d.parseMode || "none"} onValueChange={(v) => onUpdate({ parseMode: v === "none" ? undefined : v })}>
-            <SelectTrigger className="mt-1.5">
-              <SelectValue placeholder="None (plain text)" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">None</SelectItem>
-              <SelectItem value="Markdown">Markdown</SelectItem>
-              <SelectItem value="HTML">HTML</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
       {/* Caption */}
       <MappableField
         field="caption"
