@@ -42,6 +42,7 @@ import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDi
 import { uploadBufferToR2 } from "../../lib/storage.js"
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
+import sharp from "sharp"
 
 // Sora models use named aspect ratio values instead of ratio strings
 const SORA_ASPECT_RATIO_MAP: Record<string, string> = {
@@ -171,6 +172,115 @@ async function ensureVideoDuration(
   } finally {
     if (workDir) await cleanupWorkDir(workDir)
   }
+}
+
+// Kling motion control only accepts JPEG/PNG — NOT WebP/GIF.
+// Wan Animate accepts JPEG/PNG/WebP but not GIF.
+const KLING_MOTION_ACCEPTED_FORMATS = new Set(["jpeg", "png"])
+const WAN_MOTION_ACCEPTED_FORMATS = new Set(["jpeg", "png", "webp"])
+
+// Max image file size for motion transfer (10 MB per KIE docs)
+const MOTION_IMAGE_MAX_BYTES = 10 * 1024 * 1024
+
+/**
+ * Ensure the image is in a format accepted by the motion-transfer provider.
+ *
+ * - Kling 2.6/3.0: JPEG/PNG only (rejects WebP/GIF) — convert if needed
+ * - Wan Animate: JPEG/PNG/WebP (rejects GIF) — convert if needed
+ * - Kling 2.6: min 300px, aspect ratio 2:5–5:2
+ * - All: max 10 MB — compress if needed
+ *
+ * Returns the original URL if no conversion is needed, or a new R2 URL if converted.
+ */
+async function ensureImageForMotionTransfer(
+  imageUrl: string,
+  provider: string,
+): Promise<string> {
+  const acceptedFormats = provider.startsWith("wan-animate")
+    ? WAN_MOTION_ACCEPTED_FORMATS
+    : KLING_MOTION_ACCEPTED_FORMATS
+
+  // Download and inspect the image
+  const res = await fetch(imageUrl, { signal: AbortSignal.timeout(30_000) })
+  if (!res.ok) {
+    throw createSanitizedError(
+      `Failed to download motion-transfer image: HTTP ${res.status}`,
+      "Motion transfer"
+    )
+  }
+  const buffer = Buffer.from(await res.arrayBuffer())
+  const meta = await sharp(buffer).metadata()
+  const format = meta.format // "jpeg" | "png" | "webp" | "gif" | "tiff" | ...
+  const width = meta.width ?? 0
+  const height = meta.height ?? 0
+
+  if (!format || !width || !height) {
+    throw createSanitizedError(
+      "Could not read image metadata — unsupported image file",
+      "Motion transfer"
+    )
+  }
+
+  // Kling 2.6: enforce min 300px and aspect ratio 2:5–5:2
+  if (provider === "kling") {
+    if (width < 300 || height < 300) {
+      throw createSanitizedError(
+        `Kling 2.6 motion control requires images larger than 300×300px (got ${width}×${height})`,
+        "Motion transfer"
+      )
+    }
+    const ratio = width / height
+    if (ratio < 2 / 5 || ratio > 5 / 2) {
+      throw createSanitizedError(
+        `Kling 2.6 motion control requires aspect ratio between 2:5 and 5:2 (got ${width}:${height})`,
+        "Motion transfer"
+      )
+    }
+  }
+
+  const needsConversion = !acceptedFormats.has(format)
+  const needsCompress = buffer.length > MOTION_IMAGE_MAX_BYTES
+
+  if (!needsConversion && !needsCompress) {
+    return imageUrl
+  }
+
+  console.log(
+    `[KIE.ai] Motion transfer image preprocessing: format=${format}, size=${(buffer.length / 1024 / 1024).toFixed(1)}MB, ${width}×${height}` +
+    `${needsConversion ? ` → converting to JPEG (${format} not accepted by ${provider})` : ""}` +
+    `${needsCompress ? ` → compressing (>${MOTION_IMAGE_MAX_BYTES / 1024 / 1024}MB)` : ""}`
+  )
+
+  // Convert to JPEG — good balance of compatibility and compression
+  let quality = 90
+  let converted = await sharp(buffer)
+    .jpeg({ quality, mozjpeg: true })
+    .toBuffer()
+
+  // If still over 10 MB, progressively lower quality
+  while (converted.length > MOTION_IMAGE_MAX_BYTES && quality > 50) {
+    quality -= 10
+    converted = await sharp(buffer)
+      .jpeg({ quality, mozjpeg: true })
+      .toBuffer()
+  }
+
+  // If still over limit after quality reduction, resize down
+  if (converted.length > MOTION_IMAGE_MAX_BYTES) {
+    const scale = Math.sqrt(MOTION_IMAGE_MAX_BYTES / converted.length)
+    const newWidth = Math.round(width * scale)
+    converted = await sharp(buffer)
+      .resize(newWidth)
+      .jpeg({ quality: 80, mozjpeg: true })
+      .toBuffer()
+  }
+
+  const key = `images/motion-converted-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
+  const newUrl = await uploadBufferToR2(converted, key, "image/jpeg")
+  console.log(
+    `[KIE.ai] Motion transfer image converted: ${(converted.length / 1024 / 1024).toFixed(1)}MB → ${newUrl.substring(0, 80)}...`
+  )
+  return newUrl
 }
 
 function snapToAllowedDuration(requested: number, allowed: number[]): number {
@@ -800,13 +910,16 @@ export class KieVideoProvider
       options?.characterOrientation ?? "image"
     const resolution = options?.resolution ?? "720p"
 
+    // Auto-convert image format/size if needed (Kling: JPEG/PNG only; all: max 10MB)
+    const effectiveImageUrl = await ensureImageForMotionTransfer(imageUrl, provider)
+
     console.log(
       `[KIE.ai] ========== MOTION TRANSFER REQUEST ==========`
     )
     console.log(`[KIE.ai] Provider: ${provider}`)
     console.log(`[KIE.ai] Model: ${modelConfig.model}`)
     console.log(
-      `[KIE.ai] Image URL (character source): ${imageUrl}`
+      `[KIE.ai] Image URL (character source): ${effectiveImageUrl}${effectiveImageUrl !== imageUrl ? " (converted)" : ""}`
     )
     console.log(
       `[KIE.ai] Video URL (motion source): ${videoUrl}`
@@ -829,7 +942,7 @@ export class KieVideoProvider
       const kling3Mode = resolution === "1080p" ? "pro" : "std"
 
       const input: Record<string, unknown> = {
-        input_urls: [imageUrl],
+        input_urls: [effectiveImageUrl],
         video_urls: [effectiveVideoUrl],
         character_orientation: characterOrientation,
         mode: kling3Mode,
@@ -875,7 +988,7 @@ export class KieVideoProvider
     if (provider === "wan-animate-move" || provider === "wan-animate-replace") {
       const wanResolution = options?.resolution ?? "480p"
       const input: Record<string, unknown> = {
-        image_url: imageUrl,
+        image_url: effectiveImageUrl,
         video_url: videoUrl,
         resolution: wanResolution,
       }
@@ -914,7 +1027,7 @@ export class KieVideoProvider
     const effectiveVideoUrl = await ensureVideoDuration(videoUrl, MOTION_TRANSFER_MAX_VIDEO_SECONDS)
 
     const input: Record<string, unknown> = {
-      input_urls: [imageUrl], // Array of image URLs (character reference)
+      input_urls: [effectiveImageUrl], // Array of image URLs (character reference)
       video_urls: [effectiveVideoUrl], // Array of video URLs (motion source)
       character_orientation: characterOrientation,
       mode: resolution, // KIE.ai uses "mode" for resolution (720p/1080p)
