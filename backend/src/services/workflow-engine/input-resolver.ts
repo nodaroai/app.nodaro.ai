@@ -730,6 +730,24 @@ function routeOutput(
     return
   }
 
+  // --- Router passthrough — detect media type from the resolved output value ---
+  if (srcType === "router") {
+    if (!output || output === "gate") {
+      inputs.prompt = ""
+      return
+    }
+    if (IMAGE_URL_RE.test(output)) {
+      inputs.imageUrl = output
+    } else if (VIDEO_URL_RE.test(output)) {
+      routeVideoOutput(inputs, output, targetType, src.id)
+    } else if (AUDIO_URL_RE.test(output)) {
+      routeAudioOutput(inputs, output, targetType, src.id)
+    } else {
+      inputs.prompt = output
+    }
+    return
+  }
+
   // --- Text/prompt sources ---
   if (TEXT_SOURCE_NODE_TYPES.has(srcType)) {
     inputs.prompt = output

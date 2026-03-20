@@ -88,6 +88,7 @@ import { CombineTextNode } from "./combine-text-node";
 import { SplitTextNode } from "./split-text-node";
 import { PreviewNode } from "./preview-node";
 import { StickyNoteNode } from "./sticky-note-node";
+import { RouterNode } from "./router-node";
 import { TeleportSendNode, TeleportReceiveNode } from "./teleport-node-shell";
 import { SubWorkflowInputNode } from "./sub-workflow-input-node";
 import { SubWorkflowOutputNode } from "./sub-workflow-output-node";
@@ -202,6 +203,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "split-text": SplitTextNode,
   "preview": PreviewNode,
   "sticky-note": StickyNoteNode,
+  "router": RouterNode,
   "teleport-send": TeleportSendNode,
   "teleport-receive": TeleportReceiveNode,
   // Sub-Workflow

@@ -1933,6 +1933,19 @@ export type TeleportReceiveData = {
   result?: string
 }
 
+// --- Router Node Data ---
+
+export type RouterNodeData = {
+  [key: string]: unknown
+  label: string
+  mode: "radio" | "checkbox"
+  routes: Array<{ id: string; name: string; active: boolean }>
+  // Execution result fields
+  activeRoutes?: string[]
+  routeOutputs?: Record<string, string | undefined>
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+}
+
 // --- Scene Node Data ---
 
 export interface SceneCharacterEntry {
@@ -2212,6 +2225,7 @@ export type SceneNodeData =
   | StickyNoteData
   | TeleportSendData
   | TeleportReceiveData
+  | RouterNodeData
   | SubWorkflowInputData
   | SubWorkflowOutputData
   | SubWorkflowData
@@ -2313,6 +2327,7 @@ export type SceneNodeType =
   | "sticky-note"
   | "teleport-send"
   | "teleport-receive"
+  | "router"
   | "sub-workflow-input"
   | "sub-workflow-output"
   | "sub-workflow"
@@ -3516,6 +3531,22 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       previewItems: [],
       itemOrder: [],
     } as PreviewNodeData,
+  },
+  {
+    type: "router",
+    label: "Router",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["route_a", "route_b"],
+    defaultData: {
+      label: "Router",
+      mode: "radio" as const,
+      routes: [
+        { id: "default_a", name: "Route A", active: true },
+        { id: "default_b", name: "Route B", active: false },
+      ],
+    } as RouterNodeData,
   },
   {
     type: "sticky-note",

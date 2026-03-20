@@ -203,6 +203,7 @@ export const EXECUTABLE_TYPES = new Set([
   "telegram-post",
   "save-to-storage",
   "qa-check",
+  "router",
 ]);
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 20;

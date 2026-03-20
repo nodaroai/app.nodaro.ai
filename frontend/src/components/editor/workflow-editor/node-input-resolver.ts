@@ -383,6 +383,20 @@ export function resolveNodeInputs(
       } else {
         inputs.prompt = output
       }
+    } else if (src.type === "router") {
+      // Router passthrough — detect media type from URL
+      if (IMAGE_URL_RE.test(output)) {
+        inputs.imageUrl = output
+      } else if (VIDEO_URL_RE.test(output)) {
+        inputs.videoUrl = output
+      } else if (AUDIO_URL_RE.test(output)) {
+        inputs.audioUrl = output
+      } else if (output === "gate") {
+        // Gate mode — no data, just execution control
+        inputs.prompt = ""
+      } else {
+        inputs.prompt = output
+      }
     } else if (src.type === "text-prompt") {
       inputs.prompt = output;
     } else if (src.type === "list") {

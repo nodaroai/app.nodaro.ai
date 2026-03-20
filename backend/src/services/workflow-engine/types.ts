@@ -49,6 +49,10 @@ export interface NodeOutput {
   score?: number
   /** Sora-character: generated character ID for use in subsequent Sora tasks */
   characterId?: string
+  /** Router: list of active route IDs */
+  activeRoutes?: string[]
+  /** Router: route ID -> output value (undefined for inactive routes) */
+  routeOutputs?: Record<string, string | undefined>
 }
 
 export type NodeExecutionStatus =

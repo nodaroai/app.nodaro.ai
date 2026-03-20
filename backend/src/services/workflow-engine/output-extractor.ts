@@ -293,6 +293,14 @@ export function getPrimaryOutput(
     return undefined
   }
 
+  // Router: route by handle ID matching route UUID
+  if (sourceType === "router" && sourceHandle) {
+    return output.routeOutputs?.[sourceHandle]
+  }
+  if (sourceType === "router") {
+    return output.text
+  }
+
   // Adjust-volume can output either audio or video — respect lastInputType (matches frontend)
   if (sourceType === "adjust-volume") {
     if (output._lastInputType === "video") return output.videoUrl || output.audioUrl
