@@ -24,7 +24,7 @@ export function AudioOutputCard({ label, status, url }: AudioOutputCardProps) {
         <StatusBadge status={status} />
       </div>
 
-      {status === "running" ? (
+      {status === "running" || status === "waiting" ? (
         <div className="flex items-center justify-center h-20 rounded-lg bg-muted/30">
           <div className="flex items-center gap-1">
             {LOADING_WAVEFORM_STYLES.map((style, i) => (

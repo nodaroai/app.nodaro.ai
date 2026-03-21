@@ -43,7 +43,7 @@ export function VideoOutputCard({ label, status, url, nodeId, onOpenMedia }: Vid
         <StatusBadge status={status} />
       </div>
 
-      {status === "running" ? (
+      {status === "running" || status === "waiting" ? (
         <ShimmerPlaceholder />
       ) : url ? (
         <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={handleClick}>

@@ -22,7 +22,7 @@ export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia }: Ima
         <StatusBadge status={status} />
       </div>
 
-      {status === "running" ? (
+      {status === "running" || status === "waiting" ? (
         <ShimmerPlaceholder />
       ) : url ? (
         <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={handleClick}>

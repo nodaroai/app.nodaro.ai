@@ -10,7 +10,7 @@ export interface OutputCardProps {
   nodeId: string
   label: string
   outputType: string
-  status: "idle" | "running" | "completed" | "failed"
+  status: "idle" | "waiting" | "running" | "completed" | "failed"
   url?: string
   text?: string
   onOpenMedia?: (nodeId: string) => void
@@ -41,7 +41,7 @@ export function OutputCard({
   iterationTotal,
   iterationCompleted,
 }: OutputCardProps) {
-  const showProgress = (status === "running") && progress != null
+  const showProgress = (status === "running" || status === "waiting") && progress != null
 
   // Gallery mode: multiple results in a single card
   if (listResults && listResults.length > 1 && displayMode === "gallery") {

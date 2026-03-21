@@ -26,7 +26,7 @@ export function TextOutputCard({ label, status, text }: TextOutputCardProps) {
         </div>
       </div>
 
-      {status === "running" ? (
+      {status === "running" || status === "waiting" ? (
         <div className="flex items-center h-20 rounded-lg bg-muted/30 px-4">
           {/* Animated typing dots */}
           <div className="flex gap-1.5">
