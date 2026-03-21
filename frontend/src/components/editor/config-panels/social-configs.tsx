@@ -75,7 +75,7 @@ export function useSocialConnections(platform: SocialPlatformType) {
   return { connections, loading }
 }
 
-function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SocialPostData> & { platform: SocialPlatformType }) {
+function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SocialPostData> & { platform: SocialPlatformType }) {
   const d = data as SocialPostData
   const { connections, loading } = useSocialConnections(platform)
   const actions = PLATFORM_ACTIONS[platform]
@@ -191,6 +191,8 @@ function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, on
           maxLength={charLimit}
           rows={3}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
         <p className={`text-[10px] mt-1 ${captionLen > charLimit * 0.9 ? "text-amber-500" : "text-muted-foreground"}`}>
           {captionLen}/{charLimit}
@@ -215,6 +217,8 @@ function SocialConfigBase({ data, onUpdate, platform, sources, fieldMappings, on
               maxLength={100}
               rows={1}
               nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
             />
           </MappableField>
           <div>

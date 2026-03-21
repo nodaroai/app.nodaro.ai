@@ -48,7 +48,7 @@ import { PromptHelperButton } from "./prompt-helper-button"
 import { buildEnrichedScenePrompt, type EnrichableScene } from "@nodaro-shared/prompt-builder"
 
 
-export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, onUpdateNode, nodeRefs }: ConfigProps<ImageToVideoData>) {
+export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, onUpdateNode, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ImageToVideoData>) {
   useEffect(() => { prefetchModelCredits([...VIDEO_I2V_MODELS.map((m) => m.value), "sora-watermark-remove"]) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
@@ -612,7 +612,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
-export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VideoToVideoData>) {
+export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<VideoToVideoData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
@@ -636,6 +636,8 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           placeholder="Describe what to change or continue..."
           rows={3}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
     </div>
@@ -644,7 +646,7 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
 
 const MOTION_VIDEO_NODE_TYPES = new Set(["image-to-video", "text-to-video", "video-to-video", "upload-video", "motion-transfer", "extend-video", "speech-to-video", "sora-storyboard"])
 
-export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<MotionTransferData>) {
+export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<MotionTransferData>) {
   const provider = data.provider || "kling"
 
   // Detect video duration from connected upstream video node's metadata or URL
@@ -710,6 +712,8 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
           placeholder="Optional: Describe the motion transfer..."
           rows={2}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
         <span className="text-xs text-muted-foreground">{data.prompt?.length || 0}/2500</span>
       </MappableField>
@@ -822,7 +826,7 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
-export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, nodeRefs }: ConfigProps<TextToVideoData>) {
+export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToVideoData>) {
   useEffect(() => { prefetchModelCredits([...VIDEO_T2V_MODELS.map((m) => m.value), "sora-watermark-remove"]) }, [])
   const category: ProviderCategory = "video"
   const models = getModels(category, data.provider)
@@ -858,6 +862,8 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           onChange={(v) => onUpdate({ prompt: v })}
           placeholder="Describe the video to generate..."
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
       <div>
@@ -982,13 +988,15 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           onChange={(v) => onUpdate({ negativePrompt: v })}
           placeholder="Things to avoid..."
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
     </div>
   )
 }
 
-export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<ExtendVideoData>) {
+export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ExtendVideoData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
@@ -1011,6 +1019,8 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           placeholder="Describe how the video should continue..."
           rows={3}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
 

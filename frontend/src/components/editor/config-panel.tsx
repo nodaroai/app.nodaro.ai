@@ -22,7 +22,7 @@ import type { SceneNodeDataType } from "@/types/nodes"
 import { SceneConfig } from "./scene-config"
 const SceneEditorModal = lazy(() => import("./scene-editor-modal").then(m => ({ default: m.SceneEditorModal })))
 import { IterationResultsPanel } from "./iteration-results-panel"
-import { getUpstreamNodes } from "@/lib/node-refs"
+import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
 import {
   getConnectedSources,
   getModelIdentifier,
@@ -280,6 +280,7 @@ export function ConfigPanel() {
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
+  const variableDisplayMode = useWorkflowStore((s) => s.variableDisplayMode)
   const [userId, setUserId] = useState<string | undefined>(undefined)
 
   useEffect(() => {
@@ -299,6 +300,11 @@ export function ConfigPanel() {
   const liveNodeRefs = useMemo(() => {
     if (!selectedNodeId) return []
     return getUpstreamNodes(selectedNodeId, nodes, edges)
+  }, [selectedNodeId, nodes, edges])
+
+  const liveRefMap = useMemo(() => {
+    if (!selectedNodeId) return new Map<string, string>()
+    return buildNodeRefMap(selectedNodeId, nodes, edges)
   }, [selectedNodeId, nodes, edges])
 
   const liveHasDownstream = useMemo(() => {
@@ -376,16 +382,19 @@ export function ConfigPanel() {
   const frozenFieldMappingsRef = useRef(liveFieldMappings)
   const frozenHasDownstreamRef = useRef(liveHasDownstream)
   const frozenNodeRefsRef = useRef(liveNodeRefs)
+  const frozenRefMapRef = useRef(liveRefMap)
   if (isVisible) {
     frozenSourcesRef.current = liveSources
     frozenFieldMappingsRef.current = liveFieldMappings
     frozenHasDownstreamRef.current = liveHasDownstream
     frozenNodeRefsRef.current = liveNodeRefs
+    frozenRefMapRef.current = liveRefMap
   }
   const sources = isVisible ? liveSources : frozenSourcesRef.current
   const fieldMappings = isVisible ? liveFieldMappings : frozenFieldMappingsRef.current
   const hasDownstream = isVisible ? liveHasDownstream : frozenHasDownstreamRef.current
   const nodeRefs = isVisible ? liveNodeRefs : frozenNodeRefsRef.current
+  const refMap = isVisible ? liveRefMap : frozenRefMapRef.current
 
   useEffect(() => {
     if (!isVisible) setIsExpanded(false)
@@ -421,8 +430,10 @@ export function ConfigPanel() {
       onMapField: handleMapField,
       nodes,
       nodeRefs,
+      refMap,
+      variableDisplayMode,
     }),
-    [displayNode?.data, update, sources, fieldMappings, handleMapField, nodes, nodeRefs]
+    [displayNode?.data, update, sources, fieldMappings, handleMapField, nodes, nodeRefs, refMap, variableDisplayMode]
   )
 
   if (!displayNode) {

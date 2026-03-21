@@ -61,6 +61,7 @@ import { PLATFORM_LABELS } from "@/lib/social-media-specs"
 import { isVideoUrl } from "@/lib/media-type"
 import { StatusBadge } from "./output-cards/shared"
 import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled } from "./helpers"
+import { buildNodeRefMap } from "@/lib/node-refs"
 import { RunTargetSelector } from "./run-target-selector"
 import { ViewModeSelector, ALL_VIEW_MODES } from "./view-mode-selector"
 import { InputCard } from "./input-card"
@@ -600,6 +601,17 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     })
   }, [settings.cardMeta, updatePresentationSettings])
 
+  // Memoize refMaps only for readOnly input nodes (only they need resolved values)
+  const inputRefMaps = useMemo(() => {
+    const maps = new Map<string, Map<string, string>>()
+    for (const node of orderedInputNodes) {
+      if ((node.data as Record<string, unknown>).presentationReadOnly) {
+        maps.set(node.id, buildNodeRefMap(node.id, nodes, edges))
+      }
+    }
+    return maps
+  }, [orderedInputNodes, nodes, edges])
+
   // Render helpers for input/output cards
   const renderInputCard = useCallback((node: WorkflowNode) => (
     <InputCard
@@ -610,8 +622,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       readOnly={inputsReadOnly ?? (isShareReadOnly || isRunning || isTerminal)}
       onOpenMedia={handleOpenMedia}
       onOpenConfig={setConfigNode}
+      refMap={inputRefMaps.get(node.id)}
     />
-  ), [isFullscreen, presInputValues, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia])
+  ), [isFullscreen, presInputValues, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia, inputRefMaps])
 
   // Extract listResults for a node from either fullscreen nodeStates or tab-mode node data
   const getListResults = useCallback(

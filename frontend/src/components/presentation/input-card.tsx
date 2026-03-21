@@ -21,6 +21,7 @@ export interface InputCardProps {
   readOnly?: boolean
   onOpenMedia?: (nodeId: string) => void
   onOpenConfig?: (node: WorkflowNode) => void
+  refMap?: Map<string, string>
 }
 
 /** Renders the appropriate input card based on node type */
@@ -32,6 +33,7 @@ export function InputCard({
   readOnly,
   onOpenMedia,
   onOpenConfig,
+  refMap,
 }: InputCardProps) {
   const label = getNodeLabel(node)
   const data = node.data as Record<string, unknown>
@@ -66,6 +68,8 @@ export function InputCard({
             }
           }}
           readOnly={readOnly}
+          refMap={refMap}
+          presentationReadOnly={!!(node.data as Record<string, unknown>).presentationReadOnly}
         />
       )
 

@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Lock, LockOpen } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import {
   getInputNodes,
@@ -81,8 +83,11 @@ function NodeRow({
   presentationSettings: PresentationSettings
   updatePresentationSettings: (settings: Partial<PresentationSettings>) => void
 }) {
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const data = node.data as Record<string, unknown>
   const isVisible = section === "inputs" ? data.presentationInput === true : data.presentationOutput === true
+  const isChecked = !!data.presentationInput
+  const isReadOnly = !!data.presentationReadOnly
   const label = getNodeLabel(node)
   const typeBadge = getOutputType(node.type)
 
@@ -97,6 +102,24 @@ function NodeRow({
         <Badge variant="secondary" className="text-xs shrink-0">
           {typeBadge}
         </Badge>
+        {section === "inputs" && isChecked && node.type === "text-prompt" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 ml-auto"
+            title={isReadOnly ? "Read-only in app" : "Editable in app"}
+            onClick={(e) => {
+              e.stopPropagation()
+              updateNodeData(node.id, { presentationReadOnly: !isReadOnly })
+            }}
+          >
+            {isReadOnly ? (
+              <Lock className="h-3.5 w-3.5 text-amber-500" />
+            ) : (
+              <LockOpen className="h-3.5 w-3.5 text-muted-foreground" />
+            )}
+          </Button>
+        )}
       </label>
       {section === "outputs" && isVisible && (
         <OutputDisplayModeToggle
@@ -120,8 +143,12 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
   const standardNodes = useMemo(() => availableNodes.filter(n => n.type !== "list" && n.type !== "loop"), [availableNodes])
 
   const handleToggle = (nodeId: string, checked: boolean) => {
-    const field = section === "inputs" ? "presentationInput" : "presentationOutput"
-    updateNodeData(nodeId, { [field]: checked })
+    if (section === "inputs" && !checked) {
+      updateNodeData(nodeId, { presentationInput: false, presentationReadOnly: false })
+    } else {
+      const field = section === "inputs" ? "presentationInput" : "presentationOutput"
+      updateNodeData(nodeId, { [field]: checked })
+    }
   }
 
   return (

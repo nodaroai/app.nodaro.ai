@@ -513,6 +513,33 @@ html, body {
   background: color-mix(in srgb, #38BDF8 18%, transparent);
 }
 
+/* Variable display mode highlights */
+.ref-resolved-highlight {
+  color: #22c55e;
+  background: color-mix(in srgb, #22c55e 12%, transparent);
+  border-radius: 3px;
+  padding: 1px 2px;
+  margin: 0 -2px;
+}
+
+.ref-unresolved-highlight {
+  color: #f59e0b;
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  border-radius: 3px;
+  padding: 1px 2px;
+  margin: 0 -2px;
+}
+
+.dark .ref-resolved-highlight {
+  color: #4ade80;
+  background: color-mix(in srgb, #22c55e 18%, transparent);
+}
+
+.dark .ref-unresolved-highlight {
+  color: #fbbf24;
+  background: color-mix(in srgb, #f59e0b 18%, transparent);
+}
+
 /* TagTextarea inside text-prompt canvas nodes */
 .text-prompt-tag-textarea {
   color: rgba(30, 41, 59, 0.8);

@@ -31,7 +31,7 @@ import {
 } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
-export function TextPromptConfig({ data, onUpdate, nodeRefs }: ConfigProps<TextPromptData>) {
+export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextPromptData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -42,8 +42,21 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs }: ConfigProps<TextP
           onChange={(value) => onUpdate({ text: value })}
           placeholder="Enter your story prompt..."
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </div>
+      {!!(data as Record<string, unknown>).presentationInput && (
+        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!(data as Record<string, unknown>).presentationReadOnly}
+            onChange={(e) => onUpdate({ presentationReadOnly: e.target.checked })}
+            className="rounded border-border"
+          />
+          Read-only in app
+        </label>
+      )}
     </div>
   )
 }

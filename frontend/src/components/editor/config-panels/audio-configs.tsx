@@ -53,7 +53,7 @@ import { PromptHelperButton } from "./prompt-helper-button"
 import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits"
 import type { ConfigProps } from "./types"
 
-export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<TextToSpeechData>) {
+export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToSpeechData>) {
   const textSource = data.textSource || "connected"
   return (
     <div className="flex flex-col gap-3">
@@ -99,6 +99,8 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
             placeholder="Enter text to convert to speech..."
             provider={data.provider}
             nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
           />
           <p className="text-[10px] text-muted-foreground mt-1">Type [ or / for audio tags</p>
         </div>
@@ -161,7 +163,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
-export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<TextToAudioData>) {
+export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToAudioData>) {
   const isSfx = data.provider === "elevenlabs-sfx"
   const maxPromptLen = isSfx ? 450 : 2000
   const minDuration = isSfx ? 0.5 : 1
@@ -178,6 +180,8 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
           }}
           placeholder={isSfx ? "Describe the sound effect (max 450 chars)..." : "Describe the sound effect (e.g. dog barking, rain on window)..."}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
         {isSfx && (
           <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/{maxPromptLen}</p>
@@ -237,7 +241,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
   )
 }
 
-export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoGenerateData>) {
+export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoGenerateData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="suno-generate" currentPrompt={data.prompt || ""} onAccept={(v) => onUpdate({ prompt: v })} />}>
@@ -249,6 +253,8 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           maxLength={3000}
           customTags={SUNO_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
         <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
       </MappableField>
@@ -276,6 +282,8 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           maxLength={3000}
           customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
       <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -287,6 +295,8 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           maxLength={500}
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
       <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -298,6 +308,8 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           maxLength={500}
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -330,7 +342,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
-export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoCoverData>) {
+export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoCoverData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -342,6 +354,8 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
           maxLength={3000}
           customTags={SUNO_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
         <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
       </MappableField>
@@ -372,6 +386,8 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
           maxLength={3000}
           customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
       <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -383,6 +399,8 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
           maxLength={500}
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
       <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -394,6 +412,8 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
           maxLength={500}
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -414,7 +434,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
   )
 }
 
-export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoExtendData>) {
+export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoExtendData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="audioId" label="Audio ID (from Suno node)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -432,6 +452,8 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
           maxLength={5000}
           customTags={SUNO_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
         <p className="text-xs text-muted-foreground mt-1">{(data.prompt ?? "").length}/5000</p>
       </MappableField>
@@ -459,6 +481,8 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
           maxLength={1000}
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
       <div className="flex items-center gap-2">
@@ -469,7 +493,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
   )
 }
 
-export function SunoLyricsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoLyricsData>) {
+export function SunoLyricsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoLyricsData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -481,6 +505,8 @@ export function SunoLyricsConfig({ data, onUpdate, sources, fieldMappings, onMap
           maxLength={1000}
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
         <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/1000</p>
       </MappableField>
@@ -564,7 +590,7 @@ export function SunoMusicVideoConfig({ data, onUpdate }: { readonly data: SunoMu
   )
 }
 
-export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoMashupData>) {
+export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoMashupData>) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Combine two audio tracks into a mashup. Connect two audio sources to the left handles.</p>
@@ -588,10 +614,10 @@ export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMap
         <Input value={data.title ?? ""} maxLength={200} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Song title" />
       </MappableField>
       <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={2} value={data.style ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ style: v }) }} placeholder="e.g. pop, rock, jazz..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
+        <TagTextarea rows={2} value={data.style ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ style: v }) }} placeholder="e.g. pop, rock, jazz..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={2} value={data.negativeStyle ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }} placeholder="Styles to avoid..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
+        <TagTextarea rows={2} value={data.negativeStyle ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }} placeholder="Styles to avoid..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.vocalGender ?? "auto"} onValueChange={(v) => onUpdate({ vocalGender: v === "auto" ? "" : v })}>
@@ -607,7 +633,7 @@ export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMap
   )
 }
 
-export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoReplaceSectionData>) {
+export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoReplaceSectionData>) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Replace a section of an existing track. Connect an audio source.</p>
@@ -618,10 +644,10 @@ export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMapping
         <Input type="number" min={0} step={1} value={data.infillEndS ?? ""} onChange={(e) => onUpdate({ infillEndS: e.target.value === "" ? undefined : parseFloat(e.target.value) })} placeholder="30" />
       </MappableField>
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the replacement..." maxLength={3000} customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
+        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the replacement..." maxLength={3000} customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="tags" label="Tags (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={2} value={data.tags ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ tags: v }) }} placeholder="Style tags..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
+        <TagTextarea rows={2} value={data.tags ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ tags: v }) }} placeholder="Style tags..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="title" label="Title (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input value={data.title ?? ""} maxLength={200} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Song title" />
@@ -693,7 +719,7 @@ export function SunoConvertWavConfig({ data }: { readonly data: SunoConvertWavDa
   )
 }
 
-export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoUploadExtendData>) {
+export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoUploadExtendData>) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Extend a track from uploaded audio. Connect an audio source.</p>
@@ -710,7 +736,7 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
         </Select>
       </MappableField>
       <MappableField field="prompt" label="Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the extension..." maxLength={3000} customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
+        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the extension..." maxLength={3000} customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="continueAt" label="Continue At (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input type="number" min={0} step={1} value={data.continueAt ?? ""} onChange={(e) => onUpdate({ continueAt: e.target.value === "" ? undefined : parseFloat(e.target.value) })} placeholder="0" />
@@ -723,10 +749,10 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
         <Input value={data.title ?? ""} maxLength={200} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Song title" />
       </MappableField>
       <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={2} value={data.style ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ style: v }) }} placeholder="e.g. pop, rock, jazz..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
+        <TagTextarea rows={2} value={data.style ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ style: v }) }} placeholder="e.g. pop, rock, jazz..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={2} value={data.negativeStyle ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }} placeholder="Styles to avoid..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
+        <TagTextarea rows={2} value={data.negativeStyle ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }} placeholder="Styles to avoid..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.vocalGender ?? "auto"} onValueChange={(v) => onUpdate({ vocalGender: v === "auto" ? "" : v })}>
@@ -862,7 +888,7 @@ export function AudioIsolationConfig({ data, onUpdate, nodeRefs }: ConfigProps<A
   )
 }
 
-export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs }: ConfigProps<TextToDialogueData>) {
+export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToDialogueData>) {
   const dialogue = data.dialogue ?? [{ id: "1", text: "", voice: DEFAULT_DIALOGUE_VOICE }]
   const totalChars = dialogue.reduce((sum, l) => sum + l.text.length, 0)
 
@@ -961,6 +987,8 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs }: Conf
               placeholder={`Line ${i + 1}... (type [ or / for audio tags)`}
               className="text-sm"
               nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
             />
           </div>
         ))}
@@ -1101,7 +1129,7 @@ export function DubbingConfig({ data, onUpdate, nodeRefs }: ConfigProps<DubbingD
   )
 }
 
-export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VoiceRemixData>) {
+export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<VoiceRemixData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="voiceDescription" label="Voice Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1111,6 +1139,8 @@ export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMap
           onChange={(v) => onUpdate({ voiceDescription: v })}
           placeholder="Describe the voice you want (e.g. 'A warm, deep male voice with a British accent')"
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
       <MappableField field="text" label="Preview Text" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1120,6 +1150,8 @@ export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMap
           onChange={(v) => onUpdate({ text: v })}
           placeholder="Text to preview the generated voice with..."
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
       <p className="text-xs text-muted-foreground">
@@ -1135,7 +1167,7 @@ const VOICE_DESIGN_MODEL_TO_TTS_PROVIDER: Record<string, string> = {
   "eleven_multilingual_ttv_v2": "elevenlabs-multilingual",
 }
 
-export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VoiceDesignData>) {
+export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<VoiceDesignData>) {
   const ttsProvider = VOICE_DESIGN_MODEL_TO_TTS_PROVIDER[data.model || "eleven_ttv_v3"] || "elevenlabs-v3"
   return (
     <div className="flex flex-col gap-3">
@@ -1156,6 +1188,8 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
           maxLength={1000}
           provider={ttsProvider}
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
         {data.text && data.text.length < 100 && (
           <p className="text-[10px] text-amber-500 mt-0.5">{data.text.length}/100 characters (minimum 100 required)</p>
@@ -1242,7 +1276,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
   )
 }
 
-export function ForcedAlignmentConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<ForcedAlignmentData>) {
+export function ForcedAlignmentConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ForcedAlignmentData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="transcript" label="Transcript" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1252,6 +1286,8 @@ export function ForcedAlignmentConfig({ data, onUpdate, sources, fieldMappings, 
           onChange={(v) => onUpdate({ transcript: v })}
           placeholder="Enter the transcript to align with the audio..."
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
       <p className="text-xs text-muted-foreground">
