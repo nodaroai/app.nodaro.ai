@@ -1,6 +1,6 @@
 import { toast } from "sonner"
 
-export type OutputStatus = "idle" | "running" | "completed" | "failed"
+export type OutputStatus = "idle" | "waiting" | "running" | "completed" | "failed"
 
 export interface GalleryOutputProps {
   results: string[]
@@ -11,7 +11,7 @@ export interface GalleryOutputProps {
 }
 
 export function IterationProgress({ status, iterationTotal, iterationCompleted }: { status: OutputStatus; iterationTotal?: number; iterationCompleted?: number }) {
-  if (status !== "running" || iterationTotal == null) return null
+  if ((status !== "running" && status !== "waiting") || iterationTotal == null) return null
   return (
     <div className="text-xs text-muted-foreground mb-2">
       {iterationCompleted ?? 0}/{iterationTotal} generated
@@ -20,6 +20,7 @@ export function IterationProgress({ status, iterationTotal, iterationCompleted }
 }
 
 const STATUS_COLORS: Record<string, string> = {
+  waiting: "bg-amber-500/10 text-amber-500 border border-amber-500/20",
   running: "bg-blue-500/10 text-blue-500 border border-blue-500/20",
   completed: "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20",
   failed: "bg-red-500/10 text-red-500 border border-red-500/20",

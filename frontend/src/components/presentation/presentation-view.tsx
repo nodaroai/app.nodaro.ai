@@ -427,13 +427,14 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
 
   // Node execution status
   const getNodeStatus = useCallback(
-    (nodeId: string): "idle" | "running" | "completed" | "failed" => {
+    (nodeId: string): "idle" | "waiting" | "running" | "completed" | "failed" => {
       if (isFullscreen) {
         const state = presNodeStates[nodeId]
         if (!state) return "idle"
         if (state.status === "running") return "running"
         if (state.status === "completed") return "completed"
         if (state.status === "failed") return "failed"
+        if (state.status === "pending") return "waiting"
         return "idle"
       }
       const node = nodeMap.get(nodeId)
