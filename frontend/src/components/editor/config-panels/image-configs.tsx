@@ -48,7 +48,7 @@ const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
 }
 const DEFAULT_REF_IMAGE_MAX = 4
 
-export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<GenerateImageData>) {
+export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<GenerateImageData>) {
   useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
   const currentProvider = data.provider || "nano-banana-pro"
   const supportsRefImage = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(currentProvider)
@@ -197,6 +197,8 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
           onChange={(v) => onUpdate({ prompt: v })}
           placeholder="Describe the image to generate..."
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -242,6 +244,8 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
           onChange={(v) => onUpdate({ negativePrompt: v })}
           placeholder="Things to avoid..."
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
         <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
       </MappableField>
@@ -482,7 +486,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
   )
 }
 
-export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<EditImageData>) {
+export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<EditImageData>) {
   useEffect(() => { prefetchModelCredits(IMAGE_EDIT_MODELS.map((m) => m.value)) }, [])
   const isNanoBananaEdit = data.provider === "nano-banana-edit"
   const showUpscaleFactor = data.provider === "topaz-image-upscale"
@@ -557,6 +561,8 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
               onChange={(v) => onUpdate({ prompt: v })}
               placeholder="Describe how to edit the image..."
               nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
             />
           </MappableField>
 
@@ -615,6 +621,8 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
               onChange={(v) => onUpdate({ negativePrompt: v })}
               placeholder="Things to avoid..."
               nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
             />
             <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
           </MappableField>
@@ -800,7 +808,7 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
   )
 }
 
-export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<ImageToImageData>) {
+export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ImageToImageData>) {
   useEffect(() => { prefetchModelCredits(IMAGE_I2I_MODELS.map((m) => m.value)) }, [])
   const currentProvider = data.provider || "nano-banana"
   const supportsRefImage = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(currentProvider)
@@ -926,6 +934,8 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
           onChange={(v) => onUpdate({ prompt: v })}
           placeholder="Describe how to transform the input image..."
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -971,6 +981,8 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
           onChange={(v) => onUpdate({ negativePrompt: v })}
           placeholder="Things to avoid..."
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
         <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
       </MappableField>

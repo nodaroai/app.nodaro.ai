@@ -1,6 +1,8 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
 import type { NodeRefItem } from "@/lib/node-refs"
 
+export type VariableDisplayMode = "raw" | "annotated" | "resolved"
+
 export interface SourceNodeInfo {
   readonly id: string
   readonly type: string
@@ -22,4 +24,6 @@ export interface ConfigProps<T> {
   readonly nodes: ReadonlyArray<WorkflowNode>
   readonly onUpdateNode?: (nodeId: string, data: Record<string, unknown>) => void
   readonly nodeRefs?: ReadonlyArray<NodeRefItem>
+  readonly refMap?: Map<string, string>
+  readonly variableDisplayMode?: VariableDisplayMode
 }

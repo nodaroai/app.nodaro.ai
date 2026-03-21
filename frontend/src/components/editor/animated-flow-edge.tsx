@@ -18,6 +18,7 @@ type AnimatedFlowEdgeData = {
   rangeTo?: string          // "1", "last", "last-2" — default "last"
   rangeStep?: number        // only for "each" — default 1, supports negative
   itemIndex?: string        // for "item" mode: "3", "last", "last-1"
+  useAllResults?: boolean   // Include all accumulated results across runs (default false)
 }
 
 type AnimatedFlowEdgeProps = EdgeProps<Edge<AnimatedFlowEdgeData>>
@@ -100,6 +101,10 @@ function AnimatedFlowEdgeComponent({
 
   const handleItemIndexChange = useCallback((value: string) => {
     updateEdgeData(id, { itemIndex: value || undefined })
+  }, [id, updateEdgeData])
+
+  const handleUseAllResultsChange = useCallback((checked: boolean) => {
+    updateEdgeData(id, { useAllResults: checked })
   }, [id, updateEdgeData])
 
   // Use step routing for backward connections (target left of source)
@@ -335,6 +340,35 @@ function AnimatedFlowEdgeComponent({
 
                 {/* Separator */}
                 <div style={{ height: 1, background: "#555", margin: "0" }} />
+
+                {/* Include previous runs toggle */}
+                <div style={{ padding: "8px 14px" }}>
+                  <label
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!edgeData?.useAllResults}
+                      onChange={(e) => handleUseAllResultsChange(e.target.checked)}
+                      style={{
+                        accentColor: "#a78bfa",
+                        width: 14,
+                        height: 14,
+                        cursor: "pointer",
+                      }}
+                    />
+                    <span style={{ color: "#e2e8f0", fontSize: 11 }}>
+                      Include previous runs
+                    </span>
+                  </label>
+                  <span style={{ color: "#64748b", fontSize: 9.5, marginLeft: 22, display: "block", marginTop: 2 }}>
+                    Use all accumulated results, not just the latest batch
+                  </span>
+                </div>
+
+                <div style={{ height: 1, background: "#555" }} />
 
                 {/* Conditional config section based on mode */}
                 <div style={{ padding: "10px 14px" }}>

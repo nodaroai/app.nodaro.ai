@@ -12,6 +12,7 @@ import { NODE_DEFINITIONS, TELEPORTER_CHANNEL_COLORS } from "@/types/nodes"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
 import { filterCloneNodes } from "@nodaro-shared/clone-utils"
+import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 
 /**
  * Fields that are purely execution-related (job status, progress, results).
@@ -139,6 +140,8 @@ interface WorkflowState {
   readonly saveStatus: SaveStatus
   readonly saveError: string | null
   readonly videoAutoplay: boolean
+  readonly variableDisplayMode: VariableDisplayMode
+  readonly setVariableDisplayMode: (mode: VariableDisplayMode) => void
   readonly newNodeIds: Set<string>
   readonly characterDefinitions: CharacterDefinition[]
   readonly userPromptTemplates: Record<string, string>
@@ -245,6 +248,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   videoAutoplay: typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.getItem === "function" && localStorage.getItem("videoAutoplay") !== null
     ? localStorage.getItem("videoAutoplay") === "true"
     : true,
+  variableDisplayMode: "raw" as const,
   newNodeIds: new Set<string>(),
   characterDefinitions: [],
   userPromptTemplates: {},
@@ -727,6 +731,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     if (typeof window !== "undefined") localStorage.setItem("videoAutoplay", String(autoplay))
     set({ videoAutoplay: autoplay })
   },
+
+  setVariableDisplayMode: (mode) => set({ variableDisplayMode: mode }),
 
   clearNewNode: (id) =>
     set((state) => {

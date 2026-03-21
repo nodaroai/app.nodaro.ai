@@ -99,6 +99,7 @@ const SUNO_TRACK_NODE_TYPES = new Set([
 
 export function extractNodeOutputAsList(
   node: WorkflowNode,
+  useAllResults = false,
 ): string[] | undefined {
   const data = node.data as Record<string, unknown>;
   if (node.type === "split-text") {
@@ -113,6 +114,11 @@ export function extractNodeOutputAsList(
       .map((l: string) => l.trim());
     return lines.length > 0 ? lines : undefined;
   }
+  if (useAllResults) {
+    // Prefer generatedResults (full history), fall back to __listResults
+    const allResults = extractAllGeneratedResults(data, true);
+    if (allResults) return allResults;
+  }
   const listResults = data.__listResults as string[] | undefined;
   if (listResults && listResults.length > 0) return listResults;
   // Fall back to accumulated generatedResults (multiple manual runs)
@@ -124,19 +130,22 @@ export function extractNodeOutputAsList(
 
 /**
  * Extract all output values from a node's accumulated generatedResults.
- * Returns undefined if fewer than 2 results (no fan-out benefit).
+ * Returns undefined if fewer than 2 results (no fan-out benefit), unless skipLengthGuard is true.
  */
 function extractAllGeneratedResults(
   data: Record<string, unknown>,
+  skipLengthGuard = false,
 ): string[] | undefined {
   const results = data.generatedResults as
     | Array<{ url?: string; text?: string }>
     | undefined;
-  if (!results || results.length <= 1) return undefined;
+  if (!results || (results.length <= 1 && !skipLengthGuard)) return undefined;
+  if (results.length === 0) return undefined;
   const outputs = results
     .map((r) => r.url || r.text || "")
     .filter((v) => v.length > 0);
-  return outputs.length > 1 ? outputs : undefined;
+  if (outputs.length === 0) return undefined;
+  return (!skipLengthGuard && outputs.length <= 1) ? undefined : outputs;
 }
 
 /**
@@ -200,7 +209,8 @@ export function getListInputForNode(
     const outputMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type ?? "") ? "each" : "last");
     if (outputMode !== "each") continue;
 
-    const listOutput = extractNodeOutputAsList(sourceNode);
+    const edgeUseAll = !!(edge.data as Record<string, unknown> | undefined)?.useAllResults;
+    const listOutput = extractNodeOutputAsList(sourceNode, edgeUseAll);
     if (listOutput && listOutput.length > 1) return listOutput;
   }
 
@@ -311,9 +321,12 @@ export function resolveNodeInputs(
     // or accumulated generatedResults from multiple manual runs
     const edgeMode = (srcEdge.data as Record<string, unknown> | undefined)
       ?.outputMode as string | undefined;
+    const edgeUseAll = (srcEdge.data as Record<string, unknown> | undefined)
+      ?.useAllResults as boolean | undefined;
     const srcData = src.data as Record<string, unknown>;
-    const srcListResults = (srcData.__listResults as string[] | undefined)
-      ?? extractAllGeneratedResults(srcData);
+    const srcListResults = edgeUseAll
+      ? (extractAllGeneratedResults(srcData, true) ?? (srcData.__listResults as string[] | undefined))
+      : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData));
     let output: string | undefined;
     if (edgeMode && srcListResults && srcListResults.length > 0) {
       if (edgeMode.startsWith("item:")) {

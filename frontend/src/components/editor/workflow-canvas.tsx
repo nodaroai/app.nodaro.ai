@@ -155,15 +155,20 @@ function getEdgeRangeLabel(edge: WorkflowEdge): string | undefined {
   const d = edge.data as Record<string, unknown> | undefined
   if (!d) return undefined
   const mode = d.outputMode as string | undefined
-  if (!mode) return undefined
-  const normalizedMode = mode.startsWith("item:") ? "item" : mode
+  const useAllResults = d.useAllResults as boolean | undefined
+  if (!mode && !useAllResults) return undefined
+  const normalizedMode = mode?.startsWith("item:") ? "item" : (mode ?? "")
   // For legacy item:N, compute 1-based itemIndex for the label
   let itemIndex = d.itemIndex as string | undefined
-  if (!itemIndex && mode.startsWith("item:")) {
+  if (!itemIndex && mode?.startsWith("item:")) {
     const legacyIdx = parseInt(mode.split(":")[1], 10)
     if (!isNaN(legacyIdx)) itemIndex = String(legacyIdx + 1)
   }
-  return buildRangeLabelShared(normalizedMode, d.rangeFrom as string | undefined, d.rangeTo as string | undefined, d.rangeStep as number | undefined, itemIndex)
+  const rangeLabel = buildRangeLabelShared(normalizedMode, d.rangeFrom as string | undefined, d.rangeTo as string | undefined, d.rangeStep as number | undefined, itemIndex)
+  if (useAllResults) {
+    return rangeLabel ? `all runs ${rangeLabel}` : "all runs"
+  }
+  return rangeLabel
 }
 
 function getEdgeLabel(

@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "react"
 import { GlassCard } from "../output-cards/shared"
+import { ReadOnlyPromptBlock } from "../readonly-prompt-block"
 
 interface TextInputCardProps {
   label: string
@@ -7,9 +8,11 @@ interface TextInputCardProps {
   placeholder?: string
   onChange: (value: string) => void
   readOnly?: boolean
+  refMap?: Map<string, string>
+  presentationReadOnly?: boolean
 }
 
-export function TextInputCard({ label, value, placeholder, onChange, readOnly }: TextInputCardProps) {
+export function TextInputCard({ label, value, placeholder, onChange, readOnly, refMap, presentationReadOnly }: TextInputCardProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Auto-resize textarea to fit content
@@ -19,6 +22,17 @@ export function TextInputCard({ label, value, placeholder, onChange, readOnly }:
     el.style.height = "auto"
     el.style.height = `${Math.max(80, el.scrollHeight)}px`
   }, [value])
+
+  if (presentationReadOnly && refMap) {
+    return (
+      <GlassCard>
+        <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+          {label}
+        </label>
+        <ReadOnlyPromptBlock text={value} refMap={refMap} />
+      </GlassCard>
+    )
+  }
 
   return (
     <GlassCard>

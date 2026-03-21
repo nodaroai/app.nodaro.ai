@@ -44,7 +44,7 @@ import {
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { COMPOSITION_RATIOS } from "./model-options"
 
-export function VideoComposerConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VideoComposerData>) {
+export function VideoComposerConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<VideoComposerData>) {
   const { sensors, orderedIds, orderedSources, handleDragEnd } = useMediaOrder(sources, data.assetOrder, onUpdate)
 
   return (
@@ -65,6 +65,8 @@ export function VideoComposerConfig({ data, onUpdate, sources, fieldMappings, on
           rows={3}
           className="text-sm"
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
 
@@ -94,7 +96,7 @@ export function VideoComposerConfig({ data, onUpdate, sources, fieldMappings, on
 const LazyAfterEffectsPreview = lazy(() => import("@/components/editor/after-effects-preview").then(m => ({ default: m.AfterEffectsPreview })))
 const LazyAfterEffectsPlayerPreview = lazy(() => import("@/components/editor/after-effects-player-preview").then(m => ({ default: m.AfterEffectsPlayerPreview })))
 
-export function AfterEffectsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<AfterEffectsData>) {
+export function AfterEffectsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<AfterEffectsData>) {
   return (
     <div className="flex flex-col gap-3">
       <LlmModelSelect
@@ -111,6 +113,8 @@ export function AfterEffectsConfig({ data, onUpdate, sources, fieldMappings, onM
           rows={3}
           className="text-sm"
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
 
@@ -175,7 +179,7 @@ export function AfterEffectsConfig({ data, onUpdate, sources, fieldMappings, onM
 
 const LazyLottieOverlayPreview = lazy(() => import("@/components/editor/lottie-overlay-preview").then(m => ({ default: m.LottieOverlayPreview })))
 
-export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<LottieOverlayData>) {
+export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<LottieOverlayData>) {
   return (
     <div className="flex flex-col gap-3">
       <LlmModelSelect
@@ -192,6 +196,8 @@ export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, on
           rows={3}
           className="text-sm"
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
 
@@ -248,7 +254,7 @@ export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, on
 
 const LazyThreeDTitlePreview = lazy(() => import("@/components/editor/three-d-title-preview").then(m => ({ default: m.ThreeDTitlePreview })))
 
-export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<ThreeDTitleData>) {
+export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ThreeDTitleData>) {
   return (
     <div className="flex flex-col gap-3">
       <LlmModelSelect
@@ -265,6 +271,8 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
           rows={3}
           className="text-sm"
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
 
@@ -347,7 +355,7 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
 const LazyMotionGraphicsPreview = lazy(() => import("@/components/editor/motion-graphics-preview").then(m => ({ default: m.MotionGraphicsPreview })))
 const LazyMotionGraphicsPlayerPreview = lazy(() => import("@/components/editor/motion-graphics-player-preview").then(m => ({ default: m.MotionGraphicsPlayerPreview })))
 
-export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<MotionGraphicsData>) {
+export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<MotionGraphicsData>) {
   const [showInfo, setShowInfo] = useState(false)
 
   return (
@@ -404,6 +412,8 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
           rows={3}
           className="text-sm"
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
 

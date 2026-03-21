@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Play, Pause, MoreVertical, Download, Upload, Package, FileJson, FileText, ClipboardPaste } from "lucide-react"
+import { ArrowLeft, Braces, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Play, Pause, MoreVertical, Download, Upload, Package, FileJson, FileText, ClipboardPaste } from "lucide-react"
 import { CreditBalance } from "@/components/credits/CreditBalance"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -93,6 +93,8 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
   const setFlowPromptTemplates = useWorkflowStore((s) => s.setFlowPromptTemplates)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const setVideoAutoplay = useWorkflowStore((s) => s.setVideoAutoplay)
+  const variableDisplayMode = useWorkflowStore((s) => s.variableDisplayMode)
+  const setVariableDisplayMode = useWorkflowStore((s) => s.setVariableDisplayMode)
   const [flowTemplatesOpen, setFlowTemplatesOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -897,6 +899,42 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
               <span className="hidden sm:inline">{buttonText}</span>
             </Button>
           )
+        })()}
+
+        {(() => {
+          const hasConnections = edges.length > 0
+          return hasConnections ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  title="Variable display mode"
+                  className={variableDisplayMode !== "raw" ? "text-white hover:opacity-90" : ""}
+                  style={variableDisplayMode !== "raw" ? { backgroundColor: '#38BDF8', borderColor: '#38BDF8' } : undefined}
+                >
+                  <Braces className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setVariableDisplayMode("raw")}>
+                  <span className={variableDisplayMode === "raw" ? "font-bold" : ""}>
+                    {"{x}"} Raw
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setVariableDisplayMode("annotated")}>
+                  <span className={variableDisplayMode === "annotated" ? "font-bold" : ""}>
+                    {"{x: v}"} Annotated
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setVariableDisplayMode("resolved")}>
+                  <span className={variableDisplayMode === "resolved" ? "font-bold" : ""}>
+                    v Resolved
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null
         })()}
 
         <Button

@@ -3,6 +3,8 @@ import { createPortal } from "react-dom"
 import { Textarea } from "@/components/ui/textarea"
 import { AUDIO_TAGS, SSML_BREAK_OPTIONS, isV2Model, isV3Model } from "@/lib/audio-tags"
 import type { NodeRefItem } from "@/lib/node-refs"
+import type { VariableDisplayMode } from "./types"
+import { renderNodeRefs } from "@/lib/render-node-refs"
 
 /** Regex to match bracket tags like [whispers], [Verse 2], <break time="1s" /> */
 const TAG_PATTERN = /(\[[^\]]+\]|<break[^>]*\/>)/g
@@ -20,6 +22,8 @@ interface TagTextareaProps {
   readonly provider?: string
   readonly customTags?: SuggestionItem[]
   readonly nodeRefs?: readonly NodeRefItem[]
+  readonly displayMode?: VariableDisplayMode
+  readonly refMap?: Map<string, string>
 }
 
 export interface SuggestionItem {
@@ -53,7 +57,7 @@ function nodeTypeCategory(type: string): string {
   return "Node"
 }
 
-export function TagTextarea({ value, onChange, placeholder, rows, className, maxLength, provider, customTags, nodeRefs }: TagTextareaProps) {
+export function TagTextarea({ value, onChange, placeholder, rows, className, maxLength, provider, customTags, nodeRefs, displayMode = "raw", refMap }: TagTextareaProps) {
   const [showDropdown, setShowDropdown] = useState(false)
   const [triggerInfo, setTriggerInfo] = useState<{ char: TriggerChar; position: number } | null>(null)
   const [filterText, setFilterText] = useState("")
@@ -293,6 +297,11 @@ export function TagTextarea({ value, onChange, placeholder, rows, className, max
     }
   }, [])
 
+  const renderFormattedText = useMemo(() => {
+    if (displayMode === "raw" || !refMap) return null
+    return renderNodeRefs(value || "", refMap, displayMode)
+  }, [displayMode, refMap, value])
+
   const dropdown = showDropdown && flatFiltered.length > 0 && dropdownPos && createPortal(
     <div
       ref={dropdownRef}
@@ -334,26 +343,39 @@ export function TagTextarea({ value, onChange, placeholder, rows, className, max
 
   return (
     <div ref={wrapperRef} className="relative">
-      <div className="tag-textarea-container">
+      {displayMode !== "raw" && renderFormattedText ? (
         <div
-          ref={backdropRef}
-          aria-hidden
-          className="tag-textarea-backdrop"
+          className="rounded-md border border-border bg-muted/30 p-3 text-sm text-foreground whitespace-pre-wrap leading-relaxed"
+          style={{ minHeight: rows ? `${rows * 1.5}rem` : undefined }}
+          role="textbox"
+          aria-readonly="true"
         >
-          {highlightedContent}
+          {renderFormattedText}
         </div>
-        <Textarea
-          ref={textareaRef}
-          rows={rows}
-          value={value}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
-          onScroll={handleScroll}
-          placeholder={placeholder}
-          className={`tag-textarea-input ${className ?? ""}`}
-        />
-      </div>
-      {dropdown}
+      ) : (
+        <>
+          <div className="tag-textarea-container">
+            <div
+              ref={backdropRef}
+              aria-hidden
+              className="tag-textarea-backdrop"
+            >
+              {highlightedContent}
+            </div>
+            <Textarea
+              ref={textareaRef}
+              rows={rows}
+              value={value}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
+              onScroll={handleScroll}
+              placeholder={placeholder}
+              className={`tag-textarea-input ${className ?? ""}`}
+            />
+          </div>
+          {dropdown}
+        </>
+      )}
       {(persistentWarning || warning) && (
         <p className="text-[10px] text-amber-500 mt-1">{persistentWarning || warning}</p>
       )}

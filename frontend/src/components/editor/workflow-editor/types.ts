@@ -254,6 +254,18 @@ export function getFanOutMultiplier(
     const rangeStep = edgeData?.rangeStep as number | undefined;
     const hasRange = !!(rangeFrom || rangeTo || rangeStep != null);
 
+    // useAllResults: estimate from generatedResults count
+    const edgeUseAll = !!(edge.data as Record<string, unknown> | undefined)?.useAllResults;
+    if (edgeUseAll && mode === "each") {
+      const srcData = sourceNode.data as Record<string, unknown>;
+      const genResults = srcData.generatedResults as Array<unknown> | undefined;
+      if (genResults && genResults.length > 1) {
+        if (!hasRange) return genResults.length;
+        const strs = genResults.map((_, i) => String(i + 1));
+        return applyRange(strs, rangeFrom, rangeTo, rangeStep).length || genResults.length;
+      }
+    }
+
     // Direct fan-out from list node
     if (sourceNode.type === "list") {
       const items = ((sourceNode.data as Record<string, unknown>).items as string || "")

@@ -32,7 +32,7 @@ import { LlmModelSelect } from "./llm-model-select"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 
-export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<GenerateScriptData>) {
+export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<GenerateScriptData>) {
   const [copied, setCopied] = useState(false)
   const script = data.generatedScript
   const results = data.generatedResults ?? []
@@ -95,6 +95,8 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
           onChange={(v) => onUpdate({ styleGuide: v })}
           placeholder="e.g. children's book illustration, watercolor..."
           nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
         />
       </MappableField>
       <MappableField field="tone" label="Tone" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -258,7 +260,7 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
   )
 }
 
-export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<ImageToTextData>) {
+export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ImageToTextData>) {
   const imageToTextData = data as ImageToTextData
   const results = imageToTextData.generatedResults ?? []
   const activeIndex = imageToTextData.activeResultIndex ?? 0
@@ -298,6 +300,8 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
             rows={3}
             maxLength={2000}
             nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
           />
         </MappableField>
         <p className="text-xs text-muted-foreground mt-1">
