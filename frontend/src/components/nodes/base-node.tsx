@@ -200,7 +200,7 @@ function BaseNodeComponent({
       )}
       <div
         className={cn(
-          "group relative rounded-xl border-2 shadow-[0_4px_6px_-1px_rgb(0_0_0/0.05)] min-w-[200px] bg-card text-card-foreground flex-1 overflow-hidden",
+          "group relative rounded-xl border-2 shadow-[0_4px_6px_-1px_rgb(0_0_0/0.05)] min-w-[200px] bg-card text-card-foreground flex-auto overflow-hidden",
           "dark:hover:border-[#ff0073] transition-colors duration-200",
           CATEGORY_STYLES[category],
           // Focused (selected, no settings): blue ring
