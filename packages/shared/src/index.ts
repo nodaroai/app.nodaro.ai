@@ -82,3 +82,5 @@ export {
   buildRangeLabel,
   migrateEdgeOutputMode,
 } from "./edge-range.js"
+
+export { REPEATABLE_NODE_TYPES, REPEAT_PLACEHOLDER, getEffectiveRepeatCount } from "./repeat-types.js"

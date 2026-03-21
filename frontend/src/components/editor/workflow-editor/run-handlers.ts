@@ -18,6 +18,7 @@ import {
   type ExecutionContext,
 } from "./types";
 import { COMPOSER_PLAN_MAP } from "@nodaro-shared/model-constants";
+import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES } from "@nodaro-shared/repeat-types";
 import { collapseExpandedClones } from "./execution-graph";
 import { getListInputForNode } from "./node-input-resolver";
 import { executeNode, rejectAllManualEdits } from "./execute-node";
@@ -160,10 +161,22 @@ export async function handleRunSingleNode(
     useWorkflowStore.getState();
   const listItems = getListInputForNode(node, currentNodes, currentEdges);
 
-  const execution =
-    listItems && listItems.length > 1
-      ? executeNodeForList(node, listItems, ctx)
-      : executeNode(node, ctx);
+  const repeatCount = REPEATABLE_NODE_TYPES.has(node.type ?? "")
+    ? getEffectiveRepeatCount(node.data as Record<string, unknown>)
+    : 1;
+
+  let execution: Promise<void>;
+  if (listItems && listItems.length > 1) {
+    const expandedItems = repeatCount > 1
+      ? listItems.flatMap(item => Array(repeatCount).fill(item) as string[])
+      : listItems;
+    execution = executeNodeForList(node, expandedItems, ctx);
+  } else if (repeatCount > 1) {
+    const repeatedItems = Array(repeatCount).fill(REPEAT_PLACEHOLDER) as string[];
+    execution = executeNodeForList(node, repeatedItems, ctx);
+  } else {
+    execution = executeNode(node, ctx);
+  }
 
   execution
     .catch(() => {
