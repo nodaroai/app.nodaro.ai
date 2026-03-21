@@ -46,7 +46,6 @@ function AnimatedFlowEdgeComponent({
   const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
   const updateEdgeData = useWorkflowStore((s) => s.updateEdgeData)
   const zoom = useStore((s) => s.transform[2])
-  const [isHovered, setIsHovered] = useState(false)
   const [showModeMenu, setShowModeMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -126,8 +125,9 @@ function AnimatedFlowEdgeComponent({
   const pinkGlowFilterId = `glow-pink-${id}`
   const blueGlowFilterId = `glow-blue-${id}`
 
-  const hasLabel = !!(edgeData?.edgeLabel || edgeData?.edgeModeLabel)
-  const showButtons = isHovered || selected || showModeMenu
+  const hasLabel = !!(edgeData?.edgeLabel || edgeData?.edgeModeLabel || edgeData?.edgeRangeLabel)
+  const showButtons = selected || showModeMenu
+  const showEdgeUI = (hasLabel || selected || showModeMenu) && zoom >= 0.5
 
   return (
     <>
@@ -166,8 +166,8 @@ function AnimatedFlowEdgeComponent({
         </circle>
       )}
 
-      {/* Edge label with hover/select interaction */}
-      {hasLabel && zoom >= 0.5 && (
+      {/* Edge label with select interaction */}
+      {showEdgeUI && (
         <EdgeLabelRenderer>
           <div
             ref={menuRef}
@@ -179,11 +179,7 @@ function AnimatedFlowEdgeComponent({
             }}
           >
             {/* Label row: [delete] [label + mode pill] [chevron] */}
-            <div
-              className="flex items-center gap-1"
-              onMouseEnter={() => setIsHovered(true)}
-              onMouseLeave={() => { if (!showModeMenu) setIsHovered(false) }}
-            >
+            <div className="flex items-center gap-1">
               {/* Delete button — visible when selected */}
               {selected && (
                 <button
@@ -210,42 +206,44 @@ function AnimatedFlowEdgeComponent({
                 </button>
               )}
 
-              {/* Label badge */}
-              <span
-                className="text-[9px] font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm leading-none flex items-center"
-                style={edgeData?.edgeLabelColor ? {
-                  backgroundColor: `${edgeData.edgeLabelColor}18`,
-                  color: edgeData.edgeLabelColor,
-                  borderColor: `${edgeData.edgeLabelColor}30`,
-                } : {
-                  backgroundColor: 'rgba(255,255,255,0.7)',
-                  color: '#6b7280',
-                  borderColor: 'rgba(229,231,235,0.5)',
-                }}
-              >
-                {edgeData?.edgeLabel && <span>{edgeData.edgeLabel}</span>}
-                {edgeData?.edgeModeLabel && (
-                  <>
-                    {edgeData.edgeLabel && <span style={{ margin: "0 3px", opacity: 0.5 }}>{"\u00B7"}</span>}
-                    <span style={{ color: "#a78bfa" }}>{edgeData.edgeModeLabel}</span>
-                  </>
-                )}
-                {edgeData?.edgeRangeLabel && (
-                  <span style={{
-                    background: "#3a2a5a",
-                    color: "#c4b5fd",
-                    borderRadius: 3,
-                    padding: "0 4px",
-                    fontFamily: "monospace",
-                    fontSize: "0.75em",
-                    marginLeft: 4,
-                  }}>
-                    {edgeData.edgeRangeLabel}
-                  </span>
-                )}
-              </span>
+              {/* Label badge — only render when there's label content */}
+              {hasLabel && (
+                <span
+                  className="text-[9px] font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm leading-none flex items-center"
+                  style={edgeData?.edgeLabelColor ? {
+                    backgroundColor: `${edgeData.edgeLabelColor}18`,
+                    color: edgeData.edgeLabelColor,
+                    borderColor: `${edgeData.edgeLabelColor}30`,
+                  } : {
+                    backgroundColor: 'rgba(255,255,255,0.7)',
+                    color: '#6b7280',
+                    borderColor: 'rgba(229,231,235,0.5)',
+                  }}
+                >
+                  {edgeData?.edgeLabel && <span>{edgeData.edgeLabel}</span>}
+                  {edgeData?.edgeModeLabel && (
+                    <>
+                      {edgeData.edgeLabel && <span style={{ margin: "0 3px", opacity: 0.5 }}>{"\u00B7"}</span>}
+                      <span style={{ color: "#a78bfa" }}>{edgeData.edgeModeLabel}</span>
+                    </>
+                  )}
+                  {edgeData?.edgeRangeLabel && (
+                    <span style={{
+                      background: "#3a2a5a",
+                      color: "#c4b5fd",
+                      borderRadius: 3,
+                      padding: "0 4px",
+                      fontFamily: "monospace",
+                      fontSize: "0.75em",
+                      marginLeft: 4,
+                    }}>
+                      {edgeData.edgeRangeLabel}
+                    </span>
+                  )}
+                </span>
+              )}
 
-              {/* Mode chevron button — visible on hover or selected */}
+              {/* Mode chevron button — visible only when edge is selected */}
               {showButtons && (
                 <button
                   onClick={(e) => {
