@@ -11,6 +11,7 @@ import type {
   LoopNodeData,
 } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
+import { applyRange } from "@nodaro-shared/edge-range";
 
 /** Node types whose edges default to "each" output mode (fan-out) */
 const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"]);
@@ -192,17 +193,31 @@ export function getListInputForNode(
         if (upstreamNode) {
           const upstreamOutput = extractNodeOutput(upstreamNode);
           if (upstreamOutput) {
-            const items = upstreamOutput
+            const raw = upstreamOutput
               .split("\n")
               .map((s) => s.trim())
               .filter((s) => s.length > 0);
+            const edgeData = edge.data as Record<string, unknown> | undefined;
+            const items = applyRange(
+              raw,
+              edgeData?.rangeFrom as string | undefined,
+              edgeData?.rangeTo as string | undefined,
+              edgeData?.rangeStep as number | undefined,
+            );
             if (items.length > 1) return items;
           }
         }
       } else if (colIndex >= 0) {
-        const items = (loopData.rows ?? [])
+        const raw = (loopData.rows ?? [])
           .map((row) => row[colIndex])
           .filter((v) => v?.trim());
+        const edgeData = edge.data as Record<string, unknown> | undefined;
+        const items = applyRange(
+          raw,
+          edgeData?.rangeFrom as string | undefined,
+          edgeData?.rangeTo as string | undefined,
+          edgeData?.rangeStep as number | undefined,
+        );
         if (items.length > 1) return items;
       }
       continue;
@@ -314,6 +329,7 @@ export function resolveNodeInputs(
   node: WorkflowNode,
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
+  listIterationIndex?: number,
 ): FrontendResolvedInputs {
   const incomingEdges = edges.filter((e) => e.target === node.id);
   const inputs: FrontendResolvedInputs = {};
@@ -341,6 +357,38 @@ export function resolveNodeInputs(
         output = srcListResults[srcListResults.length - 1];
       } else if (edgeMode === "all") {
         output = srcListResults.join(", ");
+      }
+    }
+    if (!output && src.type === "loop" && listIterationIndex !== undefined) {
+      // Per-iteration resolution for correlated loop columns during fan-out
+      const loopData = src.data as LoopNodeData;
+      const colIndex = (loopData.columns ?? []).findIndex(
+        (c) => c.handleId === srcEdge.sourceHandle,
+      );
+      if (colIndex >= 0) {
+        const loopInEdges = edges.filter(
+          (e) => e.target === src.id && e.targetHandle === "in",
+        );
+        let raw: string[];
+        if (loopInEdges.length > 0) {
+          const upstreamNode = nodes.find((n) => n.id === loopInEdges[0].source);
+          const upstreamText = upstreamNode ? extractNodeOutput(upstreamNode) : undefined;
+          raw = upstreamText
+            ? upstreamText.split("\n").map((s) => s.trim()).filter((s) => s.length > 0)
+            : [];
+        } else {
+          raw = (loopData.rows ?? [])
+            .map((row) => row[colIndex])
+            .filter((v) => v?.trim());
+        }
+        const edgeData = srcEdge.data as Record<string, unknown> | undefined;
+        const ranged = applyRange(
+          raw,
+          edgeData?.rangeFrom as string | undefined,
+          edgeData?.rangeTo as string | undefined,
+          edgeData?.rangeStep as number | undefined,
+        );
+        output = ranged[listIterationIndex] ?? "";
       }
     }
     if (!output) {

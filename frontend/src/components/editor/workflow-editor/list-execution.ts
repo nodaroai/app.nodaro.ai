@@ -51,6 +51,7 @@ export async function executeNodeForList(
         ctx,
         isRepeat ? undefined : (isUrl ? undefined : item),
         isRepeat ? undefined : (isUrl ? item : undefined),
+        i,
       );
 
       const afterNode = useWorkflowStore
