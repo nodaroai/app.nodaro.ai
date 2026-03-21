@@ -14,6 +14,7 @@ import {
   buildExecutionLevels,
   getEffectivelySkippedIds,
   getUploadDescendantIds,
+  computeRouterGatedIds,
   isSourceNode,
   isSkipNode,
 } from "../services/workflow-engine/execution-graph.js"
@@ -352,11 +353,29 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         return
       }
 
-      // Filter to executable nodes (not source, not skipped, not already done)
+      // Recompute router-gated nodes before each level (dynamic — depends on
+      // which router nodes have completed and their active/inactive routes).
+      const routerGatedIds = computeRouterGatedIds(nodes, edges, nodeStates)
+
+      // Mark router-gated nodes as "skipped" so the UI reflects they were gated.
+      // Also count them as completed so the progress bar stays accurate.
+      for (const node of level) {
+        if (routerGatedIds.has(node.id) && nodeStates[node.id]?.status !== "completed") {
+          nodeStates[node.id] = {
+            status: "skipped",
+            nodeType: node.type,
+            completedAt: new Date().toISOString(),
+          }
+          completedCount++
+        }
+      }
+
+      // Filter to executable nodes (not source, not skipped, not gated, not already done)
       const executableNodes = level.filter((node) => {
         if (isSourceNode(node.type)) return false
         if (skippedIds.has(node.id)) return false
         if (isSkipNode(node.type)) return false
+        if (routerGatedIds.has(node.id)) return false
         if (nodeStates[node.id]?.status === "completed") return false
         return true
       })
