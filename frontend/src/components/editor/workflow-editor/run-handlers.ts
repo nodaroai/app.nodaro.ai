@@ -18,6 +18,7 @@ import {
   type ExecutionContext,
 } from "./types";
 import { COMPOSER_PLAN_MAP } from "@nodaro-shared/model-constants";
+import { expandItemsWithRepeat } from "@nodaro-shared/repeat-types";
 import { collapseExpandedClones } from "./execution-graph";
 import { getListInputForNode } from "./node-input-resolver";
 import { executeNode, rejectAllManualEdits } from "./execute-node";
@@ -159,11 +160,11 @@ export async function handleRunSingleNode(
   const { nodes: currentNodes, edges: currentEdges } =
     useWorkflowStore.getState();
   const listItems = getListInputForNode(node, currentNodes, currentEdges);
+  const expanded = expandItemsWithRepeat(listItems, node.type ?? "", node.data as Record<string, unknown>);
 
-  const execution =
-    listItems && listItems.length > 1
-      ? executeNodeForList(node, listItems, ctx)
-      : executeNode(node, ctx);
+  const execution = expanded
+    ? executeNodeForList(node, expanded, ctx)
+    : executeNode(node, ctx);
 
   execution
     .catch(() => {

@@ -3,6 +3,7 @@ import type { WorkflowNode, SceneNodeDataType } from "@/types/nodes";
 import { extractNodeOutput } from "./execution-graph";
 import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
+import { REPEAT_PLACEHOLDER } from "@nodaro-shared/repeat-types";
 
 /**
  * Execute a node once for each item in the list. Results are accumulated
@@ -33,9 +34,11 @@ export async function executeNodeForList(
     if (ctx.isWorkflowStale()) break;
 
     const item = items[i];
-    const isUrl =
+    const isRepeat = item === REPEAT_PLACEHOLDER;
+    const isUrl = !isRepeat && (
       item.startsWith("http") ||
-      /\.(png|jpg|jpeg|webp|gif|mp4|mov|webm|mp3|wav|ogg)(\?|$)/i.test(item);
+      /\.(png|jpg|jpeg|webp|gif|mp4|mov|webm|mp3|wav|ogg)(\?|$)/i.test(item)
+    );
 
     try {
       const freshNode = useWorkflowStore
@@ -46,8 +49,8 @@ export async function executeNodeForList(
       await executeNode(
         freshNode,
         ctx,
-        isUrl ? undefined : item,
-        isUrl ? item : undefined,
+        isRepeat ? undefined : (isUrl ? undefined : item),
+        isRepeat ? undefined : (isUrl ? item : undefined),
       );
 
       const afterNode = useWorkflowStore

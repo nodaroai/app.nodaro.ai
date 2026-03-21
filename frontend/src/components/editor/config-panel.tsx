@@ -23,6 +23,7 @@ import { SceneConfig } from "./scene-config"
 const SceneEditorModal = lazy(() => import("./scene-editor-modal").then(m => ({ default: m.SceneEditorModal })))
 import { IterationResultsPanel } from "./iteration-results-panel"
 import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
+import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro-shared/repeat-types"
 import {
   getConnectedSources,
   getModelIdentifier,
@@ -699,6 +700,25 @@ export function ConfigPanel() {
               />
             )
           })()}
+
+          {REPEATABLE_NODE_TYPES.has(nodeType) && (
+            <div className="flex items-center gap-2 pt-2">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">Repeat</span>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                step={1}
+                value={getEffectiveRepeatCount(nodeData as Record<string, unknown>)}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10)
+                  update({ repeatCount: isNaN(val) || val <= 1 ? undefined : Math.min(val, 20) })
+                }}
+                className="w-14 h-7 rounded border border-border bg-background text-center text-sm font-mono"
+              />
+              <span className="text-xs text-muted-foreground">times</span>
+            </div>
+          )}
 
           <div className="flex flex-col gap-2 pt-2">
             {GENERATE_BUTTON_TYPES.has(nodeType) && (

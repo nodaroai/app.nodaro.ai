@@ -7,6 +7,7 @@ import { isExecutableNode, type ExecutionContext } from "./types"
 import { executeNode } from "./execute-node"
 import { getListInputForNode } from "./node-input-resolver"
 import { executeNodeForList } from "./list-execution"
+import { expandItemsWithRepeat } from "@nodaro-shared/repeat-types"
 
 const MAX_DEPTH = 5
 
@@ -210,8 +211,10 @@ export async function executeSubWorkflow(
 
           const { nodes: latestNodes, edges: latestEdges } = useWorkflowStore.getState()
           const listItems = getListInputForNode(subNode, latestNodes, latestEdges)
-          if (listItems && listItems.length > 1) {
-            return executeNodeForList(subNode, listItems, ctx)
+          const expanded = expandItemsWithRepeat(listItems, subNode.type ?? "", subNode.data as Record<string, unknown>)
+
+          if (expanded) {
+            return executeNodeForList(subNode, expanded, ctx)
           }
           return executeNode(subNode, ctx)
         }),

@@ -3,6 +3,7 @@ import { StorageExceededError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers";
 import { applyRange } from "@nodaro-shared/edge-range";
+import { getEffectiveRepeatCount } from "@nodaro-shared/repeat-types";
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -229,8 +230,19 @@ const FAN_OUT_EACH_TYPES = new Set(["list", "loop", "split-text"]);
 /**
  * Estimate the fan-out multiplier for a node based on upstream list/loop nodes.
  * Returns 1 if no fan-out, or the number of list items if fan-out is detected.
+ * Multiplies by repeatCount so credit estimates reflect repeated execution.
  */
 export function getFanOutMultiplier(
+  node: WorkflowNode,
+  allNodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+): number {
+  const baseFanOut = getBaseFanOut(node, allNodes, edges);
+  const repeat = getEffectiveRepeatCount(node.data as Record<string, unknown>);
+  return baseFanOut * repeat;
+}
+
+function getBaseFanOut(
   node: WorkflowNode,
   allNodes: WorkflowNode[],
   edges: WorkflowEdge[],
