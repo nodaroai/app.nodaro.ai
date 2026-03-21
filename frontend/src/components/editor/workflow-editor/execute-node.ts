@@ -286,9 +286,10 @@ export function executeNode(
   ctx: ExecutionContext,
   overridePrompt?: string,
   overrideMediaUrl?: string,
+  listIterationIndex?: number,
 ): Promise<void> {
   const { nodes, edges } = useWorkflowStore.getState();
-  const inputs = resolveNodeInputs(node, nodes, edges);
+  const inputs = resolveNodeInputs(node, nodes, edges, listIterationIndex);
 
   // Set forcePrivate flag if this node uses uploaded/private content as input
   // Always explicitly set (true/false) to prevent stale state in parallel execution
@@ -596,14 +597,14 @@ export function executeNode(
     const i2vData = node.data as ImageToVideoData;
     const nodeProvider = i2vData.provider;
 
-    let startFrameUrl: string | undefined = overrideMediaUrl;
+    let startFrameUrl: string | undefined = overrideMediaUrl ?? inputs.startFrameUrl;
     if (!startFrameUrl) {
       const startEdge = edges.find(
         (e) => e.target === node.id && e.targetHandle === "startFrame",
       );
       if (startEdge) {
         const startNode = nodes.find((n) => n.id === startEdge.source);
-        if (startNode) startFrameUrl = extractNodeOutput(startNode);
+        if (startNode) startFrameUrl = extractNodeOutput(startNode, startEdge.sourceHandle ?? undefined);
       }
     }
     if (!startFrameUrl && i2vData.selectedStartFrameNodeId) {
@@ -619,13 +620,15 @@ export function executeNode(
       return Promise.reject(new Error("No start frame image"));
     }
 
-    let endFrameUrl: string | undefined;
-    const endEdge = edges.find(
-      (e) => e.target === node.id && e.targetHandle === "endFrame",
-    );
-    if (endEdge) {
-      const endNode = nodes.find((n) => n.id === endEdge.source);
-      if (endNode) endFrameUrl = extractNodeOutput(endNode);
+    let endFrameUrl: string | undefined = inputs.endFrameUrl;
+    if (!endFrameUrl) {
+      const endEdge = edges.find(
+        (e) => e.target === node.id && e.targetHandle === "endFrame",
+      );
+      if (endEdge) {
+        const endNode = nodes.find((n) => n.id === endEdge.source);
+        if (endNode) endFrameUrl = extractNodeOutput(endNode, endEdge.sourceHandle ?? undefined);
+      }
     }
     if (!endFrameUrl && i2vData.selectedEndFrameNodeId) {
       const endNode = nodes.find(

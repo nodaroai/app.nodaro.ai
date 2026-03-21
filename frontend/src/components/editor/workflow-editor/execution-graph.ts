@@ -82,6 +82,14 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   }
   if (type === "loop") {
     const loopData = data as LoopNodeData;
+    if (sourceHandle) {
+      const colIndex = (loopData.columns ?? []).findIndex(
+        (c: { handleId: string }) => c.handleId === sourceHandle,
+      );
+      if (colIndex >= 0) {
+        return loopData.rows?.[0]?.[colIndex]?.trim() || "";
+      }
+    }
     return loopData.rows?.[0]?.[0]?.trim() || "";
   }
   if (type === "text-prompt") {
