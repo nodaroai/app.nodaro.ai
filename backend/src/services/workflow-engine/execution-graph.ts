@@ -3,7 +3,7 @@
  * Pure functions operating on SimpleNode/SimpleEdge arrays.
  */
 
-import type { SimpleNode, SimpleEdge } from "./types.js"
+import type { SimpleNode, SimpleEdge, NodeExecutionState } from "./types.js"
 
 /**
  * Topological sort via Kahn's algorithm.
@@ -78,6 +78,70 @@ export function getEffectivelySkippedIds(
   return new Set(
     nodes.filter((n) => !!n.data.skipped).map((n) => n.id),
   )
+}
+
+/**
+ * Compute node IDs gated by inactive router routes.
+ * A node is "router-gated" if ALL its incoming edges originate from inactive
+ * router output handles or from other router-gated nodes (transitive).
+ * Must be called after each execution level because router state is dynamic.
+ */
+export function computeRouterGatedIds(
+  nodes: SimpleNode[],
+  edges: SimpleEdge[],
+  nodeStates: Record<string, NodeExecutionState>,
+): Set<string> {
+  // Collect "source:sourceHandle" keys for inactive router output handles
+  const inactiveHandles = new Set<string>()
+
+  for (const node of nodes) {
+    if (node.type !== "router") continue
+    const state = nodeStates[node.id]
+    if (!state || state.status !== "completed" || !state.output) continue
+    const routeOutputs = state.output.routeOutputs
+    if (!routeOutputs) continue
+
+    for (const routeId of Object.keys(routeOutputs)) {
+      if (routeOutputs[routeId] === undefined) {
+        inactiveHandles.add(`${node.id}:${routeId}`)
+      }
+    }
+  }
+
+  if (inactiveHandles.size === 0) return new Set()
+
+  // Build incoming-edges map
+  const incomingEdges = new Map<string, SimpleEdge[]>()
+  for (const edge of edges) {
+    const list = incomingEdges.get(edge.target) ?? []
+    list.push(edge)
+    incomingEdges.set(edge.target, list)
+  }
+
+  // Fixed-point: a node is gated when ALL its incoming edges come from
+  // inactive router handles or from already-gated nodes.
+  const gatedIds = new Set<string>()
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const node of nodes) {
+      if (gatedIds.has(node.id)) continue
+      const incoming = incomingEdges.get(node.id)
+      if (!incoming || incoming.length === 0) continue
+
+      const allGated = incoming.every((edge) => {
+        if (inactiveHandles.has(`${edge.source}:${edge.sourceHandle ?? ""}`)) return true
+        return gatedIds.has(edge.source)
+      })
+
+      if (allGated) {
+        gatedIds.add(node.id)
+        changed = true
+      }
+    }
+  }
+
+  return gatedIds
 }
 
 // ---------------------------------------------------------------------------

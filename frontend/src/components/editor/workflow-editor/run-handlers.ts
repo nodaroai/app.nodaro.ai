@@ -823,6 +823,9 @@ function syncNodeStatesToStore(
         executionStatus: "failed",
         errorMessage: state.error ?? "Node failed",
       });
+    } else if (state.status === "skipped" && currentStatus !== "completed") {
+      // Router-gated node: mark as idle (not stuck in "pending")
+      patchMap.set(node.id, { executionStatus: "idle" });
     }
   }
 
