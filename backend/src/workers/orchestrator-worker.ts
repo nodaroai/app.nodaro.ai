@@ -32,7 +32,7 @@ import type {
 import { WORKFLOW_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { filterCloneNodes } from "../../../packages/shared/src/clone-utils.js"
 import { migrateEdgeOutputMode } from "../../../packages/shared/src/edge-range.js"
-import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES } from "../../../packages/shared/src/repeat-types.js"
+import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, expandItemsWithRepeat } from "../../../packages/shared/src/repeat-types.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 
 /** Max nodes a single workflow execution can run concurrently. Prevents one large workflow from starving other users. */
@@ -390,73 +390,42 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
             triggerData,
           )
 
-          const repeatCount = REPEATABLE_NODE_TYPES.has(node.type)
-            ? getEffectiveRepeatCount(node.data as Record<string, unknown>)
-            : 1
+          const expanded = expandItemsWithRepeat(
+            listItems, node.type, node.data as Record<string, unknown>,
+          )
 
           let result: ExecuteNodeResult
 
-          if (listItems && listItems.length > 1) {
-            // Fan-out: execute node once per list item, optionally repeated N times each
-            const expandedItems = repeatCount > 1
-              ? listItems.flatMap(item => Array(repeatCount).fill(item) as string[])
-              : listItems
+          if (expanded) {
+            // Per-iteration progress callback — persist to DB so polling works.
+            // Only write completed_nodes (not node_states) to avoid a race where
+            // this fire-and-forget write arrives after the level-end persist and
+            // overwrites the completed node state with a stale "running" snapshot.
+            const onIterationProgress = () => {
+              completedCount++
+              updateExecution(executionId, {
+                completed_nodes: completedCount,
+              }).catch(() => {})
+              emitExecutionEvent({
+                type: "node:updated",
+                executionId,
+                nodeStates: { ...nodeStates },
+                nodeId: node.id,
+                totalNodes: totalExecutions,
+                completedNodes: completedCount,
+                failedNodes: failedCount,
+              })
+            }
             result = await executeNodeForList(
               node,
-              expandedItems,
+              expanded,
               edges,
               nodes,
               nodeStates,
               ctx,
               executionId,
               triggerData,
-              // Per-iteration progress callback — persist to DB so polling works.
-              // Only write completed_nodes (not node_states) to avoid a race where
-              // this fire-and-forget write arrives after the level-end persist and
-              // overwrites the completed node state with a stale "running" snapshot.
-              (iterationIndex: number) => {
-                completedCount++
-                updateExecution(executionId, {
-                  completed_nodes: completedCount,
-                }).catch(() => {})
-                emitExecutionEvent({
-                  type: "node:updated",
-                  executionId,
-                  nodeStates: { ...nodeStates },
-                  nodeId: node.id,
-                  totalNodes: totalExecutions,
-                  completedNodes: completedCount,
-                  failedNodes: failedCount,
-                })
-              },
-            )
-          } else if (repeatCount > 1) {
-            // Repeat-only: execute node N times with normal upstream inputs each time
-            const repeatedItems = Array(repeatCount).fill(REPEAT_PLACEHOLDER) as string[]
-            result = await executeNodeForList(
-              node,
-              repeatedItems,
-              edges,
-              nodes,
-              nodeStates,
-              ctx,
-              executionId,
-              triggerData,
-              (iterationIndex: number) => {
-                completedCount++
-                updateExecution(executionId, {
-                  completed_nodes: completedCount,
-                }).catch(() => {})
-                emitExecutionEvent({
-                  type: "node:updated",
-                  executionId,
-                  nodeStates: { ...nodeStates },
-                  nodeId: node.id,
-                  totalNodes: totalExecutions,
-                  completedNodes: completedCount,
-                  failedNodes: failedCount,
-                })
-              },
+              onIterationProgress,
             )
           } else {
             // Normal single execution

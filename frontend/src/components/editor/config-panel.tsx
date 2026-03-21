@@ -23,7 +23,7 @@ import { SceneConfig } from "./scene-config"
 const SceneEditorModal = lazy(() => import("./scene-editor-modal").then(m => ({ default: m.SceneEditorModal })))
 import { IterationResultsPanel } from "./iteration-results-panel"
 import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
-import { REPEATABLE_NODE_TYPES } from "@nodaro-shared/repeat-types"
+import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro-shared/repeat-types"
 import {
   getConnectedSources,
   getModelIdentifier,
@@ -709,7 +709,7 @@ export function ConfigPanel() {
                 min={1}
                 max={20}
                 step={1}
-                value={(nodeData as Record<string, unknown>).repeatCount as number ?? 1}
+                value={getEffectiveRepeatCount(nodeData as Record<string, unknown>)}
                 onChange={(e) => {
                   const val = parseInt(e.target.value, 10)
                   update({ repeatCount: isNaN(val) || val <= 1 ? undefined : Math.min(val, 20) })

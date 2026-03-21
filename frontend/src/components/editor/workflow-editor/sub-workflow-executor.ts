@@ -7,7 +7,7 @@ import { isExecutableNode, type ExecutionContext } from "./types"
 import { executeNode } from "./execute-node"
 import { getListInputForNode } from "./node-input-resolver"
 import { executeNodeForList } from "./list-execution"
-import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES } from "@nodaro-shared/repeat-types"
+import { expandItemsWithRepeat } from "@nodaro-shared/repeat-types"
 
 const MAX_DEPTH = 5
 
@@ -211,19 +211,10 @@ export async function executeSubWorkflow(
 
           const { nodes: latestNodes, edges: latestEdges } = useWorkflowStore.getState()
           const listItems = getListInputForNode(subNode, latestNodes, latestEdges)
+          const expanded = expandItemsWithRepeat(listItems, subNode.type ?? "", subNode.data as Record<string, unknown>)
 
-          const repeatCount = REPEATABLE_NODE_TYPES.has(subNode.type ?? "")
-            ? getEffectiveRepeatCount(subNode.data as Record<string, unknown>)
-            : 1
-
-          if (listItems && listItems.length > 1) {
-            const expandedItems = repeatCount > 1
-              ? listItems.flatMap(item => Array(repeatCount).fill(item) as string[])
-              : listItems
-            return executeNodeForList(subNode, expandedItems, ctx)
-          } else if (repeatCount > 1) {
-            const repeatedItems = Array(repeatCount).fill(REPEAT_PLACEHOLDER) as string[]
-            return executeNodeForList(subNode, repeatedItems, ctx)
+          if (expanded) {
+            return executeNodeForList(subNode, expanded, ctx)
           }
           return executeNode(subNode, ctx)
         }),

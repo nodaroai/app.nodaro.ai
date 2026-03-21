@@ -22,3 +22,30 @@ export function getEffectiveRepeatCount(nodeData: Record<string, unknown>): numb
   if (!raw || raw <= 1) return 1
   return Math.min(Math.max(Math.floor(raw), 1), 20)
 }
+
+/**
+ * Expand list items by repeatCount, or create synthetic repeat items.
+ * Returns null when no expansion is needed (single execution).
+ */
+export function expandItemsWithRepeat(
+  listItems: string[] | undefined,
+  nodeType: string,
+  nodeData: Record<string, unknown>,
+): string[] | null {
+  const repeatCount = REPEATABLE_NODE_TYPES.has(nodeType)
+    ? getEffectiveRepeatCount(nodeData)
+    : 1
+
+  if (listItems && listItems.length > 1) {
+    const expanded = repeatCount > 1
+      ? listItems.flatMap(item => Array(repeatCount).fill(item) as string[])
+      : listItems
+    return expanded
+  }
+
+  if (repeatCount > 1) {
+    return Array(repeatCount).fill(REPEAT_PLACEHOLDER) as string[]
+  }
+
+  return null
+}

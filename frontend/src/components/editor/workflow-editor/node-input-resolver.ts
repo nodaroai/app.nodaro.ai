@@ -130,7 +130,8 @@ export function extractNodeOutputAsList(
 
 /**
  * Extract all output values from a node's accumulated generatedResults.
- * Returns undefined if fewer than 2 results (no fan-out benefit), unless skipLengthGuard is true.
+ * When skipLengthGuard is true (useAllResults mode), returns even single-element arrays.
+ * When false (default), requires 2+ results for fan-out benefit.
  */
 function extractAllGeneratedResults(
   data: Record<string, unknown>,
@@ -139,13 +140,17 @@ function extractAllGeneratedResults(
   const results = data.generatedResults as
     | Array<{ url?: string; text?: string }>
     | undefined;
-  if (!results || (results.length <= 1 && !skipLengthGuard)) return undefined;
-  if (results.length === 0) return undefined;
+  if (!results || results.length === 0) return undefined;
+
   const outputs = results
     .map((r) => r.url || r.text || "")
     .filter((v) => v.length > 0);
   if (outputs.length === 0) return undefined;
-  return (!skipLengthGuard && outputs.length <= 1) ? undefined : outputs;
+
+  // Default: require 2+ outputs for fan-out benefit
+  // useAllResults: return even a single result since user explicitly opted in
+  if (!skipLengthGuard && outputs.length <= 1) return undefined;
+  return outputs;
 }
 
 /**
