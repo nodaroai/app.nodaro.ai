@@ -94,13 +94,14 @@ describe("executeNodeForList", () => {
 
     await executeNodeForList(mockNodes[0] as unknown as WorkflowNode, ["my prompt"], makeCtx())
 
-    // executeNode(freshNode, ctx, overridePrompt, overrideImageUrl)
+    // executeNode(freshNode, ctx, overridePrompt, overrideImageUrl, listIterationIndex)
     // For text: overridePrompt="my prompt", overrideImageUrl=undefined
     expect(mockExecuteNode).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
       "my prompt",
       undefined,
+      0,
     )
   })
 
@@ -119,6 +120,7 @@ describe("executeNodeForList", () => {
       expect.anything(),
       undefined,
       "https://example.com/img.png",
+      0,
     )
   })
 
@@ -138,6 +140,7 @@ describe("executeNodeForList", () => {
       expect.anything(),
       undefined,
       "video.mp4",
+      0,
     )
   })
 
