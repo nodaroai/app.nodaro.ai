@@ -89,7 +89,16 @@ export function GalleryView({
                       {title}
                     </span>
                     <div className="flex items-center justify-center h-24 rounded-lg bg-muted/30 text-muted-foreground">
-                      {result.url ? (
+                      {result.url && isVideoUrl(result.url) ? (
+                        <div className="relative w-full h-full cursor-pointer" onClick={() => onOpenMedia?.(node.id)}>
+                          <video src={result.url} className="w-full h-full object-cover rounded-lg" muted playsInline />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center">
+                              <Play className="w-3.5 h-3.5 text-white ml-0.5" fill="white" />
+                            </div>
+                          </div>
+                        </div>
+                      ) : result.url ? (
                         <CachedImage
                           src={result.url}
                           alt=""

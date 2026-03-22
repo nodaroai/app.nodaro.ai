@@ -62,7 +62,7 @@ import { isVideoUrl } from "@/lib/media-type"
 import { responsiveColumns } from "@/lib/presentation-display"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { StatusBadge } from "./output-cards/shared"
-import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled } from "./helpers"
+import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, getLoopFirstMedia, areAllInputsFilled } from "./helpers"
 import { buildNodeRefMap } from "@/lib/node-refs"
 import { RunTargetSelector } from "./run-target-selector"
 import { ViewModeSelector, ALL_VIEW_MODES } from "./view-mode-selector"
@@ -470,10 +470,17 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       // Check input values (upload nodes in fullscreen store URLs here)
       const inputUrl = presInputValues[nodeId]?.url as string | undefined
       if (inputUrl) return { url: inputUrl, text: undefined }
+      // Loop/table node: user-edited rows are inputs (always shown), but snapshot rows respect suppressOutputFallback
+      const node = nodeMap.get(nodeId)
+      if (node?.type === "loop") {
+        const loopRows = presInputValues[nodeId]?.rows as string[][] | undefined
+        if (loopRows) return getLoopFirstMedia(node.data as Record<string, unknown>, loopRows)
+        if (suppressOutputFallback) return { url: undefined, text: undefined }
+        return getLoopFirstMedia(node.data as Record<string, unknown>)
+      }
       // When outputs are explicitly cleared (e.g. Create New), don't fall back to snapshot
       if (suppressOutputFallback) return { url: undefined, text: undefined }
       // Fall back to node data (results already saved in workflow)
-      const node = nodeMap.get(nodeId)
       if (!node) return { url: undefined, text: undefined }
       return getNodeResultWithInputFallback(node)
     },
