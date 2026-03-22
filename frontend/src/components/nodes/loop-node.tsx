@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useMemo } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Repeat, Type } from "lucide-react"
+import { Film, Image, Music, Repeat, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
@@ -124,9 +124,23 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       {hasTarget && <HandleIcon icon={<Type />} side="left" top="calc(100% - 20px)" />}
-      {sourceHandles.map((h) => (
-        <HandleIcon key={h.id} icon={<Type />} top={h.top} />
-      ))}
+      {sourceHandles.map((h) => {
+        const col = columns.find((c) => c.handleId === h.id)
+        const colType = col?.type ?? "text"
+        const icon = colType === "image-url" ? <Image />
+          : colType === "video-url" ? <Film />
+          : colType === "audio-url" ? <Music />
+          : <Type />
+        const colorMap: Record<string, "pink" | "indigo" | "green" | "cyan"> = {
+          "image-url": "pink",
+          "video-url": "indigo",
+          "audio-url": "green",
+          "text": "cyan",
+        }
+        return (
+          <HandleIcon key={h.id} icon={icon} color={colorMap[colType] ?? "cyan"} top={h.top} />
+        )
+      })}
     </div>
   )
 }
