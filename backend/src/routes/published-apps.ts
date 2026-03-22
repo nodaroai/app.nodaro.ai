@@ -402,8 +402,9 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // Generate slug with collision retry
     // Reuse inherited slug if the custom slug base matches (or no custom slug given).
     // Otherwise generate a new slug from the custom slug base with a fresh random suffix.
+    const sanitizedProvided = providedSlug ? sanitizeSlugBase(providedSlug) : null
     const canReuseInherited = inheritedSlug && (
-      !providedSlug || inheritedSlug.startsWith(sanitizeSlugBase(providedSlug) + "-")
+      !sanitizedProvided || inheritedSlug === sanitizedProvided || inheritedSlug.startsWith(sanitizedProvided + "-")
     )
 
     const MAX_SLUG_RETRIES = 5
