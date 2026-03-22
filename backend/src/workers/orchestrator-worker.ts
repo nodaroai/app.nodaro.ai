@@ -498,6 +498,12 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
               triggerData,
             )
 
+            // Store resolved inputs in node state for debugging visibility
+            nodeStates[node.id] = {
+              ...nodeStates[node.id],
+              inputs: inputs as unknown as Record<string, unknown>,
+            }
+
             result = await executeNode(
               node,
               inputs,
@@ -513,6 +519,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
             status: "completed",
             nodeType: node.type,
             output: result.output,
+            inputs: nodeStates[node.id]?.inputs,
             jobId: result.jobId,
             jobIds: result.jobIds,
             usageLogId: result.usageLogId,
@@ -582,6 +589,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
             status: "failed",
             nodeType: node.type,
             error,
+            inputs: nodeStates[node.id]?.inputs,
             jobId: nodeStates[node.id]?.jobId,
             startedAt: nodeStates[node.id]?.startedAt,
             completedAt: new Date().toISOString(),

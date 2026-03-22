@@ -71,6 +71,8 @@ export interface NodeExecutionState {
   usageLogId?: string
   creditsUsed?: number
   output?: NodeOutput
+  /** Resolved inputs fed to this node (stored for debugging). */
+  inputs?: Record<string, unknown>
   error?: string
   startedAt?: string
   completedAt?: string

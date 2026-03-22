@@ -107,6 +107,10 @@ export interface NodeState {
   /** All job IDs from fan-out iterations (list/loop). */
   jobIds?: string[]
   creditsUsed?: number
+  /** Node output (videoUrl, imageUrl, audioUrl, text, etc.) */
+  output?: Record<string, unknown>
+  /** Resolved inputs fed to this node (for debugging). */
+  inputs?: Record<string, unknown>
   error?: string
   startedAt?: string
   completedAt?: string
