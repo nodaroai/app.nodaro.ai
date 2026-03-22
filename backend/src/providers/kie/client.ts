@@ -455,7 +455,11 @@ export async function runVeoTask(
   // Add image URLs for image-to-video mode
   if (imageUrls?.length) {
     requestBody.imageUrls = imageUrls
-    requestBody.generationType = "FIRST_AND_LAST_FRAMES_2_VIDEO"
+    // Use FIRST_AND_LAST_FRAMES_2_VIDEO only when both start+end frames are provided;
+    // single image uses IMAGE_2_VIDEO to avoid VEO treating it as both first and last frame
+    requestBody.generationType = imageUrls.length >= 2
+      ? "FIRST_AND_LAST_FRAMES_2_VIDEO"
+      : "IMAGE_2_VIDEO"
   } else {
     requestBody.generationType = "TEXT_2_VIDEO"
   }
