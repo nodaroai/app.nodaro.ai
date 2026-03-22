@@ -78,6 +78,12 @@ vi.mock("../types", () => ({
 
 vi.mock("../poll-job", () => ({
   pollJobToCompletion: (...args: unknown[]) => mockPollJobToCompletion(...args),
+  setSuppressToasts: () => {},
+  guardedToast: {
+    info: (...args: unknown[]) => mockToastInfo(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+    error: (...args: unknown[]) => mockToastError(...args),
+  },
 }))
 
 import {

@@ -32,7 +32,7 @@ vi.mock("../base-node", () => ({
 
 vi.mock("lucide-react", () => {
   const I = (p: any) => <span data-testid="mock-icon" {...p} />
-  return { Repeat: I, Type: I }
+  return { Repeat: I, Type: I, Table2: I, Info: I, Film: I, Image: I, Music: I }
 })
 
 vi.mock("../run-node-button", () => ({

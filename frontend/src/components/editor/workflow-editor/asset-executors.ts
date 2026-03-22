@@ -29,7 +29,7 @@ import {
   checkStorageError,
   type ExecutionContext,
 } from "./types";
-import { pollJobToCompletion } from "./poll-job";
+import { pollJobToCompletion, guardedToast } from "./poll-job";
 
 // --- Character/Face/Object/Location generation ---
 
@@ -37,11 +37,11 @@ export function runCharacterGeneration(
   nodeId: string,
   data: CharacterNodeData,
   ctx: ExecutionContext,
-): Promise<void> {
+): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, { executionStatus: "running" });
 
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     generateCharacter({
       name: data.characterName,
       description: data.description || undefined,
@@ -53,7 +53,7 @@ export function runCharacterGeneration(
       userId: ctx.userId,
     })
       .then(({ jobId }) => {
-        toast.info("Character generation started", {
+        guardedToast.info("Character generation started", {
           description: `Job ID: ${jobId}`,
         });
         updateNodeData(nodeId, { currentJobId: jobId });
@@ -91,7 +91,7 @@ export function runCharacterGeneration(
                   activeResultIndex: 0,
                   currentJobId: undefined,
                 });
-                toast.success("Character portrait generated");
+                guardedToast.success("Character portrait generated");
 
                 const supabase = createClient();
                 const {
@@ -119,7 +119,7 @@ export function runCharacterGeneration(
                   })
                   .catch(() => {});
 
-                resolve();
+                resolve((imageUrl as string) ?? "");
               } else if (job.status === "failed") {
                 ctx.untrackInterval(poll);
                 const errMsg = job.error_message ?? "Unknown error";
@@ -128,7 +128,7 @@ export function runCharacterGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                toast.error("Character generation failed", {
+                guardedToast.error("Character generation failed", {
                   description: errMsg,
                 });
                 reject(new Error(errMsg));
@@ -146,7 +146,7 @@ export function runCharacterGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                toast.error("Failed to check job status");
+                guardedToast.error("Failed to check job status");
                 reject(err);
               }
             }
@@ -161,7 +161,7 @@ export function runCharacterGeneration(
           currentJobId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          toast.error("Failed to start character generation", {
+          guardedToast.error("Failed to start character generation", {
             description: errMsg,
           });
         }
@@ -174,7 +174,7 @@ export function runFaceGeneration(
   nodeId: string,
   data: FaceNodeData,
   ctx: ExecutionContext,
-): Promise<void> {
+): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, { executionStatus: "running" });
 
@@ -193,7 +193,7 @@ export function runFaceGeneration(
     style: data.style || "realistic",
   });
 
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     generateFace({
       name: data.faceName,
       description: data.description || undefined,
@@ -204,7 +204,7 @@ export function runFaceGeneration(
       userId: ctx.userId,
     })
       .then(({ jobId }) => {
-        toast.info("Face headshot generation started", {
+        guardedToast.info("Face headshot generation started", {
           description: `Job ID: ${jobId}`,
         });
         updateNodeData(nodeId, { currentJobId: jobId });
@@ -242,7 +242,7 @@ export function runFaceGeneration(
                   activeResultIndex: 0,
                   currentJobId: undefined,
                 });
-                toast.success("Face headshot generated");
+                guardedToast.success("Face headshot generated");
 
                 const supabase = createClient();
                 const {
@@ -265,7 +265,7 @@ export function runFaceGeneration(
                   })
                   .catch(() => {});
 
-                resolve();
+                resolve((imageUrl as string) ?? "");
               } else if (job.status === "failed") {
                 ctx.untrackInterval(poll);
                 const errMsg = job.error_message ?? "Unknown error";
@@ -274,7 +274,7 @@ export function runFaceGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                toast.error("Face headshot generation failed", {
+                guardedToast.error("Face headshot generation failed", {
                   description: errMsg,
                 });
                 reject(new Error(errMsg));
@@ -292,7 +292,7 @@ export function runFaceGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                toast.error("Failed to check job status");
+                guardedToast.error("Failed to check job status");
                 reject(err);
               }
             }
@@ -307,7 +307,7 @@ export function runFaceGeneration(
           currentJobId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          toast.error("Failed to start face headshot generation", {
+          guardedToast.error("Failed to start face headshot generation", {
             description: errMsg,
           });
         }
@@ -320,11 +320,11 @@ export function runObjectGeneration(
   nodeId: string,
   data: ObjectNodeData,
   ctx: ExecutionContext,
-): Promise<void> {
+): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, { executionStatus: "running" });
 
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     generateObject({
       name: data.objectName,
       description: data.description || undefined,
@@ -335,7 +335,7 @@ export function runObjectGeneration(
       userId: ctx.userId,
     })
       .then(({ jobId }) => {
-        toast.info("Object generation started", {
+        guardedToast.info("Object generation started", {
           description: `Job ID: ${jobId}`,
         });
         updateNodeData(nodeId, { currentJobId: jobId });
@@ -373,7 +373,7 @@ export function runObjectGeneration(
                   activeResultIndex: 0,
                   currentJobId: undefined,
                 });
-                toast.success("Object image generated");
+                guardedToast.success("Object image generated");
 
                 const supabaseObj = createClient();
                 const {
@@ -400,7 +400,7 @@ export function runObjectGeneration(
                   })
                   .catch(() => {});
 
-                resolve();
+                resolve((imageUrl as string) ?? "");
               } else if (job.status === "failed") {
                 ctx.untrackInterval(poll);
                 const errMsg = job.error_message ?? "Unknown error";
@@ -409,7 +409,7 @@ export function runObjectGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                toast.error("Object generation failed", {
+                guardedToast.error("Object generation failed", {
                   description: errMsg,
                 });
                 reject(new Error(errMsg));
@@ -427,7 +427,7 @@ export function runObjectGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                toast.error("Failed to check job status");
+                guardedToast.error("Failed to check job status");
                 reject(err);
               }
             }
@@ -442,7 +442,7 @@ export function runObjectGeneration(
           currentJobId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          toast.error("Failed to start object generation", {
+          guardedToast.error("Failed to start object generation", {
             description: errMsg,
           });
         }
@@ -455,11 +455,11 @@ export function runLocationGeneration(
   nodeId: string,
   data: LocationNodeData,
   ctx: ExecutionContext,
-): Promise<void> {
+): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, { executionStatus: "running" });
 
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     generateLocation({
       name: data.locationName,
       description: data.description || undefined,
@@ -470,7 +470,7 @@ export function runLocationGeneration(
       userId: ctx.userId,
     })
       .then(({ jobId }) => {
-        toast.info("Location generation started", {
+        guardedToast.info("Location generation started", {
           description: `Job ID: ${jobId}`,
         });
         updateNodeData(nodeId, { currentJobId: jobId });
@@ -508,7 +508,7 @@ export function runLocationGeneration(
                   activeResultIndex: 0,
                   currentJobId: undefined,
                 });
-                toast.success("Location image generated");
+                guardedToast.success("Location image generated");
 
                 const supabaseLoc = createClient();
                 const {
@@ -535,7 +535,7 @@ export function runLocationGeneration(
                   })
                   .catch(() => {});
 
-                resolve();
+                resolve((imageUrl as string) ?? "");
               } else if (job.status === "failed") {
                 ctx.untrackInterval(poll);
                 const errMsg = job.error_message ?? "Unknown error";
@@ -544,7 +544,7 @@ export function runLocationGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                toast.error("Location generation failed", {
+                guardedToast.error("Location generation failed", {
                   description: errMsg,
                 });
                 reject(new Error(errMsg));
@@ -557,7 +557,7 @@ export function runLocationGeneration(
                   executionStatus: "failed",
                   currentJobId: undefined,
                 });
-                toast.error("Failed to check job status");
+                guardedToast.error("Failed to check job status");
                 reject(err);
               }
             }
@@ -570,7 +570,7 @@ export function runLocationGeneration(
           currentJobId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          toast.error("Failed to start location generation", {
+          guardedToast.error("Failed to start location generation", {
             description: err instanceof Error ? err.message : "Unknown error",
           });
         }
@@ -685,7 +685,7 @@ export async function handleGenerateCharacterAsset(
     for (let i = 0; i < config.variants.length; i++) {
       const variant = config.variants[i];
       const variantName = config.names[i];
-      toast.info(
+      guardedToast.info(
         `Generating ${assetType}... ${i + 1}/${config.variants.length} (${variantName})`,
       );
 
@@ -709,7 +709,7 @@ export async function handleGenerateCharacterAsset(
     }
 
     updateNodeData(nodeId, { [statusKey]: "completed" });
-    toast.success(`${assetType} generated: ${results.length} images`);
+    guardedToast.success(`${assetType} generated: ${results.length} images`);
 
     const latestNode = useWorkflowStore
       .getState()
@@ -742,7 +742,7 @@ export async function handleGenerateCharacterAsset(
   } catch (err) {
     if (err instanceof WorkflowStaleError) return;
     updateNodeData(nodeId, { [statusKey]: "failed" });
-    toast.error(
+    guardedToast.error(
       `Failed to generate ${assetType} (${results.length}/${config.variants.length} completed)`,
       {
         description: err instanceof Error ? err.message : "Unknown error",
@@ -797,7 +797,7 @@ export async function handleGenerateObjectAsset(
     for (let i = 0; i < config.variants.length; i++) {
       const variant = config.variants[i];
       const variantName = config.names[i];
-      toast.info(
+      guardedToast.info(
         `Generating ${assetType}... ${i + 1}/${config.variants.length} (${variantName})`,
       );
 
@@ -820,7 +820,7 @@ export async function handleGenerateObjectAsset(
     }
 
     updateNodeData(nodeId, { [statusKey]: "completed" });
-    toast.success(`${assetType} generated: ${results.length} images`);
+    guardedToast.success(`${assetType} generated: ${results.length} images`);
 
     const latestNode = useWorkflowStore
       .getState()
@@ -853,7 +853,7 @@ export async function handleGenerateObjectAsset(
   } catch (err) {
     if (err instanceof WorkflowStaleError) return;
     updateNodeData(nodeId, { [statusKey]: "failed" });
-    toast.error(
+    guardedToast.error(
       `Failed to generate ${assetType} (${results.length}/${config.variants.length} completed)`,
       {
         description: err instanceof Error ? err.message : "Unknown error",
@@ -908,7 +908,7 @@ export async function handleGenerateLocationAsset(
     for (let i = 0; i < config.variants.length; i++) {
       const variant = config.variants[i];
       const variantName = config.names[i];
-      toast.info(
+      guardedToast.info(
         `Generating ${assetType}... ${i + 1}/${config.variants.length} (${variantName})`,
       );
 
@@ -931,7 +931,7 @@ export async function handleGenerateLocationAsset(
     }
 
     updateNodeData(nodeId, { [statusKey]: "completed" });
-    toast.success(`${assetType} generated: ${results.length} images`);
+    guardedToast.success(`${assetType} generated: ${results.length} images`);
 
     const latestNode = useWorkflowStore
       .getState()
@@ -964,7 +964,7 @@ export async function handleGenerateLocationAsset(
   } catch (err) {
     if (err instanceof WorkflowStaleError) return;
     updateNodeData(nodeId, { [statusKey]: "failed" });
-    toast.error(
+    guardedToast.error(
       `Failed to generate ${assetType} (${results.length}/${config.variants.length} completed)`,
       {
         description: err instanceof Error ? err.message : "Unknown error",

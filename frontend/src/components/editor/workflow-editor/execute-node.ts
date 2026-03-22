@@ -153,7 +153,7 @@ import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, detectPreviewItemType, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
 import { resolveNodeInputs, type FrontendResolvedInputs } from "./node-input-resolver";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
-import { pollJobWithNodeUpdate } from "./poll-job";
+import { pollJobWithNodeUpdate, guardedToast } from "./poll-job";
 import {
   runImageGeneration,
   runEditImage,
@@ -245,7 +245,7 @@ function runProcessingNode(
   extraOutputFields?: (
     outputData: Record<string, unknown>,
   ) => Record<string, unknown>,
-): Promise<void> {
+): Promise<string> {
   return pollJobWithNodeUpdate(nodeId, apiCall, outputKey, label, ctx, extraOutputFields);
 }
 
@@ -287,7 +287,7 @@ export function executeNode(
   overridePrompt?: string,
   overrideMediaUrl?: string,
   listIterationIndex?: number,
-): Promise<void> {
+): Promise<string> {
   const { nodes, edges } = useWorkflowStore.getState();
   const inputs = resolveNodeInputs(node, nodes, edges, listIterationIndex);
 
@@ -1066,10 +1066,10 @@ export function executeNode(
       currentJobId: undefined,
     });
 
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
       forcedAlignmentApi(audioUrl, alignTranscript, ctx.userId)
         .then(({ jobId }) => {
-          toast.info("Forced alignment started", { description: `Job ID: ${jobId}` });
+          guardedToast.info("Forced alignment started", { description: `Job ID: ${jobId}` });
           updateNodeData(node.id, { currentJobId: jobId });
 
           let pollFailures = 0;
@@ -1096,8 +1096,8 @@ export function executeNode(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  toast.success("Forced alignment complete");
-                  resolve();
+                  guardedToast.success("Forced alignment complete");
+                  resolve(JSON.stringify(alignment ?? []));
                 } else if (job.status === "failed") {
                   ctx.untrackInterval(poll);
                   const errMsg = job.error_message ?? "Alignment failed";
@@ -1107,7 +1107,7 @@ export function executeNode(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  toast.error("Forced alignment failed", { description: errMsg });
+                  guardedToast.error("Forced alignment failed", { description: errMsg });
                   reject(new Error(errMsg));
                 }
               } catch (err) {
@@ -1119,7 +1119,7 @@ export function executeNode(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  toast.error("Failed to check alignment status");
+                  guardedToast.error("Failed to check alignment status");
                   reject(err);
                 }
               }
@@ -1133,7 +1133,7 @@ export function executeNode(
             currentJobProgress: undefined,
           });
           if (!checkStorageError(err, ctx)) {
-            toast.error("Failed to start forced alignment", {
+            guardedToast.error("Failed to start forced alignment", {
               description: err instanceof Error ? err.message : "Unknown error",
             });
           }
@@ -1261,10 +1261,10 @@ export function executeNode(
       currentJobId: undefined,
     });
 
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
       sunoLyricsApi({ prompt, userId: ctx.userId })
         .then(({ jobId }) => {
-          toast.info("Lyrics generation started", {
+          guardedToast.info("Lyrics generation started", {
             description: `Job ID: ${jobId}`,
           });
           updateNodeData(node.id, { currentJobId: jobId });
@@ -1304,8 +1304,8 @@ export function executeNode(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  toast.success("Lyrics generation complete");
-                  resolve();
+                  guardedToast.success("Lyrics generation complete");
+                  resolve(first?.text ?? "");
                 } else if (job.status === "failed") {
                   ctx.untrackInterval(poll);
                   const errMsg =
@@ -1316,7 +1316,7 @@ export function executeNode(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  toast.error("Lyrics generation failed", {
+                  guardedToast.error("Lyrics generation failed", {
                     description: errMsg,
                   });
                   reject(new Error(errMsg));
@@ -1330,7 +1330,7 @@ export function executeNode(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  toast.error("Failed to check lyrics status");
+                  guardedToast.error("Failed to check lyrics status");
                   reject(err);
                 }
               }
@@ -1344,7 +1344,7 @@ export function executeNode(
             currentJobProgress: undefined,
           });
           if (!checkStorageError(err, ctx)) {
-            toast.error("Failed to start lyrics generation", {
+            guardedToast.error("Failed to start lyrics generation", {
               description:
                 err instanceof Error ? err.message : "Unknown error",
             });
@@ -1488,7 +1488,8 @@ export function executeNode(
           generatedResults: [{ url: "", timestamp: new Date().toISOString(), jobId: "" }],
           activeResultIndex: 0,
         });
-        toast.success("Style Boost completed");
+        guardedToast.success("Style Boost completed");
+        return result.text ?? "";
       })
       .catch((err) => {
         updateNodeData(node.id, {
@@ -1626,7 +1627,7 @@ export function executeNode(
 
     const getTranscribeAudioUrl = async (): Promise<string> => {
       if (!isVideoUrl) return audioUrl as string;
-      toast.info("Extracting audio from video...");
+      guardedToast.info("Extracting audio from video...");
       const result = await downloadYouTubeAudio(audioUrl as string);
 
       if (result.thumbnailUrl) {
@@ -1650,7 +1651,7 @@ export function executeNode(
       return result.url;
     };
 
-    return new Promise((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
       getTranscribeAudioUrl()
         .then((resolvedAudioUrl) => {
           audioUrl = resolvedAudioUrl;
@@ -1664,7 +1665,7 @@ export function executeNode(
           );
         })
         .then(({ jobId }) => {
-          toast.info("Transcription started", {
+          guardedToast.info("Transcription started", {
             description: `Job ID: ${jobId}`,
           });
           updateNodeData(node.id, { currentJobId: jobId });
@@ -1697,7 +1698,7 @@ export function executeNode(
                       currentJobId: undefined,
                       currentJobProgress: undefined,
                     });
-                    toast.error("Transcription failed", {
+                    guardedToast.error("Transcription failed", {
                       description: errMsg,
                     });
                     reject(new Error(errMsg));
@@ -1733,8 +1734,8 @@ export function executeNode(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  toast.success("Transcription complete");
-                  resolve();
+                  guardedToast.success("Transcription complete");
+                  resolve(text);
                 } else if (job.status === "failed") {
                   ctx.untrackInterval(poll);
                   const errMsg = job.error_message ?? "Unknown error";
@@ -1744,7 +1745,7 @@ export function executeNode(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  toast.error("Transcription failed", {
+                  guardedToast.error("Transcription failed", {
                     description: errMsg,
                   });
                   reject(new Error(errMsg));
@@ -1758,7 +1759,7 @@ export function executeNode(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  toast.error("Failed to check transcription status");
+                  guardedToast.error("Failed to check transcription status");
                   reject(err);
                 }
               }
@@ -1774,7 +1775,7 @@ export function executeNode(
             currentJobProgress: undefined,
           });
           if (!checkStorageError(err, ctx)) {
-            toast.error("Transcription failed", { description: errMsg });
+            guardedToast.error("Transcription failed", { description: errMsg });
           }
           reject(err);
         });
@@ -1823,7 +1824,8 @@ export function executeNode(
           activeResultIndex: newResults.length - 1,
           errorMessage: undefined,
         });
-        toast.success("Image described successfully");
+        guardedToast.success("Image described successfully");
+        return result.generatedText ?? "";
       })
       .catch((err) => {
         const errMsg = err instanceof Error ? err.message : "Unknown error";
@@ -1831,7 +1833,7 @@ export function executeNode(
           executionStatus: "failed",
           errorMessage: errMsg,
         });
-        toast.error("Image description failed", { description: errMsg });
+        guardedToast.error("Image description failed", { description: errMsg });
         throw err;
       });
   }
@@ -1870,7 +1872,7 @@ export function executeNode(
         executionStatus: "failed",
         errorMessage: "System prompt is required",
       });
-      return Promise.resolve();
+      return Promise.resolve("");
     }
 
     const userInput =
@@ -1930,16 +1932,17 @@ export function executeNode(
           generatedResults: [newResult, ...existingResults],
           activeResultIndex: 0,
         });
-        toast.success(
+        guardedToast.success(
           `AI Agent completed: ${items.length} item${items.length !== 1 ? "s" : ""} generated`,
         );
+        return result.generatedText ?? "";
       })
       .catch((err: Error) => {
         updateNodeData(node.id, {
           executionStatus: "failed",
           errorMessage: err.message || "Generation failed",
         });
-        toast.error(`AI Agent failed: ${err.message}`);
+        guardedToast.error(`AI Agent failed: ${err.message}`);
         throw err;
       });
   }
@@ -2151,7 +2154,7 @@ export function executeNode(
       currentJobProgress: 0,
     });
 
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
       extractSoraCharacter({
         mode: scData.mode,
         characterPrompt: scData.characterPrompt,
@@ -2163,7 +2166,7 @@ export function executeNode(
         userId: ctx.userId,
       })
         .then(({ jobId }) => {
-          toast.info("Sora Character extraction started", { description: `Job ID: ${jobId}` });
+          guardedToast.info("Sora Character extraction started", { description: `Job ID: ${jobId}` });
           updateNodeData(node.id, { currentJobId: jobId });
 
           let pollFailures = 0;
@@ -2192,7 +2195,7 @@ export function executeNode(
                       currentJobId: undefined,
                       currentJobProgress: undefined,
                     });
-                    toast.error("Sora Character failed", { description: errMsg });
+                    guardedToast.error("Sora Character failed", { description: errMsg });
                     reject(new Error(errMsg));
                     return;
                   }
@@ -2202,8 +2205,8 @@ export function executeNode(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  toast.success("Sora Character extraction complete");
-                  resolve();
+                  guardedToast.success("Sora Character extraction complete");
+                  resolve(characterId);
                 } else if (job.status === "failed") {
                   ctx.untrackInterval(poll);
                   const errMsg = job.error_message ?? "Sora Character extraction failed";
@@ -2213,7 +2216,7 @@ export function executeNode(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  toast.error("Sora Character failed", { description: errMsg });
+                  guardedToast.error("Sora Character failed", { description: errMsg });
                   reject(new Error(errMsg));
                 }
               } catch (err) {
@@ -2232,8 +2235,8 @@ export function executeNode(
                           currentJobId: undefined,
                           currentJobProgress: undefined,
                         });
-                        toast.success("Sora Character extraction complete");
-                        resolve();
+                        guardedToast.success("Sora Character extraction complete");
+                        resolve(characterId);
                         return;
                       }
                     }
@@ -2245,7 +2248,7 @@ export function executeNode(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  toast.error("Failed to check Sora Character status");
+                  guardedToast.error("Failed to check Sora Character status");
                   reject(err);
                 }
               }
@@ -2259,7 +2262,7 @@ export function executeNode(
             currentJobProgress: undefined,
           });
           if (!checkStorageError(err, ctx)) {
-            toast.error("Failed to start Sora Character extraction", {
+            guardedToast.error("Failed to start Sora Character extraction", {
               description: err instanceof Error ? err.message : "Unknown error",
             });
           }
@@ -2539,9 +2542,9 @@ export function executeNode(
       inputVideoUrl: videoUrl,
       errorMessage: undefined,
     });
-    toast.info("Manual edit required — click 'Open Editor' on the node");
-    return new Promise<void>((resolve, reject) => {
-      pendingManualEdits.set(node.id, { resolve, reject });
+    guardedToast.info("Manual edit required — click 'Open Editor' on the node");
+    return new Promise<string>((resolve, reject) => {
+      pendingManualEdits.set(node.id, { resolve: () => resolve(""), reject });
     });
   }
 
@@ -2808,7 +2811,8 @@ export function executeNode(
           executionStatus: "completed",
           sceneGraph: result.sceneGraph,
         });
-        toast.success("Composition generated");
+        guardedToast.success("Composition generated");
+        return "plan-ready";
       })
       .catch((err) => {
         updateNodeData(node.id, {
@@ -2860,7 +2864,8 @@ export function executeNode(
           executionStatus: "completed",
           effectPlan: result.effectPlan,
         });
-        toast.success("After effects plan generated");
+        guardedToast.success("After effects plan generated");
+        return "plan-ready";
       })
       .catch((err) => {
         updateNodeData(node.id, {
@@ -2927,7 +2932,8 @@ export function executeNode(
           executionStatus: "completed",
           overlayPlan: result.overlayPlan,
         });
-        toast.success("Lottie overlay plan generated");
+        guardedToast.success("Lottie overlay plan generated");
+        return "plan-ready";
       })
       .catch((err) => {
         updateNodeData(node.id, {
@@ -2988,7 +2994,8 @@ export function executeNode(
           executionStatus: "completed",
           titlePlan: result.titlePlan,
         });
-        toast.success("3D title plan generated");
+        guardedToast.success("3D title plan generated");
+        return "plan-ready";
       })
       .catch((err) => {
         updateNodeData(node.id, {
@@ -3024,7 +3031,8 @@ export function executeNode(
           executionStatus: "completed",
           motionPlan: result.motionPlan,
         });
-        toast.success("Motion graphics plan generated");
+        guardedToast.success("Motion graphics plan generated");
+        return "plan-ready";
       })
       .catch((err) => {
         updateNodeData(node.id, {
@@ -3129,8 +3137,8 @@ export function executeNode(
         executionStatus: "completed",
         compositePlan,
       });
-      toast.success("Composite plan built");
-      return Promise.resolve();
+      guardedToast.success("Composite plan built");
+      return Promise.resolve("");
     } catch (err) {
       updateNodeData(node.id, {
         executionStatus: "failed",
@@ -3341,7 +3349,7 @@ export function executeNode(
       if (output) { value = output; break }
     }
     updateNodeData(node.id, { result: value, executionStatus: "completed" })
-    return Promise.resolve()
+    return Promise.resolve("")
   }
 
   if (node.type === "router") {
@@ -3371,7 +3379,7 @@ export function executeNode(
       result: activeRoutes.length > 0 ? "routed" : undefined,
       executionStatus: "completed",
     })
-    return Promise.resolve()
+    return Promise.resolve("")
   }
 
   if (node.type === "combine-text") {
@@ -3429,7 +3437,7 @@ export function executeNode(
       combinedText,
       executionStatus: "completed",
     });
-    return Promise.resolve();
+    return Promise.resolve("");
   }
 
   if (node.type === "split-text") {
@@ -3461,7 +3469,7 @@ export function executeNode(
         executionStatus: "failed",
         errorMessage: "No input text received",
       });
-      return Promise.resolve();
+      return Promise.resolve("");
     }
 
     let parts = inputText.split(separator);
@@ -3480,7 +3488,7 @@ export function executeNode(
       __listResults: [...parts],
       __listTotal: parts.length,
     });
-    return Promise.resolve();
+    return Promise.resolve("");
   }
 
   // Preview — collect upstream values and pass through
@@ -3548,7 +3556,7 @@ export function executeNode(
       itemOrder: newOrder,
       executionStatus: "completed",
     });
-    return Promise.resolve();
+    return Promise.resolve("");
   }
 
   // Webhook Output — collect upstream data and POST to configured URL
@@ -3564,7 +3572,7 @@ export function executeNode(
 
     if (!url) {
       updateNodeData(node.id, { executionStatus: "failed", errorMessage: "No webhook URL configured" });
-      return Promise.resolve();
+      return Promise.resolve("");
     }
 
     // Build payload from upstream connections
@@ -3600,12 +3608,14 @@ export function executeNode(
             webhookStatusCode: result.statusCode,
             webhookResponseBody: result.responseBody,
           });
+          return "";
         },
         (err) => {
           updateNodeData(node.id, {
             executionStatus: "failed",
             errorMessage: err instanceof Error ? err.message : "Webhook send failed",
           });
+          return "";
         },
       ),
     );
@@ -3675,6 +3685,7 @@ export function executeNode(
               timestamp: new Date().toISOString(),
             }, ...prev],
           });
+          return result.platformPostUrl ?? "";
         },
         (err) => {
           updateNodeData(node.id, {
@@ -3695,7 +3706,7 @@ export function executeNode(
 
     if (!mediaUrl) {
       updateNodeData(node.id, { executionStatus: "failed", errorMessage: "No media input connected" });
-      return Promise.resolve();
+      return Promise.resolve("");
     }
 
     updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
@@ -3716,12 +3727,14 @@ export function executeNode(
             timestamp: new Date().toISOString(),
           }, ...prev],
         });
+        return result.url ?? "";
       },
       (err) => {
         updateNodeData(node.id, {
           executionStatus: "failed",
           errorMessage: err instanceof Error ? err.message : "Save to storage failed",
         });
+        return "";
       },
     );
   }
@@ -3734,7 +3747,7 @@ export function executeNode(
 
     if (!content) {
       updateNodeData(node.id, { executionStatus: "failed", errorMessage: "No content input connected" });
-      return Promise.resolve();
+      return Promise.resolve("");
     }
 
     updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
@@ -3754,12 +3767,14 @@ export function executeNode(
           approved: result.approved,
           reason: result.reason,
         });
+        return result.reason ?? "";
       },
       (err) => {
         updateNodeData(node.id, {
           executionStatus: "failed",
           errorMessage: err instanceof Error ? err.message : "QA check failed",
         });
+        return "";
       },
     );
   }
@@ -3767,9 +3782,9 @@ export function executeNode(
   // Sub-Workflow — delegates to the sub-workflow executor
   if (node.type === "sub-workflow") {
     return import("./sub-workflow-executor").then(({ executeSubWorkflow }) =>
-      executeSubWorkflow(node, ctx),
+      executeSubWorkflow(node, ctx).then(() => ""),
     )
   }
 
-  return Promise.resolve();
+  return Promise.resolve("");
 }

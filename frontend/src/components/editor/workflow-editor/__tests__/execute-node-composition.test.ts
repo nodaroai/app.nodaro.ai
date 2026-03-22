@@ -160,6 +160,12 @@ vi.mock("../execution-graph", () => ({
 vi.mock("../poll-job", () => ({
   pollJobWithNodeUpdate: (...args: unknown[]) =>
     mockPollJobWithNodeUpdate(...args),
+  setSuppressToasts: () => {},
+  guardedToast: {
+    info: (...args: unknown[]) => mockToastInfo(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+    error: (...args: unknown[]) => mockToastError(...args),
+  },
 }))
 
 vi.mock("../node-executors", () => ({
