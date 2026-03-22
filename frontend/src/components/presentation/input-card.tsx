@@ -1,6 +1,6 @@
 import { useMemo } from "react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import type { WorkflowNode, PresentationDisplay } from "@/types/nodes"
+import type { WorkflowNode, PresentationDisplay, InputMode } from "@/types/nodes"
 import { getNodeLabel } from "@/lib/presentation-utils"
 import { CONFIG_INPUT_TYPES } from "./node-config-modal"
 import { TextInputCard } from "./input-cards/text-input-card"
@@ -16,6 +16,8 @@ import { hasCredits } from "@/lib/edition"
 /** System-wide ceiling for fan-out items. Will be fetched from app_settings in future. */
 export const DEFAULT_SYSTEM_MAX_FANOUT = 20
 
+export type { InputMode }
+
 export interface InputCardProps {
   node: WorkflowNode
   isFullscreen: boolean
@@ -26,6 +28,8 @@ export interface InputCardProps {
   onOpenConfig?: (node: WorkflowNode) => void
   refMap?: Map<string, string>
   display?: PresentationDisplay
+  inputMode?: InputMode
+  minLines?: number
   nodes?: Array<{ id: string; type?: string; data: Record<string, unknown> }>
   edges?: Array<{ source: string; target: string }>
 }
@@ -41,6 +45,8 @@ export function InputCard({
   onOpenConfig,
   refMap,
   display,
+  inputMode,
+  minLines,
   nodes,
   edges,
 }: InputCardProps) {
@@ -48,7 +54,6 @@ export function InputCard({
   const data = node.data as Record<string, unknown>
   const effectiveMaxItems = Math.min((data.maxItems as number) ?? 10, DEFAULT_SYSTEM_MAX_FANOUT)
 
-  // Infer downstream prompt context for prompt helper button
   const promptContext = useMemo(
     () => (nodes && edges ? inferPromptContext(node.id, nodes, edges) : null),
     [node.id, nodes, edges],
@@ -89,6 +94,8 @@ export function InputCard({
           readOnly={readOnly}
           refMap={refMap}
           presentationReadOnly={isPresReadOnly}
+          inputMode={inputMode}
+          minLines={minLines}
           promptHelper={isPresReadOnly ? undefined : promptHelperProp}
         />
       )
@@ -172,6 +179,8 @@ export function InputCard({
           inputValues={inputValues}
           onUpdateInput={onUpdateInput}
           readOnly={readOnly}
+          inputMode={inputMode}
+          minLines={minLines}
           promptHelper={promptHelperProp}
         />
       )

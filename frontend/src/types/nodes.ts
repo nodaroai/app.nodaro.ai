@@ -73,6 +73,8 @@ export interface PresentationDisplay {
   viewMode?: string
 }
 
+export type InputMode = "prompt" | "multiline" | "oneline" | "inline"
+
 export type LoopNodeData = {
   [key: string]: unknown
   label: string
