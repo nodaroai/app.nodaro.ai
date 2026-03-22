@@ -47,6 +47,21 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   }),
 }))
 
+vi.mock("@/hooks/use-file-upload", () => ({
+  useFileUpload: () => ({
+    upload: vi.fn(),
+    isUploading: false,
+    uploadError: null,
+    clearError: vi.fn(),
+    storageExceeded: { exceeded: false, usedBytes: 0, quotaBytes: 0, tier: "" },
+    clearStorageExceeded: vi.fn(),
+  }),
+}))
+
+vi.mock("@/components/credits/StorageExceededModal", () => ({
+  StorageExceededModal: () => null,
+}))
+
 function renderNode(overrides: Record<string, unknown> = {}) {
   const defaultProps = {
     id: "node-1",
