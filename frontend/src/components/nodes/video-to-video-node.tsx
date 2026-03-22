@@ -122,7 +122,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
               <CachedImage
                 src={activeThumbnail}
                 alt="Video preview"
-                className="w-full h-full object-cover rounded-xl cursor-pointer"
+                className="w-full h-auto rounded-xl cursor-pointer"
                 style={{ minHeight: 180 }}
                 onClick={() => selectNode(id)}
                 thumbnail={!useFull}
@@ -131,7 +131,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
             ) : (
               <video
                 src={activeUrl}
-                className="w-full object-cover rounded-xl cursor-pointer"
+                className="w-full h-auto rounded-xl cursor-pointer"
                 style={{ minHeight: 180 }}
                 onClick={() => selectNode(id)}
                 autoPlay={videoAutoplay}

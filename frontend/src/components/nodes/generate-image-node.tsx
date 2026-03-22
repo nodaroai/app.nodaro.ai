@@ -160,7 +160,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
             <CachedImage
               src={activeUrl}
               alt="Generated"
-              className="w-full object-cover rounded-xl"
+              className="w-full h-auto rounded-xl"
               thumbnail={!useFull}
               thumbnailWidth={320}
             />
