@@ -7,6 +7,8 @@
  * - Cycle detection via workflowId:routeId tracking
  */
 
+import { config } from "../../lib/config.js"
+import { settledWithLimit } from "../../lib/settled-with-limit.js"
 import { supabase } from "../../lib/supabase.js"
 import {
   buildExecutionLevels,
@@ -150,8 +152,7 @@ export async function executeSubWorkflow(
       return true
     })
 
-    const results = await Promise.allSettled(
-      executableNodes.map(async (subNode) => {
+    const tasks = executableNodes.map((subNode) => async () => {
         nodeStates[subNode.id] = {
           status: "running",
           startedAt: new Date().toISOString(),
@@ -189,8 +190,9 @@ export async function executeSubWorkflow(
         }
 
         return result
-      }),
-    )
+    })
+    const levelAborted = { cancelled: ctx.cancelled }
+    const results = await settledWithLimit(tasks, config.MAX_CONCURRENT_NODES_PER_EXECUTION, levelAborted)
 
     // Check for failures
     for (let i = 0; i < results.length; i++) {

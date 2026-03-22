@@ -35,9 +35,35 @@ import { filterCloneNodes } from "../../../packages/shared/src/clone-utils.js"
 import { migrateEdgeOutputMode } from "../../../packages/shared/src/edge-range.js"
 import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, expandItemsWithRepeat } from "../../../packages/shared/src/repeat-types.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
+import { settledWithLimit } from "../lib/settled-with-limit.js"
 
 /** Max nodes a single workflow execution can run concurrently. Prevents one large workflow from starving other users. */
 const MAX_CONCURRENT_NODES_PER_EXECUTION = config.MAX_CONCURRENT_NODES_PER_EXECUTION
+
+// ---------------------------------------------------------------------------
+// Stale execution cleanup
+// ---------------------------------------------------------------------------
+
+/**
+ * On startup, mark any "running" or "stopping" executions as failed.
+ * These are orphaned from a previous crash — the BullMQ jobs that were
+ * processing them are gone, so they'll never complete on their own.
+ * "pending" executions are left alone — BullMQ will retry their jobs.
+ */
+async function cleanupStaleExecutions(): Promise<void> {
+  const { data: cleaned, error } = await supabase
+    .from("workflow_executions")
+    .update({
+      status: "failed",
+      error_message: "Execution interrupted by orchestrator restart",
+      completed_at: new Date().toISOString(),
+    })
+    .in("status", ["running", "stopping"])
+    .select("id")
+
+  if (error || !cleaned || cleaned.length === 0) return
+  console.log(`[orchestrator] Cleaned up ${cleaned.length} stale execution(s): ${cleaned.map((r) => r.id).join(", ")}`)
+}
 
 // ---------------------------------------------------------------------------
 // Worker creation
@@ -72,6 +98,11 @@ export function createOrchestratorWorker() {
     console.log(
       `[orchestrator] Execution ${job.data.executionId} completed`,
     )
+  })
+
+  // Clean up orphaned executions from previous crash before processing new ones
+  cleanupStaleExecutions().catch((err) => {
+    console.error("[orchestrator] Failed to clean up stale executions:", err)
   })
 
   return worker
@@ -519,7 +550,12 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
 
           return result
       })
-      const results = await settledWithLimit(tasks, MAX_CONCURRENT_NODES_PER_EXECUTION, ctx)
+      // Per-level abort ref so fail-fast doesn't pollute ctx.cancelled
+      // (which is checked between levels for stopping mode).
+      // User cancellation still works: running tasks detect it in their poll
+      // loops and throw, which triggers fail-fast on this ref.
+      const levelAborted = { cancelled: ctx.cancelled }
+      const results = await settledWithLimit(tasks, MAX_CONCURRENT_NODES_PER_EXECUTION, levelAborted)
 
       // Check for failures
       for (let i = 0; i < results.length; i++) {
@@ -819,46 +855,6 @@ function emitExecutionEvent(event: ExecutionEvent): void {
   } catch {
     // Never let event emission break the orchestrator
   }
-}
-
-/**
- * Like Promise.allSettled but limits how many tasks run concurrently.
- * Uses a worker-pool pattern so a new task starts as soon as a slot frees up.
- * When `cancelledRef` is provided and becomes truthy, remaining un-started
- * tasks are skipped (already-running tasks continue to completion/rejection).
- */
-async function settledWithLimit<T>(
-  tasks: (() => Promise<T>)[],
-  limit: number,
-  cancelledRef?: { cancelled: boolean },
-): Promise<PromiseSettledResult<T>[]> {
-  const results: PromiseSettledResult<T>[] = new Array(tasks.length)
-  let nextIndex = 0
-
-  async function worker(): Promise<void> {
-    while (nextIndex < tasks.length) {
-      // Skip remaining tasks if execution was cancelled
-      if (cancelledRef?.cancelled) {
-        const idx = nextIndex++
-        results[idx] = { status: "rejected", reason: new Error("Execution cancelled") }
-        continue
-      }
-      const idx = nextIndex++
-      try {
-        const value = await tasks[idx]()
-        results[idx] = { status: "fulfilled", value }
-      } catch (reason) {
-        results[idx] = { status: "rejected", reason }
-      }
-    }
-  }
-
-  const workers = Array.from(
-    { length: Math.min(limit, tasks.length) },
-    () => worker(),
-  )
-  await Promise.all(workers)
-  return results
 }
 
 async function checkExecutionControl(executionId: string): Promise<"running" | "cancelled" | "stopping"> {

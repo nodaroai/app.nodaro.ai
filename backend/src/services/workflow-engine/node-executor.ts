@@ -27,7 +27,7 @@ import type {
   NodeExecutionState,
   OrchestratorContext,
 } from "./types.js"
-import { JOB_POLL_INTERVAL_MS, NODE_TIMEOUT_MS } from "./types.js"
+import { JOB_POLL_INTERVAL_MS, NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "./types.js"
 import { isSourceNode, isSkipNode } from "./execution-graph.js"
 
 // ---------------------------------------------------------------------------
@@ -585,11 +585,19 @@ async function pollJobToCompletion(
 ): Promise<ExecuteNodeResult> {
   let processingStartTime: number | null = null
   let pollCycle = 0
+  const pollStartTime = Date.now()
 
   while (true) {
     // Check cancellation (fast path — already flagged by orchestrator or sibling node)
     if (ctx.cancelled) {
       await cancelJobAndThrow(jobId, usageLogId, "Execution cancelled")
+    }
+
+    // Absolute timeout — prevents infinite polling when job never leaves "pending"
+    // (e.g. worker down, queue full). Safety net beyond NODE_TIMEOUT_MS which only
+    // starts counting after the worker picks up the job.
+    if (Date.now() - pollStartTime > POLL_ABSOLUTE_TIMEOUT_MS) {
+      await cancelJobAndThrow(jobId, usageLogId, `Poll timeout: job did not complete within ${POLL_ABSOLUTE_TIMEOUT_MS / 1000}s (may still be pending in queue)`)
     }
 
     // Periodically re-check execution status from DB so mid-level cancellation
@@ -604,7 +612,10 @@ async function pollJobToCompletion(
         .select("status")
         .eq("id", ctx.executionId)
         .single()
-      if (execRow?.status === "cancelled" || execRow?.status === "stopping") {
+      // "stopping" is handled at the level boundary (orchestrator-worker.ts) —
+      // it means "finish current level, then stop". Only "cancelled" should
+      // trigger immediate job cancellation mid-poll.
+      if (execRow?.status === "cancelled") {
         ctx.cancelled = true
         await cancelJobAndThrow(jobId, usageLogId, "Execution cancelled")
       }

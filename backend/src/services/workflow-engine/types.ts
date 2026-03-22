@@ -200,5 +200,9 @@ export const WORKFLOW_TIMEOUT_MS = 60 * 60 * 1000 // 60 minutes
 /** Polling interval for checking job completion (ms) */
 export const JOB_POLL_INTERVAL_MS = 3_000 // 3 seconds
 
+/** Absolute max time a single poll loop can run, including queue wait (ms).
+ *  Safety net — even if the job stays "pending" forever (worker down), we bail out. */
+export const POLL_ABSOLUTE_TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes
+
 /** Max depth for sub-workflow nesting */
 export const MAX_SUB_WORKFLOW_DEPTH = 5
