@@ -207,6 +207,14 @@ html, body {
   z-index: -1 !important;
 }
 
+/* When a node has been user-resized, override hardcoded maxWidth/width constraints
+   in node wrapper divs so content fills the React Flow wrapper's saved dimensions. */
+.react-flow__node.rf-resized > * {
+  max-width: none !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 /* Animated edges during workflow execution */
 .react-flow__edge.animated path.react-flow__edge-path {
   stroke-dasharray: 5 5;

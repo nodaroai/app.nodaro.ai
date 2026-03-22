@@ -271,6 +271,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       let hasContentChange = false
       let hasSelectionChange = false
       let lastSelectedId: string | null = null
+      const resizedNodeIds: string[] = []
       for (const c of changes) {
         if (c.type === "select") {
           hasSelectionChange = true
@@ -278,10 +279,23 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         } else if (c.type === "dimensions") {
           // User-initiated resize (NodeResizer) sets resizing flag — treat as content change
           // so the resized dimensions get auto-saved. Auto-measurement events don't have resizing.
-          if ("resizing" in c && c.resizing) hasContentChange = true
+          if ("resizing" in c && c.resizing) {
+            hasContentChange = true
+            resizedNodeIds.push(c.id)
+          }
         } else {
           hasContentChange = true
         }
+      }
+
+      // Mark resized nodes with className so CSS can override hardcoded maxWidth/width
+      // constraints in node wrapper divs, allowing content to fill the resized area on reload.
+      if (resizedNodeIds.length > 0) {
+        newNodes = newNodes.map((n) =>
+          resizedNodeIds.includes(n.id) && !n.className?.includes("rf-resized")
+            ? { ...n, className: ((n.className ?? "") + " rf-resized").trim() }
+            : n,
+        )
       }
 
       // Don't sync selectedNodeId from React Flow selection events here.
