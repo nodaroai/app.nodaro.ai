@@ -357,6 +357,9 @@ export function resolveNodeInputs(
         output = srcListResults[srcListResults.length - 1];
       } else if (edgeMode === "all") {
         output = srcListResults.join(", ");
+      } else if (edgeMode === "each" && listIterationIndex !== undefined) {
+        // During list fan-out, index into the i-th result from each "each" source
+        output = srcListResults[listIterationIndex] ?? srcListResults[srcListResults.length - 1];
       }
     }
     if (!output && src.type === "loop" && listIterationIndex !== undefined) {

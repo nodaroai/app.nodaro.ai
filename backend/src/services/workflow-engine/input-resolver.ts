@@ -48,6 +48,7 @@ export function resolveNodeInputs(
   nodeStates: Record<string, NodeExecutionState>,
   allNodes: SimpleNode[],
   triggerData?: Record<string, unknown>,
+  listIterationIndex?: number,
 ): ResolvedInputs {
   const incomingEdges = edges.filter((e) => e.target === targetNode.id)
   const inputs: ResolvedInputs = {}
@@ -84,6 +85,9 @@ export function resolveNodeInputs(
         const rangeTo = edgeData?.rangeTo as string | undefined
         const filtered = applyRange(effectiveListResults, rangeFrom, rangeTo)
         output = filtered.join(", ")
+      } else if (edgeOutputMode === "each" && listIterationIndex !== undefined) {
+        // During list fan-out, index into the i-th result from each "each" source
+        output = effectiveListResults[listIterationIndex] ?? effectiveListResults[effectiveListResults.length - 1]
       }
     }
 

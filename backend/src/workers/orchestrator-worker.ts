@@ -658,13 +658,14 @@ async function executeNodeForList(
     const item = items[i]
 
     try {
-      // Resolve normal inputs from upstream
+      // Resolve normal inputs from upstream, indexing "each" sources by iteration
       const inputs = resolveNodeInputs(
         node,
         edges,
         nodeStates,
         allNodes,
         triggerData,
+        i,
       )
 
       // Override the appropriate input field based on item content
