@@ -25,16 +25,18 @@ import {
 } from "../shared.js"
 
 const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, ctx) {
-  const { videoUrls, transition, transitionDuration, audioMode } = job.data as {
+  const { videoUrls, transition, transitionDuration, audioMode, trimStartFrames, trimEndFrames } = job.data as {
     jobId: string
     videoUrls: string[]
     transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"
     transitionDuration: number
     audioMode?: "keep" | "crossfade" | "remove"
+    trimStartFrames?: number
+    trimEndFrames?: number
   }
-  console.log(`[worker] combine-videos ${ctx.jobId}: ${videoUrls.length} videos, transition=${transition}, audio=${audioMode ?? "crossfade"}`)
+  console.log(`[worker] combine-videos ${ctx.jobId}: ${videoUrls.length} videos, transition=${transition}, audio=${audioMode ?? "crossfade"}, trimStart=${trimStartFrames ?? 0}, trimEnd=${trimEndFrames ?? 0}`)
 
-  const outputPath = await combineVideos({ videoUrls, transition, transitionDuration, audioMode: audioMode ?? "crossfade" })
+  const outputPath = await combineVideos({ videoUrls, transition, transitionDuration, audioMode: audioMode ?? "crossfade", trimStartFrames: trimStartFrames ?? 0, trimEndFrames: trimEndFrames ?? 0 })
   await job.updateProgress(80)
 
   const r2Url = await uploadFileToR2(outputPath, ctx.jobId, "video", ctx.jobUserId)

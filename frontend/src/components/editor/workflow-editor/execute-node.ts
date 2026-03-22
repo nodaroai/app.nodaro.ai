@@ -2407,6 +2407,8 @@ export function executeNode(
       combineData.transitionDuration ?? 0.5,
       combineData.audioMode ?? "crossfade",
       ctx,
+      combineData.trimStartFrames,
+      combineData.trimEndFrames,
     );
   }
 

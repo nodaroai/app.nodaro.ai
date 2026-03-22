@@ -1251,6 +1251,8 @@ export type CombineVideosData = {
   transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"
   transitionDuration: number
   audioMode: "keep" | "crossfade" | "remove"
+  trimStartFrames?: number
+  trimEndFrames?: number
   clipOrder?: string[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"

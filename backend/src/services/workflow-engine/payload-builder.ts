@@ -1181,6 +1181,8 @@ export function buildPayload(
         transition: data.transition ?? "cut",
         transitionDuration: data.transitionDuration ?? 0.5,
         audioMode: data.audioMode ?? "crossfade",
+        trimStartFrames: (data.trimStartFrames as number) ?? 0,
+        trimEndFrames: (data.trimEndFrames as number) ?? 0,
         usageLogId,
       })
     }

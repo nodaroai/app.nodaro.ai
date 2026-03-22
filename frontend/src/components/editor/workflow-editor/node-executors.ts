@@ -398,10 +398,12 @@ export function runCombineVideos(
   transitionDuration: number,
   audioMode: "keep" | "crossfade" | "remove",
   ctx: ExecutionContext,
+  trimStartFrames?: number,
+  trimEndFrames?: number,
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
-    () => combineVideos(videoUrls, transition, transitionDuration, audioMode, ctx.userId),
+    () => combineVideos(videoUrls, transition, transitionDuration, audioMode, ctx.userId, trimStartFrames, trimEndFrames),
     "generatedVideoUrl",
     "Combine videos",
     ctx,

@@ -11,6 +11,8 @@ const combineVideosBody = z.object({
   transition: z.enum(["cut", "fade", "dissolve", "dip-to-black", "dip-to-white"]).optional().default("cut"),
   transitionDuration: z.number().min(0).max(5).optional().default(0.5),
   audioMode: z.enum(["keep", "crossfade", "remove"]).optional().default("crossfade"),
+  trimStartFrames: z.number().int().min(0).max(120).optional().default(0),
+  trimEndFrames: z.number().int().min(0).max(120).optional().default(0),
   userId: z.string().uuid().optional(),
 })
 
@@ -26,7 +28,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrls, transition, transitionDuration, audioMode } = parsed.data
+    const { videoUrls, transition, transitionDuration, audioMode, trimStartFrames, trimEndFrames } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -44,7 +46,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { videoUrls, transition, transitionDuration, audioMode, type: "combine-videos" },
+        input_data: { videoUrls, transition, transitionDuration, audioMode, trimStartFrames, trimEndFrames, type: "combine-videos" },
       })
       .select("id")
       .single()
@@ -66,6 +68,8 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       transition,
       transitionDuration,
       audioMode,
+      trimStartFrames,
+      trimEndFrames,
       usageLogId,
     })
 
