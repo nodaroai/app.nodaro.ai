@@ -31,13 +31,15 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const [videoError, setVideoError] = useState(false)
   const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
 
   useEffect(() => {
+    setVideoError(false)
     setVideoDimensions(null)
   }, [activeUrl])
 
-  const hasResult = status !== "running" && !!activeUrl
+  const hasResult = status !== "running" && !!activeUrl && !videoError
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
@@ -69,6 +71,20 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex flex-col items-center justify-center gap-2 h-28 rounded-md bg-muted/30">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             <NodeJobProgress progress={nodeData.currentJobProgress} />
+              </div>
+            )}
+
+            {status !== "running" && activeUrl && videoError && (
+              <div className="relative group">
+                <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
+                  <AlertCircle className="w-5 h-5 text-amber-500" />
+                  <span className="text-[10px] text-amber-500">Video load failed</span>
+                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>Open URL</a>
+                </div>
+                <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">Combined</div>
+                {results.length > 0 && (
+                  <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
+                )}
               </div>
             )}
 
@@ -160,6 +176,8 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
           onExpand={() => setPreviewOpen(true)}
           onDelete={() => setDeleteConfirm(activeIndex)}
           onDimensionsChange={setVideoDimensions}
+          onVideoError={() => setVideoError(true)}
+          onVideoLoad={() => setVideoError(false)}
         />
       )}
 
