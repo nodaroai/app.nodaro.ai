@@ -265,6 +265,7 @@ backend/src/
 | Aspect ratio selector | Visual SVG tile grid | `AspectRatioSelector` component with dynamically generated SVG ratio icons; responsive grid (2-col ≤2 options, 3-col otherwise); ARIA `radiogroup`; used across all image/video/composition config panels replacing plain `<Select>` dropdowns |
 | Canvas layout | ELKjs layered algorithm | `elkjs` replaces custom tidy-up; uses `node.measured` dimensions for size-aware layout; `elk.algorithm: "layered"`, direction RIGHT, orthogonal edge routing; supports selection-mode (2+ selected) or all-nodes mode; sticky notes excluded |
 | Flexible app I/O | Curated presentation inputs/outputs | Nodes opt in via `presentationInput`/`presentationOutput` flags on node data; `NodePickerDialog` for selection; `@dnd-kit/sortable` drag-and-drop ordering; `presentationSettings.inputOrder`/`outputOrder`/`cardMeta` in workflow store |
+| Tier-based parallelism | `TIER_PARALLELISM` in `stripe-config.ts` / `pricing-data.ts` | Per-execution concurrency limit by user tier: free=2, basic=4, standard=6, pro=10, business=12. Backend orchestrator fetches `profiles.tier` at execution start; frontend fan-out reads cached tier from `use-auth.ts`. Self-hosted editions (community/business) get env ceiling (default 12). `MAX_CONCURRENT_NODES_PER_EXECUTION` env var acts as hard ceiling. |
 | Workflow orchestrator | BullMQ `"workflow-orchestration"` queue | Server-side DAG execution: topological sort → level-by-level parallel execution → per-node state tracking; 3 execution categories: worker-queued (40+ types via existing BullMQ queues), sync HTTP (13 routes: 7 AI + 6 social via internal fetch), inline (combine-text, split-text, composite); concurrency 2; 30min per-node timeout, 60min per-workflow; two stop modes: "cancelled" (immediate) and "stopping" (finish current level then stop) |
 | Webhook triggers | Token-based auth, no user auth needed | `POST /v1/webhooks/:token` (public route), 32-byte hex token per trigger, rate limited 10/min per token; creates execution + enqueues orchestrator |
 | Schedule triggers | Cron expressions + interval strings | `schedule-cron.ts` checks every 60s, supports 5-field cron + simple intervals ("5m", "1h", "1d"); respects `maxExecutions` limit; skips if workflow already running |
@@ -318,5 +319,5 @@ backend/src/
 
 ---
 
-*Last updated: 2026-03-20*
-*Version: 1.72.0*
+*Last updated: 2026-03-22*
+*Version: 1.73.0*

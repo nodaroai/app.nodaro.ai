@@ -1,5 +1,8 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import type { WorkflowNode, SceneNodeDataType } from "@/types/nodes";
+import { getCachedTier } from "@/hooks/use-auth";
+import { TIER_PARALLELISM } from "@/lib/pricing-data";
+import { hasCredits } from "@/lib/edition";
 import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
 import { REPEAT_PLACEHOLDER } from "@nodaro-shared/repeat-types";
@@ -15,7 +18,9 @@ export async function executeNodeForList(
   items: string[],
   ctx: ExecutionContext,
 ): Promise<void> {
-  const MAX_PARALLEL_ITERATIONS = 6;
+  const MAX_PARALLEL_ITERATIONS = hasCredits()
+    ? (TIER_PARALLELISM[getCachedTier()] ?? TIER_PARALLELISM.free)
+    : 12;
 
   const { updateNodeData } = useWorkflowStore.getState();
 

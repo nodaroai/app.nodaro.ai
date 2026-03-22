@@ -8,6 +8,7 @@ export type UserRole = "user" | "admin" | "super_admin"
 // Module-level auth cache — survives component unmount/remount
 let cachedUser: User | null = null
 let cachedRole: UserRole = "user"
+let cachedTier = "free"
 let cachedLoading = true
 let cachedRoleLoaded = false
 let initialized = false
@@ -35,11 +36,14 @@ function initAuth() {
     if (currentUser) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, tier")
         .eq("id", currentUser.id)
         .single()
       if (profile?.role) {
         cachedRole = profile.role as UserRole
+      }
+      if (profile?.tier) {
+        cachedTier = profile.tier as string
       }
     }
 
@@ -54,6 +58,7 @@ function initAuth() {
     cachedUser = session?.user ?? null
     if (!session?.user) {
       cachedRole = "user"
+      cachedTier = "free"
       cachedRoleLoaded = true
       cachedLoading = false
     }
@@ -90,11 +95,14 @@ export async function refreshAuth(): Promise<void> {
   if (currentUser) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, tier")
       .eq("id", currentUser.id)
       .single()
     if (profile?.role) {
       cachedRole = profile.role as UserRole
+    }
+    if (profile?.tier) {
+      cachedTier = profile.tier as string
     }
   }
 
@@ -114,6 +122,11 @@ export async function setAuthFromTokens(accessToken: string, refreshToken: strin
   // setSession triggers onAuthStateChange which updates cachedUser,
   // but also refresh explicitly to load role
   await refreshAuth()
+}
+
+/** Get the cached user tier (synchronous, no async). Falls back to "free". */
+export function getCachedTier(): string {
+  return cachedTier
 }
 
 export function useAuth() {
