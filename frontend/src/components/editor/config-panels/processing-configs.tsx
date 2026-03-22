@@ -97,6 +97,36 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
           </SelectContent>
         </Select>
       </div>
+
+      <div>
+        <Label htmlFor="trim-end-frames">Trim end of each clip (frames) — {data.trimEndFrames ?? 0}</Label>
+        <Input
+          id="trim-end-frames"
+          type="number"
+          min={0}
+          max={120}
+          step={1}
+          value={data.trimEndFrames ?? 0}
+          onChange={(e) =>
+            onUpdate({ trimEndFrames: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })
+          }
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="trim-start-frames">Trim start of each clip (frames) — {data.trimStartFrames ?? 0}</Label>
+        <Input
+          id="trim-start-frames"
+          type="number"
+          min={0}
+          max={120}
+          step={1}
+          value={data.trimStartFrames ?? 0}
+          onChange={(e) =>
+            onUpdate({ trimStartFrames: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })
+          }
+        />
+      </div>
     </div>
   )
 }

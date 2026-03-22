@@ -997,11 +997,15 @@ export async function combineVideos(
   transitionDuration: number = 0.5,
   audioMode: "keep" | "crossfade" | "remove" = "crossfade",
   userId?: string,
+  trimStartFrames?: number,
+  trimEndFrames?: number,
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrls, transition, transitionDuration, audioMode }
   if (userId) {
     body.userId = userId
   }
+  if (trimStartFrames && trimStartFrames > 0) body.trimStartFrames = trimStartFrames
+  if (trimEndFrames && trimEndFrames > 0) body.trimEndFrames = trimEndFrames
   const res = await fetch(`${API_BASE_URL}/v1/combine-videos`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },

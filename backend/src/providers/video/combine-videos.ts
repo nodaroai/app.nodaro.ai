@@ -1,12 +1,65 @@
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine } from "./ffmpeg-utils.js"
+import { downloadFile, runFfmpeg, runFfprobe, getVideoDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine } from "./ffmpeg-utils.js"
 
 interface CombineOptions {
   readonly videoUrls: readonly string[]
   readonly transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"
   readonly transitionDuration: number
   readonly audioMode: "keep" | "crossfade" | "remove"
+  readonly trimStartFrames: number
+  readonly trimEndFrames: number
+}
+
+/**
+ * Probe the frame rate of a video file.
+ */
+async function getVideoFps(filePath: string): Promise<number> {
+  const output = await runFfprobe([
+    "-v", "error",
+    "-select_streams", "v:0",
+    "-show_entries", "stream=r_frame_rate",
+    "-of", "csv=p=0",
+    filePath,
+  ])
+  // r_frame_rate is a fraction like "24/1" or "30000/1001"
+  const [num, den] = output.trim().split("/").map(Number)
+  if (!num || !den) return 24
+  return num / den
+}
+
+/**
+ * Trim frames from start and/or end of a video clip.
+ * Returns the path to the trimmed file (or the original if no trimming needed).
+ */
+async function trimClipFrames(
+  inputPath: string,
+  workDir: string,
+  index: number,
+  trimStartFrames: number,
+  trimEndFrames: number,
+): Promise<string> {
+  if (trimStartFrames <= 0 && trimEndFrames <= 0) return inputPath
+
+  const fps = await getVideoFps(inputPath)
+  const duration = await getVideoDuration(inputPath)
+  const startSec = trimStartFrames / fps
+  const endTrimSec = trimEndFrames / fps
+
+  // Don't trim more than the clip length
+  if (startSec + endTrimSec >= duration) {
+    console.log(`[combineVideos] Trim would exceed clip ${index} duration (${duration.toFixed(2)}s), skipping`)
+    return inputPath
+  }
+
+  const outputPath = join(workDir, `trimmed_${index}.mp4`)
+  const args = ["-y", "-i", inputPath]
+  if (trimStartFrames > 0) args.push("-ss", String(startSec))
+  if (trimEndFrames > 0) args.push("-to", String(duration - endTrimSec))
+  args.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac", outputPath)
+
+  await runFfmpeg(args)
+  return outputPath
 }
 
 /**
@@ -53,7 +106,6 @@ async function generateColorClip(
  * Check whether a file contains at least one audio stream.
  */
 async function hasAudioStream(filePath: string): Promise<boolean> {
-  const { runFfprobe } = await import("./ffmpeg-utils.js")
   try {
     const output = await runFfprobe([
       "-v", "error",
@@ -72,7 +124,6 @@ async function hasAudioStream(filePath: string): Promise<boolean> {
  * Probe the resolution of a video file (width x height).
  */
 async function getVideoResolution(filePath: string): Promise<{ width: number; height: number }> {
-  const { runFfprobe } = await import("./ffmpeg-utils.js")
   const output = await runFfprobe([
     "-v", "error",
     "-select_streams", "v:0",
@@ -144,7 +195,7 @@ function buildAudioFilter(
 }
 
 export async function combineVideos(options: CombineOptions): Promise<string> {
-  const { videoUrls, transition, transitionDuration, audioMode } = options
+  const { videoUrls, transition, transitionDuration, audioMode, trimStartFrames, trimEndFrames } = options
   const workDir = await createWorkDir("combine")
 
   try {
@@ -156,7 +207,8 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
       await downloadFile(videoUrls[i], inputPath)
       const normalizedPath = join(workDir, `normalized_${i}.mp4`)
       await normalizeVideoForCombine(inputPath, normalizedPath)
-      inputPaths.push(normalizedPath)
+      const trimmedPath = await trimClipFrames(normalizedPath, workDir, i, trimStartFrames, trimEndFrames)
+      inputPaths.push(trimmedPath)
     }
 
     const outputPath = join(workDir, "output.mp4")
