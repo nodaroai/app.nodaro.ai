@@ -73,7 +73,7 @@ export function ExecutionStatusBar({ executionId, onStopped }: ExecutionStatusBa
           {isStopping ? "Stopping..." : status === "running" ? "Running" : "Pending"}
         </span>
         <span className="opacity-80">
-          {completed}/{total} nodes
+          {completed}/{total} done
         </span>
         {hasCredits() && credits > 0 && (
           <span className="opacity-70">{credits} CR</span>
@@ -85,12 +85,11 @@ export function ExecutionStatusBar({ executionId, onStopped }: ExecutionStatusBa
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            size="icon"
-            className="rounded-lg bg-background"
+            className="rounded-lg bg-background h-9 px-2 gap-1"
             disabled={stopping || isStopping}
           >
-            <Square className="w-4 h-4" />
-            <ChevronDown className="w-3 h-3 ml-0.5" />
+            <Square className="w-3.5 h-3.5" />
+            <ChevronDown className="w-3 h-3" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
