@@ -535,6 +535,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
             status: "failed",
             nodeType: node.type,
             error,
+            jobId: nodeStates[node.id]?.jobId,
             startedAt: nodeStates[node.id]?.startedAt,
             completedAt: new Date().toISOString(),
           }
