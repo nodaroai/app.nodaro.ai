@@ -633,7 +633,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // Render helpers for input/output cards
   const renderInputCard = useCallback((node: WorkflowNode) => {
     const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
-    const cardDisplay = settings.cardMeta?.[node.id]?.display
+    const meta = settings.cardMeta?.[node.id]
+    const cardDisplay = meta?.display
     const display = { ...nodeDisplay, ...cardDisplay }
     return (
       <InputCard
@@ -648,6 +649,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         onOpenConfig={setConfigNode}
         refMap={inputRefMaps.get(node.id)}
         display={display}
+        inputMode={meta?.inputMode}
+        minLines={meta?.minLines}
       />
     )
   }, [nodes, edges, isFullscreen, presInputValues, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia, inputRefMaps, settings.cardMeta])

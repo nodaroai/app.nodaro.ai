@@ -1,7 +1,12 @@
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { Upload, Link } from "lucide-react"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { cn } from "@/lib/utils"
+import type { InputMode } from "@/types/nodes"
+import type { PromptContext } from "@/lib/prompt-context"
+import { GlassCard } from "../output-cards/shared"
+import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
 
 /** Deterministic waveform bar heights for decorative display */
 export const WAVEFORM_HEIGHTS = [18, 14, 22, 16, 20]
@@ -207,5 +212,107 @@ export function FileDropZone({
         }}
       />
     </div>
+  )
+}
+
+export const INPUT_CLS = "w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200"
+
+interface PresentationTextInputProps {
+  label: string
+  value: string
+  placeholder?: string
+  onChange: (value: string) => void
+  readOnly?: boolean
+  mode: InputMode
+  minLines?: number
+  icon?: React.ReactNode
+  promptHelper?: PromptContext
+}
+
+/** Shared text/parameter input supporting prompt, multiline, oneline, and inline modes */
+export function PresentationTextInput({ label, value, placeholder, onChange, readOnly, mode, minLines, icon, promptHelper }: PresentationTextInputProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (mode !== "prompt" && mode !== "multiline") return
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = "auto"
+    const minH = mode === "multiline" ? (minLines ?? 3) * 24 : 80
+    el.style.height = `${Math.max(minH, el.scrollHeight)}px`
+  }, [value, mode, minLines])
+
+  const labelContent = icon ? <>{icon}{label}</> : label
+  const labelCls = cn(
+    "text-xs font-medium text-muted-foreground uppercase tracking-wider",
+    icon && "flex items-center gap-1.5",
+  )
+
+  const helperBtn = promptHelper && (
+    <PromptHelperButton
+      nodeType={promptHelper.nodeType}
+      currentPrompt={value}
+      provider={promptHelper.provider}
+      aspectRatio={promptHelper.aspectRatio}
+      duration={promptHelper.duration}
+      onAccept={onChange}
+    />
+  )
+
+  if (mode === "inline") {
+    return (
+      <GlassCard>
+        <div className="flex items-center gap-3">
+          <label className={cn(labelCls, "whitespace-nowrap shrink-0")}>{labelContent}</label>
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            readOnly={readOnly}
+            className={cn(INPUT_CLS, "flex-1", readOnly && "opacity-70 cursor-default")}
+          />
+          {helperBtn}
+        </div>
+      </GlassCard>
+    )
+  }
+
+  if (mode === "oneline") {
+    return (
+      <GlassCard>
+        <div className="flex items-center justify-between mb-2">
+          <label className={labelCls}>{labelContent}</label>
+          {helperBtn}
+        </div>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          readOnly={readOnly}
+          className={cn(INPUT_CLS, readOnly && "opacity-70 cursor-default")}
+        />
+      </GlassCard>
+    )
+  }
+
+  const minH = mode === "multiline" ? (minLines ?? 3) * 24 : 80
+  return (
+    <GlassCard>
+      <div className="flex items-center justify-between mb-2">
+        <label className={labelCls}>{labelContent}</label>
+        {helperBtn}
+      </div>
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        readOnly={readOnly}
+        style={{ minHeight: `${minH}px` }}
+        className={cn(INPUT_CLS, "max-h-[40vh] overflow-y-auto resize-none", readOnly && "opacity-70 cursor-default")}
+      />
+    </GlassCard>
   )
 }
