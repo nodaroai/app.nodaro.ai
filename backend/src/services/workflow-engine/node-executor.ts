@@ -638,6 +638,16 @@ async function pollJobToCompletion(
     if (status === "completed") {
       const outputData = (jobRecord.output_data as Record<string, unknown>) ?? {}
       const output = buildNodeOutputFromJobData(outputData, nodeType)
+
+      // Validate that the job actually produced output — a "completed" job
+      // with empty output_data means the provider returned success but no
+      // result (or a race condition lost the data). Treat it as a failure
+      // so downstream nodes don't silently receive empty inputs.
+      const hasOutput = Object.values(output).some((v) => v != null)
+      if (!hasOutput) {
+        throw new Error(`Job ${jobId} completed but produced no output — provider may have returned an empty result`)
+      }
+
       return { output, jobId, usageLogId, creditsUsed }
     }
 

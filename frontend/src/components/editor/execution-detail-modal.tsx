@@ -254,6 +254,18 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
   if (!job && nodeInfo) {
     const { nodeId, state } = nodeInfo
     const nodeLabel = state.nodeType ? formatNodeType(state.nodeType) : nodeId.slice(0, 12)
+
+    // Extract output media URL from state.output (if available)
+    const stateOutputUrl = (() => {
+      const out = state.output
+      if (!out) return null
+      if (typeof out.videoUrl === "string" && out.videoUrl) return out.videoUrl
+      if (typeof out.imageUrl === "string" && out.imageUrl) return out.imageUrl
+      if (typeof out.audioUrl === "string" && out.audioUrl) return out.audioUrl
+      return null
+    })()
+    const stateOutputText = typeof state.output?.text === "string" ? state.output.text : null
+
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-black/50 dark:bg-black/80 backdrop-blur-sm" onClick={onClose} />
@@ -296,61 +308,87 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
           {/* Content - Two Columns */}
           <div className="flex-1 overflow-auto bg-gray-50 dark:bg-[#121212]">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
-              {/* Left Column - Details */}
-              <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Details</h3>
-                </div>
-                <div className="p-4">
-                  {state.nodeType && (
+              {/* Left Column - Details + Input */}
+              <div className="space-y-6">
+                <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Details</h3>
+                  </div>
+                  <div className="p-4">
+                    {state.nodeType && (
+                      <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
+                        <div className="flex items-start gap-3">
+                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Type</span>
+                          <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{state.nodeType}</span>
+                        </div>
+                      </div>
+                    )}
                     <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
                       <div className="flex items-start gap-3">
-                        <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Type</span>
-                        <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{state.nodeType}</span>
+                        <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Status</span>
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[state.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
+                          {state.status}
+                        </span>
                       </div>
                     </div>
-                  )}
-                  <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
-                    <div className="flex items-start gap-3">
-                      <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Status</span>
-                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[state.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
-                        {state.status}
-                      </span>
+                    {state.startedAt && (
+                      <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
+                        <div className="flex items-start gap-3">
+                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Started</span>
+                          <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{formatRelativeTime(state.startedAt)}</span>
+                        </div>
+                      </div>
+                    )}
+                    {state.completedAt && (
+                      <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
+                        <div className="flex items-start gap-3">
+                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Completed</span>
+                          <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{formatRelativeTime(state.completedAt)}</span>
+                        </div>
+                      </div>
+                    )}
+                    {state.startedAt && state.completedAt && (
+                      <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
+                        <div className="flex items-start gap-3">
+                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Duration</span>
+                          <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{formatDuration(state.startedAt, state.completedAt)}</span>
+                        </div>
+                      </div>
+                    )}
+                    {state.creditsUsed != null && state.creditsUsed > 0 && (
+                      <div className="py-3">
+                        <div className="flex items-start gap-3">
+                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Credits</span>
+                          <span className="text-sm text-[#ff0073] font-mono">{state.creditsUsed} CR</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {/* Input JSON (resolved inputs fed to the node) */}
+                {state.inputs && Object.keys(state.inputs).length > 0 && (
+                  <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Input</h3>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyJson(JSON.stringify(state.inputs, null, 2))}
+                        className="p-1.5 rounded bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] transition-colors"
+                      >
+                        {copiedJson ? (
+                          <Check className="w-4 h-4 text-green-500 dark:text-green-400" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-gray-500 dark:text-[#94A3B8]" />
+                        )}
+                      </button>
+                    </div>
+                    <div className="p-4 max-h-[300px] overflow-auto">
+                      <pre className="p-4 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] text-gray-700 dark:text-[#E2E8F0] font-mono text-sm overflow-auto">
+                        {JSON.stringify(state.inputs, null, 2)}
+                      </pre>
                     </div>
                   </div>
-                  {state.startedAt && (
-                    <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
-                      <div className="flex items-start gap-3">
-                        <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Started</span>
-                        <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{formatRelativeTime(state.startedAt)}</span>
-                      </div>
-                    </div>
-                  )}
-                  {state.completedAt && (
-                    <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
-                      <div className="flex items-start gap-3">
-                        <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Completed</span>
-                        <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{formatRelativeTime(state.completedAt)}</span>
-                      </div>
-                    </div>
-                  )}
-                  {state.startedAt && state.completedAt && (
-                    <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
-                      <div className="flex items-start gap-3">
-                        <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Duration</span>
-                        <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{formatDuration(state.startedAt, state.completedAt)}</span>
-                      </div>
-                    </div>
-                  )}
-                  {state.creditsUsed != null && state.creditsUsed > 0 && (
-                    <div className="py-3">
-                      <div className="flex items-start gap-3">
-                        <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Credits</span>
-                        <span className="text-sm text-[#ff0073] font-mono">{state.creditsUsed} CR</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
 
               {/* Right Column - Output */}
@@ -369,7 +407,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                           : "text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white"
                       }`}
                     >
-                      Status
+                      Preview
                     </button>
                     <button
                       type="button"
@@ -407,6 +445,22 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                       ) : state.status === "cancelled" ? (
                         <div className="flex flex-col items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
                           <p className="text-sm text-gray-400 dark:text-[#64748B]">This node was cancelled.</p>
+                        </div>
+                      ) : stateOutputUrl && isVideoUrl(stateOutputUrl) ? (
+                        <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
+                          <video src={stateOutputUrl} controls className="w-full max-h-[400px]" />
+                        </div>
+                      ) : stateOutputUrl && isImageUrl(stateOutputUrl) ? (
+                        <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
+                          <CachedImage src={stateOutputUrl} alt="Output" className="w-full max-h-[400px] object-contain" />
+                        </div>
+                      ) : stateOutputUrl && isAudioUrl(stateOutputUrl) ? (
+                        <div className="rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D] p-6">
+                          <audio src={stateOutputUrl} controls className="w-full" />
+                        </div>
+                      ) : stateOutputText ? (
+                        <div className="rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D] p-4">
+                          <pre className="text-sm text-gray-700 dark:text-[#E2E8F0] whitespace-pre-wrap break-words">{stateOutputText}</pre>
                         </div>
                       ) : (
                         <div className="flex items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
