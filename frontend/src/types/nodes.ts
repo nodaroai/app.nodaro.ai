@@ -57,6 +57,7 @@ export interface LoopColumn {
   readonly name: string
   readonly handleId: string
   readonly type: "text" | "image-url" | "video-url" | "audio-url"
+  readonly width?: number
 }
 
 export const LOOP_COLUMN_TYPE_META: Record<LoopColumn["type"], { label: string; shortLabel: string; color: string }> = {
@@ -79,6 +80,7 @@ export type LoopNodeData = {
   rows: string[][]
   fieldMappings: Record<string, string>
   maxItems?: number
+  thumbnailSize?: "sm" | "md" | "lg"
 }
 
 export type UploadImageData = {

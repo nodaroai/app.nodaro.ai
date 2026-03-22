@@ -1,7 +1,26 @@
 "use client"
 
-import { useState, useCallback } from "react"
-import { X, Plus, Loader2, Check, Download, AlertCircle } from "lucide-react"
+import { useState, useCallback, useRef, useMemo } from "react"
+import { X, Plus, Loader2, Check, Download, AlertCircle, Upload, Film, Music, Link, GripVertical } from "lucide-react"
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import { useFileUpload } from "@/hooks/use-file-upload"
+import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,6 +49,12 @@ import {
   type ReferenceAudioData,
 } from "@/types/nodes"
 import type { ConfigProps } from "./types"
+
+const COLUMN_ACCEPT: Record<string, string> = {
+  "image-url": "image/png,image/jpeg,image/webp,image/gif",
+  "video-url": "video/mp4,video/webm,video/quicktime",
+  "audio-url": "audio/mpeg,audio/wav,audio/ogg,audio/webm",
+}
 
 export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextPromptData>) {
   return (
@@ -143,6 +168,131 @@ export function ListConfig({ data, onUpdate }: { data: ListNodeData; onUpdate: (
   )
 }
 
+function MediaCellInput({
+  value,
+  colType,
+  onChange,
+}: {
+  value: string
+  colType: LoopColumn["type"]
+  onChange: (value: string) => void
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    clearError()
+    try {
+      const result = await upload(file)
+      onChange(result.url)
+    } catch {
+      // handled by useFileUpload state
+    }
+    e.target.value = ""
+  }
+
+  const accept = COLUMN_ACCEPT[colType] ?? ""
+
+  if (colType === "text") {
+    return null
+  }
+
+  return (
+    <div className="space-y-1">
+      <input type="file" accept={accept} onChange={handleFileSelect} className="hidden" ref={fileInputRef} />
+
+      {isUploading ? (
+        <div className="flex items-center justify-center gap-2 py-3 rounded-md border border-border bg-muted/20">
+          <Loader2 className="w-4 h-4 animate-spin text-[#38BDF8]" />
+          <span className="text-xs text-muted-foreground">Uploading...</span>
+        </div>
+      ) : value ? (
+        <div className="relative group">
+          {colType === "image-url" ? (
+            <div className="w-full aspect-video rounded-md overflow-hidden bg-muted/30">
+              <CachedImage src={value} alt="" className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-2 py-2 rounded-md border border-border bg-muted/20">
+              {colType === "video-url" ? <Film className="w-4 h-4 text-[#818CF8]" /> : <Music className="w-4 h-4 text-[#22c55e]" />}
+              <span className="text-xs text-muted-foreground truncate flex-1">{value.split("/").pop() || "media file"}</span>
+            </div>
+          )}
+          <button
+            type="button"
+            className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-red-600/80 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={() => onChange("")}
+            title="Remove"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-md border-2 border-dashed border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground/60 hover:text-[#38BDF8] transition-colors cursor-pointer"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span className="text-xs">Choose {colType === "image-url" ? "Image" : colType === "video-url" ? "Video" : "Audio"}</span>
+          </button>
+          <div className="flex items-center gap-1.5">
+            <Link className="w-3 h-3 text-muted-foreground/40 shrink-0" />
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="or paste URL..."
+              className="w-full bg-transparent border-b border-muted-foreground/20 text-xs py-1 outline-none focus:border-[#38BDF8] transition-colors placeholder:text-muted-foreground/30"
+            />
+          </div>
+        </>
+      )}
+
+      {uploadError && (
+        <div className="flex items-center gap-1 text-[10px] text-red-400">
+          <AlertCircle className="w-3 h-3 shrink-0" />
+          <span className="truncate">{uploadError}</span>
+        </div>
+      )}
+
+      <StorageExceededModal
+        open={storageExceeded.exceeded}
+        onClose={clearStorageExceeded}
+        usedBytes={storageExceeded.usedBytes}
+        quotaBytes={storageExceeded.quotaBytes}
+        tier={storageExceeded.tier}
+      />
+    </div>
+  )
+}
+
+function SortableRow({
+  id,
+  children,
+}: {
+  id: string
+  children: (props: { attributes: ReturnType<typeof useSortable>["attributes"]; listeners: ReturnType<typeof useSortable>["listeners"] }) => React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+    >
+      {children({ attributes, listeners })}
+    </tr>
+  )
+}
+
 const COLUMN_TYPES = Object.entries(LOOP_COLUMN_TYPE_META).map(([value, meta]) => ({
   value,
   label: meta.label,
@@ -153,6 +303,23 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
   const [activeTab, setActiveTab] = useState<"configure" | "data">("configure")
   const columns = data.columns ?? []
   const rows = data.rows ?? []
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  // Stable row IDs for sortable
+  const rowIds = useMemo(() => rows.map((_, i) => `row-${i}`), [rows.length])
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = rowIds.indexOf(active.id as string)
+    const newIndex = rowIds.indexOf(over.id as string)
+    if (oldIndex === -1 || newIndex === -1) return
+    onUpdate({ rows: arrayMove(rows, oldIndex, newIndex) })
+  }
 
   function addColumn() {
     const id = crypto.randomUUID()
@@ -296,34 +463,57 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
                     ))}
                   </tr>
                 </thead>
-                <tbody>
-                  {rows.map((row, ri) => (
-                    <tr key={`row-${ri}`}>
-                      <td className="pr-1 text-right align-middle">
-                        <div className="flex items-center gap-0.5">
-                          <button
-                            type="button"
-                            className="shrink-0 text-muted-foreground/40 hover:text-red-500 transition-colors"
-                            onClick={() => removeRow(ri)}
-                          >
-                            <X className="w-2.5 h-2.5" />
-                          </button>
-                          <span className="text-muted-foreground w-3 text-right">{ri + 1}</span>
-                        </div>
-                      </td>
-                      {columns.map((col, ci) => (
-                        <td key={`${col.id}-${ri}`} className="px-0.5 py-0.5">
-                          <input
-                            className="w-full min-w-[60px] text-xs bg-muted/30 rounded px-1.5 py-1 border border-border focus:border-[#ff0073] focus:outline-none"
-                            value={row[ci] ?? ""}
-                            onChange={(e) => updateCell(ri, ci, e.target.value)}
-                            placeholder={col.name}
-                          />
-                        </td>
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
+                    <tbody>
+                      {rows.map((row, ri) => (
+                        <SortableRow key={rowIds[ri]} id={rowIds[ri]}>
+                          {({ attributes, listeners }) => (
+                            <>
+                              <td className="pr-1 text-right align-middle">
+                                <div className="flex items-center gap-0.5">
+                                  <button
+                                    type="button"
+                                    className="shrink-0 text-muted-foreground/30 hover:text-muted-foreground cursor-grab active:cursor-grabbing touch-none"
+                                    {...attributes}
+                                    {...listeners}
+                                  >
+                                    <GripVertical className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="shrink-0 text-muted-foreground/40 hover:text-red-500 transition-colors"
+                                    onClick={() => removeRow(ri)}
+                                  >
+                                    <X className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
+                              </td>
+                              {columns.map((col, ci) => (
+                                <td key={`${col.id}-${ri}`} className="px-0.5 py-0.5">
+                                  {col.type && col.type !== "text" ? (
+                                    <MediaCellInput
+                                      value={row[ci] ?? ""}
+                                      colType={col.type}
+                                      onChange={(val) => updateCell(ri, ci, val)}
+                                    />
+                                  ) : (
+                                    <input
+                                      className="w-full min-w-[60px] text-xs bg-muted/30 rounded px-1.5 py-1 border border-border focus:border-[#ff0073] focus:outline-none"
+                                      value={row[ci] ?? ""}
+                                      onChange={(e) => updateCell(ri, ci, e.target.value)}
+                                      placeholder={col.name}
+                                    />
+                                  )}
+                                </td>
+                              ))}
+                            </>
+                          )}
+                        </SortableRow>
                       ))}
-                    </tr>
-                  ))}
-                </tbody>
+                    </tbody>
+                  </SortableContext>
+                </DndContext>
               </table>
 
               <button
