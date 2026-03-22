@@ -702,6 +702,8 @@ export function MobileAppShell({
                     onOpenMedia={handleOpenMedia}
                     onOpenConfig={setConfigNode}
                     display={display}
+                    nodes={presNodes}
+                    edges={presEdges}
                   />
                 )
               })

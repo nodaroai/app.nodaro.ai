@@ -1,3 +1,4 @@
+import { useMemo } from "react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowNode, PresentationDisplay } from "@/types/nodes"
 import { getNodeLabel } from "@/lib/presentation-utils"
@@ -9,6 +10,8 @@ import { AudioUploadCard } from "./input-cards/audio-upload-card"
 import { ParameterCard } from "./input-cards/parameter-card"
 import { ListInputCard } from "./input-cards/list-input-card"
 import { LoopInputCard } from "./input-cards/loop-input-card"
+import { inferPromptContext } from "@/lib/prompt-context"
+import { hasCredits } from "@/lib/edition"
 
 /** System-wide ceiling for fan-out items. Will be fetched from app_settings in future. */
 export const DEFAULT_SYSTEM_MAX_FANOUT = 20
@@ -23,6 +26,8 @@ export interface InputCardProps {
   onOpenConfig?: (node: WorkflowNode) => void
   refMap?: Map<string, string>
   display?: PresentationDisplay
+  nodes?: Array<{ id: string; type?: string; data: Record<string, unknown> }>
+  edges?: Array<{ source: string; target: string }>
 }
 
 /** Renders the appropriate input card based on node type */
@@ -36,10 +41,20 @@ export function InputCard({
   onOpenConfig,
   refMap,
   display,
+  nodes,
+  edges,
 }: InputCardProps) {
   const label = getNodeLabel(node)
   const data = node.data as Record<string, unknown>
   const effectiveMaxItems = Math.min((data.maxItems as number) ?? 10, DEFAULT_SYSTEM_MAX_FANOUT)
+
+  // Infer downstream prompt context for prompt helper button
+  const promptContext = useMemo(
+    () => (nodes && edges ? inferPromptContext(node.id, nodes, edges) : null),
+    [node.id, nodes, edges],
+  )
+
+  const promptHelperProp = promptContext && !readOnly && hasCredits() ? promptContext : undefined
 
   // Config-type nodes open a modal with their full config panel
   if (node.type && CONFIG_INPUT_TYPES.has(node.type)) {
@@ -56,11 +71,13 @@ export function InputCard({
   }
 
   switch (node.type) {
-    case "text-prompt":
+    case "text-prompt": {
+      const textValue = isFullscreen ? (inputValues[node.id]?.text as string ?? data.text as string ?? "") : (data.text as string ?? "")
+      const isPresReadOnly = !!data.presentationReadOnly
       return (
         <TextInputCard
           label={label}
-          value={isFullscreen ? (inputValues[node.id]?.text as string ?? data.text as string ?? "") : (data.text as string ?? "")}
+          value={textValue}
           placeholder={(data.placeholder as string) ?? "Enter text..."}
           onChange={(val) => {
             if (isFullscreen) {
@@ -71,9 +88,11 @@ export function InputCard({
           }}
           readOnly={readOnly}
           refMap={refMap}
-          presentationReadOnly={!!(node.data as Record<string, unknown>).presentationReadOnly}
+          presentationReadOnly={isPresReadOnly}
+          promptHelper={isPresReadOnly ? undefined : promptHelperProp}
         />
       )
+    }
 
     case "upload-image":
       return (
@@ -124,6 +143,7 @@ export function InputCard({
           onUpdateInput={onUpdateInput}
           readOnly={readOnly}
           maxItems={effectiveMaxItems}
+          promptHelper={promptHelperProp}
         />
       )
 
@@ -137,6 +157,7 @@ export function InputCard({
           readOnly={readOnly}
           maxItems={effectiveMaxItems}
           display={display}
+          promptHelper={promptHelperProp}
         />
       )
 
@@ -151,6 +172,7 @@ export function InputCard({
           inputValues={inputValues}
           onUpdateInput={onUpdateInput}
           readOnly={readOnly}
+          promptHelper={promptHelperProp}
         />
       )
   }

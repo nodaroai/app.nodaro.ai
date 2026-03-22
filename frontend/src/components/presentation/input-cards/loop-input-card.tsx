@@ -20,6 +20,8 @@ import { useFileUpload } from "@/hooks/use-file-upload"
 import { CachedImage } from "@/components/ui/cached-image"
 import { GlassButton, copyUrl, downloadFile } from "../output-cards/shared"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
+import type { PromptContext } from "@/lib/prompt-context"
 import { type WorkflowNode, type LoopColumn, type PresentationDisplay } from "@/types/nodes"
 import { resolveDisplay, ELEMENT_SIZES, isMediaColumn, colTypeToMimePrefix } from "@/lib/presentation-display"
 
@@ -31,6 +33,7 @@ interface LoopInputCardProps {
   readOnly?: boolean
   maxItems: number
   display?: PresentationDisplay
+  promptHelper?: PromptContext
 }
 
 const POINTER_SENSOR_OPTS = { activationConstraint: { distance: 5 } }
@@ -284,6 +287,7 @@ export function LoopInputCard({
   readOnly,
   maxItems,
   display,
+  promptHelper,
 }: LoopInputCardProps) {
   const columns: LoopColumn[] = useMemo(
     () => (node.data.columns as LoopColumn[]) ?? [],
@@ -475,6 +479,7 @@ export function LoopInputCard({
           sensors={sensors}
           onReorder={handleReorderRows}
           onMultiFileDrop={handleMultiFileDrop}
+          promptHelper={promptHelper}
         />
       ) : (
         <CardsView
@@ -489,6 +494,7 @@ export function LoopInputCard({
           rowIds={rowIds}
           sensors={sensors}
           onReorder={handleReorderRows}
+          promptHelper={promptHelper}
         />
       )}
 
@@ -529,6 +535,7 @@ interface ViewProps {
   sensors: ReturnType<typeof useSensors>
   onReorder: (event: DragEndEvent) => void
   onMultiFileDrop?: (files: File[], colIndex: number) => void
+  promptHelper?: PromptContext
 }
 
 interface CardsViewProps extends ViewProps {
@@ -629,6 +636,7 @@ function CardsView({
   rowIds,
   sensors,
   onReorder,
+  promptHelper,
 }: CardsViewProps) {
   const hasMedia = mediaColIndices.length > 0
   const imgSize = ELEMENT_SIZES.cardsImage[resolved.elementSize]
@@ -687,7 +695,19 @@ function CardsView({
                         const col = columns[ci]
                         return (
                           <div key={col.id} className="flex flex-col gap-1">
-                            <span className="text-[11px] text-muted-foreground/70">{col.name}</span>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] text-muted-foreground/70">{col.name}</span>
+                              {promptHelper && (
+                                <PromptHelperButton
+                                  nodeType={promptHelper.nodeType}
+                                  currentPrompt={row[ci] ?? ""}
+                                  provider={promptHelper.provider}
+                                  aspectRatio={promptHelper.aspectRatio}
+                                  duration={promptHelper.duration}
+                                  onAccept={(text) => handleCellChange(rowIndex, ci, text)}
+                                />
+                              )}
+                            </div>
                             <textarea
                               value={row[ci] ?? ""}
                               onChange={(e) => handleCellChange(rowIndex, ci, e.target.value)}
@@ -706,7 +726,19 @@ function CardsView({
                 <div className="flex flex-col gap-2">
                   {columns.map((col, colIndex) => (
                     <div key={col.id} className="flex flex-col gap-1">
-                      <span className="text-[11px] text-muted-foreground/70">{col.name}</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-muted-foreground/70">{col.name}</span>
+                        {promptHelper && (
+                          <PromptHelperButton
+                            nodeType={promptHelper.nodeType}
+                            currentPrompt={row[colIndex] ?? ""}
+                            provider={promptHelper.provider}
+                            aspectRatio={promptHelper.aspectRatio}
+                            duration={promptHelper.duration}
+                            onAccept={(text) => handleCellChange(rowIndex, colIndex, text)}
+                          />
+                        )}
+                      </div>
                       <textarea
                         value={row[colIndex] ?? ""}
                         onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
@@ -740,6 +772,7 @@ function TableView({
   sensors,
   onReorder,
   onMultiFileDrop,
+  promptHelper,
 }: ViewProps) {
   return (
     <div className="w-full overflow-x-auto">
@@ -790,15 +823,29 @@ function TableView({
                         readOnly={readOnly}
                       />
                     ) : (
-                      <input
-                        type="text"
-                        value={cellValue}
-                        onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
-                        readOnly={readOnly}
-                        disabled={readOnly}
-                        placeholder={`${col.name}...`}
-                        className={`w-full bg-transparent border-none text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none${readOnly ? " opacity-70 cursor-default" : ""}`}
-                      />
+                      <div className="relative group/cell">
+                        <input
+                          type="text"
+                          value={cellValue}
+                          onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                          readOnly={readOnly}
+                          disabled={readOnly}
+                          placeholder={`${col.name}...`}
+                          className={`w-full bg-transparent border-none text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none pr-8${readOnly ? " opacity-70 cursor-default" : ""}`}
+                        />
+                        {promptHelper && (
+                          <div className="absolute right-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/cell:opacity-100 focus-within:opacity-100 sm:opacity-0 max-sm:opacity-100 transition-opacity">
+                            <PromptHelperButton
+                              nodeType={promptHelper.nodeType}
+                              currentPrompt={cellValue}
+                              provider={promptHelper.provider}
+                              aspectRatio={promptHelper.aspectRatio}
+                              duration={promptHelper.duration}
+                              onAccept={(text) => handleCellChange(rowIndex, colIndex, text)}
+                            />
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 )
