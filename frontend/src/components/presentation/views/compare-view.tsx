@@ -11,9 +11,20 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { getOutputType, type OutputType } from "@/lib/presentation-utils"
+import { isVideoUrl, isImageUrl, isAudioUrl } from "@/lib/media-type"
 import { GlassCard } from "../output-cards/shared"
 import { WaveformBars } from "../input-cards/shared"
 import type { ViewProps } from "./types"
+
+/** Resolve output type from node type, falling back to URL-based detection for data types (e.g. loop nodes) */
+function resolveOutputType(nodeType: string | undefined, url?: string): OutputType {
+  const t = getOutputType(nodeType)
+  if (t !== "data" || !url) return t
+  if (isImageUrl(url)) return "image"
+  if (isVideoUrl(url)) return "video"
+  if (isAudioUrl(url)) return "audio"
+  return t
+}
 
 interface CompareItem {
   id: string
@@ -94,7 +105,7 @@ export function CompareView({
           id: node.id,
           title: getCardTitle(node),
           group: "Inputs",
-          outputType: getOutputType(node.type),
+          outputType: resolveOutputType(node.type, r.url),
           url: r.url,
           text: r.text,
         })

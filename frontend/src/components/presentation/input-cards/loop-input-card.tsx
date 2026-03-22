@@ -17,11 +17,10 @@ import {
 import { CSS } from "@dnd-kit/utilities"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFileUpload } from "@/hooks/use-file-upload"
-import { hasCredits } from "@/lib/edition"
 import { CachedImage } from "@/components/ui/cached-image"
 import { GlassButton, copyUrl, downloadFile } from "../output-cards/shared"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
-import { LOOP_COLUMN_TYPE_META, type WorkflowNode, type LoopColumn, type PresentationDisplay } from "@/types/nodes"
+import { type WorkflowNode, type LoopColumn, type PresentationDisplay } from "@/types/nodes"
 import { resolveDisplay, ELEMENT_SIZES, isMediaColumn, colTypeToMimePrefix } from "@/lib/presentation-display"
 
 interface LoopInputCardProps {
@@ -512,14 +511,6 @@ export function LoopInputCard({
         </button>
       )}
 
-      {hasCredits() && (
-        <div className="mt-3 px-3 py-2 rounded-md bg-[#ff007310] border border-[#ff007330] flex justify-between items-center">
-          <span className="text-xs text-[#ff0073]">Fan-out</span>
-          <span className="text-sm font-semibold text-[#ff0073]">
-            {rows.length} {rows.length === 1 ? "iteration" : "iterations"}
-          </span>
-        </div>
-      )}
     </div>
   )
 }
@@ -752,40 +743,33 @@ function TableView({
 }: ViewProps) {
   return (
     <div className="w-full overflow-x-auto">
-      {/* Header row */}
-      <div className="flex items-center gap-2 py-2 sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
-        {!readOnly && <div className="shrink-0 w-6" />}
-        {columns.map((col, colIndex) => {
-          const colType = col.type ?? "text"
-          const meta = LOOP_COLUMN_TYPE_META[colType as LoopColumn["type"]] ?? LOOP_COLUMN_TYPE_META.text
-          const isMedia = isMediaColumn(colType)
-          return (
-            <div
-              key={col.id}
-              className={`flex-1 min-w-0 px-2${isMedia && !readOnly ? " cursor-copy" : ""}`}
-              onDragOver={isMedia && !readOnly ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy" } : undefined}
-              onDrop={isMedia && !readOnly ? (e) => {
-                e.preventDefault()
-                const files = Array.from(e.dataTransfer.files)
-                if (files.length > 0) onMultiFileDrop?.(files, colIndex)
-              } : undefined}
-            >
-              <div className="flex items-center gap-1.5">
+      {/* Header row — only shown when multiple columns */}
+      {columns.length > 1 && (
+        <div className="flex items-center gap-2 py-2 sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
+          {!readOnly && <div className="shrink-0 w-6" />}
+          {columns.map((col, colIndex) => {
+            const colType = col.type ?? "text"
+            const isMedia = isMediaColumn(colType)
+            return (
+              <div
+                key={col.id}
+                className={`flex-1 min-w-0 px-2${isMedia && !readOnly ? " cursor-copy" : ""}`}
+                onDragOver={isMedia && !readOnly ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy" } : undefined}
+                onDrop={isMedia && !readOnly ? (e) => {
+                  e.preventDefault()
+                  const files = Array.from(e.dataTransfer.files)
+                  if (files.length > 0) onMultiFileDrop?.(files, colIndex)
+                } : undefined}
+              >
                 <span className="text-[11px] text-muted-foreground/70 font-medium">
                   {col.name}
                 </span>
-                <span
-                  className="text-[9px] font-semibold uppercase tracking-wider px-1 py-0.5 rounded"
-                  style={{ color: meta.color, backgroundColor: `${meta.color}15` }}
-                >
-                  {meta.shortLabel}
-                </span>
               </div>
-            </div>
-          )
-        })}
-        {!readOnly && <div className="shrink-0 w-6" />}
-      </div>
+            )
+          })}
+          {!readOnly && <div className="shrink-0 w-6" />}
+        </div>
+      )}
 
       {/* Sortable rows */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onReorder}>
