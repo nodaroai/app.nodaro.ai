@@ -14,6 +14,7 @@ export function VerticalView({
   setPickerSection,
   renderInputCard,
   renderOutputCard,
+  getNodeColumns,
 }: EditableViewProps) {
   return (
     <div className="flex-1 overflow-auto p-3 sm:p-6" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom))' }}>
@@ -29,6 +30,7 @@ export function VerticalView({
           settings={settings}
           updateCardMeta={updateCardMeta}
           renderCard={renderInputCard}
+          getNodeColumns={getNodeColumns}
         />
 
         {/* Separator */}
@@ -45,6 +47,7 @@ export function VerticalView({
           settings={settings}
           updateCardMeta={updateCardMeta}
           renderCard={renderOutputCard}
+          getNodeColumns={getNodeColumns}
         />
       </div>
     </div>

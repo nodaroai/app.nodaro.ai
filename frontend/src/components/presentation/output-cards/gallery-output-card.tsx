@@ -6,6 +6,7 @@ import type { GalleryOutputProps } from "./shared"
 
 export interface GalleryOutputCardProps extends GalleryOutputProps {
   outputType: string
+  columns?: number
 }
 
 export function GalleryOutputCard({
@@ -15,6 +16,7 @@ export function GalleryOutputCard({
   iterationTotal,
   iterationCompleted,
   onOpenMedia,
+  columns,
 }: GalleryOutputCardProps) {
   switch (outputType) {
     case "image":
@@ -25,6 +27,7 @@ export function GalleryOutputCard({
           iterationTotal={iterationTotal}
           iterationCompleted={iterationCompleted}
           onOpenMedia={onOpenMedia}
+          columns={columns}
         />
       )
     case "video":

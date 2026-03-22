@@ -17,8 +17,10 @@ import type {
   ImageToVideoData,
   TextToVideoData,
   FieldMappings,
+  PresentationDisplay,
 } from "@/types/nodes"
 import type { SceneNodeDataType } from "@/types/nodes"
+import { PresentationDisplayConfig } from "./config-panels/presentation-display-config"
 import { SceneConfig } from "./scene-config"
 const SceneEditorModal = lazy(() => import("./scene-editor-modal").then(m => ({ default: m.SceneEditorModal })))
 import { IterationResultsPanel } from "./iteration-results-panel"
@@ -781,6 +783,18 @@ export function ConfigPanel() {
               Delete Node
             </Button>
           </div>
+          {/* Presentation display settings */}
+          {(nodeData.presentationInput || nodeData.presentationOutput) && (
+            <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
+              <PresentationDisplayConfig
+                display={nodeData.presentationDisplay as PresentationDisplay ?? {}}
+                onChange={(d) => updateNodeData(selectedNodeId!, { presentationDisplay: d })}
+                showElementSize={nodeType !== "text-prompt"}
+                viewModes={nodeType === "loop" ? [{ value: "cards", label: "Cards" }, { value: "table", label: "Table" }] : undefined}
+              />
+            </div>
+          )}
+
           {/* Safe area padding for mobile bottom sheet */}
           {isMobile && <div className="h-[env(safe-area-inset-bottom)]" />}
         </div>

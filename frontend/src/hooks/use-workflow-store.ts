@@ -8,6 +8,7 @@ import {
   type Connection,
 } from "@xyflow/react"
 import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition, LoopNodeData, PreviewItem, PreviewNodeData, TeleportSendData, TeleportReceiveData } from "@/types/nodes"
+import type { PresentationDisplay } from "@/types/nodes"
 import { NODE_DEFINITIONS, TELEPORTER_CHANNEL_COLORS } from "@/types/nodes"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
@@ -116,7 +117,7 @@ export interface PresentationSettings {
   splitRatio?: number // 20-80, default 50
   inputOrder?: string[] // node IDs in display order
   outputOrder?: string[] // node IDs in display order
-  cardMeta?: Record<string, { title?: string; description?: string }>
+  cardMeta?: Record<string, { title?: string; description?: string; display?: Partial<PresentationDisplay> }>
   viewMode?: PresentationViewMode // defaults to "horizontal"
   compareLeft?: string // node ID for left compare item
   compareRight?: string // node ID for right compare item

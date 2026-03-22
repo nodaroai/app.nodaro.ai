@@ -4,7 +4,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { hasCredits } from "@/lib/edition"
 import { CachedImage } from "@/components/ui/cached-image"
-import { LOOP_COLUMN_TYPE_META, type WorkflowNode, type LoopColumn } from "@/types/nodes"
+import { LOOP_COLUMN_TYPE_META, type WorkflowNode, type LoopColumn, type PresentationDisplay } from "@/types/nodes"
+import { resolveDisplay, ELEMENT_SIZES, isMediaColumn, colTypeToMimePrefix } from "@/lib/presentation-display"
 import { GlassCard } from "../output-cards/shared"
 
 interface LoopInputCardProps {
@@ -14,6 +15,7 @@ interface LoopInputCardProps {
   onUpdateInput: (nodeId: string, key: string, value: unknown) => void
   readOnly?: boolean
   maxItems: number
+  display?: PresentationDisplay
 }
 
 function getFilenameFromUrl(url: string): string {
@@ -32,11 +34,13 @@ function MediaCellInput({
   onChange,
   mimePrefix,
   readOnly,
+  thumbnailSize,
 }: {
   value: string
   onChange: (val: string) => void
   mimePrefix: string
   readOnly?: boolean
+  thumbnailSize?: number
 }) {
   const { upload, isUploading } = useFileUpload()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -65,6 +69,9 @@ function MediaCellInput({
     [handleFile],
   )
 
+  const thumbPx = thumbnailSize ?? 48
+  const thumbStyle = { width: thumbPx, height: thumbPx }
+
   if (value) {
     return (
       <div className="flex items-center gap-2 bg-muted/30 border border-border rounded-lg px-2 py-1.5">
@@ -72,16 +79,17 @@ function MediaCellInput({
           <CachedImage
             src={value}
             alt="upload"
-            className="w-12 h-12 object-cover rounded-md shrink-0"
+            className="object-cover rounded-md shrink-0"
+            style={thumbStyle}
           />
         )}
         {mimePrefix === "video/" && (
-          <div className="w-12 h-12 rounded-md bg-muted/50 flex items-center justify-center shrink-0">
+          <div className="rounded-md bg-muted/50 flex items-center justify-center shrink-0" style={thumbStyle}>
             <Film className="w-5 h-5 text-[#818CF8]" />
           </div>
         )}
         {mimePrefix === "audio/" && (
-          <div className="w-12 h-12 rounded-md bg-muted/50 flex items-center justify-center shrink-0">
+          <div className="rounded-md bg-muted/50 flex items-center justify-center shrink-0" style={thumbStyle}>
             <Music className="w-5 h-5 text-[#22c55e]" />
           </div>
         )}
@@ -159,10 +167,21 @@ export function LoopInputCard({
   onUpdateInput,
   readOnly,
   maxItems,
+  display,
 }: LoopInputCardProps) {
   const columns: LoopColumn[] = useMemo(
     () => (node.data.columns as LoopColumn[]) ?? [],
     [node.data.columns],
+  )
+
+  const resolved = useMemo(
+    () => resolveDisplay(
+      node.data.presentationDisplay as PresentationDisplay | undefined,
+      display,
+      "loop",
+      columns,
+    ),
+    [node.data.presentationDisplay, display, columns],
   )
 
   const rows: string[][] = useMemo(() => {
@@ -214,8 +233,19 @@ export function LoopInputCard({
   const atMax = rows.length >= maxItems
   const label = (node.data.label as string) || "Table"
 
+  const { mediaColIndices, textColIndices } = useMemo(() => {
+    const media: number[] = []
+    const text: number[] = []
+    columns.forEach((col, i) => {
+      if (isMediaColumn(col.type)) media.push(i)
+      else text.push(i)
+    })
+    return { mediaColIndices: media, textColIndices: text }
+  }, [columns])
+
   return (
     <GlassCard>
+      {/* Shared header */}
       <div className="flex items-center justify-between mb-3">
         <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider">
           {label}
@@ -238,85 +268,28 @@ export function LoopInputCard({
         </div>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {rows.map((row, rowIndex) => (
-          <div
-            key={rowIndex}
-            className="border border-border/50 rounded-lg p-3 bg-muted/10"
-          >
-            {/* Row header */}
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
-                Row {rowIndex + 1}
-              </span>
-              {!readOnly && rows.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => handleRemoveRow(rowIndex)}
-                  className="text-[11px] text-muted-foreground/50 hover:text-red-400 transition-colors"
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-
-            {/* Fields — one per column */}
-            <div className="flex flex-col gap-2">
-              {columns.map((col, colIndex) => {
-                const colType = col.type ?? "text"
-                const meta = LOOP_COLUMN_TYPE_META[colType as LoopColumn["type"]] ?? LOOP_COLUMN_TYPE_META.text
-                const badgeColor = meta.color
-                const badgeLabel = meta.shortLabel
-                const cellValue = row[colIndex] ?? ""
-
-                return (
-                  <div key={col.id} className="flex flex-col gap-1">
-                    {/* Column label with type badge */}
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                        style={{
-                          color: badgeColor,
-                          backgroundColor: `${badgeColor}15`,
-                        }}
-                      >
-                        {badgeLabel}
-                      </span>
-                      <span className="text-[11px] text-muted-foreground/70">
-                        {col.name}
-                      </span>
-                    </div>
-
-                    {/* Cell input */}
-                    {colType === "text" ? (
-                      <textarea
-                        value={cellValue}
-                        onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
-                        readOnly={readOnly}
-                        placeholder={`${col.name}...`}
-                        className={`w-full min-h-[56px] bg-muted/30 border border-border rounded-lg px-3 py-2 text-[14px] text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200${readOnly ? " opacity-70 cursor-default" : ""}`}
-                      />
-                    ) : (
-                      <MediaCellInput
-                        value={cellValue}
-                        onChange={(val) => handleCellChange(rowIndex, colIndex, val)}
-                        mimePrefix={
-                          colType === "image-url"
-                            ? "image/"
-                            : colType === "video-url"
-                              ? "video/"
-                              : "audio/"
-                        }
-                        readOnly={readOnly}
-                      />
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* View mode: cards or table */}
+      {resolved.viewMode === "table" ? (
+        <TableView
+          columns={columns}
+          rows={rows}
+          readOnly={readOnly}
+          resolved={resolved}
+          handleCellChange={handleCellChange}
+          handleRemoveRow={handleRemoveRow}
+        />
+      ) : (
+        <CardsView
+          columns={columns}
+          rows={rows}
+          readOnly={readOnly}
+          resolved={resolved}
+          mediaColIndices={mediaColIndices}
+          textColIndices={textColIndices}
+          handleCellChange={handleCellChange}
+          handleRemoveRow={handleRemoveRow}
+        />
+      )}
 
       {/* Mobile-only full-width add button */}
       {!readOnly && !atMax && (
@@ -338,5 +311,241 @@ export function LoopInputCard({
         </div>
       )}
     </GlassCard>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Cards View                                                         */
+/* ------------------------------------------------------------------ */
+
+interface ViewProps {
+  columns: LoopColumn[]
+  rows: string[][]
+  readOnly?: boolean
+  resolved: Required<PresentationDisplay>
+  handleCellChange: (rowIndex: number, colIndex: number, value: string) => void
+  handleRemoveRow: (index: number) => void
+}
+
+interface CardsViewProps extends ViewProps {
+  mediaColIndices: number[]
+  textColIndices: number[]
+}
+
+function CardsView({
+  columns,
+  rows,
+  readOnly,
+  resolved,
+  mediaColIndices,
+  textColIndices,
+  handleCellChange,
+  handleRemoveRow,
+}: CardsViewProps) {
+  const hasMedia = mediaColIndices.length > 0
+  const imgSize = ELEMENT_SIZES.cardsImage[resolved.elementSize]
+
+  const gridStyle = resolved.columns > 1
+    ? { display: "grid", gridTemplateColumns: `repeat(${resolved.columns}, 1fr)`, gap: "0.75rem" }
+    : undefined
+
+  return (
+    <div style={gridStyle} className={resolved.columns <= 1 ? "flex flex-col gap-3" : undefined}>
+      {rows.map((row, rowIndex) => (
+        <div
+          key={rowIndex}
+          className="border border-border/50 rounded-lg p-3 bg-muted/10"
+        >
+          {/* Row header */}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+              Row {rowIndex + 1}
+            </span>
+            {!readOnly && rows.length > 1 && (
+              <button
+                type="button"
+                onClick={() => handleRemoveRow(rowIndex)}
+                className="text-[11px] text-muted-foreground/50 hover:text-red-400 transition-colors"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+
+          {/* Card body: media left, text right (or text-only stack) */}
+          {hasMedia ? (
+            <div className="flex gap-3">
+              {/* Media columns on the left */}
+              <div className="flex flex-col gap-2 shrink-0" style={{ width: imgSize }}>
+                {mediaColIndices.map((ci) => {
+                  const col = columns[ci]
+                  const colType = col.type ?? "text"
+                  return (
+                    <div key={col.id}>
+                      <MediaCellInput
+                        value={row[ci] ?? ""}
+                        onChange={(val) => handleCellChange(rowIndex, ci, val)}
+                        mimePrefix={colTypeToMimePrefix(colType)}
+                        readOnly={readOnly}
+                        thumbnailSize={imgSize}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Text columns on the right */}
+              {textColIndices.length > 0 && (
+                <div className="flex-1 min-w-0 flex flex-col gap-2">
+                  {textColIndices.map((ci) => {
+                    const col = columns[ci]
+                    return (
+                      <div key={col.id} className="flex flex-col gap-1">
+                        <span className="text-[11px] text-muted-foreground/70">{col.name}</span>
+                        <textarea
+                          value={row[ci] ?? ""}
+                          onChange={(e) => handleCellChange(rowIndex, ci, e.target.value)}
+                          readOnly={readOnly}
+                          placeholder={`${col.name}...`}
+                          className={`w-full min-h-[56px] bg-muted/30 border border-border rounded-lg px-3 py-2 text-[14px] text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200${readOnly ? " opacity-70 cursor-default" : ""}`}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* No media — text-only vertical stack */
+            <div className="flex flex-col gap-2">
+              {columns.map((col, colIndex) => (
+                <div key={col.id} className="flex flex-col gap-1">
+                  <span className="text-[11px] text-muted-foreground/70">{col.name}</span>
+                  <textarea
+                    value={row[colIndex] ?? ""}
+                    onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                    readOnly={readOnly}
+                    placeholder={`${col.name}...`}
+                    className={`w-full min-h-[56px] bg-muted/30 border border-border rounded-lg px-3 py-2 text-[14px] text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200${readOnly ? " opacity-70 cursor-default" : ""}`}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Table View                                                         */
+/* ------------------------------------------------------------------ */
+
+function TableView({
+  columns,
+  rows,
+  readOnly,
+  resolved,
+  handleCellChange,
+  handleRemoveRow,
+}: ViewProps) {
+  const thumbSize = ELEMENT_SIZES.tableThumbnail[resolved.elementSize]
+
+  return (
+    <div className="w-full overflow-x-auto rounded-lg border border-border/50">
+      <table className="w-full text-sm">
+        {/* Sticky header */}
+        <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
+          <tr>
+            {columns.map((col) => {
+              const colType = col.type ?? "text"
+              const meta = LOOP_COLUMN_TYPE_META[colType as LoopColumn["type"]] ?? LOOP_COLUMN_TYPE_META.text
+              return (
+                <th key={col.id} className="px-3 py-2 text-left">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-muted-foreground/70 font-medium">
+                      {col.name}
+                    </span>
+                    <span
+                      className="text-[9px] font-semibold uppercase tracking-wider px-1 py-0.5 rounded"
+                      style={{
+                        color: meta.color,
+                        backgroundColor: `${meta.color}15`,
+                      }}
+                    >
+                      {meta.shortLabel}
+                    </span>
+                  </div>
+                </th>
+              )
+            })}
+            {/* Delete column header */}
+            {!readOnly && <th className="w-8 px-2 py-2" />}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, rowIndex) => (
+            <tr
+              key={rowIndex}
+              className={rowIndex % 2 === 1 ? "bg-muted/5" : undefined}
+            >
+              {columns.map((col, colIndex) => {
+                const colType = col.type ?? "text"
+                const cellValue = row[colIndex] ?? ""
+                const isMedia = colType !== "text"
+
+                return (
+                  <td key={col.id} className="px-3 py-2 align-middle">
+                    {isMedia ? (
+                      <div style={{ width: thumbSize }}>
+                        <MediaCellInput
+                          value={cellValue}
+                          onChange={(val) => handleCellChange(rowIndex, colIndex, val)}
+                          mimePrefix={
+                            colType === "image-url"
+                              ? "image/"
+                              : colType === "video-url"
+                                ? "video/"
+                                : "audio/"
+                          }
+                          readOnly={readOnly}
+                          thumbnailSize={thumbSize}
+                        />
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={cellValue}
+                        onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                        readOnly={readOnly}
+                        disabled={readOnly}
+                        placeholder={`${col.name}...`}
+                        className={`w-full bg-transparent border-none text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none${readOnly ? " opacity-70 cursor-default" : ""}`}
+                      />
+                    )}
+                  </td>
+                )
+              })}
+              {/* Per-row delete button */}
+              {!readOnly && (
+                <td className="px-2 py-2 align-middle">
+                  {rows.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveRow(rowIndex)}
+                      className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground/40 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                      title="Remove row"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }

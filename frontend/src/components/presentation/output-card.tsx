@@ -24,6 +24,10 @@ export interface OutputCardProps {
   iterationTotal?: number
   /** Iterations completed so far */
   iterationCompleted?: number
+  /** Element size for output rendering (sm, md, lg) */
+  elementSize?: "sm" | "md" | "lg"
+  /** Number of columns for gallery grid layouts */
+  columns?: number
 }
 
 /** Renders the appropriate output card based on output type */
@@ -40,6 +44,8 @@ export function OutputCard({
   displayMode,
   iterationTotal,
   iterationCompleted,
+  elementSize,
+  columns,
 }: OutputCardProps) {
   const showProgress = (status === "running" || status === "waiting") && progress != null
 
@@ -63,6 +69,7 @@ export function OutputCard({
           iterationTotal={iterationTotal}
           iterationCompleted={iterationCompleted}
           onOpenMedia={onOpenMedia ? () => onOpenMedia(nodeId) : undefined}
+          columns={columns}
         />
         {showProgress && (
           <div className="px-1">
@@ -81,11 +88,11 @@ export function OutputCard({
   const card = (() => {
     switch (outputType) {
       case "image":
-        return <ImageOutputCard label={label} status={status} url={url} nodeId={nodeId} onOpenMedia={onOpenMedia} />
+        return <ImageOutputCard label={label} status={status} url={url} nodeId={nodeId} onOpenMedia={onOpenMedia} elementSize={elementSize} />
       case "video":
-        return <VideoOutputCard label={label} status={status} url={url} nodeId={nodeId} onOpenMedia={onOpenMedia} />
+        return <VideoOutputCard label={label} status={status} url={url} nodeId={nodeId} onOpenMedia={onOpenMedia} elementSize={elementSize} />
       case "audio":
-        return <AudioOutputCard label={label} status={status} url={url} />
+        return <AudioOutputCard label={label} status={status} url={url} elementSize={elementSize} />
       case "text":
         return <TextOutputCard label={label} status={status} text={text} />
       default:

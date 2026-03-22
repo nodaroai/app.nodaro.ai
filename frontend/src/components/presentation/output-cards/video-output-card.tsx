@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback } from "react"
 import { Download, Copy, Maximize2, Play, Pause, Volume2, VolumeX, VideoIcon } from "lucide-react"
 import { StatusBadge, GlassCard, GlassButton, ShimmerPlaceholder, copyUrl, downloadFile, type OutputStatus } from "./shared"
+import { ELEMENT_SIZES } from "@/lib/presentation-display"
 
 interface VideoOutputCardProps {
   label: string
@@ -8,9 +9,11 @@ interface VideoOutputCardProps {
   url?: string
   nodeId?: string
   onOpenMedia?: (nodeId: string) => void
+  elementSize?: "sm" | "md" | "lg"
 }
 
-export function VideoOutputCard({ label, status, url, nodeId, onOpenMedia }: VideoOutputCardProps) {
+export function VideoOutputCard({ label, status, url, nodeId, onOpenMedia, elementSize }: VideoOutputCardProps) {
+  const maxHClass = ELEMENT_SIZES.videoOutput[elementSize ?? "md"]
   const videoRef = useRef<HTMLVideoElement>(null)
   const [muted, setMuted] = useState(true)
   const [paused, setPaused] = useState(false)
@@ -50,7 +53,7 @@ export function VideoOutputCard({ label, status, url, nodeId, onOpenMedia }: Vid
           <video
             ref={videoRef}
             src={url}
-            className="w-full max-h-[70vh] rounded-lg bg-black/20 object-contain"
+            className={`w-full ${maxHClass} rounded-lg bg-black/20 object-contain`}
             muted
             autoPlay
             loop

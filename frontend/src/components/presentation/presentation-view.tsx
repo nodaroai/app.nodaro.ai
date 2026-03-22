@@ -35,7 +35,7 @@ import { hasCredits } from "@/lib/edition"
 import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useWorkflowStore, type PresentationViewMode, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
-import type { WorkflowNode } from "@/types/nodes"
+import type { WorkflowNode, PresentationDisplay } from "@/types/nodes"
 import {
   getInputNodes,
   getOutputNodes,
@@ -59,6 +59,8 @@ import { NodeConfigModal, CONFIG_INPUT_TYPES } from "./node-config-modal"
 import { PlatformPreview, PLATFORM_COLORS } from "@/components/nodes/platform-preview"
 import { PLATFORM_LABELS } from "@/lib/social-media-specs"
 import { isVideoUrl } from "@/lib/media-type"
+import { responsiveColumns } from "@/lib/presentation-display"
+import { useIsMobile } from "@/hooks/use-is-mobile"
 import { StatusBadge } from "./output-cards/shared"
 import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled } from "./helpers"
 import { buildNodeRefMap } from "@/lib/node-refs"
@@ -105,6 +107,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const [isRemixing, setIsRemixing] = useState(false)
   const [showPublishTemplate, setShowPublishTemplate] = useState(false)
   const [configNode, setConfigNode] = useState<WorkflowNode | null>(null)
+  const isMobile = useIsMobile()
 
   // Native fullscreen toggle (browser Fullscreen API)
   const toggleNativeFullscreen = useCallback(() => {
@@ -592,15 +595,22 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     [settings.cardMeta],
   )
 
-  const updateCardMeta = useCallback((nodeId: string, field: "title" | "description", value: string) => {
+  const updateCardMeta = useCallback((nodeId: string, field: string, value: unknown) => {
     const current = settings.cardMeta ?? {}
+    const nodeMeta = current[nodeId] ?? {}
     updatePresentationSettings({
-      cardMeta: {
-        ...current,
-        [nodeId]: { ...current[nodeId], [field]: value },
-      },
+      cardMeta: { ...current, [nodeId]: { ...nodeMeta, [field]: value } },
     })
   }, [settings.cardMeta, updatePresentationSettings])
+
+  const getNodeColumns = useCallback((nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId)
+    if (!node) return 1
+    const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
+    const cardDisplay = settings.cardMeta?.[nodeId]?.display
+    const merged = { ...nodeDisplay, ...cardDisplay }
+    return responsiveColumns(merged.columns ?? 1, isMobile)
+  }, [nodes, settings.cardMeta, isMobile])
 
   // Memoize refMaps only for readOnly input nodes (only they need resolved values)
   const inputRefMaps = useMemo(() => {
@@ -614,18 +624,24 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   }, [orderedInputNodes, nodes, edges])
 
   // Render helpers for input/output cards
-  const renderInputCard = useCallback((node: WorkflowNode) => (
-    <InputCard
-      node={node}
-      isFullscreen={isFullscreen}
-      inputValues={presInputValues}
-      onUpdateInput={presUpdateInput}
-      readOnly={inputsReadOnly ?? (isShareReadOnly || isRunning || isTerminal)}
-      onOpenMedia={handleOpenMedia}
-      onOpenConfig={setConfigNode}
-      refMap={inputRefMaps.get(node.id)}
-    />
-  ), [isFullscreen, presInputValues, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia, inputRefMaps])
+  const renderInputCard = useCallback((node: WorkflowNode) => {
+    const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
+    const cardDisplay = settings.cardMeta?.[node.id]?.display
+    const display = { ...nodeDisplay, ...cardDisplay }
+    return (
+      <InputCard
+        node={node}
+        isFullscreen={isFullscreen}
+        inputValues={presInputValues}
+        onUpdateInput={presUpdateInput}
+        readOnly={inputsReadOnly ?? (isShareReadOnly || isRunning || isTerminal)}
+        onOpenMedia={handleOpenMedia}
+        onOpenConfig={setConfigNode}
+        refMap={inputRefMaps.get(node.id)}
+        display={display}
+      />
+    )
+  }, [isFullscreen, presInputValues, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia, inputRefMaps, settings.cardMeta])
 
   // Extract listResults for a node from either fullscreen nodeStates or tab-mode node data
   const getListResults = useCallback(
@@ -675,6 +691,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   )
 
   const renderOutputCard = useCallback((node: WorkflowNode) => {
+    // Resolve element size from node-level + card-level overrides
+    const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
+    const cardDisplay = settings.cardMeta?.[node.id]?.display
+    const elementSize = cardDisplay?.elementSize ?? nodeDisplay?.elementSize ?? "md"
+
     // Preview node: show all visible items with their actual values
     if (node.type === "preview") {
       const nodeData = node.data as Record<string, unknown>
@@ -690,7 +711,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       const visibleItems = previewItems.filter((item) => item.visible !== false)
       const status = getNodeStatus(node.id)
       if (visibleItems.length === 0) {
-        return <OutputCard nodeId={node.id} label={getCardTitle(node)} outputType="text" status={status} />
+        return <OutputCard nodeId={node.id} label={getCardTitle(node)} outputType="text" status={status} elementSize={elementSize} />
       }
       return (
         <div className="flex flex-col gap-2">
@@ -704,6 +725,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               url={["image", "video", "audio"].includes(item.type) ? item.value : undefined}
               text={["text", "data"].includes(item.type) ? item.value : undefined}
               onOpenMedia={handleOpenMedia}
+              elementSize={elementSize}
             />
           ))}
         </div>
@@ -789,6 +811,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           displayMode="gallery"
           iterationTotal={iterationTotal}
           iterationCompleted={iterationCompleted}
+          elementSize={elementSize}
         />
       )
     }
@@ -807,6 +830,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               url={outputType !== "text" ? resultUrl : undefined}
               text={outputType === "text" ? resultUrl : undefined}
               onOpenMedia={handleOpenMedia}
+              elementSize={elementSize}
             />
           ))}
         </div>
@@ -824,9 +848,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         text={result.text}
         onOpenMedia={handleOpenMedia}
         progress={progress}
+        elementSize={elementSize}
       />
     )
-  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates])
+  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta])
 
   const costLabel = hasCredits() && estimatedCost > 0 ? ` (${estimatedCost} CR)` : ""
 
@@ -859,6 +884,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     setPickerSection: setPickerSection as (section: "inputs" | "outputs") => void,
     renderInputCard,
     renderOutputCard,
+    getNodeColumns,
   }
 
   return (

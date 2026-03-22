@@ -1,6 +1,8 @@
 import { GripVertical, X } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import type { PresentationDisplay } from "@/types/nodes"
+import { PresentationDisplayConfig } from "@/components/editor/config-panels/presentation-display-config"
 
 /** Sortable card wrapper with grip handle, remove button, and description editing */
 export function SortableCardWrapper({
@@ -9,6 +11,10 @@ export function SortableCardWrapper({
   onRemove,
   cardDescription,
   onDescriptionChange,
+  cardDisplay,
+  onDisplayChange,
+  showElementSize,
+  viewModes,
   children,
 }: {
   id: string
@@ -16,6 +22,10 @@ export function SortableCardWrapper({
   onRemove: () => void
   cardDescription?: string
   onDescriptionChange: (value: string) => void
+  cardDisplay?: Partial<PresentationDisplay>
+  onDisplayChange?: (display: Partial<PresentationDisplay>) => void
+  showElementSize?: boolean
+  viewModes?: { value: string; label: string }[]
   children: React.ReactNode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
@@ -65,6 +75,17 @@ export function SortableCardWrapper({
             onChange={(e) => onDescriptionChange(e.target.value)}
             placeholder="Add description..."
             className="w-full bg-transparent border-none text-[11px] text-muted-foreground/50 placeholder:text-muted-foreground/30 focus:text-muted-foreground focus:outline-none"
+          />
+        </div>
+      )}
+
+      {isEditMode && onDisplayChange && (
+        <div className="mt-2 px-1">
+          <PresentationDisplayConfig
+            display={cardDisplay ?? {}}
+            onChange={onDisplayChange}
+            showElementSize={showElementSize}
+            viewModes={viewModes}
           />
         </div>
       )}

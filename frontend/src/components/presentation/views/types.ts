@@ -23,8 +23,9 @@ export interface EditableViewProps extends ViewProps {
   handleOutputDragEnd: (event: DragEndEvent) => void
   handleRemoveNode: (nodeId: string) => void
   settings: PresentationSettings
-  updateCardMeta: (nodeId: string, field: "title" | "description", value: string) => void
+  updateCardMeta: (nodeId: string, field: string, value: unknown) => void
   setPickerSection: (section: "inputs" | "outputs") => void
   renderInputCard: (node: WorkflowNode) => React.ReactNode
   renderOutputCard: (node: WorkflowNode) => React.ReactNode
+  getNodeColumns?: (nodeId: string) => number
 }

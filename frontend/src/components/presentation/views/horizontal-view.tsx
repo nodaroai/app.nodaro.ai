@@ -21,6 +21,7 @@ export function HorizontalView({
   setPickerSection,
   renderInputCard,
   renderOutputCard,
+  getNodeColumns,
   splitRatio,
   containerRef,
   handleDividerMouseDown,
@@ -50,6 +51,7 @@ export function HorizontalView({
             settings={settings}
             updateCardMeta={updateCardMeta}
             renderCard={renderInputCard}
+            getNodeColumns={getNodeColumns}
           />
         </div>
 
@@ -88,6 +90,7 @@ export function HorizontalView({
             settings={settings}
             updateCardMeta={updateCardMeta}
             renderCard={renderOutputCard}
+            getNodeColumns={getNodeColumns}
           />
         </div>
       </div>
