@@ -134,7 +134,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
               <CachedImage
                 src={activeThumbnail}
                 alt="Video preview"
-                className="w-full h-auto rounded-xl"
+                className="w-full h-full object-cover rounded-xl"
                 style={{ minHeight: 180 }}
                 thumbnail={!useFull}
                 thumbnailWidth={320}
@@ -142,7 +142,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
             ) : (
               <video
                 src={activeUrl}
-                className="w-full h-auto rounded-xl"
+                className="w-full object-cover rounded-xl"
                 style={{ minHeight: 180 }}
                 autoPlay={videoAutoplay}
                 muted

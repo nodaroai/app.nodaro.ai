@@ -102,7 +102,7 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
           <CachedImage
             src={activeUrl}
             alt="Result"
-            className="w-full h-auto rounded-xl"
+            className="w-full h-full object-cover rounded-xl"
             style={{ minHeight: 180 }}
             thumbnail={!useFull}
             thumbnailWidth={320}
