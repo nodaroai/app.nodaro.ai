@@ -1,6 +1,8 @@
 import { useRef, useEffect } from "react"
 import { GlassCard } from "../output-cards/shared"
 import { ReadOnlyPromptBlock } from "../readonly-prompt-block"
+import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
+import type { PromptContext } from "@/lib/prompt-context"
 
 interface TextInputCardProps {
   label: string
@@ -10,9 +12,10 @@ interface TextInputCardProps {
   readOnly?: boolean
   refMap?: Map<string, string>
   presentationReadOnly?: boolean
+  promptHelper?: PromptContext
 }
 
-export function TextInputCard({ label, value, placeholder, onChange, readOnly, refMap, presentationReadOnly }: TextInputCardProps) {
+export function TextInputCard({ label, value, placeholder, onChange, readOnly, refMap, presentationReadOnly, promptHelper }: TextInputCardProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Auto-resize textarea to fit content
@@ -36,9 +39,21 @@ export function TextInputCard({ label, value, placeholder, onChange, readOnly, r
 
   return (
     <GlassCard>
-      <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-        {label}
-      </label>
+      <div className="flex items-center justify-between mb-2">
+        <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          {label}
+        </label>
+        {promptHelper && (
+          <PromptHelperButton
+            nodeType={promptHelper.nodeType}
+            currentPrompt={value}
+            provider={promptHelper.provider}
+            aspectRatio={promptHelper.aspectRatio}
+            duration={promptHelper.duration}
+            onAccept={onChange}
+          />
+        )}
+      </div>
       <textarea
         ref={textareaRef}
         value={value}

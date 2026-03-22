@@ -4,6 +4,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { hasCredits } from "@/lib/edition"
 import type { WorkflowNode } from "@/types/nodes"
 import { GlassCard } from "../output-cards/shared"
+import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
+import type { PromptContext } from "@/lib/prompt-context"
 
 interface ListInputCardProps {
   node: WorkflowNode
@@ -12,6 +14,7 @@ interface ListInputCardProps {
   onUpdateInput: (nodeId: string, key: string, value: unknown) => void
   readOnly?: boolean
   maxItems: number
+  promptHelper?: PromptContext
 }
 
 export function ListInputCard({
@@ -21,6 +24,7 @@ export function ListInputCard({
   onUpdateInput,
   readOnly,
   maxItems,
+  promptHelper,
 }: ListInputCardProps) {
   const items: string[] = useMemo(() => {
     if (isFullscreen) {
@@ -99,9 +103,21 @@ export function ListInputCard({
         {items.map((item, index) => (
           <div key={index} className="flex gap-2">
             <div className="flex-1 flex flex-col gap-1">
-              <span className="text-[11px] text-muted-foreground/60 pl-1">
-                #{index + 1}
-              </span>
+              <div className="flex items-center justify-between pl-1">
+                <span className="text-[11px] text-muted-foreground/60">
+                  #{index + 1}
+                </span>
+                {promptHelper && (
+                  <PromptHelperButton
+                    nodeType={promptHelper.nodeType}
+                    currentPrompt={item}
+                    provider={promptHelper.provider}
+                    aspectRatio={promptHelper.aspectRatio}
+                    duration={promptHelper.duration}
+                    onAccept={(text) => handleItemChange(index, text)}
+                  />
+                )}
+              </div>
               <textarea
                 value={item}
                 onChange={(e) => handleItemChange(index, e.target.value)}

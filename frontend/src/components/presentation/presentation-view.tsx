@@ -638,6 +638,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     return (
       <InputCard
         node={node}
+        nodes={nodes}
+        edges={edges}
         isFullscreen={isFullscreen}
         inputValues={presInputValues}
         onUpdateInput={presUpdateInput}
@@ -648,7 +650,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         display={display}
       />
     )
-  }, [isFullscreen, presInputValues, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia, inputRefMaps, settings.cardMeta])
+  }, [nodes, edges, isFullscreen, presInputValues, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia, inputRefMaps, settings.cardMeta])
 
   // Extract listResults for a node from either fullscreen nodeStates or tab-mode node data
   const getListResults = useCallback(

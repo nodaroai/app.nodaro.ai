@@ -84,3 +84,8 @@ const NODE_TO_STYLES: Record<string, readonly PromptStyle[]> = {
 export function getStylesForNodeType(nodeType: string): readonly PromptStyle[] {
   return NODE_TO_STYLES[nodeType] ?? IMAGE_PROMPT_STYLES
 }
+
+/** Returns true if the node type is a known prompt-consuming type (has specific style presets). */
+export function hasPromptConsumerType(nodeType: string): boolean {
+  return nodeType in NODE_TO_STYLES
+}

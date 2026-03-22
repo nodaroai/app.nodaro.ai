@@ -2,6 +2,11 @@ import { Clock, Ruler, Ratio, Sliders } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { SceneNodeType } from "@/types/nodes"
 import { GlassCard } from "../output-cards/shared"
+import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
+import type { PromptContext } from "@/lib/prompt-context"
+
+/** Only show prompt helper for text-type parameter nodes */
+const ENHANCEABLE_PARAM_TYPES = new Set(["tone", "style-guide"])
 
 interface ParameterCardProps {
   nodeId: string
@@ -12,6 +17,7 @@ interface ParameterCardProps {
   inputValues: Record<string, Record<string, unknown>>
   onUpdateInput: (nodeId: string, key: string, value: unknown) => void
   readOnly?: boolean
+  promptHelper?: PromptContext
 }
 
 /** Get the primary value field name for a parameter node type */
@@ -47,6 +53,7 @@ export function ParameterCard({
   inputValues,
   onUpdateInput,
   readOnly,
+  promptHelper,
 }: ParameterCardProps) {
   const field = getValueField(nodeType)
   const currentValue = isFullscreen
@@ -63,10 +70,22 @@ export function ParameterCard({
 
   return (
     <GlassCard>
-      <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-        <span className="text-muted-foreground/50">{getTypeIcon(nodeType)}</span>
-        {label}
-      </label>
+      <div className="flex items-center justify-between mb-2">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <span className="text-muted-foreground/50">{getTypeIcon(nodeType)}</span>
+          {label}
+        </label>
+        {promptHelper && ENHANCEABLE_PARAM_TYPES.has(nodeType) && (
+          <PromptHelperButton
+            nodeType={promptHelper.nodeType}
+            currentPrompt={currentValue}
+            provider={promptHelper.provider}
+            aspectRatio={promptHelper.aspectRatio}
+            duration={promptHelper.duration}
+            onAccept={handleChange}
+          />
+        )}
+      </div>
       <input
         type="text"
         value={currentValue}
