@@ -1,7 +1,7 @@
 "use client"
 
-import { memo, useState, useEffect, useRef, useCallback, type ReactNode, type MouseEvent } from "react"
-import { Handle, Position, NodeResizeControl, NodeToolbar, useReactFlow } from "@xyflow/react"
+import { memo, useState, useEffect, useRef, type ReactNode, type MouseEvent } from "react"
+import { Handle, Position, NodeResizer, NodeToolbar } from "@xyflow/react"
 import { MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -126,34 +126,23 @@ function BaseNodeComponent({
     }
   }, [])
 
-  const handleResize = useCallback((_event: unknown, params: { width: number; height: number }) => {
-    // Override the wrapper's maxWidth so the card grows with the resize
-    const wrapper = outerRef.current?.parentElement
-    if (wrapper) {
-      wrapper.style.maxWidth = "none"
-      const w = params.width
-      const h = imageAspectRatio ? w / imageAspectRatio : params.height
-      wrapper.style.width = w + "px"
-      wrapper.style.height = h + "px"
-    }
-  }, [imageAspectRatio])
-
-  // Auto-fit node to image aspect ratio (fixes previously mis-sized nodes)
-  const { getNode, setNodes } = useReactFlow()
+  // When image aspect ratio changes (switching results), update the node's
+  // explicit height to match the new image. applyNodeChanges sets top-level
+  // node.width/node.height (NOT node.style.*), so we must read/write those.
   useEffect(() => {
     if (!imageAspectRatio || !id) return
-    const node = getNode(id)
-    if (!node) return
-    const w = node.measured?.width ?? (typeof node.style?.width === "number" ? node.style.width : parseFloat(String(node.style?.width ?? "")))
-    if (!w || isNaN(w)) return
-    const correctHeight = w / imageAspectRatio
-    const currentH = node.measured?.height ?? (typeof node.style?.height === "number" ? node.style.height : parseFloat(String(node.style?.height ?? "")))
-    if (currentH && Math.abs(currentH - correctHeight) > 5) {
-      setNodes(nodes => nodes.map(n =>
-        n.id === id ? { ...n, style: { ...n.style, width: w, height: correctHeight } } : n
-      ))
-    }
-  }, [imageAspectRatio, id, getNode, setNodes])
+    const state = useWorkflowStore.getState()
+    const node = state.nodes.find((n) => n.id === id)
+    const w = node?.width
+    if (typeof w !== "number") return // auto-sized node — CSS handles it
+    const correctH = w / imageAspectRatio
+    if (typeof node?.height === "number" && Math.abs(node.height - correctH) < 2) return
+    useWorkflowStore.setState({
+      nodes: state.nodes.map((n) =>
+        n.id === id ? { ...n, height: correctH } : n
+      ),
+    })
+  }, [imageAspectRatio, id])
 
   const { isMobile } = useMobileCanvas()
   const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
@@ -381,29 +370,16 @@ function BaseNodeComponent({
         </div>
       ))}
 
-      {/* Resize handle — bottom-right corner, visible on hover */}
+      {/* Resize — NodeResizer manages dimensions through React Flow state */}
       {!isMobile && (
-        <NodeResizeControl
-          position="bottom-right"
+        <NodeResizer
           minWidth={minWidth}
           minHeight={effectiveMinHeight}
           keepAspectRatio={!!imageAspectRatio}
-          onResize={handleResize}
-          style={{
-            background: "transparent",
-            border: "none",
-            opacity: isHovered || selected ? 1 : 0,
-            transition: "opacity 200ms",
-            cursor: "nwse-resize",
-            width: 16,
-            height: 16,
-            padding: 0,
-          }}
-        >
-          <svg width="10" height="10" viewBox="0 0 10 10" className="text-black dark:text-white opacity-50">
-            <path d="M9 1L1 9M9 5L5 9M9 9L9 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </NodeResizeControl>
+          isVisible={isHovered || !!selected}
+          lineClassName="!border-0"
+          handleClassName="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
+        />
       )}
     </div>
     </>

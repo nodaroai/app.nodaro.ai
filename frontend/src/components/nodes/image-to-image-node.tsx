@@ -45,9 +45,17 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
   const [imgAspectRatio, setImgAspectRatio] = useState<number | undefined>()
   useEffect(() => {
     if (!activeUrl) { setImgAspectRatio(undefined); return }
+    let cancelled = false
     const img = new window.Image()
-    img.onload = () => setImgAspectRatio(img.naturalWidth / img.naturalHeight)
+    const setRatio = () => {
+      if (!cancelled && img.naturalWidth > 0) {
+        setImgAspectRatio(img.naturalWidth / img.naturalHeight)
+      }
+    }
+    img.onload = setRatio
     img.src = activeUrl
+    if (img.complete) setRatio()
+    return () => { cancelled = true }
   }, [activeUrl])
 
   function handleDeleteResult(indexToDelete: number) {
@@ -105,7 +113,7 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
       ]}
       imageAspectRatio={imgAspectRatio}
     >
-      <div className="relative w-full h-full group" style={{ minHeight: 180 }}>
+      <div className="relative w-full group" style={{ minHeight: 180 }}>
         {/* Image fills entire node */}
         {activeUrl && status !== "running" && (
           <CachedImage

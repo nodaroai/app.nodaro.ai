@@ -51,9 +51,17 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const [imgAspectRatio, setImgAspectRatio] = useState<number | undefined>()
   useEffect(() => {
     if (!activeUrl) { setImgAspectRatio(undefined); return }
+    let cancelled = false
     const img = new window.Image()
-    img.onload = () => setImgAspectRatio(img.naturalWidth / img.naturalHeight)
+    const setRatio = () => {
+      if (!cancelled && img.naturalWidth > 0) {
+        setImgAspectRatio(img.naturalWidth / img.naturalHeight)
+      }
+    }
+    img.onload = setRatio
     img.src = activeUrl
+    if (img.complete) setRatio() // cached images may not fire onload
+    return () => { cancelled = true }
   }, [activeUrl])
   const creditModelId = buildCreditModelIdentifier(
     nodeData.provider ?? "nano-banana",

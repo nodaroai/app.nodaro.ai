@@ -87,7 +87,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
         { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
-      <div className="relative w-full h-full group" style={{ minHeight: 180 }}>
+      <div className="relative w-full group" style={{ minHeight: 180 }}>
         {/* Image fills entire node */}
         {activeUrl && status !== "running" && (
           <CachedImage
