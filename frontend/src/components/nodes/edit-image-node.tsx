@@ -13,7 +13,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
+import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { EditableNodeLabel } from "./editable-node-label"
 import type { EditImageData } from "@/types/nodes"
@@ -34,8 +34,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const credits = useModelCredits(nodeData.provider ?? "recraft-upscale", 2)
-  const { zoom } = useCanvasZoom()
-  const useFull = zoom >= 0.8
+  const useFull = useFullResolution(id)
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedImageUrl"))
@@ -88,7 +87,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
         { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
-      <div className="relative w-full group" style={{ minHeight: 180 }}>
+      <div className="relative w-full h-full group" style={{ minHeight: 180 }}>
         {/* Image fills entire node */}
         {activeUrl && status !== "running" && (
           <CachedImage

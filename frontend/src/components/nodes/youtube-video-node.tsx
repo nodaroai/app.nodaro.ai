@@ -12,7 +12,7 @@ import { fetchYouTubeOEmbed, startVideoDownload, subscribeToDownloadProgress, do
 import type { DownloadProgressEvent } from "@/lib/api"
 import type { YouTubeVideoData } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
+import { useFullResolution } from "@/hooks/use-full-resolution"
 
 type VideoPlatform = "youtube" | "facebook" | "tiktok" | "instagram" | "twitter" | "unknown"
 
@@ -291,8 +291,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
   const canEmbed = platform === "youtube"
   const needsDownload = !canEmbed && nodeData.videoId
   const canPlay = canEmbed || !!nodeData.downloadedVideoUrl
-  const { zoom } = useCanvasZoom()
-  const useFull = zoom >= 0.8
+  const useFull = useFullResolution(id)
   const displayThumbnail = nodeData.downloadedThumbnailUrl || nodeData.thumbnailUrl
 
   return (

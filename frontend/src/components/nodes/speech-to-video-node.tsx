@@ -12,7 +12,7 @@ import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
 import { NodeJobProgress } from "./node-job-progress"
-import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
+import { useFullResolution } from "@/hooks/use-full-resolution"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { SpeechToVideoData, GeneratedResult } from "@/types/nodes"
@@ -65,8 +65,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const edges = useWorkflowStore((s) => s.edges)
   const nodes = useWorkflowStore((s) => s.nodes)
 
-  const { zoom } = useCanvasZoom()
-  const useFull = zoom >= 0.8
+  const useFull = useFullResolution(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -230,7 +229,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {/* Video Preview / Loading / Error States */}
-        <div className="relative w-full group/video" style={{ minHeight: activeUrl || status === "running" || status === "failed" ? 180 : undefined }}>
+        <div className="relative w-full h-full group/video" style={{ minHeight: activeUrl || status === "running" || status === "failed" ? 180 : undefined }}>
           {status === "running" && (
             <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10" style={{ minHeight: 180 }}>
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
@@ -252,7 +251,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
               ) : (
                 <video
                   src={activeUrl}
-                  className="w-full object-cover rounded-xl"
+                  className="w-full h-full object-cover rounded-xl"
                   style={{ minHeight: 180 }}
                   autoPlay={videoAutoplay}
                   muted

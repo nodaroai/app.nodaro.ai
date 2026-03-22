@@ -11,7 +11,7 @@ import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { WorkflowViewerModal } from "@/components/editor/workflow-viewer-modal"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
+import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NodeJobProgress } from "./node-job-progress"
 import type { SubWorkflowData, SubWorkflowPort, GeneratedResult } from "@/types/nodes"
@@ -68,8 +68,7 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SubWorkflowData
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const { zoom } = useCanvasZoom()
-  const useFull = zoom >= 0.8
+  const useFull = useFullResolution(id)
   const updateNodeInternals = useUpdateNodeInternals()
   const status = nodeData.executionStatus ?? "idle"
 

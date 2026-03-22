@@ -161,7 +161,7 @@ interface WorkflowState {
   readonly deleteNode: (nodeId: string) => void
   readonly deleteEdge: (edgeId: string) => void
   readonly updateEdgeData: (edgeId: string, data: Record<string, unknown>) => void
-  readonly duplicateNode: (nodeId: string) => void
+  readonly duplicateNode: (nodeId: string, position?: { x: number; y: number }) => void
   readonly selectNode: (nodeId: string | null) => void
   readonly setUserPromptTemplates: (templates: Record<string, string>) => void
   readonly setFlowPromptTemplates: (templates: Record<string, string>) => void
@@ -547,7 +547,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     if (isExecOnly) setSkipUndoCapture(false)
   },
 
-  duplicateNode: (nodeId) =>
+  duplicateNode: (nodeId, position) =>
     set((state) => {
       const source = state.nodes.find((n) => n.id === nodeId)
       if (!source) return state
@@ -591,20 +591,23 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         }
       }
 
+      // Spread the full source node (preserves measured, style, width, height,
+      // className — same as copy+paste) then override id, position, data.
+      const newId = generateNodeId()
       const newNode: WorkflowNode = {
-        id: generateNodeId(),
-        type: source.type,
-        position: {
+        ...source,
+        id: newId,
+        position: position ?? {
           x: source.position.x + 50,
           y: source.position.y + 50,
         },
         data: clonedData,
+        selected: false,
       }
 
       return {
         nodes: [...state.nodes, newNode],
-        newNodeIds: new Set([...state.newNodeIds, newNode.id]),
-        selectedNodeId: newNode.id,
+        newNodeIds: new Set([...state.newNodeIds, newId]),
         isDirty: true,
       }
     }),

@@ -13,7 +13,7 @@ import { copyToClipboard } from "@/lib/utils"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
+import { useFullResolution } from "@/hooks/use-full-resolution"
 import type { UploadVideoData } from "@/types/nodes"
 
 const HANDLES = [
@@ -41,8 +41,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
-  const { zoom } = useCanvasZoom()
-  const useFull = zoom >= 0.8
+  const useFull = useFullResolution(id)
 
   const videoUrl = nodeData.r2Url || nodeData.url
   const thumbnailUrl = nodeData.thumbnailUrl

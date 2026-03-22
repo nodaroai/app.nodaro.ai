@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useMemo } from "react"
 import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon } from "lucide-react"
+import { useReactFlow } from "@xyflow/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 interface NodeContextMenuProps {
@@ -21,6 +22,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   const setWorkflowThumbnail = useWorkflowStore((s) => s.setWorkflowThumbnail)
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
+  const { screenToFlowPosition } = useReactFlow()
   const ref = useRef<HTMLDivElement>(null)
 
   const hasDownstream = useMemo(() => {
@@ -88,7 +90,8 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   }
 
   function handleDuplicate() {
-    duplicateNode(nodeId)
+    const flowPos = screenToFlowPosition({ x, y })
+    duplicateNode(nodeId, flowPos)
     onClose()
   }
 

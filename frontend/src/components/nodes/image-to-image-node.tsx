@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, Link, Layers } from "lucide-react"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
@@ -13,7 +13,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
+import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -41,8 +41,14 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
     nodeData as unknown as Record<string, unknown>,
   )
   const credits = useModelCredits(creditModelId, 1)
-  const { zoom } = useCanvasZoom()
-  const useFull = zoom >= 0.8
+  const useFull = useFullResolution(id)
+  const [imgAspectRatio, setImgAspectRatio] = useState<number | undefined>()
+  useEffect(() => {
+    if (!activeUrl) { setImgAspectRatio(undefined); return }
+    const img = new window.Image()
+    img.onload = () => setImgAspectRatio(img.naturalWidth / img.naturalHeight)
+    img.src = activeUrl
+  }, [activeUrl])
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedImageUrl"))
@@ -63,6 +69,8 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      minWidth={200}
+      minHeight={imgAspectRatio ? Math.round(200 / imgAspectRatio) : 150}
       hideHeader
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
@@ -95,8 +103,9 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
         ...(supportsMask ? [{ id: "mask", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true }] : []),
         { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
+      imageAspectRatio={imgAspectRatio}
     >
-      <div className="relative w-full group" style={{ minHeight: 180 }}>
+      <div className="relative w-full h-full group" style={{ minHeight: 180 }}>
         {/* Image fills entire node */}
         {activeUrl && status !== "running" && (
           <CachedImage
