@@ -11,6 +11,19 @@ import {
   type ExecutionContext,
 } from "./types";
 
+/** When true, toast notifications are suppressed (used during list fan-out). */
+let _suppressToasts = false;
+export function setSuppressToasts(suppress: boolean): void {
+  _suppressToasts = suppress;
+}
+
+/** Toast wrapper that respects the suppression flag. Use instead of raw `toast.*` in execution handlers. */
+export const guardedToast = {
+  info: (...args: Parameters<typeof toast.info>) => { if (!_suppressToasts) toast.info(...args); },
+  success: (...args: Parameters<typeof toast.success>) => { if (!_suppressToasts) toast.success(...args); },
+  error: (...args: Parameters<typeof toast.error>) => { if (!_suppressToasts) toast.error(...args); },
+};
+
 export type OutputKey = "generatedVideoUrl" | "generatedAudioUrl" | "generatedImageUrl";
 
 /** Map store output key → backend output_data field. */
@@ -80,7 +93,7 @@ function handleJobCompleted(
   label: string,
   extraOutputFields: ((od: Record<string, unknown>) => Record<string, unknown>) | undefined,
   updateNodeData: ReturnType<typeof useWorkflowStore.getState>["updateNodeData"],
-  resolve: () => void,
+  resolve: (url: string) => void,
 ): boolean {
   const url = job.output_data?.[OUTPUT_URL_KEY[outputKey]];
 
@@ -120,8 +133,8 @@ function handleJobCompleted(
     currentJobProgress: undefined,
     ...extraFields,
   });
-  toast.success(`${label} complete`);
-  resolve();
+  guardedToast.success(`${label} complete`);
+  resolve(url as string);
   return true;
 }
 
@@ -139,7 +152,7 @@ export function pollJobWithNodeUpdate(
     outputData: Record<string, unknown>,
   ) => Record<string, unknown>,
   estimatedMs?: number,
-): Promise<void> {
+): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
     executionStatus: "running",
@@ -148,10 +161,10 @@ export function pollJobWithNodeUpdate(
     currentJobProgress: 0,
   });
 
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     apiCall()
       .then(async ({ jobId }) => {
-        toast.info(`${label} started`, { description: `Job ID: ${jobId}` });
+        guardedToast.info(`${label} started`, { description: `Job ID: ${jobId}` });
         updateNodeData(nodeId, { currentJobId: jobId });
 
         // Auto-fetch estimate for smooth progress if not provided
@@ -211,7 +224,7 @@ export function pollJobWithNodeUpdate(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  toast.error(`${label} failed`, { description: errMsg });
+                  guardedToast.error(`${label} failed`, { description: errMsg });
                   reject(new Error(errMsg));
                 }
               } else if (job.status === "failed") {
@@ -223,7 +236,7 @@ export function pollJobWithNodeUpdate(
                   currentJobId: undefined,
                   currentJobProgress: undefined,
                 });
-                toast.error(`${label} failed`, { description: errMsg });
+                guardedToast.error(`${label} failed`, { description: errMsg });
                 reject(new Error(errMsg));
               }
             } catch (err) {
@@ -244,7 +257,7 @@ export function pollJobWithNodeUpdate(
                   currentJobId: undefined,
                   currentJobProgress: undefined,
                 });
-                toast.error(`Failed to check ${label} status`);
+                guardedToast.error(`Failed to check ${label} status`);
                 reject(err);
               }
             }
@@ -258,7 +271,7 @@ export function pollJobWithNodeUpdate(
           currentJobProgress: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          toast.error(`Failed to start ${label}`, {
+          guardedToast.error(`Failed to start ${label}`, {
             description: err instanceof Error ? err.message : "Unknown error",
           });
         }

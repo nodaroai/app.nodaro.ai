@@ -43,6 +43,11 @@ vi.mock("../execute-node", () => ({
   executeNode: (...args: unknown[]) => mockExecuteNode(...args),
 }))
 
+vi.mock("../poll-job", () => ({
+  setSuppressToasts: () => {},
+  isSuppressToasts: () => false,
+}))
+
 vi.mock("../execution-graph", () => ({
   extractNodeOutput: (...args: unknown[]) => mockExtractNodeOutput(...args),
 }))
@@ -558,13 +563,13 @@ describe("executeNodeForList — ai-writer output handling", () => {
     mockEdges = []
   })
 
-  it("uses generatedText for ai-writer nodes instead of extractNodeOutput", () => {
-    mockExecuteNode.mockResolvedValue(undefined)
-    // After execution, the ai-writer node should have generatedText on its data
+  it("captures result from executeNode return value for ai-writer nodes", () => {
+    // executeNode now returns the output string directly
+    mockExecuteNode.mockResolvedValue("Written output")
     const nodeWithText = makeNode({
       id: "n1",
       type: "ai-writer",
-      data: { label: "Writer", generatedText: "Written output" },
+      data: { label: "Writer" },
     })
     mockNodes = [nodeWithText]
 
@@ -573,10 +578,7 @@ describe("executeNodeForList — ai-writer output handling", () => {
       ["topic1"],
       makeCtx(),
     ).then(() => {
-      // extractNodeOutput should NOT be called for ai-writer
-      expect(mockExtractNodeOutput).not.toHaveBeenCalled()
-
-      // Final update should contain the text from generatedText
+      // Result captured from executeNode return value, not store
       const lastCall =
         mockUpdateNodeData.mock.calls[mockUpdateNodeData.mock.calls.length - 1]
       expect(lastCall[1].__listResults).toEqual(["Written output"])
@@ -594,7 +596,7 @@ describe("executeNodeForList — node not found", () => {
     mockEdges = []
   })
 
-  it("breaks loop when freshNode is not found before execution", async () => {
+  it("cancels remaining when freshNode is not found", async () => {
     // Start with node present, then remove it
     const node = makeNode({ id: "n1" })
     mockNodes = [node]
@@ -604,8 +606,8 @@ describe("executeNodeForList — node not found", () => {
       callCount++
       // Remove the node after first execution so next iteration won't find it
       mockNodes = []
+      return "out.png"
     })
-    mockExtractNodeOutput.mockReturnValue("out.png")
 
     await executeNodeForList(
       node as unknown as WorkflowNode,
@@ -613,20 +615,18 @@ describe("executeNodeForList — node not found", () => {
       makeCtx(),
     )
 
-    // Only first item should execute; second iteration finds no node and breaks
+    // Only first item should execute; remaining cancelled because node removed
     expect(callCount).toBe(1)
   })
 
-  it("pushes empty string when afterNode is not found", async () => {
+  it("records empty string for failed iterations", async () => {
     const node = makeNode({ id: "n1" })
     mockNodes = [node]
 
-    // Node exists for freshNode lookup, then disappears before afterNode lookup
-    let execCount = 0
+    // Return value on success, then remove node to cause failure
     mockExecuteNode.mockImplementation(async () => {
-      execCount++
-      // Remove node so afterNode lookup returns undefined
       mockNodes = []
+      return "out.png"
     })
 
     await executeNodeForList(
@@ -635,10 +635,10 @@ describe("executeNodeForList — node not found", () => {
       makeCtx(),
     )
 
-    // The final call should have an empty string in results since afterNode is undefined
+    // First iteration succeeds, result should have the output
     const lastCall =
       mockUpdateNodeData.mock.calls[mockUpdateNodeData.mock.calls.length - 1]
-    expect(lastCall[1].__listResults).toContain("")
+    expect(lastCall[1].__listResults).toEqual(["out.png"])
   })
 })
 

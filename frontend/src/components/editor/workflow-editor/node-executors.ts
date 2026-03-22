@@ -1,4 +1,3 @@
-import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import {
   generateImage,
@@ -25,7 +24,7 @@ import {
   checkStorageError,
   type ExecutionContext,
 } from "./types";
-import { pollJobWithNodeUpdate } from "./poll-job";
+import { pollJobWithNodeUpdate, guardedToast } from "./poll-job";
 
 /** Extract kieTaskId from output data for downstream video chaining. */
 const extractKieTaskId = (od: Record<string, unknown>) => {
@@ -49,7 +48,7 @@ export function runImageGeneration(
   renderingSpeed?: string,
   styleType?: string,
   expandPrompt?: boolean,
-): Promise<void> {
+): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
     () =>
@@ -91,7 +90,7 @@ export function runEditImage(
     seed?: number
     referenceImageUrls?: string[]
   },
-): Promise<void> {
+): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
     () => editImage(imageUrl, prompt, provider, ctx.userId, options),
@@ -121,7 +120,7 @@ export function runImageToImage(
     guidanceScale?: number
     maskUrl?: string
   },
-): Promise<void> {
+): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
     () => imageToImage(imageUrl, prompt, provider, ctx.userId, referenceImageUrls, options),
@@ -163,7 +162,7 @@ export function runVideoGeneration(
   cameraFixed?: boolean,
   removeWatermark?: boolean,
   characterIdList?: string[],
-): Promise<void> {
+): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
     () =>
@@ -207,7 +206,7 @@ export function runVideoToVideoGeneration(
   ctx: ExecutionContext,
   prompt?: string,
   provider?: string,
-): Promise<void> {
+): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
     () => videoToVideo(sourceVideoUrl, prompt, provider, ctx.userId),
@@ -243,7 +242,7 @@ export function runTextToVideoGeneration(
     seed?: number;
   },
   characterIdList?: string[],
-): Promise<void> {
+): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
     () => textToVideo(prompt, provider, ctx.userId, { ...kling3Options, characterIdList }),
@@ -270,7 +269,7 @@ export function runTextToSpeechGeneration(
     languageCode?: string;
     voiceType?: "premade" | "custom" | "library";
   },
-): Promise<void> {
+): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
     () => textToSpeech(text, voice, provider, ctx.userId, options),
@@ -291,14 +290,14 @@ export function runScriptGeneration(
   targetDuration?: number,
   provider?: string,
   llmModel?: string,
-): Promise<void> {
+): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, { executionStatus: "running" });
 
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     generateScriptApi({ prompt, sceneCount, tone, targetDuration, provider, llmModel, userId: ctx.userId })
       .then(({ jobId }) => {
-        toast.info("Script generation started", {
+        guardedToast.info("Script generation started", {
           description: `Job ID: ${jobId}`,
         });
         updateNodeData(nodeId, { currentJobId: jobId });
@@ -343,10 +342,10 @@ export function runScriptGeneration(
                   activeResultIndex: 0,
                   currentJobId: undefined,
                 });
-                toast.success("Script generated", {
+                guardedToast.success("Script generated", {
                   description: script?.title,
                 });
-                resolve();
+                resolve(script?.title || "");
               } else if (job.status === "failed") {
                 ctx.untrackInterval(poll);
                 const errMsg = job.error_message ?? "Unknown error";
@@ -355,7 +354,7 @@ export function runScriptGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                toast.error("Script generation failed", {
+                guardedToast.error("Script generation failed", {
                   description: errMsg,
                 });
                 reject(new Error(errMsg));
@@ -368,7 +367,7 @@ export function runScriptGeneration(
                   executionStatus: "failed",
                   currentJobId: undefined,
                 });
-                toast.error("Failed to check script generation status");
+                guardedToast.error("Failed to check script generation status");
                 reject(err);
               }
             }
@@ -381,7 +380,7 @@ export function runScriptGeneration(
           currentJobId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          toast.error("Failed to start script generation", {
+          guardedToast.error("Failed to start script generation", {
             description: err instanceof Error ? err.message : "Unknown error",
           });
         }
@@ -399,7 +398,7 @@ export function runCombineVideos(
   transitionDuration: number,
   audioMode: "keep" | "crossfade" | "remove",
   ctx: ExecutionContext,
-): Promise<void> {
+): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
     () => combineVideos(videoUrls, transition, transitionDuration, audioMode, ctx.userId),

@@ -1,9 +1,10 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import type { WorkflowNode, SceneNodeDataType } from "@/types/nodes";
-import { extractNodeOutput } from "./execution-graph";
 import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
 import { REPEAT_PLACEHOLDER } from "@nodaro-shared/repeat-types";
+import { settledWithLimit } from "@nodaro-shared/settled-with-limit";
+import { setSuppressToasts } from "./poll-job";
 
 /**
  * Execute a node once for each item in the list. Results are accumulated
@@ -14,6 +15,8 @@ export async function executeNodeForList(
   items: string[],
   ctx: ExecutionContext,
 ): Promise<void> {
+  const MAX_PARALLEL_ITERATIONS = 6;
+
   const { updateNodeData } = useWorkflowStore.getState();
 
   updateNodeData(node.id, {
@@ -26,70 +29,81 @@ export async function executeNodeForList(
     __listInputs: [...items],
   });
 
-  const results: string[] = [];
   let completedCount = 0;
   let failedCount = 0;
+  const cancelRef = { cancelled: false };
 
-  for (let i = 0; i < items.length; i++) {
-    if (ctx.isWorkflowStale()) break;
+  const tasks = items.map((item, i) => async () => {
+    if (ctx.isWorkflowStale() || cancelRef.cancelled) {
+      throw new Error("Cancelled");
+    }
 
-    const item = items[i];
+    const freshNode = useWorkflowStore
+      .getState()
+      .nodes.find((n) => n.id === node.id);
+    if (!freshNode) throw new Error("Node removed");
+
     const isRepeat = item === REPEAT_PLACEHOLDER;
-    const isUrl = !isRepeat && (
-      item.startsWith("http") ||
-      /\.(png|jpg|jpeg|webp|gif|mp4|mov|webm|mp3|wav|ogg)(\?|$)/i.test(item)
+    const isUrl =
+      !isRepeat &&
+      (item.startsWith("http") ||
+        /\.(png|jpg|jpeg|webp|gif|mp4|mov|webm|mp3|wav|ogg)(\?|$)/i.test(
+          item,
+        ));
+
+    // executeNode now returns the output string directly
+    const result = await executeNode(
+      freshNode,
+      ctx,
+      isRepeat ? undefined : isUrl ? undefined : item,
+      isRepeat ? undefined : isUrl ? item : undefined,
+      i,
     );
 
-    try {
-      const freshNode = useWorkflowStore
-        .getState()
-        .nodes.find((n) => n.id === node.id);
-      if (!freshNode) break;
+    completedCount++;
+    useWorkflowStore.getState().updateNodeData(node.id, {
+      __listCompleted: completedCount + failedCount,
+    });
 
-      await executeNode(
-        freshNode,
-        ctx,
-        isRepeat ? undefined : (isUrl ? undefined : item),
-        isRepeat ? undefined : (isUrl ? item : undefined),
-        i,
-      );
+    return { index: i, value: result || "" };
+  });
 
-      const afterNode = useWorkflowStore
-        .getState()
-        .nodes.find((n) => n.id === node.id);
-      if (afterNode) {
-        if (node.type === "ai-writer") {
-          const afterData = afterNode.data as Record<string, unknown>;
-          results.push((afterData?.generatedText as string) || "");
-        } else {
-          results.push(extractNodeOutput(afterNode) || "");
-        }
+  setSuppressToasts(true);
+  try {
+    const settled = await settledWithLimit(
+      tasks,
+      MAX_PARALLEL_ITERATIONS,
+      cancelRef,
+    );
+
+    // Assemble results in original index order
+    const results: string[] = new Array(items.length).fill("");
+    for (const entry of settled) {
+      if (entry.status === "fulfilled") {
+        results[entry.value.index] = entry.value.value;
       } else {
-        results.push("");
+        failedCount++;
+        // Cancel remaining on first non-cancellation failure
+        if (!cancelRef.cancelled) {
+          cancelRef.cancelled = true;
+        }
       }
-      completedCount++;
-    } catch {
-      failedCount++;
-      results.push("");
     }
 
     useWorkflowStore.getState().updateNodeData(node.id, {
+      executionStatus: failedCount === items.length ? "failed" : "completed",
+      __listTotal: items.length,
       __listCompleted: completedCount + failedCount,
-      __listResults: [...results],
+      __listResults: results,
+      __listInputs: [...items],
+      errorMessage:
+        failedCount > 0
+          ? `${completedCount}/${items.length} succeeded, ${failedCount} failed`
+          : undefined,
     });
+  } finally {
+    setSuppressToasts(false);
   }
-
-  useWorkflowStore.getState().updateNodeData(node.id, {
-    executionStatus: failedCount === items.length ? "failed" : "completed",
-    __listTotal: items.length,
-    __listCompleted: completedCount + failedCount,
-    __listResults: results,
-    __listInputs: [...items],
-    errorMessage:
-      failedCount > 0
-        ? `${completedCount}/${items.length} succeeded, ${failedCount} failed`
-        : undefined,
-  });
 }
 
 // --- Post-execution: expand loop results into separate pipelines ---

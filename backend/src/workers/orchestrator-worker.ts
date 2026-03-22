@@ -675,13 +675,6 @@ async function executeNodeForList(
   triggerData?: Record<string, unknown>,
   onIterationComplete?: (iterationIndex: number) => void,
 ): Promise<ExecuteNodeResult> {
-  const allResults: string[] = []
-  const allJobIds: string[] = []
-  let firstOutput: NodeOutput | undefined
-  let totalCreditsUsed = 0
-  let lastJobId: string | undefined
-  let lastUsageLogId: string | undefined
-
   // Set iteration total so frontend can show "0/N" progress
   nodeStates[node.id] = {
     ...nodeStates[node.id],
@@ -689,64 +682,42 @@ async function executeNodeForList(
     iterationCompleted: 0,
   }
 
-  for (let i = 0; i < items.length; i++) {
-    if (ctx.cancelled) break // Preserve partial results on cancel
+  let iterationCompleted = 0
+  const cancelRef = { cancelled: false }
 
-    const item = items[i]
+  const tasks = items.map((item, i) => async () => {
+    if (ctx.cancelled || cancelRef.cancelled) throw new Error("Cancelled")
 
-    try {
-      // Resolve normal inputs from upstream, indexing "each" sources by iteration
-      const inputs = resolveNodeInputs(
-        node,
-        edges,
-        nodeStates,
-        allNodes,
-        triggerData,
-        i,
-      )
+    const inputs = resolveNodeInputs(
+      node,
+      edges,
+      nodeStates,
+      allNodes,
+      triggerData,
+      i,
+    )
+    overrideInputWithListItem(inputs, item)
 
-      // Override the appropriate input field based on item content
-      overrideInputWithListItem(inputs, item)
+    const result = await executeNode(
+      node,
+      inputs,
+      edges,
+      allNodes,
+      nodeStates,
+      ctx,
+    )
 
-      // Execute the node with the overridden input
-      const result = await executeNode(
-        node,
-        inputs,
-        edges,
-        allNodes,
-        nodeStates,
-        ctx,
-      )
+    const output = result.output
+    const resultValue =
+      output.imageUrl ||
+      output.videoUrl ||
+      output.audioUrl ||
+      output.text ||
+      ""
 
-      // Extract the primary result URL/text from the output
-      const output = result.output
-      const resultValue =
-        output.imageUrl ||
-        output.videoUrl ||
-        output.audioUrl ||
-        output.text ||
-        ""
-      allResults.push(resultValue)
+    iterationCompleted++
+    nodeStates[node.id].iterationCompleted = iterationCompleted
 
-      if (i === 0) {
-        firstOutput = output
-      }
-
-      totalCreditsUsed += result.creditsUsed ?? 0
-      if (result.jobId) {
-        lastJobId = result.jobId
-        allJobIds.push(result.jobId)
-      }
-      if (result.usageLogId) lastUsageLogId = result.usageLogId
-    } catch (err) {
-      allResults.push("") // Empty string for failed iteration
-      break // Fail-fast: stop at first failure, preserve completed results
-    }
-
-    // Update iteration progress
-    nodeStates[node.id] = { ...nodeStates[node.id], iterationCompleted: i + 1 }
-
-    // Emit progress update for fan-out + notify caller
     onIterationComplete?.(i)
     emitExecutionEvent({
       type: "node:updated",
@@ -754,9 +725,37 @@ async function executeNodeForList(
       nodeStates: { ...nodeStates },
       nodeId: node.id,
     })
+
+    return { index: i, result, resultValue }
+  })
+
+  const settled = await settledWithLimit(tasks, MAX_CONCURRENT_NODES_PER_EXECUTION, cancelRef)
+
+  // Assemble results in original index order
+  const allResults: string[] = new Array(items.length).fill("")
+  const allJobIds: string[] = []
+  let firstOutput: NodeOutput | undefined
+  let totalCreditsUsed = 0
+  let lastJobId: string | undefined
+  let lastUsageLogId: string | undefined
+
+  for (let i = 0; i < settled.length; i++) {
+    const entry = settled[i]
+    if (entry.status === "fulfilled") {
+      const { index, result, resultValue } = entry.value
+      allResults[index] = resultValue
+      if (index === 0) firstOutput = result.output
+      totalCreditsUsed += result.creditsUsed ?? 0
+      if (result.jobId) {
+        lastJobId = result.jobId
+        allJobIds.push(result.jobId)
+      }
+      if (result.usageLogId) lastUsageLogId = result.usageLogId
+    } else if (!cancelRef.cancelled) {
+      cancelRef.cancelled = true
+    }
   }
 
-  // Build combined output: first result as primary + listResults for downstream fan-out
   const combinedOutput: NodeOutput = {
     ...(firstOutput ?? {}),
     listResults: allResults,
