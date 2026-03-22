@@ -55,6 +55,15 @@ export const TIER_CREDITS: Record<string, number> = {
   business: 4800,
 }
 
+/** Max concurrent nodes per workflow execution, by tier. */
+export const TIER_PARALLELISM: Record<string, number> = {
+  free: 2,
+  basic: 4,
+  standard: 6,
+  pro: 10,
+  business: 12,
+}
+
 export const TIER_LLM_LIMITS: Record<string, number> = {
   free: 20,
   basic: 100,

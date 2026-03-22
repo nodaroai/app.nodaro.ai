@@ -61,7 +61,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
       "10 GB storage",
       "All standard models",
       "No watermark",
-      "Priority queue",
+      "Priority queue \u2014 up to 2x speed",
     ],
     cta: "Subscribe",
   },
@@ -81,7 +81,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
       "25 GB storage",
       "All models incl. premium",
       "No watermark",
-      "Priority queue",
+      "Priority queue \u2014 up to 3x speed",
     ],
     cta: "Subscribe",
   },
@@ -101,7 +101,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
       "50 GB storage",
       "All models incl. premium",
       "No watermark",
-      "Fastest queue priority",
+      "Fastest queue \u2014 up to 5x speed",
     ],
     highlighted: true,
     cta: "Subscribe",
@@ -122,7 +122,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
       "200 GB storage",
       "All models incl. premium",
       "No watermark",
-      "Fastest queue + dedicated",
+      "Fastest queue \u2014 up to 8x speed",
     ],
     cta: "Subscribe",
   },
@@ -139,6 +139,15 @@ export const TIER_STORAGE_BYTES: Record<string, number> = {
   pro: 50 * 1024 * 1024 * 1024,          // 50 GB
   business: 200 * 1024 * 1024 * 1024,    // 200 GB
   enterprise: 500 * 1024 * 1024 * 1024,  // 500 GB
+}
+
+/** Max concurrent nodes per workflow execution, by tier. Must match backend TIER_PARALLELISM in stripe-config.ts. */
+export const TIER_PARALLELISM: Record<string, number> = {
+  free: 2,
+  basic: 4,
+  standard: 6,
+  pro: 10,
+  business: 12,
 }
 
 /** Get the display price for a tier based on billing cycle. */

@@ -7,7 +7,8 @@
 
 import { Worker, type Job } from "bullmq"
 import IORedis from "ioredis"
-import { config } from "../lib/config.js"
+import { config, hasCredits } from "../lib/config.js"
+import { TIER_PARALLELISM } from "../billing/stripe-config.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import { supabase } from "../lib/supabase.js"
 import {
@@ -37,8 +38,15 @@ import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, exp
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { settledWithLimit } from "../lib/settled-with-limit.js"
 
-/** Max nodes a single workflow execution can run concurrently. Prevents one large workflow from starving other users. */
-const MAX_CONCURRENT_NODES_PER_EXECUTION = config.MAX_CONCURRENT_NODES_PER_EXECUTION
+/** Env-var ceiling — tier limits are capped by this. */
+const MAX_CONCURRENT_NODES_CEILING = config.MAX_CONCURRENT_NODES_PER_EXECUTION
+
+/** Resolve per-execution parallelism limit from user tier (cloud) or env ceiling (self-hosted). */
+function getParallelismLimit(tier: string | undefined): number {
+  if (!hasCredits()) return MAX_CONCURRENT_NODES_CEILING
+  const tierLimit = TIER_PARALLELISM[tier ?? "free"] ?? TIER_PARALLELISM.free
+  return Math.min(tierLimit, MAX_CONCURRENT_NODES_CEILING)
+}
 
 // ---------------------------------------------------------------------------
 // Stale execution cleanup
@@ -173,12 +181,14 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     const edges = cleaned.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
 
     // Pass workflow settings (character definitions, prompt templates) to context
-    // Load user-level prompt templates from profiles (matches frontend userPromptTemplates)
+    // Load user-level prompt templates and tier from profiles
     const { data: userProfile } = await supabase
       .from("profiles")
-      .select("prompt_templates")
+      .select("prompt_templates, tier")
       .eq("id", userId)
       .single()
+
+    const concurrencyLimit = getParallelismLimit(userProfile?.tier)
 
     ctx.workflowSettings = {
       ...((workflowData.settings as Record<string, unknown>) ?? {}),
@@ -476,6 +486,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
               executionId,
               triggerData,
               onIterationProgress,
+              concurrencyLimit,
             )
           } else {
             // Normal single execution
@@ -555,7 +566,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       // User cancellation still works: running tasks detect it in their poll
       // loops and throw, which triggers fail-fast on this ref.
       const levelAborted = { cancelled: ctx.cancelled }
-      const results = await settledWithLimit(tasks, MAX_CONCURRENT_NODES_PER_EXECUTION, levelAborted)
+      const results = await settledWithLimit(tasks, concurrencyLimit, levelAborted)
 
       // Check for failures
       for (let i = 0; i < results.length; i++) {
@@ -674,6 +685,7 @@ async function executeNodeForList(
   executionId: string,
   triggerData?: Record<string, unknown>,
   onIterationComplete?: (iterationIndex: number) => void,
+  maxConcurrency?: number,
 ): Promise<ExecuteNodeResult> {
   // Set iteration total so frontend can show "0/N" progress
   nodeStates[node.id] = {
@@ -729,7 +741,7 @@ async function executeNodeForList(
     return { index: i, result, resultValue }
   })
 
-  const settled = await settledWithLimit(tasks, MAX_CONCURRENT_NODES_PER_EXECUTION, cancelRef)
+  const settled = await settledWithLimit(tasks, maxConcurrency ?? MAX_CONCURRENT_NODES_CEILING, cancelRef)
 
   // Assemble results in original index order
   const allResults: string[] = new Array(items.length).fill("")
