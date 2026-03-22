@@ -275,7 +275,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         if (c.type === "select") {
           hasSelectionChange = true
           if (c.selected) lastSelectedId = c.id
-        } else if (c.type !== "dimensions") {
+        } else if (c.type === "dimensions") {
+          // User-initiated resize (NodeResizer) sets resizing flag — treat as content change
+          // so the resized dimensions get auto-saved. Auto-measurement events don't have resizing.
+          if ("resizing" in c && c.resizing) hasContentChange = true
+        } else {
           hasContentChange = true
         }
       }
@@ -675,17 +679,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         return isNaN(num) ? max : Math.max(max, num)
       }, 0) + 1
 
-    // Clean up stale loop expansion artifacts and strip explicit height.
+    // Clean up stale loop expansion artifacts.
     const cleaned = filterCloneNodes(nodes, edges)
-    const cleanedNodes = cleaned.nodes.map((n) => {
-      // Strip explicit height so nodes auto-size to content
-      // (Sticky notes use data.height, not the node prop, so they're unaffected.)
-      if (n.height != null) {
-        const { height: _, ...rest } = n
-        return rest as typeof n
-      }
-      return n
-    })
+    const cleanedNodes = cleaned.nodes
     // Also drop edges referencing nodes that no longer exist
     const cleanedNodeIds = new Set(cleanedNodes.map((n) => n.id))
     const cleanedEdges = cleaned.edges.filter((e) => cleanedNodeIds.has(e.source) && cleanedNodeIds.has(e.target))
