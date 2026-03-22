@@ -1102,6 +1102,8 @@ describe("combine-videos", () => {
       1.0,
       "crossfade",
       expect.anything(),
+      undefined,
+      undefined,
     )
   })
 })

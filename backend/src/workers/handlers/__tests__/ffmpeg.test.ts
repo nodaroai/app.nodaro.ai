@@ -206,6 +206,8 @@ describe("combine-videos handler", () => {
       transition: "fade",
       transitionDuration: 1,
       audioMode: "crossfade",
+      trimStartFrames: 0,
+      trimEndFrames: 0,
     })
     expect(mocks.mockUploadFileToR2).toHaveBeenCalledWith("/tmp/combine-work/output.mp4", "job-1", "video", "user-1")
     // Uses fs.rm, not cleanupWorkDir
