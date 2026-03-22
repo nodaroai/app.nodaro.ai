@@ -275,6 +275,146 @@ const RESULT_PRODUCING_TYPES = new Set([
   t !== "image-to-text" && t !== "qa-check" && t !== "transcribe"
 ))
 
+/** Extracted to isolate type checking scope — TS JSX children inference limit */
+function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExpandScene, onExpandDirector, update, selectedNodeId }: {
+  nodeType: string
+  nodeData: Record<string, unknown>
+  configProps: any
+  updateNodeData: (id: string, data: Record<string, unknown>) => void
+  onExpandScene: () => void
+  onExpandDirector: () => void
+  update: (data: Record<string, unknown>) => void
+  selectedNodeId: string | undefined
+}) {
+  switch (nodeType) {
+    case "text-prompt": return <TextPromptConfig {...configProps} />
+    case "list": return <ListConfig {...configProps} />
+    case "loop": return <LoopConfig {...configProps} />
+    case "upload-image": return <UploadImageConfig {...configProps} />
+    case "upload-video": return <UploadVideoConfig {...configProps} />
+    case "upload-audio": return <UploadAudioConfig {...configProps} />
+    case "rss-feed": return <RSSFeedConfig {...configProps} />
+    case "youtube-video": return <YouTubeVideoConfig {...configProps} />
+    case "reference-audio": return <ReferenceAudioConfig {...configProps} />
+    case "webhook-trigger": return <WebhookTriggerConfig {...configProps} />
+    case "schedule-trigger": return <ScheduleTriggerConfig {...configProps} />
+    case "tone": return <ToneConfig {...configProps} />
+    case "style-guide": return <StyleGuideConfig {...configProps} />
+    case "provider": return <ProviderConfig {...configProps} />
+    case "scene-count": return <SceneCountConfig {...configProps} />
+    case "duration": return <DurationConfig {...configProps} />
+    case "aspect-ratio": return <AspectRatioConfig {...configProps} />
+    case "motion": return <MotionConfig {...configProps} />
+    case "camera-motion": return <CameraMotionConfig {...configProps} />
+    case "generate-script": return <GenerateScriptConfig {...configProps} />
+    case "generate-image": return <GenerateImageConfig {...configProps} />
+    case "edit-image": return <EditImageConfig {...configProps} />
+    case "image-to-image": return <ImageToImageConfig {...configProps} />
+    case "image-to-video": return (nodeData as ImageToVideoData).provider === "kling-3.0"
+      ? <Suspense fallback={null}><Kling3StudioConfig {...configProps} /></Suspense>
+      : <ImageToVideoConfig {...configProps} onUpdateNode={updateNodeData} />
+    case "video-to-video": return <VideoToVideoConfig {...configProps} />
+    case "text-to-video": return (
+      <>
+        <TextToVideoConfig {...configProps} />
+        {(nodeData as TextToVideoData).provider === "kling-3.0" && (
+          <Button variant="outline" className="w-full mt-2" onClick={onExpandDirector}>
+            <Maximize2 className="w-4 h-4 mr-2" />
+            Expand Director
+          </Button>
+        )}
+      </>
+    )
+    case "text-to-speech": return <TextToSpeechConfig {...configProps} />
+    case "qa-check": return <QACheckConfig {...configProps} />
+    case "generate-music": return <GenerateMusicConfig {...configProps} />
+    case "text-to-audio": return <TextToAudioConfig {...configProps} />
+    case "audio-isolation": return <AudioIsolationConfig {...configProps} />
+    case "text-to-dialogue": return <TextToDialogueConfig {...configProps} />
+    case "voice-changer": return <VoiceChangerConfig {...configProps} />
+    case "dubbing": return <DubbingConfig {...configProps} />
+    case "voice-remix": return <VoiceRemixConfig {...configProps} />
+    case "voice-design": return <VoiceDesignConfig {...configProps} />
+    case "forced-alignment": return <ForcedAlignmentConfig {...configProps} />
+    case "suno-generate": return <SunoGenerateConfig {...configProps} />
+    case "suno-cover": return <SunoCoverConfig {...configProps} />
+    case "suno-extend": return <SunoExtendConfig {...configProps} />
+    case "suno-lyrics": return <SunoLyricsConfig {...configProps} />
+    case "suno-separate": return <SunoSeparateConfig {...configProps} />
+    case "suno-music-video": return <SunoMusicVideoConfig {...configProps} />
+    case "suno-mashup": return <SunoMashupConfig {...configProps} />
+    case "suno-replace-section": return <SunoReplaceSectionConfig {...configProps} />
+    case "suno-style-boost": return <SunoStyleBoostConfig {...configProps} />
+    case "suno-add-instrumental": return <SunoAddInstrumentalConfig {...configProps} />
+    case "suno-add-vocals": return <SunoAddVocalsConfig {...configProps} />
+    case "suno-convert-wav": return <SunoConvertWavConfig {...configProps} />
+    case "suno-upload-extend": return <SunoUploadExtendConfig {...configProps} />
+    case "lip-sync": return <LipSyncConfig {...configProps} />
+    case "speech-to-video": return <SpeechToVideoConfig {...configProps} />
+    case "sora-storyboard": return <SoraStoryboardConfig {...configProps} />
+    case "sora-character": return <SoraCharacterConfig {...configProps} />
+    case "motion-transfer": return <MotionTransferConfig {...configProps} />
+    case "transcribe": return <TranscribeConfig {...configProps} />
+    case "image-to-text": return <ImageToTextConfig {...configProps} />
+    case "ai-writer": return <AIWriterConfig {...configProps} />
+    case "video-upscale": return <VideoUpscaleConfig {...configProps} />
+    case "extend-video": return <ExtendVideoConfig {...configProps} />
+    case "combine-videos": return <CombineVideosConfig {...configProps} />
+    case "merge-video-audio": return <MergeVideoAudioConfig {...configProps} />
+    case "add-captions": return <AddCaptionsConfig {...configProps} />
+    case "resize-video": return <ResizeVideoConfig {...configProps} />
+    case "social-media-format": return <SocialMediaFormatConfig {...configProps} />
+    case "trim-audio": return <TrimAudioConfig {...configProps} />
+    case "mix-audio": return <MixAudioConfig {...configProps} />
+    case "adjust-volume": return <AdjustVolumeConfig {...configProps} />
+    case "trim-video": return <TrimVideoConfig {...configProps} />
+    case "video-composer": return <VideoComposerConfig {...configProps} />
+    case "after-effects": return <AfterEffectsConfig {...configProps} />
+    case "lottie-overlay": return <LottieOverlayConfig {...configProps} />
+    case "3d-title": return <ThreeDTitleConfig {...configProps} />
+    case "motion-graphics": return <MotionGraphicsConfig {...configProps} />
+    case "composite": return <CompositeConfig {...configProps} />
+    case "render-video": return <RenderVideoConfig {...configProps} />
+    case "speed-ramp": return <SpeedRampConfig {...configProps} />
+    case "loop-video": return <LoopVideoConfig {...configProps} />
+    case "fade-video": return <FadeVideoConfig {...configProps} />
+    case "transcode-video": return <TranscodeVideoConfig {...configProps} />
+    case "manual-edit": return <ManualEditConfig {...configProps} />
+    case "combine-text": return <CombineTextConfig {...configProps} />
+    case "split-text": return <SplitTextConfig {...configProps} />
+    case "preview": return <PreviewConfig {...configProps} />
+    case "teleport-send": case "teleport-receive": return <TeleporterConfig {...configProps} nodeType={nodeType} />
+    case "router": return <RouterConfig {...configProps} />
+    case "save-to-storage": return <SaveToStorageConfig {...configProps} />
+    case "webhook-output": return <WebhookOutputConfig {...configProps} />
+    case "instagram-post": return <InstagramPostConfig {...configProps} />
+    case "tiktok-post": return <TiktokPostConfig {...configProps} />
+    case "youtube-upload": return <YoutubeUploadConfig {...configProps} />
+    case "linkedin-post": return <LinkedinPostConfig {...configProps} />
+    case "x-post": return <XPostConfig {...configProps} />
+    case "facebook-post": return <FacebookPostConfig {...configProps} />
+    case "telegram-post": return <TelegramPostConfig {...configProps} />
+    case "telegram-trigger": return <TelegramTriggerConfig {...configProps} />
+    case "sub-workflow-input": return <SubWorkflowInputConfig {...configProps} />
+    case "sub-workflow-output": return <SubWorkflowOutputConfig {...configProps} />
+    case "sub-workflow": return <SubWorkflowConfig {...configProps} />
+    case "character": return <CharacterConfig {...configProps} />
+    case "face": return <FaceConfig data={nodeData as any} onUpdate={update} />
+    case "object": return <ObjectConfig data={nodeData as any} onUpdate={update} />
+    case "location": return <LocationConfig {...configProps} />
+    case "scene": return (
+      <>
+        <SceneConfig data={nodeData as SceneNodeDataType} onUpdate={update} nodeId={selectedNodeId} />
+        <Button variant="outline" className="w-full mt-2" onClick={onExpandScene}>
+          <Maximize2 className="w-4 h-4 mr-2" />
+          Expand Scene Editor
+        </Button>
+      </>
+    )
+    default: return null
+  }
+}
+
 export function ConfigPanel() {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
@@ -548,140 +688,16 @@ export function ConfigPanel() {
           <Separator />
 
           {/* Node-type-specific config */}
-          {nodeType === "text-prompt" && <TextPromptConfig {...configProps} />}
-          {nodeType === "list" && <ListConfig {...configProps} />}
-          {nodeType === "loop" && <LoopConfig {...configProps} />}
-          {nodeType === "upload-image" && <UploadImageConfig {...configProps} />}
-          {nodeType === "upload-video" && <UploadVideoConfig {...configProps} />}
-          {nodeType === "upload-audio" && <UploadAudioConfig {...configProps} />}
-          {nodeType === "rss-feed" && <RSSFeedConfig {...configProps} />}
-          {nodeType === "youtube-video" && <YouTubeVideoConfig {...configProps} />}
-          {nodeType === "reference-audio" && <ReferenceAudioConfig {...configProps} />}
-          {nodeType === "webhook-trigger" && <WebhookTriggerConfig {...configProps} />}
-          {nodeType === "schedule-trigger" && <ScheduleTriggerConfig {...configProps} />}
-
-          {nodeType === "tone" && <ToneConfig {...configProps} />}
-          {nodeType === "style-guide" && <StyleGuideConfig {...configProps} />}
-          {nodeType === "provider" && <ProviderConfig {...configProps} />}
-          {nodeType === "scene-count" && <SceneCountConfig {...configProps} />}
-          {nodeType === "duration" && <DurationConfig {...configProps} />}
-          {nodeType === "aspect-ratio" && <AspectRatioConfig {...configProps} />}
-          {nodeType === "motion" && <MotionConfig {...configProps} />}
-          {nodeType === "camera-motion" && <CameraMotionConfig {...configProps} />}
-
-          {nodeType === "generate-script" && <GenerateScriptConfig {...configProps} />}
-          {nodeType === "generate-image" && <GenerateImageConfig {...configProps} />}
-          {nodeType === "edit-image" && <EditImageConfig {...configProps} />}
-          {nodeType === "image-to-image" && <ImageToImageConfig {...configProps} />}
-          {nodeType === "image-to-video" && (
-            (nodeData as ImageToVideoData).provider === "kling-3.0"
-              ? <Suspense fallback={null}><Kling3StudioConfig {...configProps} /></Suspense>
-              : <ImageToVideoConfig {...configProps} onUpdateNode={updateNodeData} />
-          )}
-          {nodeType === "video-to-video" && <VideoToVideoConfig {...configProps} />}
-          {nodeType === "text-to-video" && (
-            <>
-              <TextToVideoConfig {...configProps} />
-              {(nodeData as TextToVideoData).provider === "kling-3.0" && (
-                <Button variant="outline" className="w-full mt-2" onClick={() => setExpandDirectorOpen(true)}>
-                  <Maximize2 className="w-4 h-4 mr-2" />
-                  Expand Director
-                </Button>
-              )}
-            </>
-          )}
-          {nodeType === "text-to-speech" && <TextToSpeechConfig {...configProps} />}
-          {nodeType === "qa-check" && <QACheckConfig {...configProps} />}
-          {nodeType === "generate-music" && <GenerateMusicConfig {...configProps} />}
-          {nodeType === "text-to-audio" && <TextToAudioConfig {...configProps} />}
-          {nodeType === "audio-isolation" && <AudioIsolationConfig {...configProps} />}
-          {nodeType === "text-to-dialogue" && <TextToDialogueConfig {...configProps} />}
-          {nodeType === "voice-changer" && <VoiceChangerConfig {...configProps} />}
-          {nodeType === "dubbing" && <DubbingConfig {...configProps} />}
-          {nodeType === "voice-remix" && <VoiceRemixConfig {...configProps} />}
-          {nodeType === "voice-design" && <VoiceDesignConfig {...configProps} />}
-          {nodeType === "forced-alignment" && <ForcedAlignmentConfig {...configProps} />}
-          {nodeType === "suno-generate" && <SunoGenerateConfig {...configProps} />}
-          {nodeType === "suno-cover" && <SunoCoverConfig {...configProps} />}
-          {nodeType === "suno-extend" && <SunoExtendConfig {...configProps} />}
-          {nodeType === "suno-lyrics" && <SunoLyricsConfig {...configProps} />}
-          {nodeType === "suno-separate" && <SunoSeparateConfig {...configProps} />}
-          {nodeType === "suno-music-video" && <SunoMusicVideoConfig {...configProps} />}
-          {nodeType === "suno-mashup" && <SunoMashupConfig {...configProps} />}
-          {nodeType === "suno-replace-section" && <SunoReplaceSectionConfig {...configProps} />}
-          {nodeType === "suno-style-boost" && <SunoStyleBoostConfig {...configProps} />}
-          {nodeType === "suno-add-instrumental" && <SunoAddInstrumentalConfig {...configProps} />}
-          {nodeType === "suno-add-vocals" && <SunoAddVocalsConfig {...configProps} />}
-          {nodeType === "suno-convert-wav" && <SunoConvertWavConfig {...configProps} />}
-          {nodeType === "suno-upload-extend" && <SunoUploadExtendConfig {...configProps} />}
-          {nodeType === "lip-sync" && <LipSyncConfig {...configProps} />}
-          {nodeType === "speech-to-video" && <SpeechToVideoConfig {...configProps} />}
-          {nodeType === "sora-storyboard" && <SoraStoryboardConfig {...configProps} />}
-          {nodeType === "sora-character" && <SoraCharacterConfig {...configProps} />}
-          {nodeType === "motion-transfer" && <MotionTransferConfig {...configProps} />}
-          {nodeType === "transcribe" && <TranscribeConfig {...configProps} />}
-          {nodeType === "image-to-text" && <ImageToTextConfig {...configProps} />}
-          {nodeType === "ai-writer" && <AIWriterConfig {...configProps} />}
-
-          {nodeType === "video-upscale" && <VideoUpscaleConfig {...configProps} />}
-          {nodeType === "extend-video" && <ExtendVideoConfig {...configProps} />}
-          {nodeType === "combine-videos" && <CombineVideosConfig {...configProps} />}
-          {nodeType === "merge-video-audio" && <MergeVideoAudioConfig {...configProps} />}
-          {nodeType === "add-captions" && <AddCaptionsConfig {...configProps} />}
-          {nodeType === "resize-video" && <ResizeVideoConfig {...configProps} />}
-          {nodeType === "social-media-format" && <SocialMediaFormatConfig {...configProps} />}
-          {nodeType === "trim-audio" && <TrimAudioConfig {...configProps} />}
-          {nodeType === "mix-audio" && <MixAudioConfig {...configProps} />}
-          {nodeType === "adjust-volume" && <AdjustVolumeConfig {...configProps} />}
-          {nodeType === "trim-video" && <TrimVideoConfig {...configProps} />}
-          {nodeType === "video-composer" && <VideoComposerConfig {...configProps} />}
-          {nodeType === "after-effects" && <AfterEffectsConfig {...configProps} />}
-          {nodeType === "lottie-overlay" && <LottieOverlayConfig {...configProps} />}
-          {nodeType === "3d-title" && <ThreeDTitleConfig {...configProps} />}
-          {nodeType === "motion-graphics" && <MotionGraphicsConfig {...configProps} />}
-          {nodeType === "composite" && <CompositeConfig {...configProps} />}
-          {nodeType === "render-video" && <RenderVideoConfig {...configProps} />}
-          {nodeType === "speed-ramp" && <SpeedRampConfig {...configProps} />}
-          {nodeType === "loop-video" && <LoopVideoConfig {...configProps} />}
-          {nodeType === "fade-video" && <FadeVideoConfig {...configProps} />}
-          {nodeType === "transcode-video" && <TranscodeVideoConfig {...configProps} />}
-          {nodeType === "manual-edit" && <ManualEditConfig {...configProps} />}
-          {nodeType === "combine-text" && <CombineTextConfig {...configProps} />}
-          {nodeType === "split-text" && <SplitTextConfig {...configProps} />}
-          {nodeType === "preview" && <PreviewConfig {...configProps} />}
-          {(nodeType === "teleport-send" || nodeType === "teleport-receive") && <TeleporterConfig {...configProps} nodeType={nodeType} />}
-          {nodeType === "router" && <RouterConfig {...configProps} />}
-
-          {nodeType === "save-to-storage" && <SaveToStorageConfig {...configProps} />}
-          {nodeType === "webhook-output" && <WebhookOutputConfig {...configProps} />}
-
-          {nodeType === "instagram-post" && <InstagramPostConfig {...configProps} />}
-          {nodeType === "tiktok-post" && <TiktokPostConfig {...configProps} />}
-          {nodeType === "youtube-upload" && <YoutubeUploadConfig {...configProps} />}
-          {nodeType === "linkedin-post" && <LinkedinPostConfig {...configProps} />}
-          {nodeType === "x-post" && <XPostConfig {...configProps} />}
-          {nodeType === "facebook-post" && <FacebookPostConfig {...configProps} />}
-          {nodeType === "telegram-post" && <TelegramPostConfig {...configProps} />}
-          {nodeType === "telegram-trigger" && <TelegramTriggerConfig {...configProps} />}
-
-          {nodeType === "sub-workflow-input" && <SubWorkflowInputConfig {...configProps} />}
-          {nodeType === "sub-workflow-output" && <SubWorkflowOutputConfig {...configProps} />}
-          {nodeType === "sub-workflow" && <SubWorkflowConfig {...configProps} />}
-
-          {nodeType === "character" && <CharacterConfig {...configProps} />}
-          {nodeType === "face" && <FaceConfig data={nodeData as any} onUpdate={update} />}
-          {nodeType === "object" && <ObjectConfig data={nodeData as any} onUpdate={update} />}
-          {nodeType === "location" && <LocationConfig {...configProps} />}
-
-          {nodeType === "scene" && (
-            <>
-              <SceneConfig data={nodeData as SceneNodeDataType} onUpdate={update} nodeId={selectedNodeId ?? undefined} />
-              <Button variant="outline" className="w-full mt-2" onClick={() => setExpandSceneOpen(true)}>
-                <Maximize2 className="w-4 h-4 mr-2" />
-                Expand Scene Editor
-              </Button>
-            </>
-          )}
+          <NodeTypeConfig
+            nodeType={nodeType}
+            nodeData={nodeData}
+            configProps={configProps}
+            updateNodeData={updateNodeData}
+            onExpandScene={() => setExpandSceneOpen(true)}
+            onExpandDirector={() => setExpandDirectorOpen(true)}
+            update={update}
+            selectedNodeId={selectedNodeId ?? undefined}
+          />
 
           <Separator />
 
@@ -703,7 +719,7 @@ export function ConfigPanel() {
             )
           })()}
 
-          {REPEATABLE_NODE_TYPES.has(nodeType) && (
+          {(REPEATABLE_NODE_TYPES.has(nodeType) && (
             <div className="flex items-center gap-2 pt-2">
               <span className="text-xs text-muted-foreground whitespace-nowrap">Repeat</span>
               <input
@@ -720,7 +736,7 @@ export function ConfigPanel() {
               />
               <span className="text-xs text-muted-foreground">times</span>
             </div>
-          )}
+          )) as any /* TS JSX children inference limit */}
 
           <div className="flex flex-col gap-2 pt-2">
             {GENERATE_BUTTON_TYPES.has(nodeType) && (
