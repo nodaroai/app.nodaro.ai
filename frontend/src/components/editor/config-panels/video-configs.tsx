@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useCallback, useEffect, lazy, Suspense } from "react"
-import { ImageIcon, FileText } from "lucide-react"
+import { ImageIcon } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -47,7 +47,6 @@ import type { ConfigProps } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { buildEnrichedScenePrompt, type EnrichableScene } from "@nodaro-shared/prompt-builder"
 
-
 export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, onUpdateNode, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ImageToVideoData>) {
   useEffect(() => { prefetchModelCredits([...VIDEO_I2V_MODELS.map((m) => m.value), "sora-watermark-remove"]) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
@@ -58,15 +57,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
     ? baseDurations.filter((d) => d <= 6)
     : baseDurations
   const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(data.provider || "minimax")
-
-  const connectedTextPrompts = useMemo(() => {
-    return sources.filter((s) => s.type === "text-prompt").map((s) => ({
-      id: s.id,
-      label: s.label,
-      text: (s.nodeData?.text as string) || "",
-      targetHandle: s.targetHandle,
-    }))
-  }, [sources])
 
   const connectedImages = useMemo(() => {
     const imageTypes = ["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"]
@@ -112,12 +102,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
     })
   }, [sources])
 
-  const handleTextPromptChange = useCallback((nodeId: string, newText: string) => {
-    if (onUpdateNode) {
-      onUpdateNode(nodeId, { text: newText })
-    }
-  }, [onUpdateNode])
-
   if (data.provider === "kling-3.0") {
     return <Kling3StudioConfig data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} onUpdateNode={onUpdateNode} />
   }
@@ -149,45 +133,17 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         </Select>
       </MappableField>
 
-      {connectedTextPrompts.length > 0 && (
-        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
-          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
-            Prompt (from connected node)
-          </Label>
-          {connectedTextPrompts.map((prompt, idx) => (
-            <div key={`${prompt.id}-${idx}`} className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-1.5 mb-1">
-                <FileText className="w-3 h-3 text-[#ff0073]" />
-                <span className="text-[10px] text-[#ff0073] font-medium">{prompt.label}</span>
-              </div>
-              <Textarea
-                value={prompt.text}
-                onChange={(e) => handleTextPromptChange(prompt.id, e.target.value)}
-                placeholder="Enter prompt..."
-                rows={3}
-                className="text-xs bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
-              />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {connectedTextPrompts.length === 0 && (
-        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
-          <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(v) => onUpdate({ prompt: v })} />}>
-            <Textarea
-              value={data.prompt || ""}
-              onChange={(e) => onUpdate({ prompt: e.target.value })}
-              placeholder="Describe the motion or animation you want..."
-              rows={3}
-              className="text-xs bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
-            />
-          </MappableField>
-          <p className="text-[10px] text-muted-foreground mt-1.5">
-            Tip: Connect a Text Prompt node for reusable prompts
-          </p>
-        </div>
-      )}
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(v) => onUpdate({ prompt: v })} />}>
+        <TagTextarea
+          rows={3}
+          value={data.prompt || ""}
+          onChange={(v) => onUpdate({ prompt: v })}
+          placeholder="Describe the motion or animation you want..."
+          nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
+        />
+      </MappableField>
 
       {(data.provider === "veo3" || data.provider === "veo3.1") && (
         <>
