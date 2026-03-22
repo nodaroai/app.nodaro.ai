@@ -356,6 +356,31 @@ export function resolveNodeInputs(
       } else if (edgeMode === "last") {
         output = srcListResults[srcListResults.length - 1];
       } else if (edgeMode === "all") {
+        // For array-accumulating targets, spread items individually
+        if (node.type === "combine-videos") {
+          for (const item of srcListResults) {
+            if (item) {
+              inputs.videoUrls = [...(inputs.videoUrls ?? []), item];
+              inputs.videoUrlsWithSourceIds = [
+                ...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []),
+                { nodeId: src.id, url: item },
+              ];
+            }
+          }
+          continue;
+        }
+        if (node.type === "mix-audio") {
+          for (const item of srcListResults) {
+            if (item) {
+              inputs.audioUrls = [...(inputs.audioUrls ?? []), item];
+              inputs.audioUrlsWithSourceIds = [
+                ...(inputs.audioUrlsWithSourceIds ?? []),
+                { nodeId: src.id, url: item },
+              ];
+            }
+          }
+          continue;
+        }
         output = srcListResults.join(", ");
       } else if (edgeMode === "each" && listIterationIndex !== undefined) {
         // During list fan-out, index into the i-th result from each "each" source
@@ -394,6 +419,59 @@ export function resolveNodeInputs(
         output = ranged[listIterationIndex] ?? "";
       }
     }
+
+    // During fan-out: resolve per-iteration values from loop columns and list sources
+    if (!output && listIterationIndex != null) {
+      if (src.type === "loop") {
+        const loopData = src.data as LoopNodeData;
+        const colIndex = (loopData.columns ?? []).findIndex(
+          (c) => c.handleId === srcEdge.sourceHandle,
+        );
+        if (colIndex >= 0) {
+          const loopIncomingEdges = edges.filter(
+            (e) => e.target === src.id && e.targetHandle === "in",
+          );
+          if (loopIncomingEdges.length > 0) {
+            const upstreamEdge = loopIncomingEdges[0];
+            const upstreamNode = nodes.find((n) => n.id === upstreamEdge.source);
+            if (upstreamNode) {
+              const upstreamOutput = extractNodeOutput(upstreamNode);
+              if (upstreamOutput) {
+                const lines = upstreamOutput.split("\n").map((s) => s.trim()).filter((s) => s.length > 0);
+                const edgeData = srcEdge.data as Record<string, unknown> | undefined;
+                const rf = edgeData?.rangeFrom as string | undefined;
+                const rt = edgeData?.rangeTo as string | undefined;
+                const rs = edgeData?.rangeStep as number | undefined;
+                const filtered = applyRange(lines, rf, rt, rs);
+                output = filtered[listIterationIndex];
+              }
+            }
+          } else {
+            const items = (loopData.rows ?? [])
+              .map((row) => row[colIndex])
+              .filter((v) => v?.trim());
+            const edgeData = srcEdge.data as Record<string, unknown> | undefined;
+            const rf = edgeData?.rangeFrom as string | undefined;
+            const rt = edgeData?.rangeTo as string | undefined;
+            const rs = edgeData?.rangeStep as number | undefined;
+            const filtered = applyRange(items, rf, rt, rs);
+            output = filtered[listIterationIndex];
+          }
+        }
+      } else if (srcListResults && srcListResults.length > 0) {
+        // Non-loop source with listResults: advance per iteration for "each" mode
+        const effectiveMode = edgeMode ?? (DEFAULT_EACH_TYPES.has(src.type ?? "") ? "each" : "last");
+        if (effectiveMode === "each") {
+          const edgeData = srcEdge.data as Record<string, unknown> | undefined;
+          const rf = edgeData?.rangeFrom as string | undefined;
+          const rt = edgeData?.rangeTo as string | undefined;
+          const rs = edgeData?.rangeStep as number | undefined;
+          const filtered = applyRange(srcListResults, rf, rt, rs);
+          output = filtered[listIterationIndex];
+        }
+      }
+    }
+
     if (!output) {
       output = extractNodeOutput(src, srcEdge.sourceHandle ?? undefined);
     }

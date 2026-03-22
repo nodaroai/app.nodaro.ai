@@ -84,10 +84,29 @@ export function resolveNodeInputs(
         const rangeFrom = edgeData?.rangeFrom as string | undefined
         const rangeTo = edgeData?.rangeTo as string | undefined
         const filtered = applyRange(effectiveListResults, rangeFrom, rangeTo)
+        // For array-accumulating targets, route each item individually
+        if (ARRAY_ACCUMULATING_TYPES.has(targetNode.type)) {
+          for (const item of filtered) {
+            if (item) routeOutput(inputs, sourceNode, targetNode, item, edge, edges, allNodes, nodeStates)
+          }
+          continue
+        }
         output = filtered.join(", ")
       } else if (edgeOutputMode === "each" && listIterationIndex !== undefined) {
         // During list fan-out, index into the i-th result from each "each" source
         output = effectiveListResults[listIterationIndex] ?? effectiveListResults[effectiveListResults.length - 1]
+      }
+    }
+
+    // During fan-out: "each" mode edges from list sources should advance per iteration
+    if (!output && listIterationIndex != null && effectiveListResults && effectiveListResults.length > 0) {
+      const effectiveMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type) ? "each" : "last")
+      if (effectiveMode === "each") {
+        const rangeFrom = edgeData?.rangeFrom as string | undefined
+        const rangeTo = edgeData?.rangeTo as string | undefined
+        const rangeStep = edgeData?.rangeStep as number | undefined
+        const filtered = applyRange(effectiveListResults, rangeFrom, rangeTo, rangeStep)
+        output = filtered[listIterationIndex]
       }
     }
 
@@ -105,13 +124,30 @@ export function resolveNodeInputs(
               const upstreamText = getNodeOutput(upstreamNode, loopInEdges[0].sourceHandle, nodeStates, triggerData)
               if (upstreamText) {
                 const lines = upstreamText.split("\n").map((s) => s.trim()).filter((s) => s.length > 0)
-                output = lines[0]
+                if (listIterationIndex != null) {
+                  const rf = edgeData?.rangeFrom as string | undefined
+                  const rt = edgeData?.rangeTo as string | undefined
+                  const rs = edgeData?.rangeStep as number | undefined
+                  const filtered = applyRange(lines, rf, rt, rs)
+                  output = filtered[listIterationIndex]
+                } else {
+                  output = lines[0]
+                }
               }
             }
           } else {
-            // Manual mode: get correct column value
+            // Manual mode: get correct column value for current iteration
             const rows = sourceNode.data.rows as string[][] | undefined
-            output = rows?.[0]?.[colIndex]?.trim()
+            if (listIterationIndex != null) {
+              const items = (rows ?? []).map((row) => row[colIndex]?.trim()).filter(Boolean) as string[]
+              const rf = edgeData?.rangeFrom as string | undefined
+              const rt = edgeData?.rangeTo as string | undefined
+              const rs = edgeData?.rangeStep as number | undefined
+              const filtered = applyRange(items, rf, rt, rs)
+              output = filtered[listIterationIndex]
+            } else {
+              output = rows?.[0]?.[colIndex]?.trim()
+            }
           }
         }
       }
@@ -451,6 +487,9 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
 
 // Preview routes by actual media type, not always to text (handled in routeOutput)
 // Social-media-format may produce images (handled in routeOutput)
+
+/** Target node types that accumulate inputs into arrays (videoUrls, audioUrls). */
+const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio"])
 
 const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "location"])
 
