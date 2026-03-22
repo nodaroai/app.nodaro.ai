@@ -1,12 +1,28 @@
 import { useCallback, useMemo, useRef, useState } from "react"
-import { Plus, X, Upload, Film, Music } from "lucide-react"
+import { Plus, X, Upload, Film, Maximize2, Download, Link, GripVertical } from "lucide-react"
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { hasCredits } from "@/lib/edition"
 import { CachedImage } from "@/components/ui/cached-image"
+import { GlassButton, copyUrl, downloadFile } from "../output-cards/shared"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { LOOP_COLUMN_TYPE_META, type WorkflowNode, type LoopColumn, type PresentationDisplay } from "@/types/nodes"
 import { resolveDisplay, ELEMENT_SIZES, isMediaColumn, colTypeToMimePrefix } from "@/lib/presentation-display"
-import { GlassCard } from "../output-cards/shared"
 
 interface LoopInputCardProps {
   node: WorkflowNode
@@ -18,6 +34,11 @@ interface LoopInputCardProps {
   display?: PresentationDisplay
 }
 
+const POINTER_SENSOR_OPTS = { activationConstraint: { distance: 5 } }
+const TOUCH_SENSOR_OPTS = { activationConstraint: { delay: 150, tolerance: 5 } }
+
+const TEXTAREA_CLS = "w-full min-h-[56px] bg-muted/30 border border-border rounded-lg px-3 py-2 text-[14px] text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200"
+
 function getFilenameFromUrl(url: string): string {
   try {
     const pathname = new URL(url).pathname
@@ -28,23 +49,54 @@ function getFilenameFromUrl(url: string): string {
   }
 }
 
-/** Upload + preview cell for image, video, and audio columns */
-function MediaCellInput({
+/** Shared overlay buttons for media cells (Enlarge, Download, Copy URL, Remove) */
+function MediaOverlayButtons({
+  url,
+  onPreview,
+  onRemove,
+  readOnly,
+}: {
+  url: string
+  onPreview: () => void
+  onRemove: () => void
+  readOnly?: boolean
+}) {
+  return (
+    <div className="media-overlay-controls absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+      <GlassButton onClick={onPreview} title="Enlarge">
+        <Maximize2 className="w-3.5 h-3.5" />
+      </GlassButton>
+      <GlassButton onClick={() => downloadFile(url, getFilenameFromUrl(url))} title="Download">
+        <Download className="w-3.5 h-3.5" />
+      </GlassButton>
+      <GlassButton onClick={() => copyUrl(url)} title="Copy URL">
+        <Link className="w-3.5 h-3.5" />
+      </GlassButton>
+      {!readOnly && (
+        <GlassButton onClick={onRemove} title="Remove">
+          <X className="w-3.5 h-3.5" />
+        </GlassButton>
+      )}
+    </div>
+  )
+}
+
+/** Rich media cell with fullscreen preview, hover overlay, and full-width display */
+function RichMediaCell({
   value,
   onChange,
   mimePrefix,
   readOnly,
-  thumbnailSize,
 }: {
   value: string
   onChange: (val: string) => void
   mimePrefix: string
   readOnly?: boolean
-  thumbnailSize?: number
 }) {
   const { upload, isUploading } = useFileUpload()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragOver, setIsDragOver] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -69,50 +121,65 @@ function MediaCellInput({
     [handleFile],
   )
 
-  const thumbPx = thumbnailSize ?? 48
-  const thumbStyle = { width: thumbPx, height: thumbPx }
+  const mediaType = mimePrefix === "image/" ? "image" : mimePrefix === "video/" ? "video" : "audio"
 
   if (value) {
     return (
-      <div className="flex items-center gap-2 bg-muted/30 border border-border rounded-lg px-2 py-1.5">
+      <>
         {mimePrefix === "image/" && (
-          <CachedImage
-            src={value}
-            alt="upload"
-            className="object-cover rounded-md shrink-0"
-            style={thumbStyle}
-          />
+          <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={() => setPreviewOpen(true)}>
+            <CachedImage
+              src={value}
+              alt="upload"
+              className="w-full max-h-[200px] object-cover rounded-lg"
+            />
+            <MediaOverlayButtons url={value} onPreview={() => setPreviewOpen(true)} onRemove={() => onChange("")} readOnly={readOnly} />
+          </div>
         )}
         {mimePrefix === "video/" && (
-          <div className="rounded-md bg-muted/50 flex items-center justify-center shrink-0" style={thumbStyle}>
-            <Film className="w-5 h-5 text-[#818CF8]" />
+          <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={() => setPreviewOpen(true)}>
+            <video
+              src={value}
+              className="w-full max-h-[200px] object-cover rounded-lg"
+              muted
+              playsInline
+            />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
+                <Film className="w-4 h-4 text-white ml-0.5" />
+              </div>
+            </div>
+            <MediaOverlayButtons url={value} onPreview={() => setPreviewOpen(true)} onRemove={() => onChange("")} readOnly={readOnly} />
           </div>
         )}
         {mimePrefix === "audio/" && (
-          <div className="rounded-md bg-muted/50 flex items-center justify-center shrink-0" style={thumbStyle}>
-            <Music className="w-5 h-5 text-[#22c55e]" />
+          <div className="relative group flex items-center gap-2 rounded-lg p-2">
+            <audio src={value} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              <GlassButton onClick={() => downloadFile(value, getFilenameFromUrl(value))} title="Download">
+                <Download className="w-3.5 h-3.5" />
+              </GlassButton>
+              {!readOnly && (
+                <GlassButton onClick={() => onChange("")} title="Remove">
+                  <X className="w-3.5 h-3.5" />
+                </GlassButton>
+              )}
+            </div>
           </div>
         )}
-        <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
-          {getFilenameFromUrl(value)}
-        </span>
-        {!readOnly && (
-          <button
-            type="button"
-            onClick={() => onChange("")}
-            className="shrink-0 flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-            title="Remove"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
+        <MediaPreviewModal
+          isOpen={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          type={mediaType}
+          url={value}
+        />
+      </>
     )
   }
 
   if (readOnly) {
     return (
-      <div className="flex items-center justify-center h-14 bg-muted/20 rounded-lg border border-border text-xs text-muted-foreground/50">
+      <div className="flex items-center justify-center h-14 bg-muted/10 rounded-lg text-xs text-muted-foreground/50">
         No file
       </div>
     )
@@ -141,8 +208,7 @@ function MediaCellInput({
       ) : (
         <div className="flex items-center gap-1.5">
           <Upload className="w-4 h-4 text-muted-foreground/40" />
-          <span className="hidden sm:inline text-xs text-muted-foreground">Drop or click to upload</span>
-          <span className="sm:hidden text-xs text-muted-foreground">Tap to upload</span>
+          <span className="text-xs text-muted-foreground">Drop or click</span>
         </div>
       )}
       <input
@@ -153,6 +219,57 @@ function MediaCellInput({
         onChange={(e) => {
           const file = e.target.files?.[0]
           if (file) handleFile(file)
+          e.target.value = ""
+        }}
+      />
+    </div>
+  )
+}
+
+function BottomDropZone({
+  onDrop,
+  mimePrefix,
+}: {
+  onDrop: (files: File[]) => void
+  mimePrefix: string
+}) {
+  const [isDragOver, setIsDragOver] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  return (
+    <div
+      className={`mt-3 flex items-center justify-center py-3 border-2 border-dashed rounded-lg transition-all duration-200 cursor-pointer ${
+        isDragOver
+          ? "border-[#ff0073]/60 bg-[#ff0073]/5"
+          : "border-muted-foreground/15 hover:border-[#ff0073]/40"
+      }`}
+      onDragOver={(e) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = "copy"
+        setIsDragOver(true)
+      }}
+      onDragLeave={() => setIsDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault()
+        setIsDragOver(false)
+        const files = Array.from(e.dataTransfer.files)
+        if (files.length > 0) onDrop(files)
+      }}
+      onClick={() => fileInputRef.current?.click()}
+    >
+      <div className="flex items-center gap-1.5">
+        <Upload className="w-4 h-4 text-muted-foreground/40" />
+        <span className="text-xs text-muted-foreground/60">Drop files to add rows, or click to browse</span>
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={`${mimePrefix}*`}
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? [])
+          if (files.length > 0) onDrop(files)
           e.target.value = ""
         }}
       />
@@ -230,6 +347,85 @@ export function LoopInputCard({
     [rows, updateRows],
   )
 
+  const rowIds = useMemo(
+    () => rows.map((_, i) => `row-${i}`),
+    [rows],
+  )
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, POINTER_SENSOR_OPTS),
+    useSensor(TouchSensor, TOUCH_SENSOR_OPTS),
+  )
+
+  const handleReorderRows = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event
+      if (!over || active.id === over.id) return
+      const oldIndex = rowIds.indexOf(active.id as string)
+      const newIndex = rowIds.indexOf(over.id as string)
+      if (oldIndex === -1 || newIndex === -1) return
+      const next = [...rows]
+      const [moved] = next.splice(oldIndex, 1)
+      next.splice(newIndex, 0, moved)
+      updateRows(next)
+    },
+    [rowIds, rows, updateRows],
+  )
+
+  const { upload } = useFileUpload()
+
+  // Use a ref to always get fresh rows (avoids stale closure in async uploads)
+  const rowsRef = useRef(rows)
+  rowsRef.current = rows
+
+  const handleMultiFileDrop = useCallback(
+    async (files: File[], targetColIndex: number) => {
+      const col = columns[targetColIndex]
+      if (!col) return
+      const mimePrefix = colTypeToMimePrefix(col.type ?? "text")
+      const validFiles = Array.from(files).filter((f) => f.type.startsWith(mimePrefix))
+      const slotsAvailable = maxItems - rowsRef.current.length
+      const filesToProcess = validFiles.slice(0, slotsAvailable)
+      if (filesToProcess.length === 0) return
+
+      // Create new rows immediately with empty values, then fill as uploads complete
+      const baseRowIndex = rowsRef.current.length
+      const newRows = filesToProcess.map(() => columns.map(() => ""))
+      const combined = [...rowsRef.current, ...newRows]
+      updateRows(combined)
+
+      // Upload in parallel, batch results into a single state update
+      const results = new Map<number, string>()
+      await Promise.allSettled(
+        filesToProcess.map(async (file, i) => {
+          try {
+            const result = await upload(file)
+            results.set(baseRowIndex + i, result.url)
+          } catch {
+            // Individual upload errors handled by hook
+          }
+        }),
+      )
+      if (results.size > 0) {
+        const freshRows = [...rowsRef.current]
+        for (const [ri, url] of results) {
+          if (freshRows[ri]) {
+            freshRows[ri] = freshRows[ri].map((cell, ci) =>
+              ci === targetColIndex ? url : cell,
+            )
+          }
+        }
+        updateRows(freshRows)
+      }
+    },
+    [columns, maxItems, updateRows, upload],
+  )
+
+  const firstMediaColIndex = useMemo(
+    () => columns.findIndex((col) => isMediaColumn(col.type ?? "text")),
+    [columns],
+  )
+
   const atMax = rows.length >= maxItems
   const label = (node.data.label as string) || "Table"
 
@@ -244,7 +440,7 @@ export function LoopInputCard({
   }, [columns])
 
   return (
-    <GlassCard>
+    <div>
       {/* Shared header */}
       <div className="flex items-center justify-between mb-3">
         <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -274,9 +470,12 @@ export function LoopInputCard({
           columns={columns}
           rows={rows}
           readOnly={readOnly}
-          resolved={resolved}
           handleCellChange={handleCellChange}
           handleRemoveRow={handleRemoveRow}
+          rowIds={rowIds}
+          sensors={sensors}
+          onReorder={handleReorderRows}
+          onMultiFileDrop={handleMultiFileDrop}
         />
       ) : (
         <CardsView
@@ -288,6 +487,17 @@ export function LoopInputCard({
           textColIndices={textColIndices}
           handleCellChange={handleCellChange}
           handleRemoveRow={handleRemoveRow}
+          rowIds={rowIds}
+          sensors={sensors}
+          onReorder={handleReorderRows}
+        />
+      )}
+
+      {/* Multi-file drop zone */}
+      {!readOnly && !atMax && firstMediaColIndex >= 0 && (
+        <BottomDropZone
+          onDrop={(files) => handleMultiFileDrop(files, firstMediaColIndex)}
+          mimePrefix={colTypeToMimePrefix(columns[firstMediaColIndex].type ?? "text")}
         />
       )}
 
@@ -310,27 +520,111 @@ export function LoopInputCard({
           </span>
         </div>
       )}
-    </GlassCard>
+    </div>
   )
 }
 
 /* ------------------------------------------------------------------ */
-/*  Cards View                                                         */
+/*  Shared View Types                                                  */
 /* ------------------------------------------------------------------ */
 
 interface ViewProps {
   columns: LoopColumn[]
   rows: string[][]
   readOnly?: boolean
-  resolved: Required<PresentationDisplay>
   handleCellChange: (rowIndex: number, colIndex: number, value: string) => void
   handleRemoveRow: (index: number) => void
+  rowIds: string[]
+  sensors: ReturnType<typeof useSensors>
+  onReorder: (event: DragEndEvent) => void
+  onMultiFileDrop?: (files: File[], colIndex: number) => void
 }
 
 interface CardsViewProps extends ViewProps {
+  resolved: Required<PresentationDisplay>
   mediaColIndices: number[]
   textColIndices: number[]
 }
+
+/* ------------------------------------------------------------------ */
+/*  Sortable Row Components                                            */
+/* ------------------------------------------------------------------ */
+
+function SortableRow({
+  id,
+  readOnly,
+  children,
+}: {
+  id: string
+  readOnly?: boolean
+  children: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="border-b border-border/10 last:border-b-0">
+      <div className="flex items-center gap-2 py-2">
+        {!readOnly && (
+          <div
+            {...attributes}
+            {...listeners}
+            className="shrink-0 w-6 h-6 flex items-center justify-center text-muted-foreground/30 hover:text-muted-foreground cursor-grab active:cursor-grabbing"
+          >
+            <GripVertical className="w-4 h-4" />
+          </div>
+        )}
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function SortableCardRow({
+  id,
+  readOnly,
+  children,
+}: {
+  id: string
+  readOnly?: boolean
+  children: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="border-b border-border/10 last:border-b-0 pb-3 last:pb-0">
+      <div className="flex items-start gap-2">
+        {!readOnly && (
+          <div
+            {...attributes}
+            {...listeners}
+            className="shrink-0 mt-1 w-6 h-6 flex items-center justify-center text-muted-foreground/30 hover:text-muted-foreground cursor-grab active:cursor-grabbing"
+          >
+            <GripVertical className="w-4 h-4" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Cards View                                                         */
+/* ------------------------------------------------------------------ */
 
 function CardsView({
   columns,
@@ -341,6 +635,9 @@ function CardsView({
   textColIndices,
   handleCellChange,
   handleRemoveRow,
+  rowIds,
+  sensors,
+  onReorder,
 }: CardsViewProps) {
   const hasMedia = mediaColIndices.length > 0
   const imgSize = ELEMENT_SIZES.cardsImage[resolved.elementSize]
@@ -350,169 +647,164 @@ function CardsView({
     : undefined
 
   return (
-    <div style={gridStyle} className={resolved.columns <= 1 ? "flex flex-col gap-3" : undefined}>
-      {rows.map((row, rowIndex) => (
-        <div
-          key={rowIndex}
-          className="border border-border/50 rounded-lg p-3 bg-muted/10"
-        >
-          {/* Row header */}
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
-              Row {rowIndex + 1}
-            </span>
-            {!readOnly && rows.length > 1 && (
-              <button
-                type="button"
-                onClick={() => handleRemoveRow(rowIndex)}
-                className="text-[11px] text-muted-foreground/50 hover:text-red-400 transition-colors"
-              >
-                Remove
-              </button>
-            )}
-          </div>
-
-          {/* Card body: media left, text right (or text-only stack) */}
-          {hasMedia ? (
-            <div className="flex gap-3">
-              {/* Media columns on the left */}
-              <div className="flex flex-col gap-2 shrink-0" style={{ width: imgSize }}>
-                {mediaColIndices.map((ci) => {
-                  const col = columns[ci]
-                  const colType = col.type ?? "text"
-                  return (
-                    <div key={col.id}>
-                      <MediaCellInput
-                        value={row[ci] ?? ""}
-                        onChange={(val) => handleCellChange(rowIndex, ci, val)}
-                        mimePrefix={colTypeToMimePrefix(colType)}
-                        readOnly={readOnly}
-                        thumbnailSize={imgSize}
-                      />
-                    </div>
-                  )
-                })}
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onReorder}>
+      <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
+        <div style={gridStyle} className={resolved.columns <= 1 ? "flex flex-col gap-3" : undefined}>
+          {rows.map((row, rowIndex) => (
+            <SortableCardRow key={rowIds[rowIndex]} id={rowIds[rowIndex]} readOnly={readOnly}>
+              {/* Row header */}
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+                  Row {rowIndex + 1}
+                </span>
+                {!readOnly && rows.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveRow(rowIndex)}
+                    className="text-[11px] text-muted-foreground/50 hover:text-red-400 transition-colors"
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
 
-              {/* Text columns on the right */}
-              {textColIndices.length > 0 && (
-                <div className="flex-1 min-w-0 flex flex-col gap-2">
-                  {textColIndices.map((ci) => {
-                    const col = columns[ci]
-                    return (
-                      <div key={col.id} className="flex flex-col gap-1">
-                        <span className="text-[11px] text-muted-foreground/70">{col.name}</span>
-                        <textarea
-                          value={row[ci] ?? ""}
-                          onChange={(e) => handleCellChange(rowIndex, ci, e.target.value)}
-                          readOnly={readOnly}
-                          placeholder={`${col.name}...`}
-                          className={`w-full min-h-[56px] bg-muted/30 border border-border rounded-lg px-3 py-2 text-[14px] text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200${readOnly ? " opacity-70 cursor-default" : ""}`}
-                        />
-                      </div>
-                    )
-                  })}
+              {/* Card body: media left, text right (or text-only stack) */}
+              {hasMedia ? (
+                <div className="flex gap-3">
+                  {/* Media columns on the left */}
+                  <div className="flex flex-col gap-2 shrink-0" style={{ width: imgSize }}>
+                    {mediaColIndices.map((ci) => {
+                      const col = columns[ci]
+                      const colType = col.type ?? "text"
+                      return (
+                        <div key={col.id}>
+                          <RichMediaCell
+                            value={row[ci] ?? ""}
+                            onChange={(val) => handleCellChange(rowIndex, ci, val)}
+                            mimePrefix={colTypeToMimePrefix(colType)}
+                            readOnly={readOnly}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Text columns on the right */}
+                  {textColIndices.length > 0 && (
+                    <div className="flex-1 min-w-0 flex flex-col gap-2">
+                      {textColIndices.map((ci) => {
+                        const col = columns[ci]
+                        return (
+                          <div key={col.id} className="flex flex-col gap-1">
+                            <span className="text-[11px] text-muted-foreground/70">{col.name}</span>
+                            <textarea
+                              value={row[ci] ?? ""}
+                              onChange={(e) => handleCellChange(rowIndex, ci, e.target.value)}
+                              readOnly={readOnly}
+                              placeholder={`${col.name}...`}
+                              className={`${TEXTAREA_CLS}${readOnly ? " opacity-70 cursor-default" : ""}`}
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* No media — text-only vertical stack */
+                <div className="flex flex-col gap-2">
+                  {columns.map((col, colIndex) => (
+                    <div key={col.id} className="flex flex-col gap-1">
+                      <span className="text-[11px] text-muted-foreground/70">{col.name}</span>
+                      <textarea
+                        value={row[colIndex] ?? ""}
+                        onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                        readOnly={readOnly}
+                        placeholder={`${col.name}...`}
+                        className={`w-full min-h-[56px] bg-muted/30 border border-border rounded-lg px-3 py-2 text-[14px] text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200${readOnly ? " opacity-70 cursor-default" : ""}`}
+                      />
+                    </div>
+                  ))}
                 </div>
               )}
-            </div>
-          ) : (
-            /* No media — text-only vertical stack */
-            <div className="flex flex-col gap-2">
-              {columns.map((col, colIndex) => (
-                <div key={col.id} className="flex flex-col gap-1">
-                  <span className="text-[11px] text-muted-foreground/70">{col.name}</span>
-                  <textarea
-                    value={row[colIndex] ?? ""}
-                    onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
-                    readOnly={readOnly}
-                    placeholder={`${col.name}...`}
-                    className={`w-full min-h-[56px] bg-muted/30 border border-border rounded-lg px-3 py-2 text-[14px] text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200${readOnly ? " opacity-70 cursor-default" : ""}`}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+            </SortableCardRow>
+          ))}
         </div>
-      ))}
-    </div>
+      </SortableContext>
+    </DndContext>
   )
 }
 
 /* ------------------------------------------------------------------ */
-/*  Table View                                                         */
+/*  Table View (div-based layout for dnd-kit compat)                   */
 /* ------------------------------------------------------------------ */
 
 function TableView({
   columns,
   rows,
   readOnly,
-  resolved,
   handleCellChange,
   handleRemoveRow,
+  rowIds,
+  sensors,
+  onReorder,
+  onMultiFileDrop,
 }: ViewProps) {
-  const thumbSize = ELEMENT_SIZES.tableThumbnail[resolved.elementSize]
-
   return (
-    <div className="w-full overflow-x-auto rounded-lg border border-border/50">
-      <table className="w-full text-sm">
-        {/* Sticky header */}
-        <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
-          <tr>
-            {columns.map((col) => {
-              const colType = col.type ?? "text"
-              const meta = LOOP_COLUMN_TYPE_META[colType as LoopColumn["type"]] ?? LOOP_COLUMN_TYPE_META.text
-              return (
-                <th key={col.id} className="px-3 py-2 text-left">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-muted-foreground/70 font-medium">
-                      {col.name}
-                    </span>
-                    <span
-                      className="text-[9px] font-semibold uppercase tracking-wider px-1 py-0.5 rounded"
-                      style={{
-                        color: meta.color,
-                        backgroundColor: `${meta.color}15`,
-                      }}
-                    >
-                      {meta.shortLabel}
-                    </span>
-                  </div>
-                </th>
-              )
-            })}
-            {/* Delete column header */}
-            {!readOnly && <th className="w-8 px-2 py-2" />}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, rowIndex) => (
-            <tr
-              key={rowIndex}
-              className={rowIndex % 2 === 1 ? "bg-muted/5" : undefined}
+    <div className="w-full overflow-x-auto">
+      {/* Header row */}
+      <div className="flex items-center gap-2 py-2 sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
+        {!readOnly && <div className="shrink-0 w-6" />}
+        {columns.map((col, colIndex) => {
+          const colType = col.type ?? "text"
+          const meta = LOOP_COLUMN_TYPE_META[colType as LoopColumn["type"]] ?? LOOP_COLUMN_TYPE_META.text
+          const isMedia = isMediaColumn(colType)
+          return (
+            <div
+              key={col.id}
+              className={`flex-1 min-w-0 px-2${isMedia && !readOnly ? " cursor-copy" : ""}`}
+              onDragOver={isMedia && !readOnly ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy" } : undefined}
+              onDrop={isMedia && !readOnly ? (e) => {
+                e.preventDefault()
+                const files = Array.from(e.dataTransfer.files)
+                if (files.length > 0) onMultiFileDrop?.(files, colIndex)
+              } : undefined}
             >
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-muted-foreground/70 font-medium">
+                  {col.name}
+                </span>
+                <span
+                  className="text-[9px] font-semibold uppercase tracking-wider px-1 py-0.5 rounded"
+                  style={{ color: meta.color, backgroundColor: `${meta.color}15` }}
+                >
+                  {meta.shortLabel}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+        {!readOnly && <div className="shrink-0 w-6" />}
+      </div>
+
+      {/* Sortable rows */}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onReorder}>
+        <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
+          {rows.map((row, rowIndex) => (
+            <SortableRow key={rowIds[rowIndex]} id={rowIds[rowIndex]} readOnly={readOnly}>
               {columns.map((col, colIndex) => {
                 const colType = col.type ?? "text"
                 const cellValue = row[colIndex] ?? ""
-                const isMedia = colType !== "text"
-
+                const isMedia = isMediaColumn(colType)
                 return (
-                  <td key={col.id} className="px-3 py-2 align-middle">
+                  <div key={col.id} className="flex-1 min-w-0 px-2">
                     {isMedia ? (
-                      <div style={{ width: thumbSize }}>
-                        <MediaCellInput
-                          value={cellValue}
-                          onChange={(val) => handleCellChange(rowIndex, colIndex, val)}
-                          mimePrefix={
-                            colType === "image-url"
-                              ? "image/"
-                              : colType === "video-url"
-                                ? "video/"
-                                : "audio/"
-                          }
-                          readOnly={readOnly}
-                          thumbnailSize={thumbSize}
-                        />
-                      </div>
+                      <RichMediaCell
+                        value={cellValue}
+                        onChange={(val) => handleCellChange(rowIndex, colIndex, val)}
+                        mimePrefix={colTypeToMimePrefix(colType)}
+                        readOnly={readOnly}
+                      />
                     ) : (
                       <input
                         type="text"
@@ -524,12 +816,11 @@ function TableView({
                         className={`w-full bg-transparent border-none text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none${readOnly ? " opacity-70 cursor-default" : ""}`}
                       />
                     )}
-                  </td>
+                  </div>
                 )
               })}
-              {/* Per-row delete button */}
               {!readOnly && (
-                <td className="px-2 py-2 align-middle">
+                <div className="shrink-0 w-6 flex items-center justify-center">
                   {rows.length > 1 && (
                     <button
                       type="button"
@@ -540,12 +831,12 @@ function TableView({
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
-                </td>
+                </div>
               )}
-            </tr>
+            </SortableRow>
           ))}
-        </tbody>
-      </table>
+        </SortableContext>
+      </DndContext>
     </div>
   )
 }
