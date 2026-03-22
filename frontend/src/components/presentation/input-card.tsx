@@ -1,5 +1,5 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import type { WorkflowNode } from "@/types/nodes"
+import type { WorkflowNode, PresentationDisplay } from "@/types/nodes"
 import { getNodeLabel } from "@/lib/presentation-utils"
 import { CONFIG_INPUT_TYPES } from "./node-config-modal"
 import { TextInputCard } from "./input-cards/text-input-card"
@@ -22,6 +22,7 @@ export interface InputCardProps {
   onOpenMedia?: (nodeId: string) => void
   onOpenConfig?: (node: WorkflowNode) => void
   refMap?: Map<string, string>
+  display?: PresentationDisplay
 }
 
 /** Renders the appropriate input card based on node type */
@@ -34,6 +35,7 @@ export function InputCard({
   onOpenMedia,
   onOpenConfig,
   refMap,
+  display,
 }: InputCardProps) {
   const label = getNodeLabel(node)
   const data = node.data as Record<string, unknown>
@@ -134,6 +136,7 @@ export function InputCard({
           onUpdateInput={onUpdateInput}
           readOnly={readOnly}
           maxItems={effectiveMaxItems}
+          display={display}
         />
       )
 

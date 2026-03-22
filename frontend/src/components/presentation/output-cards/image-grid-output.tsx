@@ -1,18 +1,22 @@
 import { CachedImage } from "@/components/ui/cached-image"
 import { IterationProgress, type GalleryOutputProps } from "./shared"
 
+interface ImageGridOutputProps extends GalleryOutputProps {
+  columns?: number
+}
+
 export function ImageGridOutput({
   results,
   status,
   iterationTotal,
   iterationCompleted,
   onOpenMedia,
-}: GalleryOutputProps) {
+  columns,
+}: ImageGridOutputProps) {
   return (
     <div>
       <IterationProgress status={status} iterationTotal={iterationTotal} iterationCompleted={iterationCompleted} />
-      {/* Grid: 3-col desktop, 2-col mobile */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${columns ?? 3}, 1fr)` }}>
         {results.filter(Boolean).map((url, i) => (
           <div
             key={i}

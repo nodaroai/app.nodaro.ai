@@ -1,6 +1,7 @@
 import { Download, Copy, Maximize2, ImageIcon } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { StatusBadge, GlassCard, GlassButton, ShimmerPlaceholder, copyUrl, downloadFile, type OutputStatus } from "./shared"
+import { ELEMENT_SIZES } from "@/lib/presentation-display"
 
 interface ImageOutputCardProps {
   label: string
@@ -8,9 +9,11 @@ interface ImageOutputCardProps {
   url?: string
   nodeId?: string
   onOpenMedia?: (nodeId: string) => void
+  elementSize?: "sm" | "md" | "lg"
 }
 
-export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia }: ImageOutputCardProps) {
+export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia, elementSize }: ImageOutputCardProps) {
+  const maxHClass = ELEMENT_SIZES.imageOutput[elementSize ?? "md"]
   const handleClick = () => {
     if (nodeId && onOpenMedia) onOpenMedia(nodeId)
   }
@@ -29,7 +32,7 @@ export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia }: Ima
           <CachedImage
             src={url}
             alt={label}
-            className="w-full max-h-[70vh] object-contain rounded-lg bg-black/20"
+            className={`w-full ${maxHClass} object-contain rounded-lg bg-black/20`}
             thumbnail
             thumbnailWidth={480}
           />

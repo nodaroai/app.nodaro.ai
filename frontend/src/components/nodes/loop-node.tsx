@@ -1,14 +1,15 @@
 "use client"
 
-import { memo, useEffect, useMemo } from "react"
+import { memo, useEffect, useMemo, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Film, Image, Music, Repeat, Type } from "lucide-react"
+import { Film, Image, Info, Music, Repeat, Table2, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { LOOP_COLUMN_TYPE_META, type LoopNodeData, type LoopColumn } from "@/types/nodes"
+import { CachedImage } from "@/components/ui/cached-image"
 
 function buildHandles(columns: ReadonlyArray<LoopColumn>) {
   const target = {
@@ -49,6 +50,7 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNodeInternals = useUpdateNodeInternals()
   const status = (nodeData as Record<string, unknown>).executionStatus as string | undefined ?? "idle"
+  const [showData, setShowData] = useState(false)
 
   const columns = nodeData.columns ?? []
   const handles = useMemo(() => buildHandles(columns), [columns])
@@ -62,7 +64,8 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
     updateNodeInternals(id)
   }, [id, columns.length, updateNodeInternals])
 
-  const rowCount = nodeData.rows?.length ?? 0
+  const rows = nodeData.rows ?? []
+  const rowCount = rows.length
   const colCount = nodeData.columns?.length ?? 0
 
   let statusText: string
@@ -95,31 +98,102 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
         minWidth={220}
         hideHeader
         topToolbarContent={
-          status !== "running" ? (
-            <RunNodeButton nodeId={id} credits={0} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
-          ) : undefined
+          <div className="flex items-center gap-1">
+            {colCount > 0 && rowCount > 0 && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowData(!showData) }}
+                className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors"
+                title={showData ? "Show info" : "Show data"}
+              >
+                {showData ? <Info className="w-3.5 h-3.5" /> : <Table2 className="w-3.5 h-3.5" />}
+              </button>
+            )}
+            {status !== "running" && (
+              <RunNodeButton nodeId={id} credits={0} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+            )}
+          </div>
         }
         handles={handles}
       >
         <div className="p-3" style={{ minHeight: colCount > 1 ? `${colCount * 22 + 8}px` : undefined }}>
-          <p className="text-sm text-muted-foreground">
-            {statusText}
-          </p>
-          {columns.length > 0 && (
-            <div className="flex gap-1 flex-wrap mt-1">
-              {columns.map((col) => {
-                const colColor = LOOP_COLUMN_TYPE_META[col.type ?? "text"]?.color ?? "#38BDF8"
-                return (
-                  <span key={col.id} className="text-[9px] px-1.5 py-0.5 rounded font-semibold"
-                    style={{
-                      background: `${colColor}20`,
-                      color: colColor,
-                    }}>
-                    {col.name}
-                  </span>
-                )
-              })}
+          {showData && colCount > 0 && rowCount > 0 ? (
+            <div className="overflow-auto max-h-[200px] rounded border border-border/40">
+              <table className="w-full text-[10px] border-collapse">
+                <thead>
+                  <tr className="bg-muted/30">
+                    {columns.map((col) => {
+                      const meta = LOOP_COLUMN_TYPE_META[col.type ?? "text"]
+                      const colColor = meta?.color ?? "#38BDF8"
+                      return (
+                        <th key={col.id} className="px-1.5 py-1 text-left font-medium whitespace-nowrap border-b border-border/30">
+                          <span className="inline-flex items-center gap-1">
+                            <span className="text-[8px] px-1 py-0.5 rounded font-semibold"
+                              style={{ background: `${colColor}20`, color: colColor }}>
+                              {meta?.shortLabel ?? "TXT"}
+                            </span>
+                            <span className="text-muted-foreground truncate max-w-[60px]">{col.name}</span>
+                          </span>
+                        </th>
+                      )
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, rowIdx) => (
+                    <tr key={rowIdx} className={rowIdx % 2 === 0 ? "bg-muted/10" : ""}>
+                      {columns.map((col, colIdx) => {
+                        const cell = row[colIdx] ?? ""
+                        const colType = col.type ?? "text"
+                        return (
+                          <td key={col.id} className="px-1.5 py-0.5 align-middle border-b border-border/20">
+                            {colType === "image-url" && cell ? (
+                              <CachedImage
+                                src={cell}
+                                alt=""
+                                thumbnail
+                                thumbnailWidth={48}
+                                className="w-6 h-6 object-cover rounded"
+                              />
+                            ) : colType === "video-url" || colType === "audio-url" ? (
+                              <span className="text-muted-foreground/60 italic">
+                                {cell ? "media" : "—"}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground truncate block max-w-[80px]" title={cell}>
+                                {cell || "—"}
+                              </span>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                {statusText}
+              </p>
+              {columns.length > 0 && (
+                <div className="flex gap-1 flex-wrap mt-1">
+                  {columns.map((col) => {
+                    const colColor = LOOP_COLUMN_TYPE_META[col.type ?? "text"]?.color ?? "#38BDF8"
+                    return (
+                      <span key={col.id} className="text-[9px] px-1.5 py-0.5 rounded font-semibold"
+                        style={{
+                          background: `${colColor}20`,
+                          color: colColor,
+                        }}>
+                        {col.name}
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
       </BaseNode>

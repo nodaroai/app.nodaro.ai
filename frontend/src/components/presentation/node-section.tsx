@@ -1,3 +1,4 @@
+import { useMemo } from "react"
 import { Plus } from "lucide-react"
 import {
   DndContext,
@@ -8,6 +9,7 @@ import type { SensorDescriptor, SensorOptions } from "@dnd-kit/core"
 import {
   SortableContext,
   verticalListSortingStrategy,
+  rectSortingStrategy,
 } from "@dnd-kit/sortable"
 import { Button } from "@/components/ui/button"
 import type { WorkflowNode } from "@/types/nodes"
@@ -23,8 +25,10 @@ interface NodeSectionProps {
   onAdd: () => void
   onRemove: (nodeId: string) => void
   settings: PresentationSettings
-  updateCardMeta: (nodeId: string, field: "title" | "description", value: string) => void
+  updateCardMeta: (nodeId: string, field: string, value: unknown) => void
   renderCard: (node: WorkflowNode) => React.ReactNode
+  /** Returns resolved columns count per node for grid layout */
+  getNodeColumns?: (nodeId: string) => number
 }
 
 export function NodeSection({
@@ -38,7 +42,13 @@ export function NodeSection({
   settings,
   updateCardMeta,
   renderCard,
+  getNodeColumns,
 }: NodeSectionProps) {
+  const maxCols = useMemo(
+    () => Math.max(...nodes.map((n) => getNodeColumns?.(n.id) ?? 1), 1),
+    [nodes, getNodeColumns],
+  )
+  const strategy = maxCols > 1 ? rectSortingStrategy : verticalListSortingStrategy
   return (
     <div className="flex-1 flex flex-col space-y-4">
       <div className="flex items-center justify-between">
@@ -63,19 +73,26 @@ export function NodeSection({
       ) : (
         <div className="flex-1">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext items={nodes.map((n) => n.id)} strategy={verticalListSortingStrategy}>
-              {nodes.map((node) => (
-                <SortableCardWrapper
-                  key={node.id}
-                  id={node.id}
-                  isEditMode={isEditing}
-                  onRemove={() => onRemove(node.id)}
-                  cardDescription={settings.cardMeta?.[node.id]?.description}
-                  onDescriptionChange={(v) => updateCardMeta(node.id, "description", v)}
-                >
-                  {renderCard(node)}
-                </SortableCardWrapper>
-              ))}
+            <SortableContext items={nodes.map((n) => n.id)} strategy={strategy}>
+              <div
+                className={maxCols > 1 ? "grid gap-4" : ""}
+                style={maxCols > 1 ? { gridTemplateColumns: `repeat(${maxCols}, 1fr)` } : undefined}
+              >
+                {nodes.map((node) => (
+                  <SortableCardWrapper
+                    key={node.id}
+                    id={node.id}
+                    isEditMode={isEditing}
+                    onRemove={() => onRemove(node.id)}
+                    cardDescription={settings.cardMeta?.[node.id]?.description}
+                    onDescriptionChange={(v) => updateCardMeta(node.id, "description", v)}
+                    cardDisplay={settings.cardMeta?.[node.id]?.display}
+                    onDisplayChange={(d) => updateCardMeta(node.id, "display", d)}
+                  >
+                    {renderCard(node)}
+                  </SortableCardWrapper>
+                ))}
+              </div>
             </SortableContext>
           </DndContext>
         </div>

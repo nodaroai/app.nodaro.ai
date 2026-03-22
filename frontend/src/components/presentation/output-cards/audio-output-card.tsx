@@ -1,6 +1,7 @@
 import { Download, Music } from "lucide-react"
 import { StatusBadge, GlassCard, GlassButton, downloadFile, type OutputStatus } from "./shared"
 import { WaveformBars } from "../input-cards/shared"
+import { ELEMENT_SIZES } from "@/lib/presentation-display"
 
 /** Heights for the 7-bar loading waveform */
 const LOADING_WAVEFORM_HEIGHTS = [14, 18, 12, 20, 16, 22, 14]
@@ -14,9 +15,11 @@ interface AudioOutputCardProps {
   label: string
   status: OutputStatus
   url?: string
+  elementSize?: "sm" | "md" | "lg"
 }
 
-export function AudioOutputCard({ label, status, url }: AudioOutputCardProps) {
+export function AudioOutputCard({ label, status, url, elementSize }: AudioOutputCardProps) {
+  const heightClass = ELEMENT_SIZES.audioOutput[elementSize ?? "md"]
   return (
     <GlassCard>
       <div className="flex items-center justify-between mb-2">
@@ -25,7 +28,7 @@ export function AudioOutputCard({ label, status, url }: AudioOutputCardProps) {
       </div>
 
       {status === "running" || status === "waiting" ? (
-        <div className="flex items-center justify-center h-20 rounded-lg bg-muted/30">
+        <div className={`flex items-center justify-center ${heightClass} rounded-lg bg-muted/30`}>
           <div className="flex items-center gap-1">
             {LOADING_WAVEFORM_STYLES.map((style, i) => (
               <div key={i} className="w-1 bg-[#ff0073]/50 rounded-full" style={style} />
@@ -33,7 +36,7 @@ export function AudioOutputCard({ label, status, url }: AudioOutputCardProps) {
           </div>
         </div>
       ) : url ? (
-        <div className="flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border">
+        <div className={`flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border ${heightClass}`}>
           <WaveformBars />
           <audio src={url} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
           <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title="Download">
@@ -41,7 +44,7 @@ export function AudioOutputCard({ label, status, url }: AudioOutputCardProps) {
           </GlassButton>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center h-20 rounded-lg bg-muted/30 text-muted-foreground">
+        <div className={`flex flex-col items-center justify-center ${heightClass} rounded-lg bg-muted/30 text-muted-foreground`}>
           <Music className="w-8 h-8 mb-1 animate-pulse" />
           <span className="text-xs">
             {status === "failed" ? "Generation failed" : "Awaiting generation"}

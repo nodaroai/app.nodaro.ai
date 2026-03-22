@@ -23,7 +23,7 @@ import {
 import { createClient } from "@/lib/supabase"
 import { toast } from "sonner"
 import { isVideoUrl } from "@/lib/media-type"
-import type { WorkflowNode } from "@/types/nodes"
+import type { WorkflowNode, PresentationDisplay } from "@/types/nodes"
 import type { PublishedApp } from "@/lib/api"
 import type { PresentationViewMode, PresentationSettings } from "@/hooks/use-workflow-store"
 
@@ -569,6 +569,9 @@ export function MobileAppShell({
     const status = getNodeStatus(node.id)
     const result = getFullscreenResult(node.id)
     const progress = combinedProgress[node.id]
+    const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
+    const cardDisplay = settings.cardMeta?.[node.id]?.display
+    const elementSize = cardDisplay?.elementSize ?? nodeDisplay?.elementSize ?? "md"
     return (
       <OutputCard
         key={node.id}
@@ -580,9 +583,10 @@ export function MobileAppShell({
         text={result.text}
         onOpenMedia={handleOpenMedia}
         progress={progress}
+        elementSize={elementSize}
       />
     )
-  }, [getNodeStatus, getFullscreenResult, getCardTitle, handleOpenMedia, combinedProgress])
+  }, [getNodeStatus, getFullscreenResult, getCardTitle, handleOpenMedia, combinedProgress, settings.cardMeta])
 
   // ---- View props for override views (gallery/fullscreen/compare) ----
   const viewProps = useMemo(() => ({
@@ -683,18 +687,24 @@ export function MobileAppShell({
                 <p className="text-sm">This app runs automatically</p>
               </div>
             ) : (
-              orderedInputNodes.map((node) => (
-                <InputCard
-                  key={node.id}
-                  node={node}
-                  isFullscreen
-                  inputValues={presInputValues}
-                  onUpdateInput={presUpdateInput}
-                  readOnly={inputsReadOnly || isRunning}
-                  onOpenMedia={handleOpenMedia}
-                  onOpenConfig={setConfigNode}
-                />
-              ))
+              orderedInputNodes.map((node) => {
+                const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
+                const cardDisplay = settings.cardMeta?.[node.id]?.display
+                const display = { ...nodeDisplay, ...cardDisplay }
+                return (
+                  <InputCard
+                    key={node.id}
+                    node={node}
+                    isFullscreen
+                    inputValues={presInputValues}
+                    onUpdateInput={presUpdateInput}
+                    readOnly={inputsReadOnly || isRunning}
+                    onOpenMedia={handleOpenMedia}
+                    onOpenConfig={setConfigNode}
+                    display={display}
+                  />
+                )
+              })
             )}
           </div>
         ) : activeTab === "outputs" ? (

@@ -66,6 +66,12 @@ export const LOOP_COLUMN_TYPE_META: Record<LoopColumn["type"], { label: string; 
   "audio-url": { label: "Audio", shortLabel: "AUD", color: "#22c55e" },
 }
 
+export interface PresentationDisplay {
+  columns?: 1 | 2 | 3 | 4
+  elementSize?: "sm" | "md" | "lg"
+  viewMode?: string
+}
+
 export type LoopNodeData = {
   [key: string]: unknown
   label: string
