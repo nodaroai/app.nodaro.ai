@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { Plus } from "lucide-react"
+import { Plus, FolderPlus } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -13,6 +13,7 @@ import {
 } from "@dnd-kit/sortable"
 import { Button } from "@/components/ui/button"
 import type { WorkflowNode } from "@/types/nodes"
+import type { PresentationItem } from "@nodaro-shared/presentation-types"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { SortableCardWrapper } from "./sortable-card-wrapper"
 
@@ -29,6 +30,17 @@ interface NodeSectionProps {
   renderCard: (node: WorkflowNode) => React.ReactNode
   /** Returns resolved columns count per node for grid layout */
   getNodeColumns?: (nodeId: string) => number
+  /** Rich items list — when provided, renders items instead of nodes */
+  items?: PresentationItem[] | null
+  /** Renderer for PresentationItem types */
+  renderItem?: (item: PresentationItem) => React.ReactNode
+  /** Callback to add a group container */
+  onAddGroup?: () => void
+}
+
+/** Get the sortable ID for a PresentationItem */
+function getItemSortId(item: PresentationItem): string {
+  return item.type === "node" ? item.nodeId : item.id
 }
 
 export function NodeSection({
@@ -43,12 +55,28 @@ export function NodeSection({
   updateCardMeta,
   renderCard,
   getNodeColumns,
+  items,
+  renderItem,
+  onAddGroup,
 }: NodeSectionProps) {
+  // Items-based rendering when items + renderItem are provided
+  const useItems = items && items.length > 0 && renderItem
+
   const maxCols = useMemo(
-    () => Math.max(...nodes.map((n) => getNodeColumns?.(n.id) ?? 1), 1),
-    [nodes, getNodeColumns],
+    () => {
+      if (useItems) return 1 // Not used in items mode
+      return Math.max(...nodes.map((n) => getNodeColumns?.(n.id) ?? 1), 1)
+    },
+    [useItems, nodes, getNodeColumns],
   )
   const strategy = maxCols > 1 ? rectSortingStrategy : verticalListSortingStrategy
+  const itemSortIds = useMemo(
+    () => (items ?? []).map(getItemSortId),
+    [items],
+  )
+
+  const isEmpty = useItems ? false : nodes.length === 0
+
   return (
     <div className="flex-1 flex flex-col space-y-4">
       <div className="flex items-center justify-between">
@@ -56,21 +84,75 @@ export function NodeSection({
           {label}
         </h2>
         {isEditing && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-            onClick={onAdd}
-          >
-            <Plus className="h-3 w-3 mr-1" />Add
-          </Button>
+          <div className="flex items-center gap-1">
+            {onAddGroup && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                onClick={onAddGroup}
+              >
+                <FolderPlus className="h-3 w-3 mr-1" />Group
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+              onClick={onAdd}
+            >
+              <Plus className="h-3 w-3 mr-1" />Add
+            </Button>
+          </div>
         )}
       </div>
-      {nodes.length === 0 ? (
+      {isEmpty ? (
         <div className="text-xs text-muted-foreground p-6 border border-dashed border-border rounded-xl text-center">
           {isEditing ? `Click "Add" to select ${label.toLowerCase()} nodes` : `No ${label.toLowerCase()} configured`}
         </div>
+      ) : useItems ? (
+        /* Items-based rendering (groups, fields, richtext, nodes) */
+        <div className="flex-1">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={itemSortIds} strategy={verticalListSortingStrategy}>
+              <div>
+                {items!.map((item) => {
+                  const sortId = getItemSortId(item)
+                  // Groups and richtext don't get the node-style wrapper
+                  if (item.type === "group" || item.type === "richtext") {
+                    return (
+                      <SortableCardWrapper
+                        key={sortId}
+                        id={sortId}
+                        isEditMode={isEditing}
+                      >
+                        {renderItem(item)}
+                      </SortableCardWrapper>
+                    )
+                  }
+                  // Node and field items get the full wrapper with meta editing
+                  const nodeId = "nodeId" in item ? (item as { nodeId: string }).nodeId : undefined
+                  return (
+                    <SortableCardWrapper
+                      key={sortId}
+                      id={sortId}
+                      isEditMode={isEditing}
+                      onRemove={() => { if (nodeId) onRemove(nodeId) }}
+                      cardDescription={nodeId ? settings.cardMeta?.[nodeId]?.description : undefined}
+                      onDescriptionChange={(v) => { if (nodeId) updateCardMeta(nodeId, "description", v) }}
+                      cardDisplay={nodeId ? settings.cardMeta?.[nodeId]?.display : undefined}
+                      onDisplayChange={nodeId ? (d) => updateCardMeta(nodeId, "display", d) : undefined}
+                    >
+                      {renderItem(item)}
+                    </SortableCardWrapper>
+                  )
+                })}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
       ) : (
+        /* Legacy node-based rendering */
         <div className="flex-1">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
             <SortableContext items={nodes.map((n) => n.id)} strategy={strategy}>

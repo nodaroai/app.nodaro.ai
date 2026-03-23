@@ -5,6 +5,14 @@ import { TextOutputCard } from "./output-cards/text-output-card"
 import { GalleryOutputCard } from "./output-cards/gallery-output-card"
 import { StatusBadge } from "./output-cards/shared"
 import { Progress } from "@/components/ui/progress"
+import { FieldBadge } from "./field-badge"
+import type { ExposableField } from "@nodaro-shared/presentation-types"
+
+export interface FieldBadgeEntry {
+  id: string
+  fieldDef: ExposableField
+  value: unknown
+}
 
 export interface OutputCardProps {
   nodeId: string
@@ -28,6 +36,8 @@ export interface OutputCardProps {
   elementSize?: "sm" | "md" | "lg"
   /** Number of columns for gallery grid layouts */
   columns?: number
+  /** Field badges to display below the media content */
+  fieldBadges?: FieldBadgeEntry[]
 }
 
 /** Renders the appropriate output card based on output type */
@@ -46,8 +56,16 @@ export function OutputCard({
   iterationCompleted,
   elementSize,
   columns,
+  fieldBadges,
 }: OutputCardProps) {
   const showProgress = (status === "running" || status === "waiting") && progress != null
+  const badgeRow = fieldBadges && fieldBadges.length > 0 ? (
+    <div className="flex flex-wrap gap-1 mt-2 px-1">
+      {fieldBadges.map((fb) => (
+        <FieldBadge key={fb.id} field={fb.fieldDef} value={fb.value} />
+      ))}
+    </div>
+  ) : null
 
   // Gallery mode: multiple results in a single card
   if (listResults && listResults.length > 1 && displayMode === "gallery") {
@@ -71,6 +89,7 @@ export function OutputCard({
           onOpenMedia={onOpenMedia ? () => onOpenMedia(nodeId) : undefined}
           columns={columns}
         />
+        {badgeRow}
         {showProgress && (
           <div className="px-1">
             <Progress
@@ -100,18 +119,21 @@ export function OutputCard({
     }
   })()
 
-  if (!showProgress) return card
+  if (!showProgress && !badgeRow) return card
 
   return (
     <div className="flex flex-col gap-2">
       {card}
-      <div className="px-1">
-        <Progress
-          value={progress}
-          className="h-2 bg-primary/20 [&>[data-slot=progress-indicator]]:bg-[#ff0073]"
-        />
-        <p className="mt-1 text-xs text-muted-foreground text-center">{progress}%</p>
-      </div>
+      {badgeRow}
+      {showProgress && (
+        <div className="px-1">
+          <Progress
+            value={progress}
+            className="h-2 bg-primary/20 [&>[data-slot=progress-indicator]]:bg-[#ff0073]"
+          />
+          <p className="mt-1 text-xs text-muted-foreground text-center">{progress}%</p>
+        </div>
+      )}
     </div>
   )
 }

@@ -29,7 +29,10 @@ import {
   getOutputType,
   getNodeLabel,
   getInputFieldSchema,
+  flattenItems,
+  migrateToItems,
 } from "../../../packages/shared/src/presentation-utils.js"
+import type { PresentationItem } from "../../../packages/shared/src/presentation-types.js"
 import type { GenericNode, GenericEdge } from "../../../packages/shared/src/types.js"
 
 // ---------------------------------------------------------------------------
@@ -594,16 +597,38 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       // Respect presentation ordering if available
       const settings = (workflow.settings ?? {}) as Record<string, unknown>
       const presSettings = settings.presentationSettings as {
+        inputItems?: PresentationItem[]
+        outputItems?: PresentationItem[]
         inputOrder?: string[]
         outputOrder?: string[]
       } | undefined
 
-      const sortedInputs = presSettings?.inputOrder
-        ? sortByOrder(inputNodes, presSettings.inputOrder)
+      // Read inputItems/outputItems with legacy fallback to inputOrder/outputOrder
+      const inputItems: PresentationItem[] = presSettings?.inputItems
+        ?? migrateToItems(presSettings?.inputOrder)
+        ?? []
+      const outputItems: PresentationItem[] = presSettings?.outputItems
+        ?? migrateToItems(presSettings?.outputOrder)
+        ?? []
+
+      // Extract nodeIds from items for ordering
+      const inputNodeIds = flattenItems(inputItems)
+        .filter((item): item is Extract<PresentationItem, { type: "node" }> | Extract<PresentationItem, { type: "field" }> =>
+          item.type === "node" || item.type === "field"
+        )
+        .map((item) => item.nodeId)
+      const outputNodeIds = flattenItems(outputItems)
+        .filter((item): item is Extract<PresentationItem, { type: "node" }> | Extract<PresentationItem, { type: "output" }> =>
+          item.type === "node" || item.type === "output"
+        )
+        .map((item) => item.nodeId)
+
+      const sortedInputs = inputNodeIds.length > 0
+        ? sortByOrder(inputNodes, inputNodeIds)
         : inputNodes
 
-      const sortedOutputs = presSettings?.outputOrder
-        ? sortByOrder(outputNodes, presSettings.outputOrder)
+      const sortedOutputs = outputNodeIds.length > 0
+        ? sortByOrder(outputNodes, outputNodeIds)
         : outputNodes
 
       const estimatedCredits = estimateWorkflowCredits(nodes as Array<{ type: string; data?: Record<string, unknown> }>)

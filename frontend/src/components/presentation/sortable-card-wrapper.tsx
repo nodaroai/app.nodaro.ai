@@ -19,9 +19,9 @@ export function SortableCardWrapper({
 }: {
   id: string
   isEditMode: boolean
-  onRemove: () => void
+  onRemove?: () => void
   cardDescription?: string
-  onDescriptionChange: (value: string) => void
+  onDescriptionChange?: (value: string) => void
   cardDisplay?: Partial<PresentationDisplay>
   onDisplayChange?: (display: Partial<PresentationDisplay>) => void
   showElementSize?: boolean
@@ -38,7 +38,7 @@ export function SortableCardWrapper({
 
   return (
     <div ref={setNodeRef} style={style} className="relative group mb-4">
-      {isEditMode && (
+      {isEditMode && onRemove && (
         <button
           type="button"
           onClick={onRemove}
@@ -67,7 +67,7 @@ export function SortableCardWrapper({
       )}
 
       {/* Editable description below card — edit mode only */}
-      {isEditMode && (
+      {isEditMode && onDescriptionChange && (
         <div className="mt-1 px-1">
           <input
             type="text"

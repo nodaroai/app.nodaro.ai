@@ -22,6 +22,11 @@ export function HorizontalView({
   renderInputCard,
   renderOutputCard,
   getNodeColumns,
+  inputItems,
+  outputItems,
+  renderInputItem,
+  renderOutputItem,
+  addGroup,
   splitRatio,
   containerRef,
   handleDividerMouseDown,
@@ -52,6 +57,9 @@ export function HorizontalView({
             updateCardMeta={updateCardMeta}
             renderCard={renderInputCard}
             getNodeColumns={getNodeColumns}
+            items={inputItems}
+            renderItem={renderInputItem}
+            onAddGroup={addGroup ? () => addGroup("input") : undefined}
           />
         </div>
 
@@ -91,6 +99,9 @@ export function HorizontalView({
             updateCardMeta={updateCardMeta}
             renderCard={renderOutputCard}
             getNodeColumns={getNodeColumns}
+            items={outputItems}
+            renderItem={renderOutputItem}
+            onAddGroup={addGroup ? () => addGroup("output") : undefined}
           />
         </div>
       </div>

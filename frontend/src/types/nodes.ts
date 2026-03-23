@@ -7,6 +7,8 @@ import type {
   LipSyncProvider, ScriptProvider, AiWriterProvider, QaCheckProvider,
   SunoModel, VoiceDesignModel,
 } from "@nodaro-shared/model-constants"
+import type { ExposableField, ExposableOutput } from "@nodaro-shared/presentation-types"
+import { IMAGE_STYLE_PRESETS } from "@/components/editor/config-panels/model-options"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "location" | "utility"
 
@@ -2369,6 +2371,8 @@ export interface NodeTypeDefinition {
   readonly defaultData: SceneNodeData
   readonly width?: number
   readonly height?: number
+  readonly exposableFields?: ReadonlyArray<ExposableField>
+  readonly exposableOutputs?: ReadonlyArray<ExposableOutput>
 }
 
 export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
@@ -2564,6 +2568,59 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     outputs: ["image"],
     width: 220,
     defaultData: { label: "Generate Image", prompt: "", provider: "nano-banana-pro", model: "gemini-2.5-flash-image", style: "", aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "image" as const }],
+    exposableFields: [
+      {
+        key: "model", label: "Model", type: "select" as const,
+        options: [
+          { value: "nano-banana", label: "Nano Banana" },
+          { value: "nano-banana-pro", label: "Nano Banana Pro" },
+          { value: "grok", label: "Grok" },
+          { value: "flux", label: "Flux" },
+          { value: "flux-flex", label: "Flux Flex" },
+          { value: "gpt-image", label: "GPT Image" },
+          { value: "imagen4", label: "Imagen 4" },
+          { value: "imagen4-fast", label: "Imagen 4 Fast" },
+          { value: "imagen4-ultra", label: "Imagen 4 Ultra" },
+          { value: "ideogram-v3", label: "Ideogram V3" },
+          { value: "qwen", label: "Qwen" },
+          { value: "seedream", label: "Seedream" },
+          { value: "seedream-5-lite", label: "Seedream 5 Lite" },
+          { value: "nano-banana-2", label: "Nano Banana 2" },
+          { value: "flux-kontext", label: "Flux Kontext" },
+          { value: "flux-kontext-max", label: "Flux Kontext Max" },
+          { value: "z-image", label: "Z-Image" },
+        ],
+      },
+      {
+        key: "aspectRatio", label: "Aspect Ratio", type: "select" as const,
+        options: [
+          { value: "1:1", label: "1:1 (Square)" },
+          { value: "16:9", label: "16:9 (Landscape)" },
+          { value: "9:16", label: "9:16 (Portrait)" },
+          { value: "4:3", label: "4:3" },
+          { value: "3:4", label: "3:4" },
+          { value: "3:2", label: "3:2" },
+          { value: "2:3", label: "2:3" },
+          { value: "5:4", label: "5:4" },
+          { value: "4:5", label: "4:5" },
+          { value: "21:9", label: "21:9 (Ultra-wide)" },
+        ],
+      },
+      {
+        key: "quality", label: "Quality", type: "select" as const,
+        options: [
+          { value: "medium", label: "Medium (Balanced)" },
+          { value: "high", label: "High (Detailed)" },
+          { value: "basic", label: "Basic (2K)" },
+        ],
+      },
+      { key: "negativePrompt", label: "Negative Prompt", type: "text" as const },
+      {
+        key: "style", label: "Style", type: "select" as const,
+        options: [{ value: "", label: "None" }, ...IMAGE_STYLE_PRESETS.map(s => ({ value: s.value, label: s.label }))],
+      },
+    ],
   },
   {
     type: "edit-image",
@@ -2611,6 +2668,40 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Text to Video", prompt: "", provider: "minimax", duration: 5, aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+    exposableFields: [
+      {
+        key: "model", label: "Model", type: "select" as const,
+        options: [
+          { value: "minimax", label: "MiniMax" },
+          { value: "veo3", label: "VEO 3.1 (Quality)" },
+          { value: "veo3.1", label: "VEO 3.1 (Fast)" },
+          { value: "kling", label: "Kling" },
+          { value: "kling-turbo", label: "Kling Turbo" },
+          { value: "kling-3.0", label: "Kling 3.0" },
+          { value: "grok", label: "Grok" },
+          { value: "sora2-pro", label: "Sora 2 Pro" },
+          { value: "seedance", label: "Seedance 1.5" },
+          { value: "wan", label: "Wan 2.6" },
+          { value: "sora2", label: "Sora 2" },
+          { value: "hailuo-standard", label: "MiniMax Standard" },
+          { value: "bytedance-lite", label: "Bytedance Lite" },
+          { value: "bytedance-pro", label: "Bytedance Pro" },
+          { value: "wan-turbo", label: "Wan Turbo" },
+          { value: "runway-kie", label: "Runway (KIE)" },
+        ],
+      },
+      {
+        key: "aspectRatio", label: "Aspect Ratio", type: "select" as const,
+        options: [
+          { value: "16:9", label: "16:9 (Landscape)" },
+          { value: "9:16", label: "9:16 (Portrait)" },
+          { value: "1:1", label: "1:1 (Square)" },
+        ],
+      },
+      { key: "motion", label: "Motion", type: "slider" as const, min: 1, max: 255, step: 1 },
+      { key: "generateAudio", label: "Generate Audio", type: "toggle" as const },
+    ],
   },
   {
     type: "text-to-speech",
@@ -2620,6 +2711,19 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Text to Speech", provider: "elevenlabs-v3", voiceId: "Rachel", voiceType: "premade", voiceDisplayName: "Rachel", language: "en", speed: 1, stability: 0.5, similarityBoost: 0.75, style: 0, languageCode: "", textSource: "connected", directText: "", fieldMappings: {} },
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "audio" as const }],
+    exposableFields: [
+      {
+        key: "model", label: "Model", type: "select" as const,
+        options: [
+          { value: "elevenlabs-v3", label: "ElevenLabs v3 (recommended)" },
+          { value: "elevenlabs-turbo", label: "ElevenLabs Turbo v2.5 (fast)" },
+          { value: "elevenlabs-multilingual", label: "ElevenLabs Multilingual v2" },
+        ],
+      },
+      { key: "stability", label: "Stability", type: "slider" as const, min: 0, max: 1, step: 0.05 },
+      { key: "similarity", label: "Similarity", type: "slider" as const, min: 0, max: 1, step: 0.05 },
+    ],
   },
   {
     type: "qa-check",
@@ -2886,6 +2990,20 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as VoiceDesignData,
+    exposableOutputs: [
+      { key: "audio", label: "Audio", outputType: "audio" as const },
+      { key: "voiceId", label: "Voice ID", outputType: "data" as const },
+    ],
+    exposableFields: [
+      {
+        key: "model", label: "Model", type: "select" as const,
+        options: [
+          { value: "eleven_ttv_v3", label: "ElevenLabs v3 (recommended)" },
+          { value: "eleven_multilingual_ttv_v2", label: "ElevenLabs Multilingual v2" },
+        ],
+      },
+      { key: "loudness", label: "Loudness", type: "slider" as const, min: -1, max: 1, step: 0.1 },
+    ],
   },
   {
     type: "forced-alignment",
@@ -3778,3 +3896,5 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     } as TelegramTriggerData,
   },
 ]
+
+export const NODE_DEF_MAP: ReadonlyMap<string, NodeTypeDefinition> = new Map(NODE_DEFINITIONS.map((d) => [d.type, d]))
