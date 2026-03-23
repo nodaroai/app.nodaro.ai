@@ -159,7 +159,6 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
       onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
     />
 
-    <div style={{ width: '85%' }}>
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -220,16 +219,78 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
-      <div className="flex flex-col gap-2">
+      {/* When result exists, show video fullscreen in node */}
+      {status !== "running" && activeUrl ? (
+      <div className="relative w-full h-full group/video">
+        {activeThumbnail ? (
+          <CachedImage src={activeThumbnail} alt="Video preview"
+            className="w-full h-full object-cover rounded-xl"
+            thumbnail={!useFull} thumbnailWidth={320} />
+        ) : (
+          <video src={activeUrl} className="w-full h-full object-cover rounded-xl"
+            onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight) }}
+            autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline />
+        )}
+
+        {/* Version badge - top left */}
+        {results.length > 1 && (
+          <button type="button"
+            className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md z-10 opacity-0 group-hover/video:opacity-100 transition-opacity"
+            onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }} title="Show versions">
+            <LayoutGrid className="w-3 h-3" />
+            <span className="text-[11px] font-medium">{results.length}</span>
+          </button>
+        )}
+
+        {/* Delete - top right */}
+        {results.length > 0 && (
+          <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
+            <button type="button" aria-label="Remove result"
+              className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }} title="Delete this result">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Bottom left: fullscreen + download + copy URL */}
+        <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
+          <button type="button" aria-label="Expand preview"
+            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+            onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Fullscreen">
+            <Expand className="w-3.5 h-3.5" />
+          </button>
+          <button type="button" aria-label="Download"
+            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+            onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }} title="Download">
+            <Download className="w-3.5 h-3.5" />
+          </button>
+          <button type="button" aria-label="Copy URL"
+            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+            onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }} title="Copy URL">
+            <Link className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Bottom right: settings */}
+        <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
+          <button type="button" aria-label="Settings" className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
+            onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }} title="Settings">
+            <Settings className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+      ) : (
+      <div className="flex flex-col gap-2 h-full">
         {/* Connection indicators */}
-        {!hasConnections && status !== "running" && !activeUrl && (
+        {!hasConnections && status !== "running" && (
           <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground/60">
             <MessageSquare className="w-8 h-8" />
             <span className="text-[10px] text-center">Connect image + audio + prompt</span>
           </div>
         )}
 
-        {hasConnections && !activeUrl && status !== "running" && status !== "failed" && (
+        {hasConnections && status !== "running" && status !== "failed" && (
           <div className="flex flex-col gap-1 px-3 pt-2">
             <div className="flex items-center gap-1.5">
               <ImageIcon className={`w-3 h-3 ${hasImageConnection ? "text-green-400" : "text-white/30"}`} />
@@ -246,130 +307,30 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {/* Video Preview / Loading / Error States */}
-        <div className="relative w-full h-full group/video">
-          {status === "running" && (
-            <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
-              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
-              <NodeJobProgress progress={nodeData.currentJobProgress} />
-            </div>
-          )}
+        {status === "running" && (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
+            <NodeJobProgress progress={nodeData.currentJobProgress} />
+          </div>
+        )}
 
-          {status !== "running" && activeUrl && (
-            <>
-              {activeThumbnail ? (
-                <CachedImage
-                  src={activeThumbnail}
-                  alt="Video preview"
-                  className="w-full h-full object-cover rounded-xl"
-                  thumbnail={!useFull}
-                  thumbnailWidth={320}
-                />
-              ) : (
-                <video
-                  src={activeUrl}
-                  className="w-full h-full object-cover rounded-xl"
-                  onLoadedMetadata={(e) => {
-                    const v = e.currentTarget
-                    if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
-                  }}
-                  autoPlay={videoAutoplay}
-                  muted
-                  loop={videoAutoplay}
-                  playsInline
-                />
-              )}
+        {status === "failed" && (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500 h-[180px]">
+            <AlertCircle className="w-6 h-6" />
+            {nodeData.errorMessage && (
+              <p className="text-[10px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>
+            )}
+          </div>
+        )}
 
-              <span className="absolute top-2 right-10 text-[10px] text-white/70 bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded opacity-0 group-hover/video:opacity-100 transition-opacity">
-                Wan 2.2 S2V
-              </span>
-
-              {results.length > 1 && (
-                <button
-                  type="button"
-                  className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/video:opacity-100 transition-opacity"
-                  onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
-                >
-                  <LayoutGrid className="w-3 h-3" />
-                  <span>{results.length}</span>
-                </button>
-              )}
-
-              {results.length > 0 && (
-                <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-                  <button
-                    type="button"
-                    aria-label="Remove result"
-                    className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                    onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-
-              <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
-                <button
-                  type="button"
-                  aria-label="Expand preview"
-                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                  onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
-                >
-                  <Expand className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Download"
-                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                  onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }}
-                >
-                  <Download className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Copy URL"
-                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    copyToClipboard(activeUrl!, "URL copied")
-                  }}
-                >
-                  <Link className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-                <button
-                  type="button"
-                  aria-label="Settings"
-                  className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
-                  onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }}
-                  title="Settings"
-                >
-                  <Settings className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </>
-          )}
-
-          {status === "failed" && !activeUrl && (
-            <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500 h-[180px]">
-              <AlertCircle className="w-6 h-6" />
-              {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>
-              )}
-            </div>
-          )}
-
-          {status !== "running" && !activeUrl && status !== "failed" && hasRequiredInputs && (
-            <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
-              <MessageSquare className="w-10 h-10" />
-            </div>
-          )}
-        </div>
+        {status !== "running" && status !== "failed" && hasRequiredInputs && (
+          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+            <MessageSquare className="w-10 h-10" />
+          </div>
+        )}
       </div>
+      )}
     </BaseNode>
-    </div>
 
     {/* image input handle icon */}
     <div

@@ -82,7 +82,6 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
       onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
     />
 
-    <div style={{ width: '85%' }}>
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -142,7 +141,7 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 h-full">
         {/* Shot count badge */}
         {!activeUrl && status !== "running" && status !== "failed" && (
           <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground/60">
@@ -274,7 +273,6 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    </div>
 
     {/* image input handle icon */}
     <div
