@@ -2,13 +2,16 @@
 
 import { memo, useCallback, useMemo, useRef, useState } from "react"
 import { Position, type NodeProps, NodeResizer, Handle, NodeToolbar } from "@xyflow/react"
-import { Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, List, ChevronDown } from "lucide-react"
+import { Type, FastForward } from "lucide-react"
 import { useTheme } from "next-themes"
+import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { EditableNodeLabel } from "./editable-node-label"
 import { TagTextarea } from "@/components/editor/config-panels/tag-textarea"
 import { getUpstreamNodes } from "@/lib/node-refs"
 import { NODE_COLORS, adjustColor, getEffectiveColor } from "@/lib/node-colors"
+import { hasCredits } from "@/lib/edition"
+import { estimateNodeCredits, EXECUTABLE_TYPES } from "@/components/editor/workflow-editor/types"
 import type { TextPromptData } from "@/types/nodes"
 
 function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
@@ -16,6 +19,8 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
+  const runFromHere = useWorkflowStore((s) => s.runFromHere)
+  const isEditing = useWorkflowStore((s) => s.selectedNodeId === id)
   const [isHovered, setIsHovered] = useState(false)
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
@@ -25,10 +30,6 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
 
   const color = nodeData.color ?? "#0f172a"
   const effectiveColor = getEffectiveColor(color, isDark)
-  const textStyle = nodeData.textStyle ?? "paragraph"
-  const bold = nodeData.bold ?? false
-  const italic = nodeData.italic ?? false
-  const alignment = nodeData.alignment ?? "left"
   const width = nodeData.width ?? 220
   const height = nodeData.height ?? 160
 
@@ -39,10 +40,36 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
     [id, updateNodeData],
   )
 
-  const fontSize = textStyle === "heading" ? 18 : 14
-  const fontWeight = bold ? 700 : textStyle === "heading" ? 600 : 400
-  const fontStyle = italic ? ("italic" as const) : ("normal" as const)
-  const textAlign = alignment as "left" | "center" | "right"
+  // BFS forward to find downstream executable nodes and sum their credit cost
+  const { hasDownstream, downstreamCredits } = useMemo(() => {
+    const outEdges = edges.filter((e) => e.source === id)
+    if (outEdges.length === 0) return { hasDownstream: false, downstreamCredits: 0 }
+
+    const visited = new Set<string>([id])
+    const queue = outEdges.map((e) => e.target)
+    let totalCredits = 0
+
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      if (visited.has(current)) continue
+      visited.add(current)
+
+      const node = nodes.find((n) => n.id === current)
+      if (!node) continue
+
+      if (EXECUTABLE_TYPES.has(node.type ?? "")) {
+        totalCredits += estimateNodeCredits(node as { type?: string; data?: Record<string, unknown> })
+      }
+
+      for (const edge of edges) {
+        if (edge.source === current && !visited.has(edge.target)) {
+          queue.push(edge.target)
+        }
+      }
+    }
+
+    return { hasDownstream: true, downstreamCredits: totalCredits }
+  }, [id, nodes, edges])
 
   return (
     <div
@@ -56,26 +83,11 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         hoverTimeoutRef.current = setTimeout(() => setIsHovered(false), 600)
       }}
     >
-      {/* Floating label above node */}
-      <EditableNodeLabel
-        label={nodeData.label}
-        icon={<Type className="w-3.5 h-3.5" />}
-        onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
-      />
-
-      {/* Node resizer */}
-      <NodeResizer
-        isVisible={!!selected}
-        minWidth={160}
-        lineClassName="!border-[#38BDF8]"
-        handleClassName="!w-2.5 !h-2.5 !bg-[#38BDF8] !border-none !rounded-sm"
-        onResize={handleResize}
-      />
-
-      {/* Floating toolbar below node */}
-      <NodeToolbar isVisible={selected || isHovered} position={Position.Bottom} offset={0}>
+      {/* Color swatches — centered above the label */}
+      {(selected || isHovered) && (
         <div
-          className="flex items-center gap-1 px-2 py-1.5 bg-white border border-border dark:bg-[#1a1a1a] dark:border-white/10 rounded-xl shadow-xl backdrop-blur-sm flex-wrap"
+          className="absolute flex items-center gap-1 px-2 py-1.5 bg-white border border-border dark:bg-[#1a1a1a] dark:border-white/10 rounded-xl shadow-xl backdrop-blur-sm z-10"
+          style={{ top: -54, left: '50%', transform: 'translateX(-50%)' }}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onMouseEnter={() => {
@@ -86,7 +98,6 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
             hoverTimeoutRef.current = setTimeout(() => setIsHovered(false), 300)
           }}
         >
-          {/* Color swatches */}
           {NODE_COLORS.map((c) => (
             <div
               key={c}
@@ -95,120 +106,79 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
               style={{ backgroundColor: getEffectiveColor(c, isDark) }}
             />
           ))}
-
-          <div className="w-px h-4 bg-border dark:bg-white/10 mx-1" />
-
-          {/* Paragraph / Heading select */}
-          <button
-            type="button"
-            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] text-foreground/70 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/10 transition-colors"
-            onClick={(e) => {
-              e.stopPropagation()
-              updateNodeData(id, { textStyle: textStyle === "paragraph" ? "heading" : "paragraph" })
-            }}
-          >
-            <span>{textStyle === "heading" ? "Heading" : "Paragraph"}</span>
-            <ChevronDown className="w-3 h-3" />
-          </button>
-
-          <div className="w-px h-4 bg-border dark:bg-white/10 mx-1" />
-
-          {/* Bold */}
-          <button
-            type="button"
-            className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${bold ? "bg-black/10 text-foreground dark:bg-white/20 dark:text-white" : "text-foreground/50 hover:text-foreground/80 hover:bg-black/5 dark:text-white/50 dark:hover:text-white/80 dark:hover:bg-white/10"}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              updateNodeData(id, { bold: !bold })
-            }}
-          >
-            <Bold className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Italic */}
-          <button
-            type="button"
-            className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${italic ? "bg-black/10 text-foreground dark:bg-white/20 dark:text-white" : "text-foreground/50 hover:text-foreground/80 hover:bg-black/5 dark:text-white/50 dark:hover:text-white/80 dark:hover:bg-white/10"}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              updateNodeData(id, { italic: !italic })
-            }}
-          >
-            <Italic className="w-3.5 h-3.5" />
-          </button>
-
-          <div className="w-px h-4 bg-border dark:bg-white/10 mx-1" />
-
-          {/* Alignment */}
-          <button
-            type="button"
-            className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${alignment === "left" ? "bg-black/10 text-foreground dark:bg-white/20 dark:text-white" : "text-foreground/50 hover:text-foreground/80 hover:bg-black/5 dark:text-white/50 dark:hover:text-white/80 dark:hover:bg-white/10"}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              updateNodeData(id, { alignment: "left" })
-            }}
-          >
-            <AlignLeft className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${alignment === "center" ? "bg-black/10 text-foreground dark:bg-white/20 dark:text-white" : "text-foreground/50 hover:text-foreground/80 hover:bg-black/5 dark:text-white/50 dark:hover:text-white/80 dark:hover:bg-white/10"}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              updateNodeData(id, { alignment: "center" })
-            }}
-          >
-            <AlignCenter className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${alignment === "right" ? "bg-black/10 text-foreground dark:bg-white/20 dark:text-white" : "text-foreground/50 hover:text-foreground/80 hover:bg-black/5 dark:text-white/50 dark:hover:text-white/80 dark:hover:bg-white/10"}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              updateNodeData(id, { alignment: "right" })
-            }}
-          >
-            <AlignRight className="w-3.5 h-3.5" />
-          </button>
-
-          <div className="w-px h-4 bg-border dark:bg-white/10 mx-1" />
-
-          {/* Bullet list */}
-          <button
-            type="button"
-            className="w-6 h-6 flex items-center justify-center rounded text-foreground/50 hover:text-foreground/80 hover:bg-black/5 dark:text-white/50 dark:hover:text-white/80 dark:hover:bg-white/10 transition-colors"
-            onClick={(e) => {
-              e.stopPropagation()
-              const currentText = nodeData.text ?? ""
-              const lines = currentText.split("\n")
-              const allBulleted = lines.every((l) => l.startsWith("- ") || l.trim() === "")
-              const newText = allBulleted
-                ? lines.map((l) => (l.startsWith("- ") ? l.slice(2) : l)).join("\n")
-                : lines.map((l) => (l.trim() === "" ? l : `- ${l}`)).join("\n")
-              updateNodeData(id, { text: newText })
-            }}
-          >
-            <List className="w-3.5 h-3.5" />
-          </button>
         </div>
-      </NodeToolbar>
+      )}
 
-      {/* Container */}
+      {/* Floating label above node */}
+      <EditableNodeLabel
+        label={nodeData.label}
+        icon={<Type className="w-3.5 h-3.5" />}
+        onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+      />
+
+      {/* Node resizer — matches BaseNode pattern */}
+      <NodeResizer
+        isVisible={isHovered || !!selected}
+        minWidth={160}
+        lineClassName="!border-0 !pointer-events-none"
+        handleClassName="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
+        onResize={handleResize}
+      />
+
+      {/* Run from here button — below node, only when connected downstream */}
+      {hasDownstream && (
+        <NodeToolbar isVisible={selected || isHovered} position={Position.Bottom} offset={4}>
+          <div
+            className="flex items-center"
+            onMouseEnter={() => {
+              if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+              setIsHovered(true)
+            }}
+            onMouseLeave={() => {
+              hoverTimeoutRef.current = setTimeout(() => setIsHovered(false), 300)
+            }}
+          >
+            <button
+              type="button"
+              className="flex items-center gap-1.5 h-7 px-3 text-[11px] font-medium text-white rounded-lg whitespace-nowrap bg-[#ff0073] hover:bg-[#e60068] shadow-sm transition-colors"
+              onClick={(e) => {
+                e.stopPropagation()
+                runFromHere?.(id)
+              }}
+            >
+              <FastForward className="w-3 h-3" />
+              Run from here
+              {hasCredits() && downstreamCredits > 0 && (
+                <span className="ml-0.5 opacity-80">({downstreamCredits} CR)</span>
+              )}
+            </button>
+          </div>
+        </NodeToolbar>
+      )}
+
+      {/* Container — with selection/editing glow matching BaseNode */}
       <div
-        className="w-full h-full rounded-xl overflow-hidden flex flex-col"
+        className={cn(
+          "w-full h-full rounded-xl overflow-hidden flex flex-col border-2 transition-colors duration-200",
+          "hover:border-black/40 dark:hover:border-white/40",
+          // Default border from color
+          !selected && !isEditing && "border-transparent",
+          // Focused (selected, config panel closed): blue glow
+          selected && !isEditing && "border-blue-400 shadow-[0_0_20px_rgba(96,165,250,0.6)]",
+          // Editing (selected + config panel open): pink/cyan glow
+          isEditing && "border-[#ff0073] shadow-[0_0_20px_rgba(255,0,115,0.5)] dark:border-[#38BDF8] dark:shadow-[0_0_20px_rgba(56,189,248,0.4)]",
+        )}
         style={{
           backgroundColor: effectiveColor,
-          border: `2px solid ${adjustColor(effectiveColor, -30)}`,
-          boxShadow: `0 0 16px ${effectiveColor}15`,
+          boxShadow: (!selected && !isEditing) ? `0 0 16px ${effectiveColor}15` : undefined,
         }}
       >
-        {/* Textarea */}
+        {/* Plain textarea */}
         <div
           className={`text-prompt-tag-textarea w-full flex-1 min-h-0 ${selected ? "nopan nodrag" : "pointer-events-none"}`}
           onMouseDown={selected ? (e) => e.stopPropagation() : undefined}
           onClick={selected ? (e) => e.stopPropagation() : undefined}
           onKeyDown={selected ? (e) => e.stopPropagation() : undefined}
-          style={{ fontSize, fontWeight, fontStyle, textAlign }}
         >
           <TagTextarea
             value={nodeData.text ?? ""}
