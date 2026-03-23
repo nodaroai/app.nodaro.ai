@@ -119,9 +119,7 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         minWidth={220}
         topToolbarContent={
-          status !== "running" ? (
-            <RunNodeButton nodeId={id} credits={0} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
-          ) : undefined
+                      <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={handles}
         minHeight={nodeMinHeight}

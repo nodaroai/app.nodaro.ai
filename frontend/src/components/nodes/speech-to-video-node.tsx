@@ -208,9 +208,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       topToolbarContent={
-        status !== "running" ? (
-          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
-        ) : undefined
+                  <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
         { id: "image", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 80px)', left: '-29px' }, hideHandle: true },

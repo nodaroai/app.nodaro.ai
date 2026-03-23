@@ -66,9 +66,7 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
         minWidth={220}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         topToolbarContent={
-          status !== "running" ? (
-            <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
-          ) : undefined
+                      <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
           { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },

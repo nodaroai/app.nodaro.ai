@@ -37,9 +37,7 @@ function QACheckNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         minWidth={220}
         topToolbarContent={
-          status !== "running" ? (
-            <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
-          ) : undefined
+                      <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
           { id: "in", type: "target", position: Position.Left, hideHandle: true, customStyle: { top: 'calc(100% - 20px)', left: '-29px' } },

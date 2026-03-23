@@ -83,9 +83,9 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-        status !== "running" ? (
-          <div className="flex gap-1">
-            <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+        <div className="flex gap-1">
+          <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+          {status !== "running" && (
             <button
               type="button"
               className="flex items-center gap-1 h-6 px-2 text-[11px] font-medium text-white rounded-md shadow-md transition-colors bg-[#8b5cf6] hover:bg-[#7c3aed]"
@@ -93,8 +93,8 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
             >
               <Maximize2 className="w-3 h-3" />
             </button>
-          </div>
-        ) : undefined
+          )}
+        </div>
       }
       handles={[
         { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },

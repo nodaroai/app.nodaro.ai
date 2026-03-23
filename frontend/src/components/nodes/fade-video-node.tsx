@@ -57,7 +57,7 @@ function FadeVideoNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         minWidth={220}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
-        topToolbarContent={status !== "running" ? (<RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />) : undefined}
+        topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />)}
         handles={[
           { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
           { id: "video-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
