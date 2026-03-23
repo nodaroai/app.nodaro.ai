@@ -64,9 +64,7 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         hideHeader
         topToolbarContent={
-          status !== "running" ? (
-            <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
-          ) : undefined
+                      <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
           { id: "in", type: "target", position: Position.Top, customStyle: { top: '-29px', left: '50%' }, hideHandle: true },

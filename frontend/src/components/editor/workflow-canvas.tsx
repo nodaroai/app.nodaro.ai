@@ -1326,6 +1326,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           panOnScroll
           zoomOnPinch
           panOnDrag
+          elevateNodesOnSelect
           minZoom={0.2}
           maxZoom={8}
           proOptions={{ hideAttribution: true }}

@@ -63,9 +63,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         hideHeader
         topToolbarContent={
-          status !== "running" ? (
-            <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
-          ) : undefined
+                      <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         bottomToolbarContent={
           showThumbnails && results && results.length > 1 ? (

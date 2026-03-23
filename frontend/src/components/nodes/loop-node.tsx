@@ -385,7 +385,7 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
               </>
             )}
             {status !== "running" && (
-              <RunNodeButton nodeId={id} credits={0} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+              <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
             )}
           </div>
         }

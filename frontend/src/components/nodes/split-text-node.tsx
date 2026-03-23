@@ -38,9 +38,7 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         minWidth={220}
         topToolbarContent={
-          status !== "running" ? (
-            <RunNodeButton nodeId={id} credits={0} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
-          ) : undefined
+                      <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
           { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },

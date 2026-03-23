@@ -51,9 +51,7 @@ function DubbingNodeComponent({ id, data, selected }: NodeProps) {
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-        status !== "running" ? (
-          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
-        ) : undefined
+                  <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (

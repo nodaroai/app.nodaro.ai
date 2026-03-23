@@ -248,9 +248,7 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
           listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
           hideHeader
           topToolbarContent={
-            status !== "running" ? (
-              <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={handleStreamingRun} />
-            ) : undefined
+                          <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={handleStreamingRun} />
           }
           handles={[
             { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },

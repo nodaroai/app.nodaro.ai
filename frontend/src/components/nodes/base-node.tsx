@@ -334,12 +334,10 @@ function BaseNodeComponent({
       )}
     </div>
       {/* Content below card (e.g. run button) */}
-      {topToolbarContent && isHovered && (
-        <div className="relative">
-          <div className="absolute left-0 right-0 top-0 translate-y-1 z-50 flex justify-center">
-            {topToolbarContent}
-          </div>
-        </div>
+      {topToolbarContent && (
+        <NodeToolbar align="center" isVisible={isHovered} position={Position.Bottom} offset={4}>
+          {topToolbarContent}
+        </NodeToolbar>
       )}
 
       {handles.map((h) => (
@@ -377,7 +375,7 @@ function BaseNodeComponent({
           minHeight={effectiveMinHeight}
           keepAspectRatio={!!imageAspectRatio}
           isVisible={isHovered || !!selected}
-          lineClassName="!border-0"
+          lineClassName="!border-0 !pointer-events-none"
           handleClassName="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
         />
       )}

@@ -38,7 +38,7 @@ function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
     <div className="relative" style={{ maxWidth: '220px' }}>
     <EditableNodeLabel label={nodeData.label} icon={<Headphones className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
     <BaseNode id={id} label={nodeData.label} icon={<Headphones className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"} hideHeader minWidth={220}
-      topToolbarContent={status !== "running" ? (<RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />) : undefined}
+      topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />)}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Input", hideHandle: true, customStyle: { top: 'calc(100% - 20px)', left: '-29px' } },
         { id: "audio-out", type: "source", position: Position.Right, label: "Audio", hideHandle: true, customStyle: { top: '20px', right: '-29px' } },
