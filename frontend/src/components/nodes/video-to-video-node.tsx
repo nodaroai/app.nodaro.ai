@@ -138,7 +138,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
               <CachedImage
                 src={activeThumbnail}
                 alt="Video preview"
-                className="w-full h-full object-cover rounded-xl node-result-image cursor-pointer"
+                className="w-full h-full object-cover rounded-xl cursor-pointer"
                 onClick={() => selectNode(id)}
                 thumbnail={!useFull}
                 thumbnailWidth={320}

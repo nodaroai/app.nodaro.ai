@@ -111,7 +111,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
           <CachedImage
             src={activeUrl}
             alt="Result"
-            className="w-full h-full object-cover rounded-xl node-result-image"
+            className="w-full h-full object-cover rounded-xl"
             thumbnail={!useFull}
             thumbnailWidth={320}
           />

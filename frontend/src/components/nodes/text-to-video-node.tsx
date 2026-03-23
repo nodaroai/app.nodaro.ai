@@ -151,7 +151,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
               <CachedImage
                 src={activeThumbnail}
                 alt="Video preview"
-                className="w-full h-full object-cover rounded-xl node-result-image"
+                className="w-full h-full object-cover rounded-xl"
                 thumbnail={!useFull}
                 thumbnailWidth={320}
               />
