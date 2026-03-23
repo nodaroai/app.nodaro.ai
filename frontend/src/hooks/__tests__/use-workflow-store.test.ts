@@ -198,7 +198,7 @@ describe("useWorkflowStore", () => {
       expect(state.nodes).toHaveLength(2)
       expect(state.nodes[1].position).toEqual({ x: 150, y: 150 })
       expect(state.nodes[1].type).toBe("text-prompt")
-      expect(state.selectedNodeId).toBe(state.nodes[1].id)
+      expect(state.selectedNodeId).toBeNull()
     })
 
     it("does nothing for non-existent node", () => {
