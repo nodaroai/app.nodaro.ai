@@ -1317,6 +1317,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           connectOnClick={isMobile}
           selectNodesOnDrag={!isMobile}
           fitView
+          fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
           deleteKeyCode={["Delete", "Backspace"]}
           className={cn(
             "bg-background touch-manipulation",

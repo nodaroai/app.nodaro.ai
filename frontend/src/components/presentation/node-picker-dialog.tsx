@@ -102,7 +102,7 @@ function NodeRow({
         <Badge variant="secondary" className="text-xs shrink-0">
           {typeBadge}
         </Badge>
-        {section === "inputs" && isChecked && node.type === "text-prompt" && (
+        {isVisible && node.type === "text-prompt" && (
           <Button
             variant="ghost"
             size="sm"
@@ -143,11 +143,11 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
   const standardNodes = useMemo(() => availableNodes.filter(n => n.type !== "list" && n.type !== "loop"), [availableNodes])
 
   const handleToggle = (nodeId: string, checked: boolean) => {
-    if (section === "inputs" && !checked) {
-      updateNodeData(nodeId, { presentationInput: false, presentationReadOnly: false })
+    const field = section === "inputs" ? "presentationInput" : "presentationOutput"
+    if (!checked) {
+      updateNodeData(nodeId, { [field]: false, presentationReadOnly: false })
     } else {
-      const field = section === "inputs" ? "presentationInput" : "presentationOutput"
-      updateNodeData(nodeId, { [field]: checked })
+      updateNodeData(nodeId, { [field]: true })
     }
   }
 

@@ -28,13 +28,15 @@ export function makeEmptyInputs(inputNodes: WorkflowNode[]): Record<string, Reco
   const empty: Record<string, Record<string, unknown>> = {}
   for (const node of inputNodes) {
     const t = node.type ?? ""
-    if (t === "text-prompt") empty[node.id] = { text: "" }
-    else if (t === "upload-image" || t === "upload-video" || t === "upload-audio") empty[node.id] = { url: "" }
+    const d = node.data as Record<string, unknown>
+    if (t === "text-prompt") {
+      // Preserve the original value for readonly prompts — they can't be edited
+      empty[node.id] = { text: d.presentationReadOnly ? (d.text as string) ?? "" : "" }
+    } else if (t === "upload-image" || t === "upload-video" || t === "upload-audio") empty[node.id] = { url: "" }
     else if (t === "list") {
       empty[node.id] = { items: [""] }
     } else if (t === "loop") {
-      const loopData = node.data as Record<string, unknown>
-      const columns = (loopData.columns as Array<Record<string, unknown>>) ?? []
+      const columns = (d.columns as Array<Record<string, unknown>>) ?? []
       const emptyRow = columns.map(() => "")
       empty[node.id] = { rows: [emptyRow] }
     }
