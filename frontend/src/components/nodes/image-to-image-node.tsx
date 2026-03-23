@@ -11,7 +11,6 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useModelCredits } from "@/hooks/use-model-credits"
@@ -25,6 +24,7 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
+  const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const inConnectionCount = useConnectionCount(id, "image")
   const supportsMask = !!nodeData.provider && I2I_MASK_SUPPORT.has(nodeData.provider)
   const status = nodeData.executionStatus ?? "idle"
@@ -113,14 +113,13 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
       ]}
       imageAspectRatio={imgAspectRatio}
     >
-      <div className="relative w-full group" style={{ minHeight: 180 }}>
+      <div className="relative w-full h-full group">
         {/* Image fills entire node */}
         {activeUrl && status !== "running" && (
           <CachedImage
             src={activeUrl}
             alt="Result"
-            className="w-full h-full object-cover rounded-xl"
-            style={{ minHeight: 180 }}
+            className="w-full h-full object-cover rounded-xl node-result-image"
             thumbnail={!useFull}
             thumbnailWidth={320}
           />
@@ -150,56 +149,55 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {/* Top-left: version badge */}
-        {results.length > 0 && (
+        {results.length > 1 && (
           <button
             type="button"
-            className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md z-10 opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
+            title="Show versions"
           >
             <LayoutGrid className="w-3 h-3" />
-            <span>{results.length}</span>
+            <span className="text-[11px] font-medium">{results.length}</span>
           </button>
         )}
 
-        {/* Top-right: action buttons */}
+        {/* Top-right: delete */}
         {activeUrl && (
           <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button type="button" aria-label="Remove result" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}>
-              <X className="w-3.5 h-3.5" />
-            </button>
+            {results.length > 0 && (
+              <button type="button" aria-label="Remove result" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }} title="Delete this result">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         )}
 
-        {/* Bottom-left: fullscreen + settings + download */}
+        {/* Bottom-left: fullscreen + download + copy URL */}
         {activeUrl && (
           <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button type="button" aria-label="Expand preview" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}>
+              onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Fullscreen">
               <Expand className="w-3.5 h-3.5" />
             </button>
-            <button type="button" aria-label="Settings" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); selectNode(id) }}>
-              <Settings className="w-3.5 h-3.5" />
-            </button>
             <button type="button" aria-label="Download" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'image'}.png`; a.click() }}>
+              onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'image'}.png`; a.click() }} title="Download">
               <Download className="w-3.5 h-3.5" />
             </button>
             <button type="button" aria-label="Copy URL" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => {
-                e.stopPropagation()
-                copyToClipboard(activeUrl!, "URL copied")
-              }}>
+              onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }} title="Copy URL">
               <Link className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
 
-        {/* Bottom-right: save to library */}
+        {/* Bottom-right: settings */}
         {activeUrl && (
           <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <SaveToLibraryButton url={activeUrl} type="image" className="bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" />
+            <button type="button" aria-label="Settings" className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
+              onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }} title="Settings">
+              <Settings className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
       </div>

@@ -215,6 +215,15 @@ html, body {
   height: 100% !important;
 }
 
+/* For auto-sized nodes (never resized), result images must determine their own
+   height from their intrinsic aspect ratio. Without this, h-full creates a
+   circular dependency that collapses to minHeight when switching image src,
+   and object-cover then crops the image to that wrong height. */
+.react-flow__node:not(.rf-resized) .node-result-image {
+  height: auto !important;
+  object-fit: initial !important;
+}
+
 /* Animated edges during workflow execution */
 .react-flow__edge.animated path.react-flow__edge-path {
   stroke-dasharray: 5 5;
