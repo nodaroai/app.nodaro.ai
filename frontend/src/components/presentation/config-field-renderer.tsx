@@ -44,17 +44,6 @@ const LABEL_CLS =
 
 type OptionEntry = { value: string; label: string; desc?: string }
 
-/** Filter options by allowedValues (if any), preserving original order. */
-function filterOptions(
-  options: readonly OptionEntry[],
-  allowedValues?: Array<string | number | boolean>,
-): readonly OptionEntry[] {
-  if (!allowedValues) return options
-  return options.filter((o) =>
-    allowedValues.some((av) => String(av) === o.value),
-  )
-}
-
 // ---------------------------------------------------------------------------
 // Auto-reset hook: when current value is not in available options, reset to first valid.
 // Called unconditionally at top level of the sub-components that need it.
@@ -64,74 +53,23 @@ function useAutoReset(
   value: unknown,
   options: readonly { value: string }[],
   onChange: (v: unknown) => void,
-  enabled: boolean,
+  enabled = true,
 ) {
-  const prevRef = useRef(value)
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
 
   useEffect(() => {
     if (!enabled || options.length === 0) return
     const str = String(value ?? "")
     if (!options.some((o) => o.value === str)) {
-      onChange(options[0].value)
+      onChangeRef.current(options[0].value)
     }
-    prevRef.current = value
-  }, [value, options, onChange, enabled])
+  }, [value, options, enabled])
 }
 
 // ---------------------------------------------------------------------------
 // Sub-components — each one is a proper React component with hooks at top level
 // ---------------------------------------------------------------------------
-
-function ModelSelect({
-  label,
-  models,
-  value,
-  onChange,
-  allowedValues,
-  readOnly,
-  showDesc,
-}: {
-  label: string
-  models: readonly OptionEntry[]
-  value: unknown
-  onChange: (v: unknown) => void
-  allowedValues?: Array<string | number | boolean>
-  readOnly?: boolean
-  showDesc?: boolean
-}) {
-  const filtered = filterOptions(models, allowedValues)
-  const strValue = String(value ?? "")
-
-  return (
-    <GlassCard>
-      <Label className={cn(LABEL_CLS, "mb-2 block")}>{label}</Label>
-      <Select
-        value={strValue}
-        onValueChange={(v) => onChange(v)}
-        disabled={readOnly}
-      >
-        <SelectTrigger
-          className={cn("w-full", readOnly && "opacity-70 cursor-default")}
-          aria-label={label}
-        >
-          <SelectValue placeholder={`Select ${label.toLowerCase()}...`} />
-        </SelectTrigger>
-        <SelectContent>
-          {filtered.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value}>
-              <span>{opt.label}</span>
-              {showDesc && opt.desc && (
-                <span className="ml-1.5 text-xs text-muted-foreground">
-                  - {opt.desc}
-                </span>
-              )}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </GlassCard>
-  )
-}
 
 function AspectRatioField({
   label,
@@ -154,7 +92,7 @@ function AspectRatioField({
     ? options.filter((o) =>
         allowedValues.some((av) => String(av) === o.value),
       )
-    : [...options]
+    : options
 
   useAutoReset(value, filtered, onChange, autoReset ?? false)
 
@@ -283,20 +221,22 @@ function OptionSelect({
   allowedValues,
   readOnly,
   autoReset,
+  showDesc,
 }: {
   label: string
-  options: readonly { value: string; label: string }[]
+  options: readonly OptionEntry[]
   value: unknown
   onChange: (v: unknown) => void
   allowedValues?: Array<string | number | boolean>
   readOnly?: boolean
   autoReset?: boolean
+  showDesc?: boolean
 }) {
   const filtered = allowedValues
     ? options.filter((o) =>
         allowedValues.some((av) => String(av) === o.value),
       )
-    : [...options]
+    : options
 
   useAutoReset(value, filtered, onChange, autoReset ?? false)
 
@@ -319,7 +259,12 @@ function OptionSelect({
         <SelectContent>
           {filtered.map((opt) => (
             <SelectItem key={opt.value} value={opt.value}>
-              {opt.label}
+              <span>{opt.label}</span>
+              {showDesc && opt.desc && (
+                <span className="ml-1.5 text-xs text-muted-foreground">
+                  - {opt.desc}
+                </span>
+              )}
             </SelectItem>
           ))}
         </SelectContent>
@@ -329,7 +274,7 @@ function OptionSelect({
 }
 
 // ---------------------------------------------------------------------------
-// Node-specific renderers — pure dispatchers, no hooks.
+// Node-specific renderers — dispatch to sub-components that may use hooks.
 // Auto-reset is handled by the sub-components via the autoReset prop.
 // ---------------------------------------------------------------------------
 
@@ -342,9 +287,9 @@ function renderGenerateImage(
   switch (field) {
     case "provider":
       return (
-        <ModelSelect
+        <OptionSelect
           label={customLabel ?? "Model"}
-          models={IMAGE_GEN_MODELS}
+          options={IMAGE_GEN_MODELS}
           value={value}
           onChange={onChange}
           allowedValues={allowedValues}
@@ -395,16 +340,17 @@ function renderGenerateImage(
       )
     }
     case "style": {
-      const styleOptions: { value: string; label: string }[] = [
+      const styleOptions: readonly OptionEntry[] = [
         { value: "", label: "None" },
         ...IMAGE_STYLE_PRESETS.map((s) => ({ value: s.value, label: s.label })),
       ]
       return (
         <OptionSelect
           label={customLabel ?? "Style"}
-          options={filterOptions(styleOptions, allowedValues)}
+          options={styleOptions}
           value={value}
           onChange={onChange}
+          allowedValues={allowedValues}
           readOnly={readOnly}
         />
       )
@@ -431,9 +377,9 @@ function renderTextToVideo(
   switch (field) {
     case "provider":
       return (
-        <ModelSelect
+        <OptionSelect
           label={customLabel ?? "Model"}
-          models={VIDEO_T2V_MODELS}
+          options={VIDEO_T2V_MODELS}
           value={value}
           onChange={onChange}
           allowedValues={allowedValues}
@@ -479,97 +425,6 @@ function renderTextToVideo(
   }
 }
 
-const TTS_MODELS: readonly OptionEntry[] = [
-  { value: "elevenlabs-v3", label: "ElevenLabs v3 (recommended)" },
-  { value: "elevenlabs-turbo", label: "ElevenLabs Turbo v2.5 (fast)" },
-  { value: "elevenlabs-multilingual", label: "ElevenLabs Multilingual v2" },
-]
-
-function renderTextToSpeech(
-  props: ConfigFieldRendererProps,
-): React.ReactNode | null {
-  const { field, value, onChange, allowedValues, readOnly, customLabel } = props
-
-  switch (field) {
-    case "provider":
-      return (
-        <ModelSelect
-          label={customLabel ?? "Model"}
-          models={TTS_MODELS}
-          value={value}
-          onChange={onChange}
-          allowedValues={allowedValues}
-          readOnly={readOnly}
-        />
-      )
-    case "stability":
-      return (
-        <SliderField
-          label={customLabel ?? "Stability"}
-          value={value}
-          onChange={onChange}
-          min={0}
-          max={1}
-          step={0.01}
-          readOnly={readOnly}
-        />
-      )
-    case "similarity":
-      return (
-        <SliderField
-          label={customLabel ?? "Similarity"}
-          value={value}
-          onChange={onChange}
-          min={0}
-          max={1}
-          step={0.01}
-          readOnly={readOnly}
-        />
-      )
-    default:
-      return null
-  }
-}
-
-const VOICE_DESIGN_MODELS: readonly OptionEntry[] = [
-  { value: "eleven_ttv_v3", label: "ElevenLabs v3 (recommended)" },
-  { value: "eleven_multilingual_ttv_v2", label: "ElevenLabs Multilingual v2" },
-]
-
-function renderVoiceDesign(
-  props: ConfigFieldRendererProps,
-): React.ReactNode | null {
-  const { field, value, onChange, allowedValues, readOnly, customLabel } = props
-
-  switch (field) {
-    case "model":
-      return (
-        <ModelSelect
-          label={customLabel ?? "Model"}
-          models={VOICE_DESIGN_MODELS}
-          value={value}
-          onChange={onChange}
-          allowedValues={allowedValues}
-          readOnly={readOnly}
-        />
-      )
-    case "loudness":
-      return (
-        <SliderField
-          label={customLabel ?? "Loudness"}
-          value={value}
-          onChange={onChange}
-          min={-1}
-          max={1}
-          step={0.1}
-          readOnly={readOnly}
-        />
-      )
-    default:
-      return null
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Fallback: delegate to generic FieldInputCard using NODE_DEF_MAP metadata
 // ---------------------------------------------------------------------------
@@ -596,15 +451,13 @@ function FallbackField(props: ConfigFieldRendererProps): React.ReactNode | null 
 // Main dispatcher
 // ---------------------------------------------------------------------------
 
-/** Lookup: nodeType -> pure render function (no hooks). */
+/** Lookup: nodeType -> render function that returns hook-using components. */
 const NODE_RENDERERS: Record<
   string,
   (props: ConfigFieldRendererProps) => React.ReactNode | null
 > = {
   "generate-image": renderGenerateImage,
   "text-to-video": renderTextToVideo,
-  "text-to-speech": renderTextToSpeech,
-  "voice-design": renderVoiceDesign,
 }
 
 export function ConfigFieldRenderer(
