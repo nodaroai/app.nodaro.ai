@@ -278,7 +278,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     >
       {activeUrl && !showConfig && !isKling3 ? null : (
       <div
-        className="flex flex-col gap-2"
+        className="flex flex-col gap-2 h-full"
         onDoubleClick={isKling3 ? (e) => { e.stopPropagation(); setDirectorOpen(true) } : undefined}
       >
         {isKling3 ? (
