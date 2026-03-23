@@ -1323,6 +1323,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             connectingFromType === "source" && "connecting-from-source",
             connectingFromType === "target" && "connecting-from-target",
           )}
+          panOnScroll
           zoomOnPinch
           panOnDrag
           minZoom={0.2}
