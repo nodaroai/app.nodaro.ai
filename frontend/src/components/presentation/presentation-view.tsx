@@ -988,6 +988,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           const nodeData = nodeMap.get(item.nodeId)?.data as Record<string, unknown> | undefined
           const inputVals = isFullscreen ? presInputValues[item.nodeId] : undefined
           const currentValue = inputVals?.[item.field] ?? nodeData?.[item.field] ?? fieldDef.defaultValue
+          const customTitle = settings.cardMeta?.[item.id]?.title
           return (
             <FieldInputCard
               field={fieldDef}
@@ -1001,6 +1002,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               }}
               allowedValues={item.allowedValues}
               readOnly={inputsReadOnly ?? (isShareReadOnly || isRunning || isTerminal)}
+              customLabel={customTitle}
             />
           )
         }

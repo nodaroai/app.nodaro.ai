@@ -132,16 +132,21 @@ export function NodeSection({
                   }
                   // Node and field items get the full wrapper with meta editing
                   const nodeId = "nodeId" in item ? (item as { nodeId: string }).nodeId : undefined
+                  const isNodeItem = item.type === "node"
+                  // For field items, use item.id for cardMeta key so each field has its own title/description
+                  const metaKey = item.type === "field" ? item.id : nodeId
                   return (
                     <SortableCardWrapper
                       key={sortId}
                       id={sortId}
                       isEditMode={isEditing}
                       onRemove={() => { if (nodeId) onRemove(nodeId) }}
-                      cardDescription={nodeId ? settings.cardMeta?.[nodeId]?.description : undefined}
-                      onDescriptionChange={(v) => { if (nodeId) updateCardMeta(nodeId, "description", v) }}
-                      cardDisplay={nodeId ? settings.cardMeta?.[nodeId]?.display : undefined}
-                      onDisplayChange={nodeId ? (d) => updateCardMeta(nodeId, "display", d) : undefined}
+                      cardDescription={metaKey ? settings.cardMeta?.[metaKey]?.description : undefined}
+                      onDescriptionChange={(v) => { if (metaKey) updateCardMeta(metaKey, "description", v) }}
+                      cardTitle={metaKey ? settings.cardMeta?.[metaKey]?.title : undefined}
+                      onTitleChange={metaKey ? (v) => updateCardMeta(metaKey, "title", v) : undefined}
+                      cardDisplay={isNodeItem && nodeId ? settings.cardMeta?.[nodeId]?.display : undefined}
+                      onDisplayChange={isNodeItem && nodeId ? (d) => updateCardMeta(nodeId, "display", d) : undefined}
                     >
                       {renderItem(item)}
                     </SortableCardWrapper>

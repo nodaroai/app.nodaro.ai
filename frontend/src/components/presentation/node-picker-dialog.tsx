@@ -25,6 +25,7 @@ import type { WorkflowNode, LoopColumn } from "@/types/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import type { ExposableField, ExposableOutput, PresentationItem } from "@nodaro-shared/presentation-types"
+import { migrateToItems } from "@nodaro-shared/presentation-utils"
 import { RestrictPopover } from "./restrict-popover"
 import { DEFAULT_SYSTEM_MAX_FANOUT } from "./input-card"
 
@@ -117,7 +118,11 @@ function NodeRow({
   const hasExposable = (exposableFields && exposableFields.length > 0) || (exposableOutputs && exposableOutputs.length > 0)
 
   const itemsKey = section === "inputs" ? "inputItems" : "outputItems"
-  const currentItems = presentationSettings[itemsKey] ?? []
+  const orderKey = section === "inputs" ? "inputOrder" : "outputOrder"
+  // When itemsKey is undefined, migrate existing legacy order so we don't lose node entries
+  const currentItems = presentationSettings[itemsKey]
+    ?? migrateToItems(presentationSettings[orderKey])
+    ?? []
 
   const isFieldChecked = useCallback(
     (fieldKey: string) => {

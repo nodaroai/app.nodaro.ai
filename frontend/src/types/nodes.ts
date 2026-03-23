@@ -2571,7 +2571,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableOutputs: [{ key: "result", label: "Result", outputType: "image" as const }],
     exposableFields: [
       {
-        key: "model", label: "Model", type: "select" as const,
+        key: "provider", label: "Model", type: "select" as const,
         options: [
           { value: "nano-banana", label: "Nano Banana" },
           { value: "nano-banana-pro", label: "Nano Banana Pro" },
@@ -2671,7 +2671,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
     exposableFields: [
       {
-        key: "model", label: "Model", type: "select" as const,
+        key: "provider", label: "Model", type: "select" as const,
         options: [
           { value: "minimax", label: "MiniMax" },
           { value: "veo3", label: "VEO 3.1 (Quality)" },
@@ -2714,7 +2714,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableOutputs: [{ key: "result", label: "Result", outputType: "audio" as const }],
     exposableFields: [
       {
-        key: "model", label: "Model", type: "select" as const,
+        key: "provider", label: "Model", type: "select" as const,
         options: [
           { value: "elevenlabs-v3", label: "ElevenLabs v3 (recommended)" },
           { value: "elevenlabs-turbo", label: "ElevenLabs Turbo v2.5 (fast)" },

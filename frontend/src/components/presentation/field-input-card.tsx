@@ -18,6 +18,8 @@ interface FieldInputCardProps {
   onChange: (value: unknown) => void
   allowedValues?: Array<string | number | boolean>
   readOnly?: boolean
+  /** Override the field label with a custom title */
+  customLabel?: string
 }
 
 const LABEL_CLS =
@@ -148,14 +150,18 @@ function TextField({
 }
 
 export function FieldInputCard(props: FieldInputCardProps) {
+  // Apply custom label override if provided
+  const effectiveProps = props.customLabel
+    ? { ...props, field: { ...props.field, label: props.customLabel } }
+    : props
   switch (props.field.type) {
     case "select":
-      return <SelectField {...props} />
+      return <SelectField {...effectiveProps} />
     case "slider":
-      return <SliderField {...props} />
+      return <SliderField {...effectiveProps} />
     case "toggle":
-      return <ToggleField {...props} />
+      return <ToggleField {...effectiveProps} />
     case "text":
-      return <TextField {...props} />
+      return <TextField {...effectiveProps} />
   }
 }

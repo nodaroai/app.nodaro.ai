@@ -9,6 +9,8 @@ export function SortableCardWrapper({
   id,
   isEditMode,
   onRemove,
+  cardTitle,
+  onTitleChange,
   cardDescription,
   onDescriptionChange,
   cardDisplay,
@@ -20,6 +22,8 @@ export function SortableCardWrapper({
   id: string
   isEditMode: boolean
   onRemove?: () => void
+  cardTitle?: string
+  onTitleChange?: (value: string) => void
   cardDescription?: string
   onDescriptionChange?: (value: string) => void
   cardDisplay?: Partial<PresentationDisplay>
@@ -64,6 +68,19 @@ export function SortableCardWrapper({
         </div>
       ) : (
         children
+      )}
+
+      {/* Editable title below card — edit mode only, for field items */}
+      {isEditMode && onTitleChange && (
+        <div className="mt-1 px-1">
+          <input
+            type="text"
+            value={cardTitle ?? ""}
+            onChange={(e) => onTitleChange(e.target.value)}
+            placeholder="Custom title..."
+            className="w-full bg-transparent border-none text-[11px] font-medium text-muted-foreground/60 placeholder:text-muted-foreground/30 focus:text-muted-foreground focus:outline-none"
+          />
+        </div>
       )}
 
       {/* Editable description below card — edit mode only */}
