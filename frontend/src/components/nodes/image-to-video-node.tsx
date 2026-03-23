@@ -14,7 +14,7 @@ import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
+import { useFullResolution } from "@/hooks/use-full-resolution"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
@@ -98,8 +98,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
   const provider = nodeData.provider ?? "minimax"
   const credits = useModelCredits(provider, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
-  const { zoom } = useCanvasZoom()
-  const useFull = zoom >= 0.8
+  const useFull = useFullResolution(id)
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
   const isNodeRunning = nodeData.executionStatus === "running"

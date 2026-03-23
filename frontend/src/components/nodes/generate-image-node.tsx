@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, Suspense } from "react"
+import { memo, useState, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, Settings, LayoutGrid, Expand, Download, Link, Type } from "lucide-react"
@@ -15,7 +15,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 const ExtractReferencesModal = lazy(() => import("@/components/editor/extract-references-modal").then(m => ({ default: m.ExtractReferencesModal })))
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
+import { useFullResolution } from "@/hooks/use-full-resolution"
 
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
@@ -27,6 +27,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
+  const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -46,8 +47,22 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const [extractOpen, setExtractOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [extractedRefs, setExtractedRefs] = useState<readonly ExtractedReference[]>([])
-  const { zoom } = useCanvasZoom()
-  const useFull = zoom >= 0.8
+  const useFull = useFullResolution(id)
+  const [imgAspectRatio, setImgAspectRatio] = useState<number | undefined>()
+  useEffect(() => {
+    if (!activeUrl) { setImgAspectRatio(undefined); return }
+    let cancelled = false
+    const img = new window.Image()
+    const setRatio = () => {
+      if (!cancelled && img.naturalWidth > 0) {
+        setImgAspectRatio(img.naturalWidth / img.naturalHeight)
+      }
+    }
+    img.onload = setRatio
+    img.src = activeUrl
+    if (img.complete) setRatio() // cached images may not fire onload
+    return () => { cancelled = true }
+  }, [activeUrl])
   const creditModelId = buildCreditModelIdentifier(
     nodeData.provider ?? "nano-banana",
     nodeData as unknown as Record<string, unknown>,
@@ -97,7 +112,8 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      minWidth={220}
+      minWidth={200}
+      minHeight={imgAspectRatio ? Math.round(200 / imgAspectRatio) : 150}
       listCount={listTotal}
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
@@ -133,8 +149,9 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         { id: "in", type: "target", position: Position.Left, top: "calc(100% - 20px)", customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
         { id: "image", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
+      imageAspectRatio={imgAspectRatio}
     >
-      <div className="relative w-full group">
+      <div className="relative w-full h-full group">
         {/* Running state */}
         {status === "running" && (
           <div className="flex flex-col items-center justify-center gap-2 bg-muted/30 rounded-xl h-[180px]">
@@ -160,7 +177,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
             <CachedImage
               src={activeUrl}
               alt="Generated"
-              className="w-full object-cover rounded-xl"
+              className="w-full h-full object-cover rounded-xl node-result-image"
               thumbnail={!useFull}
               thumbnailWidth={320}
             />
@@ -197,10 +214,6 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                 onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Fullscreen">
                 <Expand className="w-3.5 h-3.5" />
               </button>
-              <button type="button" aria-label="Settings" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => { e.stopPropagation(); selectNode(id) }} title="Settings">
-                <Settings className="w-3.5 h-3.5" />
-              </button>
               <button type="button" aria-label="Download" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -219,8 +232,11 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                 <Link className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="absolute bottom-8 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <SaveToLibraryButton url={activeUrl} type="image" className="bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" />
+            <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button type="button" aria-label="Settings" className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
+                onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }} title="Settings">
+                <Settings className="w-3.5 h-3.5" />
+              </button>
             </div>
           </>
         )}

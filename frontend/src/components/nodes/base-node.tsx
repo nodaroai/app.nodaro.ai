@@ -1,8 +1,8 @@
 "use client"
 
-import { memo, useState, useEffect, useRef, useCallback, type ReactNode, type MouseEvent } from "react"
+import { memo, useState, useEffect, useRef, type ReactNode, type MouseEvent } from "react"
 import { Handle, Position, NodeResizer, NodeToolbar } from "@xyflow/react"
-import { Copy } from "lucide-react"
+import { MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useMobileCanvas } from "@/components/editor/mobile-canvas-context"
@@ -37,6 +37,7 @@ interface BaseNodeProps {
   readonly bottomToolbarContent?: ReactNode
   readonly topToolbarContent?: ReactNode
   readonly className?: string
+  readonly imageAspectRatio?: number
 }
 
 // Light mode: white bg with colored top accent line, Dark mode: category-colored borders
@@ -108,6 +109,7 @@ function BaseNodeComponent({
   bottomToolbarContent,
   topToolbarContent,
   className,
+  imageAspectRatio,
 }: BaseNodeProps) {
   // Auto-compute minHeight from handle count: handles need 30px each + 20px padding
   const leftCount = handles.filter((h) => h.position === Position.Left).length
@@ -124,18 +126,25 @@ function BaseNodeComponent({
     }
   }, [])
 
-  const handleResize = useCallback((_event: unknown, params: { width: number; height: number }) => {
-    // Override the wrapper's maxWidth so the card grows with the resize
-    const wrapper = outerRef.current?.parentElement
-    if (wrapper) {
-      wrapper.style.maxWidth = "none"
-      wrapper.style.width = params.width + "px"
-      wrapper.style.height = params.height + "px"
-    }
-  }, [])
+  // When image aspect ratio changes (switching results), update the node's
+  // explicit height to match the new image. applyNodeChanges sets top-level
+  // node.width/node.height (NOT node.style.*), so we must read/write those.
+  useEffect(() => {
+    if (!imageAspectRatio || !id) return
+    const state = useWorkflowStore.getState()
+    const node = state.nodes.find((n) => n.id === id)
+    const w = node?.width
+    if (typeof w !== "number") return // auto-sized node — CSS handles it
+    const correctH = w / imageAspectRatio
+    if (typeof node?.height === "number" && Math.abs(node.height - correctH) < 2) return
+    useWorkflowStore.setState({
+      nodes: state.nodes.map((n) =>
+        n.id === id ? { ...n, height: correctH } : n
+      ),
+    })
+  }, [imageAspectRatio, id])
 
   const { isMobile } = useMobileCanvas()
-  const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
   const clearNewNode = useWorkflowStore((s) => s.clearNewNode)
   const isEditing = useWorkflowStore((s) => s.selectedNodeId === id)
@@ -151,9 +160,11 @@ function BaseNodeComponent({
     return () => clearTimeout(timer)
   }, [isNew, id, clearNewNode])
 
-  function handleDuplicate(e: MouseEvent) {
+  function handleMoreMenu(e: MouseEvent) {
     e.stopPropagation()
-    duplicateNode(id)
+    window.dispatchEvent(new CustomEvent("open-node-context-menu", {
+      detail: { nodeId: id, x: e.clientX, y: e.clientY },
+    }))
   }
 
   return (
@@ -171,7 +182,7 @@ function BaseNodeComponent({
     >
       <NodeToolbar align="end" isVisible={isHovered} position={Position.Top} offset={4}>
         <div
-          className="bg-white border border-border dark:bg-[#1a1a1a] dark:border-white/10 rounded-lg shadow-xl px-1 py-1 flex items-center gap-1"
+          className="flex items-center gap-1"
           onMouseEnter={() => {
             if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
             setIsHovered(true)
@@ -181,11 +192,11 @@ function BaseNodeComponent({
           }}
         >
           <button
-            className="hover:bg-black/5 dark:hover:bg-white/10 rounded px-2 py-1 text-foreground/70 hover:text-foreground dark:text-white/70 dark:hover:text-white"
-            onClick={handleDuplicate}
-            aria-label="Duplicate node"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            onClick={handleMoreMenu}
+            aria-label="More options"
           >
-            <Copy className="h-3 w-3" />
+            <MoreHorizontal className="h-4 w-4" />
           </button>
           {toolbarActions}
         </div>
@@ -193,20 +204,20 @@ function BaseNodeComponent({
       {/* Content above card (e.g. thumbnail gallery) */}
       {bottomToolbarContent && isHovered && (
         <div className="relative">
-          <div className="absolute left-0 right-0 bottom-0 -translate-y-1 z-50 flex justify-center">
+          <div className="absolute left-0 right-0 bottom-0 -translate-y-5 z-50 flex justify-center">
             {bottomToolbarContent}
           </div>
         </div>
       )}
       <div
         className={cn(
-          "group relative rounded-xl border-2 shadow-[0_4px_6px_-1px_rgb(0_0_0/0.05)] min-w-[200px] bg-card text-card-foreground flex-auto overflow-hidden",
-          "dark:hover:border-[#ff0073] transition-colors duration-200",
+          "group relative rounded-xl border-2 shadow-[0_4px_6px_-1px_rgb(0_0_0/0.05)] min-w-[200px] bg-card text-card-foreground flex-auto overflow-hidden flex flex-col",
+          "hover:border-black/40 dark:hover:border-white/40 transition-colors duration-200",
           CATEGORY_STYLES[category],
-          // Focused (selected, no settings): blue ring
-          selected && !isEditing && "ring-2 ring-blue-400/70 shadow-[0_0_12px_rgba(96,165,250,0.3)]",
-          // Editing (selected + settings open): pink ring + category glow
-          isEditing && "ring-2 ring-[#ff0073] shadow-[0_4px_12px_-2px_rgb(0_0_0/0.1)]",
+          // Focused (selected, no settings): blue glow
+          selected && !isEditing && "border-blue-400 shadow-[0_0_20px_rgba(96,165,250,0.6)]",
+          // Editing (selected + settings open): brand pink glow
+          isEditing && "border-[#ff0073] shadow-[0_0_20px_rgba(255,0,115,0.5)]",
           isEditing && category === "input" && "dark:shadow-[0_0_20px_rgba(56,189,248,0.4)]",
           isEditing && category === "parameter" && "dark:shadow-[0_0_20px_rgba(129,140,248,0.4)]",
           isEditing && (category === "ai" || category === "scene" || category === "script" || category === "i2v") && "dark:shadow-[0_0_25px_rgba(255,0,115,0.5)]",
@@ -318,8 +329,8 @@ function BaseNodeComponent({
 
       {children && (
         hideHeader
-          ? <div className="text-xs overflow-hidden">{children}</div>
-          : <div className="px-3 py-2 text-xs overflow-hidden bg-white dark:bg-transparent text-[#1E293B] dark:text-card-foreground">{children}</div>
+          ? <div className="text-xs overflow-hidden flex-1 min-h-0">{children}</div>
+          : <div className="px-3 py-2 text-xs overflow-hidden flex-1 min-h-0 bg-white dark:bg-transparent text-[#1E293B] dark:text-card-foreground">{children}</div>
       )}
     </div>
       {/* Content below card (e.g. run button) */}
@@ -359,17 +370,15 @@ function BaseNodeComponent({
         </div>
       ))}
 
-      {/* NodeResizer — rendered after card & handles so it paints on top */}
-      {!isMobile && selected && (
+      {/* Resize — NodeResizer manages dimensions through React Flow state */}
+      {!isMobile && (
         <NodeResizer
           minWidth={minWidth}
           minHeight={effectiveMinHeight}
-          isVisible={true}
-          onResize={handleResize}
-          lineClassName="!border-blue-400"
-          handleClassName="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded"
-          handleStyle={{ pointerEvents: "all" }}
-          lineStyle={{ pointerEvents: "all" }}
+          keepAspectRatio={!!imageAspectRatio}
+          isVisible={isHovered || !!selected}
+          lineClassName="!border-0"
+          handleClassName="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
         />
       )}
     </div>

@@ -23,6 +23,8 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
+  const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -38,6 +40,19 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
     setVideoError(false)
     setVideoDimensions(null)
   }, [activeUrl])
+
+  // Update node dimensions in store when video dimensions change (for resized nodes)
+  useEffect(() => {
+    if (!videoDimensions) return
+    const state = useWorkflowStore.getState()
+    const node = state.nodes.find((n) => n.id === id)
+    if (typeof node?.width !== "number") return // auto-sized — outer wrapper handles it
+    useWorkflowStore.setState({
+      nodes: state.nodes.map((n) =>
+        n.id === id ? { ...n, width: videoDimensions.width, height: videoDimensions.height } : n
+      ),
+    })
+  }, [videoDimensions, id])
 
   const hasResult = status !== "running" && !!activeUrl && !videoError
 
@@ -178,6 +193,8 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
           onDimensionsChange={setVideoDimensions}
           onVideoError={() => setVideoError(true)}
           onVideoLoad={() => setVideoError(false)}
+          onSettings={() => selectNode(isSettingsOpen ? null : id)}
+          isSettingsOpen={isSettingsOpen}
         />
       )}
 

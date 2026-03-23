@@ -11,7 +11,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
+import { useFullResolution } from "@/hooks/use-full-resolution"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { copyToClipboard } from "@/lib/utils"
 import type { UploadImageData } from "@/types/nodes"
@@ -34,8 +34,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
-  const { zoom } = useCanvasZoom()
-  const useFull = zoom >= 0.8
+  const useFull = useFullResolution(id)
 
   const imageUrl = nodeData.thumbnailUrl || nodeData.r2Url || nodeData.url
   const hasFile = Boolean(nodeData.r2Url || nodeData.url) && !nodeData.externalUrl

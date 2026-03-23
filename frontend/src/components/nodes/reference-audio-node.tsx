@@ -7,7 +7,7 @@ import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
+import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ReferenceAudioData } from "@/types/nodes"
 
@@ -19,8 +19,7 @@ const HANDLES = [
 function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ReferenceAudioData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const { zoom } = useCanvasZoom()
-  const useFull = zoom >= 0.8
+  const useFull = useFullResolution(id)
   const status = nodeData.extractionStatus ?? "idle"
   const hasAudio = Boolean(nodeData.extractedAudioUrl)
   const hasThumbnail = Boolean(nodeData.videoThumbnail)

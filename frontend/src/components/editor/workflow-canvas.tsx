@@ -563,15 +563,31 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     setEdgeContextMenu({ edgeId: edge.id, x: event.clientX, y: event.clientY })
   }, [])
 
+  const focusedNodeRef = useRef<string | null>(null)
+
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
       if (wasDraggingRef.current) return
-      selectNode(node.id)
+      const currentSelectedId = useWorkflowStore.getState().selectedNodeId
+      if (focusedNodeRef.current === node.id && currentSelectedId !== node.id) {
+        // Second click on same node — open settings
+        selectNode(node.id)
+      } else if (currentSelectedId === node.id) {
+        // Already editing — keep settings open
+      } else if (currentSelectedId) {
+        // Settings open on another node — switch settings to this node
+        selectNode(node.id)
+        focusedNodeRef.current = node.id
+      } else {
+        // No settings open — just focus
+        focusedNodeRef.current = node.id
+      }
     },
     [selectNode],
   )
 
   const handlePaneClick = useCallback(() => {
+    focusedNodeRef.current = null
     selectNode(null)
     setNodeContextMenu(null)
     setCanvasContextMenu(null)
@@ -781,6 +797,18 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     },
     [selectNode],
   )
+
+  // Listen for custom context menu events from node 3-dots button (skips selectNode)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { nodeId, x, y } = (e as CustomEvent).detail
+      setCanvasContextMenu(null)
+      setAddNodePopupOpen(false)
+      setNodeContextMenu({ nodeId, x, y })
+    }
+    window.addEventListener("open-node-context-menu", handler)
+    return () => window.removeEventListener("open-node-context-menu", handler)
+  }, [])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1271,6 +1299,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           onClickConnectEnd={handleClickConnectEnd}
           isValidConnection={isValidConnection}
           onNodeClick={handleNodeClick}
+          onNodeDoubleClick={(_event, node) => { selectNode(node.id); focusedNodeRef.current = node.id }}
           onPaneClick={handlePaneClick}
           onNodeContextMenu={isMobile ? undefined : handleNodeContextMenu}
           onPaneContextMenu={isMobile ? undefined : handlePaneContextMenu}

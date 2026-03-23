@@ -1,7 +1,7 @@
 "use client"
 
 import { memo } from "react"
-import { X, Expand, Download, Link } from "lucide-react"
+import { X, Expand, Download, Link, Settings } from "lucide-react"
 import { copyToClipboard } from "@/lib/utils"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 
@@ -15,6 +15,8 @@ interface VideoResultOverlayProps {
   onDimensionsChange: (dims: { width: number; height: number }) => void
   onVideoError?: () => void
   onVideoLoad?: () => void
+  onSettings?: () => void
+  isSettingsOpen?: boolean
 }
 
 function VideoResultOverlayComponent({
@@ -27,6 +29,8 @@ function VideoResultOverlayComponent({
   onDimensionsChange,
   onVideoError,
   onVideoLoad,
+  onSettings,
+  isSettingsOpen,
 }: VideoResultOverlayProps) {
   return (
     <div
@@ -98,7 +102,14 @@ function VideoResultOverlayComponent({
         </button>
       </div>
       <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-        <SaveToLibraryButton url={url} type="video" />
+        {onSettings ? (
+          <button type="button" aria-label="Settings" className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
+            onClick={(e) => { e.stopPropagation(); onSettings() }} title="Settings">
+            <Settings className="w-3.5 h-3.5" />
+          </button>
+        ) : (
+          <SaveToLibraryButton url={url} type="video" />
+        )}
       </div>
     </div>
   )

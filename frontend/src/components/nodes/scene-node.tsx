@@ -19,14 +19,13 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
+import { useFullResolution } from "@/hooks/use-full-resolution"
 import type { SceneNodeDataType, ExtractedReference } from "@/types/nodes"
 
 function SceneNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SceneNodeDataType
   const credits = useModelCredits("scene", 0)
-  const { zoom } = useCanvasZoom()
-  const useFull = zoom >= 0.8
+  const useFull = useFullResolution(id)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

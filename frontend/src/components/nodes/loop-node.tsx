@@ -2,7 +2,22 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Film, Image, Info, Loader2, Music, Plus, Repeat, Table2, Type, Upload } from "lucide-react"
+import { Film, GripVertical, Image, Info, Loader2, Music, Plus, Repeat, Table2, Type, Upload, X } from "lucide-react"
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
@@ -58,6 +73,46 @@ function buildHandles(columns: ReadonlyArray<LoopColumn>) {
   return [target, ...sources]
 }
 
+function SortableNodeRow({
+  id,
+  children,
+  onRemove,
+}: {
+  id: string
+  children: React.ReactNode
+  onRemove: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-start gap-1.5">
+      <div
+        {...attributes}
+        {...listeners}
+        className="nodrag nopan shrink-0 mt-2 text-muted-foreground/30 hover:text-muted-foreground cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical className="w-3.5 h-3.5" />
+      </div>
+      <div className="flex-1 min-w-0">
+        {children}
+      </div>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onRemove() }}
+        className="nodrag nopan shrink-0 mt-2 text-muted-foreground/30 hover:text-red-400 transition-colors"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  )
+}
+
 function LoopNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as LoopNodeData
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -65,7 +120,8 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNodeInternals = useUpdateNodeInternals()
   const status = (nodeData as Record<string, unknown>).executionStatus as string | undefined ?? "idle"
-  const [showData, setShowData] = useState(false)
+  const showData = !!(nodeData as Record<string, unknown>).showData
+  const setShowData = useCallback((v: boolean) => updateNodeData(id, { showData: v }), [id, updateNodeData])
 
   const thumbSize = nodeData.thumbnailSize ?? "md"
   const sizeConfig = THUMB_SIZE_CONFIG[thumbSize]
@@ -134,42 +190,34 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
   const colCount = nodeData.columns?.length ?? 0
 
   const firstImageColIdx = columns.findIndex((c) => c.type === "image-url")
+  const maxItems = nodeData.maxItems ?? 20
 
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragOver(false)
+  const addImageFiles = useCallback(async (files: File[]) => {
     if (firstImageColIdx < 0 || uploadingRows.size > 0) return
+    const imageFiles = files.filter((f) => f.type.startsWith("image/"))
+    if (imageFiles.length === 0) return
 
-    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/"))
-    if (files.length === 0) return
-
-    // Use a local mutable variable to track latest rows (avoids stale closure)
     let latestRows = [...(nodeData.rows ?? [])]
     const newRowIndices: number[] = []
-
-    // Create empty rows for each file
-    for (const _ of files) {
+    for (const file of imageFiles) {
+      if (latestRows.length >= maxItems) break
       const newRow = columns.map(() => "")
       latestRows.push(newRow)
       newRowIndices.push(latestRows.length - 1)
     }
     updateNodeData(id, { rows: latestRows })
 
-    // Upload files serially to avoid clobbering useFileUpload singleton state
-    for (let i = 0; i < files.length; i++) {
+    for (let i = 0; i < newRowIndices.length; i++) {
       const rowIdx = newRowIndices[i]
       setUploadingRows((prev) => new Set(prev).add(rowIdx))
       try {
-        const result = await upload(files[i])
+        const result = await upload(imageFiles[i])
         latestRows = latestRows.map((row, ri) =>
-          ri === rowIdx
-            ? row.map((cell, ci) => ci === firstImageColIdx ? result.url : cell)
-            : row
+          ri === rowIdx ? row.map((cell, ci) => ci === firstImageColIdx ? result.url : cell) : row
         )
         updateNodeData(id, { rows: latestRows })
       } catch {
-        // Error handled by useFileUpload (storageExceeded state)
+        // Error handled by useFileUpload
       } finally {
         setUploadingRows((prev) => {
           const next = new Set(prev)
@@ -178,7 +226,14 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
         })
       }
     }
-  }, [id, columns, nodeData.rows, firstImageColIdx, updateNodeData, upload, uploadingRows.size])
+  }, [id, columns, nodeData.rows, firstImageColIdx, maxItems, updateNodeData, upload, uploadingRows.size])
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+    addImageFiles(Array.from(e.dataTransfer.files))
+  }, [addImageFiles])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -220,6 +275,39 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
     e.target.value = ""
   }, [id, nodeData.rows, updateNodeData, upload])
 
+  const handleAddRow = useCallback(() => {
+    if (rows.length >= maxItems) return
+    const newRow = columns.map(() => "")
+    updateNodeData(id, { rows: [...rows, newRow] })
+  }, [id, columns, rows, maxItems, updateNodeData])
+
+  const handleRemoveRow = useCallback((rowIdx: number) => {
+    updateNodeData(id, { rows: rows.filter((_, i) => i !== rowIdx) })
+  }, [id, rows, updateNodeData])
+
+  const dropZoneFileRef = useRef<HTMLInputElement>(null)
+
+  const rowIds = useMemo(() => rows.map((_, i) => `row-${i}`), [rows])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  )
+
+  const handleReorderRows = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event
+      if (!over || active.id === over.id) return
+      const oldIndex = rowIds.indexOf(active.id as string)
+      const newIndex = rowIds.indexOf(over.id as string)
+      if (oldIndex === -1 || newIndex === -1) return
+      updateNodeData(id, { rows: arrayMove([...rows], oldIndex, newIndex) })
+    },
+    [rowIds, rows, id, updateNodeData],
+  )
+
+  const showingPresentation = showData && colCount > 0 && rowCount > 0
+  const nodeWidth = showingPresentation ? 350 : sizeConfig.maxWidth
+
   let statusText: string
   if (hasUpstreamInput) {
     statusText = "Connected: waiting for input..."
@@ -233,13 +321,25 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
   const hasTarget = handles.some(h => h.id === "in")
 
   return (
-    <div className="relative" style={{ maxWidth: `${sizeConfig.maxWidth}px` }}>
+    <div className="relative" style={showingPresentation ? undefined : { maxWidth: `${nodeWidth}px` }}>
       <input
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif"
         onChange={handleCellFileSelect}
         className="hidden"
         ref={hiddenFileRef}
+      />
+      <input
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        multiple
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? [])
+          if (files.length > 0) addImageFiles(files)
+          e.target.value = ""
+        }}
+        className="hidden"
+        ref={dropZoneFileRef}
       />
       <EditableNodeLabel
         label={nodeData.label}
@@ -254,7 +354,7 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
         credits={0}
         selected={selected}
         isRunning={status === "running"}
-        minWidth={sizeConfig.maxWidth}
+        minWidth={showingPresentation ? 300 : nodeWidth}
         hideHeader
         topToolbarContent={
           <div className="flex items-center gap-1">
@@ -268,23 +368,21 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
                 {showData ? <Info className="w-3.5 h-3.5" /> : <Table2 className="w-3.5 h-3.5" />}
               </button>
             )}
-            {showData && colCount > 0 && (
-              <div className="flex items-center bg-muted/30 rounded-md overflow-hidden">
-                {(["sm", "md", "lg"] as const).map((size) => (
-                  <button
-                    key={size}
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); updateNodeData(id, { thumbnailSize: size }) }}
-                    className={`px-1.5 py-0.5 text-[9px] font-semibold uppercase transition-colors ${
-                      thumbSize === size
-                        ? "bg-[#ff0073]/15 text-[#ff0073]"
-                        : "text-muted-foreground/50 hover:text-muted-foreground"
-                    }`}
-                  >
-                    {size.toUpperCase()}
-                  </button>
-                ))}
-              </div>
+            {showingPresentation && (
+              <>
+                <span className="text-[9px] text-muted-foreground/60">
+                  {rowCount} of {maxItems} max
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleAddRow() }}
+                  disabled={rows.length >= maxItems}
+                  className="flex items-center justify-center w-5 h-5 rounded-md bg-[#ff0073] text-white transition-opacity duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
+                  title="Add row"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </>
             )}
             {status !== "running" && (
               <RunNodeButton nodeId={id} credits={0} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
@@ -301,95 +399,76 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
           onDragLeave={handleDragLeave}
         >
           {showData && colCount > 0 && rowCount > 0 ? (
-            <div className="overflow-auto max-h-[200px] rounded border border-border/40 relative">
-              <table className="w-full text-[10px] border-collapse">
-                <thead>
-                  <tr className="bg-muted/30">
-                    {columns.map((col, ci) => {
-                      const meta = LOOP_COLUMN_TYPE_META[col.type ?? "text"]
-                      const colColor = meta?.color ?? "#38BDF8"
-                      const w = getColWidth(ci, col)
-                      return (
-                        <th key={col.id} className="px-1.5 py-1 text-left font-medium whitespace-nowrap border-b border-border/30 relative select-none"
-                          style={w ? { width: `${w}px`, minWidth: `${w}px` } : undefined}>
-                          <span className="inline-flex items-center gap-1">
-                            <span className="text-[8px] px-1 py-0.5 rounded font-semibold"
-                              style={{ background: `${colColor}20`, color: colColor }}>
-                              {meta?.shortLabel ?? "TXT"}
-                            </span>
-                            <span className="text-muted-foreground truncate max-w-[60px]">{col.name}</span>
-                          </span>
-                          <div
-                            className="absolute top-0 right-0 bottom-0 w-[6px] cursor-col-resize hover:bg-[#ff0073]/30 transition-colors"
-                            onMouseDown={(e) => {
-                              e.stopPropagation()
-                              e.preventDefault()
-                              const th = (e.target as HTMLElement).parentElement!
-                              setResizingCol({ colIdx: columns.indexOf(col), startX: e.clientX, startWidth: th.offsetWidth })
-                            }}
-                          />
-                        </th>
-                      )
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, rowIdx) => (
-                    <tr key={rowIdx} className={`${rowIdx % 2 === 0 ? "bg-muted/10" : ""} relative`}>
-                      {uploadingRows.has(rowIdx) ? (
-                        <td colSpan={columns.length} className="px-1.5 py-1 text-center">
-                          <Loader2 className="w-3 h-3 animate-spin text-[#38BDF8] inline-block" />
-                        </td>
-                      ) : (
-                        columns.map((col, colIdx) => {
-                          const cell = row[colIdx] ?? ""
-                          const colType = col.type ?? "text"
-                          const tdW = getColWidth(colIdx, col)
-                          return (
-                            <td key={col.id} className="px-1.5 py-0.5 align-middle border-b border-border/20"
-                              style={tdW ? { width: `${tdW}px`, minWidth: `${tdW}px` } : undefined}>
-                              {colType === "image-url" ? (
-                                cell ? (
-                                  <CachedImage
-                                    src={cell}
-                                    alt=""
-                                    thumbnail
-                                    thumbnailWidth={sizeConfig.px * 2}
-                                    className={`${sizeConfig.imgClass} object-cover rounded`}
-                                  />
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className={`${sizeConfig.imgClass} rounded border-2 border-dashed border-[#38BDF8]/30 flex items-center justify-center hover:border-[#38BDF8]/60 hover:bg-[#38BDF8]/5 transition-colors`}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      fileInputRef.current = { rowIdx, colIdx }
-                                      hiddenFileRef.current?.click()
-                                    }}
-                                  >
-                                    <Plus className="w-3 h-3 text-[#38BDF8]/60" />
-                                  </button>
-                                )
-                              ) : colType === "video-url" || colType === "audio-url" ? (
-                                <span className="text-muted-foreground/60 italic">
+            <div className="relative">
+              <div className="nodrag flex flex-col gap-2">
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleReorderRows}>
+                  <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
+                    {rows.map((row, rowIdx) => (
+                      <SortableNodeRow key={rowIds[rowIdx]} id={rowIds[rowIdx]} onRemove={() => handleRemoveRow(rowIdx)}>
+                        {uploadingRows.has(rowIdx) ? (
+                          <div className="flex items-center justify-center py-8 rounded-lg bg-muted/10">
+                            <Loader2 className="w-5 h-5 animate-spin text-[#38BDF8]" />
+                          </div>
+                        ) : (
+                          columns.map((col, colIdx) => {
+                            const cell = row[colIdx] ?? ""
+                            const colType = col.type ?? "text"
+                            if (colType === "image-url") {
+                              return cell ? (
+                                <CachedImage
+                                  key={col.id}
+                                  src={cell}
+                                  alt=""
+                                  className="w-full h-auto rounded-lg"
+                                />
+                              ) : (
+                                <button
+                                  key={col.id}
+                                  type="button"
+                                  className="w-full h-14 rounded-lg border-2 border-dashed border-muted-foreground/20 flex items-center justify-center hover:border-[#ff0073]/50 hover:bg-[#ff0073]/5 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    fileInputRef.current = { rowIdx, colIdx }
+                                    hiddenFileRef.current?.click()
+                                  }}
+                                >
+                                  <Plus className="w-4 h-4 text-muted-foreground/40" />
+                                </button>
+                              )
+                            }
+                            if (colType === "video-url" || colType === "audio-url") {
+                              return (
+                                <span key={col.id} className="text-[10px] text-muted-foreground/60 italic block py-1">
                                   {cell ? "media" : "\u2014"}
                                 </span>
-                              ) : (
-                                <span className="text-muted-foreground truncate block" style={{ maxWidth: `${sizeConfig.maxWidth - 80}px` }} title={cell}>
-                                  {cell || "\u2014"}
-                                </span>
-                              )}
-                            </td>
-                          )
-                        })
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                              )
+                            }
+                            return (
+                              <span key={col.id} className="text-[10px] text-muted-foreground truncate block py-1" title={cell}>
+                                {cell || "\u2014"}
+                              </span>
+                            )
+                          })
+                        )}
+                      </SortableNodeRow>
+                    ))}
+                  </SortableContext>
+                </DndContext>
+                {firstImageColIdx >= 0 && rows.length < maxItems && (
+                  <div
+                    className="flex items-center justify-center py-3 border-2 border-dashed rounded-lg transition-colors cursor-pointer border-muted-foreground/15 hover:border-[#ff0073]/40"
+                    onClick={(e) => { e.stopPropagation(); dropZoneFileRef.current?.click() }}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Upload className="w-3.5 h-3.5 text-muted-foreground/40" />
+                      <span className="text-[10px] text-muted-foreground/60">Drop files to add rows, or click to browse</span>
+                    </div>
+                  </div>
+                )}
+              </div>
               {isDragOver && firstImageColIdx >= 0 && (
-                <div className="absolute inset-0 bg-[#38BDF8]/10 border-2 border-dashed border-[#38BDF8]/60 rounded flex items-center justify-center z-10">
-                  <div className="flex items-center gap-1.5 text-[#38BDF8] text-xs font-medium">
+                <div className="absolute inset-0 bg-[#ff0073]/5 border-2 border-dashed border-[#ff0073]/60 rounded-lg flex items-center justify-center z-10">
+                  <div className="flex items-center gap-1.5 text-[#ff0073] text-xs font-medium">
                     <Upload className="w-3.5 h-3.5" />
                     Drop to add rows
                   </div>

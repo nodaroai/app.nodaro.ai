@@ -12,7 +12,7 @@ import { useConnectionCount } from "@/hooks/use-connection-count"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
+import { useFullResolution } from "@/hooks/use-full-resolution"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
@@ -41,8 +41,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 function ObjectNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ObjectNodeData
   const credits = useModelCredits((nodeData.provider as string | undefined) ?? "nano-banana", 2)
-  const { zoom } = useCanvasZoom()
-  const useFull = zoom >= 0.8
+  const useFull = useFullResolution(id)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const inConnectionCount = useConnectionCount(id)

@@ -6,6 +6,7 @@ import { PLATFORM_SPECS, PLATFORM_LABELS } from "@/lib/social-media-specs"
 import type { SocialMediaPlatform } from "@/lib/social-media-specs"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
+// MediaSlot is a sub-component without a node ID, so it uses zoom directly
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 export const PLATFORM_COLORS: Record<SocialMediaPlatform, string> = {
