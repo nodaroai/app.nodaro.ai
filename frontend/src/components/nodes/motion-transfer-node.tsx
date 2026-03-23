@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Waypoints, Loader2, AlertCircle, X, Clapperboard, LayoutGrid, Expand, Download, Link } from "lucide-react"
+import { Waypoints, Loader2, AlertCircle, X, Clapperboard, LayoutGrid, Expand, Download, Link, Settings } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -13,7 +13,6 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
-import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
@@ -24,6 +23,8 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
+  const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -161,7 +162,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {/* Version badge - top left */}
-        {results.length > 0 && (
+        {results.length > 1 && (
           <button
             type="button"
             className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/video:opacity-100 transition-opacity"
@@ -219,10 +220,18 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {/* Bottom right: save to library */}
+        {/* Bottom right: settings */}
         {activeUrl && (
           <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-            <SaveToLibraryButton url={activeUrl} type="video" />
+            <button
+              type="button"
+              aria-label="Settings"
+              className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
+              onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }}
+              title="Settings"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
       </div>

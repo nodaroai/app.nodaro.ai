@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Type, Users } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Type, Users, Settings, Link } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -12,10 +12,9 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useModelCredits } from "@/hooks/use-model-credits"
-import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
-import { computeDeleteResultUpdates } from "@/lib/utils"
+import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { TextToVideoData } from "@/types/nodes"
 
 // Fallback credit costs per video provider (shown until API responds)
@@ -31,6 +30,8 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as TextToVideoData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
+  const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const edges = useWorkflowStore((s) => s.edges)
   const inConnectionCount = useConnectionCount(id)
@@ -178,7 +179,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {/* Version badge - top left */}
-        {results.length > 0 && (
+        {results.length > 1 && (
           <button
             type="button"
             className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/video:opacity-100 transition-opacity"
@@ -203,7 +204,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {/* Bottom left: fullscreen + download */}
+        {/* Bottom left: fullscreen + download + copy URL */}
         {activeUrl && (
           <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
             <button
@@ -222,13 +223,30 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
             >
               <Download className="w-3.5 h-3.5" />
             </button>
+            <button
+              type="button"
+              aria-label="Copy URL"
+              className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }}
+              title="Copy URL"
+            >
+              <Link className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
 
-        {/* Bottom right: save to library */}
+        {/* Bottom right: settings */}
         {activeUrl && (
           <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-            <SaveToLibraryButton url={activeUrl} type="video" />
+            <button
+              type="button"
+              aria-label="Settings"
+              className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
+              onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }}
+              title="Settings"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
       </div>
