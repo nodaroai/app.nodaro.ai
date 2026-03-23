@@ -1,20 +1,19 @@
 "use client"
 
-import { memo, useState, useMemo } from "react"
+import { memo, useState, useMemo, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, LayoutGrid, Expand, Download, Users } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, LayoutGrid, Expand, Download, Users, Link, Settings } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
 import { NodeJobProgress } from "./node-job-progress"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { EditableNodeLabel } from "./editable-node-label"
-import { computeDeleteResultUpdates } from "@/lib/utils"
+import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { SoraStoryboardData, GeneratedResult } from "@/types/nodes"
 
 function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
@@ -22,6 +21,8 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
+  const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const edges = useWorkflowStore((s) => s.edges)
   const nodes = useWorkflowStore((s) => s.nodes)
 
@@ -40,6 +41,20 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
   const defaultCost = nFrames === "10" ? 47 : 85
   const credits = useModelCredits(creditModelId, defaultCost)
   const useFull = useFullResolution(id)
+  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
+  useEffect(() => {
+    const url = activeThumbnail || activeUrl
+    if (!url) { setMediaAspectRatio(undefined); return }
+    if (activeThumbnail) {
+      let cancelled = false
+      const img = new window.Image()
+      const setRatio = () => { if (!cancelled && img.naturalWidth > 0) setMediaAspectRatio(img.naturalWidth / img.naturalHeight) }
+      img.onload = setRatio
+      img.src = activeThumbnail
+      if (img.complete) setRatio()
+      return () => { cancelled = true }
+    }
+  }, [activeThumbnail, activeUrl])
 
   const shotCount = nodeData.shots?.length ?? 0
   const charactersConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "characters").length
@@ -76,6 +91,9 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      minWidth={200}
+      minHeight={mediaAspectRatio ? Math.round(200 / mediaAspectRatio) : 150}
+      imageAspectRatio={mediaAspectRatio}
       hideHeader
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
@@ -124,7 +142,7 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
-      <div className="flex flex-col gap-2" style={{ minHeight: 180 }}>
+      <div className="flex flex-col gap-2">
         {/* Shot count badge */}
         {!activeUrl && status !== "running" && status !== "failed" && (
           <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground/60">
@@ -142,9 +160,9 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {/* Video Preview / Loading / Error States */}
-        <div className="relative w-full h-full group/video" style={{ minHeight: activeUrl || status === "running" || status === "failed" ? 180 : undefined }}>
+        <div className="relative w-full h-full group/video">
           {status === "running" && (
-            <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10" style={{ minHeight: 180 }}>
+            <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
               <NodeJobProgress progress={nodeData.currentJobProgress} />
             </div>
@@ -156,8 +174,7 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
                 <CachedImage
                   src={activeThumbnail}
                   alt="Video preview"
-                  className="w-full h-full object-cover rounded-xl"
-                  style={{ minHeight: 180 }}
+                  className="w-full h-full object-cover rounded-xl node-result-image"
                   thumbnail={!useFull}
                   thumbnailWidth={320}
                 />
@@ -165,7 +182,10 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
                 <video
                   src={activeUrl}
                   className="w-full h-full object-cover rounded-xl"
-                  style={{ minHeight: 180 }}
+                  onLoadedMetadata={(e) => {
+                    const v = e.currentTarget
+                    if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
+                  }}
                   autoPlay={videoAutoplay}
                   muted
                   loop={videoAutoplay}
@@ -177,7 +197,7 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
                 Sora 2 Pro Storyboard
               </span>
 
-              {results.length > 0 && (
+              {results.length > 1 && (
                 <button
                   type="button"
                   className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/video:opacity-100 transition-opacity"
@@ -218,16 +238,33 @@ function SoraStoryboardNodeComponent({ id, data, selected }: NodeProps) {
                 >
                   <Download className="w-3.5 h-3.5" />
                 </button>
+                <button
+                  type="button"
+                  aria-label="Copy URL"
+                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                  onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }}
+                  title="Copy URL"
+                >
+                  <Link className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-                <SaveToLibraryButton url={activeUrl} type="video" />
+                <button
+                  type="button"
+                  aria-label="Settings"
+                  className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }}
+                  title="Settings"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                </button>
               </div>
             </>
           )}
 
           {status === "failed" && !activeUrl && (
-            <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500" style={{ minHeight: 180 }}>
+            <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500 h-[180px]">
               <AlertCircle className="w-6 h-6" />
               {nodeData.errorMessage && (
                 <p className="text-[10px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>

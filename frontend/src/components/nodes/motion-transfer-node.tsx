@@ -1,8 +1,8 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Waypoints, Loader2, AlertCircle, X, Clapperboard, LayoutGrid, Expand, Download, Link } from "lucide-react"
+import { Waypoints, Loader2, AlertCircle, X, Clapperboard, LayoutGrid, Expand, Download, Link, Settings } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -13,7 +13,6 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
-import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
@@ -24,6 +23,8 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
+  const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -39,6 +40,20 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const modelId = buildMotionCreditModelIdentifier(provider, resolution, nodeData.videoDuration)
   const credits = useModelCredits(modelId, 38)
   const useFull = useFullResolution(id)
+  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
+  useEffect(() => {
+    const url = activeThumbnail || activeUrl
+    if (!url) { setMediaAspectRatio(undefined); return }
+    if (activeThumbnail) {
+      let cancelled = false
+      const img = new window.Image()
+      const setRatio = () => { if (!cancelled && img.naturalWidth > 0) setMediaAspectRatio(img.naturalWidth / img.naturalHeight) }
+      img.onload = setRatio
+      img.src = activeThumbnail
+      if (img.complete) setRatio()
+      return () => { cancelled = true }
+    }
+  }, [activeThumbnail, activeUrl])
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
@@ -61,6 +76,9 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      minWidth={200}
+      minHeight={mediaAspectRatio ? Math.round(200 / mediaAspectRatio) : 150}
+      imageAspectRatio={mediaAspectRatio}
       hideHeader
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
@@ -108,7 +126,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
         { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
-      <div className="relative w-full h-full group/video" style={{ minHeight: 180 }}>
+      <div className="relative w-full h-full group/video">
         {/* Video / thumbnail */}
         {activeUrl && status !== "running" && (
           <>
@@ -116,8 +134,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
               <CachedImage
                 src={activeThumbnail}
                 alt="Video preview"
-                className="w-full h-full object-cover rounded-xl"
-                style={{ minHeight: 180 }}
+                className="w-full h-full object-cover rounded-xl node-result-image"
                 thumbnail={!useFull}
                 thumbnailWidth={320}
               />
@@ -125,7 +142,10 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
               <video
                 src={activeUrl}
                 className="w-full h-full object-cover rounded-xl"
-                style={{ minHeight: 180 }}
+                onLoadedMetadata={(e) => {
+                  const v = e.currentTarget
+                  if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
+                }}
                 autoPlay={videoAutoplay}
                 muted
                 loop={videoAutoplay}
@@ -137,14 +157,14 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Empty state */}
         {!activeUrl && status !== "running" && status !== "failed" && (
-          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40" style={{ minHeight: 180 }}>
+          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
             <Waypoints className="w-10 h-10" />
           </div>
         )}
 
         {/* Running state */}
         {status === "running" && (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10" style={{ minHeight: 180 }}>
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
             <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
@@ -152,7 +172,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Failed state */}
         {status === "failed" && !activeUrl && (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500" style={{ minHeight: 180 }}>
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500 h-[180px]">
             <AlertCircle className="w-6 h-6" />
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>
@@ -161,7 +181,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {/* Version badge - top left */}
-        {results.length > 0 && (
+        {results.length > 1 && (
           <button
             type="button"
             className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/video:opacity-100 transition-opacity"
@@ -219,10 +239,18 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {/* Bottom right: save to library */}
+        {/* Bottom right: settings */}
         {activeUrl && (
           <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-            <SaveToLibraryButton url={activeUrl} type="video" />
+            <button
+              type="button"
+              aria-label="Settings"
+              className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
+              onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }}
+              title="Settings"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
       </div>
