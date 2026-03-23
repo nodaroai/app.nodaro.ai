@@ -228,21 +228,35 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const orderedOutputNodes = useMemo(() => orderNodesByIds(outputNodes, settings.outputOrder), [outputNodes, settings.outputOrder])
 
   // Estimate credit cost — mirrors workflow-editor-main.tsx logic:
-  // uses composite model identifiers, dynamic DB costs, and fan-out multipliers
-  const [tabEstimatedCost, setTabEstimatedCost] = useState(0)
+  // uses composite model identifiers, dynamic DB costs, and fan-out multipliers.
+  // In fullscreen/app mode, inputValues contains live loop rows that affect fan-out,
+  // so we merge them into node data for accurate cost calculation.
+  const inputValues = isFullscreen ? presInputValues : undefined
+  const [dynamicEstimatedCost, setDynamicEstimatedCost] = useState(0)
   useEffect(() => {
-    if (isFullscreen || !hasCredits()) return
-    const executableNodes = nodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
+    if (!hasCredits()) return
+    // Merge inputValues into node data so getFanOutMultiplier sees current loop rows
+    const effectiveNodes = inputValues
+      ? nodes.map((n) => {
+          const vals = inputValues[n.id]
+          return vals ? { ...n, data: { ...n.data, ...vals } } : n
+        })
+      : nodes
+    const executableNodes = effectiveNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
 
     const computeEstimate = () => {
       const total = executableNodes.reduce((sum, node) => {
         const modelId = getModelIdentifier(node)
         const cached = getCachedCredits(modelId)
         const cost = cached !== undefined ? cached : estimateNodeCredits({ type: node.type, data: node.data as Record<string, unknown> })
-        const multiplier = getFanOutMultiplier(node, nodes, edges)
+        const multiplier = getFanOutMultiplier(node, effectiveNodes, edges)
         return sum + cost * multiplier
       }, 0)
-      setTabEstimatedCost(total)
+      setDynamicEstimatedCost(total)
+      // Also update the presentation store so other consumers see the live cost
+      if (isFullscreen) {
+        usePresentationStore.setState({ estimatedCost: total })
+      }
     }
 
     const modelIds = [...new Set(executableNodes.map((n) => getModelIdentifier(n)).filter(Boolean))]
@@ -257,9 +271,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     }
 
     computeEstimate()
-  }, [isFullscreen, nodes, edges])
+  }, [nodes, edges, inputValues])
 
-  const estimatedCost = isFullscreen ? presEstimatedCost : tabEstimatedCost
+  const estimatedCost = dynamicEstimatedCost || (isFullscreen ? presEstimatedCost : 0)
 
   // Pre-check: does the user need more credits to run this app?
   const needsMoreCredits = useMemo(() => {
