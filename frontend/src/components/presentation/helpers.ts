@@ -90,7 +90,9 @@ export function areAllInputsFilled(
     } else if (nodeType === "loop") {
       const columns = (data.columns as Array<{ type?: string }>) ?? []
       const rows = (inputVals?.rows as string[][] | undefined) ?? (data.rows as string[][]) ?? []
-      if (rows.length === 0) return false
+      const minRows = (data.minRows as number) ?? 0
+      if (rows.length < minRows) return false
+      if (rows.length === 0) continue
       for (const row of rows) {
         for (let i = 0; i < columns.length; i++) {
           if (!(row[i]?.trim())) return false

@@ -305,6 +305,30 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     return areAllInputsFilled(orderedInputNodes, presInputValues)
   }, [isFullscreen, orderedInputNodes, presInputValues])
 
+  const underMinTables = useMemo(() => {
+    if (!isFullscreen) return []
+    return orderedInputNodes
+      .filter((n) => {
+        if (n.type !== "loop") return false
+        const minRows = ((n.data as Record<string, unknown>).minRows as number) ?? 0
+        if (minRows === 0) return false
+        const inputVals = presInputValues[n.id] as Record<string, unknown> | undefined
+        const rows = (inputVals?.rows as string[][] | undefined) ?? ((n.data as Record<string, unknown>).rows as string[][]) ?? []
+        return rows.length < minRows
+      })
+      .map((n) => ({
+        label: (n.data as Record<string, unknown>).label as string || "Table",
+        minRows: ((n.data as Record<string, unknown>).minRows as number) ?? 0,
+        currentRows: ((presInputValues[n.id] as Record<string, unknown>)?.rows as string[][] | undefined)?.length ?? 0,
+      }))
+  }, [isFullscreen, orderedInputNodes, presInputValues])
+
+  const underMinWarning = useMemo(() => {
+    if (underMinTables.length === 0) return ""
+    const msgs = underMinTables.slice(0, 2).map((t) => `${t.label} needs ${t.minRows}+ row${t.minRows !== 1 ? "s" : ""}`)
+    return msgs.join("; ") + (underMinTables.length > 2 ? ` +${underMinTables.length - 2} more` : "")
+  }, [underMinTables])
+
   const handleRunClick = useCallback(() => {
     if (isFullscreen) {
       if (!user) {
@@ -1011,18 +1035,23 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                     <span className="hidden sm:inline">{userCredits?.tier === "free" ? "Get Free Credits" : "Get Credits"}</span>
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={handleRunClick}
-                    className="shrink-0 whitespace-nowrap h-10 md:h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
-                    disabled={!!user && !allInputsFilled}
-                  >
-                    {!user ? (
-                      <><LogIn className="h-4 w-4" /><span className="hidden sm:inline">Sign in to Run</span></>
-                    ) : (
-                      <><Play className="h-4 w-4" />Run<span className="hidden sm:inline">{costLabel}</span></>
+                  <>
+                    {underMinWarning && (
+                      <p className="text-xs text-amber-400 mb-1">{underMinWarning}</p>
                     )}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={handleRunClick}
+                      className="shrink-0 whitespace-nowrap h-10 md:h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+                      disabled={!!user && !allInputsFilled}
+                    >
+                      {!user ? (
+                        <><LogIn className="h-4 w-4" /><span className="hidden sm:inline">Sign in to Run</span></>
+                      ) : (
+                        <><Play className="h-4 w-4" />Run<span className="hidden sm:inline">{costLabel}</span></>
+                      )}
+                    </button>
+                  </>
                 )
               )
             )}
@@ -1206,18 +1235,23 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 Stop
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={handleRunClick}
-                className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={(!isFullscreen && mode === "tab" && !onRun) || (isFullscreen && !allInputsFilled && !!user)}
-              >
-                {isFullscreen && !user ? (
-                  <><LogIn className="h-4 w-4" />Sign in to Run</>
-                ) : (
-                  <><Play className="h-4 w-4" />Run{costLabel}</>
+              <>
+                {underMinWarning && (
+                  <p className="text-xs text-amber-400 mb-1">{underMinWarning}</p>
                 )}
-              </button>
+                <button
+                  type="button"
+                  onClick={handleRunClick}
+                  className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={(!isFullscreen && mode === "tab" && !onRun) || (isFullscreen && !allInputsFilled && !!user)}
+                >
+                  {isFullscreen && !user ? (
+                    <><LogIn className="h-4 w-4" />Sign in to Run</>
+                  ) : (
+                    <><Play className="h-4 w-4" />Run{costLabel}</>
+                  )}
+                </button>
+              </>
             )
           )}
         </div>
