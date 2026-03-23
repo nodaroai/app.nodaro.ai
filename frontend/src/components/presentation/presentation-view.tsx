@@ -68,7 +68,7 @@ import { RunTargetSelector } from "./run-target-selector"
 import { ViewModeSelector, ALL_VIEW_MODES } from "./view-mode-selector"
 import { InputCard } from "./input-card"
 import { OutputCard, type FieldBadgeEntry } from "./output-card"
-import { FieldInputCard } from "./field-input-card"
+import { ConfigFieldRenderer } from "./config-field-renderer"
 import { FieldBadge } from "./field-badge"
 import { RichtextBlock } from "./richtext-block"
 import { RichtextEditor } from "./richtext-editor"
@@ -983,16 +983,21 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           return renderInputCard(node)
         }
         case "field": {
+          const node = nodeMap.get(item.nodeId)
+          if (!node) return null
           const fieldDef = findFieldDef(item.nodeId, item.field)
           if (!fieldDef) return null
-          const nodeData = nodeMap.get(item.nodeId)?.data as Record<string, unknown> | undefined
+          const nodeData = (node.data ?? {}) as Record<string, unknown>
           const inputVals = isFullscreen ? presInputValues[item.nodeId] : undefined
-          const currentValue = inputVals?.[item.field] ?? nodeData?.[item.field] ?? fieldDef.defaultValue
+          const mergedNodeData = inputVals ? { ...nodeData, ...inputVals } : nodeData
+          const currentValue = inputVals?.[item.field] ?? nodeData[item.field] ?? fieldDef.defaultValue
           const customTitle = settings.cardMeta?.[item.id]?.title
           return (
-            <FieldInputCard
-              field={fieldDef}
+            <ConfigFieldRenderer
+              nodeType={node.type ?? ""}
+              field={item.field}
               value={currentValue}
+              nodeData={mergedNodeData}
               onChange={(v) => {
                 if (isFullscreen) {
                   presUpdateInput(item.nodeId, item.field, v)
