@@ -276,7 +276,69 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={handles}
     >
-      {activeUrl && !showConfig && !isKling3 ? null : (
+      {activeUrl && !showConfig && !isKling3 ? (
+      <div className="relative w-full h-full group/video">
+        {activeThumbnail ? (
+          <CachedImage src={activeThumbnail} alt="Video preview"
+            className="w-full h-full object-cover rounded-xl"
+            thumbnail={!useFull} thumbnailWidth={320} />
+        ) : (
+          <video src={activeUrl} autoPlay={videoAutoplay} loop={videoAutoplay} muted playsInline
+            className="w-full h-full object-cover rounded-xl"
+            onLoadedMetadata={(e) => {
+              const video = e.currentTarget
+              const ratio = video.videoWidth / video.videoHeight
+              const baseWidth = 490
+              const baseHeight = Math.round(baseWidth / ratio)
+              setVideoDimensions({ width: baseWidth, height: Math.max(180, Math.min(600, baseHeight)) })
+            }} />
+        )}
+        {/* Version badge */}
+        {results.length > 1 && (
+          <button type="button"
+            className="absolute top-2 left-2 z-10 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/video:opacity-100 transition-opacity"
+            onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}>
+            <LayoutGrid className="w-3 h-3" />
+            <span>{results.length}</span>
+          </button>
+        )}
+        {/* Top-right: delete */}
+        {results.length > 0 && (
+          <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
+            <button type="button" aria-label="Remove result"
+              className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }} title="Delete this result">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+        {/* Bottom-left: fullscreen + download + copy URL */}
+        <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
+          <button type="button" aria-label="Expand preview"
+            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+            onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Fullscreen">
+            <Expand className="w-3.5 h-3.5" />
+          </button>
+          <button type="button" aria-label="Download"
+            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+            onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }} title="Download">
+            <Download className="w-3.5 h-3.5" />
+          </button>
+          <button type="button" aria-label="Copy URL"
+            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+            onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }} title="Copy URL">
+            <Link className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        {/* Bottom-right: settings */}
+        <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
+          <button type="button" aria-label="Settings" className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
+            onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }} title="Settings">
+            <Settings className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+      ) : (
       <div
         className="flex flex-col gap-2 h-full"
         onDoubleClick={isKling3 ? (e) => { e.stopPropagation(); setDirectorOpen(true) } : undefined}
@@ -579,88 +641,6 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       )}
     </BaseNode>
 
-    {/* Result view overlay */}
-    {activeUrl && !showConfig && !isKling3 && (
-      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden', zIndex: 10 }} className="group/video">
-        {activeThumbnail ? (
-          <CachedImage src={activeThumbnail} alt="Video preview"
-            className="w-full h-full object-cover"
-            thumbnail={!useFull} thumbnailWidth={320}
-          />
-        ) : (
-          <video src={activeUrl} autoPlay={videoAutoplay} loop={videoAutoplay} muted playsInline className="w-full h-full object-cover"
-            onLoadedMetadata={(e) => {
-              const video = e.currentTarget
-              const ratio = video.videoWidth / video.videoHeight
-              const baseWidth = 490
-              const baseHeight = Math.round(baseWidth / ratio)
-              setVideoDimensions({ width: baseWidth, height: Math.max(180, Math.min(600, baseHeight)) })
-            }}
-          />
-        )}
-        {/* Edit button */}
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); setShowConfig(true); selectNode(id) }}
-          className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity flex items-center gap-1 px-2 py-1 rounded-md bg-black/60 hover:bg-black/80 text-white text-[10px]"
-        >
-          <Settings className="w-3 h-3" />
-          Edit
-        </button>
-        {/* Thumbnails toolbar */}
-        {showThumbnails && results.length > 1 && (
-          <div className="absolute bottom-0 left-0 right-0 z-20 bg-black/70 p-2 flex gap-1 overflow-x-auto rounded-b-xl">
-            {results.slice(0, 8).map((r, i) => (
-              <div
-                key={i}
-                onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }}
-                className={`w-10 h-10 rounded-lg overflow-hidden shrink-0 cursor-pointer border-2 transition-all ${i === activeIndex ? 'border-[#ff0073]' : 'border-transparent'}`}
-              >
-                <video src={r.url} className="w-full h-full object-cover" muted />
-              </div>
-            ))}
-          </div>
-        )}
-        {/* Version badge */}
-        {results.length > 1 && (
-          <button type="button"
-            className="absolute top-2 left-2 z-10 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/video:opacity-100 transition-opacity"
-            onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}>
-            <LayoutGrid className="w-3 h-3" />
-            <span>{results.length}</span>
-          </button>
-        )}
-        {/* Bottom-left: fullscreen + download + copy URL */}
-        <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
-          <button type="button"
-            aria-label="Expand preview"
-            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}>
-            <Expand className="w-3.5 h-3.5" />
-          </button>
-          <button type="button"
-            aria-label="Download"
-            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }}>
-            <Download className="w-3.5 h-3.5" />
-          </button>
-          <button type="button"
-            aria-label="Copy URL"
-            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }}
-            title="Copy URL">
-            <Link className="w-3.5 h-3.5" />
-          </button>
-        </div>
-        {/* Bottom-right: settings */}
-        <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-          <button type="button" aria-label="Settings" className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
-            onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }} title="Settings">
-            <Settings className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-    )}
 
     {/* startFrame handle icon */}
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"

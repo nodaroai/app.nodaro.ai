@@ -16,7 +16,7 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun }: RunNodeButt
   return (
     <button
       type="button"
-      className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium text-white rounded-md whitespace-nowrap bg-[#ff0073] hover:bg-[#e60068]"
+      className="flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium text-white rounded-md whitespace-nowrap bg-[#ff0073] hover:bg-[#e60068] shadow-sm"
       onClick={(e) => { e.stopPropagation(); onRun(nodeId) }}
     >
       <Play className="w-3 h-3" />
