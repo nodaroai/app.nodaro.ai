@@ -84,6 +84,20 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const useFull = useFullResolution(id)
+  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
+  useEffect(() => {
+    const url = activeThumbnail || activeUrl
+    if (!url) { setMediaAspectRatio(undefined); return }
+    if (activeThumbnail) {
+      let cancelled = false
+      const img = new window.Image()
+      const setRatio = () => { if (!cancelled && img.naturalWidth > 0) setMediaAspectRatio(img.naturalWidth / img.naturalHeight) }
+      img.onload = setRatio
+      img.src = activeThumbnail
+      if (img.complete) setRatio()
+      return () => { cancelled = true }
+    }
+  }, [activeThumbnail, activeUrl])
   const lipSyncProvider = nodeData.provider ?? "kling-avatar"
   const creditModelId = lipSyncProvider === "infinitalk"
     ? `infinitalk:${nodeData.resolution ?? "720p"}`
@@ -208,6 +222,9 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      minWidth={200}
+      minHeight={mediaAspectRatio ? Math.round(200 / mediaAspectRatio) : 150}
+      imageAspectRatio={mediaAspectRatio}
       hideHeader
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
@@ -256,7 +273,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
-      <div className="flex flex-col gap-2" style={{ minHeight: 180 }}>
+      <div className="flex flex-col gap-2">
         {/* Input Selection Dropdowns */}
         {hasConnections && (
           <div className="flex flex-col gap-1.5 px-3 pt-2">
@@ -363,10 +380,10 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {/* Video Preview / Loading / Error States */}
-        <div className="relative w-full h-full group/video" style={{ minHeight: activeUrl || status === "running" || status === "failed" ? 180 : undefined }}>
+        <div className="relative w-full h-full group/video">
           {/* Running state */}
           {status === "running" && (
-            <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10" style={{ minHeight: 180 }}>
+            <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
               <NodeJobProgress progress={nodeData.currentJobProgress} />
             </div>
@@ -379,8 +396,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                 <CachedImage
                   src={activeThumbnail}
                   alt="Video preview"
-                  className="w-full h-full object-cover rounded-xl"
-                  style={{ minHeight: 180 }}
+                  className="w-full h-full object-cover rounded-xl node-result-image"
                   thumbnail={!useFull}
                   thumbnailWidth={320}
                 />
@@ -389,7 +405,10 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                   src={activeUrl}
                   poster={activeThumbnail}
                   className="w-full h-full object-cover rounded-xl"
-                  style={{ minHeight: 180 }}
+                  onLoadedMetadata={(e) => {
+                    const v = e.currentTarget
+                    if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
+                  }}
                   autoPlay={videoAutoplay}
                   muted
                   loop={videoAutoplay}
@@ -473,7 +492,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
 
           {/* Failed state */}
           {status === "failed" && !activeUrl && (
-            <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500" style={{ minHeight: 180 }}>
+            <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500 h-[180px]">
               <AlertCircle className="w-6 h-6" />
               {nodeData.errorMessage && (
                 <p className="text-[10px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>
@@ -483,7 +502,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
 
           {/* Ready state (has inputs, no result yet) */}
           {status !== "running" && !activeUrl && status !== "failed" && hasRequiredInputs && (
-            <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40" style={{ minHeight: 180 }}>
+            <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
               <Users className="w-10 h-10" />
             </div>
           )}

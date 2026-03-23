@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Link, Settings } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
@@ -37,6 +37,20 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const v2vProvider = (nodeData.provider as string | undefined) ?? "wan"
   const credits = useModelCredits(v2vProvider, v2vProvider === "luma-modify" ? 32 : 25)
   const useFull = useFullResolution(id)
+  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
+  useEffect(() => {
+    const url = activeThumbnail || activeUrl
+    if (!url) { setMediaAspectRatio(undefined); return }
+    if (activeThumbnail) {
+      let cancelled = false
+      const img = new window.Image()
+      const setRatio = () => { if (!cancelled && img.naturalWidth > 0) setMediaAspectRatio(img.naturalWidth / img.naturalHeight) }
+      img.onload = setRatio
+      img.src = activeThumbnail
+      if (img.complete) setRatio()
+      return () => { cancelled = true }
+    }
+  }, [activeThumbnail, activeUrl])
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
   const isNodeRunning = nodeData.executionStatus === "running"
@@ -63,6 +77,9 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      minWidth={200}
+      minHeight={mediaAspectRatio ? Math.round(200 / mediaAspectRatio) : 150}
+      imageAspectRatio={mediaAspectRatio}
       listCount={listTotal}
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
@@ -113,7 +130,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
-      <div className="relative w-full h-full group/video" style={{ minHeight: 180 }}>
+      <div className="relative w-full h-full group/video">
         {/* Video / thumbnail */}
         {activeUrl && status !== "running" && (
           <>
@@ -121,8 +138,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
               <CachedImage
                 src={activeThumbnail}
                 alt="Video preview"
-                className="w-full h-full object-cover rounded-xl cursor-pointer"
-                style={{ minHeight: 180 }}
+                className="w-full h-full object-cover rounded-xl node-result-image cursor-pointer"
                 onClick={() => selectNode(id)}
                 thumbnail={!useFull}
                 thumbnailWidth={320}
@@ -131,8 +147,11 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
               <video
                 src={activeUrl}
                 className="w-full h-full object-cover rounded-xl cursor-pointer"
-                style={{ minHeight: 180 }}
                 onClick={() => selectNode(id)}
+                onLoadedMetadata={(e) => {
+                  const v = e.currentTarget
+                  if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
+                }}
                 autoPlay={videoAutoplay}
                 muted
                 loop={videoAutoplay}
@@ -144,14 +163,14 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Empty state */}
         {!activeUrl && status !== "running" && status !== "failed" && (
-          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40" style={{ minHeight: 180 }}>
+          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
             <Clapperboard className="w-10 h-10" />
           </div>
         )}
 
         {/* Running state */}
         {status === "running" && (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10" style={{ minHeight: 180 }}>
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
             <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
@@ -159,7 +178,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Failed state */}
         {status === "failed" && !activeUrl && (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500" style={{ minHeight: 180 }}>
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500 h-[180px]">
             <AlertCircle className="w-6 h-6" />
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>
