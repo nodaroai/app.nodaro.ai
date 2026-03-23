@@ -304,17 +304,21 @@ export function LoopInputCard({
     [node.data.presentationDisplay, display, columns],
   )
 
+  const defaultRowCount = (node.data.defaultRows as number) ?? 1
+  const minRowCount = (node.data.minRows as number) ?? 0
+  const nodeInputVals = inputValues[node.id]
+
   const rows: string[][] = useMemo(() => {
     if (isFullscreen) {
-      const stored = inputValues[node.id]?.rows
+      const stored = nodeInputVals?.rows
       if (Array.isArray(stored) && stored.length > 0) return stored as string[][]
     } else {
       const raw = node.data.rows as string[][] | undefined
       if (Array.isArray(raw) && raw.length > 0) return raw
     }
-    // Initialize with one empty row matching column count
-    return [columns.map(() => "")]
-  }, [isFullscreen, inputValues, node.id, node.data.rows, columns])
+    if (defaultRowCount === 0) return []
+    return Array.from({ length: defaultRowCount }, () => columns.map(() => ""))
+  }, [isFullscreen, nodeInputVals, node.data.rows, columns, defaultRowCount])
 
   const updateRows = useCallback(
     (newRows: string[][]) => {
@@ -344,10 +348,10 @@ export function LoopInputCard({
 
   const handleRemoveRow = useCallback(
     (index: number) => {
-      if (rows.length <= 1) return
+      if (rows.length <= minRowCount) return
       updateRows(rows.filter((_, i) => i !== index))
     },
-    [rows, updateRows],
+    [rows, minRowCount, updateRows],
   )
 
   const rowIds = useMemo(
@@ -475,6 +479,7 @@ export function LoopInputCard({
           readOnly={readOnly}
           handleCellChange={handleCellChange}
           handleRemoveRow={handleRemoveRow}
+          minRowCount={minRowCount}
           rowIds={rowIds}
           sensors={sensors}
           onReorder={handleReorderRows}
@@ -491,6 +496,7 @@ export function LoopInputCard({
           textColIndices={textColIndices}
           handleCellChange={handleCellChange}
           handleRemoveRow={handleRemoveRow}
+          minRowCount={minRowCount}
           rowIds={rowIds}
           sensors={sensors}
           onReorder={handleReorderRows}
@@ -531,6 +537,7 @@ interface ViewProps {
   readOnly?: boolean
   handleCellChange: (rowIndex: number, colIndex: number, value: string) => void
   handleRemoveRow: (index: number) => void
+  minRowCount: number
   rowIds: string[]
   sensors: ReturnType<typeof useSensors>
   onReorder: (event: DragEndEvent) => void
@@ -624,6 +631,14 @@ function SortableCardRow({
 /*  Cards View                                                         */
 /* ------------------------------------------------------------------ */
 
+function EmptyRowsPlaceholder() {
+  return (
+    <div className="flex flex-col items-center justify-center py-8 text-center">
+      <p className="text-sm text-muted-foreground">No rows yet</p>
+    </div>
+  )
+}
+
 function CardsView({
   columns,
   rows,
@@ -633,6 +648,7 @@ function CardsView({
   textColIndices,
   handleCellChange,
   handleRemoveRow,
+  minRowCount,
   rowIds,
   sensors,
   onReorder,
@@ -645,6 +661,8 @@ function CardsView({
     ? { display: "grid", gridTemplateColumns: `repeat(${resolved.columns}, 1fr)`, gap: "0.75rem" }
     : undefined
 
+  if (rows.length === 0) return <EmptyRowsPlaceholder />
+
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onReorder}>
       <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
@@ -656,7 +674,7 @@ function CardsView({
                 <span className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
                   Row {rowIndex + 1}
                 </span>
-                {!readOnly && rows.length > 1 && (
+                {!readOnly && rows.length > minRowCount && (
                   <button
                     type="button"
                     onClick={() => handleRemoveRow(rowIndex)}
@@ -768,12 +786,15 @@ function TableView({
   readOnly,
   handleCellChange,
   handleRemoveRow,
+  minRowCount,
   rowIds,
   sensors,
   onReorder,
   onMultiFileDrop,
   promptHelper,
 }: ViewProps) {
+  if (rows.length === 0) return <EmptyRowsPlaceholder />
+
   return (
     <div className="w-full overflow-x-auto">
       {/* Header row — only shown when multiple columns */}
@@ -852,7 +873,7 @@ function TableView({
               })}
               {!readOnly && (
                 <div className="shrink-0 w-6 flex items-center justify-center">
-                  {rows.length > 1 && (
+                  {rows.length > minRowCount && (
                     <button
                       type="button"
                       onClick={() => handleRemoveRow(rowIndex)}

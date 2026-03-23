@@ -82,6 +82,8 @@ export type LoopNodeData = {
   rows: string[][]
   fieldMappings: Record<string, string>
   maxItems?: number
+  minRows?: number
+  defaultRows?: number
   thumbnailSize?: "sm" | "md" | "lg"
 }
 

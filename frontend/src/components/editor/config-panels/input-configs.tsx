@@ -541,6 +541,38 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
               className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
             />
           </div>
+          <div className="flex items-center gap-2 mt-2">
+            <label className="text-xs text-muted-foreground">Min rows to run</label>
+            <input
+              type="number"
+              min={0}
+              max={data.maxItems ?? 10}
+              value={data.minRows ?? 0}
+              onChange={(e) => {
+                const val = Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, data.maxItems ?? 10))
+                const updates: Partial<LoopNodeData> = { minRows: val }
+                if (val > (data.defaultRows ?? 1)) updates.defaultRows = val
+                onUpdate(updates)
+              }}
+              className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
+            />
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <label className="text-xs text-muted-foreground">Default rows in app</label>
+            <input
+              type="number"
+              min={data.minRows ?? 0}
+              max={data.maxItems ?? 10}
+              value={data.defaultRows ?? 1}
+              onChange={(e) => {
+                const min = data.minRows ?? 0
+                const max = data.maxItems ?? 10
+                const val = Math.max(min, Math.min(parseInt(e.target.value, 10) || 1, max))
+                onUpdate({ defaultRows: val })
+              }}
+              className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
+            />
+          </div>
         </>
       )}
 

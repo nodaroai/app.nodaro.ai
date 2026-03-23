@@ -9,7 +9,7 @@ import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import { getCachedCredits } from "@/hooks/use-model-credits";
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers";
-import type { GeneratedResult } from "@/types/nodes";
+import type { GeneratedResult, WorkflowNode } from "@/types/nodes";
 import {
   NODE_CREDIT_COSTS,
   MAX_CONSECUTIVE_POLL_FAILURES,
@@ -23,6 +23,24 @@ import { collapseExpandedClones } from "./execution-graph";
 import { getListInputForNode } from "./node-input-resolver";
 import { executeNode, rejectAllManualEdits } from "./execute-node";
 import { executeNodeForList } from "./list-execution";
+
+function warnUnderMinRows(nodes: WorkflowNode[]): void {
+  const underMin = nodes.filter((n) => {
+    if (n.type !== "loop") return false
+    const data = n.data as Record<string, unknown>
+    const minRows = (data.minRows as number) ?? 0
+    if (minRows === 0) return false
+    const rows = (data.rows as string[][]) ?? []
+    return rows.length < minRows
+  })
+  if (underMin.length === 0) return
+  const names = underMin.map((n) => {
+    const label = (n.data as Record<string, unknown>).label as string || "Table"
+    const minRows = ((n.data as Record<string, unknown>).minRows as number) ?? 0
+    return `${label} (needs ${minRows}+ rows)`
+  })
+  toast.warning(`Under minimum rows: ${names.join(", ")}`)
+}
 
 // ---------------------------------------------------------------------------
 // handleRun
@@ -39,6 +57,7 @@ export async function handleRun(
 ): Promise<void> {
   rejectAllManualEdits();
   const { nodes } = collapseExpandedClones();
+  warnUnderMinRows(nodes);
 
   const executableNodes = nodes.filter(isExecutableNode);
   if (executableNodes.length === 0) {
@@ -224,6 +243,8 @@ export async function handleRunFromHere(
     }
   }
 
+  warnUnderMinRows(nodes.filter((n) => downstream.has(n.id)));
+
   const executableNodes = nodes.filter(
     (n) => downstream.has(n.id) && isExecutableNode(n),
   );
@@ -302,6 +323,7 @@ export async function handleRunSelected(
     toast.error("No executable nodes in selection.");
     return;
   }
+  warnUnderMinRows(selectedNodes);
 
   const selectedIds = selectedNodes.map((n) => n.id);
 

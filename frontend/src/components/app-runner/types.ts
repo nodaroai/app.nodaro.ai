@@ -37,8 +37,10 @@ export function makeEmptyInputs(inputNodes: WorkflowNode[]): Record<string, Reco
       empty[node.id] = { items: [""] }
     } else if (t === "loop") {
       const columns = (d.columns as Array<Record<string, unknown>>) ?? []
+      const minRows = (d.minRows as number) ?? 0
+      const defaultRows = Math.max((d.defaultRows as number) ?? 1, minRows)
       const emptyRow = columns.map(() => "")
-      empty[node.id] = { rows: [emptyRow] }
+      empty[node.id] = { rows: Array.from({ length: defaultRows }, () => [...emptyRow]) }
     }
   }
   return empty
