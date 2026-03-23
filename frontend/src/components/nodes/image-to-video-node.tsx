@@ -100,6 +100,20 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const provider = nodeData.provider ?? "minimax"
   const credits = useModelCredits(provider, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
   const useFull = useFullResolution(id)
+  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
+  useEffect(() => {
+    const url = activeThumbnail || activeUrl
+    if (!url) { setMediaAspectRatio(undefined); return }
+    if (activeThumbnail) {
+      let cancelled = false
+      const img = new window.Image()
+      const setRatio = () => { if (!cancelled && img.naturalWidth > 0) setMediaAspectRatio(img.naturalWidth / img.naturalHeight) }
+      img.onload = setRatio
+      img.src = activeThumbnail
+      if (img.complete) setRatio()
+      return () => { cancelled = true }
+    }
+  }, [activeThumbnail, activeUrl])
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
   const isNodeRunning = nodeData.executionStatus === "running"
@@ -218,6 +232,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
       hideHeader
+      imageAspectRatio={mediaAspectRatio}
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
           <div className="flex gap-2 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
@@ -475,6 +490,10 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <video src={activeUrl}
                   className="w-full h-full object-cover"
                   autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline
+                  onLoadedMetadata={(e) => {
+                    const v = e.currentTarget
+                    if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
+                  }}
                 />
               )}
 

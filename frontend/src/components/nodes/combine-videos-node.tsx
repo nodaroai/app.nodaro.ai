@@ -54,6 +54,7 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
     })
   }, [videoDimensions, id])
 
+  const mediaAspectRatio = videoDimensions ? videoDimensions.width / videoDimensions.height : undefined
   const hasResult = status !== "running" && !!activeUrl && !videoError
 
   function handleDeleteResult(indexToDelete: number) {
@@ -73,6 +74,7 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
         isRunning={status === "running"}
         hideHeader
         minWidth={220}
+        imageAspectRatio={mediaAspectRatio}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         topToolbarContent={status !== "running" ? (<RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />) : undefined}
         handles={[
