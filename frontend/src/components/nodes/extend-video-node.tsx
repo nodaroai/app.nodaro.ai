@@ -21,6 +21,8 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
+  const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -178,12 +180,14 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
           url={activeUrl}
           videoAutoplay={videoAutoplay}
           label={nodeData.label}
-          hasResults={results.length > 0}
+          hasResults={results.length > 1}
           onExpand={() => setPreviewOpen(true)}
           onDelete={() => setDeleteConfirm(activeIndex)}
           onDimensionsChange={setVideoDimensions}
           onVideoError={() => setVideoError(true)}
           onVideoLoad={() => setVideoError(false)}
+          onSettings={() => selectNode(isSettingsOpen ? null : id)}
+          isSettingsOpen={isSettingsOpen}
         />
       )}
 
