@@ -48,12 +48,15 @@ import {
   type AppBrowseParams,
 } from "@/hooks/queries/use-app-marketplace-queries"
 import { AppMarketplaceCard, AppMarketplaceCardSkeleton } from "@/components/apps/app-marketplace-card"
+import { useAppSettings } from "@/hooks/queries/use-app-settings-queries"
 
 type ViewMode = "browse" | "my-apps" | "favorites"
 
 export default function AppsPage() {
   const { user } = useAuth()
   const qc = useQueryClient()
+  const { data: appSettings } = useAppSettings()
+  const videoAutoplay = appSettings?.apps_video_autoplay ?? true
 
   // Browse state
   const [viewMode, setViewMode] = useState<ViewMode>("browse")
@@ -369,6 +372,7 @@ export default function AppsPage() {
                   app={app}
                   isFavorited={favSet.has(app.id)}
                   onToggleFavorite={(id) => favMutation.mutate({ appId: id })}
+                  videoAutoplay={videoAutoplay}
                 />
               ))}
               {isFetchingNextPage &&

@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react"
-import { Loader2, Settings, Server, Percent, Check, AlertCircle } from "lucide-react"
+import { Loader2, Settings, Server, Percent, Check, AlertCircle, Film } from "lucide-react"
 import { useAdminSettings } from "@/hooks/queries/use-admin-queries"
 import { useUpdateSettingMutation, type AppSettings } from "@/hooks/queries/use-app-settings-queries"
 import { isFeatureEnabled, isCloud } from "@/lib/edition"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import {
   Select,
   SelectContent,
@@ -19,15 +20,16 @@ export default function AdminSettingsPage() {
   const updateSettingMut = useUpdateSettingMutation()
   const [provider, setProvider] = useState<"replicate" | "kie">("replicate")
   const [markup, setMarkup] = useState<number>(25)
+  const [videoAutoplay, setVideoAutoplay] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Sync settings to local form state when loaded
   useEffect(() => {
     if (settings) {
       setProvider(settings.ai_provider)
       setMarkup(settings.cost_markup_percent)
+      setVideoAutoplay(settings.apps_video_autoplay)
     }
   }, [settings])
 
@@ -44,6 +46,10 @@ export default function AdminSettingsPage() {
 
     if (isFeatureEnabled("costMarkup") && markup !== settings?.cost_markup_percent) {
       updates.push({ key: "cost_markup_percent", value: markup })
+    }
+
+    if (videoAutoplay !== settings?.apps_video_autoplay) {
+      updates.push({ key: "apps_video_autoplay", value: videoAutoplay })
     }
 
     let allSuccess = true
@@ -67,7 +73,8 @@ export default function AdminSettingsPage() {
 
   const hasChanges =
     (isFeatureEnabled("providerSelection") && provider !== settings?.ai_provider) ||
-    (isFeatureEnabled("costMarkup") && markup !== settings?.cost_markup_percent)
+    (isFeatureEnabled("costMarkup") && markup !== settings?.cost_markup_percent) ||
+    videoAutoplay !== settings?.apps_video_autoplay
 
   if (loading && !settings) {
     return (
@@ -191,9 +198,30 @@ export default function AdminSettingsPage() {
           </div>
         )}
 
+        {/* Apps Video Autoplay */}
+        <div className="border rounded-lg p-4 bg-card">
+          <div className="flex items-center gap-2 mb-4">
+            <Film className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-medium">Apps Display</h2>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="video-autoplay">Auto-play preview videos</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                When enabled, app preview videos play automatically in the carousel and app cards. Hovering always plays regardless.
+              </p>
+            </div>
+            <Switch
+              id="video-autoplay"
+              checked={videoAutoplay}
+              onCheckedChange={setVideoAutoplay}
+            />
+          </div>
+        </div>
+
         {/* Save Button */}
-        {(isFeatureEnabled("providerSelection") || isFeatureEnabled("costMarkup")) && (
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
             <Button onClick={handleSave} disabled={saving || !hasChanges}>
               {saving ? (
                 <>
@@ -211,7 +239,6 @@ export default function AdminSettingsPage() {
               </span>
             )}
           </div>
-        )}
       </div>
     </div>
   )

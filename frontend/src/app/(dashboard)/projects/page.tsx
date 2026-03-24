@@ -18,6 +18,7 @@ import { browseApps, browseTemplates, type TemplateBrowseCard, type AppBrowseCar
 import { useTemplateFavorites, useToggleTemplateFavoriteMutation } from "@/hooks/queries/use-template-marketplace-queries"
 import { TemplatePreviewModal } from "@/components/templates/template-preview-modal"
 import { TutorialsTab } from "@/components/dashboard/tutorials-tab"
+import { useAppSettings } from "@/hooks/queries/use-app-settings-queries"
 
 interface WorkflowSearchResult extends WorkflowMeta {
   readonly projectName: string
@@ -259,6 +260,10 @@ export default function ProjectsPage() {
   const CARD_SCROLL_PX = 210
   const AUTO_SCROLL_MS = 4000
 
+  const { data: appSettings } = useAppSettings()
+  const videoAutoplay = appSettings?.apps_video_autoplay ?? true
+  const featuredAppIds = appSettings?.featured_app_ids ?? []
+
   // Featured apps for the Apps tab
   const { data: featuredAppsData, isLoading: featuredAppsLoading } = useQuery({
     queryKey: ["featured-apps"],
@@ -267,14 +272,27 @@ export default function ProjectsPage() {
     enabled: activeTab === "apps",
   })
   // Shuffle once per data fetch so carousel starts at a random position
-  const shuffledAppsRef = useRef<{ key: unknown; apps: AppBrowseCard[] }>({ key: null, apps: [] })
-  if (featuredAppsData && featuredAppsData !== shuffledAppsRef.current.key) {
-    const apps = [...featuredAppsData.data]
-    for (let i = apps.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      ;[apps[i], apps[j]] = [apps[j], apps[i]]
+  const shuffledAppsRef = useRef<{ key: unknown; ids: string; apps: AppBrowseCard[] }>({ key: null, ids: "", apps: [] })
+  const featuredIdsKey = featuredAppIds.join(",")
+  if (featuredAppsData && (featuredAppsData !== shuffledAppsRef.current.key || featuredIdsKey !== shuffledAppsRef.current.ids)) {
+    let apps = [...featuredAppsData.data]
+    // If admin curated featured apps, show those first in order, then the rest shuffled
+    if (featuredAppIds.length > 0) {
+      const curated = featuredAppIds.map((id) => apps.find((a) => a.id === id)).filter(Boolean) as AppBrowseCard[]
+      const curatedIds = new Set(featuredAppIds)
+      const rest = apps.filter((a) => !curatedIds.has(a.id))
+      for (let i = rest.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[rest[i], rest[j]] = [rest[j], rest[i]]
+      }
+      apps = [...curated, ...rest]
+    } else {
+      for (let i = apps.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[apps[i], apps[j]] = [apps[j], apps[i]]
+      }
     }
-    shuffledAppsRef.current = { key: featuredAppsData, apps }
+    shuffledAppsRef.current = { key: featuredAppsData, ids: featuredIdsKey, apps }
   }
   const featuredApps = shuffledAppsRef.current.apps
 
@@ -428,11 +446,12 @@ export default function ProjectsPage() {
                             <video
                               src={app.previewMediaUrl}
                               className="w-full h-full object-cover"
+                              autoPlay={videoAutoplay}
                               muted
                               loop
                               playsInline
                               onMouseEnter={(e) => e.currentTarget.play()}
-                              onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
+                              onMouseLeave={(e) => { if (!videoAutoplay) { e.currentTarget.pause(); e.currentTarget.currentTime = 0 } }}
                             />
                           ) : (
                             <img src={app.previewMediaUrl} alt={app.name} className="w-full h-full object-cover" loading="lazy" />

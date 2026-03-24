@@ -5,7 +5,7 @@ import { invalidateSettingsCache } from "../lib/app-settings.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 
 const updateSettingBody = z.object({
-  value: z.union([z.string(), z.number(), z.boolean(), z.record(z.unknown())]),
+  value: z.union([z.string(), z.number(), z.boolean(), z.array(z.unknown()), z.record(z.unknown())]),
 })
 
 const settingKeyParams = z.object({
@@ -116,6 +116,28 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
           error: {
             code: "validation_error",
             message: "cost_markup_percent must be a number between 0 and 500",
+          },
+        })
+      }
+    }
+
+    if (key === "apps_video_autoplay") {
+      if (typeof value !== "boolean") {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: "apps_video_autoplay must be a boolean",
+          },
+        })
+      }
+    }
+
+    if (key === "featured_app_ids") {
+      if (!Array.isArray(value) || !value.every((v: unknown) => typeof v === "string")) {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: "featured_app_ids must be an array of strings",
           },
         })
       }
