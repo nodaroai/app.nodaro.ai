@@ -39,7 +39,7 @@ import { OutputCard } from "@/components/presentation/output-card"
 import { ConfigFieldRenderer } from "@/components/presentation/config-field-renderer"
 import { RichtextBlock } from "@/components/presentation/richtext-block"
 import { GroupCard } from "@/components/presentation/group-card"
-import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled, resolveInputItems } from "@/components/presentation/helpers"
+import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled, resolveInputItems, resolveOutputItems } from "@/components/presentation/helpers"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import type { PresentationItem } from "@nodaro-shared/presentation-types"
 import { NodeConfigModal, CONFIG_INPUT_TYPES } from "@/components/presentation/node-config-modal"
@@ -127,7 +127,9 @@ export function MobileAppShell({
 
   // ---- Items-based input rendering (field items, groups, richtext) ----
   const inputItems = useMemo(() => resolveInputItems(settings), [settings.inputItems, settings.inputOrder])
+  const outputItems = useMemo(() => resolveOutputItems(settings), [settings.outputItems, settings.outputOrder])
   const useItemsRendering = inputItems && inputItems.length > 0
+  const useOutputItemsRendering = outputItems && outputItems.length > 0
 
   const findFieldDef = useCallback(
     (nodeId: string, fieldKey: string) => {
@@ -679,6 +681,41 @@ export function MobileAppShell({
     )
   }, [getNodeStatus, getFullscreenResult, getCardTitle, handleOpenMedia, combinedProgress, settings.cardMeta])
 
+  // ---- Item-based output renderer (mirrors PresentationView renderOutputItem) ----
+  const renderOutputItem = useCallback(
+    (item: PresentationItem): React.ReactNode => {
+      switch (item.type) {
+        case "node":
+        case "output": {
+          const node = nodeMap.get(item.nodeId)
+          if (!node) return null
+          return renderOutputCard(node)
+        }
+        case "field":
+          return null
+        case "richtext":
+          return <RichtextBlock content={item.content} />
+        case "group":
+          return (
+            <GroupCard
+              title={item.title}
+              showTitle={item.showTitle ?? true}
+              showBackground={item.showBackground ?? true}
+            >
+              {item.items.map((child) => (
+                <div key={child.type === "node" ? child.nodeId : child.id}>
+                  {renderOutputItem(child)}
+                </div>
+              ))}
+            </GroupCard>
+          )
+        default:
+          return null
+      }
+    },
+    [nodeMap, renderOutputCard],
+  )
+
   // ---- View props for override views (gallery/fullscreen/compare) ----
   const viewProps = useMemo(() => ({
     orderedInputNodes,
@@ -808,11 +845,18 @@ export function MobileAppShell({
         ) : activeTab === "outputs" ? (
           // Outputs tab
           <div className="space-y-4 p-4">
-            {orderedOutputNodes.length === 0 && !isRunning ? (
+            {orderedOutputNodes.length === 0 && !useOutputItemsRendering && !isRunning ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Inbox className="h-8 w-8 mb-3 opacity-40" />
                 <p className="text-sm">Run the app to see results here</p>
               </div>
+            ) : useOutputItemsRendering ? (
+              outputItems!.map((item) => {
+                const key = item.type === "node" ? item.nodeId : item.id
+                const rendered = renderOutputItem(item)
+                if (!rendered) return null
+                return <div key={key}>{rendered}</div>
+              })
             ) : (
               orderedOutputNodes.map((node) => renderOutputCard(node))
             )}
