@@ -258,12 +258,12 @@ export default function ProjectsPage() {
   ]
 
   const CARD_SCROLL_PX = 210
-  const AUTO_SCROLL_MS = 4000
 
   const { data: appSettings } = useAppSettings()
   const videoAutoplay = appSettings?.apps_video_autoplay ?? true
   const featuredAppIds = appSettings?.featured_app_ids ?? []
   const appsLimit = appSettings?.featured_apps_limit ?? 20
+  const autoScrollMs = (appSettings?.apps_auto_scroll_seconds ?? 4) * 1000
 
   // Featured apps for the Apps tab — fetch max to allow admin limit to work without refetch
   const { data: featuredAppsData, isLoading: featuredAppsLoading } = useQuery({
@@ -321,7 +321,7 @@ export default function ProjectsPage() {
   }, [featuredApps.length, updateScrollState])
 
   useEffect(() => {
-    if (featuredApps.length <= 1 || activeTab !== "apps") return
+    if (featuredApps.length <= 1 || activeTab !== "apps" || autoScrollMs === 0) return
     const timer = setInterval(() => {
       const el = appsScrollRef.current
       if (!el || isHoveringApps.current) return
@@ -331,9 +331,9 @@ export default function ProjectsPage() {
       } else {
         el.scrollBy({ left: CARD_SCROLL_PX, behavior: "smooth" })
       }
-    }, AUTO_SCROLL_MS)
+    }, autoScrollMs)
     return () => clearInterval(timer)
-  }, [featuredApps.length, activeTab])
+  }, [featuredApps.length, activeTab, autoScrollMs])
 
   const scrollAppsLeft = useCallback(() => {
     appsScrollRef.current?.scrollBy({ left: -CARD_SCROLL_PX, behavior: "smooth" })

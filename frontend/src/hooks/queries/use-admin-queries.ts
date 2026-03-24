@@ -356,6 +356,7 @@ export function useAdminSettings() {
         apps_video_autoplay: (settings.apps_video_autoplay as boolean) ?? true,
         featured_app_ids: (Array.isArray(settings.featured_app_ids) ? settings.featured_app_ids : []) as string[],
         featured_apps_limit: (settings.featured_apps_limit as number) ?? 20,
+        apps_auto_scroll_seconds: (settings.apps_auto_scroll_seconds as number) ?? 4,
       }
     },
     enabled: hasAdmin(),

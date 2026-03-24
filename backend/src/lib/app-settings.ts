@@ -6,6 +6,7 @@ export interface AppSettings {
   apps_video_autoplay: boolean
   featured_app_ids: string[]
   featured_apps_limit: number
+  apps_auto_scroll_seconds: number
 }
 
 // Cache settings for 60 seconds to avoid hitting the DB on every job
@@ -43,7 +44,7 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    return { ai_provider: "replicate", ***REDACTED-OSS-SCRUB*** apps_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20 }
+    return { ai_provider: "replicate", ***REDACTED-OSS-SCRUB*** apps_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4 }
   }
 
   const settings: AppSettings = {
@@ -52,6 +53,7 @@ async function refreshSettings(): Promise<AppSettings> {
     apps_video_autoplay: true,
     featured_app_ids: [],
     featured_apps_limit: 20,
+    apps_auto_scroll_seconds: 4,
   }
 
   for (const row of data ?? []) {
@@ -65,6 +67,8 @@ async function refreshSettings(): Promise<AppSettings> {
       settings.featured_app_ids = row.value as string[]
     } else if (row.key === "featured_apps_limit" && typeof row.value === "number") {
       settings.featured_apps_limit = row.value
+    } else if (row.key === "apps_auto_scroll_seconds" && typeof row.value === "number") {
+      settings.apps_auto_scroll_seconds = row.value
     }
   }
 

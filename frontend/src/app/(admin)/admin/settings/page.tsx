@@ -22,6 +22,7 @@ export default function AdminSettingsPage() {
   const [markup, setMarkup] = useState<number>(25)
   const [videoAutoplay, setVideoAutoplay] = useState(true)
   const [appsLimit, setAppsLimit] = useState(20)
+  const [autoScrollSeconds, setAutoScrollSeconds] = useState(4)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,6 +33,7 @@ export default function AdminSettingsPage() {
       setMarkup(settings.cost_markup_percent)
       setVideoAutoplay(settings.apps_video_autoplay)
       setAppsLimit(settings.featured_apps_limit)
+      setAutoScrollSeconds(settings.apps_auto_scroll_seconds)
     }
   }, [settings])
 
@@ -58,6 +60,10 @@ export default function AdminSettingsPage() {
       updates.push({ key: "featured_apps_limit", value: appsLimit })
     }
 
+    if (autoScrollSeconds !== settings?.apps_auto_scroll_seconds) {
+      updates.push({ key: "apps_auto_scroll_seconds", value: autoScrollSeconds })
+    }
+
     let allSuccess = true
     for (const update of updates) {
       try {
@@ -81,7 +87,8 @@ export default function AdminSettingsPage() {
     (isFeatureEnabled("providerSelection") && provider !== settings?.ai_provider) ||
     (isFeatureEnabled("costMarkup") && markup !== settings?.cost_markup_percent) ||
     videoAutoplay !== settings?.apps_video_autoplay ||
-    appsLimit !== settings?.featured_apps_limit
+    appsLimit !== settings?.featured_apps_limit ||
+    autoScrollSeconds !== settings?.apps_auto_scroll_seconds
 
   if (loading && !settings) {
     return (
@@ -242,6 +249,25 @@ export default function AdminSettingsPage() {
             </div>
             <p className="text-xs text-muted-foreground">
               Maximum number of apps shown in the homepage carousel (1-50). Featured apps always appear first.
+            </p>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <Label htmlFor="auto-scroll">Auto-scroll interval</Label>
+            <div className="flex items-center gap-2 max-w-xs">
+              <Input
+                id="auto-scroll"
+                type="number"
+                min={0}
+                max={60}
+                value={autoScrollSeconds}
+                onChange={(e) => setAutoScrollSeconds(Math.max(0, Math.min(60, Number(e.target.value) || 0)))}
+                className="w-24"
+              />
+              <span className="text-sm text-muted-foreground">seconds</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Time between auto-scroll steps in the carousel (0 to disable). Pauses on hover.
             </p>
           </div>
         </div>

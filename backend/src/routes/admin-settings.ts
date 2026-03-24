@@ -154,6 +154,17 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
       }
     }
 
+    if (key === "apps_auto_scroll_seconds") {
+      if (typeof value !== "number" || value < 0 || value > 60) {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: "apps_auto_scroll_seconds must be a number between 0 and 60 (0 to disable)",
+          },
+        })
+      }
+    }
+
     const { data, error } = await supabase
       .from("app_settings")
       .upsert(

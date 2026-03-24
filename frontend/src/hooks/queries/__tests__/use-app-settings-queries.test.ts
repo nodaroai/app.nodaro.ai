@@ -38,6 +38,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   apps_video_autoplay: true,
   featured_app_ids: [],
   featured_apps_limit: 20,
+  apps_auto_scroll_seconds: 4,
 }
 
 describe("useAppSettings", () => {

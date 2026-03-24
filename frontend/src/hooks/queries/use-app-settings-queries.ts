@@ -9,6 +9,7 @@ export interface AppSettings {
   readonly apps_video_autoplay: boolean
   readonly featured_app_ids: readonly string[]
   readonly featured_apps_limit: number
+  readonly apps_auto_scroll_seconds: number
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -17,6 +18,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   apps_video_autoplay: true,
   featured_app_ids: [],
   featured_apps_limit: 20,
+  apps_auto_scroll_seconds: 4,
 }
 
 async function fetchAppSettings(): Promise<AppSettings> {
@@ -32,6 +34,7 @@ async function fetchAppSettings(): Promise<AppSettings> {
     apps_video_autoplay: (settings.apps_video_autoplay as boolean) ?? true,
     featured_app_ids: (Array.isArray(settings.featured_app_ids) ? settings.featured_app_ids : []) as string[],
     featured_apps_limit: (settings.featured_apps_limit as number) ?? 20,
+    apps_auto_scroll_seconds: (settings.apps_auto_scroll_seconds as number) ?? 4,
   }
 }
 
