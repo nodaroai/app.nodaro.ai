@@ -35,7 +35,7 @@ import { ORIGINAL_SLOT_ID } from "./types"
 import type { useRunSlots } from "./use-run-slots"
 
 import { InputCard } from "@/components/presentation/input-card"
-import { OutputCard } from "@/components/presentation/output-card"
+import { OutputCard, type FieldBadgeEntry } from "@/components/presentation/output-card"
 import { ConfigFieldRenderer } from "@/components/presentation/config-field-renderer"
 import { RichtextBlock } from "@/components/presentation/richtext-block"
 import { GroupCard } from "@/components/presentation/group-card"
@@ -588,6 +588,33 @@ export function MobileAppShell({
 
   const handleSignIn = useCallback(() => openLoginPopup(), [openLoginPopup])
 
+  // ---- Pre-compute field badges for output nodes ----
+  const fieldBadgesByNode = useMemo(() => {
+    if (!outputItems) return new Map<string, FieldBadgeEntry[]>()
+    const map = new Map<string, FieldBadgeEntry[]>()
+    const walkItems = (items: PresentationItem[]) => {
+      for (const item of items) {
+        if (item.type === "field") {
+          const fieldDef = findFieldDef(item.nodeId, item.field)
+          if (fieldDef) {
+            const nodeData = nodeMap.get(item.nodeId)?.data as Record<string, unknown> | undefined
+            const inputVals = presInputValues[item.nodeId]
+            const value = inputVals?.[item.field] ?? nodeData?.[item.field] ?? fieldDef.defaultValue
+            const existing = map.get(item.nodeId)
+            if (existing) {
+              existing.push({ id: item.id, fieldDef, value })
+            } else {
+              map.set(item.nodeId, [{ id: item.id, fieldDef, value }])
+            }
+          }
+        }
+        if (item.type === "group") walkItems(item.items)
+      }
+    }
+    walkItems(outputItems)
+    return map
+  }, [outputItems, findFieldDef, nodeMap, presInputValues])
+
   // ---- Render output card (replicate PresentationView logic) ----
   const renderOutputCard = useCallback((node: WorkflowNode) => {
     // Social media format: show PlatformPreview with platform badge
@@ -665,6 +692,7 @@ export function MobileAppShell({
     const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
     const cardDisplay = settings.cardMeta?.[node.id]?.display
     const elementSize = cardDisplay?.elementSize ?? nodeDisplay?.elementSize ?? "md"
+    const fieldBadges = fieldBadgesByNode.get(node.id)
     return (
       <OutputCard
         key={node.id}
@@ -677,9 +705,10 @@ export function MobileAppShell({
         onOpenMedia={handleOpenMedia}
         progress={progress}
         elementSize={elementSize}
+        fieldBadges={fieldBadges}
       />
     )
-  }, [getNodeStatus, getFullscreenResult, getCardTitle, handleOpenMedia, combinedProgress, settings.cardMeta])
+  }, [getNodeStatus, getFullscreenResult, getCardTitle, handleOpenMedia, combinedProgress, settings.cardMeta, fieldBadgesByNode])
 
   // ---- Item-based output renderer (mirrors PresentationView renderOutputItem) ----
   const renderOutputItem = useCallback(
