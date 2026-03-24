@@ -131,7 +131,7 @@ export function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>
       </div>
 
       {/* Settings */}
-      <Accordion type="single" collapsible>
+      <Accordion type="single" value="settings">
         <AccordionItem value="settings" className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shadow-sm">
           <AccordionTrigger className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
             Settings

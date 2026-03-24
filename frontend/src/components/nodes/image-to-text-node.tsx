@@ -94,10 +94,6 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedText", "text"))
   }
 
-  const truncatedText = activeText && activeText.length > 100
-    ? `${activeText.substring(0, 100)}...`
-    : activeText
-
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>
     <EditableNodeLabel
@@ -113,6 +109,8 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      minWidth={300}
+      minHeight={350}
       hideHeader
       topToolbarContent={
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
@@ -122,7 +120,7 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
         { id: "text", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1 h-full">
         {status === "running" && !activeText && (
           <div className="flex flex-col items-center justify-center gap-2 h-12 rounded-md bg-muted/30">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -131,22 +129,15 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {activeText && (
-          <div className="relative group">
+          <div className="relative group flex-1 flex flex-col">
             <div
-              className="w-full rounded-md bg-muted/30 p-2 cursor-pointer hover:bg-muted/50 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation()
-                setPreviewOpen(true)
-              }}
+              className="w-full rounded-md bg-muted/20 p-3 flex-1 flex flex-col"
             >
-              <p className="text-xs text-foreground/80 line-clamp-3">
-                {truncatedText}
-              </p>
-              {activeText.length > 100 && (
-                <span className="text-[10px] text-muted-foreground mt-1 block">
-                  Click to expand
-                </span>
-              )}
+              <div className="overflow-y-auto flex-1 pr-1">
+                <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">
+                  {activeText}
+                </p>
+              </div>
             </div>
             {status === "running" && (
               <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded">
@@ -209,8 +200,8 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && !activeText && status !== "failed" && (
-          <div className="flex items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
-            <Eye className="w-5 h-5" />
+          <div className="flex items-center justify-center py-6 text-muted-foreground/40">
+            <span className="text-xs">No output yet</span>
           </div>
         )}
 

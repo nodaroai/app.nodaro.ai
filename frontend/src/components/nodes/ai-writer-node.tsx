@@ -1,8 +1,8 @@
 "use client"
 
-import { memo, useState, useRef, useCallback } from "react"
+import { memo, useState, useRef, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Sparkles, Loader2, AlertCircle, X, FileText, Square, Type, Copy, Download } from "lucide-react"
+import { Sparkles, Loader2, AlertCircle, X, FileText, Square, Type, Copy, Download, Maximize2 } from "lucide-react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
 import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
@@ -92,6 +92,8 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
   // Streaming state -- tokens are written to the Zustand store (generatedText)
   // so that both the node card and the config panel can display them.
   const [isStreaming, setIsStreaming] = useState(false)
+  const textContainerRef = useRef<HTMLDivElement>(null)
+  const [hasOverflow, setHasOverflow] = useState(false)
   const abortControllerRef = useRef<AbortController | null>(null)
   const accumulatedTextRef = useRef("")
   const flushTimerRef = useRef<number | null>(null)
@@ -223,13 +225,22 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
   // activeText derives from generatedText in the store, which is updated
   // during streaming (via rAF flushes) and after completion.
   const displayText = activeText
-  const truncatedText = displayText && displayText.length > 100
-    ? `${displayText.substring(0, 100)}...`
-    : displayText
+
+  useEffect(() => {
+    const el = textContainerRef.current
+    if (!el || !displayText) return
+
+    // Use ResizeObserver for reliable detection in flex containers
+    const check = () => setHasOverflow(el.scrollHeight > el.clientHeight + 2)
+    check()
+    const observer = new ResizeObserver(check)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [displayText])
 
   return (
     <>
-      <div className="relative">
+      <div className="relative" style={{ maxWidth: '320px' }}>
         <EditableNodeLabel
           label={nodeData.label}
           icon={<Sparkles className="w-3.5 h-3.5" />}
@@ -246,6 +257,8 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
           listCount={listTotal}
           listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
           listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
+          minWidth={300}
+          minHeight={350}
           hideHeader
           topToolbarContent={
                           <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={handleStreamingRun} />
@@ -255,7 +268,7 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
             { id: "text", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
           ]}
         >
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 h-full">
             {/* Template badge */}
             {template && template.id !== "custom" && (
               <div className="flex items-center gap-1">
@@ -272,23 +285,14 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {displayText && (
-              <div className="relative group">
-                <div
-                  className="w-full rounded-md bg-muted/30 p-2 cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (!isStreaming) setPreviewOpen(true)
-                  }}
-                >
-                  <p className="text-xs text-foreground/80 line-clamp-3">
-                    {truncatedText}
-                    {isStreaming && <span className="animate-pulse">|</span>}
-                  </p>
-                  {!isStreaming && displayText.length > 100 && (
-                    <span className="text-[10px] text-muted-foreground mt-1 block">
-                      Click to expand
-                    </span>
-                  )}
+              <div className="relative group flex-1 flex flex-col">
+                <div className="w-full rounded-md bg-muted/20 p-3 flex-1 flex flex-col">
+                  <div ref={textContainerRef} className="overflow-y-auto pr-1" style={{ maxHeight: '400px' }}>
+                    <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">
+                      {displayText}
+                      {isStreaming && <span className="animate-pulse">|</span>}
+                    </p>
+                  </div>
                 </div>
                 {status === "running" && !isStreaming && (
                   <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded">
@@ -351,8 +355,8 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {status !== "running" && !displayText && status !== "failed" && (
-              <div className="flex items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
-                <FileText className="w-5 h-5" />
+              <div className="flex items-center justify-center py-6 text-muted-foreground/40">
+                <span className="text-xs">No output yet</span>
               </div>
             )}
 
@@ -405,10 +409,25 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
               </button>
             )}
 
-            <div className="flex justify-between text-muted-foreground">
-              <span>{nodeData.provider || "gemini"}</span>
-              <span>{template?.label ?? "Custom"}</span>
-            </div>
+            {displayText && (
+              <div className="flex items-center gap-1 px-1 pt-1">
+                <span className="text-[10px] text-muted-foreground/50">{nodeData.provider || "claude"} · {nodeData.llmModel || "default"}</span>
+              </div>
+            )}
+
+            {!isStreaming && displayText && hasOverflow && (
+              <button
+                type="button"
+                className="w-full flex items-center justify-center gap-1 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors border-t border-border/50 mt-1"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setPreviewOpen(true)
+                }}
+              >
+                <Maximize2 className="w-3 h-3" />
+                View full output
+              </button>
+            )}
           </div>
         </BaseNode>
         <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)" />
