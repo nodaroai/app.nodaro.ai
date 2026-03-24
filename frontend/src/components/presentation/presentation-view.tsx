@@ -103,6 +103,14 @@ function updateGroupTitle(items: PresentationItem[], id: string, title: string):
   })
 }
 
+/** Recursively update a group field by id */
+function updateGroupField(items: PresentationItem[], id: string, field: string, value: unknown): PresentationItem[] {
+  return items.map((item) => {
+    if (item.type === "group" && item.id === id) return { ...item, [field]: value }
+    return item
+  })
+}
+
 interface PresentationViewProps {
   mode: "tab" | "fullscreen"
   isOwner: boolean
@@ -1056,10 +1064,20 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             <GroupCard
               title={item.title}
               isEditing={isEditing}
+              showTitle={item.showTitle ?? true}
+              showBackground={item.showBackground ?? true}
               onTitleChange={(title) => {
                 const items = settings.inputItems ?? []
                 const updated = updateGroupTitle(items, item.id, title)
                 updatePresentationSettings({ inputItems: updated })
+              }}
+              onShowTitleChange={(v) => {
+                const items = settings.inputItems ?? []
+                updatePresentationSettings({ inputItems: updateGroupField(items, item.id, "showTitle", v) })
+              }}
+              onShowBackgroundChange={(v) => {
+                const items = settings.inputItems ?? []
+                updatePresentationSettings({ inputItems: updateGroupField(items, item.id, "showBackground", v) })
               }}
               onDelete={() => {
                 const items = settings.inputItems ?? []
@@ -1122,10 +1140,20 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             <GroupCard
               title={item.title}
               isEditing={isEditing}
+              showTitle={item.showTitle ?? true}
+              showBackground={item.showBackground ?? true}
               onTitleChange={(title) => {
                 const items = settings.outputItems ?? []
                 const updated = updateGroupTitle(items, item.id, title)
                 updatePresentationSettings({ outputItems: updated })
+              }}
+              onShowTitleChange={(v) => {
+                const items = settings.outputItems ?? []
+                updatePresentationSettings({ outputItems: updateGroupField(items, item.id, "showTitle", v) })
+              }}
+              onShowBackgroundChange={(v) => {
+                const items = settings.outputItems ?? []
+                updatePresentationSettings({ outputItems: updateGroupField(items, item.id, "showBackground", v) })
               }}
               onDelete={() => {
                 const items = settings.outputItems ?? []

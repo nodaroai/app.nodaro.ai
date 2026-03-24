@@ -20,4 +20,4 @@ export type PresentationItem =
   | { type: "field"; id: string; nodeId: string; field: string; allowedValues?: Array<string | number | boolean> }
   | { type: "output"; id: string; nodeId: string; outputKey: string }
   | { type: "richtext"; id: string; content: string }
-  | { type: "group"; id: string; title: string; items: PresentationItem[] }
+  | { type: "group"; id: string; title: string; items: PresentationItem[]; showTitle?: boolean; showBackground?: boolean }
