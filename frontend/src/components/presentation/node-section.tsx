@@ -149,8 +149,10 @@ export function NodeSection({
                       onDescriptionChange={(v) => { if (metaKey) updateCardMeta(metaKey, "description", v) }}
                       cardTitle={metaKey ? settings.cardMeta?.[metaKey]?.title : undefined}
                       onTitleChange={metaKey ? (v) => updateCardMeta(metaKey, "title", v) : undefined}
-                      cardDisplay={showDisplayConfig && isNodeItem && nodeId ? settings.cardMeta?.[nodeId]?.display : undefined}
-                      onDisplayChange={showDisplayConfig && isNodeItem && nodeId ? (d) => updateCardMeta(nodeId, "display", d) : undefined}
+                      cardDisplay={nodeId ? settings.cardMeta?.[nodeId]?.display : undefined}
+                      onDisplayChange={nodeId ? (d) => updateCardMeta(nodeId, "display", d) : undefined}
+                      showColumns={showDisplayConfig}
+                      showElementSize={showDisplayConfig}
                     >
                       {rendered}
                     </SortableCardWrapper>
@@ -177,8 +179,10 @@ export function NodeSection({
                     onRemove={() => onRemove(node.id)}
                     cardDescription={settings.cardMeta?.[node.id]?.description}
                     onDescriptionChange={(v) => updateCardMeta(node.id, "description", v)}
-                    cardDisplay={showDisplayConfig ? settings.cardMeta?.[node.id]?.display : undefined}
-                    onDisplayChange={showDisplayConfig ? (d) => updateCardMeta(node.id, "display", d) : undefined}
+                    cardDisplay={settings.cardMeta?.[node.id]?.display}
+                    onDisplayChange={(d) => updateCardMeta(node.id, "display", d)}
+                    showColumns={showDisplayConfig}
+                    showElementSize={showDisplayConfig}
                   >
                     {renderCard(node)}
                   </SortableCardWrapper>

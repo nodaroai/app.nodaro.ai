@@ -38,13 +38,16 @@ export function colTypeToMimePrefix(colType: string): string {
   return MIME_PREFIXES[colType] ?? "application/"
 }
 
+/** Resolved display with required core fields and optional layout fields */
+export type ResolvedPresentationDisplay = Required<Pick<PresentationDisplay, "columns" | "elementSize" | "viewMode">> & Pick<PresentationDisplay, "maxWidth" | "align">
+
 /** Resolve display settings: cardMeta overrides node defaults, then auto-defaults */
 export function resolveDisplay(
   nodeDisplay: PresentationDisplay | undefined,
   cardDisplay: Partial<PresentationDisplay> | undefined,
   outputType: string,
   loopColumns?: LoopColumn[],
-): Required<PresentationDisplay> {
+): ResolvedPresentationDisplay {
   const merged = { ...nodeDisplay, ...cardDisplay }
   return {
     columns: merged.columns ?? DEFAULT_COLUMNS[outputType] ?? 1,
@@ -54,6 +57,8 @@ export function resolveDisplay(
         ? (loopColumns && hasMediaColumns(loopColumns) ? "cards" : "table")
         : ""
     ),
+    maxWidth: merged.maxWidth,
+    align: merged.align,
   }
 }
 

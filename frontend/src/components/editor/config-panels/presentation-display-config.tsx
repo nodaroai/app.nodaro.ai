@@ -1,4 +1,4 @@
-import { Columns2, Columns3, Columns4, Rows3 } from "lucide-react"
+import { Columns2, Columns3, Columns4, Rows3, AlignLeft, AlignCenter, AlignRight } from "lucide-react"
 import type { PresentationDisplay } from "@/types/nodes"
 
 const COLUMN_OPTIONS: { value: 1 | 2 | 3 | 4; icon: React.ReactNode; label: string }[] = [
@@ -14,9 +14,25 @@ const SIZE_OPTIONS: { value: "sm" | "md" | "lg"; label: string }[] = [
   { value: "lg", label: "L" },
 ]
 
+const ALIGN_OPTIONS: { value: "left" | "center" | "right"; icon: React.ReactNode; label: string }[] = [
+  { value: "left", icon: <AlignLeft className="w-3.5 h-3.5" />, label: "Left" },
+  { value: "center", icon: <AlignCenter className="w-3.5 h-3.5" />, label: "Center" },
+  { value: "right", icon: <AlignRight className="w-3.5 h-3.5" />, label: "Right" },
+]
+
+const WIDTH_OPTIONS: { value: number; label: string }[] = [
+  { value: 25, label: "25%" },
+  { value: 33, label: "33%" },
+  { value: 50, label: "50%" },
+  { value: 75, label: "75%" },
+  { value: 100, label: "100%" },
+]
+
 interface PresentationDisplayConfigProps {
   display: PresentationDisplay
   onChange: (display: PresentationDisplay) => void
+  /** Show columns control (hide for input nodes) */
+  showColumns?: boolean
   /** Show element size control (hide for text-only nodes) */
   showElementSize?: boolean
   /** Available view modes (only for nodes with multiple views, e.g. loop) */
@@ -26,6 +42,7 @@ interface PresentationDisplayConfigProps {
 export function PresentationDisplayConfig({
   display,
   onChange,
+  showColumns = true,
   showElementSize = true,
   viewModes,
 }: PresentationDisplayConfigProps) {
@@ -35,7 +52,7 @@ export function PresentationDisplayConfig({
         Presentation
       </p>
 
-      <div className="space-y-1">
+      {showColumns && <div className="space-y-1">
         <p className="text-[11px] text-muted-foreground">Columns per row</p>
         <div className="flex gap-1">
           {COLUMN_OPTIONS.map((opt) => (
@@ -54,7 +71,7 @@ export function PresentationDisplayConfig({
             </button>
           ))}
         </div>
-      </div>
+      </div>}
 
       {showElementSize && (
         <div className="space-y-1">
@@ -99,6 +116,46 @@ export function PresentationDisplayConfig({
           </div>
         </div>
       )}
+
+      <div className="space-y-1">
+        <p className="text-[11px] text-muted-foreground">Max width</p>
+        <div className="flex gap-1">
+          {WIDTH_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange({ ...display, maxWidth: opt.value === 100 ? undefined : opt.value })}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                (display.maxWidth ?? 100) === opt.value
+                  ? "bg-[#ff0073]/15 text-[#ff0073] border border-[#ff0073]/30"
+                  : "bg-muted/50 text-muted-foreground border border-transparent hover:bg-muted"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-[11px] text-muted-foreground">Alignment</p>
+        <div className="flex gap-1">
+          {ALIGN_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange({ ...display, align: opt.value === "left" ? undefined : opt.value })}
+              className={`flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                (display.align ?? "left") === opt.value
+                  ? "bg-[#ff0073]/15 text-[#ff0073] border border-[#ff0073]/30"
+                  : "bg-muted/50 text-muted-foreground border border-transparent hover:bg-muted"
+              }`}
+            >
+              {opt.icon}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

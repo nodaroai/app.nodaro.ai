@@ -36,7 +36,7 @@ export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia, eleme
           <CachedImage
             src={url}
             alt={label}
-            className={`w-full ${maxHClass} object-contain rounded-lg bg-black/20`}
+            className={`w-full ${maxHClass} object-contain rounded-lg`}
             thumbnail
             thumbnailWidth={thumbWidth}
           />
