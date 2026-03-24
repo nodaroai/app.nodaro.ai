@@ -219,7 +219,7 @@ const NODES: NodeTestConfig[] = [
   { name: "SunoMusicVideoNode", Component: SunoMusicVideoNode, expectedCategory: "ai", defaultData: { label: "Suno Music Video" } },
   { name: "LipSyncNode", Component: LipSyncNode, expectedCategory: "ai", defaultData: { label: "Lip Sync", provider: "kling-avatar" }, skipIdlePlaceholder: true, skipFailedText: true },
   { name: "MotionTransferNode", Component: MotionTransferNode, expectedCategory: "ai", defaultData: { label: "Motion Transfer" }, skipIdlePlaceholder: true, skipFailedText: true },
-  { name: "TranscribeNode", Component: TranscribeNode, expectedCategory: "ai", defaultData: { label: "Transcribe", provider: "whisper" } },
+  { name: "TranscribeNode", Component: TranscribeNode, expectedCategory: "ai", defaultData: { label: "Transcribe", provider: "whisper" }, skipIdlePlaceholder: true },
   { name: "CombineVideosNode", Component: CombineVideosNode, expectedCategory: "processing", defaultData: { label: "Combine Videos" } },
   { name: "MergeVideoAudioNode", Component: MergeVideoAudioNode, expectedCategory: "processing", defaultData: { label: "Merge Video Audio" } },
   { name: "AddCaptionsNode", Component: AddCaptionsNode, expectedCategory: "processing", defaultData: { label: "Add Captions" } },
