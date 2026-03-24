@@ -81,8 +81,7 @@ describe("AIWriterNode", () => {
 
   it("shows idle placeholder", () => {
     renderNode()
-    const dashed = document.querySelector(".border-dashed")
-    expect(dashed).toBeInTheDocument()
+    expect(screen.getByText("No output yet")).toBeInTheDocument()
   })
 
   it("shows template label", () => {

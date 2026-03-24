@@ -95,7 +95,15 @@ describe("useAppSettings", () => {
     useAppSettings()
     const opts = mockUseQuery.mock.calls[0][0]
     const result = await opts.queryFn()
-    expect(result).toEqual({ ai_provider: "kie", cost_markup_percent: 30 })
+    expect(result).toEqual({
+      ai_provider: "kie",
+      cost_markup_percent: 30,
+      carousel_video_autoplay: true,
+      apps_page_video_autoplay: true,
+      featured_app_ids: [],
+      featured_apps_limit: 20,
+      apps_auto_scroll_seconds: 4,
+    })
   })
 
   it("queryFn returns defaults on fetch failure", async () => {
