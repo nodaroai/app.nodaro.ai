@@ -3,7 +3,8 @@ import { supabase } from "./supabase.js"
 export interface AppSettings {
   ai_provider: "replicate" | "kie"
   cost_markup_percent: number
-  apps_video_autoplay: boolean
+  carousel_video_autoplay: boolean
+  apps_page_video_autoplay: boolean
   featured_app_ids: string[]
   featured_apps_limit: number
   apps_auto_scroll_seconds: number
@@ -44,13 +45,14 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    return { ai_provider: "replicate", ***REDACTED-OSS-SCRUB*** apps_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4 }
+    ***REDACTED-OSS-SCRUB***
   }
 
   const settings: AppSettings = {
     ai_provider: "replicate",
     ***REDACTED-OSS-SCRUB***
-    apps_video_autoplay: true,
+    carousel_video_autoplay: true,
+    apps_page_video_autoplay: true,
     featured_app_ids: [],
     featured_apps_limit: 20,
     apps_auto_scroll_seconds: 4,
@@ -61,8 +63,10 @@ async function refreshSettings(): Promise<AppSettings> {
       settings.ai_provider = row.value as "replicate" | "kie"
     } else if (row.key === "cost_markup_percent" && typeof row.value === "number") {
       settings.cost_markup_percent = row.value
-    } else if (row.key === "apps_video_autoplay" && typeof row.value === "boolean") {
-      settings.apps_video_autoplay = row.value
+    } else if (row.key === "carousel_video_autoplay" && typeof row.value === "boolean") {
+      settings.carousel_video_autoplay = row.value
+    } else if (row.key === "apps_page_video_autoplay" && typeof row.value === "boolean") {
+      settings.apps_page_video_autoplay = row.value
     } else if (row.key === "featured_app_ids" && Array.isArray(row.value)) {
       settings.featured_app_ids = row.value as string[]
     } else if (row.key === "featured_apps_limit" && typeof row.value === "number") {

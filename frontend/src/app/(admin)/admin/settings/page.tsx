@@ -20,7 +20,8 @@ export default function AdminSettingsPage() {
   const updateSettingMut = useUpdateSettingMutation()
   const [provider, setProvider] = useState<"replicate" | "kie">("replicate")
   const [markup, setMarkup] = useState<number>(25)
-  const [videoAutoplay, setVideoAutoplay] = useState(true)
+  const [carouselAutoplay, setCarouselAutoplay] = useState(true)
+  const [appsPageAutoplay, setAppsPageAutoplay] = useState(true)
   const [appsLimit, setAppsLimit] = useState(20)
   const [autoScrollSeconds, setAutoScrollSeconds] = useState(4)
   const [saving, setSaving] = useState(false)
@@ -31,7 +32,8 @@ export default function AdminSettingsPage() {
     if (settings) {
       setProvider(settings.ai_provider)
       setMarkup(settings.cost_markup_percent)
-      setVideoAutoplay(settings.apps_video_autoplay)
+      setCarouselAutoplay(settings.carousel_video_autoplay)
+      setAppsPageAutoplay(settings.apps_page_video_autoplay)
       setAppsLimit(settings.featured_apps_limit)
       setAutoScrollSeconds(settings.apps_auto_scroll_seconds)
     }
@@ -52,8 +54,12 @@ export default function AdminSettingsPage() {
       updates.push({ key: "cost_markup_percent", value: markup })
     }
 
-    if (videoAutoplay !== settings?.apps_video_autoplay) {
-      updates.push({ key: "apps_video_autoplay", value: videoAutoplay })
+    if (carouselAutoplay !== settings?.carousel_video_autoplay) {
+      updates.push({ key: "carousel_video_autoplay", value: carouselAutoplay })
+    }
+
+    if (appsPageAutoplay !== settings?.apps_page_video_autoplay) {
+      updates.push({ key: "apps_page_video_autoplay", value: appsPageAutoplay })
     }
 
     if (appsLimit !== settings?.featured_apps_limit) {
@@ -86,7 +92,8 @@ export default function AdminSettingsPage() {
   const hasChanges =
     (isFeatureEnabled("providerSelection") && provider !== settings?.ai_provider) ||
     (isFeatureEnabled("costMarkup") && markup !== settings?.cost_markup_percent) ||
-    videoAutoplay !== settings?.apps_video_autoplay ||
+    carouselAutoplay !== settings?.carousel_video_autoplay ||
+    appsPageAutoplay !== settings?.apps_page_video_autoplay ||
     appsLimit !== settings?.featured_apps_limit ||
     autoScrollSeconds !== settings?.apps_auto_scroll_seconds
 
@@ -221,15 +228,29 @@ export default function AdminSettingsPage() {
 
           <div className="flex items-center justify-between">
             <div>
-              <Label htmlFor="video-autoplay">Auto-play preview videos</Label>
+              <Label htmlFor="carousel-autoplay">Auto-play videos in homepage carousel</Label>
               <p className="text-xs text-muted-foreground mt-0.5">
-                When enabled, app preview videos play automatically in the carousel and app cards. Hovering always plays regardless.
+                Hovering always plays regardless of this setting.
               </p>
             </div>
             <Switch
-              id="video-autoplay"
-              checked={videoAutoplay}
-              onCheckedChange={setVideoAutoplay}
+              id="carousel-autoplay"
+              checked={carouselAutoplay}
+              onCheckedChange={setCarouselAutoplay}
+            />
+          </div>
+
+          <div className="flex items-center justify-between mt-3">
+            <div>
+              <Label htmlFor="apps-page-autoplay">Auto-play videos in apps page</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Hovering always plays regardless of this setting.
+              </p>
+            </div>
+            <Switch
+              id="apps-page-autoplay"
+              checked={appsPageAutoplay}
+              onCheckedChange={setAppsPageAutoplay}
             />
           </div>
 

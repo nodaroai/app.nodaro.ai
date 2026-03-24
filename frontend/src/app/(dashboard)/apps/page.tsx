@@ -56,7 +56,7 @@ export default function AppsPage() {
   const { user } = useAuth()
   const qc = useQueryClient()
   const { data: appSettings } = useAppSettings()
-  const videoAutoplay = appSettings?.apps_video_autoplay ?? true
+  const videoAutoplay = appSettings?.apps_page_video_autoplay ?? true
 
   // Browse state
   const [viewMode, setViewMode] = useState<ViewMode>("browse")
