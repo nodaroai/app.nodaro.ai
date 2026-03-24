@@ -39,6 +39,8 @@ interface NodeSectionProps {
   renderItem?: (item: PresentationItem) => React.ReactNode
   /** Callback to add a group container */
   onAddGroup?: () => void
+  /** Show display config (columns/size) on node items — false for input sections */
+  showDisplayConfig?: boolean
 }
 
 export function NodeSection({
@@ -57,6 +59,7 @@ export function NodeSection({
   items,
   renderItem,
   onAddGroup,
+  showDisplayConfig = true,
 }: NodeSectionProps) {
   // Items-based rendering when items + renderItem are provided
   const useItems = items && items.length > 0 && renderItem
@@ -122,13 +125,14 @@ export function NodeSection({
                   // Groups and richtext don't get the node-style wrapper
                   if (item.type === "group" || item.type === "richtext") {
                     return (
-                      <SortableCardWrapper
-                        key={sortId}
-                        id={sortId}
-                        isEditMode={isEditing}
-                      >
-                        {rendered}
-                      </SortableCardWrapper>
+                      <div key={sortId} className={item.type === "group" ? "mb-3" : undefined}>
+                        <SortableCardWrapper
+                          id={sortId}
+                          isEditMode={isEditing}
+                        >
+                          {rendered}
+                        </SortableCardWrapper>
+                      </div>
                     )
                   }
                   // Node and field items get the full wrapper with meta editing
@@ -145,8 +149,8 @@ export function NodeSection({
                       onDescriptionChange={(v) => { if (metaKey) updateCardMeta(metaKey, "description", v) }}
                       cardTitle={metaKey ? settings.cardMeta?.[metaKey]?.title : undefined}
                       onTitleChange={metaKey ? (v) => updateCardMeta(metaKey, "title", v) : undefined}
-                      cardDisplay={isNodeItem && nodeId ? settings.cardMeta?.[nodeId]?.display : undefined}
-                      onDisplayChange={isNodeItem && nodeId ? (d) => updateCardMeta(nodeId, "display", d) : undefined}
+                      cardDisplay={showDisplayConfig && isNodeItem && nodeId ? settings.cardMeta?.[nodeId]?.display : undefined}
+                      onDisplayChange={showDisplayConfig && isNodeItem && nodeId ? (d) => updateCardMeta(nodeId, "display", d) : undefined}
                     >
                       {rendered}
                     </SortableCardWrapper>
@@ -173,8 +177,8 @@ export function NodeSection({
                     onRemove={() => onRemove(node.id)}
                     cardDescription={settings.cardMeta?.[node.id]?.description}
                     onDescriptionChange={(v) => updateCardMeta(node.id, "description", v)}
-                    cardDisplay={settings.cardMeta?.[node.id]?.display}
-                    onDisplayChange={(d) => updateCardMeta(node.id, "display", d)}
+                    cardDisplay={showDisplayConfig ? settings.cardMeta?.[node.id]?.display : undefined}
+                    onDisplayChange={showDisplayConfig ? (d) => updateCardMeta(node.id, "display", d) : undefined}
                   >
                     {renderCard(node)}
                   </SortableCardWrapper>

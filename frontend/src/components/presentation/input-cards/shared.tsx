@@ -281,7 +281,7 @@ export function PresentationTextInput({ label, value, placeholder, onChange, rea
   if (mode === "oneline") {
     return (
       <GlassCard>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <label className={labelCls}>{labelContent}</label>
           {helperBtn}
         </div>

@@ -418,7 +418,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const handleRemoveItem = useCallback(
     (sortId: string, section: "inputs" | "outputs") => {
       const key = section === "inputs" ? "inputItems" : "outputItems"
-      const items: PresentationItem[] = settings[key] ?? []
+      // Use resolved items (handles legacy inputOrder/outputOrder migration)
+      const resolved = section === "inputs" ? inputItems : outputItems
+      const items: PresentationItem[] = resolved ?? settings[key] ?? []
       const item = items.find((i) => getItemSortId(i) === sortId)
       if (!item) return
       const filtered = items.filter((i) => getItemSortId(i) !== sortId)
@@ -433,7 +435,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         }
       }
     },
-    [settings, updateNodeData, updatePresentationSettings],
+    [settings, inputItems, outputItems, updateNodeData, updatePresentationSettings],
   )
 
   // Remix: create a workflow from the app's snapshot and open in a new tab

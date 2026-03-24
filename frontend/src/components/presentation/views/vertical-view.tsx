@@ -23,7 +23,7 @@ export function VerticalView({
   addGroup,
 }: EditableViewProps) {
   return (
-    <div className="flex-1 overflow-auto p-3 sm:p-6" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom))' }}>
+    <div className="flex-1 overflow-auto px-3 py-3 sm:px-6 sm:py-5" style={{ paddingBottom: 'max(1.25rem, var(--safe-area-bottom))' }}>
       <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8">
         <NodeSection
           label="Inputs"
@@ -41,6 +41,7 @@ export function VerticalView({
           items={inputItems}
           renderItem={renderInputItem}
           onAddGroup={addGroup ? () => addGroup("input") : undefined}
+          showDisplayConfig={false}
         />
 
         {/* Separator */}

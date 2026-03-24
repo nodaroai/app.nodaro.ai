@@ -24,7 +24,7 @@ export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia, eleme
 
   return (
     <GlassCard>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
         <StatusBadge status={status} />
       </div>
