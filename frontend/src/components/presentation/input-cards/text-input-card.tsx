@@ -21,7 +21,7 @@ export function TextInputCard({ label, value, placeholder, onChange, readOnly, r
   if (presentationReadOnly && refMap) {
     return (
       <GlassCard>
-        <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+        <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
           {label}
         </label>
         <ReadOnlyPromptBlock text={value} refMap={refMap} />
