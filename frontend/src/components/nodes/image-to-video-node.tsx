@@ -3,7 +3,7 @@
 import { memo, useState, useMemo, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Maximize2, Download, Settings, LayoutGrid, Expand, Users, Link } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Maximize2, Download, Settings, LayoutGrid, Expand, Users, Link, Scissors } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -77,6 +77,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ImageToVideoData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
@@ -326,6 +327,11 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
             onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }} title="Copy URL">
             <Link className="w-3.5 h-3.5" />
+          </button>
+          <button type="button" aria-label="Edit in FreeCut"
+            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+            onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!) }} title="Edit in FreeCut">
+            <Scissors className="w-3.5 h-3.5" />
           </button>
         </div>
         {/* Bottom-right: settings */}

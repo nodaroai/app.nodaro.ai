@@ -2,7 +2,7 @@
 
 import { memo, useRef, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Video, Upload, Link, Loader2, AlertCircle, X, Play, Expand, Download } from "lucide-react"
+import { Video, Upload, Link, Loader2, AlertCircle, X, Play, Expand, Download, Scissors } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
@@ -40,6 +40,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
   const useFull = useFullResolution(id)
 
@@ -242,6 +243,15 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                       title="Copy URL"
                     >
                       <Link className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Edit in FreeCut"
+                      className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
+                      onClick={(e) => { e.stopPropagation(); openFreeCut(id, videoUrl) }}
+                      title="Edit in FreeCut"
+                    >
+                      <Scissors className="w-3 h-3" />
                     </button>
                     <SaveToLibraryButton url={videoUrl} type="video" />
                   </div>

@@ -2,7 +2,7 @@
 
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Waypoints, Loader2, AlertCircle, X, Clapperboard, LayoutGrid, Expand, Download, Link, Settings } from "lucide-react"
+import { Waypoints, Loader2, AlertCircle, X, Clapperboard, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -22,6 +22,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as MotionTransferData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
@@ -233,6 +234,15 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
               }}
             >
               <Link className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label="Edit in FreeCut"
+              className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!) }}
+              title="Edit in FreeCut"
+            >
+              <Scissors className="w-3.5 h-3.5" />
             </button>
           </div>
         )}

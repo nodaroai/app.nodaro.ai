@@ -103,56 +103,74 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   } | null>(null);
 
   // ---------------------------------------------------------------------------
-  // Manual-edit FreeCut modal
+  // FreeCut modal (manual-edit node + universal edit from any video node)
   // ---------------------------------------------------------------------------
 
   const storeNodes = useWorkflowStore((s) => s.nodes);
   const storeEdges = useWorkflowStore((s) => s.edges);
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData);
+  const freecutEdit = useWorkflowStore((s) => s.freecutEdit);
+  const closeFreeCut = useWorkflowStore((s) => s.closeFreeCut);
 
   const manualEditNode = useMemo(
     () => storeNodes.find((n) => n.type === "manual-edit" && (n.data as ManualEditData).isEditorOpen),
     [storeNodes],
   );
 
+  // Determine which FreeCut source is active: manual-edit node or universal edit
+  const freecutVideoUrl = manualEditNode
+    ? ((manualEditNode.data as ManualEditData).inputVideoUrl ?? "")
+    : (freecutEdit?.videoUrl ?? "");
+  const freecutNodeId = manualEditNode ? manualEditNode.id : freecutEdit?.nodeId;
+  const isFreeCutOpen = !!manualEditNode || !!freecutEdit;
+
   const handleFreeCutExport = useCallback(
     async (blob: Blob) => {
-      if (!manualEditNode) return;
-      const nodeId = manualEditNode.id;
+      const nodeId = freecutNodeId;
+      if (!nodeId) return;
+      const isManualEdit = !!manualEditNode;
       try {
-        const file = new File([blob], "manual-edit.mp4", { type: "video/mp4" });
+        const file = new File([blob], "freecut-edit.mp4", { type: "video/mp4" });
         const result = await uploadFile(file, user?.id);
         const url = result.url;
-        const newResult: GeneratedResult = { url, jobId: `manual-edit-${Date.now()}`, timestamp: new Date().toISOString() };
+        const newResult: GeneratedResult = { url, jobId: `freecut-edit-${Date.now()}`, timestamp: new Date().toISOString() };
         const freshNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId);
-        const prev = freshNode ? ((freshNode.data as ManualEditData).generatedResults ?? []) : [];
+        const prev = freshNode ? ((freshNode.data as Record<string, unknown>).generatedResults as readonly GeneratedResult[] ?? []) : [];
         updateNodeData(nodeId, {
           executionStatus: "completed",
           generatedVideoUrl: url,
           generatedResults: [...prev, newResult],
           activeResultIndex: prev.length,
-          isEditorOpen: false,
+          ...(isManualEdit ? { isEditorOpen: false } : {}),
         });
-        resolveManualEdit(nodeId);
+        if (isManualEdit) resolveManualEdit(nodeId);
+        if (!isManualEdit) closeFreeCut();
       } catch (err) {
         if (err instanceof StorageExceededError) {
           setShowStorageExceeded(true);
           setStorageExceededData({ usedBytes: err.usedBytes, quotaBytes: err.quotaBytes, tier: err.tier });
         }
-        updateNodeData(nodeId, {
-          executionStatus: "failed",
-          errorMessage: err instanceof Error ? err.message : "Upload failed",
-          isEditorOpen: false,
-        });
+        if (isManualEdit) {
+          updateNodeData(nodeId, {
+            executionStatus: "failed",
+            errorMessage: err instanceof Error ? err.message : "Upload failed",
+            isEditorOpen: false,
+          });
+        }
+        if (!isManualEdit) closeFreeCut();
       }
     },
-    [manualEditNode, user?.id, updateNodeData],
+    [freecutNodeId, manualEditNode, user?.id, updateNodeData, closeFreeCut],
   );
 
   const handleFreeCutClose = useCallback(() => {
-    if (!manualEditNode) return;
-    updateNodeData(manualEditNode.id, { isEditorOpen: false });
-  }, [manualEditNode, updateNodeData]);
+    if (manualEditNode) {
+      updateNodeData(manualEditNode.id, { isEditorOpen: false });
+    }
+    if (freecutEdit) {
+      closeFreeCut();
+    }
+  }, [manualEditNode, freecutEdit, updateNodeData, closeFreeCut]);
 
   // ---------------------------------------------------------------------------
   // Credit estimate (accounts for fan-out from list/loop nodes)
@@ -874,10 +892,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         tier={storageExceededData?.tier ?? "free"}
       />
 
-      {manualEditNode && (
+      {isFreeCutOpen && (
         <Suspense fallback={null}>
           <FreeCutEditorModal
-            videoUrl={(manualEditNode.data as ManualEditData).inputVideoUrl ?? ""}
+            videoUrl={freecutVideoUrl}
             onExportComplete={handleFreeCutExport}
             onClose={handleFreeCutClose}
           />
