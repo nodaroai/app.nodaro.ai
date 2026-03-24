@@ -47,6 +47,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
   const [showHistory, setShowHistory] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [runsLoaded, setRunsLoaded] = useState(false)
+  const [runsFetchDone, setRunsFetchDone] = useState(false)
   const [slots, setSlots] = useState<RunSlot[]>([])
   const [pendingRunId, setPendingRunId] = useState<string | null>(initialRunId ?? null)
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null)
@@ -129,6 +130,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     setSlots([])
     setActiveSlotId(null)
     setRunsLoaded(false)
+    setRunsFetchDone(false)
     setPendingRunId(null)
     initialAppliedRef.current = false
   }, [slug])
@@ -190,7 +192,11 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     setRunsLoaded(true)
 
     getAppRuns(slug).then(({ data }) => {
-      if (!data || data.length === 0) return
+      if (!data || data.length === 0) {
+        setRunsFetchDone(true)
+        setPendingRunId(null)
+        return
+      }
       const dbSlots: RunSlot[] = data.map((run) => ({
         id: run.id,
         name: run.name ?? null,
@@ -224,9 +230,11 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
           })
         }
       }
+      setRunsFetchDone(true)
       setPendingRunId(null)
     }).catch(() => {
       // silently fail — user may not be authenticated
+      setRunsFetchDone(true)
       setPendingRunId(null)
     })
   }, [app, user, slug, runsLoaded, persistRuns]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -573,7 +581,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
   // pendingRunId is set on mount from initialRunId, cleared after DB fetch completes.
   const isLoadingRun = !!pendingRunId
   // True while DB runs are being fetched (sidebar spinner, regardless of initialRunId)
-  const isLoadingRuns = persistRuns && runsLoaded && slots.length === 0 && !!user
+  const isLoadingRuns = persistRuns && runsLoaded && !runsFetchDone && !!user
 
   return {
     // State (allSlots includes the synthetic Original slot)
