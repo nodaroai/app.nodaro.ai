@@ -121,12 +121,12 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
       }
     }
 
-    if (key === "apps_video_autoplay") {
+    if (key === "carousel_video_autoplay" || key === "apps_page_video_autoplay") {
       if (typeof value !== "boolean") {
         return reply.status(400).send({
           error: {
             code: "validation_error",
-            message: "apps_video_autoplay must be a boolean",
+            message: `${key} must be a boolean`,
           },
         })
       }

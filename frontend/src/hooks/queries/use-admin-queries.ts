@@ -353,7 +353,8 @@ export function useAdminSettings() {
       return {
         ai_provider: (settings.ai_provider as "replicate" | "kie") ?? "replicate",
         cost_markup_percent: (settings.cost_markup_percent as number) ?? 25,
-        apps_video_autoplay: (settings.apps_video_autoplay as boolean) ?? true,
+        carousel_video_autoplay: (settings.carousel_video_autoplay as boolean) ?? true,
+        apps_page_video_autoplay: (settings.apps_page_video_autoplay as boolean) ?? true,
         featured_app_ids: (Array.isArray(settings.featured_app_ids) ? settings.featured_app_ids : []) as string[],
         featured_apps_limit: (settings.featured_apps_limit as number) ?? 20,
         apps_auto_scroll_seconds: (settings.apps_auto_scroll_seconds as number) ?? 4,

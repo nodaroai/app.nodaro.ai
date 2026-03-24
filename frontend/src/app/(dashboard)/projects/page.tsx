@@ -260,7 +260,7 @@ export default function ProjectsPage() {
   const CARD_SCROLL_PX = 210
 
   const { data: appSettings } = useAppSettings()
-  const videoAutoplay = appSettings?.apps_video_autoplay ?? true
+  const videoAutoplay = appSettings?.carousel_video_autoplay ?? true
   const featuredAppIds = appSettings?.featured_app_ids ?? []
   const appsLimit = appSettings?.featured_apps_limit ?? 20
   const autoScrollMs = (appSettings?.apps_auto_scroll_seconds ?? 4) * 1000
