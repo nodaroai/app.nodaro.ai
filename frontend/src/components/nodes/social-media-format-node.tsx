@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Share2, Loader2, AlertCircle, X, Expand, FileVideo, FileImage, Type, Download, Link } from "lucide-react"
+import { Share2, Loader2, AlertCircle, X, Expand, FileVideo, FileImage, Type, Download, Link, Scissors } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
@@ -25,6 +25,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = currentNodeData ?? (data as SocialMediaFormatData)
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -133,6 +134,15 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
                     title="Copy URL"
                   >
                     <Link className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Edit in FreeCut"
+                    className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                    onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl) }}
+                    title="Edit in FreeCut"
+                  >
+                    <Scissors className="w-3.5 h-3.5" />
                   </button>
                   <SaveToLibraryButton url={activeUrl} type="video" className="w-7 h-7 rounded-full" />
                 </div>

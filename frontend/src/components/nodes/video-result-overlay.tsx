@@ -1,7 +1,7 @@
 "use client"
 
 import { memo } from "react"
-import { X, Expand, Download, Link, Settings } from "lucide-react"
+import { X, Expand, Download, Link, Settings, Scissors } from "lucide-react"
 import { copyToClipboard } from "@/lib/utils"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 
@@ -17,6 +17,7 @@ interface VideoResultOverlayProps {
   onVideoLoad?: () => void
   onSettings?: () => void
   isSettingsOpen?: boolean
+  onEdit?: () => void
 }
 
 function VideoResultOverlayComponent({
@@ -31,6 +32,7 @@ function VideoResultOverlayComponent({
   onVideoLoad,
   onSettings,
   isSettingsOpen,
+  onEdit,
 }: VideoResultOverlayProps) {
   return (
     <div
@@ -100,6 +102,17 @@ function VideoResultOverlayComponent({
         >
           <Link className="w-3.5 h-3.5" />
         </button>
+        {onEdit && (
+          <button
+            type="button"
+            aria-label="Edit in FreeCut"
+            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+            onClick={(e) => { e.stopPropagation(); onEdit() }}
+            title="Edit in FreeCut"
+          >
+            <Scissors className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
       <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
         {onSettings ? (

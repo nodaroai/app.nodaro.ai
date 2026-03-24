@@ -2,7 +2,7 @@
 
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Type, Users, Settings, Link } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Type, Users, Settings, Link, Scissors } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -33,6 +33,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const edges = useWorkflowStore((s) => s.edges)
   const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
@@ -248,6 +249,15 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
               title="Copy URL"
             >
               <Link className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label="Edit in FreeCut"
+              className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!) }}
+              title="Edit in FreeCut"
+            >
+              <Scissors className="w-3.5 h-3.5" />
             </button>
           </div>
         )}

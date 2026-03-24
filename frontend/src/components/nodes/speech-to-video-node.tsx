@@ -2,7 +2,7 @@
 
 import { memo, useState, useMemo, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { MessageSquare, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, LayoutGrid, Expand, Download, Type, Link, Settings } from "lucide-react"
+import { MessageSquare, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, LayoutGrid, Expand, Download, Type, Link, Settings, Scissors } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -60,6 +60,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SpeechToVideoData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
@@ -267,6 +268,11 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
             onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }} title="Copy URL">
             <Link className="w-3.5 h-3.5" />
+          </button>
+          <button type="button" aria-label="Edit in FreeCut"
+            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+            onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!) }} title="Edit in FreeCut">
+            <Scissors className="w-3.5 h-3.5" />
           </button>
         </div>
 

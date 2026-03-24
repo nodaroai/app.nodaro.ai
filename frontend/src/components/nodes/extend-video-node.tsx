@@ -20,6 +20,7 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ExtendVideoData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
@@ -176,6 +177,7 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
       {hasResult && (
         <VideoResultOverlay
           url={activeUrl}
+          onEdit={() => openFreeCut(id, activeUrl!)}
           videoAutoplay={videoAutoplay}
           label={nodeData.label}
           hasResults={results.length > 1}

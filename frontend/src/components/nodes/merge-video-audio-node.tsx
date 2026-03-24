@@ -41,6 +41,7 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -196,6 +197,7 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
       {hasResult && (
         <VideoResultOverlay
           url={activeUrl}
+          onEdit={() => openFreeCut(id, activeUrl!)}
           videoAutoplay={videoAutoplay}
           label={nodeData.label}
           hasResults={results.length > 0}
