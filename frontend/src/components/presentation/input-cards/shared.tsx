@@ -300,7 +300,7 @@ export function PresentationTextInput({ label, value, placeholder, onChange, rea
   const minH = mode === "multiline" ? (minLines ?? 3) * 24 : 80
   return (
     <GlassCard>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-3">
         <label className={labelCls}>{labelContent}</label>
         {helperBtn}
       </div>

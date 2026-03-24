@@ -762,6 +762,33 @@ export function resolveNodeInputs(
           inputs.imageUrl = sceneImageUrl;
         }
       }
+      // Extract video URL from scene video results
+      const sceneVideoResults =
+        (sceneData.generatedVideoResults as GeneratedResult[] | undefined) ?? [];
+      const sceneVideoActiveIdx =
+        (sceneData.activeVideoResultIndex as number | undefined) ?? 0;
+      const sceneVideoUrl =
+        sceneVideoResults[sceneVideoActiveIdx]?.url ?? sceneData.generatedVideoUrl;
+      if (sceneVideoUrl) {
+        if (node.type === "combine-videos") {
+          inputs.videoUrls = [...(inputs.videoUrls ?? []), sceneVideoUrl];
+          inputs.videoUrlsWithSourceIds = [
+            ...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []),
+            { nodeId: src.id, url: sceneVideoUrl },
+          ];
+        } else if (node.type === "merge-video-audio") {
+          if (!inputs.videoUrl) {
+            inputs.videoUrl = sceneVideoUrl;
+          } else {
+            inputs.audioSources = [
+              ...(inputs.audioSources ?? []),
+              { url: sceneVideoUrl, sourceNodeId: src.id, sourceType: "video" as const },
+            ];
+          }
+        } else {
+          inputs.videoUrl = sceneVideoUrl;
+        }
+      }
       const allAssetIds = [
         ...sceneData.characters.map((c) => c.assetId),
         ...(sceneData.locations ?? []).map((l) => l.assetId),

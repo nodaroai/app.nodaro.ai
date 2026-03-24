@@ -20,7 +20,7 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
 
   return (
     <GlassCard>
-      <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+      <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
         {label}
       </label>
 
