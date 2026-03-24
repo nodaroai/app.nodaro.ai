@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   ***REDACTED-OSS-SCRUB***
   apps_video_autoplay: true,
   featured_app_ids: [],
+  featured_apps_limit: 20,
 }
 
 describe("useAppSettings", () => {

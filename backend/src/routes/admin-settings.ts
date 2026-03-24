@@ -143,6 +143,17 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
       }
     }
 
+    if (key === "featured_apps_limit") {
+      if (typeof value !== "number" || value < 1 || value > 50) {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: "featured_apps_limit must be a number between 1 and 50",
+          },
+        })
+      }
+    }
+
     const { data, error } = await supabase
       .from("app_settings")
       .upsert(

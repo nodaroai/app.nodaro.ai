@@ -8,6 +8,7 @@ export interface AppSettings {
   readonly cost_markup_percent: number
   readonly apps_video_autoplay: boolean
   readonly featured_app_ids: readonly string[]
+  readonly featured_apps_limit: number
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -15,6 +16,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   ***REDACTED-OSS-SCRUB***
   apps_video_autoplay: true,
   featured_app_ids: [],
+  featured_apps_limit: 20,
 }
 
 async function fetchAppSettings(): Promise<AppSettings> {
@@ -29,6 +31,7 @@ async function fetchAppSettings(): Promise<AppSettings> {
     cost_markup_percent: (settings.cost_markup_percent as number) ?? 25,
     apps_video_autoplay: (settings.apps_video_autoplay as boolean) ?? true,
     featured_app_ids: (Array.isArray(settings.featured_app_ids) ? settings.featured_app_ids : []) as string[],
+    featured_apps_limit: (settings.featured_apps_limit as number) ?? 20,
   }
 }
 

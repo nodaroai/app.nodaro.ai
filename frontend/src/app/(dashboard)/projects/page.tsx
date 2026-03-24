@@ -263,20 +263,19 @@ export default function ProjectsPage() {
   const { data: appSettings } = useAppSettings()
   const videoAutoplay = appSettings?.apps_video_autoplay ?? true
   const featuredAppIds = appSettings?.featured_app_ids ?? []
+  const appsLimit = appSettings?.featured_apps_limit ?? 20
 
-  // Featured apps for the Apps tab
+  // Featured apps for the Apps tab — fetch max to allow admin limit to work without refetch
   const { data: featuredAppsData, isLoading: featuredAppsLoading } = useQuery({
     queryKey: ["featured-apps"],
-    queryFn: () => browseApps({ sort: "popular", limit: 20 }),
+    queryFn: () => browseApps({ sort: "popular", limit: 50 }),
     staleTime: 60_000,
     enabled: activeTab === "apps",
   })
-  // Shuffle once per data fetch so carousel starts at a random position
-  const shuffledAppsRef = useRef<{ key: unknown; ids: string; apps: AppBrowseCard[] }>({ key: null, ids: "", apps: [] })
-  const featuredIdsKey = featuredAppIds.join(",")
-  if (featuredAppsData && (featuredAppsData !== shuffledAppsRef.current.key || featuredIdsKey !== shuffledAppsRef.current.ids)) {
+  const shuffledAppsRef = useRef<{ key: unknown; cacheKey: string; apps: AppBrowseCard[] }>({ key: null, cacheKey: "", apps: [] })
+  const cacheKey = `${featuredAppIds.join(",")}_${appsLimit}`
+  if (featuredAppsData && (featuredAppsData !== shuffledAppsRef.current.key || cacheKey !== shuffledAppsRef.current.cacheKey)) {
     let apps = [...featuredAppsData.data]
-    // If admin curated featured apps, show those first in order, then the rest shuffled
     if (featuredAppIds.length > 0) {
       const curated = featuredAppIds.map((id) => apps.find((a) => a.id === id)).filter(Boolean) as AppBrowseCard[]
       const curatedIds = new Set(featuredAppIds)
@@ -292,7 +291,7 @@ export default function ProjectsPage() {
         ;[apps[i], apps[j]] = [apps[j], apps[i]]
       }
     }
-    shuffledAppsRef.current = { key: featuredAppsData, ids: featuredIdsKey, apps }
+    shuffledAppsRef.current = { key: featuredAppsData, cacheKey, apps: apps.slice(0, appsLimit) }
   }
   const featuredApps = shuffledAppsRef.current.apps
 

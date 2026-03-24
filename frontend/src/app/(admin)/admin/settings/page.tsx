@@ -21,6 +21,7 @@ export default function AdminSettingsPage() {
   const [provider, setProvider] = useState<"replicate" | "kie">("replicate")
   const [markup, setMarkup] = useState<number>(25)
   const [videoAutoplay, setVideoAutoplay] = useState(true)
+  const [appsLimit, setAppsLimit] = useState(20)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +31,7 @@ export default function AdminSettingsPage() {
       setProvider(settings.ai_provider)
       setMarkup(settings.cost_markup_percent)
       setVideoAutoplay(settings.apps_video_autoplay)
+      setAppsLimit(settings.featured_apps_limit)
     }
   }, [settings])
 
@@ -50,6 +52,10 @@ export default function AdminSettingsPage() {
 
     if (videoAutoplay !== settings?.apps_video_autoplay) {
       updates.push({ key: "apps_video_autoplay", value: videoAutoplay })
+    }
+
+    if (appsLimit !== settings?.featured_apps_limit) {
+      updates.push({ key: "featured_apps_limit", value: appsLimit })
     }
 
     let allSuccess = true
@@ -74,7 +80,8 @@ export default function AdminSettingsPage() {
   const hasChanges =
     (isFeatureEnabled("providerSelection") && provider !== settings?.ai_provider) ||
     (isFeatureEnabled("costMarkup") && markup !== settings?.cost_markup_percent) ||
-    videoAutoplay !== settings?.apps_video_autoplay
+    videoAutoplay !== settings?.apps_video_autoplay ||
+    appsLimit !== settings?.featured_apps_limit
 
   if (loading && !settings) {
     return (
@@ -217,6 +224,25 @@ export default function AdminSettingsPage() {
               checked={videoAutoplay}
               onCheckedChange={setVideoAutoplay}
             />
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <Label htmlFor="apps-limit">Apps carousel limit</Label>
+            <div className="flex items-center gap-2 max-w-xs">
+              <Input
+                id="apps-limit"
+                type="number"
+                min={1}
+                max={50}
+                value={appsLimit}
+                onChange={(e) => setAppsLimit(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                className="w-24"
+              />
+              <span className="text-sm text-muted-foreground">apps</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Maximum number of apps shown in the homepage carousel (1-50). Featured apps always appear first.
+            </p>
           </div>
         </div>
 

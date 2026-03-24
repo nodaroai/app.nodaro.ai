@@ -99,7 +99,7 @@ describe("resolveMarkup", () => {
       providerChain: ["kie"],
       ***REDACTED-OSS-SCRUB***
       activeProvider: "kie",
-      settings: { ai_provider: "kie", ***REDACTED-OSS-SCRUB*** apps_video_autoplay: true, featured_app_ids: [] },
+      settings: { ai_provider: "kie", ***REDACTED-OSS-SCRUB*** apps_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20 },
     }
     ***REDACTED-OSS-SCRUB***
     // With replicate disabled, even replicate providerUsed returns the same KIE markup
