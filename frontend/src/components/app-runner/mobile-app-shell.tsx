@@ -36,7 +36,12 @@ import type { useRunSlots } from "./use-run-slots"
 
 import { InputCard } from "@/components/presentation/input-card"
 import { OutputCard } from "@/components/presentation/output-card"
-import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled } from "@/components/presentation/helpers"
+import { ConfigFieldRenderer } from "@/components/presentation/config-field-renderer"
+import { RichtextBlock } from "@/components/presentation/richtext-block"
+import { GroupCard } from "@/components/presentation/group-card"
+import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled, resolveInputItems } from "@/components/presentation/helpers"
+import { NODE_DEF_MAP } from "@/types/nodes"
+import type { PresentationItem } from "@nodaro-shared/presentation-types"
 import { NodeConfigModal, CONFIG_INPUT_TYPES } from "@/components/presentation/node-config-modal"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { GetCreditsModal } from "@/components/credits/GetCreditsModal"
@@ -119,6 +124,20 @@ export function MobileAppShell({
   )
 
   const nodeMap = useMemo(() => new Map(presNodes.map((n) => [n.id, n])), [presNodes])
+
+  // ---- Items-based input rendering (field items, groups, richtext) ----
+  const inputItems = useMemo(() => resolveInputItems(settings), [settings.inputItems, settings.inputOrder])
+  const useItemsRendering = inputItems && inputItems.length > 0
+
+  const findFieldDef = useCallback(
+    (nodeId: string, fieldKey: string) => {
+      const node = nodeMap.get(nodeId)
+      if (!node?.type) return undefined
+      const def = NODE_DEF_MAP.get(node.type)
+      return def?.exposableFields?.find((f) => f.key === fieldKey)
+    },
+    [nodeMap],
+  )
 
   // ---- Execution derived state ----
   const isRunning = presExecutionStatus === "running"
@@ -344,6 +363,79 @@ export function MobileAppShell({
     [settings.cardMeta],
   )
 
+  const handleOpenMedia = setLightboxNodeId
+
+  // ---- Item-based input renderer (mirrors PresentationView renderInputItem) ----
+  const renderInputItem = useCallback(
+    (item: PresentationItem): React.ReactNode => {
+      switch (item.type) {
+        case "node": {
+          const node = nodeMap.get(item.nodeId)
+          if (!node) return null
+          const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
+          const cardDisplay = settings.cardMeta?.[node.id]?.display
+          const display = { ...nodeDisplay, ...cardDisplay }
+          return (
+            <InputCard
+              node={node}
+              nodes={presNodes}
+              edges={presEdges}
+              isFullscreen
+              inputValues={presInputValues}
+              onUpdateInput={presUpdateInput}
+              readOnly={inputsReadOnly || isRunning}
+              onOpenMedia={handleOpenMedia}
+              onOpenConfig={setConfigNode}
+              display={display}
+            />
+          )
+        }
+        case "field": {
+          const node = nodeMap.get(item.nodeId)
+          if (!node) return null
+          const fieldDef = findFieldDef(item.nodeId, item.field)
+          if (!fieldDef) return null
+          const nodeData = (node.data ?? {}) as Record<string, unknown>
+          const inputVals = presInputValues[item.nodeId]
+          const mergedNodeData = inputVals ? { ...nodeData, ...inputVals } : nodeData
+          const currentValue = inputVals?.[item.field] ?? nodeData[item.field] ?? fieldDef.defaultValue
+          const customTitle = settings.cardMeta?.[item.id]?.title
+          return (
+            <ConfigFieldRenderer
+              nodeType={node.type ?? ""}
+              field={item.field}
+              value={currentValue}
+              nodeData={mergedNodeData}
+              onChange={(v) => presUpdateInput(item.nodeId, item.field, v)}
+              allowedValues={item.allowedValues}
+              readOnly={inputsReadOnly || isRunning}
+              customLabel={customTitle}
+            />
+          )
+        }
+        case "richtext":
+          return <RichtextBlock content={item.content} />
+        case "group":
+          return (
+            <GroupCard
+              title={item.title}
+              showTitle={item.showTitle ?? true}
+              showBackground={item.showBackground ?? true}
+            >
+              {item.items.map((child) => (
+                <div key={child.type === "node" ? child.nodeId : child.id}>
+                  {renderInputItem(child)}
+                </div>
+              ))}
+            </GroupCard>
+          )
+        default:
+          return null
+      }
+    },
+    [nodeMap, presNodes, presEdges, presInputValues, presUpdateInput, inputsReadOnly, isRunning, handleOpenMedia, setConfigNode, findFieldDef, settings.cardMeta],
+  )
+
   // ---- Media lightbox ----
   // Only compute media items when lightbox is open — avoids recalculating on every nodeStates poll
   const mediaItems = useMemo(() => {
@@ -362,7 +454,6 @@ export function MobileAppShell({
   const lightboxIndex = lightboxNodeId ? mediaItems.findIndex((m) => m.nodeId === lightboxNodeId) : -1
   const lightboxItem = lightboxIndex >= 0 ? mediaItems[lightboxIndex] : null
 
-  const handleOpenMedia = setLightboxNodeId
   const handleLightboxPrev = useCallback(() => {
     if (lightboxIndex > 0) setLightboxNodeId(mediaItems[lightboxIndex - 1].nodeId)
   }, [lightboxIndex, mediaItems])
@@ -681,11 +772,16 @@ export function MobileAppShell({
         ) : activeTab === "inputs" ? (
           // Inputs tab
           <div className="space-y-4 p-4">
-            {orderedInputNodes.length === 0 ? (
+            {orderedInputNodes.length === 0 && !useItemsRendering ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Play className="h-8 w-8 mb-3 opacity-40" />
                 <p className="text-sm">This app runs automatically</p>
               </div>
+            ) : useItemsRendering ? (
+              inputItems!.map((item) => {
+                const key = item.type === "node" ? item.nodeId : item.id
+                return <div key={key}>{renderInputItem(item)}</div>
+              })
             ) : (
               orderedInputNodes.map((node) => {
                 const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
