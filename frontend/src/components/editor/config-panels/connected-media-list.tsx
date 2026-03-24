@@ -138,6 +138,7 @@ const VIDEO_TYPES = new Set([
   "transcode-video",
   "video-upscale",
   "motion-transfer",
+  "scene",
 ])
 
 const AUDIO_TYPES = new Set([

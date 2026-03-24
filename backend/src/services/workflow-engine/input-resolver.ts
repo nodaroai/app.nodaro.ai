@@ -926,6 +926,26 @@ function routeOutput(
         inputs.imageUrl = state.output.imageUrl
       }
     }
+    if (state?.output?.videoUrl) {
+      if (targetType === "combine-videos") {
+        inputs.videoUrls = [...(inputs.videoUrls ?? []), state.output.videoUrl]
+        inputs.videoUrlsWithSourceIds = [
+          ...(inputs.videoUrlsWithSourceIds ?? []),
+          { nodeId: src.id, url: state.output.videoUrl },
+        ]
+      } else if (targetType === "merge-video-audio") {
+        if (!inputs.videoUrl) {
+          inputs.videoUrl = state.output.videoUrl
+        } else {
+          inputs.audioSources = [
+            ...(inputs.audioSources ?? []),
+            { url: state.output.videoUrl, sourceNodeId: src.id, sourceType: "video" as const },
+          ]
+        }
+      } else {
+        inputs.videoUrl = state.output.videoUrl
+      }
+    }
     if (state?.output?.text) {
       inputs.prompt = state.output.text
     }

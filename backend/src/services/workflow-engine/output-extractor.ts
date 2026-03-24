@@ -522,12 +522,19 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return url ? { imageUrl: url } : undefined
   }
 
-  // Scene → imageUrl from generatedResults or generatedImageUrl, with text fallback
+  // Scene → imageUrl + videoUrl from generatedResults/generatedVideoResults, with text fallback
   if (type === "scene") {
-    const url =
+    const output: NodeOutput = {}
+    const imageUrl =
       getActiveResultUrl(data) ??
       (data.generatedImageUrl as string | undefined)
-    if (url) return { imageUrl: url }
+    if (imageUrl) output.imageUrl = imageUrl
+    // Extract video URL from scene video results
+    const videoResults = (data.generatedVideoResults as GeneratedResult[] | undefined) ?? []
+    const videoActiveIdx = (data.activeVideoResultIndex as number | undefined) ?? 0
+    const videoUrl = videoResults[videoActiveIdx]?.url ?? (data.generatedVideoUrl as string | undefined)
+    if (videoUrl) output.videoUrl = videoUrl
+    if (output.imageUrl || output.videoUrl) return output
     // Fall back to buildScenePrompt (shared with frontend) — without character
     // definitions the character names will default to "a figure", but all other
     // scene fields (shot type, camera angle, locations, mood, etc.) are preserved.
