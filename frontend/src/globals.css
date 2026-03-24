@@ -582,6 +582,27 @@ html, body {
   pointer-events: all !important;
 }
 
+/* Slim styled scrollbar — thin track, rounded thumb, auto-hide */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.45);
+}
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 128, 0.25) transparent;
+}
+
 /* Hide scrollbar utility for horizontal-scroll action bars */
 .scrollbar-none {
   -ms-overflow-style: none;
