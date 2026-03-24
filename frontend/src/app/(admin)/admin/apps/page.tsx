@@ -1,10 +1,11 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
-import { Loader2, ExternalLink, Copy, Check, AppWindow } from "lucide-react"
+import { Loader2, ExternalLink, Copy, Check, AppWindow, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useAdminApps, type AdminApp } from "@/hooks/queries/use-admin-queries"
+import { useAppSettings, useUpdateSettingMutation } from "@/hooks/queries/use-app-settings-queries"
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -38,6 +39,15 @@ export default function AdminAppsPage() {
   const [page, setPage] = useState(0)
   const [selectedApp, setSelectedApp] = useState<AdminApp | null>(null)
   const { data: apps = [], isLoading } = useAdminApps(page, 50)
+  const { data: appSettings } = useAppSettings()
+  const featuredIds = new Set(appSettings?.featured_app_ids ?? [])
+  const updateSetting = useUpdateSettingMutation()
+
+  const toggleFeatured = (appId: string) => {
+    const current = appSettings?.featured_app_ids ?? []
+    const next = featuredIds.has(appId) ? current.filter((id) => id !== appId) : [...current, appId]
+    updateSetting.mutate({ key: "featured_app_ids", value: next })
+  }
 
   if (isLoading && apps.length === 0) {
     return (
@@ -58,6 +68,7 @@ export default function AdminAppsPage() {
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr>
+              <th className="text-left px-4 py-2 font-medium w-10" />
               <th className="text-left px-4 py-2 font-medium">Name</th>
               <th className="text-left px-4 py-2 font-medium">Creator</th>
               <th className="text-left px-4 py-2 font-medium">Status</th>
@@ -71,6 +82,16 @@ export default function AdminAppsPage() {
           <tbody>
             {(apps as AdminApp[]).map((app) => (
               <tr key={app.id} className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedApp(app)}>
+                <td className="px-4 py-2">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); toggleFeatured(app.id) }}
+                    className="p-0.5 hover:text-amber-400 transition-colors"
+                    title={featuredIds.has(app.id) ? "Remove from featured" : "Add to featured"}
+                  >
+                    <Star className={`w-4 h-4 ${featuredIds.has(app.id) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"}`} />
+                  </button>
+                </td>
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-2">
                     {app.icon_url ? (
@@ -103,7 +124,7 @@ export default function AdminAppsPage() {
             ))}
             {apps.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
                   No published apps found.
                 </td>
               </tr>

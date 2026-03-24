@@ -14,10 +14,11 @@ import { StatsOverview } from "@/components/dashboard/stats-overview"
 import { WorkflowThumbnail } from "@/components/dashboard/workflow-thumbnail"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { browseApps, browseTemplates, type TemplateBrowseCard } from "@/lib/api"
+import { browseApps, browseTemplates, type TemplateBrowseCard, type AppBrowseCard } from "@/lib/api"
 import { useTemplateFavorites, useToggleTemplateFavoriteMutation } from "@/hooks/queries/use-template-marketplace-queries"
 import { TemplatePreviewModal } from "@/components/templates/template-preview-modal"
 import { TutorialsTab } from "@/components/dashboard/tutorials-tab"
+import { useAppSettings } from "@/hooks/queries/use-app-settings-queries"
 
 interface WorkflowSearchResult extends WorkflowMeta {
   readonly projectName: string
@@ -256,18 +257,48 @@ export default function ProjectsPage() {
     { id: "statistics", label: "Statistics", icon: <BarChart3 className="h-3.5 w-3.5" /> },
   ]
 
-  // Featured apps for the Apps tab
+  const CARD_SCROLL_PX = 210
+
+  const { data: appSettings } = useAppSettings()
+  const videoAutoplay = appSettings?.apps_video_autoplay ?? true
+  const featuredAppIds = appSettings?.featured_app_ids ?? []
+  const appsLimit = appSettings?.featured_apps_limit ?? 20
+  const autoScrollMs = (appSettings?.apps_auto_scroll_seconds ?? 4) * 1000
+
+  // Featured apps for the Apps tab — fetch max to allow admin limit to work without refetch
   const { data: featuredAppsData, isLoading: featuredAppsLoading } = useQuery({
     queryKey: ["featured-apps"],
-    queryFn: () => browseApps({ sort: "popular", limit: 6 }),
+    queryFn: () => browseApps({ sort: "popular", limit: 50 }),
     staleTime: 60_000,
     enabled: activeTab === "apps",
   })
-  const featuredApps = featuredAppsData?.data ?? []
+  const shuffledAppsRef = useRef<{ key: unknown; cacheKey: string; apps: AppBrowseCard[] }>({ key: null, cacheKey: "", apps: [] })
+  const cacheKey = `${featuredAppIds.join(",")}_${appsLimit}`
+  if (featuredAppsData && (featuredAppsData !== shuffledAppsRef.current.key || cacheKey !== shuffledAppsRef.current.cacheKey)) {
+    let apps = [...featuredAppsData.data]
+    if (featuredAppIds.length > 0) {
+      const curated = featuredAppIds.map((id) => apps.find((a) => a.id === id)).filter(Boolean) as AppBrowseCard[]
+      const curatedIds = new Set(featuredAppIds)
+      const rest = apps.filter((a) => !curatedIds.has(a.id))
+      for (let i = rest.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[rest[i], rest[j]] = [rest[j], rest[i]]
+      }
+      apps = [...curated, ...rest]
+    } else {
+      for (let i = apps.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[apps[i], apps[j]] = [apps[j], apps[i]]
+      }
+    }
+    shuffledAppsRef.current = { key: featuredAppsData, cacheKey, apps: apps.slice(0, appsLimit) }
+  }
+  const featuredApps = shuffledAppsRef.current.apps
 
   const appsScrollRef = useRef<HTMLDivElement>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(true)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+  const isHoveringApps = useRef(false)
 
   const updateScrollState = useCallback(() => {
     const el = appsScrollRef.current
@@ -276,11 +307,39 @@ export default function ProjectsPage() {
     setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
   }, [])
 
+  useEffect(() => {
+    if (featuredApps.length === 0) return
+    const frame = requestAnimationFrame(updateScrollState)
+    const el = appsScrollRef.current
+    if (!el) return () => cancelAnimationFrame(frame)
+    const observer = new ResizeObserver(updateScrollState)
+    observer.observe(el)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [featuredApps.length, updateScrollState])
+
+  useEffect(() => {
+    if (featuredApps.length <= 1 || activeTab !== "apps" || autoScrollMs === 0) return
+    const timer = setInterval(() => {
+      const el = appsScrollRef.current
+      if (!el || isHoveringApps.current) return
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1
+      if (atEnd) {
+        el.scrollTo({ left: 0, behavior: "smooth" })
+      } else {
+        el.scrollBy({ left: CARD_SCROLL_PX, behavior: "smooth" })
+      }
+    }, autoScrollMs)
+    return () => clearInterval(timer)
+  }, [featuredApps.length, activeTab, autoScrollMs])
+
   const scrollAppsLeft = useCallback(() => {
-    appsScrollRef.current?.scrollBy({ left: -210, behavior: "smooth" })
+    appsScrollRef.current?.scrollBy({ left: -CARD_SCROLL_PX, behavior: "smooth" })
   }, [])
   const scrollAppsRight = useCallback(() => {
-    appsScrollRef.current?.scrollBy({ left: 210, behavior: "smooth" })
+    appsScrollRef.current?.scrollBy({ left: CARD_SCROLL_PX, behavior: "smooth" })
   }, [])
 
   return (
@@ -368,6 +427,8 @@ export default function ProjectsPage() {
                 <div
                   ref={appsScrollRef}
                   onScroll={updateScrollState}
+                  onMouseEnter={() => { isHoveringApps.current = true }}
+                  onMouseLeave={() => { isHoveringApps.current = false }}
                   className="flex gap-2 px-2 pb-2 overflow-x-auto"
                   style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
                 >
@@ -384,11 +445,12 @@ export default function ProjectsPage() {
                             <video
                               src={app.previewMediaUrl}
                               className="w-full h-full object-cover"
+                              autoPlay={videoAutoplay}
                               muted
                               loop
                               playsInline
                               onMouseEnter={(e) => e.currentTarget.play()}
-                              onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
+                              onMouseLeave={(e) => { if (!videoAutoplay) { e.currentTarget.pause(); e.currentTarget.currentTime = 0 } }}
                             />
                           ) : (
                             <img src={app.previewMediaUrl} alt={app.name} className="w-full h-full object-cover" loading="lazy" />
@@ -424,18 +486,18 @@ export default function ProjectsPage() {
                   <button
                     type="button"
                     onClick={scrollAppsLeft}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-background/80 text-foreground opacity-0 group-hover/apps:opacity-100 transition-opacity hover:bg-background shadow-md"
+                    className="absolute left-1 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-background/90 text-foreground shadow-md hover:bg-background transition-colors"
                   >
-                    <ChevronLeft className="h-5 w-5" />
+                    <ChevronLeft className="h-4 w-4" />
                   </button>
                 )}
                 {canScrollRight && (
                   <button
                     type="button"
                     onClick={scrollAppsRight}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-background/80 text-foreground opacity-0 group-hover/apps:opacity-100 transition-opacity hover:bg-background shadow-md"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-background/90 text-foreground shadow-md hover:bg-background transition-colors"
                   >
-                    <ChevronRight className="h-5 w-5" />
+                    <ChevronRight className="h-4 w-4" />
                   </button>
                 )}
               </>

@@ -3,6 +3,10 @@ import { supabase } from "./supabase.js"
 export interface AppSettings {
   ai_provider: "replicate" | "kie"
   cost_markup_percent: number
+  apps_video_autoplay: boolean
+  featured_app_ids: string[]
+  featured_apps_limit: number
+  apps_auto_scroll_seconds: number
 }
 
 // Cache settings for 60 seconds to avoid hitting the DB on every job
@@ -40,12 +44,16 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    return { ai_provider: "replicate", ***REDACTED-OSS-SCRUB*** }
+    return { ai_provider: "replicate", ***REDACTED-OSS-SCRUB*** apps_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4 }
   }
 
   const settings: AppSettings = {
     ai_provider: "replicate",
     ***REDACTED-OSS-SCRUB***
+    apps_video_autoplay: true,
+    featured_app_ids: [],
+    featured_apps_limit: 20,
+    apps_auto_scroll_seconds: 4,
   }
 
   for (const row of data ?? []) {
@@ -53,6 +61,14 @@ async function refreshSettings(): Promise<AppSettings> {
       settings.ai_provider = row.value as "replicate" | "kie"
     } else if (row.key === "cost_markup_percent" && typeof row.value === "number") {
       settings.cost_markup_percent = row.value
+    } else if (row.key === "apps_video_autoplay" && typeof row.value === "boolean") {
+      settings.apps_video_autoplay = row.value
+    } else if (row.key === "featured_app_ids" && Array.isArray(row.value)) {
+      settings.featured_app_ids = row.value as string[]
+    } else if (row.key === "featured_apps_limit" && typeof row.value === "number") {
+      settings.featured_apps_limit = row.value
+    } else if (row.key === "apps_auto_scroll_seconds" && typeof row.value === "number") {
+      settings.apps_auto_scroll_seconds = row.value
     }
   }
 

@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react"
-import { Loader2, Settings, Server, Percent, Check, AlertCircle } from "lucide-react"
+import { Loader2, Settings, Server, Percent, Check, AlertCircle, Film } from "lucide-react"
 import { useAdminSettings } from "@/hooks/queries/use-admin-queries"
 import { useUpdateSettingMutation, type AppSettings } from "@/hooks/queries/use-app-settings-queries"
 import { isFeatureEnabled, isCloud } from "@/lib/edition"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import {
   Select,
   SelectContent,
@@ -19,15 +20,20 @@ export default function AdminSettingsPage() {
   const updateSettingMut = useUpdateSettingMutation()
   const [provider, setProvider] = useState<"replicate" | "kie">("replicate")
   const [markup, setMarkup] = useState<number>(25)
+  const [videoAutoplay, setVideoAutoplay] = useState(true)
+  const [appsLimit, setAppsLimit] = useState(20)
+  const [autoScrollSeconds, setAutoScrollSeconds] = useState(4)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Sync settings to local form state when loaded
   useEffect(() => {
     if (settings) {
       setProvider(settings.ai_provider)
       setMarkup(settings.cost_markup_percent)
+      setVideoAutoplay(settings.apps_video_autoplay)
+      setAppsLimit(settings.featured_apps_limit)
+      setAutoScrollSeconds(settings.apps_auto_scroll_seconds)
     }
   }, [settings])
 
@@ -44,6 +50,18 @@ export default function AdminSettingsPage() {
 
     if (isFeatureEnabled("costMarkup") && markup !== settings?.cost_markup_percent) {
       updates.push({ key: "cost_markup_percent", value: markup })
+    }
+
+    if (videoAutoplay !== settings?.apps_video_autoplay) {
+      updates.push({ key: "apps_video_autoplay", value: videoAutoplay })
+    }
+
+    if (appsLimit !== settings?.featured_apps_limit) {
+      updates.push({ key: "featured_apps_limit", value: appsLimit })
+    }
+
+    if (autoScrollSeconds !== settings?.apps_auto_scroll_seconds) {
+      updates.push({ key: "apps_auto_scroll_seconds", value: autoScrollSeconds })
     }
 
     let allSuccess = true
@@ -67,7 +85,10 @@ export default function AdminSettingsPage() {
 
   const hasChanges =
     (isFeatureEnabled("providerSelection") && provider !== settings?.ai_provider) ||
-    (isFeatureEnabled("costMarkup") && markup !== settings?.cost_markup_percent)
+    (isFeatureEnabled("costMarkup") && markup !== settings?.cost_markup_percent) ||
+    videoAutoplay !== settings?.apps_video_autoplay ||
+    appsLimit !== settings?.featured_apps_limit ||
+    autoScrollSeconds !== settings?.apps_auto_scroll_seconds
 
   if (loading && !settings) {
     return (
@@ -191,9 +212,68 @@ export default function AdminSettingsPage() {
           </div>
         )}
 
+        {/* Apps Video Autoplay */}
+        <div className="border rounded-lg p-4 bg-card">
+          <div className="flex items-center gap-2 mb-4">
+            <Film className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-medium">Apps Display</h2>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="video-autoplay">Auto-play preview videos</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                When enabled, app preview videos play automatically in the carousel and app cards. Hovering always plays regardless.
+              </p>
+            </div>
+            <Switch
+              id="video-autoplay"
+              checked={videoAutoplay}
+              onCheckedChange={setVideoAutoplay}
+            />
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <Label htmlFor="apps-limit">Apps carousel limit</Label>
+            <div className="flex items-center gap-2 max-w-xs">
+              <Input
+                id="apps-limit"
+                type="number"
+                min={1}
+                max={50}
+                value={appsLimit}
+                onChange={(e) => setAppsLimit(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                className="w-24"
+              />
+              <span className="text-sm text-muted-foreground">apps</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Maximum number of apps shown in the homepage carousel (1-50). Featured apps always appear first.
+            </p>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <Label htmlFor="auto-scroll">Auto-scroll interval</Label>
+            <div className="flex items-center gap-2 max-w-xs">
+              <Input
+                id="auto-scroll"
+                type="number"
+                min={0}
+                max={60}
+                value={autoScrollSeconds}
+                onChange={(e) => setAutoScrollSeconds(Math.max(0, Math.min(60, Number(e.target.value) || 0)))}
+                className="w-24"
+              />
+              <span className="text-sm text-muted-foreground">seconds</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Time between auto-scroll steps in the carousel (0 to disable). Pauses on hover.
+            </p>
+          </div>
+        </div>
+
         {/* Save Button */}
-        {(isFeatureEnabled("providerSelection") || isFeatureEnabled("costMarkup")) && (
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
             <Button onClick={handleSave} disabled={saving || !hasChanges}>
               {saving ? (
                 <>
@@ -211,7 +291,6 @@ export default function AdminSettingsPage() {
               </span>
             )}
           </div>
-        )}
       </div>
     </div>
   )

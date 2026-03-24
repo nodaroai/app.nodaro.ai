@@ -8,6 +8,7 @@ interface AppMarketplaceCardProps {
   app: AppBrowseCard
   isFavorited: boolean
   onToggleFavorite: (appId: string) => void
+  videoAutoplay?: boolean
 }
 
 function formatCount(n: number): string {
@@ -15,7 +16,7 @@ function formatCount(n: number): string {
   return String(n)
 }
 
-export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite }: AppMarketplaceCardProps) {
+export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAutoplay = true }: AppMarketplaceCardProps) {
   const navigate = useNavigate()
   const categoryLabel = APP_CATEGORIES.find((c) => c.value === app.category)?.label ?? "Other"
   const categoryColor = CATEGORY_COLORS[app.category] ?? CATEGORY_COLORS.other
@@ -32,11 +33,12 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite }: AppMa
             <video
               src={app.previewMediaUrl}
               className="w-full h-full object-cover"
+              autoPlay={videoAutoplay}
               muted
               loop
               playsInline
               onMouseEnter={(e) => e.currentTarget.play()}
-              onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
+              onMouseLeave={(e) => { if (!videoAutoplay) { e.currentTarget.pause(); e.currentTarget.currentTime = 0 } }}
             />
           ) : (
             <img

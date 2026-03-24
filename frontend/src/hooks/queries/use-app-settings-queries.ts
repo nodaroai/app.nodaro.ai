@@ -6,11 +6,19 @@ import { getAuthHeaders } from "@/lib/api"
 export interface AppSettings {
   readonly ai_provider: "replicate" | "kie"
   readonly cost_markup_percent: number
+  readonly apps_video_autoplay: boolean
+  readonly featured_app_ids: readonly string[]
+  readonly featured_apps_limit: number
+  readonly apps_auto_scroll_seconds: number
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
   ai_provider: "kie",
   ***REDACTED-OSS-SCRUB***
+  apps_video_autoplay: true,
+  featured_app_ids: [],
+  featured_apps_limit: 20,
+  apps_auto_scroll_seconds: 4,
 }
 
 async function fetchAppSettings(): Promise<AppSettings> {
@@ -23,6 +31,10 @@ async function fetchAppSettings(): Promise<AppSettings> {
   return {
     ai_provider: (settings.ai_provider as "replicate" | "kie") ?? "kie",
     cost_markup_percent: (settings.cost_markup_percent as number) ?? 25,
+    apps_video_autoplay: (settings.apps_video_autoplay as boolean) ?? true,
+    featured_app_ids: (Array.isArray(settings.featured_app_ids) ? settings.featured_app_ids : []) as string[],
+    featured_apps_limit: (settings.featured_apps_limit as number) ?? 20,
+    apps_auto_scroll_seconds: (settings.apps_auto_scroll_seconds as number) ?? 4,
   }
 }
 
