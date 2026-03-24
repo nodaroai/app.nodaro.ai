@@ -48,6 +48,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [runsLoaded, setRunsLoaded] = useState(false)
   const [slots, setSlots] = useState<RunSlot[]>([])
+  const [pendingRunId, setPendingRunId] = useState<string | null>(initialRunId ?? null)
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null)
   // activeSlot is computed after allSlots is built (below)
   const [deleteConfirmSlotId, setDeleteConfirmSlotId] = useState<string | null>(null)
@@ -128,6 +129,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     setSlots([])
     setActiveSlotId(null)
     setRunsLoaded(false)
+    setPendingRunId(null)
     initialAppliedRef.current = false
   }, [slug])
 
@@ -170,11 +172,15 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
       setShowHistory(true)
       setSidebarCollapsed(false)
     } else {
-      // Default: expanded on desktop, closed on mobile
+      // Default: read from localStorage, fall back to collapsed
+      const stored = localStorage.getItem("app-sidebar-collapsed")
+      const collapsed = stored !== null ? stored === "true" : true
       if (isDesktop) {
-        setSidebarCollapsed(false)
+        setSidebarCollapsed(collapsed)
+        setShowHistory(true)
+      } else {
+        setShowHistory(false)
       }
-      setShowHistory(isDesktop)
     }
   }, [allSlots.length, presNodes.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -200,10 +206,30 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         thumbnailUrl: run.thumbnailUrl ?? null,
       }))
       setSlots(dbSlots)
+
+      // If initialRunId targets a DB run that wasn't available during init, select it now
+      if (initialRunId) {
+        const target = dbSlots.find((s) => s.id === initialRunId)
+        if (target) {
+          setActiveSlotId(target.id)
+          applySlotToPresentation(target)
+          useAppRunnerStore.setState({
+            activeRunId: target.id,
+            executionId: target.executionId ?? null,
+            executionStatus: target.executionStatus as "idle" | "running" | "completed" | "failed",
+            nodeStates: target.nodeStates,
+            completedNodes: target.completedNodes,
+            totalNodes: target.totalNodes,
+            errorMessage: null,
+          })
+        }
+      }
+      setPendingRunId(null)
     }).catch(() => {
       // silently fail — user may not be authenticated
+      setPendingRunId(null)
     })
-  }, [app, user, slug, runsLoaded, persistRuns])
+  }, [app, user, slug, runsLoaded, persistRuns]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync execution state: app runner store -> presentation store + active slot
   // Guard: skip entirely when Original slot is active — its data is static snapshot
@@ -296,6 +322,10 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         setActiveSlotId(slot.id)
         newRun()
         resetPresentationToIdle(emptyInputs)
+        // Update URL for deep-linking on refresh
+        const url = new URL(window.location.href)
+        url.searchParams.set("run", slot.id)
+        window.history.replaceState({}, "", url.toString())
         return
       } catch {
         // Fallback to local slot
@@ -321,6 +351,9 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     setActiveSlotId(slot.id)
     newRun()
     resetPresentationToIdle(emptyInputs)
+    const url = new URL(window.location.href)
+    url.searchParams.set("run", slot.id)
+    window.history.replaceState({}, "", url.toString())
   }, [saveCurrentSlotInputs, inputNodes, newRun, slug, user, selectedVersion, latestVersion, persistRuns])
 
   // Clear — reset current slot's inputs
@@ -522,7 +555,11 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
   const handleCloseSidebar = useCallback(() => {
     const isDesktop = window.matchMedia("(min-width: 768px)").matches
     if (isDesktop) {
-      setSidebarCollapsed((prev) => !prev)
+      setSidebarCollapsed((prev) => {
+        const next = !prev
+        localStorage.setItem("app-sidebar-collapsed", String(next))
+        return next
+      })
     } else {
       setShowHistory(false)
     }
@@ -532,6 +569,11 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
   const isRunning = executionStatus === "running"
   const isTerminal = activeSlot?.executionStatus === "completed" || activeSlot?.executionStatus === "failed"
   const inputsReadOnlyValue = !activeSlotId || isRunning || isTerminal || activeSlotId === ORIGINAL_SLOT_ID
+  // True while waiting for DB runs to load a specific run from URL.
+  // pendingRunId is set on mount from initialRunId, cleared after DB fetch completes.
+  const isLoadingRun = !!pendingRunId
+  // True while DB runs are being fetched (sidebar spinner, regardless of initialRunId)
+  const isLoadingRuns = persistRuns && runsLoaded && slots.length === 0 && !!user
 
   return {
     // State (allSlots includes the synthetic Original slot)
@@ -561,6 +603,8 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     newRunLabel,
     isRunning,
     inputsReadOnlyValue,
+    isLoadingRun,
+    isLoadingRuns,
 
     // Version
     selectedVersion,

@@ -155,61 +155,72 @@ function NodeRow({
     [currentItems, node.id]
   )
 
-  // When transitioning from legacy to items-based rendering, seed with visible nodes
-  const seedIfEmpty = useCallback(
-    (items: PresentationItem[]): PresentationItem[] =>
-      items.length === 0 && allVisibleNodeIds.length > 0
-        ? allVisibleNodeIds.map((id) => ({ type: "node" as const, nodeId: id }))
-        : items,
-    [allVisibleNodeIds],
-  )
-
   const handleFieldToggle = useCallback(
     (field: ExposableField, checked: boolean) => {
       if (checked) {
-        const items = seedIfEmpty(currentItems)
-        const newItem: PresentationItem = {
+        // Seed other visible nodes if items list is empty, but exclude this node — fields replace it
+        let items = currentItems.length === 0 && allVisibleNodeIds.length > 0
+          ? allVisibleNodeIds
+              .filter((id) => id !== node.id)
+              .map((id) => ({ type: "node" as const, nodeId: id }))
+          : [...currentItems]
+        // Remove any existing node item for this node — individual fields replace it
+        items = items.filter((i) => !(i.type === "node" && i.nodeId === node.id))
+        items.push({
           type: "field",
           id: crypto.randomUUID(),
           nodeId: node.id,
           field: field.key,
-        }
-        updatePresentationSettings({
-          [itemsKey]: [...items, newItem],
         })
+        updatePresentationSettings({ [itemsKey]: items })
       } else {
-        updatePresentationSettings({
-          [itemsKey]: currentItems.filter(
-            (item) => !(item.type === "field" && item.nodeId === node.id && item.field === field.key)
-          ),
-        })
+        const filtered = currentItems.filter(
+          (item) => !(item.type === "field" && item.nodeId === node.id && item.field === field.key)
+        )
+        // If no items reference this node anymore, re-add node item so it stays visible
+        const hasItemsForNode = filtered.some(
+          (i) => i.type !== "richtext" && i.type !== "group" && i.nodeId === node.id
+        )
+        if (!hasItemsForNode && isVisible) {
+          filtered.push({ type: "node" as const, nodeId: node.id })
+        }
+        updatePresentationSettings({ [itemsKey]: filtered })
       }
     },
-    [node.id, currentItems, itemsKey, updatePresentationSettings, seedIfEmpty]
+    [node.id, currentItems, itemsKey, isVisible, allVisibleNodeIds, updatePresentationSettings]
   )
 
   const handleOutputToggle = useCallback(
     (output: ExposableOutput, checked: boolean) => {
       if (checked) {
-        const items = seedIfEmpty(currentItems)
-        const newItem: PresentationItem = {
+        // Seed other visible nodes if items list is empty, but exclude this node — outputs replace it
+        let items = currentItems.length === 0 && allVisibleNodeIds.length > 0
+          ? allVisibleNodeIds
+              .filter((id) => id !== node.id)
+              .map((id) => ({ type: "node" as const, nodeId: id }))
+          : [...currentItems]
+        items = items.filter((i) => !(i.type === "node" && i.nodeId === node.id))
+        items.push({
           type: "output",
           id: crypto.randomUUID(),
           nodeId: node.id,
           outputKey: output.key,
-        }
-        updatePresentationSettings({
-          [itemsKey]: [...items, newItem],
         })
+        updatePresentationSettings({ [itemsKey]: items })
       } else {
-        updatePresentationSettings({
-          [itemsKey]: currentItems.filter(
-            (item) => !(item.type === "output" && item.nodeId === node.id && item.outputKey === output.key)
-          ),
-        })
+        const filtered = currentItems.filter(
+          (item) => !(item.type === "output" && item.nodeId === node.id && item.outputKey === output.key)
+        )
+        const hasItemsForNode = filtered.some(
+          (i) => i.type !== "richtext" && i.type !== "group" && i.nodeId === node.id
+        )
+        if (!hasItemsForNode && isVisible) {
+          filtered.push({ type: "node" as const, nodeId: node.id })
+        }
+        updatePresentationSettings({ [itemsKey]: filtered })
       }
     },
-    [node.id, currentItems, itemsKey, updatePresentationSettings, seedIfEmpty]
+    [node.id, currentItems, itemsKey, isVisible, allVisibleNodeIds, updatePresentationSettings]
   )
 
   const handleRestrictUpdate = useCallback(

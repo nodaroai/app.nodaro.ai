@@ -73,6 +73,7 @@ import { RichtextBlock } from "./richtext-block"
 import { RichtextEditor } from "./richtext-editor"
 import { GroupCard } from "./group-card"
 import type { PresentationItem, ExposableField } from "@nodaro-shared/presentation-types"
+import { getItemSortId } from "@nodaro-shared/presentation-utils"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import {
   HorizontalView,
@@ -405,6 +406,28 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     [updateNodeData],
   )
 
+  /** Remove a specific item from an items list by sortId */
+  const handleRemoveItem = useCallback(
+    (sortId: string, section: "inputs" | "outputs") => {
+      const key = section === "inputs" ? "inputItems" : "outputItems"
+      const items: PresentationItem[] = settings[key] ?? []
+      const item = items.find((i) => getItemSortId(i) === sortId)
+      if (!item) return
+      const filtered = items.filter((i) => getItemSortId(i) !== sortId)
+      updatePresentationSettings({ [key]: filtered })
+      // If removing a node item and no other items reference this node, also remove from presentation
+      if (item.type === "node") {
+        const nodeId = item.nodeId
+        const hasOtherItems = filtered.some((i) => i.type !== "richtext" && i.type !== "group" && i.nodeId === nodeId)
+        if (!hasOtherItems) {
+          const flag = section === "inputs" ? "presentationInput" : "presentationOutput"
+          updateNodeData(nodeId, { [flag]: false })
+        }
+      }
+    },
+    [settings, updateNodeData, updatePresentationSettings],
+  )
+
   // Remix: create a workflow from the app's snapshot and open in a new tab
   const handleRemix = useCallback(async () => {
     if (!user) {
@@ -563,7 +586,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   )
 
   // Resizable split — with cleanup on unmount
-  const splitRatio = settings.splitRatio ?? 50
+  const splitRatio = settings.splitRatio ?? 30
   const containerRef = useRef<HTMLDivElement>(null)
   const isDraggingDivider = useRef(false)
   const dividerCleanupRef = useRef<(() => void) | null>(null)
@@ -809,7 +832,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     // Resolve element size from node-level + card-level overrides
     const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
     const cardDisplay = settings.cardMeta?.[node.id]?.display
-    const elementSize = cardDisplay?.elementSize ?? nodeDisplay?.elementSize ?? "md"
+    const elementSize = cardDisplay?.elementSize ?? nodeDisplay?.elementSize ?? "lg"
     const fieldBadges = fieldBadgesByNode.get(node.id)
 
     // Preview node: show all visible items with their actual values
@@ -1205,6 +1228,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     handleInputDragEnd: handleInputItemsDragEnd,
     handleOutputDragEnd: handleOutputItemsDragEnd,
     handleRemoveNode,
+    handleRemoveItem,
     settings,
     updateCardMeta,
     setPickerSection: setPickerSection as (section: "inputs" | "outputs") => void,
@@ -1267,9 +1291,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               />
             )}
             {isFullscreen && allowedModes.length > 1 && (
-              <div className="hidden sm:contents">
-                <ViewModeSelector viewMode={viewMode} onChange={handleViewModeChange} allowedModes={allowedModes} />
-              </div>
+              <ViewModeSelector viewMode={viewMode} onChange={handleViewModeChange} allowedModes={allowedModes} />
             )}
           </div>
         </div>

@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button"
 import type { WorkflowNode } from "@/types/nodes"
 import type { PresentationItem } from "@nodaro-shared/presentation-types"
+import { getItemSortId } from "@nodaro-shared/presentation-utils"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { SortableCardWrapper } from "./sortable-card-wrapper"
 
@@ -25,6 +26,8 @@ interface NodeSectionProps {
   onDragEnd: (event: DragEndEvent) => void
   onAdd: () => void
   onRemove: (nodeId: string) => void
+  /** Remove a specific item from the items list by its sort ID */
+  onRemoveItem?: (sortId: string) => void
   settings: PresentationSettings
   updateCardMeta: (nodeId: string, field: string, value: unknown) => void
   renderCard: (node: WorkflowNode) => React.ReactNode
@@ -38,11 +41,6 @@ interface NodeSectionProps {
   onAddGroup?: () => void
 }
 
-/** Get the sortable ID for a PresentationItem */
-function getItemSortId(item: PresentationItem): string {
-  return item.type === "node" ? item.nodeId : item.id
-}
-
 export function NodeSection({
   label,
   nodes,
@@ -51,6 +49,7 @@ export function NodeSection({
   onDragEnd,
   onAdd,
   onRemove,
+  onRemoveItem,
   settings,
   updateCardMeta,
   renderCard,
@@ -141,7 +140,7 @@ export function NodeSection({
                       key={sortId}
                       id={sortId}
                       isEditMode={isEditing}
-                      onRemove={() => { if (nodeId) onRemove(nodeId) }}
+                      onRemove={onRemoveItem ? () => onRemoveItem(sortId) : () => { if (nodeId) onRemove(nodeId) }}
                       cardDescription={metaKey ? settings.cardMeta?.[metaKey]?.description : undefined}
                       onDescriptionChange={(v) => { if (metaKey) updateCardMeta(metaKey, "description", v) }}
                       cardTitle={metaKey ? settings.cardMeta?.[metaKey]?.title : undefined}

@@ -70,14 +70,6 @@ export default function AppRunnerPage() {
       isOwner: false,
       estimatedCost: app.estimatedCredits,
       presentationSettings,
-      // Clear stale state from previous app to prevent images/text bleeding through
-      inputValues: {},
-      nodeStates: {},
-      executionId: null,
-      executionStatus: "idle",
-      completedNodes: 0,
-      totalNodes: 0,
-      errorMessage: null,
     })
   }, [app])
 
@@ -161,6 +153,7 @@ export default function AppRunnerPage() {
           onRenameSlot={runSlots.handleRenameSlot}
           onClose={runSlots.handleCloseSidebar}
           collapsed={runSlots.sidebarCollapsed}
+          isLoadingRuns={runSlots.isLoadingRuns}
           versions={runSlots.versions}
           selectedVersion={runSlots.selectedVersion}
           onSelectVersion={runSlots.setSelectedVersion}
@@ -168,29 +161,38 @@ export default function AppRunnerPage() {
         />
       ) : null}
     >
-      <PresentationView
-        mode="fullscreen"
-        isOwner={false}
-        onCancel={cancel}
-        onNewRun={user ? runSlots.handleHeaderAction : undefined}
-        newRunLabel={runSlots.newRunLabel}
-        inputsReadOnly={runSlots.inputsReadOnlyValue}
-        suppressOutputFallback={runSlots.activeSlotId !== null && runSlots.activeSlotId !== ORIGINAL_SLOT_ID}
-        showFullscreenToggle
-        headerLeft={
-          user && !runSlots.showHistory ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => runSlots.setShowHistory(true)}
-              className="h-8 border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted touch-manipulation shrink-0 md:hidden"
-            >
-              <Clock className="h-4 w-4 mr-1" />
-              Runs
-            </Button>
-          ) : null
-        }
-      />
+      {runSlots.isLoadingRun ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 px-8 py-6 rounded-2xl bg-card/60 backdrop-blur-md border border-border/50 shadow-lg">
+            <Loader2 className="h-6 w-6 animate-spin text-[#ff0073]" />
+            <span className="text-sm text-muted-foreground">Loading run...</span>
+          </div>
+        </div>
+      ) : (
+        <PresentationView
+          mode="fullscreen"
+          isOwner={false}
+          onCancel={cancel}
+          onNewRun={user ? runSlots.handleHeaderAction : undefined}
+          newRunLabel={runSlots.newRunLabel}
+          inputsReadOnly={runSlots.inputsReadOnlyValue}
+          suppressOutputFallback={(runSlots.activeSlotId !== null && runSlots.activeSlotId !== ORIGINAL_SLOT_ID) || !!initialRunId}
+          showFullscreenToggle
+          headerLeft={
+            user && !runSlots.showHistory ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => runSlots.setShowHistory(true)}
+                className="h-8 border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted touch-manipulation shrink-0 md:hidden"
+              >
+                <Clock className="h-4 w-4 mr-1" />
+                Runs
+              </Button>
+            ) : null
+          }
+        />
+      )}
       {deleteDialog}
     </AppRunnerLayout>
   )

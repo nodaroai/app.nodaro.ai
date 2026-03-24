@@ -72,8 +72,13 @@ export function makeSnapshotInputs(inputNodes: WorkflowNode[]): Record<string, R
     } else if (t === "upload-image" || t === "upload-video" || t === "upload-audio") {
       inputs[node.id] = { url: (node.data.url as string) ?? "" }
     } else if (t === "list") {
-      const items = ((node.data as Record<string, unknown>).items as string || "")
-        .split("\n").map((s: string) => s.trim()).filter(Boolean)
+      const raw = (node.data as Record<string, unknown>).items
+      let items: string[]
+      if (Array.isArray(raw)) {
+        items = raw.map(String).filter(Boolean)
+      } else {
+        items = (String(raw || "")).split("\n").map((s: string) => s.trim()).filter(Boolean)
+      }
       inputs[node.id] = { items: items.length > 0 ? items : [""] }
     } else if (t === "loop") {
       const loopData = node.data as Record<string, unknown>

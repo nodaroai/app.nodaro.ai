@@ -9,6 +9,7 @@ export function VerticalView({
   handleInputDragEnd,
   handleOutputDragEnd,
   handleRemoveNode,
+  handleRemoveItem,
   settings,
   updateCardMeta,
   setPickerSection,
@@ -32,6 +33,7 @@ export function VerticalView({
           onDragEnd={handleInputDragEnd}
           onAdd={() => setPickerSection("inputs")}
           onRemove={handleRemoveNode}
+          onRemoveItem={(sortId) => handleRemoveItem(sortId, "inputs")}
           settings={settings}
           updateCardMeta={updateCardMeta}
           renderCard={renderInputCard}
@@ -52,6 +54,7 @@ export function VerticalView({
           onDragEnd={handleOutputDragEnd}
           onAdd={() => setPickerSection("outputs")}
           onRemove={handleRemoveNode}
+          onRemoveItem={(sortId) => handleRemoveItem(sortId, "outputs")}
           settings={settings}
           updateCardMeta={updateCardMeta}
           renderCard={renderOutputCard}

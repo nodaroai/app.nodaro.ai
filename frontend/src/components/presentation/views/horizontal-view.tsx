@@ -16,6 +16,7 @@ export function HorizontalView({
   handleInputDragEnd,
   handleOutputDragEnd,
   handleRemoveNode,
+  handleRemoveItem,
   settings,
   updateCardMeta,
   setPickerSection,
@@ -32,17 +33,17 @@ export function HorizontalView({
   handleDividerMouseDown,
 }: HorizontalViewProps) {
   const leftColumnStyle = useMemo(() => ({
-    width: `calc(${splitRatio}% - 8px)`,
+    width: `${splitRatio}%`,
     minWidth: '280px',
   }), [splitRatio])
   const rightColumnStyle = useMemo(() => ({
-    width: `calc(${100 - splitRatio}% - 8px)`,
+    width: `${100 - splitRatio}%`,
     minWidth: '280px',
   }), [splitRatio])
 
   return (
-    <div className="flex-1 flex flex-col overflow-auto p-3 md:p-6" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom))' }}>
-      <div ref={containerRef} className="pres-horiz-container max-w-7xl mx-auto flex gap-0 flex-1 min-h-[400px] overflow-x-auto">
+    <div className="flex-1 flex flex-col overflow-auto px-3 py-2 md:px-6 md:py-4" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom))' }}>
+      <div ref={containerRef} className="pres-horiz-container flex gap-0 flex-1 min-h-[400px] overflow-x-auto">
         {/* Inputs column — width overridden to 100% on mobile via CSS */}
         <div className="pres-horiz-column flex flex-col overflow-y-auto md:pr-3" style={leftColumnStyle}>
           <NodeSection
@@ -53,6 +54,7 @@ export function HorizontalView({
             onDragEnd={handleInputDragEnd}
             onAdd={() => setPickerSection("inputs")}
             onRemove={handleRemoveNode}
+            onRemoveItem={(sortId) => handleRemoveItem(sortId, "inputs")}
             settings={settings}
             updateCardMeta={updateCardMeta}
             renderCard={renderInputCard}
@@ -95,6 +97,7 @@ export function HorizontalView({
             onDragEnd={handleOutputDragEnd}
             onAdd={() => setPickerSection("outputs")}
             onRemove={handleRemoveNode}
+            onRemoveItem={(sortId) => handleRemoveItem(sortId, "outputs")}
             settings={settings}
             updateCardMeta={updateCardMeta}
             renderCard={renderOutputCard}
