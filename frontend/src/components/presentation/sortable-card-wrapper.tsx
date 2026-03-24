@@ -41,7 +41,7 @@ export function SortableCardWrapper({
   }
 
   return (
-    <div ref={setNodeRef} style={style} className="relative group mb-4">
+    <div ref={setNodeRef} style={style} className="relative group mb-2">
       {isEditMode && onRemove && (
         <button
           type="button"

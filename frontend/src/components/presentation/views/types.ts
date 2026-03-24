@@ -23,6 +23,8 @@ export interface EditableViewProps extends ViewProps {
   handleInputDragEnd: (event: DragEndEvent) => void
   handleOutputDragEnd: (event: DragEndEvent) => void
   handleRemoveNode: (nodeId: string) => void
+  /** Remove a specific item (field/node/richtext) from the items list by its sort ID */
+  handleRemoveItem: (sortId: string, section: "inputs" | "outputs") => void
   settings: PresentationSettings
   updateCardMeta: (nodeId: string, field: string, value: unknown) => void
   setPickerSection: (section: "inputs" | "outputs") => void

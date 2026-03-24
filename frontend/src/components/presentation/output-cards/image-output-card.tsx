@@ -12,8 +12,12 @@ interface ImageOutputCardProps {
   elementSize?: "sm" | "md" | "lg"
 }
 
+const THUMBNAIL_WIDTHS: Record<string, number> = { sm: 480, md: 800, lg: 1200 }
+
 export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia, elementSize }: ImageOutputCardProps) {
-  const maxHClass = ELEMENT_SIZES.imageOutput[elementSize ?? "md"]
+  const size = elementSize ?? "md"
+  const maxHClass = ELEMENT_SIZES.imageOutput[size]
+  const thumbWidth = THUMBNAIL_WIDTHS[size] ?? 800
   const handleClick = () => {
     if (nodeId && onOpenMedia) onOpenMedia(nodeId)
   }
@@ -34,7 +38,7 @@ export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia, eleme
             alt={label}
             className={`w-full ${maxHClass} object-contain rounded-lg bg-black/20`}
             thumbnail
-            thumbnailWidth={480}
+            thumbnailWidth={thumbWidth}
           />
           {/* Toolbar — top-right, visible on hover/touch */}
           <div className="media-overlay-controls absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">

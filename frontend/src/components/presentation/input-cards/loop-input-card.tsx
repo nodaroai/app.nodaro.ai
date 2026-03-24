@@ -133,7 +133,7 @@ function RichMediaCell({
             <CachedImage
               src={value}
               alt="upload"
-              className="w-full max-h-[200px] object-cover rounded-lg"
+              className="w-full object-contain rounded-lg"
             />
             <MediaOverlayButtons url={value} onPreview={() => setPreviewOpen(true)} onRemove={() => onChange("")} readOnly={readOnly} />
           </div>
@@ -142,7 +142,7 @@ function RichMediaCell({
           <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={() => setPreviewOpen(true)}>
             <video
               src={value}
-              className="w-full max-h-[200px] object-cover rounded-lg"
+              className="w-full object-contain rounded-lg"
               muted
               playsInline
             />

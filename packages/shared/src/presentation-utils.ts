@@ -305,6 +305,11 @@ export function flattenItems(items: PresentationItem[]): PresentationItem[] {
   return result
 }
 
+/** Get the sortable/unique ID for a PresentationItem. */
+export function getItemSortId(item: PresentationItem): string {
+  return item.type === "node" ? item.nodeId : item.id
+}
+
 /** Remove items whose nodeId no longer exists in the workflow. */
 export function cleanOrphanedItems(
   items: PresentationItem[],

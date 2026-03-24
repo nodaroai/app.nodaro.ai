@@ -1,6 +1,6 @@
 import { useRef } from "react"
 import { Link } from "react-router-dom"
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react"
+import { Plus, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import type { RunSlot } from "./types"
@@ -16,6 +16,7 @@ export function RunsSidebar({
   onRenameSlot,
   onClose,
   collapsed,
+  isLoadingRuns,
   versions,
   selectedVersion,
   onSelectVersion,
@@ -34,6 +35,7 @@ export function RunsSidebar({
   selectedVersion: number | null
   onSelectVersion: (version: number | null) => void
   latestVersion: number
+  isLoadingRuns?: boolean
 }) {
   const hasMultipleVersions = versions.length > 1
   const sidebarRef = useRef<HTMLDivElement>(null)
@@ -67,6 +69,11 @@ export function RunsSidebar({
               onSelect={() => onSelectSlot(slot.id)}
             />
           ))}
+          {isLoadingRuns && (
+            <div className="flex items-center justify-center py-3">
+              <Loader2 className="h-4 w-4 animate-spin text-[#ff0073]" />
+            </div>
+          )}
         </div>
 
         {/* Expand bar at bottom — full width clickable */}
@@ -138,7 +145,13 @@ export function RunsSidebar({
             onRename={(name) => onRenameSlot(slot.id, name)}
           />
         ))}
-        {slots.length === 0 && (
+        {isLoadingRuns && (
+          <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-[#ff0073]" />
+            Loading runs...
+          </div>
+        )}
+        {slots.length === 0 && !isLoadingRuns && (
           <div className="px-4 py-6 text-center text-xs text-muted-foreground">
             Click + to create a new run
           </div>
