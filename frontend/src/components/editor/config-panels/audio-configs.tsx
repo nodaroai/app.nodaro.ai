@@ -83,9 +83,9 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
         >
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="elevenlabs-v3">ElevenLabs v3 (recommended)</SelectItem>
-            <SelectItem value="elevenlabs-turbo">ElevenLabs Turbo v2.5 (fast)</SelectItem>
             <SelectItem value="elevenlabs-multilingual">ElevenLabs Multilingual v2</SelectItem>
+            <SelectItem value="elevenlabs-turbo">ElevenLabs Turbo v2.5 (fast)</SelectItem>
+            <SelectItem value="elevenlabs-v3">ElevenLabs v3 (recommended)</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -262,11 +262,11 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoGenerateData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            <SelectItem value="V4">Suno V4</SelectItem>
+            <SelectItem value="V4_5">Suno V4.5</SelectItem>
             <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
             <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
-            <SelectItem value="V4_5">Suno V4.5</SelectItem>
-            <SelectItem value="V4">Suno V4</SelectItem>
+            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -366,11 +366,11 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoCoverData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            <SelectItem value="V4">Suno V4</SelectItem>
+            <SelectItem value="V4_5">Suno V4.5</SelectItem>
             <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
             <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
-            <SelectItem value="V4_5">Suno V4.5</SelectItem>
-            <SelectItem value="V4">Suno V4</SelectItem>
+            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -461,11 +461,11 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoExtendData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            <SelectItem value="V4">Suno V4</SelectItem>
+            <SelectItem value="V4_5">Suno V4.5</SelectItem>
             <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
             <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
-            <SelectItem value="V4_5">Suno V4.5</SelectItem>
-            <SelectItem value="V4">Suno V4</SelectItem>
+            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -598,11 +598,11 @@ export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMap
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoMashupData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            <SelectItem value="V4">Suno V4</SelectItem>
+            <SelectItem value="V4_5">Suno V4.5</SelectItem>
             <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
             <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
-            <SelectItem value="V4_5">Suno V4.5</SelectItem>
-            <SelectItem value="V4">Suno V4</SelectItem>
+            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -684,8 +684,8 @@ export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappin
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoAddInstrumentalData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
             <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
+            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -701,8 +701,8 @@ export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, on
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoAddVocalsData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
             <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
+            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -727,11 +727,11 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoUploadExtendData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            <SelectItem value="V4">Suno V4</SelectItem>
+            <SelectItem value="V4_5">Suno V4.5</SelectItem>
             <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
             <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
-            <SelectItem value="V4_5">Suno V4.5</SelectItem>
-            <SelectItem value="V4">Suno V4</SelectItem>
+            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -845,9 +845,9 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         <Select value={data.provider || "kling-avatar"} onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"] })}>
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
+            <SelectItem value="infinitalk">{`Infinitalk (${getCachedCredits("infinitalk:480p") ?? 11}–${getCachedCredits("infinitalk") ?? 42} credits)`}</SelectItem>
             <SelectItem value="kling-avatar">{`Kling Avatar (${getCachedCredits("kling-avatar") ?? 28} credits)`}</SelectItem>
             <SelectItem value="kling-avatar-pro">{`Kling Avatar Pro (${getCachedCredits("kling-avatar-pro") ?? 56} credits)`}</SelectItem>
-            <SelectItem value="infinitalk">{`Infinitalk (${getCachedCredits("infinitalk:480p") ?? 11}–${getCachedCredits("infinitalk") ?? 42} credits)`}</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -1200,8 +1200,8 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
         <Select value={data.model || "eleven_ttv_v3"} onValueChange={(v) => onUpdate({ model: v })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="eleven_ttv_v3">ElevenLabs v3 (recommended)</SelectItem>
             <SelectItem value="eleven_multilingual_ttv_v2">ElevenLabs Multilingual v2</SelectItem>
+            <SelectItem value="eleven_ttv_v3">ElevenLabs v3 (recommended)</SelectItem>
           </SelectContent>
         </Select>
       </div>

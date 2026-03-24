@@ -15,6 +15,11 @@ export function VerticalView({
   renderInputCard,
   renderOutputCard,
   getNodeColumns,
+  inputItems,
+  outputItems,
+  renderInputItem,
+  renderOutputItem,
+  addGroup,
 }: EditableViewProps) {
   return (
     <div className="flex-1 overflow-auto p-3 sm:p-6" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom))' }}>
@@ -31,6 +36,9 @@ export function VerticalView({
           updateCardMeta={updateCardMeta}
           renderCard={renderInputCard}
           getNodeColumns={getNodeColumns}
+          items={inputItems}
+          renderItem={renderInputItem}
+          onAddGroup={addGroup ? () => addGroup("input") : undefined}
         />
 
         {/* Separator */}
@@ -48,6 +56,9 @@ export function VerticalView({
           updateCardMeta={updateCardMeta}
           renderCard={renderOutputCard}
           getNodeColumns={getNodeColumns}
+          items={outputItems}
+          renderItem={renderOutputItem}
+          onAddGroup={addGroup ? () => addGroup("output") : undefined}
         />
       </div>
     </div>

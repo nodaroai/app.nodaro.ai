@@ -13,6 +13,8 @@ import { NODE_DEFINITIONS, TELEPORTER_CHANNEL_COLORS } from "@/types/nodes"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
 import { filterCloneNodes } from "@nodaro-shared/clone-utils"
+import type { PresentationItem } from "@nodaro-shared/presentation-types"
+import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems } from "@nodaro-shared/presentation-utils"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 
 /**
@@ -115,8 +117,10 @@ export interface PresentationSettings {
   subWorkflowNodeId?: string
   selectedRouteId?: string
   splitRatio?: number // 20-80, default 50
-  inputOrder?: string[] // node IDs in display order
-  outputOrder?: string[] // node IDs in display order
+  inputOrder?: string[] // node IDs in display order (legacy)
+  outputOrder?: string[] // node IDs in display order (legacy)
+  inputItems?: PresentationItem[] // rich ordered items (groups, fields, richtext)
+  outputItems?: PresentationItem[] // rich ordered items (groups, fields, richtext)
   cardMeta?: Record<string, { title?: string; description?: string; display?: Partial<PresentationDisplay>; inputMode?: InputMode; minLines?: number }>
   viewMode?: PresentationViewMode // defaults to "horizontal"
   compareLeft?: string // node ID for left compare item
@@ -613,15 +617,26 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }),
 
   deleteNode: (nodeId) =>
-    set((state) => ({
-      nodes: state.nodes.filter((n) => n.id !== nodeId),
-      edges: state.edges.filter(
-        (e) => e.source !== nodeId && e.target !== nodeId,
-      ),
-      selectedNodeId:
-        state.selectedNodeId === nodeId ? null : state.selectedNodeId,
-      isDirty: true,
-    })),
+    set((state) => {
+      const remainingNodes = state.nodes.filter((n) => n.id !== nodeId)
+      const remainingNodeIds = new Set(remainingNodes.map((n) => n.id))
+      const ps = state.presentationSettings
+      const updatedPs = {
+        ...ps,
+        ...(ps.inputItems ? { inputItems: cleanOrphanedItems(ps.inputItems, remainingNodeIds) } : {}),
+        ...(ps.outputItems ? { outputItems: cleanOrphanedItems(ps.outputItems, remainingNodeIds) } : {}),
+      }
+      return {
+        nodes: remainingNodes,
+        edges: state.edges.filter(
+          (e) => e.source !== nodeId && e.target !== nodeId,
+        ),
+        selectedNodeId:
+          state.selectedNodeId === nodeId ? null : state.selectedNodeId,
+        presentationSettings: updatedPs,
+        isDirty: true,
+      }
+    }),
 
   updateEdgeData: (edgeId, data) =>
     set((state) => ({
@@ -899,10 +914,25 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   updatePresentationSettings: (settings) =>
-    set((state) => ({
-      presentationSettings: { ...state.presentationSettings, ...settings },
-      isDirty: true,
-    })),
+    set((state) => {
+      const current = state.presentationSettings
+      const merged = { ...current, ...settings }
+      // Auto-migrate legacy string[] order to PresentationItem[] on first edit
+      if (!merged.inputItems && merged.inputOrder) {
+        merged.inputItems = migrateToItems(merged.inputOrder)
+      }
+      if (!merged.outputItems && merged.outputOrder) {
+        merged.outputItems = migrateToItems(merged.outputOrder)
+      }
+      // Validate no nested groups (only when the incoming update touches items)
+      if (settings.inputItems && merged.inputItems) {
+        merged.inputItems = validateNoNestedGroups(merged.inputItems)
+      }
+      if (settings.outputItems && merged.outputItems) {
+        merged.outputItems = validateNoNestedGroups(merged.outputItems)
+      }
+      return { presentationSettings: merged, isDirty: true }
+    }),
 
   syncTeleporterEdges: (channel) => {
     set((state) => {

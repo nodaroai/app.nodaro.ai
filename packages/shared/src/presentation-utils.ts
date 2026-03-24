@@ -4,6 +4,7 @@
  */
 
 import type { GenericNode, GenericEdge } from "./types.js"
+import type { PresentationItem } from "./presentation-types.js"
 
 // ---------------------------------------------------------------------------
 // Node type sets
@@ -269,4 +270,55 @@ const INPUT_FIELD_MAP: Record<string, InputFieldSchema> = {
 /** Get the overridable field schema for an input node type. */
 export function getInputFieldSchema(nodeType: string): InputFieldSchema | undefined {
   return INPUT_FIELD_MAP[nodeType]
+}
+
+// ---------------------------------------------------------------------------
+// Migration & validation helpers (PresentationItem)
+// ---------------------------------------------------------------------------
+
+/** Migrate a legacy string[] order to PresentationItem[]. */
+export function migrateToItems(order: string[] | undefined): PresentationItem[] | undefined {
+  if (!order) return undefined
+  return order.map((nodeId) => ({ type: "node" as const, nodeId }))
+}
+
+/** Strip nested groups — groups may only contain non-group items. */
+export function validateNoNestedGroups(items: PresentationItem[]): PresentationItem[] {
+  return items.map((item) => {
+    if (item.type === "group") {
+      return { ...item, items: item.items.filter((child) => child.type !== "group") }
+    }
+    return item
+  })
+}
+
+/** Recursively flatten all items, unwrapping groups. */
+export function flattenItems(items: PresentationItem[]): PresentationItem[] {
+  const result: PresentationItem[] = []
+  for (const item of items) {
+    if (item.type === "group") {
+      result.push(...flattenItems(item.items))
+    } else {
+      result.push(item)
+    }
+  }
+  return result
+}
+
+/** Remove items whose nodeId no longer exists in the workflow. */
+export function cleanOrphanedItems(
+  items: PresentationItem[],
+  nodeIds: Set<string>
+): PresentationItem[] {
+  return items
+    .filter((item) => {
+      if (item.type === "node" || item.type === "field" || item.type === "output") return nodeIds.has(item.nodeId)
+      return true
+    })
+    .map((item) => {
+      if (item.type === "group") {
+        return { ...item, items: cleanOrphanedItems(item.items, nodeIds) }
+      }
+      return item
+    })
 }

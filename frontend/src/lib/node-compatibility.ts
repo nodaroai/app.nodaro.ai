@@ -1,5 +1,5 @@
-import type { SceneNodeType, NodeTypeDefinition } from "@/types/nodes"
-import { NODE_DEFINITIONS } from "@/types/nodes"
+import type { SceneNodeType } from "@/types/nodes"
+import { NODE_DEF_MAP } from "@/types/nodes"
 import type { XYPosition } from "@xyflow/react"
 
 export interface ConnectionContext {
@@ -52,10 +52,6 @@ export const HANDLE_COMPATIBILITY: Record<string, readonly string[]> = {
   rejected: ["in"],
 }
 
-// O(1) lookup map built once at module scope
-const NODE_DEF_MAP = new Map<SceneNodeType, NodeTypeDefinition>(
-  NODE_DEFINITIONS.map((d) => [d.type, d]),
-)
 
 export interface NodeOption {
   readonly type: SceneNodeType

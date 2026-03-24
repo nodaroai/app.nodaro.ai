@@ -62,12 +62,18 @@ import { isVideoUrl } from "@/lib/media-type"
 import { responsiveColumns } from "@/lib/presentation-display"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { StatusBadge } from "./output-cards/shared"
-import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, getLoopFirstMedia, areAllInputsFilled } from "./helpers"
+import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, getLoopFirstMedia, areAllInputsFilled, resolveInputItems, resolveOutputItems } from "./helpers"
 import { buildNodeRefMap } from "@/lib/node-refs"
 import { RunTargetSelector } from "./run-target-selector"
 import { ViewModeSelector, ALL_VIEW_MODES } from "./view-mode-selector"
 import { InputCard } from "./input-card"
-import { OutputCard } from "./output-card"
+import { OutputCard, type FieldBadgeEntry } from "./output-card"
+import { ConfigFieldRenderer } from "./config-field-renderer"
+import { RichtextBlock } from "./richtext-block"
+import { RichtextEditor } from "./richtext-editor"
+import { GroupCard } from "./group-card"
+import type { PresentationItem, ExposableField } from "@nodaro-shared/presentation-types"
+import { NODE_DEF_MAP } from "@/types/nodes"
 import {
   HorizontalView,
   VerticalView,
@@ -78,6 +84,23 @@ import {
 
 const POINTER_ACTIVATION = { activationConstraint: { distance: 5 } } as const
 const VALID_VIEW_MODES = new Set<PresentationViewMode>(ALL_VIEW_MODES)
+
+/** Recursively update a richtext item's content by id */
+function updateItemContent(items: PresentationItem[], id: string, content: string): PresentationItem[] {
+  return items.map((item) => {
+    if (item.type === "richtext" && item.id === id) return { ...item, content }
+    if (item.type === "group") return { ...item, items: updateItemContent(item.items, id, content) }
+    return item
+  })
+}
+
+/** Recursively update a group's title by id */
+function updateGroupTitle(items: PresentationItem[], id: string, title: string): PresentationItem[] {
+  return items.map((item) => {
+    if (item.type === "group" && item.id === id) return { ...item, title }
+    return item
+  })
+}
 
 interface PresentationViewProps {
   mode: "tab" | "fullscreen"
@@ -226,6 +249,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const outputNodes = useMemo(() => getOutputNodes(nodes, edges, true), [nodes, edges])
   const orderedInputNodes = useMemo(() => orderNodesByIds(inputNodes, settings.inputOrder), [inputNodes, settings.inputOrder])
   const orderedOutputNodes = useMemo(() => orderNodesByIds(outputNodes, settings.outputOrder), [outputNodes, settings.outputOrder])
+
+  // Rich items-based ordering (groups, fields, richtext alongside nodes)
+  const inputItems = useMemo(() => resolveInputItems(settings), [settings.inputItems, settings.inputOrder])
+  const outputItems = useMemo(() => resolveOutputItems(settings), [settings.outputItems, settings.outputOrder])
 
   // Estimate credit cost — mirrors workflow-editor-main.tsx logic:
   // uses composite model identifiers, dynamic DB costs, and fan-out multipliers.
@@ -740,11 +767,50 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     [isFullscreen, presNodeStates],
   )
 
+  // Look up an exposable field definition from NODE_DEFINITIONS
+  const findFieldDef = useCallback(
+    (nodeId: string, fieldKey: string): ExposableField | undefined => {
+      const node = nodeMap.get(nodeId)
+      if (!node?.type) return undefined
+      const def = NODE_DEF_MAP.get(node.type)
+      return def?.exposableFields?.find((f) => f.key === fieldKey)
+    },
+    [nodeMap],
+  )
+
+  // Pre-compute field badges for all output nodes from outputItems
+  const fieldBadgesByNode = useMemo(() => {
+    if (!outputItems) return new Map<string, FieldBadgeEntry[]>()
+    const map = new Map<string, FieldBadgeEntry[]>()
+    const walkItems = (items: PresentationItem[]) => {
+      for (const item of items) {
+        if (item.type === "field") {
+          const fieldDef = findFieldDef(item.nodeId, item.field)
+          if (fieldDef) {
+            const nodeData = nodeMap.get(item.nodeId)?.data as Record<string, unknown> | undefined
+            const inputVals = isFullscreen ? presInputValues[item.nodeId] : undefined
+            const value = inputVals?.[item.field] ?? nodeData?.[item.field] ?? fieldDef.defaultValue
+            const existing = map.get(item.nodeId)
+            if (existing) {
+              existing.push({ id: item.id, fieldDef, value })
+            } else {
+              map.set(item.nodeId, [{ id: item.id, fieldDef, value }])
+            }
+          }
+        }
+        if (item.type === "group") walkItems(item.items)
+      }
+    }
+    walkItems(outputItems)
+    return map
+  }, [outputItems, findFieldDef, nodeMap, isFullscreen, presInputValues])
+
   const renderOutputCard = useCallback((node: WorkflowNode) => {
     // Resolve element size from node-level + card-level overrides
     const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
     const cardDisplay = settings.cardMeta?.[node.id]?.display
     const elementSize = cardDisplay?.elementSize ?? nodeDisplay?.elementSize ?? "md"
+    const fieldBadges = fieldBadgesByNode.get(node.id)
 
     // Preview node: show all visible items with their actual values
     if (node.type === "preview") {
@@ -862,6 +928,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           iterationTotal={iterationTotal}
           iterationCompleted={iterationCompleted}
           elementSize={elementSize}
+          fieldBadges={fieldBadges}
         />
       )
     }
@@ -881,6 +948,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               text={outputType === "text" ? resultUrl : undefined}
               onOpenMedia={handleOpenMedia}
               elementSize={elementSize}
+              fieldBadges={i === 0 ? fieldBadges : undefined}
             />
           ))}
         </div>
@@ -899,9 +967,217 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         onOpenMedia={handleOpenMedia}
         progress={progress}
         elementSize={elementSize}
+        fieldBadges={fieldBadges}
       />
     )
-  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta])
+  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta, fieldBadgesByNode])
+
+  // Render a single PresentationItem — dispatches by type for input side
+  const renderInputItem = useCallback(
+    (item: PresentationItem): React.ReactNode => {
+      switch (item.type) {
+        case "node": {
+          const node = nodeMap.get(item.nodeId)
+          if (!node) return null
+          return renderInputCard(node)
+        }
+        case "field": {
+          const node = nodeMap.get(item.nodeId)
+          if (!node) return null
+          const fieldDef = findFieldDef(item.nodeId, item.field)
+          if (!fieldDef) return null
+          const nodeData = (node.data ?? {}) as Record<string, unknown>
+          const inputVals = isFullscreen ? presInputValues[item.nodeId] : undefined
+          const mergedNodeData = inputVals ? { ...nodeData, ...inputVals } : nodeData
+          const currentValue = inputVals?.[item.field] ?? nodeData[item.field] ?? fieldDef.defaultValue
+          const customTitle = settings.cardMeta?.[item.id]?.title
+          return (
+            <ConfigFieldRenderer
+              nodeType={node.type ?? ""}
+              field={item.field}
+              value={currentValue}
+              nodeData={mergedNodeData}
+              onChange={(v) => {
+                if (isFullscreen) {
+                  presUpdateInput(item.nodeId, item.field, v)
+                } else {
+                  updateNodeData(item.nodeId, { [item.field]: v })
+                }
+              }}
+              allowedValues={item.allowedValues}
+              readOnly={inputsReadOnly ?? (isShareReadOnly || isRunning || isTerminal)}
+              customLabel={customTitle}
+            />
+          )
+        }
+        case "richtext": {
+          if (isEditing) {
+            return (
+              <RichtextEditor
+                content={item.content}
+                onChange={(html) => {
+                  const key = inputItems ? "inputItems" : undefined
+                  if (!key) return
+                  const items = settings[key] ?? []
+                  const updatedItems = updateItemContent(items, item.id, html)
+                  updatePresentationSettings({ [key]: updatedItems })
+                }}
+                placeholder="Type something..."
+              />
+            )
+          }
+          return <RichtextBlock content={item.content} />
+        }
+        case "group": {
+          return (
+            <GroupCard
+              title={item.title}
+              isEditing={isEditing}
+              onTitleChange={(title) => {
+                const items = settings.inputItems ?? []
+                const updated = updateGroupTitle(items, item.id, title)
+                updatePresentationSettings({ inputItems: updated })
+              }}
+              onDelete={() => {
+                const items = settings.inputItems ?? []
+                updatePresentationSettings({ inputItems: items.filter((i) => !(i.type === "group" && i.id === item.id)) })
+              }}
+              onAddRichtext={() => addRichtextToGroup("inputItems", item.id)}
+            >
+              {item.items.map((child) => (
+                <div key={child.type === "node" ? child.nodeId : child.id}>
+                  {renderInputItem(child)}
+                </div>
+              ))}
+            </GroupCard>
+          )
+        }
+        default:
+          return null
+      }
+    },
+    [nodeMap, renderInputCard, findFieldDef, isFullscreen, presInputValues, presUpdateInput, updateNodeData, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, isEditing, inputItems, settings, updatePresentationSettings],
+  )
+
+  // Render a single PresentationItem — dispatches by type for output side
+  const renderOutputItem = useCallback(
+    (item: PresentationItem): React.ReactNode => {
+      switch (item.type) {
+        case "node": {
+          const node = nodeMap.get(item.nodeId)
+          if (!node) return null
+          return renderOutputCard(node)
+        }
+        case "field": {
+          // Field items are already rendered as inline badges on the output card
+          // via fieldBadgesByNode — skip standalone rendering to avoid duplicates
+          return null
+        }
+        case "output": {
+          const node = nodeMap.get(item.nodeId)
+          if (!node) return null
+          return renderOutputCard(node)
+        }
+        case "richtext": {
+          if (isEditing) {
+            return (
+              <RichtextEditor
+                content={item.content}
+                onChange={(html) => {
+                  const items = settings.outputItems ?? []
+                  const updatedItems = updateItemContent(items, item.id, html)
+                  updatePresentationSettings({ outputItems: updatedItems })
+                }}
+                placeholder="Type something..."
+              />
+            )
+          }
+          return <RichtextBlock content={item.content} />
+        }
+        case "group": {
+          return (
+            <GroupCard
+              title={item.title}
+              isEditing={isEditing}
+              onTitleChange={(title) => {
+                const items = settings.outputItems ?? []
+                const updated = updateGroupTitle(items, item.id, title)
+                updatePresentationSettings({ outputItems: updated })
+              }}
+              onDelete={() => {
+                const items = settings.outputItems ?? []
+                updatePresentationSettings({ outputItems: items.filter((i) => !(i.type === "group" && i.id === item.id)) })
+              }}
+              onAddRichtext={() => addRichtextToGroup("outputItems", item.id)}
+            >
+              {item.items.map((child) => (
+                <div key={child.type === "node" ? child.nodeId : child.id}>
+                  {renderOutputItem(child)}
+                </div>
+              ))}
+            </GroupCard>
+          )
+        }
+        default:
+          return null
+      }
+    },
+    [nodeMap, renderOutputCard, findFieldDef, isFullscreen, presInputValues, isEditing, settings, updatePresentationSettings],
+  )
+
+  // Add a group item to the specified side
+  const addGroup = useCallback(
+    (side: "input" | "output") => {
+      const key = side === "input" ? "inputItems" : "outputItems"
+      const current = settings[key] ?? []
+      updatePresentationSettings({
+        [key]: [...current, { type: "group" as const, id: crypto.randomUUID(), title: "New Group", items: [] }],
+      })
+    },
+    [settings, updatePresentationSettings],
+  )
+
+  // Add a richtext item inside a group
+  const addRichtextToGroup = useCallback(
+    (settingsKey: "inputItems" | "outputItems", groupId: string) => {
+      const items = settings[settingsKey] ?? []
+      const updated = items.map((item) => {
+        if (item.type === "group" && item.id === groupId) {
+          return {
+            ...item,
+            items: [...item.items, { type: "richtext" as const, id: crypto.randomUUID(), content: "" }],
+          }
+        }
+        return item
+      })
+      updatePresentationSettings({ [settingsKey]: updated })
+    },
+    [settings, updatePresentationSettings],
+  )
+
+  // Items-based drag-end handler (reorders within the flat items list)
+  const makeItemsDragEndHandler = useCallback(
+    (items: PresentationItem[], settingsKey: "inputItems" | "outputItems") =>
+      (event: DragEndEvent) => {
+        const { active, over } = event
+        if (!over || active.id === over.id) return
+        const ids = items.map((item) => item.type === "node" ? item.nodeId : item.id)
+        const oldIndex = ids.indexOf(active.id as string)
+        const newIndex = ids.indexOf(over.id as string)
+        if (oldIndex === -1 || newIndex === -1) return
+        updatePresentationSettings({ [settingsKey]: arrayMove([...items], oldIndex, newIndex) })
+      },
+    [updatePresentationSettings],
+  )
+
+  const handleInputItemsDragEnd = useMemo(
+    () => inputItems ? makeItemsDragEndHandler(inputItems, "inputItems") : handleInputDragEnd,
+    [inputItems, makeItemsDragEndHandler, handleInputDragEnd],
+  )
+  const handleOutputItemsDragEnd = useMemo(
+    () => outputItems ? makeItemsDragEndHandler(outputItems, "outputItems") : handleOutputDragEnd,
+    [outputItems, makeItemsDragEndHandler, handleOutputDragEnd],
+  )
 
   const costLabel = hasCredits() && estimatedCost > 0 ? ` (${estimatedCost} CR)` : ""
 
@@ -926,8 +1202,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     ...viewProps,
     isEditing,
     sensors,
-    handleInputDragEnd,
-    handleOutputDragEnd,
+    handleInputDragEnd: handleInputItemsDragEnd,
+    handleOutputDragEnd: handleOutputItemsDragEnd,
     handleRemoveNode,
     settings,
     updateCardMeta,
@@ -935,6 +1211,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     renderInputCard,
     renderOutputCard,
     getNodeColumns,
+    inputItems,
+    outputItems,
+    renderInputItem,
+    renderOutputItem,
+    addGroup,
   }
 
   return (

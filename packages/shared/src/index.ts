@@ -86,3 +86,5 @@ export {
 export { REPEATABLE_NODE_TYPES, REPEAT_PLACEHOLDER, getEffectiveRepeatCount, expandItemsWithRepeat } from "./repeat-types.js"
 
 export { settledWithLimit } from "./settled-with-limit.js"
+
+export type { ExposableField, ExposableOutput, PresentationItem } from "./presentation-types.js"

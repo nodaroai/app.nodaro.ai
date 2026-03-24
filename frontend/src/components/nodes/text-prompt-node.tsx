@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useCallback, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Position, type NodeProps, NodeResizer, Handle, NodeToolbar } from "@xyflow/react"
 import { Type, FastForward } from "lucide-react"
 import { useTheme } from "next-themes"
@@ -9,7 +9,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { EditableNodeLabel } from "./editable-node-label"
 import { TagTextarea } from "@/components/editor/config-panels/tag-textarea"
 import { getUpstreamNodes } from "@/lib/node-refs"
-import { NODE_COLORS, adjustColor, getEffectiveColor } from "@/lib/node-colors"
+import { NODE_COLORS, getEffectiveColor } from "@/lib/node-colors"
 import { hasCredits } from "@/lib/edition"
 import { estimateNodeCredits, EXECUTABLE_TYPES } from "@/components/editor/workflow-editor/types"
 import type { TextPromptData } from "@/types/nodes"
@@ -32,6 +32,39 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   const effectiveColor = getEffectiveColor(color, isDark)
   const width = nodeData.width ?? 220
   const height = nodeData.height ?? 160
+
+  // Local state buffer — preserves browser-native Cmd+Z and debounces store writes
+  const [localText, setLocalText] = useState(nodeData.text ?? "")
+  const storeTextRef = useRef(nodeData.text ?? "")
+  const localTextRef = useRef(nodeData.text ?? "")
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  useEffect(() => {
+    const storeText = nodeData.text ?? ""
+    if (storeText !== storeTextRef.current) {
+      storeTextRef.current = storeText
+      localTextRef.current = storeText
+      setLocalText(storeText)
+    }
+  }, [nodeData.text])
+
+  const handleTextChange = useCallback((value: string) => {
+    setLocalText(value)
+    localTextRef.current = value
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      storeTextRef.current = value
+      updateNodeData(id, { text: value })
+    }, 300)
+  }, [id, updateNodeData])
+
+  // Flush (not just clear) pending debounce on unmount so last keystrokes aren't lost
+  useEffect(() => () => {
+    clearTimeout(debounceRef.current)
+    if (localTextRef.current !== storeTextRef.current) {
+      updateNodeData(id, { text: localTextRef.current })
+    }
+  }, [id, updateNodeData])
 
   const handleResize = useCallback(
     (_event: unknown, params: { width: number; height: number }) => {
@@ -173,7 +206,6 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
           boxShadow: (!selected && !isEditing) ? `0 0 16px ${effectiveColor}15` : undefined,
         }}
       >
-        {/* Plain textarea */}
         <div
           className={`text-prompt-tag-textarea w-full flex-1 min-h-0 ${selected ? "nopan nodrag" : "pointer-events-none"}`}
           onMouseDown={selected ? (e) => e.stopPropagation() : undefined}
@@ -181,10 +213,10 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
           onKeyDown={selected ? (e) => e.stopPropagation() : undefined}
         >
           <TagTextarea
-            value={nodeData.text ?? ""}
-            onChange={(value) => updateNodeData(id, { text: value })}
+            value={localText}
+            onChange={handleTextChange}
             placeholder="Enter your prompt..."
-            className="!bg-transparent !border-none !shadow-none !ring-0 !outline-none !p-3 !leading-relaxed !h-full !resize-none"
+            className="!bg-transparent !border-none !shadow-none !ring-0 !outline-none !resize-none"
             nodeRefs={nodeRefs}
           />
         </div>

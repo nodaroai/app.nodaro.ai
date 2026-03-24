@@ -1,6 +1,7 @@
 import type { DragEndEvent } from "@dnd-kit/core"
 import type { SensorDescriptor, SensorOptions } from "@dnd-kit/core"
 import type { WorkflowNode } from "@/types/nodes"
+import type { PresentationItem } from "@nodaro-shared/presentation-types"
 import type { OutputStatus } from "../output-cards/shared"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 
@@ -28,4 +29,10 @@ export interface EditableViewProps extends ViewProps {
   renderInputCard: (node: WorkflowNode) => React.ReactNode
   renderOutputCard: (node: WorkflowNode) => React.ReactNode
   getNodeColumns?: (nodeId: string) => number
+  /** Rich items lists (groups, fields, richtext alongside nodes) — null when legacy mode */
+  inputItems?: PresentationItem[] | null
+  outputItems?: PresentationItem[] | null
+  renderInputItem?: (item: PresentationItem) => React.ReactNode
+  renderOutputItem?: (item: PresentationItem) => React.ReactNode
+  addGroup?: (side: "input" | "output") => void
 }

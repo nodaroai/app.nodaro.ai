@@ -1,5 +1,22 @@
 import type { WorkflowNode } from "@/types/nodes"
+import type { PresentationItem } from "@nodaro-shared/presentation-types"
+import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { getNodeLabel, getNodeResult } from "@/lib/presentation-utils"
+import { migrateToItems } from "@nodaro-shared/presentation-utils"
+
+/** Resolve input items from settings — prefer inputItems, fallback to migrated inputOrder */
+export function resolveInputItems(settings: PresentationSettings): PresentationItem[] | null {
+  if (settings.inputItems) return settings.inputItems
+  if (settings.inputOrder) return migrateToItems(settings.inputOrder) ?? null
+  return null
+}
+
+/** Resolve output items from settings — prefer outputItems, fallback to migrated outputOrder */
+export function resolveOutputItems(settings: PresentationSettings): PresentationItem[] | null {
+  if (settings.outputItems) return settings.outputItems
+  if (settings.outputOrder) return migrateToItems(settings.outputOrder) ?? null
+  return null
+}
 
 /** Get display title for a presentation card — custom title from cardMeta, or fallback to node label */
 export function getCardTitle(

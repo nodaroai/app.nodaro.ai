@@ -14,6 +14,8 @@ import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { hasCredits } from "../lib/config.js"
 import { CreditsService } from "../billing/credits.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
+import { flattenItems } from "../../../packages/shared/src/presentation-utils.js"
+import type { PresentationItem } from "../../../packages/shared/src/presentation-types.js"
 
 // In-memory cache for published app data (30min TTL — explicit invalidation on publish)
 const APP_CACHE_TTL_MS = 30 * 60_000
@@ -62,6 +64,25 @@ const appQuery = z.object({
 // Shared helpers — resolve slug → workflow_id → version(s)
 // No is_active filter: runs and app data remain visible even when deactivated.
 // ---------------------------------------------------------------------------
+
+/** Validate restricted field values against allowedValues. Returns error message or null. */
+function validateRestrictedFields(
+  snapshotSettings: Record<string, unknown> | null | undefined,
+  inputValues: Record<string, Record<string, unknown>> | undefined,
+): string | null {
+  const presSettings = (snapshotSettings ?? {} as Record<string, unknown>).presentationSettings as Record<string, unknown> | undefined
+  if (!presSettings?.inputItems || !inputValues) return null
+  const fieldItems = flattenItems(presSettings.inputItems as PresentationItem[])
+    .filter((item): item is Extract<PresentationItem, { type: "field" }> => item.type === "field")
+  for (const fieldItem of fieldItems) {
+    if (!fieldItem.allowedValues) continue
+    const submitted = inputValues[fieldItem.nodeId]?.[fieldItem.field]
+    if (submitted !== undefined && !fieldItem.allowedValues.includes(submitted as string | number | boolean)) {
+      return `Invalid value for ${fieldItem.field}: ${submitted}. Allowed: ${fieldItem.allowedValues.join(", ")}`
+    }
+  }
+  return null
+}
 
 async function resolveSlug(slug: string): Promise<string | null> {
   const { data, error } = await supabase
@@ -219,6 +240,15 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       return reply.status(404).send({
         error: { code: "not_found", message: version ? `Version ${version} not found` : "App not found" },
       })
+    }
+
+    // Validate restricted field values against allowedValues
+    const restrictedError = validateRestrictedFields(
+      (appRow.snapshot_settings ?? {}) as Record<string, unknown>,
+      inputOverrides,
+    )
+    if (restrictedError) {
+      return reply.status(400).send({ error: { code: "validation_error", message: restrictedError } })
     }
 
     // Run rate limit + app credits allowance checks in parallel
@@ -391,11 +421,20 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
     }
 
-    const appRow = await loadAppVersion(workflowId, "id", version)
+    const appRow = await loadAppVersion(workflowId, "id, snapshot_settings", version)
     if (!appRow) {
       return reply.status(404).send({
         error: { code: "not_found", message: version ? `Version ${version} not found` : "App not found" },
       })
+    }
+
+    // Validate restricted field values against allowedValues
+    const restrictedErrorDraft = validateRestrictedFields(
+      (appRow.snapshot_settings ?? {}) as Record<string, unknown>,
+      inputValues,
+    )
+    if (restrictedErrorDraft) {
+      return reply.status(400).send({ error: { code: "validation_error", message: restrictedErrorDraft } })
     }
 
     const { data: run, error: runError } = await supabase
