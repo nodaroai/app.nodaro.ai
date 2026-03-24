@@ -66,10 +66,19 @@ export function NodeSection({
 
   const maxCols = useMemo(
     () => {
-      if (useItems) return 1 // Not used in items mode
+      if (useItems) {
+        let max = 1
+        for (const item of items!) {
+          if (item.type === "node") {
+            const cols = getNodeColumns?.(item.nodeId) ?? 1
+            if (cols > max) max = cols
+          }
+        }
+        return max
+      }
       return Math.max(...nodes.map((n) => getNodeColumns?.(n.id) ?? 1), 1)
     },
-    [useItems, nodes, getNodeColumns],
+    [useItems, items, nodes, getNodeColumns],
   )
   const strategy = maxCols > 1 ? rectSortingStrategy : verticalListSortingStrategy
   const itemSortIds = useMemo(
@@ -116,16 +125,19 @@ export function NodeSection({
         /* Items-based rendering (groups, fields, richtext, nodes) */
         <div className="flex-1">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext items={itemSortIds} strategy={verticalListSortingStrategy}>
-              <div>
+            <SortableContext items={itemSortIds} strategy={strategy}>
+              <div
+                className={maxCols > 1 ? "grid gap-4" : ""}
+                style={maxCols > 1 ? { gridTemplateColumns: `repeat(${maxCols}, 1fr)` } : undefined}
+              >
                 {items!.map((item) => {
                   const sortId = getItemSortId(item)
                   const rendered = renderItem(item)
                   if (!rendered) return null
-                  // Groups and richtext don't get the node-style wrapper
+                  // Groups and richtext don't get the node-style wrapper — span full width in grid
                   if (item.type === "group" || item.type === "richtext") {
                     return (
-                      <div key={sortId} className={item.type === "group" ? "mb-3" : undefined}>
+                      <div key={sortId} className={item.type === "group" ? "mb-3" : undefined} style={maxCols > 1 ? { gridColumn: "1 / -1" } : undefined}>
                         <SortableCardWrapper
                           id={sortId}
                           isEditMode={isEditing}
