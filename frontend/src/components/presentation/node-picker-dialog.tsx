@@ -14,7 +14,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Lock, LockOpen, ChevronDown, ChevronRight } from "lucide-react"
+import { Lock, LockOpen, ChevronDown, ChevronRight, Sparkles } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import {
   getInputNodes,
@@ -111,6 +111,7 @@ function NodeRow({
   const data = node.data as Record<string, unknown>
   const isVisible = section === "inputs" ? data.presentationInput === true : data.presentationOutput === true
   const isReadOnly = !!data.presentationReadOnly
+  const promptHelperEnabled = data.presentationPromptHelper !== false
   const label = getNodeLabel(node)
   const typeBadge = getOutputType(node.type)
 
@@ -253,22 +254,36 @@ function NodeRow({
             {typeBadge}
           </Badge>
           {isVisible && node.type === "text-prompt" && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 ml-auto"
-              title={isReadOnly ? "Read-only in app" : "Editable in app"}
-              onClick={(e) => {
-                e.stopPropagation()
-                updateNodeData(node.id, { presentationReadOnly: !isReadOnly })
-              }}
-            >
-              {isReadOnly ? (
-                <Lock className="h-3.5 w-3.5 text-amber-500" />
-              ) : (
-                <LockOpen className="h-3.5 w-3.5 text-muted-foreground" />
-              )}
-            </Button>
+            <div className="flex items-center gap-0.5 ml-auto">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                title={promptHelperEnabled ? "AI helper enabled" : "AI helper disabled"}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  updateNodeData(node.id, { presentationPromptHelper: !promptHelperEnabled })
+                }}
+              >
+                <Sparkles className={`h-3.5 w-3.5 ${promptHelperEnabled ? "text-[#ff0073]" : "text-muted-foreground/40"}`} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                title={isReadOnly ? "Read-only in app" : "Editable in app"}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  updateNodeData(node.id, { presentationReadOnly: !isReadOnly })
+                }}
+              >
+                {isReadOnly ? (
+                  <Lock className="h-3.5 w-3.5 text-amber-500" />
+                ) : (
+                  <LockOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+              </Button>
+            </div>
           )}
         </label>
       </div>

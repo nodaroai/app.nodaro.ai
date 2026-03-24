@@ -59,7 +59,8 @@ export function InputCard({
     [node.id, nodes, edges],
   )
 
-  const promptHelperProp = promptContext && !readOnly && hasCredits() ? promptContext : undefined
+  const showPromptHelper = data.presentationPromptHelper !== false
+  const promptHelperProp = promptContext && !readOnly && hasCredits() && showPromptHelper ? promptContext : undefined
 
   // Config-type nodes open a modal with their full config panel
   if (node.type && CONFIG_INPUT_TYPES.has(node.type)) {
