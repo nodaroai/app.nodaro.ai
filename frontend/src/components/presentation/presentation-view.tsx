@@ -561,7 +561,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           const result = getNodeResult(output)
           if (result.url || result.text) return result
         }
-        const url = (output.imageUrl ?? output.videoUrl ?? output.audioUrl) as string | undefined
+        const url = (output.url ?? output.imageUrl ?? output.videoUrl ?? output.audioUrl ?? output.resultUrl) as string | undefined
         const text = output.text as string | undefined
         if (url || text) return { url, text }
       }
