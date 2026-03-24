@@ -23,7 +23,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
 import type { PromptContext } from "@/lib/prompt-context"
 import { type WorkflowNode, type LoopColumn, type PresentationDisplay } from "@/types/nodes"
-import { resolveDisplay, ELEMENT_SIZES, isMediaColumn, colTypeToMimePrefix } from "@/lib/presentation-display"
+import { resolveDisplay, type ResolvedPresentationDisplay, ELEMENT_SIZES, isMediaColumn, colTypeToMimePrefix } from "@/lib/presentation-display"
 
 interface LoopInputCardProps {
   node: WorkflowNode
@@ -546,7 +546,7 @@ interface ViewProps {
 }
 
 interface CardsViewProps extends ViewProps {
-  resolved: Required<PresentationDisplay>
+  resolved: ResolvedPresentationDisplay
   mediaColIndices: number[]
   textColIndices: number[]
 }

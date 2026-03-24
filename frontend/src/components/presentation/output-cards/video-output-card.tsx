@@ -53,7 +53,7 @@ export function VideoOutputCard({ label, status, url, nodeId, onOpenMedia, eleme
           <video
             ref={videoRef}
             src={url}
-            className={`w-full ${maxHClass} rounded-lg bg-black/20 object-contain`}
+            className={`w-full ${maxHClass} rounded-lg object-contain`}
             muted
             autoPlay
             loop

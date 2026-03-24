@@ -73,6 +73,8 @@ export interface PresentationDisplay {
   columns?: 1 | 2 | 3 | 4
   elementSize?: "sm" | "md" | "lg"
   viewMode?: string
+  maxWidth?: number // 10-100 (percentage of container width)
+  align?: "left" | "center" | "right"
 }
 
 export type InputMode = "prompt" | "multiline" | "oneline" | "inline"
@@ -2630,6 +2632,18 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["image"],
     outputs: ["out"],
     defaultData: { label: "Edit Image", prompt: "", provider: "recraft-upscale", fieldMappings: {} },
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "image" as const }],
+    exposableFields: [
+      {
+        key: "provider", label: "Model", type: "select" as const,
+        options: [
+          { value: "nano-banana-edit", label: "Nano Banana Edit" },
+          { value: "recraft-remove-bg", label: "Recraft Remove BG" },
+          { value: "recraft-upscale", label: "Recraft Upscale" },
+          { value: "topaz-image-upscale", label: "Topaz Upscale" },
+        ],
+      },
+    ],
   },
   {
     type: "image-to-image",
@@ -2639,6 +2653,29 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["image"],
     outputs: ["out"],
     defaultData: { label: "Image to Image", prompt: "", provider: "nano-banana", fieldMappings: {} },
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "image" as const }],
+    exposableFields: [
+      {
+        key: "provider", label: "Model", type: "select" as const,
+        options: [
+          { value: "flux-i2i", label: "Flux-2" },
+          { value: "flux-pro-i2i", label: "Flux-2 Pro" },
+          { value: "flux-kontext", label: "Flux Kontext" },
+          { value: "flux-kontext-max", label: "Flux Kontext Max" },
+          { value: "gpt-image-i2i", label: "GPT Image" },
+          { value: "grok-i2i", label: "Grok" },
+          { value: "ideogram-edit", label: "Ideogram Edit" },
+          { value: "ideogram-reframe", label: "Ideogram Reframe" },
+          { value: "ideogram-remix", label: "Ideogram Remix" },
+          { value: "nano-banana", label: "Nano Banana" },
+          { value: "nano-banana-pro", label: "Nano Banana Pro" },
+          { value: "qwen-i2i", label: "Qwen" },
+          { value: "qwen-edit", label: "Qwen Edit" },
+          { value: "seedream-5-lite-i2i", label: "Seedream 5 Lite" },
+          { value: "seedream-edit", label: "Seedream Edit" },
+        ],
+      },
+    ],
   },
   {
     type: "image-to-video",
@@ -2649,6 +2686,34 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["startFrame", "endFrame", "audio"],
     outputs: ["video"],
     defaultData: { label: "Image to Video", provider: "veo3", model: "veo-3", duration: 5, fieldMappings: {} },
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+    exposableFields: [
+      {
+        key: "provider", label: "Model", type: "select" as const,
+        options: [
+          { value: "bytedance-lite", label: "Bytedance Lite" },
+          { value: "bytedance-pro", label: "Bytedance Pro" },
+          { value: "bytedance-pro-fast", label: "Bytedance Pro Fast" },
+          { value: "grok-i2v", label: "Grok" },
+          { value: "hailuo-2.3", label: "Hailuo 2.3" },
+          { value: "hailuo-2.3-pro", label: "Hailuo 2.3 Pro" },
+          { value: "hailuo-standard", label: "Hailuo Standard" },
+          { value: "kling", label: "Kling" },
+          { value: "kling-3.0", label: "Kling 3.0" },
+          { value: "kling-master", label: "Kling Master" },
+          { value: "kling-turbo", label: "Kling Turbo" },
+          { value: "minimax", label: "MiniMax" },
+          { value: "runway-kie", label: "Runway (KIE)" },
+          { value: "seedance", label: "Seedance" },
+          { value: "sora2", label: "Sora 2" },
+          { value: "sora2-pro", label: "Sora 2 Pro" },
+          { value: "veo3", label: "VEO 3.1 (Quality)" },
+          { value: "veo3.1", label: "VEO 3.1 (Fast)" },
+          { value: "wan-i2v", label: "Wan 2.6" },
+          { value: "wan-turbo", label: "Wan Turbo" },
+        ],
+      },
+    ],
   },
   {
     type: "video-to-video",
@@ -2742,6 +2807,11 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Generate Music", prompt: "", provider: "suno", duration: 8, genre: "", mood: "", instrumental: true, lyrics: "", referenceAudioUrl: "", referenceYouTubeUrl: "", referenceSource: "none", modelVersion: "stereo-large", fieldMappings: {} },
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "audio" as const }],
+    exposableFields: [
+      { key: "duration", label: "Duration (s)", type: "slider" as const, min: 1, max: 60, step: 1 },
+      { key: "instrumental", label: "Instrumental", type: "toggle" as const },
+    ],
   },
   {
     type: "text-to-audio",
@@ -2751,6 +2821,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Text to Audio", prompt: "", provider: "elevenlabs-sfx", duration: 10, fieldMappings: {} },
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "audio" as const }],
+    exposableFields: [
+      { key: "duration", label: "Duration (s)", type: "slider" as const, min: 1, max: 22, step: 0.5 },
+    ],
   },
   {
     type: "suno-generate",
@@ -3296,6 +3370,24 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as LipSyncData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+    exposableFields: [
+      {
+        key: "provider", label: "Model", type: "select" as const,
+        options: [
+          { value: "kling-avatar", label: "Kling Avatar" },
+          { value: "kling-avatar-pro", label: "Kling Avatar Pro" },
+          { value: "infinitalk", label: "InfiniTalk" },
+        ],
+      },
+      {
+        key: "resolution", label: "Resolution", type: "select" as const,
+        options: [
+          { value: "720p", label: "720p" },
+          { value: "1080p", label: "1080p" },
+        ],
+      },
+    ],
   },
   // Speech-to-Video (Wan 2.2 S2V)
   {
@@ -3405,6 +3497,16 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as ExtendVideoData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+    exposableFields: [
+      {
+        key: "provider", label: "Model", type: "select" as const,
+        options: [
+          { value: "veo-extend", label: "VEO Extend" },
+          { value: "runway-extend", label: "Runway Extend" },
+        ],
+      },
+    ],
   },
   // Output
   {
@@ -3621,6 +3723,11 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       maxTokens: 4096,
       fieldMappings: {},
     } as AIWriterNodeData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "text" as const }],
+    exposableFields: [
+      { key: "temperature", label: "Temperature", type: "slider" as const, min: 0, max: 1, step: 0.1 },
+      { key: "maxTokens", label: "Max Tokens", type: "slider" as const, min: 256, max: 16384, step: 256 },
+    ],
   },
   // Utility
   {

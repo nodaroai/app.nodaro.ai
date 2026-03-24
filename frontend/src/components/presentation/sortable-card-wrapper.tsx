@@ -15,6 +15,7 @@ export function SortableCardWrapper({
   onDescriptionChange,
   cardDisplay,
   onDisplayChange,
+  showColumns,
   showElementSize,
   viewModes,
   children,
@@ -28,20 +29,26 @@ export function SortableCardWrapper({
   onDescriptionChange?: (value: string) => void
   cardDisplay?: Partial<PresentationDisplay>
   onDisplayChange?: (display: Partial<PresentationDisplay>) => void
+  showColumns?: boolean
   showElementSize?: boolean
   viewModes?: { value: string; label: string }[]
   children: React.ReactNode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
 
+  const maxWidth = cardDisplay?.maxWidth
+  const align = cardDisplay?.align ?? "left"
+  const alignClass = align === "center" ? "mx-auto" : align === "right" ? "ml-auto" : ""
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    ...(maxWidth && maxWidth < 100 ? { maxWidth: `${maxWidth}%` } : {}),
   }
 
   return (
-    <div ref={setNodeRef} style={style} className="relative group mb-3">
+    <div ref={setNodeRef} style={style} className={`relative group mb-3 ${alignClass}`}>
       {isEditMode && onRemove && (
         <button
           type="button"
@@ -101,6 +108,7 @@ export function SortableCardWrapper({
           <PresentationDisplayConfig
             display={cardDisplay ?? {}}
             onChange={onDisplayChange}
+            showColumns={showColumns}
             showElementSize={showElementSize}
             viewModes={viewModes}
           />
