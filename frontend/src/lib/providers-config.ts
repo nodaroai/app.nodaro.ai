@@ -7,53 +7,53 @@ export type ProviderCategory = "image" | "video" | "voice" | "script"
 
 export const PROVIDERS_CONFIG: Record<ProviderCategory, Record<string, ProviderInfo>> = {
   image: {
-    "nano-banana": {
-      label: "Nano Banana",
-      models: ["gemini-2.5-flash-image", "gemini-2.5-pro-image"],
+    dalle: {
+      label: "DALL-E",
+      models: ["dall-e-3", "dall-e-2"],
     },
     flux: {
       label: "Flux",
       models: ["flux-pro", "flux-dev"],
     },
-    dalle: {
-      label: "DALL-E",
-      models: ["dall-e-3", "dall-e-2"],
-    },
     midjourney: {
       label: "Midjourney",
       models: ["midjourney-v6", "midjourney-v5"],
     },
+    "nano-banana": {
+      label: "Nano Banana",
+      models: ["gemini-2.5-flash-image", "gemini-2.5-pro-image"],
+    },
   },
   video: {
-    veo3: {
-      label: "VEO 3.1",
-      models: ["veo-3", "veo-3-fast"],
-    },
     kling: {
       label: "Kling",
       models: ["kling-v1", "kling-v1-pro"],
-    },
-    runway: {
-      label: "Runway",
-      models: ["gen-3-alpha", "gen-3-alpha-turbo"],
     },
     pika: {
       label: "Pika",
       models: ["pika-1.0", "pika-1.5"],
     },
+    runway: {
+      label: "Runway",
+      models: ["gen-3-alpha", "gen-3-alpha-turbo"],
+    },
     sora: {
       label: "Sora",
       models: ["sora-1.0"],
     },
+    veo3: {
+      label: "VEO 3.1",
+      models: ["veo-3", "veo-3-fast"],
+    },
   },
   voice: {
-    "elevenlabs-turbo": {
-      label: "ElevenLabs Turbo v2.5",
-      models: ["elevenlabs/text-to-speech-turbo-2-5"],
-    },
     "elevenlabs-multilingual": {
       label: "ElevenLabs Multilingual v2",
       models: ["elevenlabs/text-to-speech-multilingual-v2"],
+    },
+    "elevenlabs-turbo": {
+      label: "ElevenLabs Turbo v2.5",
+      models: ["elevenlabs/text-to-speech-turbo-2-5"],
     },
   },
   script: {
@@ -61,13 +61,13 @@ export const PROVIDERS_CONFIG: Record<ProviderCategory, Record<string, ProviderI
       label: "Claude",
       models: ["claude-3-opus", "claude-3-sonnet", "claude-3-haiku"],
     },
-    gpt: {
-      label: "GPT",
-      models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
-    },
     gemini: {
       label: "Gemini",
       models: ["gemini-2.5-flash", "gemini-2.5-pro"],
+    },
+    gpt: {
+      label: "GPT",
+      models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
     },
   },
 }

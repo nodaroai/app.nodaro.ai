@@ -962,8 +962,8 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         >
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="veo-extend">VEO Extend</SelectItem>
             <SelectItem value="runway-extend">Runway Extend</SelectItem>
+            <SelectItem value="veo-extend">VEO Extend</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
