@@ -69,7 +69,6 @@ import { ViewModeSelector, ALL_VIEW_MODES } from "./view-mode-selector"
 import { InputCard } from "./input-card"
 import { OutputCard, type FieldBadgeEntry } from "./output-card"
 import { ConfigFieldRenderer } from "./config-field-renderer"
-import { FieldBadge } from "./field-badge"
 import { RichtextBlock } from "./richtext-block"
 import { RichtextEditor } from "./richtext-editor"
 import { GroupCard } from "./group-card"
@@ -1070,12 +1069,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           return renderOutputCard(node)
         }
         case "field": {
-          const fieldDef = findFieldDef(item.nodeId, item.field)
-          if (!fieldDef) return null
-          const nodeData = nodeMap.get(item.nodeId)?.data as Record<string, unknown> | undefined
-          const inputVals = isFullscreen ? presInputValues[item.nodeId] : undefined
-          const currentValue = inputVals?.[item.field] ?? nodeData?.[item.field] ?? fieldDef.defaultValue
-          return <FieldBadge field={fieldDef} value={currentValue} />
+          // Field items are already rendered as inline badges on the output card
+          // via fieldBadgesByNode — skip standalone rendering to avoid duplicates
+          return null
         }
         case "output": {
           const node = nodeMap.get(item.nodeId)

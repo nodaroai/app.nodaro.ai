@@ -96,6 +96,7 @@ function NodeRow({
   updatePresentationSettings,
   expanded,
   onToggleExpand,
+  allVisibleNodeIds,
 }: {
   node: WorkflowNode
   section: "inputs" | "outputs"
@@ -104,6 +105,7 @@ function NodeRow({
   updatePresentationSettings: (settings: Partial<PresentationSettings>) => void
   expanded: boolean
   onToggleExpand: () => void
+  allVisibleNodeIds: string[]
 }) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const data = node.data as Record<string, unknown>
@@ -152,9 +154,19 @@ function NodeRow({
     [currentItems, node.id]
   )
 
+  // When transitioning from legacy to items-based rendering, seed with visible nodes
+  const seedIfEmpty = useCallback(
+    (items: PresentationItem[]): PresentationItem[] =>
+      items.length === 0 && allVisibleNodeIds.length > 0
+        ? allVisibleNodeIds.map((id) => ({ type: "node" as const, nodeId: id }))
+        : items,
+    [allVisibleNodeIds],
+  )
+
   const handleFieldToggle = useCallback(
     (field: ExposableField, checked: boolean) => {
       if (checked) {
+        const items = seedIfEmpty(currentItems)
         const newItem: PresentationItem = {
           type: "field",
           id: crypto.randomUUID(),
@@ -162,7 +174,7 @@ function NodeRow({
           field: field.key,
         }
         updatePresentationSettings({
-          [itemsKey]: [...currentItems, newItem],
+          [itemsKey]: [...items, newItem],
         })
       } else {
         updatePresentationSettings({
@@ -172,12 +184,13 @@ function NodeRow({
         })
       }
     },
-    [node.id, currentItems, itemsKey, updatePresentationSettings]
+    [node.id, currentItems, itemsKey, updatePresentationSettings, seedIfEmpty]
   )
 
   const handleOutputToggle = useCallback(
     (output: ExposableOutput, checked: boolean) => {
       if (checked) {
+        const items = seedIfEmpty(currentItems)
         const newItem: PresentationItem = {
           type: "output",
           id: crypto.randomUUID(),
@@ -185,7 +198,7 @@ function NodeRow({
           outputKey: output.key,
         }
         updatePresentationSettings({
-          [itemsKey]: [...currentItems, newItem],
+          [itemsKey]: [...items, newItem],
         })
       } else {
         updatePresentationSettings({
@@ -195,7 +208,7 @@ function NodeRow({
         })
       }
     },
-    [node.id, currentItems, itemsKey, updatePresentationSettings]
+    [node.id, currentItems, itemsKey, updatePresentationSettings, seedIfEmpty]
   )
 
   const handleRestrictUpdate = useCallback(
@@ -349,6 +362,15 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
   const arrayNodes = useMemo(() => availableNodes.filter(n => n.type === "list" || n.type === "loop"), [availableNodes])
   const standardNodes = useMemo(() => availableNodes.filter(n => n.type !== "list" && n.type !== "loop"), [availableNodes])
 
+  // IDs of nodes currently visible in presentation — used to seed inputItems/outputItems
+  // when transitioning from legacy rendering to items-based rendering
+  const visibleNodeIds = useMemo(() => {
+    const flag = section === "inputs" ? "presentationInput" : "presentationOutput"
+    return availableNodes
+      .filter((n) => (n.data as Record<string, unknown>)[flag] === true)
+      .map((n) => n.id)
+  }, [availableNodes, section])
+
   const toggleExpanded = useCallback((nodeId: string) => {
     setExpandedNodes((prev) => {
       const next = new Set(prev)
@@ -381,6 +403,19 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
       }
     } else {
       updateNodeData(nodeId, { [field]: true })
+      // When items-based rendering is active, also add a node item so it appears
+      const itemsKey = section === "inputs" ? "inputItems" : "outputItems"
+      const currentItems = presentationSettings[itemsKey] ?? []
+      if (currentItems.length > 0) {
+        const alreadyPresent = currentItems.some(
+          (item) => item.type === "node" && item.nodeId === nodeId
+        )
+        if (!alreadyPresent) {
+          updatePresentationSettings({
+            [itemsKey]: [...currentItems, { type: "node" as const, nodeId }],
+          })
+        }
+      }
     }
   }
 
@@ -414,6 +449,7 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
                   updatePresentationSettings={updatePresentationSettings}
                   expanded={expandedNodes.has(node.id)}
                   onToggleExpand={() => toggleExpanded(node.id)}
+                  allVisibleNodeIds={visibleNodeIds}
                 />
               ))}
               {arrayNodes.length > 0 && (
@@ -451,6 +487,7 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
                           updatePresentationSettings={updatePresentationSettings}
                           expanded={expandedNodes.has(node.id)}
                           onToggleExpand={() => toggleExpanded(node.id)}
+                          allVisibleNodeIds={visibleNodeIds}
                         />
                         {meta && (
                           <p className="text-[10px] text-muted-foreground/60 pl-10 -mt-1 pb-1">

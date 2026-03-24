@@ -118,6 +118,8 @@ export function NodeSection({
               <div>
                 {items!.map((item) => {
                   const sortId = getItemSortId(item)
+                  const rendered = renderItem(item)
+                  if (!rendered) return null
                   // Groups and richtext don't get the node-style wrapper
                   if (item.type === "group" || item.type === "richtext") {
                     return (
@@ -126,14 +128,13 @@ export function NodeSection({
                         id={sortId}
                         isEditMode={isEditing}
                       >
-                        {renderItem(item)}
+                        {rendered}
                       </SortableCardWrapper>
                     )
                   }
                   // Node and field items get the full wrapper with meta editing
                   const nodeId = "nodeId" in item ? (item as { nodeId: string }).nodeId : undefined
                   const isNodeItem = item.type === "node"
-                  // For field items, use item.id for cardMeta key so each field has its own title/description
                   const metaKey = item.type === "field" ? item.id : nodeId
                   return (
                     <SortableCardWrapper
@@ -148,7 +149,7 @@ export function NodeSection({
                       cardDisplay={isNodeItem && nodeId ? settings.cardMeta?.[nodeId]?.display : undefined}
                       onDisplayChange={isNodeItem && nodeId ? (d) => updateCardMeta(nodeId, "display", d) : undefined}
                     >
-                      {renderItem(item)}
+                      {rendered}
                     </SortableCardWrapper>
                   )
                 })}
