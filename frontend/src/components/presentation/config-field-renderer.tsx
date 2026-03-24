@@ -341,15 +341,15 @@ function renderGenerateImage(
     }
     case "style": {
       const styleOptions: readonly OptionEntry[] = [
-        { value: "", label: "None" },
+        { value: "__none__", label: "None" },
         ...IMAGE_STYLE_PRESETS.map((s) => ({ value: s.value, label: s.label })),
       ]
       return (
         <OptionSelect
           label={customLabel ?? "Style"}
           options={styleOptions}
-          value={value}
-          onChange={onChange}
+          value={value === "" ? "__none__" : value}
+          onChange={(v) => onChange(v === "__none__" ? "" : v)}
           allowedValues={allowedValues}
           readOnly={readOnly}
         />

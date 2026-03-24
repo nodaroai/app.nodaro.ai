@@ -38,14 +38,17 @@ function SelectField({
       )
     : (field.options ?? [])
 
-  const strValue = String(value ?? "")
+  // Map empty string ↔ __none__ sentinel to avoid Radix Select crash on empty value
+  const hasNoneSentinel = options.some((o) => o.value === "__none__")
+  const rawValue = String(value ?? "")
+  const strValue = hasNoneSentinel && rawValue === "" ? "__none__" : rawValue
 
   return (
     <GlassCard>
       <Label className={cn(LABEL_CLS, "mb-2 block")}>{field.label}</Label>
       <Select
         value={strValue}
-        onValueChange={(v) => onChange(v)}
+        onValueChange={(v) => onChange(v === "__none__" ? "" : v)}
         disabled={readOnly}
       >
         <SelectTrigger
