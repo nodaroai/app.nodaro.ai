@@ -14,7 +14,7 @@ import { StatsOverview } from "@/components/dashboard/stats-overview"
 import { WorkflowThumbnail } from "@/components/dashboard/workflow-thumbnail"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { browseApps, browseTemplates, type TemplateBrowseCard } from "@/lib/api"
+import { browseApps, browseTemplates, type TemplateBrowseCard, type AppBrowseCard } from "@/lib/api"
 import { useTemplateFavorites, useToggleTemplateFavoriteMutation } from "@/hooks/queries/use-template-marketplace-queries"
 import { TemplatePreviewModal } from "@/components/templates/template-preview-modal"
 import { TutorialsTab } from "@/components/dashboard/tutorials-tab"
@@ -256,18 +256,32 @@ export default function ProjectsPage() {
     { id: "statistics", label: "Statistics", icon: <BarChart3 className="h-3.5 w-3.5" /> },
   ]
 
+  const CARD_SCROLL_PX = 210
+  const AUTO_SCROLL_MS = 4000
+
   // Featured apps for the Apps tab
   const { data: featuredAppsData, isLoading: featuredAppsLoading } = useQuery({
     queryKey: ["featured-apps"],
-    queryFn: () => browseApps({ sort: "popular", limit: 6 }),
+    queryFn: () => browseApps({ sort: "popular", limit: 20 }),
     staleTime: 60_000,
     enabled: activeTab === "apps",
   })
-  const featuredApps = featuredAppsData?.data ?? []
+  // Shuffle once per data fetch so carousel starts at a random position
+  const shuffledAppsRef = useRef<{ key: unknown; apps: AppBrowseCard[] }>({ key: null, apps: [] })
+  if (featuredAppsData && featuredAppsData !== shuffledAppsRef.current.key) {
+    const apps = [...featuredAppsData.data]
+    for (let i = apps.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[apps[i], apps[j]] = [apps[j], apps[i]]
+    }
+    shuffledAppsRef.current = { key: featuredAppsData, apps }
+  }
+  const featuredApps = shuffledAppsRef.current.apps
 
   const appsScrollRef = useRef<HTMLDivElement>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(true)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+  const isHoveringApps = useRef(false)
 
   const updateScrollState = useCallback(() => {
     const el = appsScrollRef.current
@@ -276,11 +290,39 @@ export default function ProjectsPage() {
     setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
   }, [])
 
+  useEffect(() => {
+    if (featuredApps.length === 0) return
+    const frame = requestAnimationFrame(updateScrollState)
+    const el = appsScrollRef.current
+    if (!el) return () => cancelAnimationFrame(frame)
+    const observer = new ResizeObserver(updateScrollState)
+    observer.observe(el)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [featuredApps.length, updateScrollState])
+
+  useEffect(() => {
+    if (featuredApps.length <= 1 || activeTab !== "apps") return
+    const timer = setInterval(() => {
+      const el = appsScrollRef.current
+      if (!el || isHoveringApps.current) return
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1
+      if (atEnd) {
+        el.scrollTo({ left: 0, behavior: "smooth" })
+      } else {
+        el.scrollBy({ left: CARD_SCROLL_PX, behavior: "smooth" })
+      }
+    }, AUTO_SCROLL_MS)
+    return () => clearInterval(timer)
+  }, [featuredApps.length, activeTab])
+
   const scrollAppsLeft = useCallback(() => {
-    appsScrollRef.current?.scrollBy({ left: -210, behavior: "smooth" })
+    appsScrollRef.current?.scrollBy({ left: -CARD_SCROLL_PX, behavior: "smooth" })
   }, [])
   const scrollAppsRight = useCallback(() => {
-    appsScrollRef.current?.scrollBy({ left: 210, behavior: "smooth" })
+    appsScrollRef.current?.scrollBy({ left: CARD_SCROLL_PX, behavior: "smooth" })
   }, [])
 
   return (
@@ -368,6 +410,8 @@ export default function ProjectsPage() {
                 <div
                   ref={appsScrollRef}
                   onScroll={updateScrollState}
+                  onMouseEnter={() => { isHoveringApps.current = true }}
+                  onMouseLeave={() => { isHoveringApps.current = false }}
                   className="flex gap-2 px-2 pb-2 overflow-x-auto"
                   style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
                 >
@@ -424,18 +468,18 @@ export default function ProjectsPage() {
                   <button
                     type="button"
                     onClick={scrollAppsLeft}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-background/80 text-foreground opacity-0 group-hover/apps:opacity-100 transition-opacity hover:bg-background shadow-md"
+                    className="absolute left-1 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-background/90 text-foreground shadow-md hover:bg-background transition-colors"
                   >
-                    <ChevronLeft className="h-5 w-5" />
+                    <ChevronLeft className="h-4 w-4" />
                   </button>
                 )}
                 {canScrollRight && (
                   <button
                     type="button"
                     onClick={scrollAppsRight}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-background/80 text-foreground opacity-0 group-hover/apps:opacity-100 transition-opacity hover:bg-background shadow-md"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-background/90 text-foreground shadow-md hover:bg-background transition-colors"
                   >
-                    <ChevronRight className="h-5 w-5" />
+                    <ChevronRight className="h-4 w-4" />
                   </button>
                 )}
               </>
