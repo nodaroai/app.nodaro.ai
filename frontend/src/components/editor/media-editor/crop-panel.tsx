@@ -46,20 +46,30 @@ export function CropPanel({
 
   if (!naturalWidth || !naturalHeight) return null
 
-  const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget
-    setImgSize({ w: img.clientWidth, h: img.clientHeight })
-    onDisplaySizeChange?.(img.clientWidth, img.clientHeight)
-  }, [onDisplaySizeChange])
+  const mediaElRef = useRef<HTMLImageElement | HTMLVideoElement | null>(null)
 
-  const handleVideoLoad = useCallback(() => {
-    if (videoRef?.current) {
-      const w = videoRef.current.clientWidth
-      const h = videoRef.current.clientHeight
-      setImgSize({ w, h })
-      onDisplaySizeChange?.(w, h)
+  // Track rendered media size via ResizeObserver (handles mobile resize, orientation change)
+  useEffect(() => {
+    const el = mediaElRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect
+      if (width > 0 && height > 0) {
+        setImgSize({ w: width, h: height })
+        onDisplaySizeChange?.(width, height)
+      }
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [onDisplaySizeChange, mediaUrl])
+
+  const setMediaRef = useCallback((el: HTMLImageElement | HTMLVideoElement | null) => {
+    mediaElRef.current = el
+    if (el && el.clientWidth > 0) {
+      setImgSize({ w: el.clientWidth, h: el.clientHeight })
+      onDisplaySizeChange?.(el.clientWidth, el.clientHeight)
     }
-  }, [videoRef, onDisplaySizeChange])
+  }, [onDisplaySizeChange])
 
   useEffect(() => {
     if (!crop && imgSize.w > 0 && imgSize.h > 0) {
@@ -195,36 +205,33 @@ export function CropPanel({
   ]
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 items-center">
       <div
         ref={wrapperRef}
-        className="relative mx-auto select-none rounded-lg overflow-hidden bg-black touch-none"
-        style={{ maxWidth: "100%", maxHeight: "60vh" }}
+        className="relative select-none rounded-lg overflow-hidden bg-black touch-none inline-block max-w-full"
       >
         {mediaType === "image" ? (
           <img
+            ref={(el) => setMediaRef(el)}
             src={mediaUrl}
             alt="Preview"
             draggable={false}
-            onLoad={handleImageLoad}
-            className="block max-w-full max-h-[60vh] mx-auto"
+            className="block w-full mx-auto"
+            style={{ maxHeight: "55vh" }}
           />
         ) : (
           <video
-            ref={videoRef}
+            ref={(el) => { setMediaRef(el); if (videoRef && "current" in videoRef) (videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el }}
             src={mediaUrl}
             muted
             playsInline
-            onLoadedMetadata={handleVideoLoad}
-            className="block max-w-full max-h-[60vh] mx-auto"
+            className="block w-full mx-auto"
+            style={{ maxHeight: "55vh" }}
           />
         )}
 
         {crop && imgSize.w > 0 && (
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{ width: imgSize.w, height: imgSize.h, left: "50%", top: 0, transform: "translateX(-50%)" }}
-          >
+          <div className="absolute inset-0 pointer-events-none">
             <div className="absolute bg-black/60" style={{ top: 0, left: 0, right: 0, height: crop.y }} />
             <div className="absolute bg-black/60" style={{ top: crop.y + crop.height, left: 0, right: 0, bottom: 0 }} />
             <div className="absolute bg-black/60" style={{ top: crop.y, left: 0, width: crop.x, height: crop.height }} />
