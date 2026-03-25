@@ -33,7 +33,45 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
 
   const videoRef = useRef<HTMLVideoElement>(null)
 
-  if (!isOpen || !currentFile) return null
+  // Compute output info — must be before early return (Rules of Hooks)
+  const outputInfo = useMemo(() => {
+    if (!currentFile) return null
+    const dw = editorState.displayWidth
+    const dh = editorState.displayHeight
+    const { crop } = editorState
+    const nw = currentFile.naturalWidth
+    const nh = currentFile.naturalHeight
+    const mt = currentFile.mediaType
+
+    let outW = nw
+    let outH = nh
+    if (crop && dw > 0 && dh > 0) {
+      const scaleX = nw / dw
+      const scaleY = nh / dh
+      outW = Math.round(crop.width * scaleX)
+      outH = Math.round(crop.height * scaleY)
+    }
+    const isCropped = outW !== nw || outH !== nh
+
+    const origExt = currentFile.file.name.split(".").pop()?.toLowerCase() ?? currentFile.file.type.split("/").pop() ?? "unknown"
+    const outFormat = (editorState.format ?? origExt).toUpperCase()
+
+    const trim = editorState.trim
+    const origDuration = currentFile.duration
+    const outDuration = trim ? trim.endTime - trim.startTime : origDuration
+    const isTrimmed = trim && (trim.startTime > 0.05 || trim.endTime < origDuration - 0.05)
+
+    const origSize = currentFile.file.size
+    const pixelRatio = (outW * outH) / Math.max(nw * nh, 1)
+    const durationRatio = origDuration > 0 ? outDuration / origDuration : 1
+    const estimatedSize = mt === "audio"
+      ? Math.round(origSize * durationRatio)
+      : Math.round(origSize * pixelRatio * durationRatio)
+
+    return { outW, outH, outFormat, outDuration, isCropped, isTrimmed, origSize, estimatedSize, nw, nh, origDuration }
+  }, [editorState, currentFile])
+
+  if (!isOpen || !currentFile || !outputInfo) return null
 
   const { mediaType } = currentFile
   const isMultiFile = totalFiles > 1
@@ -56,45 +94,6 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
   const updateState = (partial: Partial<MediaEditorState>) => {
     setEditorState((prev: MediaEditorState) => ({ ...prev, ...partial }))
   }
-
-  // Compute output info
-  const outputInfo = useMemo(() => {
-    const dw = editorState.displayWidth
-    const dh = editorState.displayHeight
-    const { crop } = editorState
-    const nw = currentFile.naturalWidth
-    const nh = currentFile.naturalHeight
-
-    // Output dimensions
-    let outW = nw
-    let outH = nh
-    if (crop && dw > 0 && dh > 0) {
-      const scaleX = nw / dw
-      const scaleY = nh / dh
-      outW = Math.round(crop.width * scaleX)
-      outH = Math.round(crop.height * scaleY)
-    }
-    const isCropped = outW !== nw || outH !== nh
-
-    // Output format
-    const outFormat = (editorState.format ?? originalFormat).toUpperCase()
-
-    // Output duration (video/audio)
-    const trim = editorState.trim
-    const origDuration = currentFile.duration
-    const outDuration = trim ? trim.endTime - trim.startTime : origDuration
-    const isTrimmed = trim && (trim.startTime > 0.05 || trim.endTime < origDuration - 0.05)
-
-    // File size estimate (rough — assume proportional to pixel count × duration ratio)
-    const origSize = currentFile.file.size
-    const pixelRatio = (outW * outH) / Math.max(nw * nh, 1)
-    const durationRatio = origDuration > 0 ? outDuration / origDuration : 1
-    const estimatedSize = mediaType === "audio"
-      ? Math.round(origSize * durationRatio)
-      : Math.round(origSize * pixelRatio * durationRatio)
-
-    return { outW, outH, outFormat, outDuration, isCropped, isTrimmed, origSize, estimatedSize, nw, nh, origDuration }
-  }, [editorState, currentFile, originalFormat, mediaType])
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm">
