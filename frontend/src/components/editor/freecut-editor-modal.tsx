@@ -24,6 +24,20 @@ export function FreeCutEditorModal({ videoUrl, onExportComplete, onClose }: Free
     (event: MessageEvent) => {
       if (event.origin !== FREECUT_ORIGIN) return
 
+      if (event.data?.type === "FREECUT_READY") {
+        // FreeCut message handler is initialized — send the video
+        if (!sentVideoRef.current) {
+          sentVideoRef.current = true
+          const iframe = iframeRef.current
+          if (iframe?.contentWindow) {
+            iframe.contentWindow.postMessage(
+              { type: "NODARO_LOAD_VIDEO", payload: { videoUrl } },
+              FREECUT_ORIGIN,
+            )
+          }
+        }
+      }
+
       if (event.data?.type === "FREECUT_EXPORT_COMPLETE") {
         const buffer: ArrayBuffer = event.data.payload?.videoBuffer
         if (!buffer) return
@@ -32,30 +46,13 @@ export function FreeCutEditorModal({ videoUrl, onExportComplete, onClose }: Free
         onExportComplete(blob)
       }
     },
-    [onExportComplete],
+    [onExportComplete, videoUrl],
   )
 
   useEffect(() => {
     window.addEventListener("message", handleMessage)
     return () => window.removeEventListener("message", handleMessage)
   }, [handleMessage])
-
-  useEffect(() => {
-    if (!iframeLoaded || sentVideoRef.current) return
-    sentVideoRef.current = true
-
-    const iframe = iframeRef.current
-    if (!iframe?.contentWindow) return
-
-    // Small delay to let FreeCut initialize its listener
-    const timer = setTimeout(() => {
-      iframe.contentWindow!.postMessage(
-        { type: "NODARO_LOAD_VIDEO", payload: { videoUrl } },
-        FREECUT_ORIGIN,
-      )
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [iframeLoaded, videoUrl])
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -111,8 +108,7 @@ export function FreeCutEditorModal({ videoUrl, onExportComplete, onClose }: Free
           ref={iframeRef}
           src={FREECUT_URL}
           className="w-full h-full border-0"
-          allow="autoplay"
-          sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+          allow="autoplay; camera; microphone; storage-access"
           onLoad={() => setIframeLoaded(true)}
           title="FreeCut Video Editor"
         />
