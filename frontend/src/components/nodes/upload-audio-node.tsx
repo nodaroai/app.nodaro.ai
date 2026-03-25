@@ -60,6 +60,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
 
   const audioUrl = nodeData.r2Url || nodeData.url
   const hasFile = Boolean(audioUrl) && !nodeData.externalUrl
+  const [isDragOver, setIsDragOver] = useState(false)
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -67,6 +68,17 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
     clearError()
     mediaEditor.openEditor([file])
     e.target.value = ""
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file && file.type.startsWith("audio/")) {
+      clearError()
+      mediaEditor.openEditor([file])
+    }
   }
 
   const handleUrlChange = (url: string) => {
@@ -188,14 +200,21 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                   />
                   <button
                     type="button"
-                    className="w-full flex items-center justify-center gap-2 h-16 rounded-md border-2 border-dashed border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground/60 hover:text-[#38BDF8] transition-colors cursor-pointer"
+                    className={`w-full flex items-center justify-center gap-2 h-16 rounded-md border-2 border-dashed transition-colors cursor-pointer ${
+                      isDragOver
+                        ? "border-[#38BDF8] bg-[#38BDF8]/10 text-[#38BDF8]"
+                        : "border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground/60 hover:text-[#38BDF8]"
+                    }`}
                     onClick={(e) => {
                       e.stopPropagation()
                       fileInputRef.current?.click()
                     }}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true) }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={handleDrop}
                   >
                     <Upload className="w-4 h-4" />
-                    <span className="text-xs">Choose Audio</span>
+                    <span className="text-xs">{isDragOver ? "Drop Audio" : "Choose Audio"}</span>
                   </button>
                 </>
               )}

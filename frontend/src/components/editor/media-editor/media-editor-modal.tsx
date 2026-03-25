@@ -1,4 +1,5 @@
 import { useRef } from "react"
+import { createPortal } from "react-dom"
 import { X, Loader2 } from "lucide-react"
 import { AspectRatioSelector } from "../config-panels/aspect-ratio-selector"
 import { CropPanel } from "./crop-panel"
@@ -56,7 +57,7 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
     setEditorState((prev: MediaEditorState) => ({ ...prev, ...partial }))
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-black/90 backdrop-blur-sm">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
@@ -178,6 +179,7 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
