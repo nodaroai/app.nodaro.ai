@@ -63,11 +63,23 @@ export function CropPanel({
 
   // When aspect ratio changes, re-constrain existing crop
   const lockedRatio = parseAspectRatio(aspectRatio)
+  // "original" means the natural image ratio, not "no constraint"
+  const effectiveRatio = aspectRatio === "original" ? naturalWidth / naturalHeight : lockedRatio
   useEffect(() => {
-    if (crop && imgSize.w > 0) {
-      const constrained = constrainCrop(crop)
-      if (constrained.width !== crop.width || constrained.height !== crop.height || constrained.x !== crop.x || constrained.y !== crop.y) {
-        onCropChange(constrained)
+    if (crop && imgSize.w > 0 && effectiveRatio !== null) {
+      let { x, y, width, height } = crop
+      const currentRatio = width / height
+      if (Math.abs(currentRatio - effectiveRatio) > 0.02) {
+        if (currentRatio > effectiveRatio) {
+          width = height * effectiveRatio
+        } else {
+          height = width / effectiveRatio
+        }
+        width = Math.max(MIN_CROP_SIZE, Math.min(width, imgSize.w))
+        height = Math.max(MIN_CROP_SIZE, Math.min(height, imgSize.h))
+        x = Math.max(0, Math.min(x, imgSize.w - width))
+        y = Math.max(0, Math.min(y, imgSize.h - height))
+        onCropChange({ ...crop, x, y, width, height })
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -79,12 +91,12 @@ export function CropPanel({
     const maxH = imgSize.h
     if (maxW <= 0 || maxH <= 0) return c
 
-    if (lockedRatio !== null) {
-      // Fit the ratio inside the current crop area
-      if (width / height > lockedRatio) {
-        width = height * lockedRatio
+    // Lock to ratio for all presets including "original" (but not "custom")
+    if (effectiveRatio !== null && aspectRatio !== "custom") {
+      if (width / height > effectiveRatio) {
+        width = height * effectiveRatio
       } else {
-        height = width / lockedRatio
+        height = width / effectiveRatio
       }
     }
     width = Math.max(MIN_CROP_SIZE, Math.min(width, maxW))

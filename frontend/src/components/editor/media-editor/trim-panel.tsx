@@ -38,6 +38,12 @@ export function TrimPanel({
   const animRef = useRef<number | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
+  // Refs so the tick function always reads the latest values
+  const trimRef = useRef(trim)
+  trimRef.current = trim
+  const loopRef = useRef(loopEnabled)
+  loopRef.current = loopEnabled
+
   const { frames, isLoading: filmstripLoading } = useFilmstrip(
     mediaType === "video" ? mediaUrl : null,
     12,
@@ -139,15 +145,20 @@ export function TrimPanel({
       video.play()
 
       const tick = () => {
-        if (video.currentTime >= trim.endTime) {
-          if (loopEnabled) {
-            video.currentTime = trim.startTime
+        const t = trimRef.current
+        if (video.currentTime >= t.endTime) {
+          if (loopRef.current) {
+            video.currentTime = t.startTime
           } else {
             video.pause()
             setIsPlaying(false)
-            setPlayhead(trim.endTime)
+            setPlayhead(t.endTime)
             return
           }
+        }
+        // Clamp playhead within current trim bounds
+        if (video.currentTime < t.startTime) {
+          video.currentTime = t.startTime
         }
         setPlayhead(video.currentTime)
         animRef.current = requestAnimationFrame(tick)
@@ -162,15 +173,19 @@ export function TrimPanel({
       audio.play()
 
       const tick = () => {
-        if (audio.currentTime >= trim.endTime) {
-          if (loopEnabled) {
-            audio.currentTime = trim.startTime
+        const t = trimRef.current
+        if (audio.currentTime >= t.endTime) {
+          if (loopRef.current) {
+            audio.currentTime = t.startTime
           } else {
             audio.pause()
             setIsPlaying(false)
-            setPlayhead(trim.endTime)
+            setPlayhead(t.endTime)
             return
           }
+        }
+        if (audio.currentTime < t.startTime) {
+          audio.currentTime = t.startTime
         }
         setPlayhead(audio.currentTime)
         animRef.current = requestAnimationFrame(tick)
