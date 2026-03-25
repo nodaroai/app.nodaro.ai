@@ -5,10 +5,11 @@ interface TrimVideoOptions {
   readonly videoUrl: string
   readonly startTime: number
   readonly endTime?: number
+  readonly outputSilentVideo?: boolean
 }
 
-export async function trimVideo(options: TrimVideoOptions): Promise<string> {
-  const { videoUrl, startTime, endTime } = options
+export async function trimVideo(options: TrimVideoOptions): Promise<{ videoPath: string; silentVideoPath?: string }> {
+  const { videoUrl, startTime, endTime, outputSilentVideo = false } = options
   const workDir = await createWorkDir("trim-video")
 
   try {
@@ -44,7 +45,26 @@ export async function trimVideo(options: TrimVideoOptions): Promise<string> {
     await runFfmpeg(args)
 
     console.log(`[trimVideo] Output: ${outputPath}`)
-    return outputPath
+
+    let silentVideoPath: string | undefined
+    if (outputSilentVideo) {
+      try {
+        silentVideoPath = join(workDir, "silent.mp4")
+        await runFfmpeg([
+          "-y",
+          "-i", outputPath,
+          "-an",
+          "-c:v", "copy",
+          silentVideoPath,
+        ])
+        console.log(`[trimVideo] Silent video output: ${silentVideoPath}`)
+      } catch {
+        console.log("[trimVideo] Failed to generate silent video, skipping")
+        silentVideoPath = undefined
+      }
+    }
+
+    return { videoPath: outputPath, silentVideoPath }
   } catch (err) {
     await cleanupWorkDir(workDir)
     throw err

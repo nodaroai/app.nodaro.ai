@@ -2504,7 +2504,6 @@ export function executeNode(
         trimAudioApi(
           videoUrl,
           d.audioFormat,
-          d.outputSilentVideo,
           ctx.userId,
           d.startTime as number | undefined,
           d.endTime as number | undefined,
@@ -2527,10 +2526,13 @@ export function executeNode(
     return runProcessingNode(
       node.id,
       () =>
-        trimVideoApi(videoUrl, d.startTime, d.endTime || undefined, ctx.userId),
+        trimVideoApi(videoUrl, d.startTime, d.endTime || undefined, ctx.userId, d.outputSilentVideo),
       "generatedVideoUrl",
       "Trim Video",
       ctx,
+      (od) => ({
+        generatedSilentVideoUrl: od.videoUrlSilent as string | undefined,
+      }),
     );
   }
 

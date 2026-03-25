@@ -22,18 +22,16 @@ function isSocialMediaUrl(url: string): boolean {
 interface TrimAudioOptions {
   readonly videoUrl: string
   readonly audioFormat?: "mp3" | "wav" | "aac"
-  readonly outputSilentVideo?: boolean
   readonly startTime?: number
   readonly endTime?: number
 }
 
 interface TrimAudioResult {
   readonly audioPath: string
-  readonly silentVideoPath?: string
 }
 
 export async function trimAudio(options: TrimAudioOptions): Promise<TrimAudioResult> {
-  const { videoUrl, audioFormat = "mp3", outputSilentVideo = false, startTime, endTime } = options
+  const { videoUrl, audioFormat = "mp3", startTime, endTime } = options
   const workDir = await createWorkDir("trim-audio")
 
   try {
@@ -81,20 +79,8 @@ export async function trimAudio(options: TrimAudioOptions): Promise<TrimAudioRes
       audioPath,
     ])
 
-    let silentVideoPath: string | undefined
-    if (outputSilentVideo) {
-      silentVideoPath = join(workDir, "silent.mp4")
-      await runFfmpeg([
-        "-y",
-        "-i", videoPath,
-        "-an",
-        "-c:v", "copy",
-        silentVideoPath,
-      ])
-    }
-
     console.log(`[trimAudio] Output: ${audioPath}`)
-    return { audioPath, silentVideoPath }
+    return { audioPath }
   } catch (err) {
     await cleanupWorkDir(workDir)
     throw err

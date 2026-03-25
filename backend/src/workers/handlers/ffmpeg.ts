@@ -76,24 +76,20 @@ const handleMergeVideoAudio: HandlerFn = async function handleMergeVideoAudio(jo
 }
 
 const handleTrimAudio: HandlerFn = async function handleTrimAudio(job, ctx) {
-  const { videoUrl, audioFormat, outputSilentVideo, startTime, endTime } = job.data as {
-    jobId: string; videoUrl: string; audioFormat?: "mp3" | "wav" | "aac"; outputSilentVideo?: boolean; startTime?: number; endTime?: number
+  const { videoUrl, audioFormat, startTime, endTime } = job.data as {
+    jobId: string; videoUrl: string; audioFormat?: "mp3" | "wav" | "aac"; startTime?: number; endTime?: number
   }
   console.log(`[worker] trim-audio ${ctx.jobId}`)
-  const result = await trimAudio({ videoUrl, audioFormat, outputSilentVideo, startTime, endTime })
+  const result = await trimAudio({ videoUrl, audioFormat, startTime, endTime })
   await job.updateProgress(80)
   const audioR2Url = await uploadFileToR2(result.audioPath, ctx.jobId, "audio", ctx.jobUserId)
-  let silentVideoR2Url: string | undefined
-  if (result.silentVideoPath) {
-    silentVideoR2Url = await uploadFileToR2(result.silentVideoPath, `${ctx.jobId}-silent`, "video", ctx.jobUserId)
-  }
   await cleanupWorkDir(dirname(result.audioPath))
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   await supabase.from("jobs").update({
     status: "completed",
     progress: 100,
-    output_data: { audioUrl: audioR2Url, ...(silentVideoR2Url ? { videoUrl: silentVideoR2Url } : {}) },
+    output_data: { audioUrl: audioR2Url },
     completed_at: new Date().toISOString(),
   }).eq("id", ctx.jobId)
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
@@ -101,13 +97,29 @@ const handleTrimAudio: HandlerFn = async function handleTrimAudio(job, ctx) {
 }
 
 const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
-  const { videoUrl, startTime, endTime } = job.data as {
-    jobId: string; videoUrl: string; startTime: number; endTime?: number
+  const { videoUrl, startTime, endTime, outputSilentVideo } = job.data as {
+    jobId: string; videoUrl: string; startTime: number; endTime?: number; outputSilentVideo?: boolean
   }
   console.log(`[worker] trim-video ${ctx.jobId}`)
-  const outputPath = await trimVideo({ videoUrl, startTime, endTime })
+  const result = await trimVideo({ videoUrl, startTime, endTime, outputSilentVideo })
   await job.updateProgress(80)
-  await completeFfmpegVideoJob(outputPath, ctx)
+  const r2Url = await uploadFileToR2(result.videoPath, ctx.jobId, "video", ctx.jobUserId)
+  let silentVideoR2Url: string | undefined
+  if (result.silentVideoPath) {
+    silentVideoR2Url = await uploadFileToR2(result.silentVideoPath, `${ctx.jobId}-silent`, "video", ctx.jobUserId)
+  }
+  await cleanupWorkDir(dirname(result.videoPath))
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed",
+    progress: 100,
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...(silentVideoR2Url ? { videoUrlSilent: silentVideoR2Url } : {}) },
+    completed_at: new Date().toISOString(),
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
 const handleSpeedRamp: HandlerFn = async function handleSpeedRamp(job, ctx) {

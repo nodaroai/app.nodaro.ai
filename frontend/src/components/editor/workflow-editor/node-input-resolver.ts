@@ -520,6 +520,16 @@ export function resolveNodeInputs(
       continue;
     }
 
+    // Silent video output from trim-video node
+    if (src.type === "trim-video" && srcEdge.sourceHandle === "silent-video") {
+      const srcData = src.data as Record<string, unknown>;
+      const silentUrl = srcData.generatedSilentVideoUrl as string | undefined;
+      if (silentUrl) {
+        inputs.videoUrl = silentUrl;
+      }
+      continue;
+    }
+
     if (src.type === "teleport-send" || src.type === "teleport-receive") {
       // Teleporter passthrough — detect media type from URL
       if (IMAGE_URL_RE.test(output)) {

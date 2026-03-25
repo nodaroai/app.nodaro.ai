@@ -1394,7 +1394,6 @@ export type TrimAudioData = {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
-  outputSilentVideo: boolean
   audioFormat: "mp3" | "wav" | "aac"
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -3156,8 +3155,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     creditCost: 1,
     inputs: ["in"],
-    outputs: ["audio", "silent-video"],
-    defaultData: { label: "Trim Audio", outputSilentVideo: true, audioFormat: "mp3", fieldMappings: {} },
+    outputs: ["audio"],
+    defaultData: { label: "Trim Audio", audioFormat: "mp3", fieldMappings: {} },
   },
   {
     type: "mix-audio",

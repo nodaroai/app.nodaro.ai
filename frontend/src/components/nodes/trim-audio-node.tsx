@@ -81,7 +81,6 @@ function TrimAudioNodeComponent({ id, data, selected }: NodeProps) {
       handles={[
         { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
         { id: "audio", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
-        { id: "silent-video", type: "source", position: Position.Right, customStyle: { top: '50px', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -154,13 +153,6 @@ function TrimAudioNodeComponent({ id, data, selected }: NodeProps) {
       style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
     >
       <AudioLines className="w-3.5 h-3.5 text-white" />
-    </div>
-    {/* Output handle icon - silent video */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '50px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Clapperboard className="w-3.5 h-3.5 text-white" />
     </div>
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

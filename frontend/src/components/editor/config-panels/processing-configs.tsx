@@ -241,15 +241,6 @@ export function TrimAudioConfig({ data, onUpdate }: ConfigProps<TrimAudioData>) 
           </SelectContent>
         </Select>
       </div>
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="output-silent"
-          checked={data.outputSilentVideo}
-          onChange={(e) => onUpdate({ outputSilentVideo: e.target.checked })}
-        />
-        <Label htmlFor="output-silent">Output silent video</Label>
-      </div>
       <div>
         <Label htmlFor="start-time">Start Time (s) — optional</Label>
         <Input
@@ -415,6 +406,16 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
           value={data.endTime ?? ""}
           onChange={(e) => onUpdate({ endTime: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
         />
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="outputSilentVideo"
+          checked={data.outputSilentVideo ?? false}
+          onChange={(e) => onUpdate({ outputSilentVideo: e.target.checked })}
+          className="w-4 h-4"
+        />
+        <label htmlFor="outputSilentVideo" className="text-xs text-muted-foreground">Output Silent Video</label>
       </div>
     </div>
   )

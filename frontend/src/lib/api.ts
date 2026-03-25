@@ -1041,8 +1041,8 @@ export async function mergeVideoAudioApi(
   return res.json()
 }
 
-export async function trimAudioApi(videoUrl: string, audioFormat?: string, outputSilentVideo?: boolean, userId?: string, startTime?: number, endTime?: number): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { videoUrl, audioFormat, outputSilentVideo, startTime, endTime }
+export async function trimAudioApi(videoUrl: string, audioFormat?: string, userId?: string, startTime?: number, endTime?: number): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, audioFormat, startTime, endTime }
   if (userId) {
     body.userId = userId
   }
@@ -1058,8 +1058,8 @@ export async function trimAudioApi(videoUrl: string, audioFormat?: string, outpu
   return res.json()
 }
 
-export async function trimVideoApi(videoUrl: string, startTime: number, endTime?: number, userId?: string): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { videoUrl, startTime, endTime }
+export async function trimVideoApi(videoUrl: string, startTime: number, endTime?: number, userId?: string, outputSilentVideo?: boolean): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, startTime, endTime, outputSilentVideo }
   if (userId) {
     body.userId = userId
   }

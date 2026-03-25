@@ -9,7 +9,6 @@ import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.j
 const trimAudioBody = z.object({
   videoUrl: safeUrlSchema,
   audioFormat: z.enum(["mp3", "wav", "aac"]).optional().default("mp3"),
-  outputSilentVideo: z.boolean().optional().default(false),
   startTime: z.number().min(0).optional(),
   endTime: z.number().min(0).optional(),
   userId: z.string().uuid().optional(),

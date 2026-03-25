@@ -1225,7 +1225,6 @@ export function buildPayload(
         jobId,
         videoUrl: resolvedInputs.videoUrl || resolvedInputs.audioUrl || data.videoUrl,
         audioFormat: data.audioFormat,
-        outputSilentVideo: data.outputSilentVideo,
         startTime: data.startTime,
         endTime: data.endTime,
         usageLogId,

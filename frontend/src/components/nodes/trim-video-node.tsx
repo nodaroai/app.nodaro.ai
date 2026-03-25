@@ -2,7 +2,7 @@
 
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Scissors, Loader2, AlertCircle, X, Clapperboard, Film } from "lucide-react"
+import { Scissors, Loader2, AlertCircle, X, Clapperboard, Film, Download, Copy } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
@@ -57,6 +57,7 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
         handles={[
           { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
           { id: "video-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+          { id: "silent-video", type: "source", position: Position.Right, customStyle: { top: '50px', right: '-29px' }, hideHandle: true },
         ]}
       >
         {hasResult ? null : (
@@ -128,8 +129,46 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
         />
       )}
 
+      {nodeData.generatedSilentVideoUrl && (
+        <div className="flex flex-col gap-1 mt-1">
+          <span className="text-[10px] text-muted-foreground font-medium px-1">Silent Video</span>
+          <VideoResultOverlay
+            url={nodeData.generatedSilentVideoUrl}
+            label="Silent Video"
+            hasResults={false}
+            onExpand={() => {}}
+            onDelete={() => {}}
+          />
+          <div className="flex gap-1 px-1">
+            <a
+              href={nodeData.generatedSilentVideoUrl}
+              download
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 px-1.5 py-0.5 bg-black/40 hover:bg-black/60 border border-white/10 text-white text-[10px] rounded-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Download className="w-3 h-3" />
+              <span>Download</span>
+            </a>
+            <button
+              type="button"
+              className="flex items-center gap-1 px-1.5 py-0.5 bg-black/40 hover:bg-black/60 border border-white/10 text-white text-[10px] rounded-md"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(nodeData.generatedSilentVideoUrl!);
+              }}
+            >
+              <Copy className="w-3 h-3" />
+              <span>Copy URL</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       <HandleIcon icon={<Clapperboard />} color="steel" side="left" top="calc(100% - 20px)" />
       <HandleIcon icon={<Film />} color="steel" top="20px" />
+      <HandleIcon icon={<Clapperboard />} color="steel" top="50px" />
       {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} />}
       <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>
