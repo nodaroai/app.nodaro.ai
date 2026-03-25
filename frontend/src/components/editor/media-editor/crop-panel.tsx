@@ -91,12 +91,12 @@ export function CropPanel({
     const maxH = imgSize.h
     if (maxW <= 0 || maxH <= 0) return c
 
-    // Lock to ratio for all presets including "original" (but not "custom")
-    if (effectiveRatio !== null && aspectRatio !== "custom") {
-      if (width / height > effectiveRatio) {
-        width = height * effectiveRatio
+    // Lock to ratio for presets like 1:1, 16:9 etc. (not "original" or "custom" — those are free-form)
+    if (lockedRatio !== null) {
+      if (width / height > lockedRatio) {
+        width = height * lockedRatio
       } else {
-        height = width / effectiveRatio
+        height = width / lockedRatio
       }
     }
     width = Math.max(MIN_CROP_SIZE, Math.min(width, maxW))
