@@ -299,6 +299,25 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
         </Select>
       </div>
       {(data.generatedAudioUrls?.length ?? 0) > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Output Chunk</label>
+          <select
+            value={data.outputChunkIndex ?? 0}
+            onChange={(e) => {
+              const val = Number(e.target.value)
+              console.log('[SplitMedia] outputChunkIndex changed to:', val)
+              onUpdate({ outputChunkIndex: val })
+            }}
+            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+          >
+            {data.generatedAudioUrls!.map((_, i) => (
+              <option key={i} value={i}>Chunk {i + 1}</option>
+            ))}
+          </select>
+          <p className="text-[10px] text-muted-foreground">Select which chunk to output when connected to another node</p>
+        </div>
+      )}
+      {(data.generatedAudioUrls?.length ?? 0) > 0 && (
         <div className="flex flex-col gap-2 pt-2 border-t border-border">
           <div className="flex items-center justify-between">
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">

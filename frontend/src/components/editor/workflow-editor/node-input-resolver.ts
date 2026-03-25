@@ -346,9 +346,10 @@ export function resolveNodeInputs(
     const edgeUseAll = (srcEdge.data as Record<string, unknown> | undefined)
       ?.useAllResults as boolean | undefined;
     const srcData = src.data as Record<string, unknown>;
-    const srcListResults = edgeUseAll
+    // split-media uses outputChunkIndex routing, skip __listResults
+    const srcListResults = src.type === "split-media" ? undefined : (edgeUseAll
       ? (extractAllGeneratedResults(srcData, true) ?? (srcData.__listResults as string[] | undefined))
-      : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData));
+      : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData)));
     let output: string | undefined;
     if (edgeMode && srcListResults && srcListResults.length > 0) {
       if (edgeMode.startsWith("item:")) {
@@ -530,19 +531,21 @@ export function resolveNodeInputs(
       continue;
     }
 
-    // Split media output — route by handle, respecting selectedChunks
+    // Split media output — route selected chunk by outputChunkIndex
     if (src.type === "split-media") {
-      const srcData = src.data as Record<string, unknown>;
-      if (srcEdge.sourceHandle === "audio-out") {
-        const audioUrls = (srcData.generatedAudioUrls as string[] | undefined) ?? [];
-        const selected = srcData.selectedAudioChunks as number[] | undefined;
-        const filtered = selected ? selected.map(i => audioUrls[i]).filter(Boolean) : audioUrls;
-        if (filtered[0]) inputs.audioUrl = filtered[0];
-      } else {
-        const videoUrls = (srcData.generatedVideoUrls as string[] | undefined) ?? [];
-        const selected = srcData.selectedVideoChunks as number[] | undefined;
-        const filtered = selected ? selected.map(i => videoUrls[i]).filter(Boolean) : videoUrls;
-        if (filtered[0]) inputs.videoUrl = filtered[0];
+      const liveNode = useWorkflowStore.getState().nodes.find(n => n.id === src.id);
+      const srcData = (liveNode?.data ?? src.data) as Record<string, unknown>;
+      const chunkIndex = (srcData.outputChunkIndex as number | undefined) ?? 0;
+      const audioUrls = (srcData.generatedAudioUrls as string[] | undefined) ?? [];
+      const videoUrls = (srcData.generatedVideoUrls as string[] | undefined) ?? [];
+      console.log('[resolver] split-media: chunkIndex=', chunkIndex, 'audioUrls=', audioUrls.length, 'sourceHandle=', srcEdge.sourceHandle);
+      if (audioUrls.length > 0) {
+        const selectedUrl = audioUrls[chunkIndex];
+        if (selectedUrl) inputs.audioUrl = selectedUrl;
+      }
+      if (videoUrls.length > 0) {
+        const selectedUrl = videoUrls[chunkIndex];
+        if (selectedUrl) inputs.videoUrl = selectedUrl;
       }
       continue;
     }

@@ -1417,6 +1417,7 @@ export type SplitMediaData = {
   generatedAudioUrls?: string[]
   selectedAudioChunks?: number[]
   selectedVideoChunks?: number[]
+  outputChunkIndex?: number
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
   currentJobId?: string

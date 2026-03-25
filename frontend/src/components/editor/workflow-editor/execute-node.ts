@@ -2545,20 +2545,43 @@ export function executeNode(
               const od = job.output_data as Record<string, unknown>;
               const videoUrls = od.videoUrls as string[] | undefined;
               const audioUrls = od.audioUrls as string[] | undefined;
-              const selectedAudio = d.selectedAudioChunks;
-              const selectedVideo = d.selectedVideoChunks;
-              const filteredAudio = audioUrls ? (selectedAudio ? selectedAudio.map(i => audioUrls[i]).filter(Boolean) : audioUrls) : [];
-              const filteredVideo = videoUrls ? (selectedVideo ? selectedVideo.map(i => videoUrls[i]).filter(Boolean) : videoUrls) : [];
-              const allUrls = [...filteredAudio, ...filteredVideo];
+              const chunkIdx = d.outputChunkIndex ?? 0;
+              const singleResult = [audioUrls?.[chunkIdx] ?? videoUrls?.[chunkIdx]].filter(Boolean) as string[];
               updateNodeData(node.id, {
                 executionStatus: "completed",
                 generatedVideoUrls: videoUrls,
                 generatedAudioUrls: audioUrls,
-                generatedItems: allUrls,
-                __listResults: allUrls,
+                generatedItems: [...(audioUrls ?? []), ...(videoUrls ?? [])],
+                __listResults: singleResult,
                 currentJobId: undefined,
                 currentJobProgress: undefined,
               });
+              // Create upload nodes on canvas for each chunk
+              const { addNode } = useWorkflowStore.getState();
+              const currentNode = useWorkflowStore.getState().nodes.find(n => n.id === node.id);
+              const baseX = (currentNode?.position?.x ?? 0) + 300;
+              const baseY = (currentNode?.position?.y ?? 0);
+              const allUrls = [...(audioUrls ?? []), ...(videoUrls ?? [])];
+              allUrls.forEach((url, i) => {
+                const isAudio = !!(audioUrls && i < audioUrls.length);
+                const result = { url, timestamp: new Date().toISOString() };
+                addNode(
+                  isAudio ? "upload-audio" : "upload-video",
+                  { x: baseX, y: baseY + (i * 120) },
+                  {
+                    label: `Chunk ${i + 1}`,
+                    url,
+                    externalUrl: url,
+                    r2Url: "",
+                    assetId: "",
+                    filename: `chunk-${i + 1}`,
+                    generatedResults: [result],
+                    activeResultIndex: 0,
+                    executionStatus: "completed",
+                  },
+                );
+              });
+
               toast.success(`Split Media complete: ${od.chunkCount} chunks`);
               resolve((audioUrls?.[0] ?? videoUrls?.[0]) as string);
             } else if (job.status === "failed") {
