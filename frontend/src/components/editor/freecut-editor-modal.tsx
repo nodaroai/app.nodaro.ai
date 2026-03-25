@@ -31,11 +31,15 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, onExportComple
       if (includeProject && freecutProjectUrl) {
         try {
           projectJson = await fetch(freecutProjectUrl).then((r) => r.json())
-        } catch {
-          // Project restore failed — start fresh
+          console.warn("[FreeCut] Loaded project JSON from:", freecutProjectUrl)
+        } catch (e) {
+          console.warn("[FreeCut] Failed to load project JSON:", e)
         }
+      } else {
+        console.warn("[FreeCut] No project to restore", { includeProject, freecutProjectUrl })
       }
 
+      console.warn("[FreeCut] Sending to iframe", { hasBuffer: !!videoBuffer, hasProjectJson: !!projectJson })
       iframe.contentWindow!.postMessage(
         { type: "NODARO_LOAD_VIDEO", payload: { videoUrl, videoBuffer, projectJson } },
         FREECUT_ORIGIN,
@@ -71,6 +75,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, onExportComple
         setSaveState("saving")
         const blob = new Blob([buffer], { type: "video/mp4" })
         const projectJson = event.data.payload?.projectJson
+        console.warn("[FreeCut] Export received", { hasBuffer: !!buffer, hasProjectJson: !!projectJson, projectJsonType: typeof projectJson })
         onExportComplete(blob, projectJson).then(() => {
           setSaveState("done")
           setTimeout(() => onClose(), 800)

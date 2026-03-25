@@ -143,9 +143,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             const jsonFile = new File([jsonBlob], "freecut-project.json", { type: "application/json" });
             const jsonResult = await uploadFile(jsonFile, user?.id);
             projectUrl = jsonResult.url;
-          } catch {
-            // Project save failed — video still saved successfully
+            console.warn("[FreeCut] Project JSON uploaded to:", projectUrl);
+          } catch (e) {
+            console.warn("[FreeCut] Project JSON upload FAILED:", e);
           }
+        } else {
+          console.warn("[FreeCut] No projectJson received from FreeCut");
         }
 
         const newResult: GeneratedResult = { url, jobId: `freecut-edit-${Date.now()}`, timestamp: new Date().toISOString(), freecutProjectUrl: projectUrl };
