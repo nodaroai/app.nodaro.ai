@@ -1356,8 +1356,38 @@ export function executeNode(
 
   if (node.type === "suno-separate") {
     const d = node.data as SunoSeparateData;
-    const taskId = inputs.sunoTaskId ?? d.taskId?.trim();
-    const audioId = inputs.sunoTrackId ?? d.audioId?.trim();
+    let taskId = inputs.sunoTaskId ?? d.taskId?.trim();
+    let audioId = inputs.sunoTrackId ?? d.audioId?.trim();
+
+    // Fallback: walk upstream to find sunoTaskId/sunoTrackId from connected Suno node
+    if (!taskId || !audioId) {
+      const { nodes: allNodes, edges: allEdges } = useWorkflowStore.getState();
+      const incomingEdges = allEdges.filter(e => e.target === node.id);
+      for (const edge of incomingEdges) {
+        const srcNode = allNodes.find(n => n.id === edge.source);
+        if (!srcNode) continue;
+        const srcData = srcNode.data as Record<string, unknown>;
+        if (!taskId) {
+          taskId = (srcData.sunoTaskId as string | undefined);
+          // also check generatedResults
+          if (!taskId) {
+            const results = srcData.generatedResults as Array<Record<string, unknown>> | undefined;
+            const activeIndex = (srcData.activeResultIndex as number | undefined) ?? 0;
+            taskId = results?.[activeIndex]?.sunoTaskId as string | undefined;
+          }
+        }
+        if (!audioId) {
+          audioId = (srcData.sunoTrackId as string | undefined);
+          // also check generatedResults
+          if (!audioId) {
+            const results = srcData.generatedResults as Array<Record<string, unknown>> | undefined;
+            const activeIndex = (srcData.activeResultIndex as number | undefined) ?? 0;
+            audioId = results?.[activeIndex]?.sunoTrackId as string | undefined;
+          }
+        }
+        if (taskId && audioId) break;
+      }
+    }
     if (!taskId) {
       toast.error(
         `Node "${d.label}": no task ID found (connect a Suno Generate/Cover/Extend node or enter manually)`,

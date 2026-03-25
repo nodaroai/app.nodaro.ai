@@ -112,17 +112,18 @@ function handleJobCompleted(
         .nodes.find((n) => n.id === nodeId)?.data as Record<string, unknown>
     )?.generatedResults as readonly GeneratedResult[] | undefined) ?? [];
 
+  const extraFields =
+    extraOutputFields && job.output_data
+      ? extraOutputFields(job.output_data as Record<string, unknown>)
+      : {};
+
   const newResult: GeneratedResult = {
     url: url as string,
     thumbnailUrl,
     timestamp: new Date().toISOString(),
     jobId,
+    ...extraFields,
   };
-
-  const extraFields =
-    extraOutputFields && job.output_data
-      ? extraOutputFields(job.output_data as Record<string, unknown>)
-      : {};
 
   updateNodeData(nodeId, {
     executionStatus: "completed",

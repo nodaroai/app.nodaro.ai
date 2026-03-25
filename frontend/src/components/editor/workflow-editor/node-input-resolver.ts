@@ -96,6 +96,7 @@ const SUNO_TRACK_NODE_TYPES = new Set([
   "suno-add-vocals",
   "suno-convert-wav",
   "suno-upload-extend",
+  "suno-separate",
 ]);
 
 export function extractNodeOutputAsList(
@@ -882,11 +883,17 @@ export function resolveNodeInputs(
       }
       if (SUNO_TRACK_NODE_TYPES.has(src.type!)) {
         const srcData = src.data as Record<string, unknown>;
-        if (srcData.sunoTrackId) {
-          inputs.sunoTrackId = srcData.sunoTrackId as string;
-        }
-        if (srcData.sunoTaskId) {
-          inputs.sunoTaskId = srcData.sunoTaskId as string;
+        const trackId = (srcData.sunoTrackId as string | undefined);
+        const taskId = (srcData.sunoTaskId as string | undefined);
+        if (trackId) inputs.sunoTrackId = trackId;
+        if (taskId) inputs.sunoTaskId = taskId;
+        // Fallback: check generatedResults for stored sunoTrackId/sunoTaskId
+        if (!trackId || !taskId) {
+          const results = srcData.generatedResults as Array<Record<string, unknown>> | undefined;
+          const activeIndex = (srcData.activeResultIndex as number | undefined) ?? 0;
+          const activeResult = results?.[activeIndex];
+          if (activeResult?.sunoTrackId && !trackId) inputs.sunoTrackId = activeResult.sunoTrackId as string;
+          if (activeResult?.sunoTaskId && !taskId) inputs.sunoTaskId = activeResult.sunoTaskId as string;
         }
       }
     } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "suno-style-boost" || src.type === "image-to-text" || src.type === "forced-alignment" || src.type === "qa-check") {
