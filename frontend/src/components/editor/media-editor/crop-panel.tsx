@@ -46,25 +46,23 @@ export function CropPanel({
 
   if (!naturalWidth || !naturalHeight) return null
 
-  const imgRef = useRef<HTMLImageElement | null>(null)
   const onDisplaySizeRef = useRef(onDisplaySizeChange)
   onDisplaySizeRef.current = onDisplaySizeChange
 
-  // Track rendered media size via ResizeObserver
-  const observerTargetRef = useRef<HTMLElement | null>(null)
+  // Create ResizeObserver eagerly (not in useEffect) so it's ready for callback refs
   const observerRef = useRef<ResizeObserver | null>(null)
-
-  useEffect(() => {
+  if (!observerRef.current) {
     observerRef.current = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect
       if (width > 0 && height > 0) {
-        setImgSize((prev) => (prev.w === width && prev.h === height) ? prev : { w: width, h: height })
-        onDisplaySizeRef.current?.(width, height)
+        setImgSize((prev) => (prev.w === Math.round(width) && prev.h === Math.round(height)) ? prev : { w: Math.round(width), h: Math.round(height) })
+        onDisplaySizeRef.current?.(Math.round(width), Math.round(height))
       }
     })
-    return () => observerRef.current?.disconnect()
-  }, [])
+  }
+  useEffect(() => () => observerRef.current?.disconnect(), [])
 
+  const observerTargetRef = useRef<HTMLElement | null>(null)
   const attachObserver = useCallback((el: HTMLElement | null) => {
     if (observerTargetRef.current) observerRef.current?.unobserve(observerTargetRef.current)
     observerTargetRef.current = el
@@ -212,7 +210,7 @@ export function CropPanel({
       >
         {mediaType === "image" ? (
           <img
-            ref={(el) => { imgRef.current = el; attachObserver(el) }}
+            ref={(el) => attachObserver(el)}
             src={mediaUrl}
             alt="Preview"
             draggable={false}
