@@ -1838,7 +1838,7 @@ describe("trim-video", () => {
       "generatedVideoUrl",
       "Trim Video",
       expect.anything(),
-      undefined,
+      expect.any(Function),
     )
   })
 })

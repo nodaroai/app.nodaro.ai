@@ -604,7 +604,6 @@ describe("trim-audio", () => {
     expect(mockTrimAudioApi).toHaveBeenCalledWith(
       "http://vid.mp4",
       "mp3",
-      true,
       "u1",
       undefined,
       undefined,
@@ -644,7 +643,7 @@ describe("trim-video", () => {
       "generatedVideoUrl",
       "Trim Video",
       expect.anything(),
-      undefined,
+      expect.any(Function),
     )
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
@@ -653,6 +652,7 @@ describe("trim-video", () => {
       5,
       15,
       "u1",
+      undefined,
     )
   })
 
@@ -673,6 +673,7 @@ describe("trim-video", () => {
       2,
       undefined,
       "u1",
+      undefined,
     )
   })
 })
