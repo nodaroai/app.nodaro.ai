@@ -126,73 +126,72 @@ export function TrimPanel({
     seekToTime(clamped)
   }, [getTimeFromEvent, trim, seekToTime])
 
-  // Playback
+  // Playback — simple rAF loop, only seeks at loop boundary
+  const seekingRef = useRef(false)
+
+  const stopPlayback = useCallback(() => {
+    setIsPlaying(false)
+    if (videoRef?.current) videoRef.current.pause()
+    if (audioRef.current) audioRef.current.pause()
+    if (animRef.current) cancelAnimationFrame(animRef.current)
+    animRef.current = null
+  }, [videoRef])
+
   const togglePlay = useCallback(() => {
     if (isPlaying) {
-      setIsPlaying(false)
-      if (videoRef?.current) videoRef.current.pause()
-      if (audioRef.current) audioRef.current.pause()
-      if (animRef.current) cancelAnimationFrame(animRef.current)
+      stopPlayback()
       return
     }
 
-    setIsPlaying(true)
-    const startFrom = playhead >= trim.endTime - 0.1 ? trim.startTime : playhead
+    const t = trimRef.current
+    const startFrom = playhead >= t.endTime - 0.1 ? t.startTime : playhead
 
-    if (mediaType === "video" && videoRef?.current) {
-      const video = videoRef.current
-      video.currentTime = startFrom
-      video.play()
+    const startMedia = (el: HTMLMediaElement) => {
+      el.currentTime = startFrom
+      seekingRef.current = false
+      const playPromise = el.play()
+      if (playPromise) playPromise.catch(() => {})
 
       const tick = () => {
-        const t = trimRef.current
-        if (video.currentTime >= t.endTime) {
-          if (loopRef.current) {
-            video.currentTime = t.startTime
+        if (!el.paused && !seekingRef.current) {
+          const ct = el.currentTime
+          const tr = trimRef.current
+
+          if (ct >= tr.endTime) {
+            if (loopRef.current) {
+              seekingRef.current = true
+              el.currentTime = tr.startTime
+              const onSeeked = () => {
+                el.removeEventListener("seeked", onSeeked)
+                seekingRef.current = false
+              }
+              el.addEventListener("seeked", onSeeked)
+            } else {
+              el.pause()
+              setIsPlaying(false)
+              setPlayhead(tr.endTime)
+              return
+            }
           } else {
-            video.pause()
-            setIsPlaying(false)
-            setPlayhead(t.endTime)
-            return
+            setPlayhead(ct)
           }
         }
-        // Clamp playhead within current trim bounds
-        if (video.currentTime < t.startTime) {
-          video.currentTime = t.startTime
-        }
-        setPlayhead(video.currentTime)
         animRef.current = requestAnimationFrame(tick)
       }
+
+      setIsPlaying(true)
       animRef.current = requestAnimationFrame(tick)
+    }
+
+    if (mediaType === "video" && videoRef?.current) {
+      startMedia(videoRef.current)
     } else if (mediaType === "audio") {
       if (!audioRef.current) {
         audioRef.current = new Audio(mediaUrl)
       }
-      const audio = audioRef.current
-      audio.currentTime = startFrom
-      audio.play()
-
-      const tick = () => {
-        const t = trimRef.current
-        if (audio.currentTime >= t.endTime) {
-          if (loopRef.current) {
-            audio.currentTime = t.startTime
-          } else {
-            audio.pause()
-            setIsPlaying(false)
-            setPlayhead(t.endTime)
-            return
-          }
-        }
-        if (audio.currentTime < t.startTime) {
-          audio.currentTime = t.startTime
-        }
-        setPlayhead(audio.currentTime)
-        animRef.current = requestAnimationFrame(tick)
-      }
-      animRef.current = requestAnimationFrame(tick)
+      startMedia(audioRef.current)
     }
-  }, [isPlaying, playhead, trim, mediaType, mediaUrl, videoRef, loopEnabled])
+  }, [isPlaying, playhead, mediaType, mediaUrl, videoRef, stopPlayback])
 
   // Reset audio element when URL changes
   useEffect(() => {
