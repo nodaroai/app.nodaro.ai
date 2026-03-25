@@ -11,6 +11,7 @@ import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { copyToClipboard } from "@/lib/utils"
 import { useFileUpload } from "@/hooks/use-file-upload"
+import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
@@ -42,6 +43,26 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
+  const mediaEditor = useMediaEditor({
+    onComplete: async (results) => {
+      const result = results[0]
+      if (!result) return
+      const url = result.processedUrl ?? result.uploadResult.url
+      updateNodeData(id, {
+        assetId: result.uploadResult.assetId ?? "",
+        url,
+        r2Url: url,
+        thumbnailUrl: result.uploadResult.thumbnailUrl ?? "",
+        filename: result.uploadResult.filename,
+        fileSize: result.uploadResult.sizeBytes,
+        mimeType: result.uploadResult.mimeType,
+        metadata: result.uploadResult.metadata ?? {},
+        isUploading: false,
+        uploadError: "",
+        externalUrl: "",
+      })
+    },
+  })
   const useFull = useFullResolution(id)
 
   const videoUrl = nodeData.r2Url || nodeData.url
@@ -51,32 +72,8 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
     clearError()
-    updateNodeData(id, { isUploading: true, uploadError: "" })
-
-    try {
-      const result = await upload(file)
-      updateNodeData(id, {
-        assetId: result.assetId ?? "",
-        url: result.url,
-        r2Url: result.url,
-        thumbnailUrl: result.thumbnailUrl ?? "",
-        filename: result.filename,
-        fileSize: result.sizeBytes,
-        mimeType: result.mimeType,
-        metadata: result.metadata ?? {},
-        isUploading: false,
-        uploadError: "",
-        externalUrl: "",
-      })
-    } catch {
-      updateNodeData(id, {
-        isUploading: false,
-        uploadError: uploadError ?? "Upload failed",
-      })
-    }
-
+    mediaEditor.openEditor([file])
     e.target.value = ""
   }
 
@@ -357,6 +354,8 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
       quotaBytes={storageExceeded.quotaBytes}
       tier={storageExceeded.tier}
     />
+
+    <MediaEditorModal editor={mediaEditor} />
     </>
   )
 }

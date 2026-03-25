@@ -21,7 +21,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { uploadImage } from "@/lib/api"
+import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import type {
   CharacterNodeData,
   FaceNodeData,
@@ -51,6 +51,16 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
   const nodes = useWorkflowStore((s) => s.nodes)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+  const charMediaEditor = useMediaEditor({
+    onComplete: async (results) => {
+      const result = results[0]
+      if (!result) return
+      const url = result.processedUrl ?? result.uploadResult.url
+      onUpdate({ sourceImageUrl: url })
+      setUploading(false)
+    },
+    onCancel: () => setUploading(false),
+  })
 
   useEffect(() => {
     prefetchModelCredits(IMAGE_GEN_MODEL_IDS)
@@ -133,19 +143,12 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
     return null
   }, [data.characterName, data.characterDbId, existingNames])
 
-  async function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
-    try {
-      const { url } = await uploadImage(file)
-      onUpdate({ sourceImageUrl: url })
-    } catch (err) {
-      // error already thrown by uploadImage
-    } finally {
-      setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ""
-    }
+    charMediaEditor.openEditor([file])
+    if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
   function handleGenerateAsset(assetType: "expressions" | "poses" | "lighting" | "angles") {
@@ -333,6 +336,8 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
           Generate All Assets
         </Button>
       </div>
+
+      <MediaEditorModal editor={charMediaEditor} />
     </div>
   )
 }
@@ -344,6 +349,16 @@ export function FaceConfig({ data, onUpdate }: { readonly data: FaceNodeData; re
   const edges = useWorkflowStore((s) => s.edges)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+  const faceMediaEditor = useMediaEditor({
+    onComplete: async (results) => {
+      const result = results[0]
+      if (!result) return
+      const url = result.processedUrl ?? result.uploadResult.url
+      onUpdate({ sourceImageUrl: url })
+      setUploading(false)
+    },
+    onCancel: () => setUploading(false),
+  })
 
   useEffect(() => {
     prefetchModelCredits(IMAGE_GEN_MODEL_IDS)
@@ -401,19 +416,12 @@ export function FaceConfig({ data, onUpdate }: { readonly data: FaceNodeData; re
     return null
   }, [data.faceName, data.faceDbId, existingNames])
 
-  async function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
-    try {
-      const { url } = await uploadImage(file)
-      onUpdate({ sourceImageUrl: url })
-    } catch {
-      // error already thrown by uploadImage
-    } finally {
-      setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ""
-    }
+    faceMediaEditor.openEditor([file])
+    if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
   return (
@@ -478,6 +486,8 @@ export function FaceConfig({ data, onUpdate }: { readonly data: FaceNodeData; re
       {!data.sourceImageUrl && !hasConnectedImage && data.faceName && (
         <p className="text-[10px] text-muted-foreground">Upload a reference photo or connect an Upload Image node to enable headshot generation.</p>
       )}
+
+      <MediaEditorModal editor={faceMediaEditor} />
     </div>
   )
 }
@@ -489,6 +499,16 @@ export function ObjectConfig({ data, onUpdate }: { readonly data: ObjectNodeData
   const nodes = useWorkflowStore((s) => s.nodes)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+  const objMediaEditor = useMediaEditor({
+    onComplete: async (results) => {
+      const result = results[0]
+      if (!result) return
+      const url = result.processedUrl ?? result.uploadResult.url
+      onUpdate({ sourceImageUrl: url })
+      setUploading(false)
+    },
+    onCancel: () => setUploading(false),
+  })
 
   useEffect(() => {
     prefetchModelCredits(IMAGE_GEN_MODEL_IDS)
@@ -531,11 +551,12 @@ export function ObjectConfig({ data, onUpdate }: { readonly data: ObjectNodeData
     return null
   }, [data.objectName, data.objectDbId, existingNames])
 
-  async function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
-    try { const { url } = await uploadImage(file); onUpdate({ sourceImageUrl: url }) } catch (err) { /* error already thrown */ } finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = "" }
+    objMediaEditor.openEditor([file])
+    if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
   function handleGenerateAsset(assetType: "angles" | "materials" | "variations") {
@@ -658,6 +679,8 @@ export function ObjectConfig({ data, onUpdate }: { readonly data: ObjectNodeData
           Generate All Assets
         </Button>
       </div>
+
+      <MediaEditorModal editor={objMediaEditor} />
     </div>
   )
 }
@@ -669,6 +692,16 @@ export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapFi
   const nodes = useWorkflowStore((s) => s.nodes)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+  const locMediaEditor = useMediaEditor({
+    onComplete: async (results) => {
+      const result = results[0]
+      if (!result) return
+      const url = result.processedUrl ?? result.uploadResult.url
+      onUpdate({ sourceImageUrl: url })
+      setUploading(false)
+    },
+    onCancel: () => setUploading(false),
+  })
 
   useEffect(() => {
     prefetchModelCredits(IMAGE_GEN_MODEL_IDS)
@@ -736,11 +769,12 @@ export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapFi
     return null
   }, [data.locationName, data.locationDbId, existingNames])
 
-  async function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
-    try { const { url } = await uploadImage(file); onUpdate({ sourceImageUrl: url }) } catch { /* error already thrown */ } finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = "" }
+    locMediaEditor.openEditor([file])
+    if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
   function handleGenerateAsset(assetType: "timeOfDay" | "weather" | "angles") {
@@ -888,6 +922,8 @@ export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapFi
           Generate All Assets
         </Button>
       </div>
+
+      <MediaEditorModal editor={locMediaEditor} />
     </div>
   )
 }

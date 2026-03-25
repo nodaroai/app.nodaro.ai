@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react"
 import { Upload, Link } from "lucide-react"
 import { useFileUpload } from "@/hooks/use-file-upload"
+import { useMediaEditor } from "@/components/editor/media-editor"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { cn } from "@/lib/utils"
 import type { InputMode } from "@/types/nodes"
@@ -58,15 +59,19 @@ export function useMediaUpload({ mimePrefix, nodeId, isFullscreen, inputValues, 
     }
   }, [nodeId, isFullscreen, onUpdateInput])
 
-  const handleFile = useCallback(async (file: File) => {
+  const mediaEditor = useMediaEditor({
+    onComplete: async (results) => {
+      const result = results[0]
+      if (!result) return
+      const resultUrl = result.processedUrl ?? result.uploadResult.url
+      updateUrl(resultUrl)
+    },
+  })
+
+  const handleFile = useCallback((file: File) => {
     if (!file.type.startsWith(mimePrefix)) return
-    try {
-      const result = await upload(file)
-      updateUrl(result.url)
-    } catch {
-      // Error handled by useFileUpload hook
-    }
-  }, [mimePrefix, upload, updateUrl])
+    mediaEditor.openEditor([file])
+  }, [mimePrefix, mediaEditor])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -101,6 +106,7 @@ export function useMediaUpload({ mimePrefix, nodeId, isFullscreen, inputValues, 
     handleDrop,
     handleUrlSubmit,
     handleRemove,
+    mediaEditor,
   }
 }
 
