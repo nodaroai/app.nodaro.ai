@@ -872,6 +872,27 @@ export function resolveNodeInputs(
       } else {
         inputs.audioUrl = output;
       }
+    } else if (src.type === "suno-separate" && (srcEdge.sourceHandle === "instrumental-out" || srcEdge.sourceHandle === "vocal-out")) {
+      const srcData = src.data as Record<string, unknown>;
+      if (srcEdge.sourceHandle === "instrumental-out") {
+        const instrumentalUrl = srcData.instrumentalUrl as string | undefined;
+        if (instrumentalUrl) {
+          if (node.type === "merge-video-audio") {
+            inputs.audioSources = [...(inputs.audioSources ?? []), { url: instrumentalUrl, sourceNodeId: src.id }];
+          } else {
+            inputs.audioUrl = instrumentalUrl;
+          }
+        }
+      } else if (srcEdge.sourceHandle === "vocal-out") {
+        const vocalUrl = srcData.vocalUrl as string | undefined;
+        if (vocalUrl) {
+          if (node.type === "merge-video-audio") {
+            inputs.audioSources = [...(inputs.audioSources ?? []), { url: vocalUrl, sourceNodeId: src.id }];
+          } else {
+            inputs.audioUrl = vocalUrl;
+          }
+        }
+      }
     } else if (
       src.type === "text-to-speech" ||
       src.type === "generate-music" ||
