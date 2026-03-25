@@ -85,18 +85,17 @@ export function CropPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aspectRatio])
 
-  function constrainCrop(c: CropState): CropState {
+  function clampCrop(c: CropState, ratioToEnforce: number | null): CropState {
     let { x, y, width, height } = c
     const maxW = imgSize.w
     const maxH = imgSize.h
     if (maxW <= 0 || maxH <= 0) return c
 
-    // Lock to ratio for presets like 1:1, 16:9 etc. (not "original" or "custom" — those are free-form)
-    if (lockedRatio !== null) {
-      if (width / height > lockedRatio) {
-        width = height * lockedRatio
+    if (ratioToEnforce !== null) {
+      if (width / height > ratioToEnforce) {
+        width = height * ratioToEnforce
       } else {
-        height = width / lockedRatio
+        height = width / ratioToEnforce
       }
     }
     width = Math.max(MIN_CROP_SIZE, Math.min(width, maxW))
@@ -120,12 +119,19 @@ export function CropPanel({
 
   useEffect(() => {
     if (!dragType || !dragStartRef.current || !crop) return
+
+    const isCorner = ["nw", "ne", "sw", "se"].includes(dragType)
+    const isEdge = ["n", "s", "e", "w"].includes(dragType)
+    // Corners preserve current ratio; edges are free-form
+    const cornerRatio = isCorner ? dragStartRef.current.crop.width / dragStartRef.current.crop.height : null
+
     const handleMouseMove = (e: MouseEvent) => {
       const start = dragStartRef.current!
       const dx = e.clientX - start.x
       const dy = e.clientY - start.y
       const sc = start.crop
       let newCrop: CropState
+
       if (dragType === "move") {
         newCrop = { ...sc, x: sc.x + dx, y: sc.y + dy }
       } else {
@@ -136,15 +142,13 @@ export function CropPanel({
         if (dragType.includes("n")) { ny = sc.y + dy; nh = sc.height - dy }
         newCrop = { ...sc, x: nx, y: ny, width: nw, height: nh }
       }
-      const constrained = constrainCrop(newCrop)
+
+      const constrained = clampCrop(newCrop, isCorner ? cornerRatio : null)
       onCropChange(constrained)
-      // If user resized (not moved) and ratio is unlocked, switch to "custom"
-      if (dragType !== "move" && lockedRatio === null && onAspectRatioChange) {
-        const newRatio = constrained.width / constrained.height
-        const isOriginalRatio = Math.abs(newRatio - naturalWidth / naturalHeight) < 0.02
-        if (!isOriginalRatio && constrained.width < imgSize.w * 0.99) {
-          onAspectRatioChange("custom")
-        }
+
+      // Edge drag = free-form → auto-switch to "custom"
+      if (isEdge && onAspectRatioChange && aspectRatio !== "custom") {
+        onAspectRatioChange("custom")
       }
     }
     const handleMouseUp = () => {
