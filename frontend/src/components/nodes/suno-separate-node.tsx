@@ -80,7 +80,8 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "audio", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "audio-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "vocal-out", type: "source", position: Position.Right, customStyle: { top: '30%', right: '-29px' }, hideHandle: true },
+        { id: "instrumental-out", type: "source", position: Position.Right, customStyle: { top: '70%', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -112,6 +113,18 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
               onExpand={() => setPreviewOpen(true)}
               onDelete={() => setDeleteConfirm(activeIndex)}
             />
+          </div>
+        )}
+        {nodeData.vocalUrl && (
+          <div className="flex flex-col gap-1 px-1">
+            <span className="text-[10px] text-muted-foreground font-medium">Vocal</span>
+            <AudioResultOverlay url={nodeData.vocalUrl} label="Vocal" hasResults={false} onExpand={() => setPreviewOpen(true)} onDelete={() => {}} />
+          </div>
+        )}
+        {nodeData.instrumentalUrl && (
+          <div className="flex flex-col gap-1 px-1">
+            <span className="text-[10px] text-muted-foreground font-medium">Instrumental</span>
+            <AudioResultOverlay url={nodeData.instrumentalUrl} label="Instrumental" hasResults={false} onExpand={() => setPreviewOpen(true)} onDelete={() => {}} />
           </div>
         )}
 
@@ -147,10 +160,17 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
     >
       <Volume2 className="w-3.5 h-3.5 text-white" />
     </div>
-    {/* Output handle icon */}
+    {/* Vocal output handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
+      style={{ top: '30%', right: '-29px', transform: 'translateY(-50%)' }}
+    >
+      <Volume2 className="w-3.5 h-3.5 text-white" />
+    </div>
+    {/* Instrumental output handle icon */}
+    <div
+      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
+      style={{ top: '70%', right: '-29px', transform: 'translateY(-50%)' }}
     >
       <Scissors className="w-3.5 h-3.5 text-white" />
     </div>

@@ -333,6 +333,13 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.generatedVideoUrl as string | undefined)
     );
   }
+  if (type === "split-media") {
+    // Return first video or audio chunk URL based on sourceHandle
+    const videoUrls = (data.generatedVideoUrls as string[] | undefined) ?? [];
+    const audioUrls = (data.generatedAudioUrls as string[] | undefined) ?? [];
+    if (sourceHandle === "audio-out") return audioUrls[0];
+    return videoUrls[0] ?? audioUrls[0];
+  }
   if (type === "trim-audio" || type === "mix-audio") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];

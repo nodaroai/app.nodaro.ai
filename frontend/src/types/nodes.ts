@@ -1394,7 +1394,6 @@ export type TrimAudioData = {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
-  outputSilentVideo: boolean
   audioFormat: "mp3" | "wav" | "aac"
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -1403,6 +1402,25 @@ export type TrimAudioData = {
   generatedVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
+}
+
+export type SplitMediaData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  chunkDuration: number
+  audioFormat?: "mp3" | "wav" | "aac"
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrls?: string[]
+  generatedAudioUrls?: string[]
+  selectedAudioChunks?: number[]
+  selectedVideoChunks?: number[]
+  outputChunkIndex?: number
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
 }
 
 export type MixAudioData = {
@@ -1444,10 +1462,12 @@ export type TrimVideoData = {
   label: string
   startTime: number
   endTime: number
+  outputSilentVideo?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string
+  generatedSilentVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
 }
@@ -2206,6 +2226,7 @@ export type SceneNodeData =
   | ResizeVideoData
   | SocialMediaFormatData
   | TrimAudioData
+  | SplitMediaData
   | MixAudioData
   | AdjustVolumeData
   | TrimVideoData
@@ -2310,6 +2331,7 @@ export type SceneNodeType =
   | "resize-video"
   | "social-media-format"
   | "trim-audio"
+  | "split-media"
   | "mix-audio"
   | "adjust-volume"
   | "trim-video"
@@ -3156,8 +3178,17 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     creditCost: 1,
     inputs: ["in"],
-    outputs: ["audio", "silent-video"],
-    defaultData: { label: "Trim Audio", outputSilentVideo: true, audioFormat: "mp3", fieldMappings: {} },
+    outputs: ["audio"],
+    defaultData: { label: "Trim Audio", audioFormat: "mp3", fieldMappings: {} },
+  },
+  {
+    type: "split-media",
+    label: "Split Media",
+    category: "processing",
+    creditCost: 2,
+    inputs: ["video-in", "audio-in"],
+    outputs: ["video-out", "audio-out"],
+    defaultData: { label: "Split Media", chunkDuration: 10, audioFormat: "mp3", fieldMappings: {} },
   },
   {
     type: "mix-audio",

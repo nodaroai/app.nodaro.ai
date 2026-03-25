@@ -492,6 +492,15 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return undefined
   }
 
+  // Split media → first video or audio chunk
+  if (type === "split-media") {
+    const videoUrls = (data.generatedVideoUrls as string[] | undefined) ?? []
+    const audioUrls = (data.generatedAudioUrls as string[] | undefined) ?? []
+    if (videoUrls[0]) return { videoUrl: videoUrls[0] }
+    if (audioUrls[0]) return { audioUrl: audioUrls[0] }
+    return undefined
+  }
+
   // Audio-generating nodes → audioUrl from generatedResults or generatedAudioUrl
   if (AUDIO_RESULT_TYPES.has(type)) {
     const url =

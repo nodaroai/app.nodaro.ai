@@ -10,6 +10,7 @@ const trimVideoBody = z.object({
   videoUrl: safeUrlSchema,
   startTime: z.number().min(0),
   endTime: z.number().min(0),
+  outputSilentVideo: z.boolean().optional().default(false),
   userId: z.string().uuid().optional(),
 })
 

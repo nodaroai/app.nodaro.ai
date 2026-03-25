@@ -29,6 +29,7 @@ import type {
   TranscodeVideoData,
   ManualEditData,
   SocialMediaFormatData,
+  SplitMediaData,
 } from "@/types/nodes"
 import type { WorkflowNode } from "@/types/nodes"
 import { ConnectedMediaList, applyMediaOrder } from "./connected-media-list"
@@ -241,15 +242,6 @@ export function TrimAudioConfig({ data, onUpdate }: ConfigProps<TrimAudioData>) 
           </SelectContent>
         </Select>
       </div>
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="output-silent"
-          checked={data.outputSilentVideo}
-          onChange={(e) => onUpdate({ outputSilentVideo: e.target.checked })}
-        />
-        <Label htmlFor="output-silent">Output silent video</Label>
-      </div>
       <div>
         <Label htmlFor="start-time">Start Time (s) — optional</Label>
         <Input
@@ -274,6 +266,137 @@ export function TrimAudioConfig({ data, onUpdate }: ConfigProps<TrimAudioData>) 
           onChange={(e) => onUpdate({ endTime: e.target.value ? parseFloat(e.target.value) : undefined })}
         />
       </div>
+    </div>
+  )
+}
+
+export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="chunk-duration">Chunk Duration (seconds)</Label>
+        <Input
+          id="chunk-duration"
+          type="number"
+          min={1}
+          step={1}
+          value={data.chunkDuration ?? 10}
+          onChange={(e) => onUpdate({ chunkDuration: Math.max(1, parseInt(e.target.value) || 1) })}
+        />
+      </div>
+      <div>
+        <Label>Audio Format</Label>
+        <Select
+          value={data.audioFormat ?? "mp3"}
+          onValueChange={(v) => onUpdate({ audioFormat: v as "mp3" | "wav" | "aac" })}
+        >
+          <SelectTrigger aria-label="Audio format"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="mp3">MP3</SelectItem>
+            <SelectItem value="wav">WAV</SelectItem>
+            <SelectItem value="aac">AAC</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {(data.generatedAudioUrls?.length ?? 0) > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Output Chunk</label>
+          <select
+            value={data.outputChunkIndex ?? 0}
+            onChange={(e) => {
+              const val = Number(e.target.value)
+              console.log('[SplitMedia] outputChunkIndex changed to:', val)
+              onUpdate({ outputChunkIndex: val })
+            }}
+            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+          >
+            {data.generatedAudioUrls!.map((_, i) => (
+              <option key={i} value={i}>Chunk {i + 1}</option>
+            ))}
+          </select>
+          <p className="text-[10px] text-muted-foreground">Select which chunk to output when connected to another node</p>
+        </div>
+      )}
+      {(data.generatedAudioUrls?.length ?? 0) > 0 && (
+        <div className="flex flex-col gap-2 pt-2 border-t border-border">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+              Audio Chunks ({data.generatedAudioUrls!.length})
+            </label>
+            <button
+              type="button"
+              className="text-[10px] text-primary hover:underline"
+              onClick={() => {
+                const allSelected = !data.selectedAudioChunks || data.selectedAudioChunks.length === data.generatedAudioUrls!.length
+                onUpdate({ selectedAudioChunks: allSelected ? [] : data.generatedAudioUrls!.map((_, idx) => idx) })
+              }}
+            >
+              {!data.selectedAudioChunks || data.selectedAudioChunks.length === data.generatedAudioUrls!.length ? "Deselect All" : "Select All"}
+            </button>
+          </div>
+          <div className="flex flex-col gap-3 max-h-64 overflow-y-auto">
+            {data.generatedAudioUrls!.map((url, i) => (
+              <div key={i} className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!data.selectedAudioChunks || data.selectedAudioChunks.includes(i)}
+                    onChange={(e) => {
+                      const current = data.selectedAudioChunks ?? data.generatedAudioUrls!.map((_, idx) => idx)
+                      const next = e.target.checked ? [...current, i] : current.filter(x => x !== i)
+                      onUpdate({ selectedAudioChunks: next.sort((a, b) => a - b) })
+                    }}
+                    className="w-3.5 h-3.5"
+                  />
+                  <span className="text-[11px] text-muted-foreground">Chunk {i + 1}</span>
+                  <a href={url} download className="text-[10px] text-primary hover:underline ml-auto" onClick={(e) => e.stopPropagation()}>Download</a>
+                </div>
+                <audio controls src={url} className="w-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {(data.generatedVideoUrls?.length ?? 0) > 0 && (
+        <div className="flex flex-col gap-2 pt-2 border-t border-border">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+              Video Chunks ({data.generatedVideoUrls!.length})
+            </label>
+            <button
+              type="button"
+              className="text-[10px] text-primary hover:underline"
+              onClick={() => {
+                const allSelected = !data.selectedVideoChunks || data.selectedVideoChunks.length === data.generatedVideoUrls!.length
+                onUpdate({ selectedVideoChunks: allSelected ? [] : data.generatedVideoUrls!.map((_, idx) => idx) })
+              }}
+            >
+              {!data.selectedVideoChunks || data.selectedVideoChunks.length === data.generatedVideoUrls!.length ? "Deselect All" : "Select All"}
+            </button>
+          </div>
+          <div className="flex flex-col gap-3 max-h-64 overflow-y-auto">
+            {data.generatedVideoUrls!.map((url, i) => (
+              <div key={i} className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!data.selectedVideoChunks || data.selectedVideoChunks.includes(i)}
+                    onChange={(e) => {
+                      const current = data.selectedVideoChunks ?? data.generatedVideoUrls!.map((_, idx) => idx)
+                      const next = e.target.checked ? [...current, i] : current.filter(x => x !== i)
+                      onUpdate({ selectedVideoChunks: next.sort((a, b) => a - b) })
+                    }}
+                    className="w-3.5 h-3.5"
+                  />
+                  <span className="text-[11px] text-muted-foreground">Chunk {i + 1}</span>
+                  <a href={url} download className="text-[10px] text-primary hover:underline ml-auto" onClick={(e) => e.stopPropagation()}>Download</a>
+                </div>
+                <video controls src={url} className="w-full rounded" style={{ maxHeight: '80px' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -415,6 +538,16 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
           value={data.endTime ?? ""}
           onChange={(e) => onUpdate({ endTime: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
         />
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="outputSilentVideo"
+          checked={data.outputSilentVideo ?? false}
+          onChange={(e) => onUpdate({ outputSilentVideo: e.target.checked })}
+          className="w-4 h-4"
+        />
+        <label htmlFor="outputSilentVideo" className="text-xs text-muted-foreground">Output Silent Video</label>
       </div>
     </div>
   )

@@ -96,6 +96,7 @@ const SUNO_TRACK_NODE_TYPES = new Set([
   "suno-add-vocals",
   "suno-convert-wav",
   "suno-upload-extend",
+  "suno-separate",
 ]);
 
 export function extractNodeOutputAsList(
@@ -345,9 +346,10 @@ export function resolveNodeInputs(
     const edgeUseAll = (srcEdge.data as Record<string, unknown> | undefined)
       ?.useAllResults as boolean | undefined;
     const srcData = src.data as Record<string, unknown>;
-    const srcListResults = edgeUseAll
+    // split-media uses outputChunkIndex routing, skip __listResults
+    const srcListResults = src.type === "split-media" ? undefined : (edgeUseAll
       ? (extractAllGeneratedResults(srcData, true) ?? (srcData.__listResults as string[] | undefined))
-      : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData));
+      : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData)));
     let output: string | undefined;
     if (edgeMode && srcListResults && srcListResults.length > 0) {
       if (edgeMode.startsWith("item:")) {
@@ -515,6 +517,35 @@ export function resolveNodeInputs(
         routeSunoMashupAudio(inputs, output);
       } else {
         inputs.audioUrl = output;
+      }
+      continue;
+    }
+
+    // Silent video output from trim-video node
+    if (src.type === "trim-video" && srcEdge.sourceHandle === "silent-video") {
+      const srcData = src.data as Record<string, unknown>;
+      const silentUrl = srcData.generatedSilentVideoUrl as string | undefined;
+      if (silentUrl) {
+        inputs.videoUrl = silentUrl;
+      }
+      continue;
+    }
+
+    // Split media output — route selected chunk by outputChunkIndex
+    if (src.type === "split-media") {
+      const liveNode = useWorkflowStore.getState().nodes.find(n => n.id === src.id);
+      const srcData = (liveNode?.data ?? src.data) as Record<string, unknown>;
+      const chunkIndex = (srcData.outputChunkIndex as number | undefined) ?? 0;
+      const audioUrls = (srcData.generatedAudioUrls as string[] | undefined) ?? [];
+      const videoUrls = (srcData.generatedVideoUrls as string[] | undefined) ?? [];
+      console.log('[resolver] split-media: chunkIndex=', chunkIndex, 'audioUrls=', audioUrls.length, 'sourceHandle=', srcEdge.sourceHandle);
+      if (audioUrls.length > 0) {
+        const selectedUrl = audioUrls[chunkIndex];
+        if (selectedUrl) inputs.audioUrl = selectedUrl;
+      }
+      if (videoUrls.length > 0) {
+        const selectedUrl = videoUrls[chunkIndex];
+        if (selectedUrl) inputs.videoUrl = selectedUrl;
       }
       continue;
     }
@@ -882,11 +913,17 @@ export function resolveNodeInputs(
       }
       if (SUNO_TRACK_NODE_TYPES.has(src.type!)) {
         const srcData = src.data as Record<string, unknown>;
-        if (srcData.sunoTrackId) {
-          inputs.sunoTrackId = srcData.sunoTrackId as string;
-        }
-        if (srcData.sunoTaskId) {
-          inputs.sunoTaskId = srcData.sunoTaskId as string;
+        const trackId = (srcData.sunoTrackId as string | undefined);
+        const taskId = (srcData.sunoTaskId as string | undefined);
+        if (trackId) inputs.sunoTrackId = trackId;
+        if (taskId) inputs.sunoTaskId = taskId;
+        // Fallback: check generatedResults for stored sunoTrackId/sunoTaskId
+        if (!trackId || !taskId) {
+          const results = srcData.generatedResults as Array<Record<string, unknown>> | undefined;
+          const activeIndex = (srcData.activeResultIndex as number | undefined) ?? 0;
+          const activeResult = results?.[activeIndex];
+          if (activeResult?.sunoTrackId && !trackId) inputs.sunoTrackId = activeResult.sunoTrackId as string;
+          if (activeResult?.sunoTaskId && !taskId) inputs.sunoTaskId = activeResult.sunoTaskId as string;
         }
       }
     } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "suno-style-boost" || src.type === "image-to-text" || src.type === "forced-alignment" || src.type === "qa-check") {

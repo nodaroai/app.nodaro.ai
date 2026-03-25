@@ -338,6 +338,23 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
         <input type="checkbox" id="suno-instrumental" checked={data.instrumental ?? false} onChange={(e) => onUpdate({ instrumental: e.target.checked })} className="accent-[#ff0073]" />
         <label htmlFor="suno-instrumental" className="text-xs font-medium text-muted-foreground">Instrumental (no vocals)</label>
       </div>
+      {((data.sunoTaskId as string | undefined) || (data.sunoTrackId as string | undefined)) && (
+        <div className="flex flex-col gap-2 pt-2 border-t border-border">
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Output IDs</label>
+          {(data.sunoTaskId as string | undefined) && (
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-muted-foreground">Task ID</label>
+              <div className="text-[11px] font-mono bg-muted/40 px-2 py-1 rounded break-all select-all">{data.sunoTaskId as string}</div>
+            </div>
+          )}
+          {(data.sunoTrackId as string | undefined) && (
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-muted-foreground">Track ID</label>
+              <div className="text-[11px] font-mono bg-muted/40 px-2 py-1 rounded break-all select-all">{data.sunoTrackId as string}</div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

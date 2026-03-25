@@ -92,6 +92,7 @@ import {
   ResizeVideoConfig,
   SocialMediaFormatConfig,
   TrimAudioConfig,
+  SplitMediaConfig,
   MixAudioConfig,
   AdjustVolumeConfig,
   TrimVideoConfig,
@@ -194,6 +195,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "resize-video": "Resize Video",
   "social-media-format": "Social Media Format",
   "trim-audio": "Trim Audio",
+  "split-media": "Split Media",
   "mix-audio": "Mix Audio",
   "adjust-volume": "Adjust Volume",
   "trim-video": "Trim Video",
@@ -252,7 +254,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "render-video",
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post",
   // FFmpeg processing (tiered credits)
-  "merge-video-audio", "combine-videos", "trim-audio", "trim-video",
+  "merge-video-audio", "combine-videos", "trim-audio", "split-media", "trim-video",
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume",
   "add-captions", "mix-audio",
 ])
@@ -365,6 +367,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "resize-video": return <ResizeVideoConfig {...configProps} />
     case "social-media-format": return <SocialMediaFormatConfig {...configProps} />
     case "trim-audio": return <TrimAudioConfig {...configProps} />
+    case "split-media": return <SplitMediaConfig {...configProps} />
     case "mix-audio": return <MixAudioConfig {...configProps} />
     case "adjust-volume": return <AdjustVolumeConfig {...configProps} />
     case "trim-video": return <TrimVideoConfig {...configProps} />
