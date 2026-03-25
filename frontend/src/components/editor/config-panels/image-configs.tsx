@@ -19,7 +19,7 @@ import { Separator } from "@/components/ui/separator"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { prefetchModelCredits } from "@/hooks/use-model-credits"
-import { uploadImage } from "@/lib/api"
+import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { PromptHelperButton } from "./prompt-helper-button"
 import type {
   GenerateImageData,
@@ -94,6 +94,19 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
   const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
   const refImageInputRef = useRef<HTMLInputElement>(null)
   const [uploadingRefImage, setUploadingRefImage] = useState(false)
+  const genImgMediaEditor = useMediaEditor({
+    onComplete: async (results) => {
+      const currentManual = [...(data.referenceImageUrls ?? [])]
+      for (const result of results) {
+        const url = result.processedUrl ?? result.uploadResult.url
+        const newImg: ManualReferenceImage = { id: crypto.randomUUID(), url }
+        currentManual.push(newImg)
+      }
+      onUpdate({ referenceImageUrls: currentManual })
+      setUploadingRefImage(false)
+    },
+    onCancel: () => setUploadingRefImage(false),
+  })
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const addNode = useWorkflowStore((s) => s.addNode)
@@ -153,24 +166,12 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
       .map((c) => ({ id: `char_${c.id}`, url: c.referenceImageUrl!, label: c.name }))
   }, [attachedChars])
 
-  async function handleRefImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleRefImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files
     if (!files || files.length === 0) return
     setUploadingRefImage(true)
-    try {
-      const currentManual = [...(data.referenceImageUrls ?? [])]
-      for (const file of Array.from(files)) {
-        const { url } = await uploadImage(file)
-        const newImg: ManualReferenceImage = { id: crypto.randomUUID(), url }
-        currentManual.push(newImg)
-      }
-      onUpdate({ referenceImageUrls: currentManual })
-    } catch {
-      // error already thrown by uploadImage
-    } finally {
-      setUploadingRefImage(false)
-      if (refImageInputRef.current) refImageInputRef.current.value = ""
-    }
+    genImgMediaEditor.openEditor(Array.from(files))
+    if (refImageInputRef.current) refImageInputRef.current.value = ""
   }
 
   return (
@@ -482,6 +483,8 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
           />
         </Suspense>
       )}
+
+      <MediaEditorModal editor={genImgMediaEditor} />
     </div>
   )
 }
@@ -847,6 +850,16 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
   const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
   const refImageInputRef = useRef<HTMLInputElement>(null)
   const [uploadingRefImage, setUploadingRefImage] = useState(false)
+  const i2iMediaEditor = useMediaEditor({
+    onComplete: async (results) => {
+      const result = results[0]
+      if (!result) return
+      const url = result.processedUrl ?? result.uploadResult.url
+      onUpdate({ referenceImageUrl: url })
+      setUploadingRefImage(false)
+    },
+    onCancel: () => setUploadingRefImage(false),
+  })
   const [showMaskPainter, setShowMaskPainter] = useState(false)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
@@ -897,19 +910,12 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
     }
   }
 
-  async function handleRefImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleRefImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploadingRefImage(true)
-    try {
-      const { url } = await uploadImage(file)
-      onUpdate({ referenceImageUrl: url })
-    } catch {
-      // error already thrown by uploadImage
-    } finally {
-      setUploadingRefImage(false)
-      if (refImageInputRef.current) refImageInputRef.current.value = ""
-    }
+    i2iMediaEditor.openEditor([file])
+    if (refImageInputRef.current) refImageInputRef.current.value = ""
   }
 
   return (
@@ -1295,6 +1301,8 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
           />
         </Suspense>
       )}
+
+      <MediaEditorModal editor={i2iMediaEditor} />
     </div>
   )
 }

@@ -1317,6 +1317,40 @@ export async function uploadFile(
   return json.data ?? json
 }
 
+// ---------- Media Editor ----------
+
+export interface MediaProcessParams {
+  sourceUrl: string
+  type: "video" | "audio"
+  crop?: { x: number; y: number; width: number; height: number }
+  trim?: { startTime: number; endTime: number }
+  format?: string
+}
+
+export interface MediaProcessResult {
+  url: string
+  thumbnailUrl: string | null
+  assetId: string | null
+  metadata: Record<string, unknown>
+  sizeBytes: number
+  mimeType: string
+}
+
+export async function processMedia(params: MediaProcessParams): Promise<MediaProcessResult> {
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}/v1/media/process`, {
+    method: "POST",
+    headers: { ...authHeaders, "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Media processing failed")
+  }
+  const json = await res.json()
+  return json.data
+}
+
 export async function downloadYouTubeAudio(url: string): Promise<{ url: string; thumbnailUrl: string | null }> {
   const res = await fetch(`${API_BASE_URL}/v1/youtube-audio`, {
     method: "POST",

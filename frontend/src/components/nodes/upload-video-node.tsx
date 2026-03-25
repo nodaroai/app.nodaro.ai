@@ -11,6 +11,7 @@ import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { copyToClipboard } from "@/lib/utils"
 import { useFileUpload } from "@/hooks/use-file-upload"
+import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
@@ -42,42 +43,51 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
+  const mediaEditor = useMediaEditor({
+    onComplete: async (results) => {
+      const result = results[0]
+      if (!result) return
+      const url = result.processedUrl ?? result.uploadResult.url
+      const thumb = result.processedThumbnailUrl ?? result.uploadResult.thumbnailUrl ?? ""
+      updateNodeData(id, {
+        assetId: result.uploadResult.assetId ?? "",
+        url,
+        r2Url: url,
+        thumbnailUrl: thumb,
+        filename: result.uploadResult.filename,
+        fileSize: result.uploadResult.sizeBytes,
+        mimeType: result.uploadResult.mimeType,
+        metadata: result.uploadResult.metadata ?? {},
+        isUploading: false,
+        uploadError: "",
+        externalUrl: "",
+      })
+    },
+  })
   const useFull = useFullResolution(id)
 
   const videoUrl = nodeData.r2Url || nodeData.url
   const thumbnailUrl = nodeData.thumbnailUrl
   const hasFile = Boolean(videoUrl) && !nodeData.externalUrl
+  const [isDragOver, setIsDragOver] = useState(false)
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
     clearError()
-    updateNodeData(id, { isUploading: true, uploadError: "" })
-
-    try {
-      const result = await upload(file)
-      updateNodeData(id, {
-        assetId: result.assetId ?? "",
-        url: result.url,
-        r2Url: result.url,
-        thumbnailUrl: result.thumbnailUrl ?? "",
-        filename: result.filename,
-        fileSize: result.sizeBytes,
-        mimeType: result.mimeType,
-        metadata: result.metadata ?? {},
-        isUploading: false,
-        uploadError: "",
-        externalUrl: "",
-      })
-    } catch {
-      updateNodeData(id, {
-        isUploading: false,
-        uploadError: uploadError ?? "Upload failed",
-      })
-    }
-
+    mediaEditor.openEditor([file])
     e.target.value = ""
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file && file.type.startsWith("video/")) {
+      clearError()
+      mediaEditor.openEditor([file])
+    }
   }
 
   const handleUrlChange = (url: string) => {
@@ -282,14 +292,21 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                   />
                   <button
                     type="button"
-                    className="w-full flex items-center justify-center gap-2 h-16 rounded-md border-2 border-dashed border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground/60 hover:text-[#38BDF8] transition-colors cursor-pointer"
+                    className={`w-full flex items-center justify-center gap-2 h-16 rounded-md border-2 border-dashed transition-colors cursor-pointer ${
+                      isDragOver
+                        ? "border-[#38BDF8] bg-[#38BDF8]/10 text-[#38BDF8]"
+                        : "border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground/60 hover:text-[#38BDF8]"
+                    }`}
                     onClick={(e) => {
                       e.stopPropagation()
                       fileInputRef.current?.click()
                     }}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true) }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={handleDrop}
                   >
                     <Upload className="w-4 h-4" />
-                    <span className="text-xs">Choose Video</span>
+                    <span className="text-xs">{isDragOver ? "Drop Video" : "Choose Video"}</span>
                   </button>
                 </>
               )}
@@ -357,6 +374,8 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
       quotaBytes={storageExceeded.quotaBytes}
       tier={storageExceeded.tier}
     />
+
+    <MediaEditorModal editor={mediaEditor} />
     </>
   )
 }
