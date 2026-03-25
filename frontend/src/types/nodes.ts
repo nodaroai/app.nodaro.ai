@@ -23,6 +23,7 @@ export interface GeneratedResult {
   readonly thumbnailUrl?: string
   readonly timestamp: string
   readonly jobId: string
+  readonly freecutProjectUrl?: string
 }
 
 export interface ManualReferenceImage {

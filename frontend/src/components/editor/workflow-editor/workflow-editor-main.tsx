@@ -121,11 +121,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const freecutVideoUrl = manualEditNode
     ? ((manualEditNode.data as ManualEditData).inputVideoUrl ?? "")
     : (freecutEdit?.videoUrl ?? "");
+  const freecutProjectUrl = freecutEdit?.freecutProjectUrl;
   const freecutNodeId = manualEditNode ? manualEditNode.id : freecutEdit?.nodeId;
   const isFreeCutOpen = !!manualEditNode || !!freecutEdit;
 
   const handleFreeCutExport = useCallback(
-    async (blob: Blob) => {
+    async (blob: Blob, projectJson?: unknown) => {
       const nodeId = freecutNodeId;
       if (!nodeId) return;
       const isManualEdit = !!manualEditNode;
@@ -133,7 +134,21 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         const file = new File([blob], "freecut-edit.mp4", { type: "video/mp4" });
         const result = await uploadFile(file, user?.id);
         const url = result.url;
-        const newResult: GeneratedResult = { url, jobId: `freecut-edit-${Date.now()}`, timestamp: new Date().toISOString() };
+
+        // Upload project JSON to R2 for future restore
+        let projectUrl: string | undefined;
+        if (projectJson) {
+          try {
+            const jsonBlob = new Blob([JSON.stringify(projectJson)], { type: "application/json" });
+            const jsonFile = new File([jsonBlob], "freecut-project.json", { type: "application/json" });
+            const jsonResult = await uploadFile(jsonFile, user?.id);
+            projectUrl = jsonResult.url;
+          } catch {
+            // Project save failed — video still saved successfully
+          }
+        }
+
+        const newResult: GeneratedResult = { url, jobId: `freecut-edit-${Date.now()}`, timestamp: new Date().toISOString(), freecutProjectUrl: projectUrl };
         const freshNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId);
         const prev = freshNode ? ((freshNode.data as Record<string, unknown>).generatedResults as readonly GeneratedResult[] ?? []) : [];
         updateNodeData(nodeId, {
@@ -896,6 +911,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         <Suspense fallback={null}>
           <FreeCutEditorModal
             videoUrl={freecutVideoUrl}
+            freecutProjectUrl={freecutProjectUrl}
             onExportComplete={handleFreeCutExport}
             onClose={handleFreeCutClose}
           />

@@ -178,7 +178,7 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
       {hasResult && (
         <VideoResultOverlay
           url={activeUrl}
-          onEdit={() => openFreeCut(id, activeUrl!)}
+          onEdit={() => openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl)}
           videoAutoplay={videoAutoplay}
           label={nodeData.label}
           hasResults={results.length > 0}

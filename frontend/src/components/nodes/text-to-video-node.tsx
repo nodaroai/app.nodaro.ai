@@ -254,7 +254,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
               type="button"
               aria-label="Edit in FreeCut"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!) }}
+              onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }}
               title="Edit in FreeCut"
             >
               <Scissors className="w-3.5 h-3.5" />
