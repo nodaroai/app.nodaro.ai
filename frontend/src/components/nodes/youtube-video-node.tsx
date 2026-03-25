@@ -142,6 +142,7 @@ function VideoPlayerModal({
         {showDownloadedPlayer && (
           <video
             src={downloadedVideoUrl}
+            crossOrigin="anonymous"
             className="w-full h-full rounded-lg"
             controls
             autoPlay

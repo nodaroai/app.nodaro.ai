@@ -254,6 +254,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 ) : (
                   <video
                     src={r.url}
+                    crossOrigin="anonymous"
                     className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
                       i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                     }`}
@@ -282,7 +283,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
             className="w-full h-full object-cover rounded-xl"
             thumbnail={!useFull} thumbnailWidth={320} />
         ) : (
-          <video src={activeUrl} autoPlay={videoAutoplay} loop={videoAutoplay} muted playsInline
+          <video src={activeUrl} crossOrigin="anonymous" autoPlay={videoAutoplay} loop={videoAutoplay} muted playsInline
             className="w-full h-full object-cover rounded-xl"
             onLoadedMetadata={(e) => {
               const video = e.currentTarget
@@ -427,6 +428,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
               <div className="relative h-[40px] rounded-md overflow-hidden bg-muted/30 border border-muted">
                 <img
                   src={startFrameInfo.thumbnailUrl}
+                  crossOrigin="anonymous"
                   alt={startFrameInfo.label}
                   className="w-full h-full object-cover"
                 />
@@ -553,7 +555,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   thumbnail={!useFull} thumbnailWidth={320}
                 />
               ) : (
-                <video src={activeUrl}
+                <video src={activeUrl} crossOrigin="anonymous"
                   className="w-full h-full object-cover"
                   autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline
                   onLoadedMetadata={(e) => {

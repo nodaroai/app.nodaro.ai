@@ -177,6 +177,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                     >
                       <video
                         src={videoUrl}
+                        crossOrigin="anonymous"
                         autoPlay={videoAutoplay}
                         loop={videoAutoplay}
                         muted

@@ -10,7 +10,7 @@ const FREECUT_ORIGIN = new URL(FREECUT_URL).origin
 interface FreeCutEditorModalProps {
   readonly videoUrl: string
   readonly freecutProjectUrl?: string
-  readonly onExportComplete: (videoBlob: Blob, projectJson?: unknown) => void
+  readonly onExportComplete: (videoBlob: Blob, projectJson?: unknown) => Promise<void>
   readonly onClose: () => void
 }
 
@@ -71,9 +71,12 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, onExportComple
         setSaveState("saving")
         const blob = new Blob([buffer], { type: "video/mp4" })
         const projectJson = event.data.payload?.projectJson
-        onExportComplete(blob, projectJson)
-        setSaveState("done")
-        setTimeout(() => onClose(), 800)
+        onExportComplete(blob, projectJson).then(() => {
+          setSaveState("done")
+          setTimeout(() => onClose(), 800)
+        }).catch(() => {
+          setSaveState("idle")
+        })
       }
     },
     [onExportComplete, onClose, videoUrl, sendVideoToFreeCut],

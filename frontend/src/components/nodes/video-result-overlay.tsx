@@ -41,6 +41,7 @@ function VideoResultOverlayComponent({
     >
       <video
         src={url}
+        crossOrigin="anonymous"
         autoPlay={videoAutoplay}
         loop={videoAutoplay}
         muted

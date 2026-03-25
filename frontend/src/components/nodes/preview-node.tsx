@@ -32,6 +32,7 @@ function PreviewItemRow({ item }: { readonly item: PreviewItem }) {
         {item.type === "image" && isMediaUrl(item.value) ? (
           <img
             src={item.value}
+            crossOrigin="anonymous"
             alt=""
             className="w-full h-14 object-cover rounded mt-0.5"
             loading="lazy"
@@ -39,6 +40,7 @@ function PreviewItemRow({ item }: { readonly item: PreviewItem }) {
         ) : item.type === "video" && isMediaUrl(item.value) ? (
           <video
             src={item.value}
+            crossOrigin="anonymous"
             className="w-full h-14 object-cover rounded mt-0.5"
             muted
             playsInline

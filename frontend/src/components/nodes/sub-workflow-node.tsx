@@ -156,7 +156,7 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
           {status === "completed" && previewUrl && (
             isAudio ? (
               <div className="mt-2">
-                <audio src={previewUrl} controls className="w-full h-8" />
+                <audio src={previewUrl} crossOrigin="anonymous" controls className="w-full h-8" />
               </div>
             ) : (
               <div className="mt-2 cursor-pointer" onClick={() => setLightboxOpen(true)}>
@@ -166,7 +166,7 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
                   generatedResults[activeIdx]?.thumbnailUrl ? (
                     <CachedImage src={generatedResults[activeIdx]!.thumbnailUrl!} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" thumbnail={!useFull} thumbnailWidth={320} />
                   ) : (
-                    <video src={previewUrl} className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" muted />
+                    <video src={previewUrl} crossOrigin="anonymous" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" muted />
                   )
                 ) : (
                   <p className="text-[10px] text-muted-foreground truncate">{previewUrl}</p>
