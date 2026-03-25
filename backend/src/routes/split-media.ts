@@ -6,17 +6,19 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
-const trimAudioBody = z.object({
-  videoUrl: safeUrlSchema,
+const splitMediaBody = z.object({
+  videoUrl: safeUrlSchema.optional(),
+  audioUrl: safeUrlSchema.optional(),
+  chunkDuration: z.number().min(1),
   audioFormat: z.enum(["mp3", "wav", "aac"]).optional().default("mp3"),
-  startTime: z.number().min(0).optional(),
-  endTime: z.number().min(0).optional(),
   userId: z.string().uuid().optional(),
+}).refine((d) => d.videoUrl || d.audioUrl, {
+  message: "At least one of videoUrl or audioUrl is required",
 })
 
-export async function trimAudioRoutes(app: FastifyInstance) {
-  app.post("/v1/trim-audio", { preHandler: creditGuard(() => "trim-audio") }, async (req, reply) => {
-    const parsed = trimAudioBody.safeParse(req.body)
+export async function splitMediaRoutes(app: FastifyInstance) {
+  app.post("/v1/split-media", { preHandler: creditGuard(() => "split-media") }, async (req, reply) => {
+    const parsed = splitMediaBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
         error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
@@ -32,7 +34,7 @@ export async function trimAudioRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = "trim-audio"
+    const modelIdentifier = "split-media"
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -41,7 +43,7 @@ export async function trimAudioRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { ...restData, type: "trim-audio" },
+        input_data: { ...restData, type: "split-media" },
       })
       .select("id")
       .single()
@@ -50,12 +52,11 @@ export async function trimAudioRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     }
 
-    // Reserve credits
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("trim-audio", { jobId: job.id, ...restData, usageLogId })
+    await videoQueue.add("split-media", { jobId: job.id, ...restData, usageLogId })
     return { jobId: job.id }
   })
 }

@@ -8,6 +8,7 @@ import { socialMediaFormat } from "../../providers/video/social-media-format.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { trimAudio } from "../../providers/video/trim-audio.js"
 import { trimVideo } from "../../providers/video/trim-video.js"
+import { splitMedia } from "../../providers/video/split-media.js"
 import { resizeVideo } from "../../providers/video/resize-video.js"
 import { adjustVolume } from "../../providers/video/adjust-volume.js"
 import { addCaptions } from "../../providers/video/add-captions.js"
@@ -76,24 +77,20 @@ const handleMergeVideoAudio: HandlerFn = async function handleMergeVideoAudio(jo
 }
 
 const handleTrimAudio: HandlerFn = async function handleTrimAudio(job, ctx) {
-  const { videoUrl, audioFormat, outputSilentVideo, startTime, endTime } = job.data as {
-    jobId: string; videoUrl: string; audioFormat?: "mp3" | "wav" | "aac"; outputSilentVideo?: boolean; startTime?: number; endTime?: number
+  const { videoUrl, audioFormat, startTime, endTime } = job.data as {
+    jobId: string; videoUrl: string; audioFormat?: "mp3" | "wav" | "aac"; startTime?: number; endTime?: number
   }
   console.log(`[worker] trim-audio ${ctx.jobId}`)
-  const result = await trimAudio({ videoUrl, audioFormat, outputSilentVideo, startTime, endTime })
+  const result = await trimAudio({ videoUrl, audioFormat, startTime, endTime })
   await job.updateProgress(80)
   const audioR2Url = await uploadFileToR2(result.audioPath, ctx.jobId, "audio", ctx.jobUserId)
-  let silentVideoR2Url: string | undefined
-  if (result.silentVideoPath) {
-    silentVideoR2Url = await uploadFileToR2(result.silentVideoPath, `${ctx.jobId}-silent`, "video", ctx.jobUserId)
-  }
   await cleanupWorkDir(dirname(result.audioPath))
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   await supabase.from("jobs").update({
     status: "completed",
     progress: 100,
-    output_data: { audioUrl: audioR2Url, ...(silentVideoR2Url ? { videoUrl: silentVideoR2Url } : {}) },
+    output_data: { audioUrl: audioR2Url },
     completed_at: new Date().toISOString(),
   }).eq("id", ctx.jobId)
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
@@ -101,13 +98,29 @@ const handleTrimAudio: HandlerFn = async function handleTrimAudio(job, ctx) {
 }
 
 const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
-  const { videoUrl, startTime, endTime } = job.data as {
-    jobId: string; videoUrl: string; startTime: number; endTime?: number
+  const { videoUrl, startTime, endTime, outputSilentVideo } = job.data as {
+    jobId: string; videoUrl: string; startTime: number; endTime?: number; outputSilentVideo?: boolean
   }
   console.log(`[worker] trim-video ${ctx.jobId}`)
-  const outputPath = await trimVideo({ videoUrl, startTime, endTime })
+  const result = await trimVideo({ videoUrl, startTime, endTime, outputSilentVideo })
   await job.updateProgress(80)
-  await completeFfmpegVideoJob(outputPath, ctx)
+  const r2Url = await uploadFileToR2(result.videoPath, ctx.jobId, "video", ctx.jobUserId)
+  let silentVideoR2Url: string | undefined
+  if (result.silentVideoPath) {
+    silentVideoR2Url = await uploadFileToR2(result.silentVideoPath, `${ctx.jobId}-silent`, "video", ctx.jobUserId)
+  }
+  await cleanupWorkDir(dirname(result.videoPath))
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed",
+    progress: 100,
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...(silentVideoR2Url ? { videoUrlSilent: silentVideoR2Url } : {}) },
+    completed_at: new Date().toISOString(),
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
 const handleSpeedRamp: HandlerFn = async function handleSpeedRamp(job, ctx) {
@@ -256,6 +269,50 @@ const handleSocialMediaFormat: HandlerFn = async function handleSocialMediaForma
   }
 }
 
+const handleSplitMedia: HandlerFn = async function handleSplitMedia(job, ctx) {
+  const { videoUrl, audioUrl, chunkDuration, audioFormat } = job.data as {
+    jobId: string; videoUrl?: string; audioUrl?: string; chunkDuration: number; audioFormat?: "mp3" | "wav" | "aac"
+  }
+  console.log(`[worker] split-media ${ctx.jobId} (chunkDuration: ${chunkDuration}s)`)
+  const result = await splitMedia({ videoUrl, audioUrl, chunkDuration, audioFormat })
+  await job.updateProgress(70)
+
+  const videoUrls: string[] = []
+  const audioUrls: string[] = []
+
+  if (result.videoPaths) {
+    for (let i = 0; i < result.videoPaths.length; i++) {
+      const r2Url = await uploadFileToR2(result.videoPaths[i], `${ctx.jobId}-video-${i}`, "video", ctx.jobUserId)
+      videoUrls.push(r2Url)
+    }
+  }
+  if (result.audioPaths) {
+    for (let i = 0; i < result.audioPaths.length; i++) {
+      const r2Url = await uploadFileToR2(result.audioPaths[i], `${ctx.jobId}-audio-${i}`, "audio", ctx.jobUserId)
+      audioUrls.push(r2Url)
+    }
+  }
+
+  // Clean up work directory from first available path
+  const firstPath = result.videoPaths?.[0] ?? result.audioPaths?.[0]
+  if (firstPath) await cleanupWorkDir(dirname(firstPath))
+
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed",
+    progress: 100,
+    output_data: {
+      videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
+      audioUrls: audioUrls.length > 0 ? audioUrls : undefined,
+      chunkCount: Math.max(videoUrls.length, audioUrls.length),
+    },
+    completed_at: new Date().toISOString(),
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${videoUrls.length} video chunks, ${audioUrls.length} audio chunks`)
+}
+
 export const ffmpegHandlers: Record<string, HandlerFn> = {
   "combine-videos": handleCombineVideos,
   "merge-video-audio": handleMergeVideoAudio,
@@ -270,4 +327,5 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "mix-audio": handleMixAudio,
   "transcode-video": handleTranscodeVideo,
   "social-media-format": handleSocialMediaFormat,
+  "split-media": handleSplitMedia,
 }

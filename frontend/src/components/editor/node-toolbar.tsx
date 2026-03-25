@@ -109,6 +109,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Processing — Audio
   { type: "merge-video-audio", label: "Merge Video & Audio", icon: <Volume2 className="h-4 w-4" />, category: "Processing", group: "Audio" },
   { type: "trim-audio", label: "Trim Audio", icon: <AudioLines className="h-4 w-4" />, category: "Processing", group: "Audio" },
+  { type: "split-media", label: "Split Media", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Audio" },
   { type: "mix-audio", label: "Mix Audio", icon: <Music className="h-4 w-4" />, category: "Processing", group: "Audio" },
   { type: "adjust-volume", label: "Adjust Volume", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Processing", group: "Audio" },
   // Processing — Text

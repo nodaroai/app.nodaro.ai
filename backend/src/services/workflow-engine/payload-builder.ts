@@ -1225,9 +1225,18 @@ export function buildPayload(
         jobId,
         videoUrl: resolvedInputs.videoUrl || resolvedInputs.audioUrl || data.videoUrl,
         audioFormat: data.audioFormat,
-        outputSilentVideo: data.outputSilentVideo,
         startTime: data.startTime,
         endTime: data.endTime,
+        usageLogId,
+      })
+
+    case "split-media":
+      return ffmpegResult("split-media", {
+        jobId,
+        videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+        audioUrl: resolvedInputs.audioUrl || data.audioUrl,
+        chunkDuration: data.chunkDuration,
+        audioFormat: data.audioFormat,
         usageLogId,
       })
 

@@ -481,16 +481,15 @@ describe("trimAudioApi", () => {
     expect(result).toEqual({ jobId: "j1" })
   })
 
-  it("includes audioFormat and outputSilentVideo", async () => {
+  it("includes audioFormat", async () => {
     noSession()
     const mock = mockFetchJson({ jobId: "j2" })
     vi.stubGlobal("fetch", mock)
 
-    await trimAudioApi("http://vid.mp4", "wav", true)
+    await trimAudioApi("http://vid.mp4", "wav")
 
     const body = JSON.parse(mock.mock.calls[0][1].body as string)
     expect(body.audioFormat).toBe("wav")
-    expect(body.outputSilentVideo).toBe(true)
   })
 
   it("includes auth header when session exists", async () => {
