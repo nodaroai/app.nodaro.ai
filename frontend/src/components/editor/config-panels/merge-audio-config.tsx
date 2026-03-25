@@ -19,6 +19,9 @@ const AUDIO_SOURCE_TYPES = new Set([
   "text-to-speech", "generate-music", "text-to-audio",
   "upload-audio", "reference-audio", "trim-audio",
   "adjust-volume", "mix-audio",
+  "suno-separate", "suno-generate", "suno-cover", "suno-extend",
+  "suno-mashup", "suno-add-vocals", "suno-add-instrumental",
+  "suno-convert-wav", "suno-upload-extend", "split-media",
 ])
 
 const VIDEO_SOURCE_TYPES = new Set([
