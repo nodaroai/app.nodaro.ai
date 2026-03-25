@@ -46,30 +46,30 @@ export function CropPanel({
 
   if (!naturalWidth || !naturalHeight) return null
 
-  const mediaElRef = useRef<HTMLImageElement | HTMLVideoElement | null>(null)
+  const imgRef = useRef<HTMLImageElement | null>(null)
+  const onDisplaySizeRef = useRef(onDisplaySizeChange)
+  onDisplaySizeRef.current = onDisplaySizeChange
 
-  // Track rendered media size via ResizeObserver (handles mobile resize, orientation change)
+  // Track rendered media size via ResizeObserver
+  const observerTargetRef = useRef<HTMLElement | null>(null)
+  const observerRef = useRef<ResizeObserver | null>(null)
+
   useEffect(() => {
-    const el = mediaElRef.current
-    if (!el) return
-    const observer = new ResizeObserver((entries) => {
+    observerRef.current = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect
       if (width > 0 && height > 0) {
-        setImgSize({ w: width, h: height })
-        onDisplaySizeChange?.(width, height)
+        setImgSize((prev) => (prev.w === width && prev.h === height) ? prev : { w: width, h: height })
+        onDisplaySizeRef.current?.(width, height)
       }
     })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [onDisplaySizeChange, mediaUrl])
+    return () => observerRef.current?.disconnect()
+  }, [])
 
-  const setMediaRef = useCallback((el: HTMLImageElement | HTMLVideoElement | null) => {
-    mediaElRef.current = el
-    if (el && el.clientWidth > 0) {
-      setImgSize({ w: el.clientWidth, h: el.clientHeight })
-      onDisplaySizeChange?.(el.clientWidth, el.clientHeight)
-    }
-  }, [onDisplaySizeChange])
+  const attachObserver = useCallback((el: HTMLElement | null) => {
+    if (observerTargetRef.current) observerRef.current?.unobserve(observerTargetRef.current)
+    observerTargetRef.current = el
+    if (el) observerRef.current?.observe(el)
+  }, [])
 
   useEffect(() => {
     if (!crop && imgSize.w > 0 && imgSize.h > 0) {
@@ -212,7 +212,7 @@ export function CropPanel({
       >
         {mediaType === "image" ? (
           <img
-            ref={(el) => setMediaRef(el)}
+            ref={(el) => { imgRef.current = el; attachObserver(el) }}
             src={mediaUrl}
             alt="Preview"
             draggable={false}
@@ -221,7 +221,7 @@ export function CropPanel({
           />
         ) : (
           <video
-            ref={(el) => { setMediaRef(el); if (videoRef && "current" in videoRef) (videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el }}
+            ref={(el) => { if (videoRef && "current" in videoRef) (videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el; attachObserver(el) }}
             src={mediaUrl}
             muted
             playsInline
