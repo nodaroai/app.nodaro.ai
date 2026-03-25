@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, useEffect } from "react"
-import { Play, Pause } from "lucide-react"
+import { Play, Pause, Repeat } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useFilmstrip } from "./use-filmstrip"
 import { useWaveform } from "./use-waveform"
@@ -33,6 +33,7 @@ export function TrimPanel({
   const [dragging, setDragging] = useState<"start" | "end" | "playhead" | "region" | null>(null)
   const regionDragStartRef = useRef<{ time: number; trimStart: number; trimEnd: number } | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [loopEnabled, setLoopEnabled] = useState(true)
   const [playhead, setPlayhead] = useState(trim.startTime)
   const animRef = useRef<number | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -139,8 +140,14 @@ export function TrimPanel({
 
       const tick = () => {
         if (video.currentTime >= trim.endTime) {
-          // Loop back to start
-          video.currentTime = trim.startTime
+          if (loopEnabled) {
+            video.currentTime = trim.startTime
+          } else {
+            video.pause()
+            setIsPlaying(false)
+            setPlayhead(trim.endTime)
+            return
+          }
         }
         setPlayhead(video.currentTime)
         animRef.current = requestAnimationFrame(tick)
@@ -156,15 +163,21 @@ export function TrimPanel({
 
       const tick = () => {
         if (audio.currentTime >= trim.endTime) {
-          // Loop back to start
-          audio.currentTime = trim.startTime
+          if (loopEnabled) {
+            audio.currentTime = trim.startTime
+          } else {
+            audio.pause()
+            setIsPlaying(false)
+            setPlayhead(trim.endTime)
+            return
+          }
         }
         setPlayhead(audio.currentTime)
         animRef.current = requestAnimationFrame(tick)
       }
       animRef.current = requestAnimationFrame(tick)
     }
-  }, [isPlaying, playhead, trim, mediaType, mediaUrl, videoRef])
+  }, [isPlaying, playhead, trim, mediaType, mediaUrl, videoRef, loopEnabled])
 
   // Reset audio element when URL changes
   useEffect(() => {
@@ -200,16 +213,28 @@ export function TrimPanel({
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Time display + play button */}
+      {/* Controls row: Trim label | Play + Loop | Time display */}
       <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+        <span>Trim</span>
         <div className="flex items-center gap-2">
-          <span>Trim</span>
           <button
             type="button"
             onClick={togglePlay}
-            className="flex items-center justify-center w-6 h-6 rounded-full bg-[#ff0073] hover:bg-[#ff0073]/80 text-white transition-colors"
+            className="flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] hover:bg-[#ff0073]/80 text-white transition-colors"
           >
-            {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 ml-0.5" />}
+            {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLoopEnabled(!loopEnabled)}
+            title={loopEnabled ? "Loop on" : "Loop off"}
+            className={`flex items-center justify-center w-7 h-7 rounded-full border transition-colors ${
+              loopEnabled
+                ? "border-[#ff0073]/50 bg-[#ff0073]/10 text-[#ff0073]"
+                : "border-white/20 text-white/30 hover:text-white/50"
+            }`}
+          >
+            <Repeat className="w-3.5 h-3.5" />
           </button>
         </div>
         <span>
