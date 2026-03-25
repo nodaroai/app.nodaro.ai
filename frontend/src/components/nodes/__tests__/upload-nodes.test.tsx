@@ -50,6 +50,7 @@ vi.mock("lucide-react", () => ({
   Music: MockIcon,
   Download: MockIcon,
   Expand: MockIcon,
+  Scissors: MockIcon,
 }))
 
 vi.mock("@/hooks/use-workflow-store", () => ({
@@ -57,6 +58,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
     selector({
       updateNodeData: () => {},
       videoAutoplay: false,
+      openFreeCut: () => {},
     }),
 }))
 
