@@ -294,4 +294,29 @@ export async function uploadRoutes(app: FastifyInstance) {
 
     return { url: publicUrl }
   })
+
+  // ===========================================================
+  // POST /v1/upload-json - Lightweight JSON upload to R2
+  // No multipart, no asset record, no thumbnail processing.
+  // Used for FreeCut project persistence.
+  // ===========================================================
+
+  app.post("/v1/upload-json", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+
+    const body = req.body
+    if (!body || typeof body !== "object") {
+      return reply.status(400).send({ error: { code: "validation_error", message: "JSON body required" } })
+    }
+
+    const json = JSON.stringify(body)
+    const buffer = Buffer.from(json, "utf-8")
+    const key = `projects/${randomUUID()}.json`
+    const publicUrl = await uploadBufferToS3(buffer, key, "application/json")
+
+    return { url: publicUrl }
+  })
 }

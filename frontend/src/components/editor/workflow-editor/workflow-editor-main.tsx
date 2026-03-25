@@ -139,16 +139,19 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         let projectUrl: string | undefined;
         if (projectJson) {
           try {
-            const jsonBlob = new Blob([JSON.stringify(projectJson)], { type: "application/json" });
-            const jsonFile = new File([jsonBlob], "freecut-project.json", { type: "application/json" });
-            const jsonResult = await uploadFile(jsonFile, user?.id);
-            projectUrl = jsonResult.url;
-            console.warn("[FreeCut] Project JSON uploaded to:", projectUrl);
-          } catch (e) {
-            console.warn("[FreeCut] Project JSON upload FAILED:", e);
+            const headers = await import("@/lib/api").then((m) => m.getAuthHeaders());
+            const res = await fetch("/v1/upload-json", {
+              method: "POST",
+              headers: { ...headers, "Content-Type": "application/json" },
+              body: JSON.stringify(projectJson),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              projectUrl = data.url;
+            }
+          } catch {
+            // Project save failed — video still saved successfully
           }
-        } else {
-          console.warn("[FreeCut] No projectJson received from FreeCut");
         }
 
         const newResult: GeneratedResult = { url, jobId: `freecut-edit-${Date.now()}`, timestamp: new Date().toISOString(), freecutProjectUrl: projectUrl };
