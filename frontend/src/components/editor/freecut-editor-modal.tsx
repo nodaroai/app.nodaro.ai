@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { X, Loader2, Upload } from "lucide-react"
+import { X, Loader2, Check } from "lucide-react"
 
 const FREECUT_URL = import.meta.env.VITE_FREECUT_URL || "http://localhost:5174"
 const FREECUT_ORIGIN = new URL(FREECUT_URL).origin
@@ -16,7 +16,7 @@ interface FreeCutEditorModalProps {
 export function FreeCutEditorModal({ videoUrl, onExportComplete, onClose }: FreeCutEditorModalProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [iframeLoaded, setIframeLoaded] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "done">("idle")
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const sentVideoRef = useRef(false)
 
@@ -53,12 +53,15 @@ export function FreeCutEditorModal({ videoUrl, onExportComplete, onClose }: Free
       if (event.data?.type === "FREECUT_EXPORT_COMPLETE") {
         const buffer: ArrayBuffer = event.data.payload?.videoBuffer
         if (!buffer) return
-        setUploading(true)
+        setSaveState("saving")
         const blob = new Blob([buffer], { type: "video/mp4" })
         onExportComplete(blob)
+        // Show brief success then auto-close
+        setSaveState("done")
+        setTimeout(() => onClose(), 800)
       }
     },
-    [onExportComplete, videoUrl],
+    [onExportComplete, onClose, videoUrl],
   )
 
   useEffect(() => {
@@ -70,7 +73,9 @@ export function FreeCutEditorModal({ videoUrl, onExportComplete, onClose }: Free
     (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault()
-        setShowCloseConfirm(true)
+        // If confirm dialog is open, dismiss it (go back to editing)
+        // If not, show it
+        setShowCloseConfirm((prev) => !prev)
       }
     },
     [],
@@ -81,24 +86,11 @@ export function FreeCutEditorModal({ videoUrl, onExportComplete, onClose }: Free
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [handleKeyDown])
 
-  function handleCancel() {
-    setShowCloseConfirm(false)
-    onClose()
-  }
-
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 bg-[#1E1E1E] border-b border-[#2D2D2D] shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-white">FreeCut Editor</span>
-          {uploading && (
-            <div className="flex items-center gap-2 text-xs text-amber-400">
-              <Upload className="w-3 h-3 animate-pulse" />
-              Uploading edited video...
-            </div>
-          )}
-        </div>
+        <span className="text-sm font-medium text-white">FreeCut Editor</span>
         <button
           type="button"
           aria-label="Close editor"
@@ -126,13 +118,39 @@ export function FreeCutEditorModal({ videoUrl, onExportComplete, onClose }: Free
         />
       </div>
 
+      {/* Saving overlay */}
+      {saveState !== "idle" && (
+        <div className="absolute inset-0 z-[10000] bg-black/70 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            {saveState === "saving" && (
+              <>
+                <Loader2 className="w-8 h-8 animate-spin text-white" />
+                <span className="text-sm text-white">Saving edited video...</span>
+              </>
+            )}
+            {saveState === "done" && (
+              <>
+                <Check className="w-8 h-8 text-green-400" />
+                <span className="text-sm text-green-400">Saved</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Close confirmation */}
       {showCloseConfirm && (
-        <div className="absolute inset-0 z-[10000] bg-black/60 flex items-center justify-center">
-          <div className="bg-[#1E1E1E] border border-[#2D2D2D] rounded-lg p-6 max-w-sm mx-4 shadow-xl">
-            <h3 className="text-sm font-medium text-white mb-2">Close editor?</h3>
+        <div
+          className="absolute inset-0 z-[10000] bg-black/60 flex items-center justify-center"
+          onClick={() => setShowCloseConfirm(false)}
+        >
+          <div
+            className="bg-[#1E1E1E] border border-[#2D2D2D] rounded-lg p-6 max-w-sm mx-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-medium text-white mb-2">Discard changes?</h3>
             <p className="text-xs text-white/60 mb-4">
-              Any unsaved edits will be lost. The node will stay paused so you can reopen the editor.
+              Your edits haven't been sent back. Closing will discard them.
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -140,14 +158,14 @@ export function FreeCutEditorModal({ videoUrl, onExportComplete, onClose }: Free
                 className="px-3 py-1.5 text-xs rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors"
                 onClick={() => setShowCloseConfirm(false)}
               >
-                Keep Editing
+                Continue editing
               </button>
               <button
                 type="button"
                 className="px-3 py-1.5 text-xs rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors"
-                onClick={handleCancel}
+                onClick={() => { setShowCloseConfirm(false); onClose() }}
               >
-                Close
+                Discard
               </button>
             </div>
           </div>
