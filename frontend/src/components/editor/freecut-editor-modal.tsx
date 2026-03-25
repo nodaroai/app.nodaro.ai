@@ -30,7 +30,7 @@ export function FreeCutEditorModal({ videoUrl, onExportComplete, onClose }: Free
           sentVideoRef.current = true
           const iframe = iframeRef.current
           if (iframe?.contentWindow) {
-            fetch(videoUrl, { cache: "no-store" })
+            fetch(videoUrl)
               .then((res) => res.arrayBuffer())
               .then((videoBuffer) => {
                 iframe.contentWindow!.postMessage(
