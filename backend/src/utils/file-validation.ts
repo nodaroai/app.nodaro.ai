@@ -30,6 +30,9 @@ const ALLOWED_MIME_TYPES: Record<string, ReadonlyArray<string>> = {
     "audio/ogg",
     "audio/webm",
   ],
+  data: [
+    "application/json",
+  ],
 }
 
 const ALL_ALLOWED_TYPES = new Set(
@@ -52,7 +55,7 @@ const DEFAULT_SIZE_LIMIT = 50 * 1024 * 1024 // 50 MB fallback
 // Types
 // ============================================================
 
-export type FileCategory = "image" | "video" | "audio"
+export type FileCategory = "image" | "video" | "audio" | "data"
 
 export interface ValidationResult {
   readonly valid: boolean
@@ -107,6 +110,7 @@ export function getExtensionFromMime(mimeType: string): string {
     "audio/aac": "aac",
     "audio/ogg": "ogg",
     "audio/webm": "weba",
+    "application/json": "json",
   }
   return map[mimeType] ?? "bin"
 }
