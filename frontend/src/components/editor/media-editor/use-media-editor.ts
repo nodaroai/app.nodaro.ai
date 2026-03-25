@@ -25,6 +25,7 @@ export interface MediaEditorFile {
 export interface MediaEditorResult {
   uploadResult: UploadResult
   processedUrl?: string
+  processedThumbnailUrl?: string
 }
 
 interface UseMediaEditorOptions {
@@ -216,7 +217,7 @@ export function useMediaEditor({ onComplete, onCancel }: UseMediaEditorOptions) 
           }
 
           const processed = await processMedia(processParams)
-          result = { uploadResult, processedUrl: processed.url }
+          result = { uploadResult, processedUrl: processed.url, processedThumbnailUrl: processed.thumbnailUrl ?? undefined }
         } else {
           result = { uploadResult }
         }
@@ -304,7 +305,7 @@ export function useMediaEditor({ onComplete, onCancel }: UseMediaEditorOptions) 
             if (editorState.trim) processParams.trim = editorState.trim
             if (editorState.format) processParams.format = editorState.format
             const processed = await processMedia(processParams)
-            allResults.push({ uploadResult, processedUrl: processed.url })
+            allResults.push({ uploadResult, processedUrl: processed.url, processedThumbnailUrl: processed.thumbnailUrl ?? undefined })
           } else {
             allResults.push({ uploadResult })
           }

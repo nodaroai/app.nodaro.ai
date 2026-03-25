@@ -48,11 +48,12 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
       const result = results[0]
       if (!result) return
       const url = result.processedUrl ?? result.uploadResult.url
+      const thumb = result.processedThumbnailUrl ?? result.uploadResult.thumbnailUrl ?? ""
       updateNodeData(id, {
         assetId: result.uploadResult.assetId ?? "",
         url,
         r2Url: url,
-        thumbnailUrl: result.uploadResult.thumbnailUrl ?? "",
+        thumbnailUrl: thumb,
         filename: result.uploadResult.filename,
         fileSize: result.uploadResult.sizeBytes,
         mimeType: result.uploadResult.mimeType,
