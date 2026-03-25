@@ -21,6 +21,14 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}`
 }
 
+function getClientX(e: MouseEvent | TouchEvent): number {
+  if ("touches" in e) {
+    const t = e.touches[0] ?? e.changedTouches[0]
+    return t.clientX
+  }
+  return e.clientX
+}
+
 export function TrimPanel({
   mediaUrl,
   mediaType,
@@ -38,7 +46,6 @@ export function TrimPanel({
   const animRef = useRef<number | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  // Refs so the tick function always reads the latest values
   const trimRef = useRef(trim)
   trimRef.current = trim
   const loopRef = useRef(loopEnabled)
@@ -54,18 +61,16 @@ export function TrimPanel({
 
   const isLoading = mediaType === "video" ? filmstripLoading : waveformLoading
 
-  const getTimeFromEvent = useCallback(
+  const getTimeFromX = useCallback(
     (clientX: number) => {
       const track = trackRef.current
       if (!track || duration <= 0) return 0
       const rect = track.getBoundingClientRect()
-      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-      return ratio * duration
+      return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * duration
     },
     [duration],
   )
 
-  // Seek the video preview when playhead moves (scrubbing)
   const seekToTime = useCallback((time: number) => {
     setPlayhead(time)
     if (mediaType === "video" && videoRef?.current && !isPlaying) {
@@ -73,12 +78,13 @@ export function TrimPanel({
     }
   }, [mediaType, videoRef, isPlaying])
 
-  // Handle drag for trim handles and playhead
+  // Unified drag handler (mouse + touch)
   useEffect(() => {
     if (!dragging) return
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const time = getTimeFromEvent(e.clientX)
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      e.preventDefault()
+      const time = getTimeFromX(getClientX(e))
       if (dragging === "start") {
         const newStart = Math.min(time, trim.endTime - 0.1)
         onTrimChange({ startTime: newStart, endTime: trim.endTime })
@@ -88,45 +94,54 @@ export function TrimPanel({
         onTrimChange({ startTime: trim.startTime, endTime: newEnd })
         seekToTime(newEnd)
       } else if (dragging === "playhead") {
-        const clamped = Math.max(trim.startTime, Math.min(time, trim.endTime))
-        seekToTime(clamped)
+        seekToTime(Math.max(trim.startTime, Math.min(time, trim.endTime)))
       } else if (dragging === "region" && regionDragStartRef.current) {
         const ref = regionDragStartRef.current
         const delta = time - ref.time
-        const trimLen = ref.trimEnd - ref.trimStart
-        let newStart = ref.trimStart + delta
-        let newEnd = ref.trimEnd + delta
-        // Clamp to [0, duration]
-        if (newStart < 0) { newStart = 0; newEnd = trimLen }
-        if (newEnd > duration) { newEnd = duration; newStart = duration - trimLen }
-        onTrimChange({ startTime: newStart, endTime: newEnd })
-        seekToTime(newStart + (playhead - ref.trimStart))
+        const len = ref.trimEnd - ref.trimStart
+        let ns = ref.trimStart + delta
+        let ne = ref.trimEnd + delta
+        if (ns < 0) { ns = 0; ne = len }
+        if (ne > duration) { ne = duration; ns = duration - len }
+        onTrimChange({ startTime: ns, endTime: ne })
+        seekToTime(ns + (playhead - ref.trimStart))
       }
     }
 
-    const handleMouseUp = () => {
+    const handleEnd = () => {
       setDragging(null)
       regionDragStartRef.current = null
     }
 
-    window.addEventListener("mousemove", handleMouseMove)
-    window.addEventListener("mouseup", handleMouseUp)
+    window.addEventListener("mousemove", handleMove)
+    window.addEventListener("mouseup", handleEnd)
+    window.addEventListener("touchmove", handleMove, { passive: false })
+    window.addEventListener("touchend", handleEnd)
+    window.addEventListener("touchcancel", handleEnd)
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-      window.removeEventListener("mouseup", handleMouseUp)
+      window.removeEventListener("mousemove", handleMove)
+      window.removeEventListener("mouseup", handleEnd)
+      window.removeEventListener("touchmove", handleMove)
+      window.removeEventListener("touchend", handleEnd)
+      window.removeEventListener("touchcancel", handleEnd)
     }
-  }, [dragging, trim, onTrimChange, getTimeFromEvent, seekToTime])
+  }, [dragging, trim, onTrimChange, getTimeFromX, seekToTime, duration, playhead])
 
-  // Click on track = move playhead there
   const handleTrackClick = useCallback((e: React.MouseEvent) => {
-    // Don't move playhead if clicking on a handle
     if ((e.target as HTMLElement).closest("[data-trim-handle]")) return
-    const time = getTimeFromEvent(e.clientX)
-    const clamped = Math.max(trim.startTime, Math.min(time, trim.endTime))
-    seekToTime(clamped)
-  }, [getTimeFromEvent, trim, seekToTime])
+    seekToTime(Math.max(trim.startTime, Math.min(getTimeFromX(e.clientX), trim.endTime)))
+  }, [getTimeFromX, trim, seekToTime])
 
-  // Playback — simple rAF loop, only seeks at loop boundary
+  // Start drag helper (shared by mouse and touch)
+  const startHandleDrag = (clientX: number, type: "start" | "end" | "playhead" | "region") => {
+    if (isPlaying) stopPlayback()
+    if (type === "region") {
+      regionDragStartRef.current = { time: getTimeFromX(clientX), trimStart: trim.startTime, trimEnd: trim.endTime }
+    }
+    setDragging(type)
+  }
+
+  // Playback
   const seekingRef = useRef(false)
 
   const stopPlayback = useCallback(() => {
@@ -138,10 +153,7 @@ export function TrimPanel({
   }, [videoRef])
 
   const togglePlay = useCallback(() => {
-    if (isPlaying) {
-      stopPlayback()
-      return
-    }
+    if (isPlaying) { stopPlayback(); return }
 
     const t = trimRef.current
     const startFrom = playhead >= t.endTime - 0.1 ? t.startTime : playhead
@@ -149,28 +161,21 @@ export function TrimPanel({
     const startMedia = (el: HTMLMediaElement) => {
       el.currentTime = startFrom
       seekingRef.current = false
-      const playPromise = el.play()
-      if (playPromise) playPromise.catch(() => {})
+      const p = el.play()
+      if (p) p.catch(() => {})
 
       const tick = () => {
         if (!el.paused && !seekingRef.current) {
           const ct = el.currentTime
           const tr = trimRef.current
-
           if (ct >= tr.endTime) {
             if (loopRef.current) {
               seekingRef.current = true
               el.currentTime = tr.startTime
-              const onSeeked = () => {
-                el.removeEventListener("seeked", onSeeked)
-                seekingRef.current = false
-              }
+              const onSeeked = () => { el.removeEventListener("seeked", onSeeked); seekingRef.current = false }
               el.addEventListener("seeked", onSeeked)
             } else {
-              el.pause()
-              setIsPlaying(false)
-              setPlayhead(tr.endTime)
-              return
+              el.pause(); setIsPlaying(false); setPlayhead(tr.endTime); return
             }
           } else {
             setPlayhead(ct)
@@ -178,46 +183,30 @@ export function TrimPanel({
         }
         animRef.current = requestAnimationFrame(tick)
       }
-
       setIsPlaying(true)
       animRef.current = requestAnimationFrame(tick)
     }
 
-    if (mediaType === "video" && videoRef?.current) {
-      startMedia(videoRef.current)
-    } else if (mediaType === "audio") {
-      if (!audioRef.current) {
-        audioRef.current = new Audio(mediaUrl)
-      }
+    if (mediaType === "video" && videoRef?.current) startMedia(videoRef.current)
+    else if (mediaType === "audio") {
+      if (!audioRef.current) audioRef.current = new Audio(mediaUrl)
       startMedia(audioRef.current)
     }
   }, [isPlaying, playhead, mediaType, mediaUrl, videoRef, stopPlayback])
 
-  // Reset audio element when URL changes
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current = null
-    }
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
   }, [mediaUrl])
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current)
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current = null
-      }
+      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
     }
   }, [])
 
-  // Seek video to start frame on mount
   useEffect(() => {
-    if (mediaType === "video" && videoRef?.current) {
-      videoRef.current.currentTime = trim.startTime
-    }
-    // Only on mount
+    if (mediaType === "video" && videoRef?.current) videoRef.current.currentTime = trim.startTime
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -225,140 +214,100 @@ export function TrimPanel({
   const endPct = duration > 0 ? (trim.endTime / duration) * 100 : 100
   const playheadPct = duration > 0 ? (playhead / duration) * 100 : 0
 
+  // Shared touch+mouse handler for trim handles
+  const handleDown = (e: React.MouseEvent | React.TouchEvent, type: "start" | "end" | "playhead" | "region") => {
+    e.preventDefault()
+    e.stopPropagation()
+    const x = "touches" in e ? e.touches[0].clientX : e.clientX
+    startHandleDrag(x, type)
+  }
+
   return (
     <div className="flex flex-col gap-2">
-      {/* Controls row: Trim label (left) | Play+Loop (absolute center) | Time (right) */}
+      {/* Play + Loop — own row on mobile, inline on desktop */}
+      <div className="flex items-center justify-center gap-2 sm:hidden">
+        <button type="button" onClick={togglePlay} className="flex items-center justify-center w-8 h-8 rounded-full bg-[#ff0073] hover:bg-[#ff0073]/80 text-white transition-colors">
+          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+        </button>
+        <button type="button" onClick={() => setLoopEnabled(!loopEnabled)} title={loopEnabled ? "Loop on" : "Loop off"}
+          className={`flex items-center justify-center w-8 h-8 rounded-full border transition-colors ${loopEnabled ? "border-[#ff0073]/50 bg-[#ff0073]/10 text-[#ff0073]" : "border-white/20 text-white/30"}`}>
+          <Repeat className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Controls row: Trim | Play+Loop (desktop only, centered) | Time */}
       <div className="relative flex items-center justify-between text-xs text-muted-foreground px-1 h-8">
         <span>Trim</span>
-        {/* Absolute center — unaffected by left/right content width */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={togglePlay}
-            className="flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] hover:bg-[#ff0073]/80 text-white transition-colors"
-          >
+        {/* Desktop only — centered */}
+        <div className="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-2">
+          <button type="button" onClick={togglePlay} className="flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] hover:bg-[#ff0073]/80 text-white transition-colors">
             {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
           </button>
-          <button
-            type="button"
-            onClick={() => setLoopEnabled(!loopEnabled)}
-            title={loopEnabled ? "Loop on" : "Loop off"}
-            className={`flex items-center justify-center w-7 h-7 rounded-full border transition-colors ${
-              loopEnabled
-                ? "border-[#ff0073]/50 bg-[#ff0073]/10 text-[#ff0073]"
-                : "border-white/20 text-white/30 hover:text-white/50"
-            }`}
-          >
+          <button type="button" onClick={() => setLoopEnabled(!loopEnabled)} title={loopEnabled ? "Loop on" : "Loop off"}
+            className={`flex items-center justify-center w-7 h-7 rounded-full border transition-colors ${loopEnabled ? "border-[#ff0073]/50 bg-[#ff0073]/10 text-[#ff0073]" : "border-white/20 text-white/30 hover:text-white/50"}`}>
             <Repeat className="w-3.5 h-3.5" />
           </button>
         </div>
-        <span>
+        <span className="text-[11px] sm:text-xs">
           <span className="text-[#ff0073]">{formatTime(trim.startTime)}</span>
           {" — "}
           <span className="text-[#ff0073]">{formatTime(trim.endTime)}</span>
-          <span className="text-muted-foreground/50"> (of {formatTime(duration)})</span>
+          <span className="text-muted-foreground/50"> ({formatTime(duration)})</span>
         </span>
       </div>
 
       {/* Track */}
       <div
         ref={trackRef}
-        className="relative h-12 bg-[#1a1a2a] rounded-lg overflow-hidden select-none cursor-pointer"
+        className="relative h-12 bg-[#1a1a2a] rounded-lg overflow-hidden select-none cursor-pointer touch-none"
         onClick={handleTrackClick}
       >
-        {/* Filmstrip frames (video) */}
+        {/* Filmstrip */}
         {mediaType === "video" && (
           <div className="absolute inset-0 flex pointer-events-none">
             {isLoading ? (
-              <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">
-                Loading frames...
-              </div>
-            ) : (
-              frames.map((frame, i) => (
-                <img
-                  key={i}
-                  src={frame.dataUrl}
-                  alt=""
-                  className="h-full object-cover opacity-40"
-                  style={{ width: `${100 / frames.length}%` }}
-                  draggable={false}
-                />
-              ))
-            )}
+              <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">Loading...</div>
+            ) : frames.map((frame, i) => (
+              <img key={i} src={frame.dataUrl} alt="" className="h-full object-cover opacity-40" style={{ width: `${100 / frames.length}%` }} draggable={false} />
+            ))}
           </div>
         )}
 
-        {/* Waveform bars (audio) */}
+        {/* Waveform */}
         {mediaType === "audio" && (
           <div className="absolute inset-0 flex items-center gap-px px-1 pointer-events-none">
             {waveformLoading ? (
-              <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">
-                Loading waveform...
-              </div>
-            ) : (
-              waveformData.map((amplitude, i) => {
-                const pct = (i / waveformData.length) * 100
-                const inRange = pct >= startPct && pct <= endPct
-                return (
-                  <div
-                    key={i}
-                    className={cn(
-                      "flex-1 rounded-sm transition-colors",
-                      inRange ? "bg-[#ff0073]" : "bg-muted-foreground/20",
-                    )}
-                    style={{ height: `${Math.max(4, amplitude * 100)}%` }}
-                  />
-                )
-              })
-            )}
+              <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">Loading...</div>
+            ) : waveformData.map((amp, i) => {
+              const pct = (i / waveformData.length) * 100
+              return <div key={i} className={cn("flex-1 rounded-sm", pct >= startPct && pct <= endPct ? "bg-[#ff0073]" : "bg-muted-foreground/20")} style={{ height: `${Math.max(4, amp * 100)}%` }} />
+            })}
           </div>
         )}
 
-        {/* Inactive regions (dimmed) */}
-        <div
-          className="absolute top-0 bottom-0 left-0 bg-black/50 pointer-events-none"
-          style={{ width: `${startPct}%` }}
-        />
-        <div
-          className="absolute top-0 bottom-0 right-0 bg-black/50 pointer-events-none"
-          style={{ width: `${100 - endPct}%` }}
-        />
+        {/* Inactive dim */}
+        <div className="absolute top-0 bottom-0 left-0 bg-black/50 pointer-events-none" style={{ width: `${startPct}%` }} />
+        <div className="absolute top-0 bottom-0 right-0 bg-black/50 pointer-events-none" style={{ width: `${100 - endPct}%` }} />
 
-        {/* Active region — draggable to slide the whole trim window */}
+        {/* Active region — drag to slide */}
         <div
           data-trim-handle
-          className="absolute top-0 bottom-0 border-t-2 border-b-2 border-[#ff0073]/30 cursor-grab active:cursor-grabbing"
+          className="absolute top-0 bottom-0 border-t-2 border-b-2 border-[#ff0073]/30 cursor-grab active:cursor-grabbing touch-none"
           style={{ left: `${startPct}%`, right: `${100 - endPct}%` }}
-          onMouseDown={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            if (isPlaying) {
-              setIsPlaying(false)
-              if (videoRef?.current) videoRef.current.pause()
-              if (audioRef.current) audioRef.current.pause()
-              if (animRef.current) cancelAnimationFrame(animRef.current)
-            }
-            regionDragStartRef.current = {
-              time: getTimeFromEvent(e.clientX),
-              trimStart: trim.startTime,
-              trimEnd: trim.endTime,
-            }
-            setDragging("region")
-          }}
+          onMouseDown={(e) => handleDown(e, "region")}
+          onTouchStart={(e) => handleDown(e, "region")}
         />
 
         {/* Start handle */}
         <div
           data-trim-handle
-          className="absolute top-0 bottom-0 w-1 bg-[#ff0073] cursor-ew-resize z-10 hover:w-1.5"
-          style={{ left: `${startPct}%` }}
-          onMouseDown={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            setDragging("start")
-          }}
+          className="absolute top-0 bottom-0 cursor-ew-resize z-10 touch-none"
+          style={{ left: `calc(${startPct}% - 8px)`, width: 16 }}
+          onMouseDown={(e) => handleDown(e, "start")}
+          onTouchStart={(e) => handleDown(e, "start")}
         >
-          <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-4 h-6 bg-[#ff0073] rounded-sm flex items-center justify-center">
+          <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-1 bg-[#ff0073]" />
+          <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-4 h-6 bg-[#ff0073] rounded-sm flex items-center justify-center">
             <div className="w-0.5 h-3 bg-white/60 rounded-full" />
           </div>
         </div>
@@ -366,40 +315,27 @@ export function TrimPanel({
         {/* End handle */}
         <div
           data-trim-handle
-          className="absolute top-0 bottom-0 w-1 bg-[#ff0073] cursor-ew-resize z-10 hover:w-1.5"
-          style={{ left: `${endPct}%` }}
-          onMouseDown={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            setDragging("end")
-          }}
+          className="absolute top-0 bottom-0 cursor-ew-resize z-10 touch-none"
+          style={{ left: `calc(${endPct}% - 8px)`, width: 16 }}
+          onMouseDown={(e) => handleDown(e, "end")}
+          onTouchStart={(e) => handleDown(e, "end")}
         >
-          <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-4 h-6 bg-[#ff0073] rounded-sm flex items-center justify-center">
+          <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-1 bg-[#ff0073]" />
+          <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-4 h-6 bg-[#ff0073] rounded-sm flex items-center justify-center">
             <div className="w-0.5 h-3 bg-white/60 rounded-full" />
           </div>
         </div>
 
-        {/* Playhead — always visible, draggable */}
+        {/* Playhead */}
         <div
           data-trim-handle
-          className="absolute top-0 bottom-0 z-20 cursor-ew-resize"
-          style={{ left: `${playheadPct}%`, transform: "translateX(-50%)", width: 12 }}
-          onMouseDown={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            if (isPlaying) {
-              setIsPlaying(false)
-              if (videoRef?.current) videoRef.current.pause()
-              if (audioRef.current) audioRef.current.pause()
-              if (animRef.current) cancelAnimationFrame(animRef.current)
-            }
-            setDragging("playhead")
-          }}
+          className="absolute top-0 bottom-0 z-20 cursor-ew-resize touch-none"
+          style={{ left: `calc(${playheadPct}% - 8px)`, width: 16 }}
+          onMouseDown={(e) => handleDown(e, "playhead")}
+          onTouchStart={(e) => handleDown(e, "playhead")}
         >
-          {/* Playhead line */}
           <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white -translate-x-1/2" />
-          {/* Playhead top handle */}
-          <div className="absolute left-1/2 -top-1 -translate-x-1/2 w-2.5 h-2.5 bg-white rounded-full shadow" />
+          <div className="absolute left-1/2 -top-1 -translate-x-1/2 w-3 h-3 bg-white rounded-full shadow" />
         </div>
       </div>
     </div>

@@ -164,41 +164,25 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
             <>
               {hasFile ? (
                 <div className="relative group">
-                  {thumbnailUrl ? (
-                    <div
-                      className="w-full aspect-video rounded-md overflow-hidden bg-muted/30 relative"
-                    >
-                      <CachedImage
-                        src={thumbnailUrl}
-                        alt={nodeData.filename || "Video thumbnail"}
-                        className="w-full h-full object-cover"
-                        thumbnail={!useFull}
-                        thumbnailWidth={320}
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center">
-                          <Play className="w-4 h-4 text-white ml-0.5" />
-                        </div>
-                      </div>
-                    </div>
-                  ) : videoUrl ? (
-                    <div
-                      className="w-full aspect-video rounded-md overflow-hidden bg-muted/30 relative"
-                    >
+                  {videoUrl ? (
+                    <div className="w-full rounded-md overflow-hidden bg-muted/30 relative">
                       <video
                         src={videoUrl}
+                        poster={thumbnailUrl || undefined}
                         crossOrigin="anonymous"
                         autoPlay={videoAutoplay}
                         loop={videoAutoplay}
                         muted
                         playsInline
-                        className="w-full h-full object-cover"
+                        className="w-full object-contain"
                       />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center">
-                          <Play className="w-4 h-4 text-white ml-0.5" />
+                      {!videoAutoplay && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center">
+                            <Play className="w-4 h-4 text-white ml-0.5" />
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   ) : (
                     <div className="w-full aspect-video rounded-md bg-muted/30 flex items-center justify-center">

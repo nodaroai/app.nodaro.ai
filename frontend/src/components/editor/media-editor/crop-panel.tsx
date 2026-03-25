@@ -15,9 +15,17 @@ interface CropPanelProps {
 }
 
 const MIN_CROP_SIZE = 20
-const HANDLE_SIZE = 12
+const HANDLE_SIZE = 16 // slightly larger for touch
 
 type DragType = "move" | "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w" | null
+
+function getClientXY(e: MouseEvent | TouchEvent): { x: number; y: number } {
+  if ("touches" in e) {
+    const t = e.touches[0] ?? e.changedTouches[0]
+    return { x: t.clientX, y: t.clientY }
+  }
+  return { x: e.clientX, y: e.clientY }
+}
 
 export function CropPanel({
   mediaUrl,
@@ -38,32 +46,36 @@ export function CropPanel({
 
   if (!naturalWidth || !naturalHeight) return null
 
-  // Once the image renders, measure its actual on-screen size
-  const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget
-    setImgSize({ w: img.clientWidth, h: img.clientHeight })
-    onDisplaySizeChange?.(img.clientWidth, img.clientHeight)
-  }, [onDisplaySizeChange])
+  const onDisplaySizeRef = useRef(onDisplaySizeChange)
+  onDisplaySizeRef.current = onDisplaySizeChange
 
-  const handleVideoLoad = useCallback(() => {
-    if (videoRef?.current) {
-      const w = videoRef.current.clientWidth
-      const h = videoRef.current.clientHeight
-      setImgSize({ w, h })
-      onDisplaySizeChange?.(w, h)
-    }
-  }, [videoRef, onDisplaySizeChange])
+  // Create ResizeObserver eagerly (not in useEffect) so it's ready for callback refs
+  const observerRef = useRef<ResizeObserver | null>(null)
+  if (!observerRef.current) {
+    observerRef.current = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect
+      if (width > 0 && height > 0) {
+        setImgSize((prev) => (prev.w === Math.round(width) && prev.h === Math.round(height)) ? prev : { w: Math.round(width), h: Math.round(height) })
+        onDisplaySizeRef.current?.(Math.round(width), Math.round(height))
+      }
+    })
+  }
+  useEffect(() => () => observerRef.current?.disconnect(), [])
 
-  // Init crop to full displayed image once we know the size
+  const observerTargetRef = useRef<HTMLElement | null>(null)
+  const attachObserver = useCallback((el: HTMLElement | null) => {
+    if (observerTargetRef.current) observerRef.current?.unobserve(observerTargetRef.current)
+    observerTargetRef.current = el
+    if (el) observerRef.current?.observe(el)
+  }, [])
+
   useEffect(() => {
     if (!crop && imgSize.w > 0 && imgSize.h > 0) {
       onCropChange({ x: 0, y: 0, width: imgSize.w, height: imgSize.h, zoom: 1, panX: 0, panY: 0 })
     }
   }, [crop, imgSize.w, imgSize.h, onCropChange])
 
-  // When aspect ratio changes, re-constrain existing crop
   const lockedRatio = parseAspectRatio(aspectRatio)
-  // "original" means the natural image ratio, not "no constraint"
   const effectiveRatio = aspectRatio === "original" ? naturalWidth / naturalHeight : lockedRatio
   useEffect(() => {
     if (crop && imgSize.w > 0 && effectiveRatio !== null) {
@@ -90,7 +102,6 @@ export function CropPanel({
     const maxW = imgSize.w
     const maxH = imgSize.h
     if (maxW <= 0 || maxH <= 0) return c
-
     if (ratioToEnforce !== null) {
       if (width / height > ratioToEnforce) {
         width = height * ratioToEnforce
@@ -105,30 +116,40 @@ export function CropPanel({
     return { ...c, x, y, width, height }
   }
 
-  // --- Drag handling ---
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent, type: DragType) => {
-      e.preventDefault()
-      e.stopPropagation()
+  // Start drag (mouse or touch)
+  const startDrag = useCallback(
+    (clientX: number, clientY: number, type: DragType) => {
       if (!crop) return
       setDragType(type)
-      dragStartRef.current = { x: e.clientX, y: e.clientY, crop: { ...crop } }
+      dragStartRef.current = { x: clientX, y: clientY, crop: { ...crop } }
     },
     [crop],
   )
 
+  const handlePointerDown = useCallback(
+    (e: React.MouseEvent | React.TouchEvent, type: DragType) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const pt = "touches" in e ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY }
+      startDrag(pt.x, pt.y, type)
+    },
+    [startDrag],
+  )
+
+  // Global move/end listeners (mouse + touch)
   useEffect(() => {
     if (!dragType || !dragStartRef.current || !crop) return
 
     const isCorner = ["nw", "ne", "sw", "se"].includes(dragType)
     const isEdge = ["n", "s", "e", "w"].includes(dragType)
-    // Corners preserve current ratio; edges are free-form
     const cornerRatio = isCorner ? dragStartRef.current.crop.width / dragStartRef.current.crop.height : null
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      e.preventDefault()
+      const { x: clientX, y: clientY } = getClientXY(e)
       const start = dragStartRef.current!
-      const dx = e.clientX - start.x
-      const dy = e.clientY - start.y
+      const dx = clientX - start.x
+      const dy = clientY - start.y
       const sc = start.crop
       let newCrop: CropState
 
@@ -143,23 +164,29 @@ export function CropPanel({
         newCrop = { ...sc, x: nx, y: ny, width: nw, height: nh }
       }
 
-      const constrained = clampCrop(newCrop, isCorner ? cornerRatio : null)
-      onCropChange(constrained)
+      onCropChange(clampCrop(newCrop, isCorner ? cornerRatio : null))
 
-      // Edge drag = free-form → auto-switch to "custom"
       if (isEdge && onAspectRatioChange && aspectRatio !== "custom") {
         onAspectRatioChange("custom")
       }
     }
-    const handleMouseUp = () => {
+
+    const handleEnd = () => {
       setDragType(null)
       dragStartRef.current = null
     }
-    window.addEventListener("mousemove", handleMouseMove)
-    window.addEventListener("mouseup", handleMouseUp)
+
+    window.addEventListener("mousemove", handleMove)
+    window.addEventListener("mouseup", handleEnd)
+    window.addEventListener("touchmove", handleMove, { passive: false })
+    window.addEventListener("touchend", handleEnd)
+    window.addEventListener("touchcancel", handleEnd)
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-      window.removeEventListener("mouseup", handleMouseUp)
+      window.removeEventListener("mousemove", handleMove)
+      window.removeEventListener("mouseup", handleEnd)
+      window.removeEventListener("touchmove", handleMove)
+      window.removeEventListener("touchend", handleEnd)
+      window.removeEventListener("touchcancel", handleEnd)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragType, crop])
@@ -176,64 +203,57 @@ export function CropPanel({
   ]
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* Image container — the image drives the container size naturally */}
+    <div className="flex flex-col gap-3 items-center">
       <div
         ref={wrapperRef}
-        className="relative mx-auto select-none rounded-lg overflow-hidden bg-black"
-        style={{ maxWidth: "100%", maxHeight: "60vh" }}
+        className="relative select-none rounded-lg overflow-hidden bg-black touch-none inline-block max-w-full"
       >
-        {/* The actual media element — displayed inline so it sizes the container */}
         {mediaType === "image" ? (
           <img
+            ref={(el) => attachObserver(el)}
             src={mediaUrl}
             alt="Preview"
             draggable={false}
-            onLoad={handleImageLoad}
-            className="block max-w-full max-h-[60vh] mx-auto"
+            className="block w-full mx-auto"
+            style={{ maxHeight: "55vh" }}
           />
         ) : (
           <video
-            ref={videoRef}
+            ref={(el) => { if (videoRef && "current" in videoRef) (videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el; attachObserver(el) }}
             src={mediaUrl}
             muted
-            onLoadedMetadata={handleVideoLoad}
-            className="block max-w-full max-h-[60vh] mx-auto"
+            playsInline
+            className="block w-full mx-auto"
+            style={{ maxHeight: "55vh" }}
           />
         )}
 
-        {/* Crop overlay — positioned absolute over the image */}
         {crop && imgSize.w > 0 && (
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{ width: imgSize.w, height: imgSize.h, left: "50%", top: 0, transform: "translateX(-50%)" }}
-          >
-            {/* Dark overlay outside crop (4 rects) */}
+          <div className="absolute inset-0 pointer-events-none">
             <div className="absolute bg-black/60" style={{ top: 0, left: 0, right: 0, height: crop.y }} />
             <div className="absolute bg-black/60" style={{ top: crop.y + crop.height, left: 0, right: 0, bottom: 0 }} />
             <div className="absolute bg-black/60" style={{ top: crop.y, left: 0, width: crop.x, height: crop.height }} />
             <div className="absolute bg-black/60" style={{ top: crop.y, left: crop.x + crop.width, right: 0, height: crop.height }} />
 
-            {/* Crop selection box */}
             <div
-              className="absolute border-2 border-white/80 pointer-events-auto"
+              className="absolute border-2 border-white/80 pointer-events-auto touch-none"
               style={{ left: crop.x, top: crop.y, width: crop.width, height: crop.height, cursor: "move" }}
-              onMouseDown={(e) => handleMouseDown(e, "move")}
+              onMouseDown={(e) => handlePointerDown(e, "move")}
+              onTouchStart={(e) => handlePointerDown(e, "move")}
             >
-              {/* Rule of thirds */}
               <div className="absolute inset-0 pointer-events-none">
                 <div className="absolute left-1/3 top-0 bottom-0 w-px bg-white/20" />
                 <div className="absolute left-2/3 top-0 bottom-0 w-px bg-white/20" />
                 <div className="absolute top-1/3 left-0 right-0 h-px bg-white/20" />
                 <div className="absolute top-2/3 left-0 right-0 h-px bg-white/20" />
               </div>
-              {/* Resize handles */}
               {handles.map(({ type, style, cursor }) => (
                 <div
                   key={type}
-                  className="absolute w-3 h-3 bg-white border-2 border-[#ff0073] rounded-sm z-10 pointer-events-auto"
+                  className="absolute w-4 h-4 bg-white border-2 border-[#ff0073] rounded-full z-10 pointer-events-auto touch-none"
                   style={{ ...style, cursor }}
-                  onMouseDown={(e) => handleMouseDown(e, type)}
+                  onMouseDown={(e) => handlePointerDown(e, type)}
+                  onTouchStart={(e) => handlePointerDown(e, type)}
                 />
               ))}
             </div>
