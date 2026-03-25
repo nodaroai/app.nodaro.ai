@@ -106,6 +106,7 @@ function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
                     ) : (
                       <video
                         src={r.url}
+                        crossOrigin="anonymous"
                         className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`}
                         onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }}
                         muted

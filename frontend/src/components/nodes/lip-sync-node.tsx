@@ -247,6 +247,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                 ) : (
                   <video
                     src={r.url}
+                    crossOrigin="anonymous"
                     className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
                       i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                     }`}
@@ -286,6 +287,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         ) : (
           <video
             src={activeUrl}
+            crossOrigin="anonymous"
             poster={activeThumbnail}
             className="w-full h-full object-cover rounded-xl"
             onLoadedMetadata={(e) => {

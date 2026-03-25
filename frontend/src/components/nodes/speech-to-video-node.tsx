@@ -192,6 +192,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 ) : (
                   <video
                     src={r.url}
+                    crossOrigin="anonymous"
                     className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
                       i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                     }`}
@@ -226,7 +227,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
             className="w-full h-full object-cover rounded-xl"
             thumbnail={!useFull} thumbnailWidth={320} />
         ) : (
-          <video src={activeUrl} className="w-full h-full object-cover rounded-xl"
+          <video src={activeUrl} crossOrigin="anonymous" className="w-full h-full object-cover rounded-xl"
             onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight) }}
             autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline />
         )}

@@ -195,6 +195,7 @@ function MediaSlot({
     return (
       <video
         src={mediaUrl}
+        crossOrigin="anonymous"
         className={className}
         muted
         loop={videoAutoplay}

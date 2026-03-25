@@ -126,6 +126,7 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
                     ) : (
                       <video
                         src={r.url}
+                        crossOrigin="anonymous"
                         className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
                           i === activeIndex
                             ? "opacity-100 ring-2 ring-primary"

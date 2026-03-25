@@ -24,6 +24,7 @@ function AudioResultOverlayComponent({
     <div className="relative group/audio">
       <audio
         src={url}
+        crossOrigin="anonymous"
         controls
         className="w-full h-8"
         onClick={(e) => e.stopPropagation()}

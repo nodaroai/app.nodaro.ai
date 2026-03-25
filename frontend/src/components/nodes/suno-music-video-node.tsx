@@ -73,6 +73,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <video
                   key={`${r.jobId}-${i}`}
                   src={r.url}
+                  crossOrigin="anonymous"
                   muted
                   playsInline
                   className={`w-12 h-12 object-cover rounded-lg cursor-pointer transition-all ${

@@ -9,6 +9,7 @@ function preloadImage(src: string) {
   if (!src || preloaded.has(src)) return
   preloaded.add(src)
   const img = new Image()
+  img.crossOrigin = "anonymous"
   img.src = src
 }
 
@@ -48,6 +49,7 @@ export function CachedImage({
     <img
       ref={imgRef}
       src={effectiveSrc}
+      crossOrigin="anonymous"
       alt={alt}
       className={className}
       onClick={onClick}
