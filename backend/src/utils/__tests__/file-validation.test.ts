@@ -21,8 +21,11 @@ describe("detectCategory", () => {
     expect(detectCategory("audio/ogg")).toBe("audio")
   })
 
+  it("detects data types", () => {
+    expect(detectCategory("application/json")).toBe("data")
+  })
+
   it("returns null for unknown types", () => {
-    expect(detectCategory("application/json")).toBeNull()
     expect(detectCategory("text/html")).toBeNull()
   })
 })
@@ -74,8 +77,14 @@ describe("validateFile", () => {
     expect(result.category).toBe("audio")
   })
 
-  it("rejects unsupported MIME types", () => {
+  it("accepts data files (JSON)", () => {
     const result = validateFile("application/json", 1024)
+    expect(result.valid).toBe(true)
+    expect(result.category).toBe("data")
+  })
+
+  it("rejects unsupported MIME types", () => {
+    const result = validateFile("text/html", 1024)
     expect(result.valid).toBe(false)
     expect(result.error).toContain("Unsupported file type")
   })
