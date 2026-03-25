@@ -25,15 +25,27 @@ export function FreeCutEditorModal({ videoUrl, onExportComplete, onClose }: Free
       if (event.origin !== FREECUT_ORIGIN) return
 
       if (event.data?.type === "FREECUT_READY") {
-        // FreeCut message handler is initialized — send the video
+        // FreeCut message handler is initialized — fetch video and send as buffer to avoid CORS
         if (!sentVideoRef.current) {
           sentVideoRef.current = true
           const iframe = iframeRef.current
           if (iframe?.contentWindow) {
-            iframe.contentWindow.postMessage(
-              { type: "NODARO_LOAD_VIDEO", payload: { videoUrl } },
-              FREECUT_ORIGIN,
-            )
+            fetch(videoUrl)
+              .then((res) => res.arrayBuffer())
+              .then((videoBuffer) => {
+                iframe.contentWindow!.postMessage(
+                  { type: "NODARO_LOAD_VIDEO", payload: { videoUrl, videoBuffer } },
+                  FREECUT_ORIGIN,
+                  [videoBuffer],
+                )
+              })
+              .catch(() => {
+                // Fallback: send URL only, FreeCut will try to fetch it directly
+                iframe.contentWindow!.postMessage(
+                  { type: "NODARO_LOAD_VIDEO", payload: { videoUrl } },
+                  FREECUT_ORIGIN,
+                )
+              })
           }
         }
       }
