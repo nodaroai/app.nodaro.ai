@@ -1,6 +1,6 @@
-import { useRef } from "react"
+import { useMemo, useRef } from "react"
 import { createPortal } from "react-dom"
-import { X, Loader2 } from "lucide-react"
+import { X, Loader2, ArrowRight } from "lucide-react"
 import { AspectRatioSelector } from "../config-panels/aspect-ratio-selector"
 import { CropPanel } from "./crop-panel"
 import { TrimPanel } from "./trim-panel"
@@ -56,6 +56,45 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
   const updateState = (partial: Partial<MediaEditorState>) => {
     setEditorState((prev: MediaEditorState) => ({ ...prev, ...partial }))
   }
+
+  // Compute output info
+  const outputInfo = useMemo(() => {
+    const dw = editorState.displayWidth
+    const dh = editorState.displayHeight
+    const { crop } = editorState
+    const nw = currentFile.naturalWidth
+    const nh = currentFile.naturalHeight
+
+    // Output dimensions
+    let outW = nw
+    let outH = nh
+    if (crop && dw > 0 && dh > 0) {
+      const scaleX = nw / dw
+      const scaleY = nh / dh
+      outW = Math.round(crop.width * scaleX)
+      outH = Math.round(crop.height * scaleY)
+    }
+    const isCropped = outW !== nw || outH !== nh
+
+    // Output format
+    const outFormat = (editorState.format ?? originalFormat).toUpperCase()
+
+    // Output duration (video/audio)
+    const trim = editorState.trim
+    const origDuration = currentFile.duration
+    const outDuration = trim ? trim.endTime - trim.startTime : origDuration
+    const isTrimmed = trim && (trim.startTime > 0.05 || trim.endTime < origDuration - 0.05)
+
+    // File size estimate (rough — assume proportional to pixel count × duration ratio)
+    const origSize = currentFile.file.size
+    const pixelRatio = (outW * outH) / Math.max(nw * nh, 1)
+    const durationRatio = origDuration > 0 ? outDuration / origDuration : 1
+    const estimatedSize = mediaType === "audio"
+      ? Math.round(origSize * durationRatio)
+      : Math.round(origSize * pixelRatio * durationRatio)
+
+    return { outW, outH, outFormat, outDuration, isCropped, isTrimmed, origSize, estimatedSize, nw, nh, origDuration }
+  }, [editorState, currentFile, originalFormat, mediaType])
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm">
@@ -136,6 +175,49 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
                 onFormatChange={(format) => updateState({ format })}
                 originalFormat={originalFormat}
               />
+
+              {/* Output info bar */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 py-2 text-[11px] text-white/40 border-t border-white/5 mt-1">
+                {/* Dimensions (image + video) */}
+                {(mediaType === "image" || mediaType === "video") && (
+                  <span className="flex items-center gap-1.5">
+                    <span>{outputInfo.nw} × {outputInfo.nh}</span>
+                    {outputInfo.isCropped && (
+                      <>
+                        <ArrowRight className="w-3 h-3 text-white/25" />
+                        <span className="text-[#ff0073]">{outputInfo.outW} × {outputInfo.outH}</span>
+                      </>
+                    )}
+                  </span>
+                )}
+
+                {/* Duration (video + audio) */}
+                {(mediaType === "video" || mediaType === "audio") && outputInfo.origDuration > 0 && (
+                  <span className="flex items-center gap-1.5">
+                    <span>{formatDuration(outputInfo.origDuration)}</span>
+                    {outputInfo.isTrimmed && (
+                      <>
+                        <ArrowRight className="w-3 h-3 text-white/25" />
+                        <span className="text-[#ff0073]">{formatDuration(outputInfo.outDuration)}</span>
+                      </>
+                    )}
+                  </span>
+                )}
+
+                {/* Format */}
+                <span>{outputInfo.outFormat}</span>
+
+                {/* File size */}
+                <span className="flex items-center gap-1.5">
+                  <span>{formatBytes(outputInfo.origSize)}</span>
+                  {(outputInfo.isCropped || outputInfo.isTrimmed) && (
+                    <>
+                      <ArrowRight className="w-3 h-3 text-white/25" />
+                      <span className="text-white/50">~{formatBytes(outputInfo.estimatedSize)}</span>
+                    </>
+                  )}
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -187,4 +269,16 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
     </div>,
     document.body,
   )
+}
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }

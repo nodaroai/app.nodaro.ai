@@ -123,10 +123,8 @@ export function TrimPanel({
 
       const tick = () => {
         if (video.currentTime >= trim.endTime) {
-          video.pause()
-          setIsPlaying(false)
-          setPlayhead(trim.startTime)
-          return
+          // Loop back to start
+          video.currentTime = trim.startTime
         }
         setPlayhead(video.currentTime)
         animRef.current = requestAnimationFrame(tick)
@@ -142,10 +140,8 @@ export function TrimPanel({
 
       const tick = () => {
         if (audio.currentTime >= trim.endTime) {
-          audio.pause()
-          setIsPlaying(false)
-          setPlayhead(trim.startTime)
-          return
+          // Loop back to start
+          audio.currentTime = trim.startTime
         }
         setPlayhead(audio.currentTime)
         animRef.current = requestAnimationFrame(tick)
