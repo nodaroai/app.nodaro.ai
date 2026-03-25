@@ -134,10 +134,12 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
           <span className="text-[10px] text-muted-foreground font-medium px-1">Silent Video</span>
           <VideoResultOverlay
             url={nodeData.generatedSilentVideoUrl}
+            videoAutoplay={false}
             label="Silent Video"
             hasResults={false}
             onExpand={() => {}}
             onDelete={() => {}}
+            onDimensionsChange={() => {}}
           />
           <div className="flex gap-1 px-1">
             <a

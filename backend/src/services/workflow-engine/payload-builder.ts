@@ -1230,6 +1230,16 @@ export function buildPayload(
         usageLogId,
       })
 
+    case "split-media":
+      return ffmpegResult("split-media", {
+        jobId,
+        videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+        audioUrl: resolvedInputs.audioUrl || data.audioUrl,
+        chunkDuration: data.chunkDuration,
+        audioFormat: data.audioFormat,
+        usageLogId,
+      })
+
     case "trim-video":
       return ffmpegResult("trim-video", {
         jobId,

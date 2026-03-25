@@ -530,6 +530,23 @@ export function resolveNodeInputs(
       continue;
     }
 
+    // Split media output — route by handle, respecting selectedChunks
+    if (src.type === "split-media") {
+      const srcData = src.data as Record<string, unknown>;
+      if (srcEdge.sourceHandle === "audio-out") {
+        const audioUrls = (srcData.generatedAudioUrls as string[] | undefined) ?? [];
+        const selected = srcData.selectedAudioChunks as number[] | undefined;
+        const filtered = selected ? selected.map(i => audioUrls[i]).filter(Boolean) : audioUrls;
+        if (filtered[0]) inputs.audioUrl = filtered[0];
+      } else {
+        const videoUrls = (srcData.generatedVideoUrls as string[] | undefined) ?? [];
+        const selected = srcData.selectedVideoChunks as number[] | undefined;
+        const filtered = selected ? selected.map(i => videoUrls[i]).filter(Boolean) : videoUrls;
+        if (filtered[0]) inputs.videoUrl = filtered[0];
+      }
+      continue;
+    }
+
     if (src.type === "teleport-send" || src.type === "teleport-receive") {
       // Teleporter passthrough — detect media type from URL
       if (IMAGE_URL_RE.test(output)) {

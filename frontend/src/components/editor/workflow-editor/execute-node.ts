@@ -42,6 +42,7 @@ import {
   generateMotionGraphics,
   mergeVideoAudioApi,
   trimAudioApi,
+  splitMediaApi,
   trimVideoApi,
   transcodeVideoApi,
   speedRampApi,
@@ -111,6 +112,7 @@ import type {
   CombineVideosData,
   MergeVideoAudioData,
   TrimAudioData,
+  SplitMediaData,
   TrimVideoData,
   TranscodeVideoData,
   ManualEditData,
@@ -1356,8 +1358,8 @@ export function executeNode(
 
   if (node.type === "suno-separate") {
     const d = node.data as SunoSeparateData;
-    let taskId = inputs.sunoTaskId ?? d.taskId?.trim();
-    let audioId = inputs.sunoTrackId ?? d.audioId?.trim();
+    let taskId: string | undefined = inputs.sunoTaskId ?? d.taskId?.trim();
+    let audioId: string | undefined = inputs.sunoTrackId ?? d.audioId?.trim();
 
     // Fallback: walk upstream to find sunoTaskId/sunoTrackId from connected Suno node
     if (!taskId || !audioId) {
@@ -1368,21 +1370,21 @@ export function executeNode(
         if (!srcNode) continue;
         const srcData = srcNode.data as Record<string, unknown>;
         if (!taskId) {
-          taskId = (srcData.sunoTaskId as string | undefined);
-          // also check generatedResults
+          taskId = srcData.sunoTaskId as string | undefined;
           if (!taskId) {
             const results = srcData.generatedResults as Array<Record<string, unknown>> | undefined;
             const activeIndex = (srcData.activeResultIndex as number | undefined) ?? 0;
-            taskId = results?.[activeIndex]?.sunoTaskId as string | undefined;
+            const activeResult = results?.[activeIndex];
+            taskId = (activeResult?.sunoTaskId ?? undefined) as string | undefined;
           }
         }
         if (!audioId) {
-          audioId = (srcData.sunoTrackId as string | undefined);
-          // also check generatedResults
+          audioId = srcData.sunoTrackId as string | undefined;
           if (!audioId) {
             const results = srcData.generatedResults as Array<Record<string, unknown>> | undefined;
             const activeIndex = (srcData.activeResultIndex as number | undefined) ?? 0;
-            audioId = results?.[activeIndex]?.sunoTrackId as string | undefined;
+            const activeResult = results?.[activeIndex];
+            audioId = (activeResult?.sunoTrackId ?? undefined) as string | undefined;
           }
         }
         if (taskId && audioId) break;
@@ -2512,6 +2514,71 @@ export function executeNode(
       "Trim Audio",
       ctx,
     );
+  }
+
+  if (node.type === "split-media") {
+    const d = node.data as SplitMediaData;
+    const videoUrl = inputs.videoUrl;
+    const audioUrl = inputs.audioUrl;
+    if (!videoUrl && !audioUrl) {
+      toast.error(`Node "${d.label}": no video or audio input found`);
+      return Promise.reject(new Error("No input"));
+    }
+    const { updateNodeData } = useWorkflowStore.getState();
+    updateNodeData(node.id, { executionStatus: "running", currentJobProgress: 0 });
+    return new Promise<string>((resolve, reject) => {
+      splitMediaApi({
+        videoUrl: videoUrl || undefined,
+        audioUrl: audioUrl || undefined,
+        chunkDuration: d.chunkDuration || 10,
+        audioFormat: d.audioFormat || "mp3",
+        userId: ctx.userId,
+      }).then(({ jobId }) => {
+        toast.info("Split Media started", { description: `Job ID: ${jobId}` });
+        updateNodeData(node.id, { currentJobId: jobId });
+        const poll = setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId);
+            if (job.progress != null) updateProgressIfChanged(node.id, job.progress, updateNodeData);
+            if (job.status === "completed") {
+              clearInterval(poll);
+              const od = job.output_data as Record<string, unknown>;
+              const videoUrls = od.videoUrls as string[] | undefined;
+              const audioUrls = od.audioUrls as string[] | undefined;
+              const selectedAudio = d.selectedAudioChunks;
+              const selectedVideo = d.selectedVideoChunks;
+              const filteredAudio = audioUrls ? (selectedAudio ? selectedAudio.map(i => audioUrls[i]).filter(Boolean) : audioUrls) : [];
+              const filteredVideo = videoUrls ? (selectedVideo ? selectedVideo.map(i => videoUrls[i]).filter(Boolean) : videoUrls) : [];
+              const allUrls = [...filteredAudio, ...filteredVideo];
+              updateNodeData(node.id, {
+                executionStatus: "completed",
+                generatedVideoUrls: videoUrls,
+                generatedAudioUrls: audioUrls,
+                generatedItems: allUrls,
+                __listResults: allUrls,
+                currentJobId: undefined,
+                currentJobProgress: undefined,
+              });
+              toast.success(`Split Media complete: ${od.chunkCount} chunks`);
+              resolve((audioUrls?.[0] ?? videoUrls?.[0]) as string);
+            } else if (job.status === "failed") {
+              clearInterval(poll);
+              updateNodeData(node.id, { executionStatus: "failed", errorMessage: job.error_message ?? "Failed", currentJobId: undefined });
+              toast.error(`Split Media failed: ${job.error_message}`);
+              reject(new Error(job.error_message ?? "Failed"));
+            }
+          } catch {
+            clearInterval(poll);
+            updateNodeData(node.id, { executionStatus: "failed", currentJobId: undefined });
+            reject(new Error("Polling failed"));
+          }
+        }, 2000);
+        ctx.trackInterval(poll);
+      }).catch((err) => {
+        updateNodeData(node.id, { executionStatus: "failed", currentJobId: undefined });
+        reject(err);
+      });
+    });
   }
 
   if (node.type === "trim-video") {

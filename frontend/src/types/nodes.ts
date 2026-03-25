@@ -1404,6 +1404,24 @@ export type TrimAudioData = {
   activeResultIndex?: number
 }
 
+export type SplitMediaData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  chunkDuration: number
+  audioFormat?: "mp3" | "wav" | "aac"
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrls?: string[]
+  generatedAudioUrls?: string[]
+  selectedAudioChunks?: number[]
+  selectedVideoChunks?: number[]
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+}
+
 export type MixAudioData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -1443,10 +1461,12 @@ export type TrimVideoData = {
   label: string
   startTime: number
   endTime: number
+  outputSilentVideo?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string
+  generatedSilentVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
 }
@@ -2205,6 +2225,7 @@ export type SceneNodeData =
   | ResizeVideoData
   | SocialMediaFormatData
   | TrimAudioData
+  | SplitMediaData
   | MixAudioData
   | AdjustVolumeData
   | TrimVideoData
@@ -2309,6 +2330,7 @@ export type SceneNodeType =
   | "resize-video"
   | "social-media-format"
   | "trim-audio"
+  | "split-media"
   | "mix-audio"
   | "adjust-volume"
   | "trim-video"
@@ -3157,6 +3179,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Trim Audio", audioFormat: "mp3", fieldMappings: {} },
+  },
+  {
+    type: "split-media",
+    label: "Split Media",
+    category: "processing",
+    creditCost: 2,
+    inputs: ["video-in", "audio-in"],
+    outputs: ["video-out", "audio-out"],
+    defaultData: { label: "Split Media", chunkDuration: 10, audioFormat: "mp3", fieldMappings: {} },
   },
   {
     type: "mix-audio",

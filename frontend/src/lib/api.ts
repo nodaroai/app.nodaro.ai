@@ -1058,6 +1058,24 @@ export async function trimAudioApi(videoUrl: string, audioFormat?: string, userI
   return res.json()
 }
 
+export async function splitMediaApi(opts: { videoUrl?: string; audioUrl?: string; chunkDuration?: number; audioFormat?: string; userId?: string }): Promise<{ jobId: string }> {
+  const { userId, ...rest } = opts
+  const body: Record<string, unknown> = { ...rest }
+  if (userId) {
+    body.userId = userId
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/split-media`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start split-media")
+  }
+  return res.json()
+}
+
 export async function trimVideoApi(videoUrl: string, startTime: number, endTime?: number, userId?: string, outputSilentVideo?: boolean): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, startTime, endTime, outputSilentVideo }
   if (userId) {

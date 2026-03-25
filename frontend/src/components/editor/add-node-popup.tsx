@@ -627,6 +627,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Audio",
   },
   {
+    type: "split-media",
+    label: "Split Media",
+    icon: <Scissors className="h-4 w-4" />,
+    category: "Processing",
+    group: "Audio",
+  },
+  {
     type: "mix-audio",
     label: "Mix Audio",
     icon: <Music className="h-4 w-4" />,

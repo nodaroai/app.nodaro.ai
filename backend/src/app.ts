@@ -27,6 +27,7 @@ import { fadeVideoRoutes } from "./routes/fade-video.js"
 import { transcodeVideoRoutes } from "./routes/transcode-video.js"
 import { addCaptionsRoutes } from "./routes/add-captions.js"
 import { mixAudioRoutes } from "./routes/mix-audio.js"
+import { splitMediaRoutes } from "./routes/split-media.js"
 import { generateMusicRoutes } from "./routes/generate-music.js"
 import { uploadRoutes } from "./routes/upload.js"
 import { youtubeAudioRoutes } from "./routes/youtube-audio.js"
@@ -167,6 +168,7 @@ export async function buildApp() {
   await app.register(transcodeVideoRoutes)
   await app.register(addCaptionsRoutes)
   await app.register(mixAudioRoutes)
+  await app.register(splitMediaRoutes)
   await app.register(generateMusicRoutes)
   await app.register(uploadRoutes)
   await app.register(youtubeAudioRoutes)
