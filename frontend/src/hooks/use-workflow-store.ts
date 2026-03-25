@@ -145,8 +145,8 @@ interface WorkflowState {
   readonly saveStatus: SaveStatus
   readonly saveError: string | null
   readonly videoAutoplay: boolean
-  readonly freecutEdit: { nodeId: string; videoUrl: string } | null
-  readonly openFreeCut: (nodeId: string, videoUrl: string) => void
+  readonly freecutEdit: { nodeId: string; videoUrl: string; freecutProjectUrl?: string } | null
+  readonly openFreeCut: (nodeId: string, videoUrl: string, freecutProjectUrl?: string) => void
   readonly closeFreeCut: () => void
   readonly variableDisplayMode: VariableDisplayMode
   readonly setVariableDisplayMode: (mode: VariableDisplayMode) => void
@@ -765,7 +765,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set({ videoAutoplay: autoplay })
   },
 
-  openFreeCut: (nodeId, videoUrl) => set({ freecutEdit: { nodeId, videoUrl } }),
+  openFreeCut: (nodeId, videoUrl, freecutProjectUrl) => set({ freecutEdit: { nodeId, videoUrl, freecutProjectUrl } }),
   closeFreeCut: () => set({ freecutEdit: null }),
 
   setVariableDisplayMode: (mode) => set({ variableDisplayMode: mode }),

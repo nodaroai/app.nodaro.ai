@@ -248,7 +248,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                       type="button"
                       aria-label="Edit in FreeCut"
                       className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
-                      onClick={(e) => { e.stopPropagation(); openFreeCut(id, videoUrl) }}
+                      onClick={(e) => { e.stopPropagation(); openFreeCut(id, videoUrl, undefined) }}
                       title="Edit in FreeCut"
                     >
                       <Scissors className="w-3 h-3" />
