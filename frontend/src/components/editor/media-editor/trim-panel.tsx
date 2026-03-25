@@ -213,10 +213,11 @@ export function TrimPanel({
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Controls row: Trim label | Play + Loop | Time display */}
-      <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+      {/* Controls row: Trim label (left) | Play+Loop (absolute center) | Time (right) */}
+      <div className="relative flex items-center justify-between text-xs text-muted-foreground px-1 h-8">
         <span>Trim</span>
-        <div className="flex items-center gap-2">
+        {/* Absolute center — unaffected by left/right content width */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
           <button
             type="button"
             onClick={togglePlay}
