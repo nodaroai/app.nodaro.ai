@@ -83,6 +83,33 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, onExportComple
           setSaveState("idle")
         })
       }
+
+      if (event.data?.type === "FREECUT_REQUEST_IMPORT") {
+        const { accept, multiple } = event.data.payload
+        const input = document.createElement("input")
+        input.type = "file"
+        input.accept = accept || "video/*,audio/*,image/*"
+        input.multiple = multiple ?? true
+        input.onchange = async () => {
+          const files = Array.from(input.files || [])
+          if (!files.length) return
+          const payload = await Promise.all(
+            files.map(async (f) => ({
+              name: f.name,
+              type: f.type,
+              size: f.size,
+              buffer: await f.arrayBuffer(),
+            })),
+          )
+          const buffers = payload.map((f) => f.buffer)
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "NODARO_IMPORT_FILES", payload: { files: payload } },
+            FREECUT_ORIGIN,
+            buffers,
+          )
+        }
+        input.click()
+      }
     },
     [onExportComplete, onClose, videoUrl, sendVideoToFreeCut],
   )
