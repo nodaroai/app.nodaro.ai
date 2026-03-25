@@ -97,6 +97,8 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
                 aspectRatio={editorState.aspectRatio}
                 crop={editorState.crop}
                 onCropChange={(crop) => updateState({ crop })}
+                onDisplaySizeChange={(w, h) => updateState({ displayWidth: w, displayHeight: h })}
+                onAspectRatioChange={(ratio) => updateState({ aspectRatio: ratio })}
                 videoRef={videoRef}
               />
             )}

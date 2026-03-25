@@ -20,8 +20,10 @@ export interface TrimState {
 export interface MediaEditorState {
   crop: CropState | null
   trim: TrimState | null
-  aspectRatio: string  // "original" | "1:1" | "16:9" | etc.
+  aspectRatio: string  // "original" | "1:1" | "16:9" | "custom" | etc.
   format: string | null
+  displayWidth: number  // actual rendered image width (set by CropPanel)
+  displayHeight: number // actual rendered image height (set by CropPanel)
 }
 
 export function detectMediaType(file: File): MediaCategory {
@@ -106,6 +108,8 @@ export const DEFAULT_EDITOR_STATE: MediaEditorState = {
   trim: null,
   aspectRatio: "original",
   format: null,
+  displayWidth: 0,
+  displayHeight: 0,
 }
 
 export const ASPECT_RATIO_OPTIONS = [
@@ -115,6 +119,7 @@ export const ASPECT_RATIO_OPTIONS = [
   { value: "9:16", label: "9:16" },
   { value: "4:3", label: "4:3" },
   { value: "3:4", label: "3:4" },
+  { value: "custom", label: "Custom" },
 ]
 
 export const IMAGE_FORMAT_OPTIONS = [

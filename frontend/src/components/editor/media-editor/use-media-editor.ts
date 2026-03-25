@@ -9,8 +9,6 @@ import {
   DEFAULT_EDITOR_STATE,
   type MediaEditorState,
   type MediaCategory,
-  type CropState,
-  type TrimState,
 } from "./utils"
 
 export interface MediaEditorFile {
@@ -146,15 +144,22 @@ export function useMediaEditor({ onComplete, onCancel }: UseMediaEditorOptions) 
 
       if (currentFile.mediaType === "image") {
         const { crop } = editorState
-        if (crop && (crop.x !== 0 || crop.y !== 0 || crop.zoom !== 1)) {
-          const mediaUrl = currentFile.objectUrl
+        const dw = editorState.displayWidth
+        const dh = editorState.displayHeight
+        // Crop is "edited" if it doesn't cover the full display image
+        const cropEdited = crop && dw > 0 && dh > 0 && (
+          crop.x > 1 || crop.y > 1 ||
+          crop.width < dw - 2 || crop.height < dh - 2
+        )
+
+        if (cropEdited && crop && dw > 0) {
           const blob = await cropImageCanvas(
-            mediaUrl,
+            currentFile.objectUrl,
             { x: crop.x, y: crop.y, width: crop.width, height: crop.height },
             currentFile.naturalWidth,
             currentFile.naturalHeight,
-            crop.width / (crop.zoom || 1),
-            crop.height / (crop.zoom || 1),
+            dw,
+            dh,
             editorState.format ?? undefined,
           )
           const croppedFile = new File([blob], currentFile.file.name, { type: blob.type })
@@ -179,21 +184,29 @@ export function useMediaEditor({ onComplete, onCancel }: UseMediaEditorOptions) 
         }
       } else {
         const uploadResult = await upload(currentFile.file)
-        const cropIsEdited = editorState.crop && (
-          editorState.crop.zoom !== 1 ||
-          editorState.crop.panX !== 0 ||
-          editorState.crop.panY !== 0 ||
-          editorState.aspectRatio !== "original"
+        const dw = editorState.displayWidth
+        const dh = editorState.displayHeight
+        const { crop } = editorState
+        const cropEdited = crop && dw > 0 && dh > 0 && (
+          crop.x > 1 || crop.y > 1 ||
+          crop.width < dw - 2 || crop.height < dh - 2
         )
-        const hasEdits = cropIsEdited || editorState.trim || editorState.format
+        const hasEdits = cropEdited || editorState.trim || editorState.format
 
         if (hasEdits) {
           const processParams: Parameters<typeof processMedia>[0] = {
             sourceUrl: uploadResult.url,
             type: currentFile.mediaType as "video" | "audio",
           }
-          if (editorState.crop && currentFile.mediaType === "video") {
-            processParams.crop = computeCropPixels(editorState.crop, currentFile.naturalWidth, currentFile.naturalHeight)
+          if (cropEdited && crop && currentFile.mediaType === "video") {
+            const scaleX = currentFile.naturalWidth / dw
+            const scaleY = currentFile.naturalHeight / dh
+            processParams.crop = {
+              x: Math.round(crop.x * scaleX),
+              y: Math.round(crop.y * scaleY),
+              width: Math.round(crop.width * scaleX),
+              height: Math.round(crop.height * scaleY),
+            }
           }
           if (editorState.trim) {
             processParams.trim = editorState.trim
@@ -226,8 +239,8 @@ export function useMediaEditor({ onComplete, onCancel }: UseMediaEditorOptions) 
         cleanup()
         onComplete(newResults)
       }
-    } catch {
-      // Error handled by upload hook
+    } catch (err) {
+      console.error("[media-editor] Upload failed:", err)
     } finally {
       setIsProcessing(false)
     }
@@ -265,14 +278,28 @@ export function useMediaEditor({ onComplete, onCancel }: UseMediaEditorOptions) 
           }
         } else {
           const uploadResult = await upload(file.file)
-          const hasEdits = editorState.crop || editorState.trim || editorState.format
+          const { crop: applyCrop } = editorState
+          const adw = editorState.displayWidth
+          const adh = editorState.displayHeight
+          const applyCropEdited = applyCrop && adw > 0 && adh > 0 && (
+            applyCrop.x > 1 || applyCrop.y > 1 ||
+            applyCrop.width < adw - 2 || applyCrop.height < adh - 2
+          )
+          const hasEdits = applyCropEdited || editorState.trim || editorState.format
           if (hasEdits) {
             const processParams: Parameters<typeof processMedia>[0] = {
               sourceUrl: uploadResult.url,
               type: file.mediaType as "video" | "audio",
             }
-            if (editorState.crop && file.mediaType === "video") {
-              processParams.crop = computeCropPixels(editorState.crop, file.naturalWidth, file.naturalHeight)
+            if (applyCropEdited && applyCrop && file.mediaType === "video") {
+              const scaleX = file.naturalWidth / adw
+              const scaleY = file.naturalHeight / adh
+              processParams.crop = {
+                x: Math.round(applyCrop.x * scaleX),
+                y: Math.round(applyCrop.y * scaleY),
+                width: Math.round(applyCrop.width * scaleX),
+                height: Math.round(applyCrop.height * scaleY),
+              }
             }
             if (editorState.trim) processParams.trim = editorState.trim
             if (editorState.format) processParams.format = editorState.format
@@ -287,8 +314,8 @@ export function useMediaEditor({ onComplete, onCancel }: UseMediaEditorOptions) 
       setIsOpen(false)
       cleanup()
       onComplete(allResults)
-    } catch {
-      // Error handled
+    } catch (err) {
+      console.error("[media-editor] Apply all failed:", err)
     } finally {
       setIsProcessing(false)
     }
@@ -330,53 +357,6 @@ export function useMediaEditor({ onComplete, onCancel }: UseMediaEditorOptions) 
 }
 
 // --- Helpers ---
-
-/**
- * Translate display-space crop coordinates to original pixel coordinates.
- * Uses the CropState's own width/height and the known natural dimensions
- * to derive the display scale, avoiding any DOM queries.
- */
-function computeCropPixels(
-  crop: CropState,
-  naturalWidth: number,
-  naturalHeight: number,
-): { x: number; y: number; width: number; height: number } {
-  // CropPanel initialises crop.width/height to displayWidth/displayHeight,
-  // where displayScale = min(containerW/naturalW, containerH/naturalH, 1).
-  // We don't know the container size, but we can derive the scale from the
-  // initial crop dimensions that covered the full image (zoom=1, panX/Y=0).
-  // CropPanel's displayWidth = naturalWidth * displayScale, and the crop
-  // region is always in that coordinate space.  So:
-  //   scaleX = naturalWidth  / (naturalWidth * displayScale) = 1 / displayScale
-  // But we don't have displayScale directly.  However the crop panel set
-  // displayWidth = naturalWidth * displayScale, so if we know the full-image
-  // display width we can solve for it.  Since we don't store that, use a
-  // safe approximation: the crop coordinates already represent a fraction of
-  // the display image.  The aspect ratio is preserved (scaleX === scaleY)
-  // so we can derive scale from crop dimensions relative to natural size.
-  // CropPanel clamps crop within [0, displayWidth] x [0, displayHeight],
-  // so max(crop.x + crop.width) ≤ displayWidth = naturalWidth * displayScale.
-  // The safest approach: use the fact that displayScale ≤ 1, so the crop's
-  // coordinate space upper bound equals naturalWidth * displayScale.  Since
-  // we need pixel coords, multiply by 1/displayScale.  We approximate
-  // displayScale as min(crop_max_x / naturalWidth, crop_max_y / naturalHeight, 1)
-  // but that's circular.  Instead, use CropPanel's own displayScale formula
-  // with a reasonable max container size of 480x400 (the modal's max dimensions).
-  const MAX_CONTAINER_W = 480
-  const MAX_CONTAINER_H = 400
-  const displayScale = Math.min(
-    MAX_CONTAINER_W / naturalWidth,
-    MAX_CONTAINER_H / naturalHeight,
-    1,
-  )
-  const inv = 1 / displayScale
-  return {
-    x: Math.round(crop.x * inv),
-    y: Math.round(crop.y * inv),
-    width: Math.round(crop.width * inv),
-    height: Math.round(crop.height * inv),
-  }
-}
 
 function getImageDimensions(url: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {

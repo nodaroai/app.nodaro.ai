@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Minus, Plus } from "lucide-react"
 import { parseAspectRatio, type CropState } from "./utils"
 
 interface CropPanelProps {
@@ -10,6 +9,8 @@ interface CropPanelProps {
   aspectRatio: string
   crop: CropState | null
   onCropChange: (crop: CropState) => void
+  onDisplaySizeChange?: (w: number, h: number) => void
+  onAspectRatioChange?: (ratio: string) => void
   videoRef?: React.RefObject<HTMLVideoElement | null>
 }
 
@@ -26,6 +27,8 @@ export function CropPanel({
   aspectRatio,
   crop,
   onCropChange,
+  onDisplaySizeChange,
+  onAspectRatioChange,
   videoRef,
 }: CropPanelProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -39,14 +42,17 @@ export function CropPanel({
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget
     setImgSize({ w: img.clientWidth, h: img.clientHeight })
-  }, [])
+    onDisplaySizeChange?.(img.clientWidth, img.clientHeight)
+  }, [onDisplaySizeChange])
 
-  // Also measure on video load
   const handleVideoLoad = useCallback(() => {
     if (videoRef?.current) {
-      setImgSize({ w: videoRef.current.clientWidth, h: videoRef.current.clientHeight })
+      const w = videoRef.current.clientWidth
+      const h = videoRef.current.clientHeight
+      setImgSize({ w, h })
+      onDisplaySizeChange?.(w, h)
     }
-  }, [videoRef])
+  }, [videoRef, onDisplaySizeChange])
 
   // Init crop to full displayed image once we know the size
   useEffect(() => {
@@ -118,7 +124,16 @@ export function CropPanel({
         if (dragType.includes("n")) { ny = sc.y + dy; nh = sc.height - dy }
         newCrop = { ...sc, x: nx, y: ny, width: nw, height: nh }
       }
-      onCropChange(constrainCrop(newCrop))
+      const constrained = constrainCrop(newCrop)
+      onCropChange(constrained)
+      // If user resized (not moved) and ratio is unlocked, switch to "custom"
+      if (dragType !== "move" && lockedRatio === null && onAspectRatioChange) {
+        const newRatio = constrained.width / constrained.height
+        const isOriginalRatio = Math.abs(newRatio - naturalWidth / naturalHeight) < 0.02
+        if (!isOriginalRatio && constrained.width < imgSize.w * 0.99) {
+          onAspectRatioChange("custom")
+        }
+      }
     }
     const handleMouseUp = () => {
       setDragType(null)
@@ -132,14 +147,6 @@ export function CropPanel({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragType, crop])
-
-  const handleZoomChange = useCallback(
-    (newZoom: number) => {
-      if (!crop) return
-      onCropChange({ ...crop, zoom: Math.max(1, Math.min(newZoom, 5)) })
-    },
-    [crop, onCropChange],
-  )
 
   const handles: { type: DragType; style: React.CSSProperties; cursor: string }[] = [
     { type: "nw", style: { top: -HANDLE_SIZE / 2, left: -HANDLE_SIZE / 2 }, cursor: "nw-resize" },
@@ -168,10 +175,6 @@ export function CropPanel({
             draggable={false}
             onLoad={handleImageLoad}
             className="block max-w-full max-h-[60vh] mx-auto"
-            style={{
-              transform: crop ? `scale(${crop.zoom}) translate(${crop.panX / (crop.zoom || 1)}px, ${crop.panY / (crop.zoom || 1)}px)` : undefined,
-              transformOrigin: "center",
-            }}
           />
         ) : (
           <video
@@ -220,21 +223,6 @@ export function CropPanel({
             </div>
           </div>
         )}
-      </div>
-
-      {/* Zoom slider */}
-      <div className="flex items-center gap-2 px-2">
-        <button type="button" onClick={() => handleZoomChange((crop?.zoom ?? 1) - 0.25)} className="p-1 text-muted-foreground hover:text-white transition-colors">
-          <Minus className="w-4 h-4" />
-        </button>
-        <input
-          type="range" min={1} max={5} step={0.1} value={crop?.zoom ?? 1}
-          onChange={(e) => handleZoomChange(Number(e.target.value))}
-          className="flex-1 accent-[#ff0073]"
-        />
-        <button type="button" onClick={() => handleZoomChange((crop?.zoom ?? 1) + 0.25)} className="p-1 text-muted-foreground hover:text-white transition-colors">
-          <Plus className="w-4 h-4" />
-        </button>
       </div>
     </div>
   )
