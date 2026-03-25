@@ -17,7 +17,8 @@ interface TrimPanelProps {
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+  const ms = Math.floor((seconds % 1) * 1000)
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}`
 }
 
 export function TrimPanel({
@@ -29,7 +30,8 @@ export function TrimPanel({
   videoRef,
 }: TrimPanelProps) {
   const trackRef = useRef<HTMLDivElement>(null)
-  const [dragging, setDragging] = useState<"start" | "end" | "playhead" | null>(null)
+  const [dragging, setDragging] = useState<"start" | "end" | "playhead" | "region" | null>(null)
+  const regionDragStartRef = useRef<{ time: number; trimStart: number; trimEnd: number } | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [playhead, setPlayhead] = useState(trim.startTime)
   const animRef = useRef<number | null>(null)
@@ -81,10 +83,24 @@ export function TrimPanel({
       } else if (dragging === "playhead") {
         const clamped = Math.max(trim.startTime, Math.min(time, trim.endTime))
         seekToTime(clamped)
+      } else if (dragging === "region" && regionDragStartRef.current) {
+        const ref = regionDragStartRef.current
+        const delta = time - ref.time
+        const trimLen = ref.trimEnd - ref.trimStart
+        let newStart = ref.trimStart + delta
+        let newEnd = ref.trimEnd + delta
+        // Clamp to [0, duration]
+        if (newStart < 0) { newStart = 0; newEnd = trimLen }
+        if (newEnd > duration) { newEnd = duration; newStart = duration - trimLen }
+        onTrimChange({ startTime: newStart, endTime: newEnd })
+        seekToTime(newStart + (playhead - ref.trimStart))
       }
     }
 
-    const handleMouseUp = () => setDragging(null)
+    const handleMouseUp = () => {
+      setDragging(null)
+      regionDragStartRef.current = null
+    }
 
     window.addEventListener("mousemove", handleMouseMove)
     window.addEventListener("mouseup", handleMouseUp)
@@ -268,10 +284,27 @@ export function TrimPanel({
           style={{ width: `${100 - endPct}%` }}
         />
 
-        {/* Active region border */}
+        {/* Active region — draggable to slide the whole trim window */}
         <div
-          className="absolute top-0 bottom-0 border-t-2 border-b-2 border-[#ff0073]/30 pointer-events-none"
+          data-trim-handle
+          className="absolute top-0 bottom-0 border-t-2 border-b-2 border-[#ff0073]/30 cursor-grab active:cursor-grabbing"
           style={{ left: `${startPct}%`, right: `${100 - endPct}%` }}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            if (isPlaying) {
+              setIsPlaying(false)
+              if (videoRef?.current) videoRef.current.pause()
+              if (audioRef.current) audioRef.current.pause()
+              if (animRef.current) cancelAnimationFrame(animRef.current)
+            }
+            regionDragStartRef.current = {
+              time: getTimeFromEvent(e.clientX),
+              trimStart: trim.startTime,
+              trimEnd: trim.endTime,
+            }
+            setDragging("region")
+          }}
         />
 
         {/* Start handle */}
