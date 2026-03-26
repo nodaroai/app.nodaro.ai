@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useRef, useState } from "react"
+import { memo, useEffect, useRef, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Video, Upload, Link, Loader2, AlertCircle, X, Play, Expand, Download, Scissors } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -14,7 +14,6 @@ import { useFileUpload } from "@/hooks/use-file-upload"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useFullResolution } from "@/hooks/use-full-resolution"
 import type { UploadVideoData } from "@/types/nodes"
 
 const HANDLES = [
@@ -22,17 +21,6 @@ const HANDLES = [
   { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
 ] as const
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, "0")}`
-}
 
 function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as UploadVideoData
@@ -42,7 +30,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
-  const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
+  const { isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
   const mediaEditor = useMediaEditor({
     onComplete: async (results) => {
       const result = results[0]
@@ -64,12 +52,33 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
       })
     },
   })
-  const useFull = useFullResolution(id)
-
   const videoUrl = nodeData.r2Url || nodeData.url
   const thumbnailUrl = nodeData.thumbnailUrl
   const hasFile = Boolean(videoUrl) && !nodeData.externalUrl
   const [isDragOver, setIsDragOver] = useState(false)
+  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
+  useEffect(() => {
+    const url = thumbnailUrl || videoUrl
+    if (!url) { setMediaAspectRatio(undefined); return }
+    let cancelled = false
+    if (thumbnailUrl) {
+      const img = new window.Image()
+      img.onload = () => {
+        if (!cancelled && img.naturalWidth > 0) setMediaAspectRatio(img.naturalWidth / img.naturalHeight)
+      }
+      img.src = thumbnailUrl
+      if (img.complete && img.naturalWidth > 0) {
+        setMediaAspectRatio(img.naturalWidth / img.naturalHeight)
+      }
+    } else if (videoUrl) {
+      const vid = document.createElement("video")
+      vid.onloadedmetadata = () => {
+        if (!cancelled && vid.videoWidth > 0) setMediaAspectRatio(vid.videoWidth / vid.videoHeight)
+      }
+      vid.src = videoUrl
+    }
+    return () => { cancelled = true }
+  }, [videoUrl, thumbnailUrl])
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -136,208 +145,173 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
         credits={0}
         selected={selected}
         minWidth={220}
+        imageAspectRatio={mediaAspectRatio}
         hideHeader
         handles={HANDLES}
       >
-        <div className="p-3">
-          {/* Uploading state */}
-          {(isUploading || nodeData.isUploading) && (
-            <div className="flex flex-col items-center gap-2 py-3">
-              <Loader2 className="w-5 h-5 animate-spin text-[#38BDF8]" />
-              <p className="text-xs text-muted-foreground">Uploading...</p>
-              <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-[#38BDF8] rounded-full animate-pulse" style={{ width: "60%" }} />
-              </div>
-            </div>
-          )}
-
-          {/* Error state */}
-          {!isUploading && !nodeData.isUploading && (uploadError || nodeData.uploadError) && (
-            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-red-500/10 text-red-400 text-xs">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{uploadError || nodeData.uploadError}</span>
-            </div>
-          )}
-
-          {/* Upload mode */}
-          {!isUploading && !nodeData.isUploading && mode === "upload" && (
-            <>
-              {hasFile ? (
-                <div className="relative group">
-                  {videoUrl ? (
-                    <div className="w-full rounded-md overflow-hidden bg-muted/30 relative">
-                      <video
-                        src={videoUrl}
-                        poster={thumbnailUrl || undefined}
-                        crossOrigin="anonymous"
-                        autoPlay={videoAutoplay}
-                        loop={videoAutoplay}
-                        muted
-                        playsInline
-                        className="w-full object-contain"
-                      />
-                      {!videoAutoplay && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center">
-                            <Play className="w-4 h-4 text-white ml-0.5" />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="w-full aspect-video rounded-md bg-muted/30 flex items-center justify-center">
-                      <Video className="w-6 h-6 text-muted-foreground/40" />
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    aria-label="Remove video"
-                    className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-red-600/80 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleClear()
-                    }}
-                    title="Remove"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                  {/* Action buttons row */}
-                  <div className="absolute bottom-1 left-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      aria-label="Expand video"
-                      className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
-                      onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
-                      title="Expand"
-                    >
-                      <Expand className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Download video"
-                      className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const a = document.createElement('a')
-                        a.href = '/v1/image-proxy?url=' + encodeURIComponent(videoUrl) + '&download=1'
-                        a.download = (nodeData.label || 'video') + '.mp4'
-                        a.click()
-                      }}
-                      title="Download"
-                    >
-                      <Download className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Copy URL"
-                      className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        copyToClipboard(videoUrl, "URL copied")
-                      }}
-                      title="Copy URL"
-                    >
-                      <Link className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Edit in FreeCut"
-                      className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
-                      onClick={(e) => { e.stopPropagation(); openFreeCut(id, videoUrl, undefined) }}
-                      title="Edit in FreeCut"
-                    >
-                      <Scissors className="w-3 h-3" />
-                    </button>
-                    <SaveToLibraryButton url={videoUrl} type="video" />
-                  </div>
-                  {nodeData.filename && (
-                    <div className="mt-1.5 space-y-0.5">
-                      <p className="text-[10px] text-muted-foreground truncate">{nodeData.filename}</p>
-                      <div className="flex gap-2 text-[10px] text-muted-foreground/60">
-                        {nodeData.fileSize > 0 && <span>{formatBytes(nodeData.fileSize)}</span>}
-                        {nodeData.metadata?.durationSeconds && nodeData.metadata.durationSeconds > 0 && (
-                          <span>{formatDuration(nodeData.metadata.durationSeconds)}</span>
-                        )}
-                        {nodeData.metadata?.width && nodeData.metadata?.height && (
-                          <span>{nodeData.metadata.width} x {nodeData.metadata.height}</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
+        {/* Flush: video result display (when hasFile=true and not uploading) */}
+        {!isUploading && !nodeData.isUploading && hasFile && mode === "upload" && (
+          <div className="relative w-full h-full group">
+            {thumbnailUrl ? (
+              <CachedImage
+                src={thumbnailUrl}
+                alt="Video thumbnail"
+                className="w-full h-full object-cover rounded-xl"
+              />
+            ) : (
+              <video
+                src={videoUrl}
+                crossOrigin="anonymous"
+                autoPlay={videoAutoplay}
+                loop={videoAutoplay}
+                muted
+                playsInline
+                className="w-full h-full object-cover rounded-xl"
+              />
+            )}
+            {!videoAutoplay && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
+                  <Play className="w-5 h-5 text-white ml-0.5" />
                 </div>
-              ) : (
-                <>
-                  <input
-                    type="file"
-                    accept="video/mp4,video/webm,video/quicktime,video/x-msvideo"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                    ref={fileInputRef}
-                  />
-                  <button
-                    type="button"
-                    className={`w-full flex items-center justify-center gap-2 h-16 rounded-md border-2 border-dashed transition-colors cursor-pointer ${
-                      isDragOver
-                        ? "border-[#38BDF8] bg-[#38BDF8]/10 text-[#38BDF8]"
-                        : "border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground/60 hover:text-[#38BDF8]"
-                    }`}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      fileInputRef.current?.click()
-                    }}
-                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true) }}
-                    onDragLeave={() => setIsDragOver(false)}
-                    onDrop={handleDrop}
-                  >
-                    <Upload className="w-4 h-4" />
-                    <span className="text-xs">{isDragOver ? "Drop Video" : "Choose Video"}</span>
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                className="w-full text-center text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors mt-1"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setMode("url")
-                }}
-              >
-                or use URL
-              </button>
-            </>
-          )}
-
-          {/* URL mode */}
-          {!isUploading && !nodeData.isUploading && mode === "url" && (
-            <>
-              <div className="flex items-center gap-1.5">
-                <Link className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
-                <input
-                  type="text"
-                  value={nodeData.externalUrl || nodeData.url || ""}
-                  onChange={(e) => {
-                    e.stopPropagation()
-                    handleUrlChange(e.target.value)
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  placeholder="https://..."
-                  className="w-full bg-transparent border-b border-muted-foreground/20 text-xs py-1 outline-none focus:border-[#38BDF8] transition-colors placeholder:text-muted-foreground/30"
-                />
               </div>
-              <button
-                type="button"
-                className="w-full text-center text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors mt-1"
+            )}
+            {/* Top-right: delete */}
+            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button type="button" aria-label="Remove video"
+                className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-red-600/80 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => { e.stopPropagation(); handleClear() }}
+                title="Remove">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {/* Bottom-left: action buttons */}
+            <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button type="button" aria-label="Expand video" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Expand">
+                <Expand className="w-3.5 h-3.5" />
+              </button>
+              <button type="button" aria-label="Download" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
-                  setMode("upload")
-                }}
-              >
-                or upload file
+                  const a = document.createElement('a')
+                  a.href = '/v1/image-proxy?url=' + encodeURIComponent(videoUrl) + '&download=1'
+                  a.download = (nodeData.label || 'video') + '.mp4'
+                  a.click()
+                }} title="Download">
+                <Download className="w-3.5 h-3.5" />
               </button>
-            </>
-          )}
-        </div>
+              <button type="button" aria-label="Copy URL" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  copyToClipboard(videoUrl, "URL copied")
+                }} title="Copy URL">
+                <Link className="w-3.5 h-3.5" />
+              </button>
+              <button type="button" aria-label="Edit in FreeCut" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => { e.stopPropagation(); openFreeCut(id, videoUrl, undefined) }} title="Edit in FreeCut">
+                <Scissors className="w-3.5 h-3.5" />
+              </button>
+              <SaveToLibraryButton url={videoUrl} type="video" />
+            </div>
+          </div>
+        )}
+
+        {/* Padded: all other states (uploading, error, empty upload, URL mode) */}
+        {(isUploading || nodeData.isUploading || !hasFile || mode !== "upload") && (
+          <div className="p-3">
+            {/* Uploading state */}
+            {(isUploading || nodeData.isUploading) && (
+              <div className="flex flex-col items-center gap-2 py-3">
+                <Loader2 className="w-5 h-5 animate-spin text-[#38BDF8]" />
+                <p className="text-xs text-muted-foreground">Uploading...</p>
+                <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div className="h-full bg-[#38BDF8] rounded-full animate-pulse" style={{ width: "60%" }} />
+                </div>
+              </div>
+            )}
+
+            {/* Error state */}
+            {!isUploading && !nodeData.isUploading && (uploadError || nodeData.uploadError) && (
+              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-red-500/10 text-red-400 text-xs">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{uploadError || nodeData.uploadError}</span>
+              </div>
+            )}
+
+            {/* Upload mode - empty state */}
+            {!isUploading && !nodeData.isUploading && mode === "upload" && !hasFile && (
+              <>
+                <input
+                  type="file"
+                  accept="video/mp4,video/webm,video/quicktime,video/x-msvideo"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  ref={fileInputRef}
+                />
+                <button
+                  type="button"
+                  className={`w-full flex items-center justify-center gap-2 h-16 rounded-md border-2 border-dashed transition-colors cursor-pointer ${
+                    isDragOver
+                      ? "border-[#38BDF8] bg-[#38BDF8]/10 text-[#38BDF8]"
+                      : "border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground/60 hover:text-[#38BDF8]"
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    fileInputRef.current?.click()
+                  }}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true) }}
+                  onDragLeave={() => setIsDragOver(false)}
+                  onDrop={handleDrop}
+                >
+                  <Upload className="w-4 h-4" />
+                  <span className="text-xs">{isDragOver ? "Drop Video" : "Choose Video"}</span>
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-center text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors mt-1"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setMode("url")
+                  }}
+                >
+                  or use URL
+                </button>
+              </>
+            )}
+
+            {/* URL mode */}
+            {!isUploading && !nodeData.isUploading && mode === "url" && (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <Link className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+                  <input
+                    type="text"
+                    value={nodeData.externalUrl || nodeData.url || ""}
+                    onChange={(e) => {
+                      e.stopPropagation()
+                      handleUrlChange(e.target.value)
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    placeholder="https://..."
+                    className="w-full bg-transparent border-b border-muted-foreground/20 text-xs py-1 outline-none focus:border-[#38BDF8] transition-colors placeholder:text-muted-foreground/30"
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="w-full text-center text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors mt-1"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setMode("upload")
+                  }}
+                >
+                  or upload file
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </BaseNode>
       <HandleIcon icon={<Video />} color="cyan" side="left" top="calc(100% - 20px)" />
       <HandleIcon icon={<Video />} top="20px" />
