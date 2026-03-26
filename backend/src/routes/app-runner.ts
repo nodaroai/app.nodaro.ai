@@ -49,6 +49,7 @@ const createRunBody = z.object({
 const updateRunBody = z.object({
   inputValues: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
   name: z.string().max(100).nullable().optional(),
+  hiddenNodes: z.array(z.string()).optional(),
 })
 
 const runsQuery = z.object({
@@ -485,11 +486,12 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     const { runId } = paramsParsed.data
-    const { inputValues, name } = bodyParsed.data
+    const { inputValues, name, hiddenNodes } = bodyParsed.data
 
     const updates: Record<string, unknown> = {}
     if (inputValues !== undefined) updates.input_values = inputValues
     if (name !== undefined) updates.name = name
+    if (hiddenNodes !== undefined) updates.hidden_nodes = hiddenNodes
 
     if (Object.keys(updates).length === 0) {
       return reply.status(400).send({
@@ -502,7 +504,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       .update(updates)
       .eq("id", runId)
       .eq("runner_id", req.userId)
-      .select("id, input_values, name")
+      .select("id, input_values, name, hidden_nodes")
       .single()
 
     if (runError || !run) {
@@ -511,7 +513,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       })
     }
 
-    return reply.send({ id: run.id, inputValues: run.input_values, name: run.name })
+    return reply.send({ id: run.id, inputValues: run.input_values, name: run.name, hiddenNodes: run.hidden_nodes ?? [] })
   })
 
   // --- List runner's past runs for this app ---
@@ -578,7 +580,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     let query = supabase
       .from("app_runs")
       .select(
-        "id, app_id, created_at, execution_id, input_values, status, name, credits_used, workflow_executions(status, node_states, completed_nodes, total_nodes, completed_at, total_credits_used)"
+        "id, app_id, created_at, execution_id, input_values, status, name, credits_used, hidden_nodes, workflow_executions(status, node_states, completed_nodes, total_nodes, completed_at, total_credits_used)"
       )
       .in("app_id", versionIds)
       .eq("runner_id", req.userId)
@@ -638,6 +640,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           creditsUsed: exec?.total_credits_used ?? (run as { credits_used?: number }).credits_used ?? 0,
           version: versionMap.get(run.app_id) ?? null,
           thumbnailUrl,
+          hiddenNodes: (run as { hidden_nodes?: string[] }).hidden_nodes ?? [],
         }
       }),
       nextCursor,
@@ -664,7 +667,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const { data: run, error: runError } = await supabase
       .from("app_runs")
       .select(
-        "id, app_id, runner_id, execution_id, input_values, status, name, credits_used, created_at, published_apps!app_id(version, thumbnail_node_id), workflow_executions(id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, completed_at)"
+        "id, app_id, runner_id, execution_id, input_values, status, name, credits_used, hidden_nodes, created_at, published_apps!app_id(version, thumbnail_node_id), workflow_executions(id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, completed_at)"
       )
       .eq("id", runId)
       .eq("runner_id", req.userId)
@@ -712,6 +715,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       createdAt: run.created_at,
       version: pubApp?.version ?? null,
       thumbnailUrl,
+      hiddenNodes: (run as { hidden_nodes?: string[] }).hidden_nodes ?? [],
       execution: exec
         ? {
             id: exec.id,

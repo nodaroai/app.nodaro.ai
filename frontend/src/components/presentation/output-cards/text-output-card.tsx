@@ -1,14 +1,20 @@
 import { Copy, FileText } from "lucide-react"
 import { toast } from "sonner"
-import { StatusBadge, GlassCard, GlassButton, type OutputStatus } from "./shared"
+import { StatusBadge, GlassCard, GlassButton, UnhideBanner, resolveTextCardActions, type OutputStatus, type OutputCardActions } from "./shared"
+import { ActionMenu } from "./action-menu"
+import { ActionBar } from "./action-bar"
+import { shareMedia } from "./share-utils"
 
 interface TextOutputCardProps {
   label: string
   status: OutputStatus
   text?: string
+  nodeId?: string
+  actions?: OutputCardActions
 }
 
-export function TextOutputCard({ label, status, text }: TextOutputCardProps) {
+export function TextOutputCard({ label, status, text, nodeId, actions }: TextOutputCardProps) {
+  const bound = resolveTextCardActions(actions, nodeId)
   return (
     <GlassCard>
       <div className="flex items-center justify-between mb-3">
@@ -22,6 +28,15 @@ export function TextOutputCard({ label, status, text }: TextOutputCardProps) {
             >
               <Copy className="w-3.5 h-3.5" />
             </GlassButton>
+          )}
+          {text && (
+            <div className="hidden md:block">
+              <ActionMenu
+                mediaType="text"
+                onShare={() => shareMedia({ text, title: label, type: "text" })}
+                onHide={bound.onHide}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -43,9 +58,20 @@ export function TextOutputCard({ label, status, text }: TextOutputCardProps) {
           </div>
         </div>
       ) : text ? (
-        <div className="bg-muted/30 rounded-lg p-3 text-sm text-foreground whitespace-pre-wrap max-h-64 overflow-y-auto border border-border leading-relaxed">
-          {text}
-        </div>
+        <>
+          <div className="bg-muted/30 rounded-lg p-3 text-sm text-foreground whitespace-pre-wrap max-h-64 overflow-y-auto border border-border leading-relaxed">
+            {text}
+          </div>
+          <ActionBar
+            mediaType="text"
+            label={label}
+            onShare={() => shareMedia({ text, title: label, type: "text" })}
+            onHide={bound.onHide}
+          />
+          {bound.isRevealed && bound.onUnhide && (
+            <UnhideBanner onUnhide={bound.onUnhide} />
+          )}
+        </>
       ) : (
         <div className="flex flex-col items-center justify-center h-20 rounded-lg bg-muted/30 text-muted-foreground">
           <FileText className="w-8 h-8 mb-1 animate-pulse" />

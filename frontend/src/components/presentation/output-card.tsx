@@ -4,6 +4,7 @@ import { AudioOutputCard } from "./output-cards/audio-output-card"
 import { TextOutputCard } from "./output-cards/text-output-card"
 import { GalleryOutputCard } from "./output-cards/gallery-output-card"
 import { StatusBadge } from "./output-cards/shared"
+import type { OutputCardActions } from "./output-cards/shared"
 import { Progress } from "@/components/ui/progress"
 import { FieldBadge } from "./field-badge"
 import type { ExposableField } from "@nodaro-shared/presentation-types"
@@ -38,6 +39,8 @@ export interface OutputCardProps {
   columns?: number
   /** Field badges to display below the media content */
   fieldBadges?: FieldBadgeEntry[]
+  /** Action callbacks for share/edit/hide */
+  actions?: OutputCardActions
 }
 
 /** Renders the appropriate output card based on output type */
@@ -57,6 +60,7 @@ export function OutputCard({
   elementSize,
   columns,
   fieldBadges,
+  actions,
 }: OutputCardProps) {
   const showProgress = (status === "running" || status === "waiting") && progress != null
   const badgeRow = fieldBadges && fieldBadges.length > 0 ? (
@@ -107,15 +111,15 @@ export function OutputCard({
   const card = (() => {
     switch (outputType) {
       case "image":
-        return <ImageOutputCard label={label} status={status} url={url} nodeId={nodeId} onOpenMedia={onOpenMedia} elementSize={elementSize} />
+        return <ImageOutputCard label={label} status={status} url={url} nodeId={nodeId} onOpenMedia={onOpenMedia} elementSize={elementSize} actions={actions} />
       case "video":
-        return <VideoOutputCard label={label} status={status} url={url} nodeId={nodeId} onOpenMedia={onOpenMedia} elementSize={elementSize} />
+        return <VideoOutputCard label={label} status={status} url={url} nodeId={nodeId} onOpenMedia={onOpenMedia} elementSize={elementSize} actions={actions} />
       case "audio":
-        return <AudioOutputCard label={label} status={status} url={url} elementSize={elementSize} />
+        return <AudioOutputCard label={label} status={status} url={url} elementSize={elementSize} nodeId={nodeId} actions={actions} />
       case "text":
-        return <TextOutputCard label={label} status={status} text={text} />
+        return <TextOutputCard label={label} status={status} text={text} nodeId={nodeId} actions={actions} />
       default:
-        return <TextOutputCard label={label} status={status} text={text ?? url} />
+        return <TextOutputCard label={label} status={status} text={text ?? url} nodeId={nodeId} actions={actions} />
     }
   })()
 

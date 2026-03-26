@@ -1,5 +1,8 @@
 import { Download, Music } from "lucide-react"
-import { StatusBadge, GlassCard, GlassButton, downloadFile, type OutputStatus } from "./shared"
+import { StatusBadge, GlassCard, GlassButton, downloadFile, UnhideBanner, resolveCardActions, type OutputStatus, type OutputCardActions } from "./shared"
+import { ActionMenu } from "./action-menu"
+import { ActionBar } from "./action-bar"
+import { shareMedia } from "./share-utils"
 import { WaveformBars } from "../input-cards/shared"
 import { ELEMENT_SIZES } from "@/lib/presentation-display"
 
@@ -15,16 +18,31 @@ interface AudioOutputCardProps {
   label: string
   status: OutputStatus
   url?: string
+  nodeId?: string
   elementSize?: "sm" | "md" | "lg"
+  actions?: OutputCardActions
 }
 
-export function AudioOutputCard({ label, status, url, elementSize }: AudioOutputCardProps) {
+export function AudioOutputCard({ label, status, url, nodeId, elementSize, actions }: AudioOutputCardProps) {
   const heightClass = ELEMENT_SIZES.audioOutput[elementSize ?? "md"]
+  const bound = resolveCardActions(actions, nodeId, "audio", url)
   return (
     <GlassCard>
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
-        <StatusBadge status={status} />
+        <div className="flex items-center gap-2">
+          <StatusBadge status={status} />
+          {url && (
+            <div className="hidden md:block">
+              <ActionMenu
+                mediaType="audio"
+                onShare={() => shareMedia({ url, title: label, type: "audio" })}
+                onEdit={bound.onEdit}
+                onHide={bound.onHide}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {status === "running" || status === "waiting" ? (
@@ -36,13 +54,26 @@ export function AudioOutputCard({ label, status, url, elementSize }: AudioOutput
           </div>
         </div>
       ) : url ? (
-        <div className={`flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border ${heightClass}`}>
-          <WaveformBars />
-          <audio src={url} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
-          <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title="Download">
-            <Download className="w-3.5 h-3.5" />
-          </GlassButton>
-        </div>
+        <>
+          <div className={`flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border ${heightClass}`}>
+            <WaveformBars />
+            <audio src={url} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
+            <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title="Download">
+              <Download className="w-3.5 h-3.5" />
+            </GlassButton>
+          </div>
+          <ActionBar
+            mediaType="audio"
+            url={url}
+            label={label}
+            onShare={() => shareMedia({ url, title: label, type: "audio" })}
+            onEdit={bound.onEdit}
+            onHide={bound.onHide}
+          />
+          {bound.isRevealed && bound.onUnhide && (
+            <UnhideBanner onUnhide={bound.onUnhide} />
+          )}
+        </>
       ) : (
         <div className={`flex flex-col items-center justify-center ${heightClass} rounded-lg bg-muted/30 text-muted-foreground`}>
           <Music className="w-8 h-8 mb-1 animate-pulse" />

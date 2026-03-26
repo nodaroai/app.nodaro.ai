@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useCallback } from "react"
 import { useParams, useSearchParams, Link } from "react-router-dom"
 import { Loader2, Clock } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
@@ -17,6 +17,7 @@ import {
 import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "@/hooks/use-workflow-store"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { useRunSlots, AppRunnerLayout, RunsSidebar, MobileAppShell, ORIGINAL_SLOT_ID } from "@/components/app-runner"
+import { updateAppRunInputs } from "@/lib/api"
 
 export default function AppRunnerPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -77,6 +78,14 @@ export default function AppRunnerPage() {
   const runSlots = useRunSlots({ slug, user, persistRuns: !!user, initialRunId, initialSidebar })
 
   const isMobile = useIsMobile()
+
+  // Persist hidden output cards to the backend when the user hides/unhides them
+  const handleHiddenNodesChange = useCallback((nodeIds: string[]) => {
+    const activeId = runSlots.activeSlotId
+    if (activeId && activeId !== ORIGINAL_SLOT_ID && slug) {
+      updateAppRunInputs(slug, activeId, undefined, undefined, nodeIds).catch(() => {})
+    }
+  }, [runSlots.activeSlotId, slug])
 
   // Loading / error states — show spinner until app is loaded (no blank flash)
   if (errorMessage && !app) {
@@ -178,6 +187,7 @@ export default function AppRunnerPage() {
           inputsReadOnly={runSlots.inputsReadOnlyValue}
           suppressOutputFallback={(runSlots.activeSlotId !== null && runSlots.activeSlotId !== ORIGINAL_SLOT_ID) || !!initialRunId}
           showFullscreenToggle
+          onHiddenNodesChange={handleHiddenNodesChange}
           headerLeft={
             user && !runSlots.showHistory ? (
               <Button

@@ -5,7 +5,7 @@
  * Works in both "tab" mode (inside editor) and "fullscreen" mode (shared link).
  */
 
-import { useState, useMemo, useCallback, useRef, useEffect } from "react"
+import { useState, useMemo, useCallback, useRef, useEffect, lazy, Suspense } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, LogOut, RotateCcw, Plus, Maximize2, Minimize2, Sparkles, LayoutGrid, Copy } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -62,6 +62,8 @@ import { isVideoUrl } from "@/lib/media-type"
 import { responsiveColumns } from "@/lib/presentation-display"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { StatusBadge } from "./output-cards/shared"
+import type { OutputCardActions } from "./output-cards/shared"
+import { HiddenNodesPill } from "./hidden-nodes-pill"
 import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, getLoopFirstMedia, areAllInputsFilled, resolveInputItems, resolveOutputItems } from "./helpers"
 import { buildNodeRefMap } from "@/lib/node-refs"
 import { RunTargetSelector } from "./run-target-selector"
@@ -83,8 +85,23 @@ import {
   CompareView,
 } from "./views"
 
+const FreeCutEditorModal = lazy(() =>
+  import("../editor/freecut-editor-modal").then((m) => ({ default: m.FreeCutEditorModal })),
+)
+const FilerobotEditorModal = lazy(() =>
+  import("../editor/filerobot-editor-modal").then((m) => ({ default: m.FilerobotEditorModal })),
+)
+const AudiomassEditorModal = lazy(() =>
+  import("../editor/audiomass-editor-modal").then((m) => ({ default: m.AudiomassEditorModal })),
+)
+
 const POINTER_ACTIVATION = { activationConstraint: { distance: 5 } } as const
 const VALID_VIEW_MODES = new Set<PresentationViewMode>(ALL_VIEW_MODES)
+const EDITOR_META: Record<string, { filename: string; mime: string; outputKey: string }> = {
+  video: { filename: "edited-video.mp4", mime: "video/mp4", outputKey: "videoUrl" },
+  image: { filename: "edited-image.png", mime: "image/png", outputKey: "imageUrl" },
+  audio: { filename: "edited-audio.mp3", mime: "audio/mpeg", outputKey: "audioUrl" },
+}
 
 /** Recursively update a richtext item's content by id */
 function updateItemContent(items: PresentationItem[], id: string, content: string): PresentationItem[] {
@@ -126,9 +143,11 @@ interface PresentationViewProps {
   showFullscreenToggle?: boolean
   /** Optional element rendered left of the title (e.g. Runs button) */
   headerLeft?: React.ReactNode
+  /** Called when hidden nodes change (for external persistence -- e.g., app runner) */
+  onHiddenNodesChange?: (nodeIds: string[]) => void
 }
 
-export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle, headerLeft }: PresentationViewProps) {
+export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle, headerLeft, onHiddenNodesChange }: PresentationViewProps) {
   const { user, signOut: globalSignOut } = useAuth()
   const navigate = useNavigate()
   const [isEditMode, setIsEditMode] = useState(false)
@@ -140,6 +159,17 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const [showPublishTemplate, setShowPublishTemplate] = useState(false)
   const [configNode, setConfigNode] = useState<WorkflowNode | null>(null)
   const isMobile = useIsMobile()
+
+  // Hidden nodes -- seeded from settings
+  const [hiddenNodeIds, setHiddenNodeIds] = useState<Set<string>>(new Set())
+  const [isRevealingHidden, setIsRevealingHidden] = useState(false)
+
+  // Editor state (fullscreen mode only -- tab mode delegates to workflow store)
+  const [editState, setEditState] = useState<{
+    nodeId: string
+    type: "image" | "video" | "audio"
+    url: string
+  } | null>(null)
 
   // Native fullscreen toggle (browser Fullscreen API)
   const toggleNativeFullscreen = useCallback(() => {
@@ -192,6 +222,15 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const edges = isFullscreen ? presEdges : editorEdges
   const workflowName = isFullscreen ? presName : editorName
   const settings = isFullscreen ? presPresentationSettings : presentationSettings
+
+  // Seed hidden nodes from settings once available
+  const seededHiddenRef = useRef<readonly string[] | undefined>(undefined)
+  useEffect(() => {
+    const saved = settings.hiddenNodes
+    if (saved === seededHiddenRef.current) return
+    seededHiddenRef.current = saved
+    setHiddenNodeIds(new Set(saved ?? []))
+  }, [settings.hiddenNodes])
 
   // View mode — synced with URL ?view= param, constrained by allowed modes for shared viewers
   const [searchParams, setSearchParams] = useSearchParams()
@@ -258,6 +297,14 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const outputNodes = useMemo(() => getOutputNodes(nodes, edges, true), [nodes, edges])
   const orderedInputNodes = useMemo(() => orderNodesByIds(inputNodes, settings.inputOrder), [inputNodes, settings.inputOrder])
   const orderedOutputNodes = useMemo(() => orderNodesByIds(outputNodes, settings.outputOrder), [outputNodes, settings.outputOrder])
+
+  // Filter hidden output nodes (reveal toggle shows them temporarily)
+  const visibleOutputNodes = useMemo(
+    () => isRevealingHidden
+      ? orderedOutputNodes
+      : orderedOutputNodes.filter((n) => !hiddenNodeIds.has(n.id)),
+    [orderedOutputNodes, hiddenNodeIds, isRevealingHidden],
+  )
 
   // Rich items-based ordering (groups, fields, richtext alongside nodes)
   const inputItems = useMemo(() => resolveInputItems(settings), [settings.inputItems, settings.inputOrder])
@@ -413,6 +460,59 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     },
     [updateNodeData],
   )
+
+  // Hide/unhide/reveal handlers for output cards
+  const handleHideNode = useCallback((nodeId: string) => {
+    if (hiddenNodeIds.has(nodeId)) return
+    const next = new Set(hiddenNodeIds)
+    next.add(nodeId)
+    setHiddenNodeIds(next)
+    const arr = [...next]
+    if (!isFullscreen) updatePresentationSettings({ hiddenNodes: arr })
+    onHiddenNodesChange?.(arr)
+  }, [hiddenNodeIds, isFullscreen, onHiddenNodesChange, updatePresentationSettings])
+
+  const handleUnhideNode = useCallback((nodeId: string) => {
+    if (!hiddenNodeIds.has(nodeId)) return
+    const next = new Set(hiddenNodeIds)
+    next.delete(nodeId)
+    setHiddenNodeIds(next)
+    const arr = [...next]
+    if (!isFullscreen) updatePresentationSettings({ hiddenNodes: arr })
+    onHiddenNodesChange?.(arr)
+    if (next.size === 0) setIsRevealingHidden(false)
+  }, [hiddenNodeIds, isFullscreen, onHiddenNodesChange, updatePresentationSettings])
+
+  const handleToggleReveal = useCallback(() => {
+    setIsRevealingHidden((prev) => !prev)
+  }, [])
+
+  // Edit handler — fullscreen renders editors locally; tab mode delegates to workflow store
+  const handleEditNode = useCallback((nodeId: string, type: "image" | "video" | "audio", url: string) => {
+    if (isFullscreen) {
+      setEditState({ nodeId, type, url })
+    } else {
+      if (type === "video") {
+        useWorkflowStore.getState().openFreeCut(nodeId, url)
+      } else if (type === "image") {
+        useWorkflowStore.getState().openImageEdit(nodeId, url)
+      } else if (type === "audio") {
+        // Audio: open locally even in tab mode (no workflow store equivalent)
+        setEditState({ nodeId, type, url })
+      }
+    }
+  }, [isFullscreen])
+
+  // Shared upload handler for all editor modals
+  const handleEditorSave = useCallback(async (blob: Blob) => {
+    if (!editState) return
+    const meta = EDITOR_META[editState.type]
+    const file = new File([blob], meta.filename, { type: meta.mime })
+    const { uploadFile: doUpload } = await import("@/lib/api")
+    const result = await doUpload(file)
+    usePresentationStore.getState().updateNodeOutput(editState.nodeId, { [meta.outputKey]: result.url, url: result.url })
+    setEditState(null)
+  }, [editState])
 
   /** Remove a specific item from an items list by sortId */
   const handleRemoveItem = useCallback(
@@ -670,7 +770,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
 
   const mediaItems = useMemo(() => {
     const items: { nodeId: string; type: "image" | "video"; url: string }[] = []
-    for (const node of [...orderedInputNodes, ...orderedOutputNodes]) {
+    for (const node of [...orderedInputNodes, ...visibleOutputNodes]) {
       const outputType = getOutputType(node.type)
       if (outputType !== "image" && outputType !== "video") continue
       const result = getResult(node.id)
@@ -678,7 +778,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       items.push({ nodeId: node.id, type: outputType, url: result.url })
     }
     return items
-  }, [orderedInputNodes, orderedOutputNodes, getResult])
+  }, [orderedInputNodes, visibleOutputNodes, getResult])
 
   const lightboxIndex = lightboxNodeId ? mediaItems.findIndex((m) => m.nodeId === lightboxNodeId) : -1
   const lightboxItem = lightboxIndex >= 0 ? mediaItems[lightboxIndex] : null
@@ -709,13 +809,13 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   }, [settings.cardMeta, updatePresentationSettings])
 
   const getNodeColumns = useCallback((nodeId: string) => {
-    const node = nodes.find(n => n.id === nodeId)
+    const node = nodeMap.get(nodeId)
     if (!node) return 1
     const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
     const cardDisplay = settings.cardMeta?.[nodeId]?.display
     const merged = { ...nodeDisplay, ...cardDisplay }
     return responsiveColumns(merged.columns ?? 1, isMobile)
-  }, [nodes, settings.cardMeta, isMobile])
+  }, [nodeMap, settings.cardMeta, isMobile])
 
   // Memoize refMaps only for readOnly input nodes (only they need resolved values)
   const inputRefMaps = useMemo(() => {
@@ -845,6 +945,15 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     const elementSize = cardDisplay?.elementSize ?? nodeDisplay?.elementSize ?? "lg"
     const fieldBadges = fieldBadgesByNode.get(node.id)
 
+    // Build per-node action callbacks for share/edit/hide
+    const isNodeHidden = hiddenNodeIds.has(node.id)
+    const nodeActions: OutputCardActions = {
+      onEdit: handleEditNode,
+      onHide: isNodeHidden ? undefined : handleHideNode,
+      onUnhide: isNodeHidden ? handleUnhideNode : undefined,
+      isRevealed: isNodeHidden && isRevealingHidden,
+    }
+
     // Preview node: show all visible items with their actual values
     if (node.type === "preview") {
       const nodeData = node.data as Record<string, unknown>
@@ -860,7 +969,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       const visibleItems = previewItems.filter((item) => item.visible !== false)
       const status = getNodeStatus(node.id)
       if (visibleItems.length === 0) {
-        return <OutputCard nodeId={node.id} label={getCardTitle(node)} outputType="text" status={status} elementSize={elementSize} />
+        return <OutputCard nodeId={node.id} label={getCardTitle(node)} outputType="text" status={status} elementSize={elementSize} actions={nodeActions} />
       }
       return (
         <div className="flex flex-col gap-2">
@@ -875,6 +984,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               text={["text", "data"].includes(item.type) ? item.value : undefined}
               onOpenMedia={handleOpenMedia}
               elementSize={elementSize}
+              actions={nodeActions}
             />
           ))}
         </div>
@@ -962,6 +1072,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           iterationCompleted={iterationCompleted}
           elementSize={elementSize}
           fieldBadges={fieldBadges}
+          actions={nodeActions}
         />
       )
     }
@@ -982,6 +1093,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               onOpenMedia={handleOpenMedia}
               elementSize={elementSize}
               fieldBadges={i === 0 ? fieldBadges : undefined}
+              actions={nodeActions}
             />
           ))}
         </div>
@@ -1001,9 +1113,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         progress={progress}
         elementSize={elementSize}
         fieldBadges={fieldBadges}
+        actions={nodeActions}
       />
     )
-  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta, fieldBadgesByNode])
+  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta, fieldBadgesByNode, hiddenNodeIds, isRevealingHidden, handleHideNode, handleUnhideNode, handleEditNode])
 
   // Render a single PresentationItem — dispatches by type for input side
   const renderInputItem = useCallback(
@@ -1236,14 +1349,14 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
 
   // Stable reference for ShareDialog nodes prop
   const allPresentationNodes = useMemo(
-    () => [...orderedInputNodes, ...orderedOutputNodes],
-    [orderedInputNodes, orderedOutputNodes],
+    () => [...orderedInputNodes, ...visibleOutputNodes],
+    [orderedInputNodes, visibleOutputNodes],
   )
 
   // Shared props for all views
   const viewProps = {
     orderedInputNodes,
-    orderedOutputNodes,
+    orderedOutputNodes: visibleOutputNodes,
     getNodeStatus,
     getResult,
     getCardTitle,
@@ -1590,6 +1703,17 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         </div>
       </div>
 
+      {/* Hidden nodes pill */}
+      {hiddenNodeIds.size > 0 && (
+        <div className="flex justify-center mb-3">
+          <HiddenNodesPill
+            count={hiddenNodeIds.size}
+            isRevealing={isRevealingHidden}
+            onToggleReveal={handleToggleReveal}
+          />
+        </div>
+      )}
+
       {/* Content: view-specific layout */}
       {viewMode === "horizontal" && (
         <HorizontalView
@@ -1652,6 +1776,33 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           balance={userCredits.total}
           required={estimatedCost}
         />
+      )}
+
+      {/* Editor modals (fullscreen renders locally; tab mode for audio only) */}
+      {editState && (
+        <Suspense fallback={null}>
+          {editState.type === "video" && (
+            <FreeCutEditorModal
+              videoUrl={editState.url}
+              onExportComplete={(blob) => handleEditorSave(blob)}
+              onClose={() => setEditState(null)}
+            />
+          )}
+          {editState.type === "image" && (
+            <FilerobotEditorModal
+              imageUrl={editState.url}
+              onSaveComplete={(blob: Blob) => handleEditorSave(blob)}
+              onClose={() => setEditState(null)}
+            />
+          )}
+          {editState.type === "audio" && (
+            <AudiomassEditorModal
+              audioUrl={editState.url}
+              onExportComplete={(blob) => handleEditorSave(blob)}
+              onClose={() => setEditState(null)}
+            />
+          )}
+        </Suspense>
       )}
     </div>
   )
