@@ -134,6 +134,8 @@ export type UploadVideoData = {
     durationSeconds?: number
     codec?: string
   }
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type UploadAudioData = {
