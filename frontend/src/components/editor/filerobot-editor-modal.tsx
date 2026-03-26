@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
-import { X, Loader2, Check } from "lucide-react"
+import { Loader2, Check, X } from "lucide-react"
 import { useTheme } from "next-themes"
 import FilerobotImageEditor, { TABS } from "react-filerobot-image-editor"
 
@@ -11,48 +11,130 @@ interface FilerobotEditorModalProps {
   readonly onClose: () => void
 }
 
-const ALL_TABS = [TABS.ADJUST, TABS.ANNOTATE, TABS.FILTERS, TABS.FINETUNE, TABS.RESIZE, TABS.WATERMARK]
+const ALL_TABS = [TABS.ADJUST, TABS.ANNOTATE, TABS.FILTERS, TABS.FINETUNE, TABS.RESIZE]
 
+/** Build Filerobot palette using the actual @scaleflex/ui Color enum keys */
 function buildTheme(isDark: boolean) {
+  const common = {
+    // Accent / brand
+    "accent-primary": "#ff0073",
+    "accent-primary-hover": "#e0005f",
+    "accent-primary-active": "#cc0056",
+    "accent-primary-disabled": "#3D3D3D",
+    "accent-stateless": "#ff0073",
+    // Buttons
+    "btn-primary-text": "#FFFFFF",
+    "btn-primary-text-0-6": "rgba(255,255,255,0.6)",
+    "btn-primary-text-0-4": "rgba(255,255,255,0.4)",
+    // Links
+    "link-primary": "#ff0073",
+    "link-stateless": "#ff0073",
+    "link-hover": "#e0005f",
+    "link-active": "#cc0056",
+    // States
+    warning: "#F59E0B",
+    "warning-hover": "#D97706",
+    error: "#EF4444",
+    "error-hover": "#DC2626",
+    "error-active": "#B91C1C",
+    success: "#22C55E",
+    info: "#3B82F6",
+  }
+
   if (isDark) {
     return {
       palette: {
+        ...common,
+        // Backgrounds
         "bg-primary": "#121212",
+        "bg-primary-active": "#1A1A1A",
+        "bg-primary-hover": "#1A1A1A",
+        "bg-primary-light": "#1E1E1E",
         "bg-secondary": "#1E1E1E",
-        "accent-primary": "#ff0073",
-        "accent-primary-active": "#e0005f",
-        "icons-primary": "#E2E8F0",
+        "bg-stateless": "#1E1E1E",
+        "bg-hover": "#1E1E1E",
+        "bg-active": "#252525",
+        "bg-grey": "#2D2D2D",
+        "bg-tooltip": "#333333",
+        "bg-primary-0-5-opacity": "rgba(18,18,18,0.5)",
+        "bg-primary-stateless": "#2D2D2D",
+        // Text
+        "txt-primary": "#E2E8F0",
+        "txt-secondary": "#94A3B8",
+        "txt-secondary-invert": "#94A3B8",
+        "txt-placeholder": "#64748B",
+        // Icons
+        "icon-primary": "#E2E8F0",
+        "icons-primary-opacity-0-6": "rgba(226,232,240,0.6)",
         "icons-secondary": "#94A3B8",
+        "icons-placeholder": "#4D4D4D",
+        "icons-invert": "#121212",
+        "icons-muted": "#64748B",
+        "icons-primary-hover": "#FFFFFF",
+        "icons-secondary-hover": "#E2E8F0",
+        // Borders
         "borders-primary": "#2D2D2D",
-        "borders-secondary": "#3D3D3D",
-        "text-primary": "#E2E8F0",
-        "text-secondary": "#94A3B8",
-        warning: "#F59E0B",
-        error: "#EF4444",
+        "borders-primary-hover": "#4D4D4D",
+        "borders-secondary": "#252525",
+        "borders-strong": "#4D4D4D",
+        "borders-invert": "#4D4D4D",
+        "borders-item": "#2D2D2D",
+        "borders-button": "#4D4D4D",
+        // Buttons
+        "btn-disabled-text": "#64748B",
+        "btn-secondary-text": "#E2E8F0",
+        // Active states (menus, selected items)
+        "active-secondary": "#1E1E1E",
+        "active-secondary-hover": "#252525",
       },
-      typography: {
-        fontFamily: "inherit",
-      },
+      typography: { fontFamily: "inherit" },
     }
   }
+
   return {
     palette: {
+      ...common,
+      // Backgrounds
       "bg-primary": "#F8FAFC",
+      "bg-primary-active": "#F1F5F9",
+      "bg-primary-hover": "#F1F5F9",
+      "bg-primary-light": "#F8FAFC",
       "bg-secondary": "#FFFFFF",
-      "accent-primary": "#ff0073",
-      "accent-primary-active": "#e0005f",
-      "icons-primary": "#1E293B",
-      "icons-secondary": "#64748B",
+      "bg-stateless": "#FFFFFF",
+      "bg-hover": "#F8FAFC",
+      "bg-active": "#F1F5F9",
+      "bg-grey": "#E2E8F0",
+      "bg-tooltip": "#334155",
+      // Text
+      "txt-primary": "#1E293B",
+      "txt-secondary": "#64748B",
+      "txt-secondary-invert": "#94A3B8",
+      "txt-placeholder": "#94A3B8",
+      // Icons
+      "icon-primary": "#64748B",
+      "icons-primary-opacity-0-6": "rgba(30,41,59,0.6)",
+      "icons-secondary": "#94A3B8",
+      "icons-placeholder": "#CBD5E1",
+      "icons-invert": "#FFFFFF",
+      "icons-muted": "#94A3B8",
+      "icons-primary-hover": "#1E293B",
+      "icons-secondary-hover": "#64748B",
+      // Borders
       "borders-primary": "#E2E8F0",
-      "borders-secondary": "#D1D5DB",
-      "text-primary": "#1E293B",
-      "text-secondary": "#64748B",
-      warning: "#F59E0B",
-      error: "#EF4444",
+      "borders-primary-hover": "#94A3B8",
+      "borders-secondary": "#F1F5F9",
+      "borders-strong": "#CBD5E1",
+      "borders-invert": "#64748B",
+      "borders-item": "#E2E8F0",
+      "borders-button": "#94A3B8",
+      // Buttons
+      "btn-disabled-text": "#94A3B8",
+      "btn-secondary-text": "#1E293B",
+      // Active states
+      "active-secondary": "#FFFFFF",
+      "active-secondary-hover": "#F1F5F9",
     },
-    typography: {
-      fontFamily: "inherit",
-    },
+    typography: { fontFamily: "inherit" },
   }
 }
 
@@ -72,7 +154,6 @@ export function FilerobotEditorModal({
   const [loadedDesignState, setLoadedDesignState] = useState<unknown>(undefined)
   const [designStateFetched, setDesignStateFetched] = useState(!designStateUrl)
 
-  // Fetch design state from R2 if URL provided
   useEffect(() => {
     if (!designStateUrl) return
     let cancelled = false
@@ -85,21 +166,16 @@ export function FilerobotEditorModal({
         }
       })
       .catch(() => {
-        // Failed to load design state — open editor without it
-        if (!cancelled) {
-          setDesignStateFetched(true)
-        }
+        if (!cancelled) setDesignStateFetched(true)
       })
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [designStateUrl])
 
   const theme = useMemo(() => buildTheme(isDark), [isDark])
 
   const handleSave = useCallback(
-    async (editedImageObject: { imageBase64?: string; mimeType?: string }, designState: unknown) => {
-      const base64Data = editedImageObject.imageBase64
+    async (imageData: { imageBase64?: string; mimeType?: string }, designState: unknown) => {
+      const base64Data = imageData.imageBase64
       if (!base64Data || isSavingRef.current) return
 
       isSavingRef.current = true
@@ -109,7 +185,7 @@ export function FilerobotEditorModal({
         const byteString = atob(
           base64Data.includes(",") ? base64Data.split(",")[1] : base64Data,
         )
-        const mimeType = editedImageObject.mimeType || "image/png"
+        const mimeType = imageData.mimeType || "image/png"
         const ab = new ArrayBuffer(byteString.length)
         const ia = new Uint8Array(ab)
         for (let i = 0; i < byteString.length; i++) {
@@ -120,15 +196,18 @@ export function FilerobotEditorModal({
         await onSaveComplete(blob, designState)
         setSaveState("done")
         setHasChanges(false)
-        setTimeout(() => setSaveState("idle"), 1500)
+        setTimeout(() => onClose(), 600)
       } catch {
         setSaveState("idle")
       } finally {
         isSavingRef.current = false
       }
     },
-    [onSaveComplete],
+    [onSaveComplete, onClose],
   )
+
+  // Return false to skip "Save As" modal — triggers onSave directly
+  const handleBeforeSave = useCallback(() => false as const, [])
 
   const handleClose = useCallback(
     (_closingReason: string, hasUnsavedChanges: boolean) => {
@@ -143,33 +222,40 @@ export function FilerobotEditorModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
-      <div className={`flex items-center justify-between px-4 py-2 border-b shrink-0 ${isDark ? "bg-[#1E1E1E] border-[#2D2D2D]" : "bg-white border-[#E2E8F0]"}`}>
-        <span className={`text-sm font-medium ${isDark ? "text-white" : "text-[#1E293B]"}`}>Edit Image</span>
-        <div className="flex items-center gap-3">
+      {saveState !== "idle" && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[10001] flex items-center gap-2 px-4 py-2 rounded-full bg-black/80 backdrop-blur-sm border border-white/10 shadow-lg pointer-events-none">
           {saveState === "saving" && (
-            <div className="flex items-center gap-1.5">
-              <Loader2 className={`w-4 h-4 animate-spin ${isDark ? "text-white/70" : "text-[#64748B]"}`} />
-              <span className={`text-xs ${isDark ? "text-white/70" : "text-[#64748B]"}`}>Saving...</span>
-            </div>
+            <>
+              <Loader2 className="w-4 h-4 animate-spin text-white/70" />
+              <span className="text-xs text-white/70">Saving...</span>
+            </>
           )}
           {saveState === "done" && (
-            <div className="flex items-center gap-1.5">
+            <>
               <Check className="w-4 h-4 text-green-400" />
               <span className="text-xs text-green-400">Saved</span>
-            </div>
+            </>
           )}
-          <button
-            type="button"
-            aria-label="Close editor"
-            className={`transition-colors ${isDark ? "text-white/70 hover:text-white" : "text-[#64748B] hover:text-[#1E293B]"}`}
-            onClick={() => hasChanges ? setShowCloseConfirm(true) : onClose()}
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
-      </div>
+      )}
 
-      <div className="flex-1 relative">
+      {/* Our close button — replaces Filerobot's broken one (library bug: isResetted=false disables click) */}
+      <button
+        type="button"
+        aria-label="Close editor"
+        className="absolute top-2 right-2 z-[10001] w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 transition-colors"
+        onClick={() => hasChanges ? setShowCloseConfirm(true) : onClose()}
+      >
+        <X className={`w-5 h-5 ${isDark ? "text-white/70 hover:text-white" : "text-[#64748B] hover:text-[#1E293B]"}`} />
+      </button>
+
+      {/* Hide Filerobot's broken close button + fix hardcoded white spinner overlay */}
+      <style>{`
+        .FIE_buttons-close-btn { display: none !important; }
+        .sc-m42fbk-0 { background: ${isDark ? "rgba(18,18,18,0.85)" : "rgba(248,250,252,0.85)"} !important; }
+      `}</style>
+
+      <div className="flex-1 min-h-0 overflow-hidden">
         {!designStateFetched ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black">
             <Loader2 className="w-8 h-8 animate-spin text-white/50" />
@@ -177,17 +263,22 @@ export function FilerobotEditorModal({
         ) : (
           <FilerobotImageEditor
             source={imageUrl}
+            onBeforeSave={handleBeforeSave}
             onSave={handleSave}
             onClose={handleClose}
             onModify={() => setHasChanges(true)}
             closeAfterSave={false}
+            disableSaveIfNoChanges
             tabsIds={ALL_TABS}
             defaultTabId={TABS.ADJUST}
             theme={theme}
+            translations={{ save: "Save & Close" }}
             savingPixelRatio={4}
             previewPixelRatio={window.devicePixelRatio || 1}
             avoidChangesNotSavedAlertOnLeave
+            useBackendTranslations={false}
             defaultSavedImageType="png"
+            showBackButton={false}
             {...(loadedDesignState ? { loadableDesignState: loadedDesignState as Record<string, unknown> } : {})}
           />
         )}
