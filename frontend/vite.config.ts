@@ -30,6 +30,13 @@ export default defineConfig({
       },
     },
   },
+  optimizeDeps: {
+    include: [
+      "react-filerobot-image-editor",
+      "react-konva",
+      "styled-components",
+    ],
+  },
   build: {
     chunkSizeWarningLimit: 700,
     rollupOptions: {
