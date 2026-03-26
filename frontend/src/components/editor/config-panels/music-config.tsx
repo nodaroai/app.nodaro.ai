@@ -72,7 +72,7 @@ export function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<Gen
         </Select>
       </div>
       <div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center justify-between gap-1.5">
           <Label htmlFor="music-prompt">Prompt</Label>
           <PromptHelperButton nodeType="generate-music" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
         </div>

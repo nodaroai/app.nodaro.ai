@@ -83,10 +83,10 @@ export function PromptHelperButton({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 min-h-[32px] min-w-[32px] sm:min-h-0 sm:min-w-0 justify-center rounded-md border border-[#ff0073]/30 bg-[#ff0073]/5 text-[#ff0073] hover:bg-[#ff0073]/15 hover:border-[#ff0073]/50 transition-colors text-[10px] font-medium"
+            className="inline-flex items-center gap-1 px-2 py-0.5 min-h-[32px] sm:min-h-0 justify-center rounded-md border border-[#ff0073]/30 bg-[#ff0073]/5 text-[#ff0073] hover:bg-[#ff0073]/15 hover:border-[#ff0073]/50 transition-colors text-[10px] font-medium whitespace-nowrap"
           >
             <Sparkles className="w-3 h-3" />
-            AI
+            Generate with AI
           </button>
         </TooltipTrigger>
         <TooltipContent side="top" className="text-xs">AI Prompt Wizard</TooltipContent>
