@@ -34,7 +34,10 @@ export default defineConfig({
     include: [
       "react-filerobot-image-editor",
       "react-konva",
+      "konva",
       "styled-components",
+      "@scaleflex/ui",
+      "@scaleflex/icons",
     ],
   },
   build: {
