@@ -1,6 +1,9 @@
-import { X } from "lucide-react"
+import { X, Download, Copy } from "lucide-react"
 import { MediaEditorModal } from "@/components/editor/media-editor"
-import { GlassCard, GlassButton } from "../output-cards/shared"
+import { GlassCard, GlassButton, copyUrl, downloadFile } from "../output-cards/shared"
+import { ActionMenu } from "../output-cards/action-menu"
+import { ActionBar } from "../output-cards/action-bar"
+import { shareMedia } from "../output-cards/share-utils"
 import { useMediaUpload, FileDropZone, UrlInputRow, WaveformBars } from "./shared"
 
 interface AudioUploadCardProps {
@@ -24,19 +27,41 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
         </label>
 
         {media.effectiveUrl ? (
-          <div className="relative group">
-            <div className="flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border">
-              <WaveformBars />
-              <audio src={media.effectiveUrl} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
-            </div>
-            {!readOnly && (
-              <div className="media-overlay-controls absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <GlassButton onClick={media.handleRemove} title="Remove">
-                  <X className="w-3.5 h-3.5" />
-                </GlassButton>
+          <>
+            <div className="relative group">
+              <div className="flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border">
+                <WaveformBars />
+                <audio src={media.effectiveUrl} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
+                {/* Desktop inline actions */}
+                <div className="hidden md:flex gap-1.5 flex-shrink-0">
+                  <GlassButton onClick={() => downloadFile(media.effectiveUrl!, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title="Download">
+                    <Download className="w-3.5 h-3.5" />
+                  </GlassButton>
+                  <GlassButton onClick={() => copyUrl(media.effectiveUrl!)} title="Copy URL">
+                    <Copy className="w-3.5 h-3.5" />
+                  </GlassButton>
+                  <ActionMenu
+                    mediaType="audio"
+                    onShare={() => shareMedia({ url: media.effectiveUrl!, title: label, type: "audio" })}
+                  />
+                </div>
               </div>
-            )}
-          </div>
+              {!readOnly && (
+                <div className="media-overlay-controls absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <GlassButton onClick={media.handleRemove} title="Remove">
+                    <X className="w-3.5 h-3.5" />
+                  </GlassButton>
+                </div>
+              )}
+            </div>
+            {/* Mobile action bar */}
+            <ActionBar
+              mediaType="audio"
+              url={media.effectiveUrl}
+              label={label}
+              onShare={() => shareMedia({ url: media.effectiveUrl!, title: label, type: "audio" })}
+            />
+          </>
         ) : readOnly ? (
           <div className="flex items-center justify-center h-24 bg-muted/30 rounded-lg border border-border text-sm text-muted-foreground">
             No audio

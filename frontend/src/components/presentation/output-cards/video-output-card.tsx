@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from "react"
-import { Download, Copy, Maximize2, Play, Pause, Volume2, VolumeX, VideoIcon } from "lucide-react"
+import { Download, Copy, Play, Pause, Volume2, VolumeX, VideoIcon } from "lucide-react"
 import { StatusBadge, GlassCard, GlassButton, ShimmerPlaceholder, copyUrl, downloadFile, UnhideBanner, resolveCardActions, type OutputStatus, type OutputCardActions } from "./shared"
 import { ActionMenu } from "./action-menu"
 import { ActionBar } from "./action-bar"
@@ -81,11 +81,8 @@ export function VideoOutputCard({ label, status, url, nodeId, onOpenMedia, eleme
                   : <Volume2 className="w-3.5 h-3.5" />}
               </GlassButton>
             </div>
-            {/* Top-right: fullscreen, download, copy — visible on hover/touch */}
+            {/* Top-right: download, copy, menu — visible on hover/touch */}
             <div className="media-overlay-controls absolute top-2 right-2 hidden md:flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              <GlassButton onClick={handleClick} title="Fullscreen">
-                <Maximize2 className="w-3.5 h-3.5" />
-              </GlassButton>
               <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.mp4`)} title="Download">
                 <Download className="w-3.5 h-3.5" />
               </GlassButton>

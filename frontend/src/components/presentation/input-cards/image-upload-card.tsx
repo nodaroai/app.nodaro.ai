@@ -1,7 +1,10 @@
-import { X, Maximize2 } from "lucide-react"
+import { X, Download, Copy } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { MediaEditorModal } from "@/components/editor/media-editor"
-import { GlassCard, GlassButton } from "../output-cards/shared"
+import { GlassCard, GlassButton, copyUrl, downloadFile } from "../output-cards/shared"
+import { ActionMenu } from "../output-cards/action-menu"
+import { ActionBar } from "../output-cards/action-bar"
+import { shareMedia } from "../output-cards/share-utils"
 import { useMediaUpload, FileDropZone, UrlInputRow } from "./shared"
 
 interface ImageUploadCardProps {
@@ -28,24 +31,40 @@ export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues,
         </label>
 
         {media.effectiveUrl ? (
-          <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={handleOpen}>
-            <CachedImage
-              src={media.effectiveUrl}
-              alt={label}
-              className="w-full max-h-[70vh] object-contain rounded-lg bg-black/20"
-            />
-            {/* Toolbar — top-right, visible on hover/touch */}
-            <div className="media-overlay-controls absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              <GlassButton onClick={handleOpen} title="Enlarge">
-                <Maximize2 className="w-3.5 h-3.5" />
-              </GlassButton>
-              {!readOnly && (
-                <GlassButton onClick={media.handleRemove} title="Remove">
-                  <X className="w-3.5 h-3.5" />
+          <>
+            <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={handleOpen}>
+              <CachedImage
+                src={media.effectiveUrl}
+                alt={label}
+                className="w-full max-h-[70vh] object-contain rounded-lg bg-black/20"
+              />
+              {/* Desktop toolbar — top-right, visible on hover */}
+              <div className="media-overlay-controls absolute top-2 right-2 hidden md:flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <GlassButton onClick={() => downloadFile(media.effectiveUrl!, `${label.replace(/\s+/g, "-").toLowerCase()}.png`)} title="Download">
+                  <Download className="w-3.5 h-3.5" />
                 </GlassButton>
-              )}
+                <GlassButton onClick={() => copyUrl(media.effectiveUrl!)} title="Copy URL">
+                  <Copy className="w-3.5 h-3.5" />
+                </GlassButton>
+                {!readOnly && (
+                  <GlassButton onClick={media.handleRemove} title="Remove">
+                    <X className="w-3.5 h-3.5" />
+                  </GlassButton>
+                )}
+                <ActionMenu
+                  mediaType="image"
+                  onShare={() => shareMedia({ url: media.effectiveUrl!, title: label, type: "image" })}
+                />
+              </div>
             </div>
-          </div>
+            {/* Mobile action bar */}
+            <ActionBar
+              mediaType="image"
+              url={media.effectiveUrl}
+              label={label}
+              onShare={() => shareMedia({ url: media.effectiveUrl!, title: label, type: "image" })}
+            />
+          </>
         ) : readOnly ? (
           <div className="flex items-center justify-center h-32 bg-muted/30 rounded-lg border border-border text-sm text-muted-foreground">
             No image
