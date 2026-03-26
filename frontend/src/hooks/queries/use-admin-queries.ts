@@ -406,14 +406,14 @@ export function useUpdateModelPricingMutation() {
 export function useAdminAdjustCreditsMutation() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (params: { userId: string; amount: number; type: string }) => {
+    mutationFn: async (params: { userId: string; amount: number; creditType: string; description: string; adminUserId: string }) => {
       const res = await fetch(`/v1/admin/users/${params.userId}/credits`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...await getAuthHeaders(),
         },
-        body: JSON.stringify({ amount: params.amount, type: params.type }),
+        body: JSON.stringify({ amount: params.amount, creditType: params.creditType, description: params.description, adminUserId: params.adminUserId }),
       })
       if (!res.ok) throw new Error("Failed to adjust credits")
       return res.json()
