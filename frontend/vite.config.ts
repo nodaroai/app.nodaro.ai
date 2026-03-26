@@ -36,8 +36,6 @@ export default defineConfig({
       "react-konva",
       "konva",
       "styled-components",
-      "@scaleflex/ui",
-      "@scaleflex/icons",
     ],
   },
   build: {
