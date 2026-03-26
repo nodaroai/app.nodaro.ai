@@ -56,6 +56,8 @@ function buildTheme(isDark: boolean) {
         "bg-active": "#252525",
         "bg-grey": "#2D2D2D",
         "bg-tooltip": "#333333",
+        "bg-primary-0-5-opacity": "rgba(18,18,18,0.5)",
+        "bg-primary-stateless": "#2D2D2D",
         // Text
         "txt-primary": "#E2E8F0",
         "txt-secondary": "#94A3B8",
@@ -250,12 +252,15 @@ export function FilerobotEditorModal({
             onClose={handleClose}
             onModify={() => setHasChanges(true)}
             closeAfterSave={false}
+            disableSaveIfNoChanges
             tabsIds={ALL_TABS}
             defaultTabId={TABS.ADJUST}
             theme={theme}
+            translations={{ save: "Save & Close" }}
             savingPixelRatio={4}
             previewPixelRatio={window.devicePixelRatio || 1}
             avoidChangesNotSavedAlertOnLeave
+            useBackendTranslations={false}
             defaultSavedImageType="png"
             showBackButton={false}
             {...(loadedDesignState ? { loadableDesignState: loadedDesignState as Record<string, unknown> } : {})}
