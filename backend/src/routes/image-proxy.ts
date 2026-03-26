@@ -9,6 +9,12 @@ const proxyQuery = z.object({
   download: z.string().optional(),
 })
 
+function sanitizeFilename(rawUrl: string): string {
+  const pathname = new URL(rawUrl).pathname
+  const decoded = decodeURIComponent(pathname.split("/").pop() ?? "file")
+  return decoded.replace(/["\r\n\\]/g, "_")
+}
+
 export async function imageProxyRoutes(app: FastifyInstance) {
   app.get("/v1/image-proxy", async (req, reply) => {
     const parsed = proxyQuery.safeParse(req.query)
@@ -35,11 +41,16 @@ export async function imageProxyRoutes(app: FastifyInstance) {
     }
 
     const contentType = response.headers.get("content-type") ?? "image/png"
-    if (!contentType.startsWith("image/")) {
+    const isDownload = parsed.data.download === '1'
+    if (!isDownload && !contentType.startsWith("image/")) {
       return reply.status(400).send({
         error: { code: "validation_error", message: "URL does not point to an image" },
       })
     }
+
+    const disposition = isDownload
+      ? { "Content-Disposition": `attachment; filename="${sanitizeFilename(url)}"` }
+      : {}
 
     // Stream response directly without buffering in memory
     const contentLength = response.headers.get("content-length")
@@ -48,7 +59,7 @@ export async function imageProxyRoutes(app: FastifyInstance) {
       "Cache-Control": "public, max-age=31536000, immutable",
       "Access-Control-Allow-Origin": req.headers.origin ?? "*",
       ...(contentLength ? { "Content-Length": contentLength } : {}),
-      ...(parsed.data.download === '1' ? { "Content-Disposition": 'attachment; filename="image.png"' } : {}),
+      ...disposition,
     })
     const nodeStream = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
     nodeStream.pipe(reply.raw)

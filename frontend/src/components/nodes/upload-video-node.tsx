@@ -225,6 +225,8 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                 src={thumbnailUrl}
                 alt="Video thumbnail"
                 className="w-full h-full object-cover rounded-xl"
+                thumbnail
+                thumbnailWidth={320}
               />
             ) : (
               <video

@@ -97,6 +97,8 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
                     className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
                       i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                     }`}
+                    thumbnail
+                    thumbnailWidth={128}
                     onClick={(e) => {
                       e.stopPropagation()
                       updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
