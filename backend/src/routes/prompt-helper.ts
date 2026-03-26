@@ -12,6 +12,7 @@ import { buildWizardAnalyzeSystem, buildWizardGenerateSystem } from "../prompts/
 const nodeContextSchema = z.object({
   connectedInputTypes: z.array(z.string()).optional(),
   referenceImageCount: z.number().optional(),
+  referenceImageUrls: z.array(z.string().url()).max(10).optional(),
   hasSourceVideo: z.boolean().optional(),
 }).optional()
 
@@ -178,10 +179,23 @@ export async function promptHelperRoutes(app: FastifyInstance) {
           }
         }
 
+        // Build message content — include reference images for multimodal analysis
+        const refUrls = body.action === "analyze" ? (body.nodeContext?.referenceImageUrls ?? []) : []
+        let messageContent: string | Array<{ type: "text"; text: string } | { type: "image"; url: string }>
+
+        if (refUrls.length > 0) {
+          messageContent = [
+            ...refUrls.map((url, i) => ({ type: "image" as const, url })),
+            { type: "text" as const, text: `The above ${refUrls.length === 1 ? "image is a" : `${refUrls.length} images are`} reference image${refUrls.length > 1 ? "s" : ""} connected to this node.\n\n${userMessage}` },
+          ]
+        } else {
+          messageContent = userMessage
+        }
+
         const response = await llmComplete({
           modelId: llmModel,
           system: systemPrompt,
-          messages: [{ role: "user", content: userMessage }],
+          messages: [{ role: "user", content: messageContent }],
           maxTokens: 2048,
           temperature: 0.7,
         })
