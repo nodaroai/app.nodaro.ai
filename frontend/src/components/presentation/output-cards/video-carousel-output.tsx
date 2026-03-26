@@ -63,7 +63,7 @@ export function VideoCarouselOutput({
                 i === activeIndex ? "border-[#ff0073]" : "border-transparent opacity-60"
               }`}
             >
-              <video src={url} preload="none" className="w-full h-full object-cover" muted />
+              <video src={url} preload="metadata" className="w-full h-full object-cover" muted />
             </button>
           ))}
         </div>
