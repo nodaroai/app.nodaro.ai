@@ -103,9 +103,11 @@ const STORAGE_LIMIT_OPTIONS: ReadonlyArray<{ readonly label: string; readonly by
 function UserExpandedRow({
   user,
   onCreditsAdjusted,
+  adminUserId,
 }: {
   readonly user: AdminUser
   readonly onCreditsAdjusted: () => void
+  readonly adminUserId: string
 }) {
   const { data: txResult, isLoading: txLoading } = useAdminUserTransactions(user.id)
   const transactions = Array.isArray(txResult) ? txResult : (txResult?.data ?? []) as ReadonlyArray<CreditTransaction>
@@ -144,7 +146,9 @@ function UserExpandedRow({
       await adjustCreditsMut.mutateAsync({
         userId: user.id,
         amount,
-        type: adjustType,
+        creditType: adjustType,
+        description: adjustDesc.trim(),
+        adminUserId,
       })
       toast.success(`Credits adjusted: ${amount > 0 ? "+" : ""}${amount} ${adjustType}`)
       setAdjustAmount("")
@@ -664,7 +668,7 @@ function UserRow({
         </td>
       </tr>
       {isExpanded && (
-        <UserExpandedRow user={user} onCreditsAdjusted={onCreditsAdjusted} />
+        <UserExpandedRow user={user} onCreditsAdjusted={onCreditsAdjusted} adminUserId={currentUserId} />
       )}
     </>
   )
