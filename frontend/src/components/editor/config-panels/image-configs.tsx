@@ -191,7 +191,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
         </Select>
       </MappableField>
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="generate-image" currentPrompt={data.prompt || ""} provider={data.provider} aspectRatio={data.aspectRatio} onAccept={(v) => onUpdate({ prompt: v })} />}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="generate-image" currentPrompt={data.prompt || ""} provider={data.provider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
           rows={3}
           value={data.prompt}
@@ -557,7 +557,7 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
       </MappableField>
       {isNanoBananaEdit && (
         <>
-          <MappableField field="prompt" label="Edit Instructions" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="edit-image" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(v) => onUpdate({ prompt: v })} />}>
+          <MappableField field="prompt" label="Edit Instructions" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="edit-image" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
             <TagTextarea
               rows={3}
               value={data.prompt}
@@ -933,7 +933,7 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
           </SelectContent>
         </Select>
       </MappableField>
-      <MappableField field="prompt" label="Transformation Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-image" currentPrompt={data.prompt || ""} provider={data.provider} aspectRatio={data.aspectRatio} onAccept={(v) => onUpdate({ prompt: v })} />}>
+      <MappableField field="prompt" label="Transformation Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-image" currentPrompt={data.prompt || ""} provider={data.provider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
           rows={3}
           value={data.prompt}

@@ -2522,25 +2522,71 @@ export async function generateMotionGraphics(params: {
 
 // --- Prompt Helper ---
 
-export async function enhancePrompt(params: {
+export async function wizardAnalyze(params: {
   nodeType: string
-  prompt: string
+  prompt?: string
   provider?: string
-  model?: string
-  llmModel?: string
   style?: string
   aspectRatio?: string
   duration?: number
-  additionalContext?: string
-}): Promise<{ jobId: string; enhancedPrompt: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/prompt-helper/enhance`, {
+  llmModel?: string
+  nodeContext?: {
+    connectedInputTypes?: string[]
+    referenceImageCount?: number
+    hasSourceVideo?: boolean
+  }
+  userPreference?: string
+}): Promise<{
+  jobId: string
+  questions: Array<{
+    category: string
+    label: string
+    options: Array<{ value: string; label: string; description?: string }>
+    selected: string | string[] | null
+    allowCustom: boolean
+    multi?: boolean
+  }>
+}> {
+  const res = await fetch(`${API_BASE_URL}/v1/prompt-helper/wizard`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(params)),
+    body: JSON.stringify(withWorkflowId({ action: "analyze" as const, ...params })),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Prompt enhancement failed")
+    throwApiError(err, "Prompt analysis failed")
+  }
+  return res.json()
+}
+
+export async function wizardGenerate(params: {
+  nodeType: string
+  provider?: string
+  style?: string
+  aspectRatio?: string
+  duration?: number
+  llmModel?: string
+  selections: Array<{ category: string; value: string; isCustom: boolean }>
+  originalPrompt?: string
+  nodeContext?: {
+    connectedInputTypes?: string[]
+    referenceImageCount?: number
+    hasSourceVideo?: boolean
+  }
+  userPreference?: string
+}): Promise<{
+  jobId: string
+  prompt: string
+  recommendedModel?: { provider: string; field: string; label: string; reason: string }
+}> {
+  const res = await fetch(`${API_BASE_URL}/v1/prompt-helper/wizard`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId({ action: "generate" as const, ...params })),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Prompt generation failed")
   }
   return res.json()
 }

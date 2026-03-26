@@ -133,7 +133,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         </Select>
       </MappableField>
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(v) => onUpdate({ prompt: v })} />}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
           rows={3}
           value={data.prompt || ""}
@@ -585,7 +585,7 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         </Select>
       </MappableField>
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="video-to-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(v) => onUpdate({ prompt: v })} />}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="video-to-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
           value={data.prompt}
           onChange={(v) => onUpdate({ prompt: v })}
@@ -661,7 +661,7 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
           </SelectContent>
         </Select>
       </MappableField>
-      <MappableField field="prompt" label="Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="motion-transfer" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(v) => onUpdate({ prompt: v })} />}>
+      <MappableField field="prompt" label="Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="motion-transfer" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
           value={data.prompt}
           onChange={(v) => onUpdate({ prompt: v.slice(0, 2500) })}
@@ -811,7 +811,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           </SelectContent>
         </Select>
       </MappableField>
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="text-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(v) => onUpdate({ prompt: v })} />}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="text-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
           rows={3}
           value={data.prompt}
@@ -968,7 +968,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </Select>
       </MappableField>
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="extend-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(v) => onUpdate({ prompt: v })} />}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="extend-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
           value={data.prompt || ""}
           onChange={(v) => onUpdate({ prompt: v })}
@@ -1059,7 +1059,14 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
 
       {/* Prompt */}
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Prompt</Label>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground">Prompt</Label>
+          <PromptHelperButton
+            nodeType="speech-to-video"
+            currentPrompt={data.prompt || ""}
+            onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })}
+          />
+        </div>
         <Textarea
           value={data.prompt || ""}
           onChange={(e) => onUpdate({ prompt: e.target.value })}
