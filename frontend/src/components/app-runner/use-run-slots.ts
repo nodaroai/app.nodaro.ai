@@ -21,15 +21,22 @@ function resetPresentationToIdle(inputValues: Record<string, Record<string, unkn
 }
 
 /** Apply a slot's execution state to the presentation store */
-function applySlotToPresentation(slot: Pick<RunSlot, "inputValues" | "nodeStates" | "executionStatus" | "completedNodes" | "totalNodes">) {
-  usePresentationStore.setState({
+function applySlotToPresentation(slot: Pick<RunSlot, "inputValues" | "nodeStates" | "executionStatus" | "completedNodes" | "totalNodes" | "hiddenNodes">) {
+  const base = {
     inputValues: slot.inputValues,
     nodeStates: slot.nodeStates,
     executionStatus: slot.executionStatus,
     completedNodes: slot.completedNodes,
     totalNodes: slot.totalNodes,
-    errorMessage: null,
-  })
+    errorMessage: null as string | null,
+  }
+  // Seed hiddenNodes into presentationSettings so PresentationView picks them up
+  if (slot.hiddenNodes && slot.hiddenNodes.length > 0) {
+    const currentSettings = usePresentationStore.getState().presentationSettings
+    usePresentationStore.setState({ ...base, presentationSettings: { ...currentSettings, hiddenNodes: slot.hiddenNodes } })
+  } else {
+    usePresentationStore.setState(base)
+  }
 }
 
 interface UseRunSlotsOptions {
@@ -210,6 +217,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         createdAt: new Date(run.createdAt).getTime(),
         version: run.version ?? null,
         thumbnailUrl: run.thumbnailUrl ?? null,
+        hiddenNodes: run.hiddenNodes ?? undefined,
       }))
       setSlots(dbSlots)
 

@@ -22,6 +22,7 @@ export interface RunSlot {
   createdAt: number
   version: number | null
   thumbnailUrl: string | null
+  hiddenNodes?: string[]
 }
 
 export function makeEmptyInputs(inputNodes: WorkflowNode[]): Record<string, Record<string, unknown>> {

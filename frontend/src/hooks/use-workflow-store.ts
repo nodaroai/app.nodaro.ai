@@ -129,6 +129,8 @@ export interface PresentationSettings {
   shareAllowedModes?: PresentationViewMode[] // default all 5 — subset viewer can use
   shareDefaultMode?: PresentationViewMode // default "horizontal" — initial mode for viewer
   outputDisplayModes?: Record<string, "gallery" | "individual"> // per-output-node display mode, default "individual"
+  /** Node IDs hidden by the viewer */
+  hiddenNodes?: string[]
 }
 
 export const DEFAULT_PRESENTATION_SETTINGS: PresentationSettings = { runTarget: "workflow" }

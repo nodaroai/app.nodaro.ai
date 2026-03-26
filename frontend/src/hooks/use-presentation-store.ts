@@ -47,6 +47,7 @@ interface PresentationState {
   // Actions
   loadSharedWorkflow: (token: string) => Promise<void>
   updateInputValue: (nodeId: string, key: string, value: unknown) => void
+  updateNodeOutput: (nodeId: string, output: Record<string, unknown>) => void
   run: () => Promise<void>
   reset: () => void
 }
@@ -113,6 +114,22 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
         },
       },
     })
+  },
+
+  updateNodeOutput: (nodeId: string, output: Record<string, unknown>) => {
+    set((state) => ({
+      nodeStates: {
+        ...state.nodeStates,
+        [nodeId]: {
+          ...state.nodeStates[nodeId],
+          status: state.nodeStates[nodeId]?.status ?? "completed",
+          output: {
+            ...state.nodeStates[nodeId]?.output,
+            ...output,
+          },
+        },
+      },
+    }))
   },
 
   run: async () => {

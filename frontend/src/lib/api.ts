@@ -3842,6 +3842,7 @@ export interface AppRun {
   completedNodes?: number
   totalNodes?: number
   completedAt?: string | null
+  hiddenNodes?: string[] | null
   // Nested execution from detail endpoint
   execution?: {
     status: string
@@ -4016,16 +4017,18 @@ export async function createAppRun(
   )
 }
 
-/** Update a draft run's input values and/or name. */
+/** Update a draft run's input values, name, and/or hidden nodes. */
 export async function updateAppRunInputs(
   slug: string,
   runId: string,
   inputValues?: Record<string, Record<string, unknown>>,
   name?: string | null,
+  hiddenNodes?: string[],
 ): Promise<{ id: string; inputValues: Record<string, Record<string, unknown>> }> {
   const body: Record<string, unknown> = {}
   if (inputValues !== undefined) body.inputValues = inputValues
   if (name !== undefined) body.name = name
+  if (hiddenNodes !== undefined) body.hiddenNodes = hiddenNodes
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}`,
     "Failed to update run",
