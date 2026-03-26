@@ -47,7 +47,8 @@ export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia, eleme
               thumbnailWidth={thumbWidth}
             />
             {/* Toolbar — top-right, visible on hover/touch */}
-            <div className="media-overlay-controls absolute top-2 right-2 hidden md:flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions */}
+            <div className="media-overlay-controls absolute top-2 right-2 hidden md:flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
               <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.png`)} title="Download">
                 <Download className="w-3.5 h-3.5" />
               </GlassButton>
