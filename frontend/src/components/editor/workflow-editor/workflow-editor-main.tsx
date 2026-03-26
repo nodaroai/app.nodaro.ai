@@ -59,6 +59,7 @@ import { handleCreateNodesFromWriter as createNodesFromWriter, handleRunAllWrite
 import { resolveManualEdit } from "./execute-node";
 import type { ManualEditData, GeneratedResult } from "@/types/nodes";
 const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));
+const FilerobotEditorModal = lazy(() => import("../filerobot-editor-modal").then(m => ({ default: m.FilerobotEditorModal })));
 const PresentationViewLazy = lazy(() => import("../../presentation/presentation-view").then(m => ({ default: m.PresentationView })));
 
 interface WorkflowEditorProps {
@@ -124,6 +125,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const freecutProjectUrl = freecutEdit?.freecutProjectUrl;
   const freecutNodeId = manualEditNode ? manualEditNode.id : freecutEdit?.nodeId;
   const isFreeCutOpen = !!manualEditNode || !!freecutEdit;
+
+  // ---------------------------------------------------------------------------
+  // Filerobot image editor modal (universal edit from any image node)
+  // ---------------------------------------------------------------------------
+
+  const imageEdit = useWorkflowStore((s) => s.imageEdit);
+  const closeImageEdit = useWorkflowStore((s) => s.closeImageEdit);
+
+  const imageEditUrl = imageEdit?.imageUrl ?? "";
+  const imageEditDesignStateUrl = imageEdit?.designStateUrl;
+  const imageEditNodeId = imageEdit?.nodeId;
+  const isImageEditOpen = !!imageEdit;
 
   const handleFreeCutExport = useCallback(
     async (blob: Blob, projectJson?: unknown) => {
@@ -192,6 +205,74 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       closeFreeCut();
     }
   }, [manualEditNode, freecutEdit, updateNodeData, closeFreeCut]);
+
+  const handleImageEditSave = useCallback(
+    async (blob: Blob, designState: unknown) => {
+      const nodeId = imageEditNodeId;
+      if (!nodeId) return;
+      try {
+        const file = new File([blob], "edited-image.png", { type: "image/png" });
+
+        // Upload image and designState in parallel
+        const uploadImagePromise = uploadFile(file, user?.id);
+        const uploadDesignStatePromise = designState
+          ? import("@/lib/api")
+              .then((m) => m.getAuthHeaders())
+              .then((headers) =>
+                fetch("/v1/upload-json", {
+                  method: "POST",
+                  headers: { ...headers, "Content-Type": "application/json" },
+                  body: JSON.stringify(designState),
+                }),
+              )
+              .then((res) => (res.ok ? res.json() : undefined))
+              .then((data) => data?.url as string | undefined)
+              .catch(() => undefined)
+          : Promise.resolve(undefined);
+
+        const [imageResult, designStateUrl] = await Promise.all([
+          uploadImagePromise,
+          uploadDesignStatePromise,
+        ]);
+        const url = imageResult.url;
+
+        const newResult: GeneratedResult = {
+          url,
+          jobId: `image-edit-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          filerobotDesignStateUrl: designStateUrl,
+        };
+
+        const freshNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId);
+        const freshData = freshNode?.data as Record<string, unknown> | undefined;
+        const prev = (freshData?.generatedResults as readonly GeneratedResult[] | undefined) ?? [];
+
+        const nodeType = freshNode?.type ?? "";
+        const isEntity = ["character", "face", "object", "location"].includes(nodeType);
+        const legacyUrlField = isEntity ? "sourceImageUrl" : "generatedImageUrl";
+
+        updateNodeData(nodeId, {
+          executionStatus: "completed",
+          [legacyUrlField]: url,
+          generatedResults: [...prev, newResult],
+          activeResultIndex: prev.length,
+        });
+
+        closeImageEdit();
+      } catch (err) {
+        if (err instanceof StorageExceededError) {
+          setShowStorageExceeded(true);
+          setStorageExceededData({ usedBytes: err.usedBytes, quotaBytes: err.quotaBytes, tier: err.tier });
+        }
+        closeImageEdit();
+      }
+    },
+    [imageEditNodeId, user?.id, updateNodeData, closeImageEdit],
+  );
+
+  const handleImageEditClose = useCallback(() => {
+    closeImageEdit();
+  }, [closeImageEdit]);
 
   // ---------------------------------------------------------------------------
   // Credit estimate (accounts for fan-out from list/loop nodes)
@@ -920,6 +1001,17 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             freecutProjectUrl={freecutProjectUrl}
             onExportComplete={handleFreeCutExport}
             onClose={handleFreeCutClose}
+          />
+        </Suspense>
+      )}
+
+      {isImageEditOpen && (
+        <Suspense fallback={null}>
+          <FilerobotEditorModal
+            imageUrl={imageEditUrl}
+            designStateUrl={imageEditDesignStateUrl}
+            onSaveComplete={handleImageEditSave}
+            onClose={handleImageEditClose}
           />
         </Suspense>
       )}

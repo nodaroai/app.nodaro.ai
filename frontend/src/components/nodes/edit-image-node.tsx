@@ -2,7 +2,7 @@
 
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Wand2, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, ImageIcon, Link } from "lucide-react"
+import { Wand2, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, ImageIcon, Link, Pencil } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
@@ -22,6 +22,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
+  const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
   const inConnectionCount = useConnectionCount(id, "image")
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -163,9 +164,13 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {/* Bottom-left: fullscreen + download + copy URL */}
+        {/* Bottom-left: edit + fullscreen + download + copy URL */}
         {activeUrl && (
           <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button type="button" aria-label="Edit image" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => { e.stopPropagation(); openImageEdit(id, activeUrl!, activeResult?.filerobotDesignStateUrl) }} title="Edit image">
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
             <button type="button" aria-label="Expand preview" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Fullscreen">
               <Expand className="w-3.5 h-3.5" />

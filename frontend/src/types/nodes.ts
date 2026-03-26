@@ -24,6 +24,7 @@ export interface GeneratedResult {
   readonly timestamp: string
   readonly jobId: string
   readonly freecutProjectUrl?: string
+  readonly filerobotDesignStateUrl?: string
 }
 
 export interface ManualReferenceImage {
@@ -110,6 +111,8 @@ export type UploadImageData = {
     height?: number
     format?: string
   }
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type UploadVideoData = {

@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { UserCircle, Loader2, AlertCircle, X, ImageIcon, Maximize2, ChevronDown, ChevronRight, Type, Download, Link } from "lucide-react"
+import { UserCircle, Loader2, AlertCircle, X, ImageIcon, Maximize2, ChevronDown, ChevronRight, Type, Download, Link, Pencil } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -32,6 +32,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const useFull = useFullResolution(id)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
   const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -117,6 +118,19 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
             <div className="absolute bottom-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <SaveToLibraryButton url={activeUrl} type="image" />
             </div>
+            {/* Edit image button */}
+            <button
+              type="button"
+              aria-label="Edit image"
+              className="absolute bottom-1 right-[73px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation()
+                openImageEdit(id, activeUrl!, activeResult?.filerobotDesignStateUrl)
+              }}
+              title="Edit image"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
             {/* Download button */}
             <button
               type="button"

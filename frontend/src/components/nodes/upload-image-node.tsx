@@ -2,7 +2,7 @@
 
 import { memo, useRef, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Maximize2, Upload, Link, Download, Loader2, AlertCircle, X } from "lucide-react"
+import { ImageIcon, Maximize2, Upload, Link, Download, Loader2, AlertCircle, X, Pencil } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
@@ -15,7 +15,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { copyToClipboard } from "@/lib/utils"
-import type { UploadImageData } from "@/types/nodes"
+import type { UploadImageData, GeneratedResult } from "@/types/nodes"
 
 const HANDLES = [
   { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
@@ -34,12 +34,18 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
   const [mode, setMode] = useState<"upload" | "url">(nodeData.externalUrl ? "url" : "upload")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
   const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
   const mediaEditor = useMediaEditor({
     onComplete: async (results) => {
       const result = results[0]
       if (!result) return
       const url = result.processedUrl ?? result.uploadResult.url
+      const newResult: GeneratedResult = {
+        url,
+        jobId: `upload-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+      }
       updateNodeData(id, {
         assetId: result.uploadResult.assetId ?? "",
         url,
@@ -52,12 +58,17 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
         isUploading: false,
         uploadError: "",
         externalUrl: "",
+        generatedResults: [...(nodeData.generatedResults ?? []), newResult],
+        activeResultIndex: (nodeData.generatedResults ?? []).length,
       })
     },
   })
   const useFull = useFullResolution(id)
 
-  const imageUrl = nodeData.thumbnailUrl || nodeData.r2Url || nodeData.url
+  const results = nodeData.generatedResults ?? []
+  const activeIndex = nodeData.activeResultIndex ?? 0
+  const activeResult = results[activeIndex]
+  const imageUrl = activeResult?.url ?? nodeData.thumbnailUrl ?? nodeData.r2Url ?? nodeData.url
   const hasFile = Boolean(nodeData.r2Url || nodeData.url) && !nodeData.externalUrl
   const [isDragOver, setIsDragOver] = useState(false)
 
@@ -167,6 +178,20 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                     <div className="absolute bottom-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <SaveToLibraryButton url={imageUrl} type="image" />
                     </div>
+                    {imageUrl && (
+                      <button
+                        type="button"
+                        aria-label="Edit image"
+                        className="absolute bottom-1 right-[97px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openImageEdit(id, imageUrl, activeResult?.filerobotDesignStateUrl)
+                        }}
+                        title="Edit image"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       aria-label="Download image"

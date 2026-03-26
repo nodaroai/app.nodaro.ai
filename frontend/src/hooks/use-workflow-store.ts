@@ -148,6 +148,9 @@ interface WorkflowState {
   readonly freecutEdit: { nodeId: string; videoUrl: string; freecutProjectUrl?: string } | null
   readonly openFreeCut: (nodeId: string, videoUrl: string, freecutProjectUrl?: string) => void
   readonly closeFreeCut: () => void
+  readonly imageEdit: { nodeId: string; imageUrl: string; designStateUrl?: string } | null
+  readonly openImageEdit: (nodeId: string, imageUrl: string, designStateUrl?: string) => void
+  readonly closeImageEdit: () => void
   readonly variableDisplayMode: VariableDisplayMode
   readonly setVariableDisplayMode: (mode: VariableDisplayMode) => void
   readonly newNodeIds: Set<string>
@@ -257,6 +260,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     ? localStorage.getItem("videoAutoplay") === "true"
     : true,
   freecutEdit: null,
+  imageEdit: null,
   variableDisplayMode: "raw" as const,
   newNodeIds: new Set<string>(),
   characterDefinitions: [],
@@ -767,6 +771,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   openFreeCut: (nodeId, videoUrl, freecutProjectUrl) => set({ freecutEdit: { nodeId, videoUrl, freecutProjectUrl } }),
   closeFreeCut: () => set({ freecutEdit: null }),
+
+  openImageEdit: (nodeId, imageUrl, designStateUrl) => set({ imageEdit: { nodeId, imageUrl, designStateUrl } }),
+  closeImageEdit: () => set({ imageEdit: null }),
 
   setVariableDisplayMode: (mode) => set({ variableDisplayMode: mode }),
 
