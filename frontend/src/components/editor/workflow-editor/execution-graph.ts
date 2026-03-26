@@ -96,7 +96,9 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     return (data.text as string | undefined)?.trim();
   }
   if (type === "upload-image") {
-    return (data.url as string | undefined)?.trim();
+    const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+    return results[activeIndex]?.url ?? (data.url as string | undefined)?.trim()
   }
   if (type === "upload-video") {
     return (data.url as string | undefined)?.trim();

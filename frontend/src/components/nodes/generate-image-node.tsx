@@ -3,7 +3,7 @@
 import { memo, useState, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, Settings, LayoutGrid, Expand, Download, Link, Type } from "lucide-react"
+import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, Settings, LayoutGrid, Expand, Download, Link, Type, Pencil } from "lucide-react"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
@@ -38,6 +38,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   // Treat empty strings as undefined (falsy check)
   const activeUrl = rawUrl && rawUrl.trim() ? rawUrl : undefined
   const isContentPolicy = status === "failed" && nodeData.errorMessage?.toLowerCase().includes("content policy")
+  const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const attachedIds = nodeData.characterDefinitionIds ?? []
@@ -208,6 +209,10 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
               )}
             </div>
             <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button type="button" aria-label="Edit image" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => { e.stopPropagation(); openImageEdit(id, activeUrl!, activeResult?.filerobotDesignStateUrl) }} title="Edit image">
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
               <button type="button" aria-label="Expand preview" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Fullscreen">
                 <Expand className="w-3.5 h-3.5" />

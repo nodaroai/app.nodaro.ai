@@ -68,7 +68,8 @@ export function extractSourceNodeOutput(
     }
 
     case "upload-image": {
-      const url = (data.url as string | undefined)?.trim()
+      const activeUrl = getActiveResultUrl(data)
+      const url = activeUrl ?? (data.url as string | undefined)?.trim()
       return url ? { imageUrl: url } : undefined
     }
 
@@ -400,6 +401,7 @@ const IMAGE_RESULT_TYPES = new Set([
   "generate-image",
   "edit-image",
   "image-to-image",
+  "upload-image",
 ])
 
 /** Video-generating node types that store results in generatedVideoUrl / generatedResults */
