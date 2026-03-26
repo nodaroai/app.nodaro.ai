@@ -1,9 +1,28 @@
-import { defineConfig } from "vite"
+import { defineConfig, type Plugin } from "vite"
 import react from "@vitejs/plugin-react"
 import path from "path"
 
+/**
+ * Injects `import React from 'react'` into react-filerobot-image-editor files
+ * that use React.createElement without importing React (package bug — 6 files).
+ */
+function filerobotReactShim(): Plugin {
+  return {
+    name: "filerobot-react-shim",
+    transform(code, id) {
+      if (
+        id.includes("react-filerobot-image-editor") &&
+        code.includes("React.createElement") &&
+        !code.includes("import React")
+      ) {
+        return { code: `import React from "react";\n${code}`, map: null }
+      }
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), filerobotReactShim()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
