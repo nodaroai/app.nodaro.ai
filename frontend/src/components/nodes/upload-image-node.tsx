@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useRef, useState } from "react"
+import { memo, useRef, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Maximize2, Upload, Link, Download, Loader2, AlertCircle, X, Pencil } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -71,6 +71,21 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
   const imageUrl = activeResult?.url ?? nodeData.thumbnailUrl ?? nodeData.r2Url ?? nodeData.url
   const hasFile = Boolean(nodeData.r2Url || nodeData.url) && !nodeData.externalUrl
   const [isDragOver, setIsDragOver] = useState(false)
+  const [imgAspectRatio, setImgAspectRatio] = useState<number | undefined>()
+  useEffect(() => {
+    if (!imageUrl || !hasFile) { setImgAspectRatio(undefined); return }
+    let cancelled = false
+    const img = new window.Image()
+    const setRatio = () => {
+      if (!cancelled && img.naturalWidth > 0) {
+        setImgAspectRatio(img.naturalWidth / img.naturalHeight)
+      }
+    }
+    img.onload = setRatio
+    img.src = imageUrl
+    if (img.complete) setRatio()
+    return () => { cancelled = true }
+  }, [imageUrl, hasFile])
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -139,206 +154,165 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
           minWidth={220}
           hideHeader
           handles={HANDLES}
+          imageAspectRatio={imgAspectRatio}
         >
-          <div className="p-3">
-            {/* Uploading state */}
-            {(isUploading || nodeData.isUploading) && (
-              <div className="flex flex-col items-center gap-2 py-3">
-                <Loader2 className="w-5 h-5 animate-spin text-[#38BDF8]" />
-                <p className="text-xs text-muted-foreground">Uploading...</p>
-                <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-[#38BDF8] rounded-full animate-pulse" style={{ width: "60%" }} />
+          {/* Flush: image result display (when hasFile=true and not uploading) */}
+          {!isUploading && !nodeData.isUploading && hasFile && mode === "upload" && (
+            <div className="relative w-full h-full group">
+              <CachedImage
+                src={imageUrl}
+                alt={nodeData.filename || "Uploaded image"}
+                className="w-full h-full object-cover rounded-xl"
+                thumbnail={!useFull}
+                thumbnailWidth={320}
+              />
+              {/* Top-right: delete button */}
+              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button type="button" aria-label="Remove image"
+                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-red-600/80 border border-white/10 text-white rounded-full shadow-sm"
+                  onClick={(e) => { e.stopPropagation(); handleClear() }}
+                  title="Remove">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {/* Bottom-left: action buttons */}
+              <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button type="button" aria-label="Edit image" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                  onClick={(e) => { e.stopPropagation(); openImageEdit(id, imageUrl!, activeResult?.filerobotDesignStateUrl) }} title="Edit image">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button type="button" aria-label="Expand preview" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                  onClick={(e) => { e.stopPropagation(); setLightboxSrc(imageUrl) }} title="Enlarge">
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </button>
+                <button type="button" aria-label="Download" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const a = document.createElement('a')
+                    a.href = `/v1/image-proxy?url=${encodeURIComponent(imageUrl ?? '')}&download=1`
+                    a.download = `${nodeData.label || 'image'}.png`
+                    a.click()
+                  }} title="Download">
+                  <Download className="w-3.5 h-3.5" />
+                </button>
+                <button type="button" aria-label="Copy URL" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    copyToClipboard(imageUrl ?? '', "URL copied")
+                  }} title="Copy URL">
+                  <Link className="w-3.5 h-3.5" />
+                </button>
+                <SaveToLibraryButton url={imageUrl} type="image" />
+              </div>
+            </div>
+          )}
+
+          {/* Padded: all other states (uploading, error, empty upload, URL mode) */}
+          {(isUploading || nodeData.isUploading || !hasFile || mode !== "upload") && (
+            <div className="p-3">
+              {/* Uploading state */}
+              {(isUploading || nodeData.isUploading) && (
+                <div className="flex flex-col items-center gap-2 py-3">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#38BDF8]" />
+                  <p className="text-xs text-muted-foreground">Uploading...</p>
+                  <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full bg-[#38BDF8] rounded-full animate-pulse" style={{ width: "60%" }} />
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Error state */}
-            {!isUploading && !nodeData.isUploading && (uploadError || nodeData.uploadError) && (
-              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-red-500/10 text-red-400 text-xs">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">{uploadError || nodeData.uploadError}</span>
-              </div>
-            )}
+              {/* Error state */}
+              {!isUploading && !nodeData.isUploading && (uploadError || nodeData.uploadError) && (
+                <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-red-500/10 text-red-400 text-xs">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{uploadError || nodeData.uploadError}</span>
+                </div>
+              )}
 
-            {/* Upload mode */}
-            {!isUploading && !nodeData.isUploading && mode === "upload" && (
-              <>
-                {hasFile ? (
-                  <div className="relative group">
-                    <div className="w-full aspect-square rounded-md overflow-hidden bg-muted/30">
+              {/* Upload mode - empty state */}
+              {!isUploading && !nodeData.isUploading && mode === "upload" && !hasFile && (
+                <>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    ref={fileInputRef}
+                  />
+                  <button
+                    type="button"
+                    className={`w-full flex items-center justify-center gap-2 h-16 rounded-md border-2 border-dashed transition-colors cursor-pointer ${
+                      isDragOver
+                        ? "border-[#38BDF8] bg-[#38BDF8]/10 text-[#38BDF8]"
+                        : "border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground/60 hover:text-[#38BDF8]"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      fileInputRef.current?.click()
+                    }}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true) }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={handleDrop}
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span className="text-xs">{isDragOver ? "Drop Image" : "Choose Image"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full text-center text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors mt-1"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setMode("url")
+                    }}
+                  >
+                    or use URL
+                  </button>
+                </>
+              )}
+
+              {/* URL mode */}
+              {!isUploading && !nodeData.isUploading && mode === "url" && (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <Link className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+                    <input
+                      type="text"
+                      value={nodeData.externalUrl || nodeData.url || ""}
+                      onChange={(e) => {
+                        e.stopPropagation()
+                        handleUrlChange(e.target.value)
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      placeholder="https://..."
+                      className="w-full bg-transparent border-b border-muted-foreground/20 text-xs py-1 outline-none focus:border-[#38BDF8] transition-colors placeholder:text-muted-foreground/30"
+                    />
+                  </div>
+                  {nodeData.externalUrl && (
+                    <div className="relative mt-2 w-full aspect-video rounded-md overflow-hidden bg-muted/30">
                       <CachedImage
-                        src={imageUrl}
-                        alt={nodeData.filename || "Uploaded image"}
+                        src={nodeData.externalUrl}
+                        alt="External image"
                         className="w-full h-full object-cover"
                         thumbnail={!useFull}
                         thumbnailWidth={320}
                       />
                     </div>
-                    {/* Save to library */}
-                    <div className="absolute bottom-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <SaveToLibraryButton url={imageUrl} type="image" />
-                    </div>
-                    {imageUrl && (
-                      <button
-                        type="button"
-                        aria-label="Edit image"
-                        className="absolute bottom-1 right-[97px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          openImageEdit(id, imageUrl, activeResult?.filerobotDesignStateUrl)
-                        }}
-                        title="Edit image"
-                      >
-                        <Pencil className="w-3 h-3" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      aria-label="Download image"
-                      className="absolute bottom-1 right-[73px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const a = document.createElement('a')
-                        a.href = `/v1/image-proxy?url=${encodeURIComponent(imageUrl ?? '')}&download=1`
-                        a.download = `${nodeData.label || 'image'}.png`
-                        a.click()
-                      }}
-                      title="Download"
-                    >
-                      <Download className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Copy URL"
-                      className="absolute bottom-1 right-[49px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        copyToClipboard(imageUrl ?? '', "URL copied")
-                      }}
-                      title="Copy URL"
-                    >
-                      <Link className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Enlarge image"
-                      className="absolute bottom-1 right-[25px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setLightboxSrc(imageUrl)
-                      }}
-                      title="Enlarge"
-                    >
-                      <Maximize2 className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Remove image"
-                      className="absolute bottom-1 right-1 w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-red-600/80 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleClear()
-                      }}
-                      title="Remove"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                    {nodeData.filename && (
-                      <div className="mt-1.5 space-y-0.5">
-                        <p className="text-[10px] text-muted-foreground truncate">{nodeData.filename}</p>
-                        <div className="flex gap-2 text-[10px] text-muted-foreground/60">
-                          {nodeData.fileSize > 0 && <span>{formatBytes(nodeData.fileSize)}</span>}
-                          {nodeData.metadata?.width && nodeData.metadata?.height && (
-                            <span>{nodeData.metadata.width} x {nodeData.metadata.height}</span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <>
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                      ref={fileInputRef}
-                    />
-                    <button
-                      type="button"
-                      className={`w-full flex items-center justify-center gap-2 h-16 rounded-md border-2 border-dashed transition-colors cursor-pointer ${
-                        isDragOver
-                          ? "border-[#38BDF8] bg-[#38BDF8]/10 text-[#38BDF8]"
-                          : "border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground/60 hover:text-[#38BDF8]"
-                      }`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        fileInputRef.current?.click()
-                      }}
-                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true) }}
-                      onDragLeave={() => setIsDragOver(false)}
-                      onDrop={handleDrop}
-                    >
-                      <Upload className="w-4 h-4" />
-                      <span className="text-xs">{isDragOver ? "Drop Image" : "Choose Image"}</span>
-                    </button>
-                  </>
-                )}
-                <button
-                  type="button"
-                  className="w-full text-center text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors mt-1"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setMode("url")
-                  }}
-                >
-                  or use URL
-                </button>
-              </>
-            )}
-
-            {/* URL mode */}
-            {!isUploading && !nodeData.isUploading && mode === "url" && (
-              <>
-                <div className="flex items-center gap-1.5">
-                  <Link className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
-                  <input
-                    type="text"
-                    value={nodeData.externalUrl || nodeData.url || ""}
-                    onChange={(e) => {
+                  )}
+                  <button
+                    type="button"
+                    className="w-full text-center text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors mt-1"
+                    onClick={(e) => {
                       e.stopPropagation()
-                      handleUrlChange(e.target.value)
+                      setMode("upload")
                     }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
-                    placeholder="https://..."
-                    className="w-full bg-transparent border-b border-muted-foreground/20 text-xs py-1 outline-none focus:border-[#38BDF8] transition-colors placeholder:text-muted-foreground/30"
-                  />
-                </div>
-                {nodeData.externalUrl && (
-                  <div className="relative mt-2 w-full aspect-video rounded-md overflow-hidden bg-muted/30">
-                    <CachedImage
-                      src={nodeData.externalUrl}
-                      alt="External image"
-                      className="w-full h-full object-cover"
-                      thumbnail={!useFull}
-                      thumbnailWidth={320}
-                    />
-                  </div>
-                )}
-                <button
-                  type="button"
-                  className="w-full text-center text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors mt-1"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setMode("upload")
-                  }}
-                >
-                  or upload file
-                </button>
-              </>
-            )}
-          </div>
+                  >
+                    or upload file
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </BaseNode>
         <HandleIcon icon={<ImageIcon />} color="cyan" side="left" top="calc(100% - 20px)" />
         <HandleIcon icon={<ImageIcon />} top="20px" />
