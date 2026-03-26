@@ -46,8 +46,9 @@ export function MappableField({
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5">
           <Label id={labelId} htmlFor={triggerId} className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{label}</Label>
-          {labelAction}
         </div>
+        <div className="flex items-center gap-1.5">
+          {labelAction}
         {compatible.length > 0 && (
           <Select
             value={mapping?.sourceNodeId ?? "__manual__"}
@@ -66,6 +67,7 @@ export function MappableField({
             </SelectContent>
           </Select>
         )}
+        </div>
       </div>
       {isMapped ? (
         <p className="text-xs text-gray-500 dark:text-[#94A3B8] bg-[#F8FAFC] dark:bg-[#121212] rounded-lg px-2.5 py-2 break-words whitespace-pre-wrap border border-gray-200 dark:border-[#2D2D2D]">

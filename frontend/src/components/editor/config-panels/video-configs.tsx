@@ -1059,7 +1059,7 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
 
       {/* Prompt */}
       <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center justify-between gap-1.5">
           <Label className="text-xs text-muted-foreground">Prompt</Label>
           <PromptHelperButton
             nodeType="speech-to-video"
