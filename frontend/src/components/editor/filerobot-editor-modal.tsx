@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
-import { X, Loader2, Check } from "lucide-react"
+import { Loader2, Check } from "lucide-react"
 import { useTheme } from "next-themes"
 import FilerobotImageEditor, { TABS } from "react-filerobot-image-editor"
 
@@ -11,22 +11,31 @@ interface FilerobotEditorModalProps {
   readonly onClose: () => void
 }
 
-const ALL_TABS = [TABS.ADJUST, TABS.ANNOTATE, TABS.FILTERS, TABS.FINETUNE, TABS.RESIZE, TABS.WATERMARK]
+const ALL_TABS = [TABS.ADJUST, TABS.ANNOTATE, TABS.FILTERS, TABS.FINETUNE, TABS.RESIZE]
 
 function buildTheme(isDark: boolean) {
   if (isDark) {
     return {
       palette: {
         "bg-primary": "#121212",
+        "bg-primary-active": "#1E1E1E",
         "bg-secondary": "#1E1E1E",
         "accent-primary": "#ff0073",
         "accent-primary-active": "#e0005f",
         "icons-primary": "#E2E8F0",
         "icons-secondary": "#94A3B8",
+        "icons-primary-opacity-0.6": "rgba(226,232,240,0.6)",
         "borders-primary": "#2D2D2D",
         "borders-secondary": "#3D3D3D",
+        "borders-strong": "#4D4D4D",
         "text-primary": "#E2E8F0",
+        "text-primary-invert": "#121212",
         "text-secondary": "#94A3B8",
+        "btn-primary-text": "#FFFFFF",
+        "btn-disabled-text": "#64748B",
+        "active-secondary": "#2D2D2D",
+        "active-secondary-hover": "#3D3D3D",
+        "link-primary": "#ff0073",
         warning: "#F59E0B",
         error: "#EF4444",
       },
@@ -38,15 +47,24 @@ function buildTheme(isDark: boolean) {
   return {
     palette: {
       "bg-primary": "#F8FAFC",
+      "bg-primary-active": "#FFFFFF",
       "bg-secondary": "#FFFFFF",
       "accent-primary": "#ff0073",
       "accent-primary-active": "#e0005f",
       "icons-primary": "#1E293B",
       "icons-secondary": "#64748B",
+      "icons-primary-opacity-0.6": "rgba(30,41,59,0.6)",
       "borders-primary": "#E2E8F0",
       "borders-secondary": "#D1D5DB",
+      "borders-strong": "#94A3B8",
       "text-primary": "#1E293B",
+      "text-primary-invert": "#FFFFFF",
       "text-secondary": "#64748B",
+      "btn-primary-text": "#FFFFFF",
+      "btn-disabled-text": "#94A3B8",
+      "active-secondary": "#F1F5F9",
+      "active-secondary-hover": "#E2E8F0",
+      "link-primary": "#ff0073",
       warning: "#F59E0B",
       error: "#EF4444",
     },
@@ -72,7 +90,6 @@ export function FilerobotEditorModal({
   const [loadedDesignState, setLoadedDesignState] = useState<unknown>(undefined)
   const [designStateFetched, setDesignStateFetched] = useState(!designStateUrl)
 
-  // Fetch design state from R2 if URL provided
   useEffect(() => {
     if (!designStateUrl) return
     let cancelled = false
@@ -85,7 +102,6 @@ export function FilerobotEditorModal({
         }
       })
       .catch(() => {
-        // Failed to load design state — open editor without it
         if (!cancelled) {
           setDesignStateFetched(true)
         }
@@ -120,14 +136,15 @@ export function FilerobotEditorModal({
         await onSaveComplete(blob, designState)
         setSaveState("done")
         setHasChanges(false)
-        setTimeout(() => setSaveState("idle"), 1500)
+        // Close after brief "Saved" feedback
+        setTimeout(() => onClose(), 600)
       } catch {
         setSaveState("idle")
       } finally {
         isSavingRef.current = false
       }
     },
-    [onSaveComplete],
+    [onSaveComplete, onClose],
   )
 
   const handleClose = useCallback(
@@ -143,33 +160,25 @@ export function FilerobotEditorModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
-      <div className={`flex items-center justify-between px-4 py-2 border-b shrink-0 ${isDark ? "bg-[#1E1E1E] border-[#2D2D2D]" : "bg-white border-[#E2E8F0]"}`}>
-        <span className={`text-sm font-medium ${isDark ? "text-white" : "text-[#1E293B]"}`}>Edit Image</span>
-        <div className="flex items-center gap-3">
+      {/* Saving overlay indicator */}
+      {saveState !== "idle" && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[10001] flex items-center gap-2 px-4 py-2 rounded-full bg-black/80 backdrop-blur-sm border border-white/10 shadow-lg">
           {saveState === "saving" && (
-            <div className="flex items-center gap-1.5">
-              <Loader2 className={`w-4 h-4 animate-spin ${isDark ? "text-white/70" : "text-[#64748B]"}`} />
-              <span className={`text-xs ${isDark ? "text-white/70" : "text-[#64748B]"}`}>Saving...</span>
-            </div>
+            <>
+              <Loader2 className="w-4 h-4 animate-spin text-white/70" />
+              <span className="text-xs text-white/70">Saving...</span>
+            </>
           )}
           {saveState === "done" && (
-            <div className="flex items-center gap-1.5">
+            <>
               <Check className="w-4 h-4 text-green-400" />
               <span className="text-xs text-green-400">Saved</span>
-            </div>
+            </>
           )}
-          <button
-            type="button"
-            aria-label="Close editor"
-            className={`transition-colors ${isDark ? "text-white/70 hover:text-white" : "text-[#64748B] hover:text-[#1E293B]"}`}
-            onClick={() => hasChanges ? setShowCloseConfirm(true) : onClose()}
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
-      </div>
+      )}
 
-      <div className="flex-1 relative">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {!designStateFetched ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black">
             <Loader2 className="w-8 h-8 animate-spin text-white/50" />
@@ -188,6 +197,7 @@ export function FilerobotEditorModal({
             previewPixelRatio={window.devicePixelRatio || 1}
             avoidChangesNotSavedAlertOnLeave
             defaultSavedImageType="png"
+            showBackButton={false}
             {...(loadedDesignState ? { loadableDesignState: loadedDesignState as Record<string, unknown> } : {})}
           />
         )}
