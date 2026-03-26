@@ -184,7 +184,7 @@ describe("UploadImageNode", () => {
     expect(handle).toHaveAttribute("data-position", "right")
   })
 
-  it("shows filename when a file is present", () => {
+  it("renders image when a file is present", () => {
     renderImageNode({
       data: {
         label: "Upload Image",
@@ -194,7 +194,7 @@ describe("UploadImageNode", () => {
         fileSize: 1024,
       },
     })
-    expect(screen.getByText("photo.jpg")).toBeInTheDocument()
+    expect(screen.getByAltText("photo.jpg")).toBeInTheDocument()
   })
 
   it("passes node id to BaseNode", () => {
@@ -245,8 +245,8 @@ describe("UploadVideoNode", () => {
     expect(handle).toHaveAttribute("data-position", "right")
   })
 
-  it("shows filename when a file is present", () => {
-    renderVideoNode({
+  it("renders video when a file is present", () => {
+    const { container } = renderVideoNode({
       data: {
         label: "Upload Video",
         r2Url: "https://example.com/clip.mp4",
@@ -255,7 +255,7 @@ describe("UploadVideoNode", () => {
         fileSize: 5242880,
       },
     })
-    expect(screen.getByText("clip.mp4")).toBeInTheDocument()
+    expect(container.querySelector("video")).toBeInTheDocument()
   })
 
   it("passes node id to BaseNode", () => {
