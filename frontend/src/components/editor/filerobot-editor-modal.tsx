@@ -14,14 +14,21 @@ interface FilerobotEditorModalProps {
 const ALL_TABS = [TABS.ADJUST, TABS.ANNOTATE, TABS.FILTERS, TABS.FINETUNE, TABS.RESIZE]
 
 function buildTheme(isDark: boolean) {
+  const common = {
+    "accent-primary": "#ff0073",
+    "accent-primary-active": "#e0005f",
+    "link-primary": "#ff0073",
+    "btn-primary-text": "#FFFFFF",
+    warning: "#F59E0B",
+    error: "#EF4444",
+  }
   if (isDark) {
     return {
       palette: {
+        ...common,
         "bg-primary": "#121212",
-        "bg-primary-active": "#1E1E1E",
+        "bg-primary-active": "#1A1A1A",
         "bg-secondary": "#1E1E1E",
-        "accent-primary": "#ff0073",
-        "accent-primary-active": "#e0005f",
         "icons-primary": "#E2E8F0",
         "icons-secondary": "#94A3B8",
         "icons-primary-opacity-0.6": "rgba(226,232,240,0.6)",
@@ -31,26 +38,19 @@ function buildTheme(isDark: boolean) {
         "text-primary": "#E2E8F0",
         "text-primary-invert": "#121212",
         "text-secondary": "#94A3B8",
-        "btn-primary-text": "#FFFFFF",
         "btn-disabled-text": "#64748B",
         "active-secondary": "#2D2D2D",
         "active-secondary-hover": "#3D3D3D",
-        "link-primary": "#ff0073",
-        warning: "#F59E0B",
-        error: "#EF4444",
       },
-      typography: {
-        fontFamily: "inherit",
-      },
+      typography: { fontFamily: "inherit" },
     }
   }
   return {
     palette: {
+      ...common,
       "bg-primary": "#F8FAFC",
       "bg-primary-active": "#FFFFFF",
       "bg-secondary": "#FFFFFF",
-      "accent-primary": "#ff0073",
-      "accent-primary-active": "#e0005f",
       "icons-primary": "#1E293B",
       "icons-secondary": "#64748B",
       "icons-primary-opacity-0.6": "rgba(30,41,59,0.6)",
@@ -60,17 +60,11 @@ function buildTheme(isDark: boolean) {
       "text-primary": "#1E293B",
       "text-primary-invert": "#FFFFFF",
       "text-secondary": "#64748B",
-      "btn-primary-text": "#FFFFFF",
       "btn-disabled-text": "#94A3B8",
       "active-secondary": "#F1F5F9",
       "active-secondary-hover": "#E2E8F0",
-      "link-primary": "#ff0073",
-      warning: "#F59E0B",
-      error: "#EF4444",
     },
-    typography: {
-      fontFamily: "inherit",
-    },
+    typography: { fontFamily: "inherit" },
   }
 }
 
@@ -102,20 +96,16 @@ export function FilerobotEditorModal({
         }
       })
       .catch(() => {
-        if (!cancelled) {
-          setDesignStateFetched(true)
-        }
+        if (!cancelled) setDesignStateFetched(true)
       })
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [designStateUrl])
 
   const theme = useMemo(() => buildTheme(isDark), [isDark])
 
   const handleSave = useCallback(
-    async (editedImageObject: { imageBase64?: string; mimeType?: string }, designState: unknown) => {
-      const base64Data = editedImageObject.imageBase64
+    async (imageData: { imageBase64?: string; mimeType?: string }, designState: unknown) => {
+      const base64Data = imageData.imageBase64
       if (!base64Data || isSavingRef.current) return
 
       isSavingRef.current = true
@@ -125,7 +115,7 @@ export function FilerobotEditorModal({
         const byteString = atob(
           base64Data.includes(",") ? base64Data.split(",")[1] : base64Data,
         )
-        const mimeType = editedImageObject.mimeType || "image/png"
+        const mimeType = imageData.mimeType || "image/png"
         const ab = new ArrayBuffer(byteString.length)
         const ia = new Uint8Array(ab)
         for (let i = 0; i < byteString.length; i++) {
@@ -136,7 +126,6 @@ export function FilerobotEditorModal({
         await onSaveComplete(blob, designState)
         setSaveState("done")
         setHasChanges(false)
-        // Close after brief "Saved" feedback
         setTimeout(() => onClose(), 600)
       } catch {
         setSaveState("idle")
@@ -146,6 +135,9 @@ export function FilerobotEditorModal({
     },
     [onSaveComplete, onClose],
   )
+
+  // Skip the "Save As" modal — go directly to our custom save handler
+  const handleBeforeSave = useCallback(() => false as const, [])
 
   const handleClose = useCallback(
     (_closingReason: string, hasUnsavedChanges: boolean) => {
@@ -160,9 +152,8 @@ export function FilerobotEditorModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
-      {/* Saving overlay indicator */}
       {saveState !== "idle" && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[10001] flex items-center gap-2 px-4 py-2 rounded-full bg-black/80 backdrop-blur-sm border border-white/10 shadow-lg">
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[10001] flex items-center gap-2 px-4 py-2 rounded-full bg-black/80 backdrop-blur-sm border border-white/10 shadow-lg pointer-events-none">
           {saveState === "saving" && (
             <>
               <Loader2 className="w-4 h-4 animate-spin text-white/70" />
@@ -186,6 +177,7 @@ export function FilerobotEditorModal({
         ) : (
           <FilerobotImageEditor
             source={imageUrl}
+            onBeforeSave={handleBeforeSave}
             onSave={handleSave}
             onClose={handleClose}
             onModify={() => setHasChanges(true)}
