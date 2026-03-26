@@ -13,56 +13,124 @@ interface FilerobotEditorModalProps {
 
 const ALL_TABS = [TABS.ADJUST, TABS.ANNOTATE, TABS.FILTERS, TABS.FINETUNE, TABS.RESIZE]
 
+/** Build Filerobot palette using the actual @scaleflex/ui Color enum keys */
 function buildTheme(isDark: boolean) {
   const common = {
+    // Accent / brand
     "accent-primary": "#ff0073",
-    "accent-primary-active": "#e0005f",
-    "link-primary": "#ff0073",
+    "accent-primary-hover": "#e0005f",
+    "accent-primary-active": "#cc0056",
+    "accent-primary-disabled": "#3D3D3D",
+    "accent-stateless": "#ff0073",
+    // Buttons
     "btn-primary-text": "#FFFFFF",
+    "btn-primary-text-0-6": "rgba(255,255,255,0.6)",
+    "btn-primary-text-0-4": "rgba(255,255,255,0.4)",
+    // Links
+    "link-primary": "#ff0073",
+    "link-stateless": "#ff0073",
+    "link-hover": "#e0005f",
+    "link-active": "#cc0056",
+    // States
     warning: "#F59E0B",
+    "warning-hover": "#D97706",
     error: "#EF4444",
+    "error-hover": "#DC2626",
+    "error-active": "#B91C1C",
+    success: "#22C55E",
+    info: "#3B82F6",
   }
+
   if (isDark) {
     return {
       palette: {
         ...common,
+        // Backgrounds
         "bg-primary": "#121212",
         "bg-primary-active": "#1A1A1A",
+        "bg-primary-hover": "#1A1A1A",
+        "bg-primary-light": "#1E1E1E",
         "bg-secondary": "#1E1E1E",
-        "icons-primary": "#E2E8F0",
+        "bg-stateless": "#1E1E1E",
+        "bg-hover": "#1E1E1E",
+        "bg-active": "#252525",
+        "bg-grey": "#2D2D2D",
+        "bg-tooltip": "#333333",
+        // Text
+        "txt-primary": "#E2E8F0",
+        "txt-secondary": "#94A3B8",
+        "txt-secondary-invert": "#94A3B8",
+        "txt-placeholder": "#64748B",
+        // Icons
+        "icon-primary": "#E2E8F0",
+        "icons-primary-opacity-0-6": "rgba(226,232,240,0.6)",
         "icons-secondary": "#94A3B8",
-        "icons-primary-opacity-0.6": "rgba(226,232,240,0.6)",
+        "icons-placeholder": "#4D4D4D",
+        "icons-invert": "#121212",
+        "icons-muted": "#64748B",
+        "icons-primary-hover": "#FFFFFF",
+        "icons-secondary-hover": "#E2E8F0",
+        // Borders
         "borders-primary": "#2D2D2D",
-        "borders-secondary": "#3D3D3D",
+        "borders-primary-hover": "#4D4D4D",
+        "borders-secondary": "#252525",
         "borders-strong": "#4D4D4D",
-        "text-primary": "#E2E8F0",
-        "text-primary-invert": "#121212",
-        "text-secondary": "#94A3B8",
+        "borders-invert": "#4D4D4D",
+        "borders-item": "#2D2D2D",
+        "borders-button": "#4D4D4D",
+        // Buttons
         "btn-disabled-text": "#64748B",
-        "active-secondary": "#2D2D2D",
-        "active-secondary-hover": "#3D3D3D",
+        "btn-secondary-text": "#E2E8F0",
+        // Active states (menus, selected items)
+        "active-secondary": "#1E1E1E",
+        "active-secondary-hover": "#252525",
       },
       typography: { fontFamily: "inherit" },
     }
   }
+
   return {
     palette: {
       ...common,
+      // Backgrounds
       "bg-primary": "#F8FAFC",
-      "bg-primary-active": "#FFFFFF",
+      "bg-primary-active": "#F1F5F9",
+      "bg-primary-hover": "#F1F5F9",
+      "bg-primary-light": "#F8FAFC",
       "bg-secondary": "#FFFFFF",
-      "icons-primary": "#1E293B",
-      "icons-secondary": "#64748B",
-      "icons-primary-opacity-0.6": "rgba(30,41,59,0.6)",
+      "bg-stateless": "#FFFFFF",
+      "bg-hover": "#F8FAFC",
+      "bg-active": "#F1F5F9",
+      "bg-grey": "#E2E8F0",
+      "bg-tooltip": "#334155",
+      // Text
+      "txt-primary": "#1E293B",
+      "txt-secondary": "#64748B",
+      "txt-secondary-invert": "#94A3B8",
+      "txt-placeholder": "#94A3B8",
+      // Icons
+      "icon-primary": "#64748B",
+      "icons-primary-opacity-0-6": "rgba(30,41,59,0.6)",
+      "icons-secondary": "#94A3B8",
+      "icons-placeholder": "#CBD5E1",
+      "icons-invert": "#FFFFFF",
+      "icons-muted": "#94A3B8",
+      "icons-primary-hover": "#1E293B",
+      "icons-secondary-hover": "#64748B",
+      // Borders
       "borders-primary": "#E2E8F0",
-      "borders-secondary": "#D1D5DB",
-      "borders-strong": "#94A3B8",
-      "text-primary": "#1E293B",
-      "text-primary-invert": "#FFFFFF",
-      "text-secondary": "#64748B",
+      "borders-primary-hover": "#94A3B8",
+      "borders-secondary": "#F1F5F9",
+      "borders-strong": "#CBD5E1",
+      "borders-invert": "#64748B",
+      "borders-item": "#E2E8F0",
+      "borders-button": "#94A3B8",
+      // Buttons
       "btn-disabled-text": "#94A3B8",
-      "active-secondary": "#F1F5F9",
-      "active-secondary-hover": "#E2E8F0",
+      "btn-secondary-text": "#1E293B",
+      // Active states
+      "active-secondary": "#FFFFFF",
+      "active-secondary-hover": "#F1F5F9",
     },
     typography: { fontFamily: "inherit" },
   }
@@ -136,7 +204,7 @@ export function FilerobotEditorModal({
     [onSaveComplete, onClose],
   )
 
-  // Skip the "Save As" modal — go directly to our custom save handler
+  // Return false to skip "Save As" modal — triggers onSave directly
   const handleBeforeSave = useCallback(() => false as const, [])
 
   const handleClose = useCallback(
