@@ -19,3 +19,4 @@ build/
 venv/
 coverage/
 .DS_Store
+.playwright-mcp/

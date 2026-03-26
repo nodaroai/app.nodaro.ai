@@ -1,10 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Sparkles } from "lucide-react"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { hasCredits } from "@/lib/edition"
+import { isWizardSupported } from "@nodaro-shared/prompt-wizard-categories"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { PromptHelperDialog } from "./prompt-helper-dialog"
+
+interface ModelChange {
+  field: string
+  value: string
+}
 
 interface PromptHelperButtonProps {
   readonly nodeType: string
@@ -12,8 +19,12 @@ interface PromptHelperButtonProps {
   readonly provider?: string
   readonly aspectRatio?: string
   readonly duration?: number
-  readonly onAccept: (enhancedPrompt: string) => void
+  readonly onAccept: (enhancedPrompt: string, modelChange?: ModelChange) => void
 }
+
+const IMAGE_SOURCE_TYPES = new Set([
+  "generate-image", "upload-image", "edit-image", "image-to-image",
+])
 
 export function PromptHelperButton({
   nodeType,
@@ -24,8 +35,38 @@ export function PromptHelperButton({
   onAccept,
 }: PromptHelperButtonProps) {
   const [open, setOpen] = useState(false)
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+  const allEdges = useWorkflowStore((s) => s.edges)
+  const allNodes = useWorkflowStore((s) => s.nodes)
+
+  // Collect node context from connected edges
+  const nodeContext = useMemo(() => {
+    if (!selectedNodeId) return undefined
+
+    const incomingEdges = allEdges.filter((e) => e.target === selectedNodeId)
+    const connectedInputTypes: string[] = []
+    let referenceImageCount = 0
+    let hasSourceVideo = false
+
+    for (const edge of incomingEdges) {
+      const sourceNode = allNodes.find((n) => n.id === edge.source)
+      if (!sourceNode?.type) continue
+      connectedInputTypes.push(sourceNode.type)
+      if (IMAGE_SOURCE_TYPES.has(sourceNode.type)) referenceImageCount++
+      if (sourceNode.type.includes("video") || sourceNode.type === "upload-video") hasSourceVideo = true
+    }
+
+    if (!connectedInputTypes.length && !referenceImageCount && !hasSourceVideo) return undefined
+
+    return { connectedInputTypes, referenceImageCount, hasSourceVideo }
+  }, [selectedNodeId, allEdges, allNodes])
 
   if (!hasCredits()) return null
+  if (!isWizardSupported(nodeType)) return null
+
+  // Read style from current node data
+  const currentNode = allNodes.find((n) => n.id === selectedNodeId)
+  const currentStyle = (currentNode?.data as Record<string, unknown>)?.style as string | undefined
 
   return (
     <>
@@ -40,7 +81,7 @@ export function PromptHelperButton({
             AI
           </button>
         </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">AI Prompt Helper</TooltipContent>
+        <TooltipContent side="top" className="text-xs">AI Prompt Wizard</TooltipContent>
       </Tooltip>
       {open && (
         <PromptHelperDialog
@@ -49,8 +90,10 @@ export function PromptHelperButton({
           nodeType={nodeType}
           currentPrompt={currentPrompt}
           provider={provider}
+          style={currentStyle}
           aspectRatio={aspectRatio}
           duration={duration}
+          nodeContext={nodeContext}
           onAccept={onAccept}
         />
       )}

@@ -67,6 +67,7 @@
 | 6 | `backend/src/providers/kie/index.ts` or `replicate/index.ts` | `supportedModels` array |
 | 7 | `backend/src/billing/credits.ts` | `STATIC_CREDIT_COSTS` (supports composite identifiers like `"gpt-image:high"`) |
 | 8 | `frontend/src/lib/pricing-data.ts` | MODEL_REFERENCE |
+| 8b | `packages/shared/src/prompt-wizard-categories.ts` | `PROVIDER_CAPABILITIES` entry for the node type |
 | 9 | `model_pricing` DB table | Include actual provider cost |
 | 10 | `backend/src/billing/stripe-config.ts` | If pricing tiers or credit allocations change |
 | 11 | `frontend/src/lib/pricing-data.ts` | PRICING_TIERS if tier features/prices change |
@@ -247,7 +248,7 @@ backend/src/
 | Media processing | FFmpeg in worker | 12 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale), 0 credits |
 | Image generation | Per-model params via `model-options.ts` | Config panel layout: Provider → Prompt → Style → Negative Prompt → Assets → Model Settings; style uses `IMAGE_STYLE_PRESETS` dropdown (16 presets) + "Custom..." free text; aspect ratios, resolution (Flux/Nano Banana 2), quality (GPT Image/Seedream) filtered per provider; Nano Banana v1 uses `image_size` (not `aspect_ratio`) and has no `resolution`; Nano Banana 2 uses native `aspect_ratio` with 1K/2K/4K resolution; `output_format` only sent to Nano Banana family; Flux Kontext/Max use own aspect ratio set (1:1, 16:9, 9:16, 4:3, 3:4, 21:9); style appended to prompt at execution; `negative_prompt` sent natively for imagen4/ideogram/qwen, appended as "Avoid: ..." for others; Ideogram uses `reference_image_urls` for character refs; reference image UI hidden for models that don't support it (`MODELS_WITH_REFERENCE_IMAGE_SUPPORT`: nano-banana, nano-banana-pro, ideogram only) |
 | LLM routing | KIE.ai unified client + Anthropic fallback | `packages/shared/src/llm-models.ts` (model registry), `backend/src/lib/llm-client.ts` (`llmComplete()` + `llmStream()`, 3 format adapters: chat-completions, messages, responses); 7 models across 3 tiers (economy/standard/premium); all 11 LLM routes + translate migrated; `LlmModelSelect` component in all LLM config panels; `LlmFeature` type covers 11 features; `buildLlmCreditIdentifier()` for tiered pricing; `resolveLlmCreditId()` reads `llmModel` from raw body before Zod strips it |
-| AI prompt helper | LLM-powered prompt enhancement | `POST /v1/prompt-helper/enhance` — node-type-aware prompt improvement with style dropdown (`IMAGE_PROMPT_STYLES`, `VIDEO_PROMPT_STYLES`, etc.); `PromptHelperButton` (pink sparkles, gated behind `hasCredits()`); `PromptHelperDialog` with LLM model selector; default model `gemini-3-flash` (economy tier) |
+| AI prompt wizard | LLM-powered interactive prompt builder | `POST /v1/prompt-helper/wizard` — two-action flow (analyze + generate); `PromptHelperButton` (pink sparkles, gated behind `hasCredits()` + `isWizardSupported()`); three-phase `PromptHelperDialog` (Input → Review Form → Result); AI picks 3-5 categories per node type (image 7, video 6, music 6, audio 4) and generates pre-filled questions with curated options; reference image role assignment (multi-select); model recommendation with one-click Apply; categories + provider capabilities in `packages/shared/src/prompt-wizard-categories.ts`; default model `gemini-3-flash` (economy tier); 2 credits per full wizard flow |
 | Translation | Gemini Flash via KIE.ai | Creative prompt translation (migrated from Replicate to unified LLM client) |
 | Composition preview | `@remotion/player` in frontend | Lazy-loaded Player preview for After Effects + Motion Graphics config panels; `@remotion-pkg` Vite alias resolves `packages/remotion/src`; `resolve.dedupe` prevents duplicate remotion bundles |
 | Undo/redo | Zustand snapshot stack (50 max), 300ms debounce | `undo-flags.ts` shared skip flag prevents execution updates (status/progress/results via `EXECUTION_DATA_KEYS`) from creating undo entries; `_isRestoring` flag prevents restore from triggering subscription; `loadGeneration` counter clears history only on workflow load/switch, not on auto-save `markClean()` |
@@ -317,8 +318,9 @@ backend/src/
 - [x] Sora character_id_list integration (I2V, T2V, Storyboard — up to 5 characters per generation)
 - [x] Credit system improvements: FFmpeg tiered pricing (1/2/3 CR), dynamic credit labels, entity node model selection, scene node credit badges
 - [x] Route-scoped preset mode (run only a route in presentation mode + published apps)
+- [x] Prompt Wizard (interactive AI prompt builder with category questions, model recommendation, reference image roles)
 
 ---
 
-*Last updated: 2026-03-22*
-*Version: 1.73.0*
+*Last updated: 2026-03-26*
+*Version: 1.74.0*

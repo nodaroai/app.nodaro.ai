@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Sparkles, Loader2 } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Sparkles, Loader2, ArrowLeft, Check, Lightbulb, Settings } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -17,11 +19,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { enhancePrompt } from "@/lib/api"
+import { wizardAnalyze, wizardGenerate } from "@/lib/api"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
-import { getStylesForNodeType } from "./prompt-helper-styles"
 import { LlmModelSelect } from "./llm-model-select"
+import type { WizardQuestion, RecommendedModel } from "@nodaro-shared/prompt-wizard-categories"
+
+interface ModelChange {
+  field: string
+  value: string
+}
 
 interface PromptHelperDialogProps {
   readonly open: boolean
@@ -29,10 +36,20 @@ interface PromptHelperDialogProps {
   readonly nodeType: string
   readonly currentPrompt: string
   readonly provider?: string
+  readonly style?: string
   readonly aspectRatio?: string
   readonly duration?: number
-  readonly onAccept: (enhancedPrompt: string) => void
+  readonly nodeContext?: {
+    connectedInputTypes?: string[]
+    referenceImageCount?: number
+    hasSourceVideo?: boolean
+  }
+  readonly onAccept: (enhancedPrompt: string, modelChange?: ModelChange) => void
 }
+
+type Phase = "input" | "review" | "result"
+
+const CUSTOM_VALUE = "__custom__"
 
 export function PromptHelperDialog({
   open,
@@ -40,181 +57,442 @@ export function PromptHelperDialog({
   nodeType,
   currentPrompt,
   provider,
+  style,
   aspectRatio,
   duration,
+  nodeContext,
   onAccept,
 }: PromptHelperDialogProps) {
-  const [style, setStyle] = useState("__none__")
-  const [llmModel, setLlmModel] = useState<string | undefined>(undefined)
-  const [additionalContext, setAdditionalContext] = useState("")
-  const [enhancedPrompt, setEnhancedPrompt] = useState("")
+  // Shared state
+  const [llmModel, setLlmModel] = useState<string | undefined>(() => {
+    return localStorage.getItem("prompt-wizard-model") || "claude-sonnet-4.6"
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+
+  // Phase 1 state
+  const [roughIdea, setRoughIdea] = useState(currentPrompt || "")
+
+  // Phase 2 state
+  const [phase, setPhase] = useState<Phase>("input")
+  const [questions, setQuestions] = useState<WizardQuestion[]>([])
+  const [selections, setSelections] = useState<Record<string, string>>({})
+  const [multiSelections, setMultiSelections] = useState<Record<string, string[]>>({})
+  const [customTexts, setCustomTexts] = useState<Record<string, string>>({})
+
+  // Phase 3 state
+  const [generatedPrompt, setGeneratedPrompt] = useState("")
+  const [recommendedModel, setRecommendedModel] = useState<RecommendedModel | null>(null)
+
+  // User preference (persisted in localStorage)
+  const [showPreference, setShowPreference] = useState(false)
+  const [userPreference, setUserPreference] = useState("")
+
+  useEffect(() => {
+    const savedPref = localStorage.getItem("prompt-wizard-preference")
+    if (savedPref) setUserPreference(savedPref)
+  }, [])
+
+  function handleModelChange(modelId: string) {
+    setLlmModel(modelId)
+    localStorage.setItem("prompt-wizard-model", modelId)
+  }
+
+  function handlePreferenceChange(value: string) {
+    setUserPreference(value)
+    if (value) {
+      localStorage.setItem("prompt-wizard-preference", value)
+    } else {
+      localStorage.removeItem("prompt-wizard-preference")
+    }
+  }
 
   const effectiveModel = llmModel || LLM_FEATURE_DEFAULTS["prompt-helper"]
   const creditCost = useModelCredits(buildLlmCreditIdentifier("prompt-helper", effectiveModel), 1)
 
-  const styles = getStylesForNodeType(nodeType)
-
-  async function handleEnhance() {
+  // -- Phase 1: Analyze --
+  async function handleAnalyze() {
     setLoading(true)
     setError("")
-    setEnhancedPrompt("")
     try {
-      const result = await enhancePrompt({
+      const result = await wizardAnalyze({
         nodeType,
-        prompt: currentPrompt,
-        provider: provider || undefined,
+        prompt: roughIdea || undefined,
+        provider,
+        style,
+        aspectRatio,
+        duration,
         llmModel,
-        style: style !== "__none__" ? style : undefined,
-        aspectRatio: aspectRatio || undefined,
-        duration: duration || undefined,
-        additionalContext: additionalContext || undefined,
+        nodeContext,
+        userPreference: userPreference || undefined,
       })
-      setEnhancedPrompt(result.enhancedPrompt)
+
+      setQuestions(result.questions)
+
+      // Initialize selections from AI pre-selections
+      const initSelections: Record<string, string> = {}
+      const initMulti: Record<string, string[]> = {}
+      for (const q of result.questions) {
+        if (q.multi && Array.isArray(q.selected)) {
+          initMulti[q.category] = q.selected
+        } else if (typeof q.selected === "string") {
+          initSelections[q.category] = q.selected
+        }
+      }
+      setSelections(initSelections)
+      setMultiSelections(initMulti)
+      setCustomTexts({})
+      setPhase("review")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Enhancement failed")
+      setError(err instanceof Error ? err.message : "Analysis failed")
     } finally {
       setLoading(false)
     }
   }
 
-  function handleAccept() {
-    onAccept(enhancedPrompt)
+  // -- Phase 2: Generate --
+  async function handleGenerate() {
+    setLoading(true)
+    setError("")
+    try {
+      const selectionList = questions.map((q) => {
+        if (q.multi) {
+          const vals = multiSelections[q.category] ?? []
+          return {
+            category: q.category,
+            value: vals.join(","),
+            isCustom: false,
+          }
+        }
+        const val = selections[q.category]
+        const isCustom = val === CUSTOM_VALUE
+        return {
+          category: q.category,
+          value: isCustom ? (customTexts[q.category] ?? "") : (val ?? ""),
+          isCustom,
+        }
+      }).filter((s) => s.value)
+
+      const result = await wizardGenerate({
+        nodeType,
+        provider,
+        style,
+        aspectRatio,
+        duration,
+        llmModel,
+        selections: selectionList,
+        originalPrompt: roughIdea || undefined,
+        nodeContext,
+        userPreference: userPreference || undefined,
+      })
+
+      setGeneratedPrompt(result.prompt)
+      setRecommendedModel(result.recommendedModel ?? null)
+      setPhase("result")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generation failed")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // -- Phase 3: Accept --
+  function handleAccept(applyModel: boolean) {
+    const modelChange = applyModel && recommendedModel
+      ? { field: recommendedModel.field, value: recommendedModel.provider }
+      : undefined
+    onAccept(generatedPrompt, modelChange)
     handleClose()
   }
 
   function handleClose() {
-    setStyle("__none__")
-    setLlmModel(undefined)
-    setAdditionalContext("")
-    setEnhancedPrompt("")
+    setPhase("input")
+    setRoughIdea(currentPrompt || "")
+    // Don't reset llmModel — persisted in localStorage
+    setQuestions([])
+    setSelections({})
+    setMultiSelections({})
+    setCustomTexts({})
+    setGeneratedPrompt("")
+    setRecommendedModel(null)
     setError("")
     setLoading(false)
     onClose()
   }
 
+  // -- Selection Handlers --
+  function handleSingleSelect(category: string, value: string) {
+    setSelections((prev) => ({ ...prev, [category]: value }))
+  }
+
+  function handleMultiToggle(category: string, value: string) {
+    setMultiSelections((prev) => {
+      const current = prev[category] ?? []
+      const next = current.includes(value)
+        ? current.filter((v) => v !== value)
+        : [...current, value]
+      return { ...prev, [category]: next }
+    })
+  }
+
+  function handleCustomText(category: string, text: string) {
+    setCustomTexts((prev) => ({ ...prev, [category]: text }))
+  }
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[#ff0073]" />
-            AI Prompt Helper
+            AI Prompt Wizard
+            {phase !== "input" && (
+              <span className="text-xs font-normal text-muted-foreground ml-2">
+                {phase === "review" ? "Step 2 of 3" : "Step 3 of 3"}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowPreference((p) => !p)}
+              className={`ml-auto p-1 rounded-md transition-colors ${showPreference || userPreference ? "text-[#ff0073] bg-[#ff0073]/10" : "text-muted-foreground hover:text-foreground"}`}
+              title="Wizard preferences"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
-          {/* Node context badges */}
+          {/* Context badges */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{nodeType}</span>
             {provider && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{provider}</span>}
           </div>
 
-          {/* Current prompt (readonly) */}
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Current Prompt</label>
-            <div className="text-xs bg-muted/50 rounded-md px-2.5 py-2 max-h-20 overflow-y-auto break-words whitespace-pre-wrap border">
-              {currentPrompt || <span className="text-muted-foreground/60 italic">Empty — describe what you want below</span>}
-            </div>
-          </div>
-
-          {/* Style dropdown */}
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Style</label>
-            <Select value={style} onValueChange={setStyle}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="No style" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">No style</SelectItem>
-                {styles.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* AI Model */}
-          <LlmModelSelect
-            feature="prompt-helper"
-            value={llmModel}
-            onChange={setLlmModel}
-          />
-
-          {/* Additional context */}
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">What do you want to achieve?</label>
-            <Textarea
-              rows={2}
-              value={additionalContext}
-              onChange={(e) => setAdditionalContext(e.target.value)}
-              placeholder="e.g. make it more dramatic, add golden hour lighting, focus on the eyes..."
-              className="text-xs resize-none"
-              maxLength={1000}
-            />
-          </div>
-
-          {/* Enhance button */}
-          {!enhancedPrompt && (
-            <Button
-              onClick={handleEnhance}
-              disabled={loading || (!currentPrompt && !additionalContext)}
-              className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
-                  Enhancing...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                  Enhance Prompt
-                  <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditCost} CR</span>
-                </>
-              )}
-            </Button>
-          )}
-
-          {error && (
-            <p className="text-xs text-destructive">{error}</p>
-          )}
-
-          {/* Result */}
-          {enhancedPrompt && (
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Enhanced Prompt</label>
+          {/* User preference (collapsible) */}
+          {showPreference && (
+            <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-[#ff0073]/20 bg-[#ff0073]/5">
+              <label className="text-xs font-medium text-muted-foreground">
+                General Preference <span className="text-[10px] font-normal">(applies to all wizard sessions)</span>
+              </label>
               <Textarea
-                rows={4}
-                value={enhancedPrompt}
-                onChange={(e) => setEnhancedPrompt(e.target.value)}
+                rows={2}
+                value={userPreference}
+                onChange={(e) => handlePreferenceChange(e.target.value)}
+                placeholder="e.g. show options in Hebrew, always suggest photorealistic style, use simple language..."
                 className="text-xs resize-none"
+                maxLength={500}
               />
-              <div className="flex gap-2 mt-3">
-                <Button
-                  onClick={handleAccept}
-                  className="flex-1 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
-                >
-                  Use This Prompt
-                </Button>
+              {userPreference && (
+                <p className="text-[10px] text-muted-foreground">Saved automatically. Clear the text to remove.</p>
+              )}
+            </div>
+          )}
+
+          {/* PHASE 1: Input */}
+          {phase === "input" && (
+            <>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Describe what you want (or leave empty to build from scratch)
+                </label>
+                <Textarea
+                  rows={3}
+                  value={roughIdea}
+                  onChange={(e) => setRoughIdea(e.target.value)}
+                  placeholder="e.g. a cat sitting on a windowsill at sunset..."
+                  className="text-xs resize-none"
+                  maxLength={5000}
+                />
+              </div>
+
+              <LlmModelSelect feature="prompt-helper" value={llmModel} onChange={handleModelChange} />
+
+              <Button
+                onClick={handleAnalyze}
+                disabled={loading}
+                className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+              >
+                {loading ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Analyzing...</>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                    Build Prompt
+                    <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditCost} CR</span>
+                  </>
+                )}
+              </Button>
+            </>
+          )}
+
+          {/* PHASE 2: Review Form */}
+          {phase === "review" && (
+            <>
+              {/* Collapsed rough idea */}
+              {roughIdea && (
+                <div className="text-xs bg-muted/50 rounded-md px-2.5 py-2 border">
+                  <span className="text-muted-foreground font-medium">Your idea: </span>
+                  <span className="break-words">{roughIdea.length > 120 ? roughIdea.slice(0, 120) + "..." : roughIdea}</span>
+                </div>
+              )}
+
+              {/* Question rows */}
+              <div className="flex flex-col gap-3">
+                {questions.map((q) => (
+                  <div key={q.category} className="flex flex-col gap-1.5 p-3 rounded-lg border bg-card">
+                    <label className="text-xs font-medium">{q.label}</label>
+
+                    {q.multi ? (
+                      /* Multi-select: checkboxes */
+                      <div className="flex flex-col gap-1.5">
+                        {q.options.map((opt) => (
+                          <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
+                            <Checkbox
+                              checked={(multiSelections[q.category] ?? []).includes(opt.value)}
+                              onCheckedChange={() => handleMultiToggle(q.category, opt.value)}
+                              className="mt-0.5"
+                            />
+                            <div>
+                              <span className="text-xs font-medium">{opt.label}</span>
+                              {opt.description && (
+                                <p className="text-[10px] text-muted-foreground">{opt.description}</p>
+                              )}
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      /* Single-select: dropdown */
+                      <>
+                        <Select
+                          value={selections[q.category] ?? ""}
+                          onValueChange={(v) => handleSingleSelect(q.category, v)}
+                        >
+                          <SelectTrigger className="h-auto min-h-[2rem] sm:min-h-[2.5rem] text-xs py-1.5">
+                            <SelectValue placeholder="Select..." />
+                          </SelectTrigger>
+                          <SelectContent className="max-w-[min(90vw,600px)]">
+                            {q.options.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value} className="whitespace-normal">
+                                <div className="flex flex-col">
+                                  <span>{opt.label}</span>
+                                  {opt.description && (
+                                    <span className="text-[10px] text-muted-foreground leading-tight">{opt.description}</span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            ))}
+                            {q.allowCustom && (
+                              <SelectItem value={CUSTOM_VALUE}>Custom...</SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+
+                        {/* Custom text input */}
+                        {selections[q.category] === CUSTOM_VALUE && (
+                          <Input
+                            value={customTexts[q.category] ?? ""}
+                            onChange={(e) => handleCustomText(q.category, e.target.value)}
+                            placeholder="Type your custom value..."
+                            className="h-8 text-xs mt-1"
+                          />
+                        )}
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2">
                 <Button
                   variant="outline"
-                  onClick={handleEnhance}
-                  disabled={loading}
+                  onClick={() => setPhase("input")}
                   className="flex-shrink-0"
                 >
+                  <ArrowLeft className="w-3.5 h-3.5 mr-1" />
+                  Re-analyze
+                  <span className="ml-1 text-[10px] opacity-60">{creditCost} CR</span>
+                </Button>
+                <Button
+                  onClick={handleGenerate}
+                  disabled={loading || questions.every((q) =>
+                    q.multi
+                      ? !(multiSelections[q.category]?.length)
+                      : !selections[q.category] || (selections[q.category] === CUSTOM_VALUE && !customTexts[q.category])
+                  )}
+                  className="flex-1 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+                >
                   {loading ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Generating...</>
                   ) : (
                     <>
-                      Retry
-                      <span className="ml-1.5 text-[10px] opacity-60">{creditCost} CR</span>
+                      Generate Prompt
+                      <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditCost} CR</span>
                     </>
                   )}
                 </Button>
               </div>
-            </div>
+            </>
+          )}
+
+          {/* PHASE 3: Result */}
+          {phase === "result" && (
+            <>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Generated Prompt</label>
+                <Textarea
+                  rows={4}
+                  value={generatedPrompt}
+                  onChange={(e) => setGeneratedPrompt(e.target.value)}
+                  className="text-xs resize-none"
+                />
+              </div>
+
+              {/* Model recommendation card */}
+              {recommendedModel && (
+                <div className="flex items-start gap-3 p-3 rounded-lg border bg-muted/30">
+                  <Lightbulb className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium">Recommended: {recommendedModel.label}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{recommendedModel.reason}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleAccept(true)}
+                    className="flex-shrink-0 text-xs h-7"
+                  >
+                    <Check className="w-3 h-3 mr-1" />
+                    Apply & Use
+                  </Button>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setPhase("review")}
+                  className="flex-shrink-0"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 mr-1" />
+                  Back
+                </Button>
+                <Button
+                  onClick={() => handleAccept(false)}
+                  className="flex-1 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+                >
+                  Use This Prompt
+                </Button>
+              </div>
+            </>
+          )}
+
+          {/* Error display (all phases) */}
+          {error && (
+            <p className="text-xs text-destructive">{error}</p>
           )}
         </div>
       </DialogContent>
