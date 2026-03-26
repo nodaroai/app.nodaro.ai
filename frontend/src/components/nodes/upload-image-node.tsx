@@ -179,6 +179,13 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
             ) : undefined
           }
         >
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onChange={handleFileSelect}
+            className="hidden"
+            ref={fileInputRef}
+          />
           {/* Flush: image result display (when hasFile=true and not uploading) */}
           {!isUploading && !nodeData.isUploading && hasFile && mode === "upload" && (
             <div className="relative w-full h-full group">
@@ -208,8 +215,11 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
-              {/* Bottom-left: action buttons */}
               <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button type="button" aria-label="Upload another image" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                  onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }} title="Upload another">
+                  <Upload className="w-3.5 h-3.5" />
+                </button>
                 <button type="button" aria-label="Edit image" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => { e.stopPropagation(); openImageEdit(id, imageUrl!, activeResult?.filerobotDesignStateUrl) }} title="Edit image">
                   <Pencil className="w-3.5 h-3.5" />
@@ -265,13 +275,6 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
               {/* Upload mode - empty state */}
               {!isUploading && !nodeData.isUploading && mode === "upload" && !hasFile && (
                 <>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                    ref={fileInputRef}
-                  />
                   <button
                     type="button"
                     className={`w-full flex items-center justify-center gap-2 h-16 rounded-md border-2 border-dashed transition-colors cursor-pointer ${
