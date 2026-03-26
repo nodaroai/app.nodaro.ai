@@ -42,6 +42,7 @@ interface PromptHelperDialogProps {
   readonly nodeContext?: {
     connectedInputTypes?: string[]
     referenceImageCount?: number
+    referenceImageUrls?: string[]
     hasSourceVideo?: boolean
   }
   readonly onAccept: (enhancedPrompt: string, modelChange?: ModelChange) => void
@@ -65,7 +66,7 @@ export function PromptHelperDialog({
 }: PromptHelperDialogProps) {
   // Shared state
   const [llmModel, setLlmModel] = useState<string | undefined>(() => {
-    return localStorage.getItem("prompt-wizard-model") || "claude-sonnet-4.6"
+    return localStorage.getItem("prompt-wizard-model") || "gemini-3.1-pro"
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -339,9 +340,24 @@ export function PromptHelperDialog({
 
               {/* Question rows */}
               <div className="flex flex-col gap-3">
-                {questions.map((q) => (
+                {questions.map((q) => {
+                  // Extract reference image index for thumbnail display
+                  const refMatch = q.category.match(/^reference-role-(\d+)$/)
+                  const refIdx = refMatch ? parseInt(refMatch[1], 10) - 1 : -1
+                  const refImageUrl = refIdx >= 0 ? nodeContext?.referenceImageUrls?.[refIdx] : undefined
+
+                  return (
                   <div key={q.category} className="flex flex-col gap-1.5 p-3 rounded-lg border bg-card">
-                    <label className="text-xs font-medium">{q.label}</label>
+                    <div className="flex items-center gap-2">
+                      {refImageUrl && (
+                        <img
+                          src={refImageUrl}
+                          alt={`Reference ${refIdx + 1}`}
+                          className="w-12 h-12 rounded-md object-cover border flex-shrink-0"
+                        />
+                      )}
+                      <label className="text-xs font-medium">{q.label}</label>
+                    </div>
 
                     {q.multi ? (
                       /* Multi-select: checkboxes */
@@ -401,7 +417,8 @@ export function PromptHelperDialog({
                       </>
                     )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
 
               {/* Actions */}

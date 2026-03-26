@@ -45,20 +45,28 @@ export function PromptHelperButton({
 
     const incomingEdges = allEdges.filter((e) => e.target === selectedNodeId)
     const connectedInputTypes: string[] = []
-    let referenceImageCount = 0
+    const referenceImageUrls: string[] = []
     let hasSourceVideo = false
 
     for (const edge of incomingEdges) {
       const sourceNode = allNodes.find((n) => n.id === edge.source)
       if (!sourceNode?.type) continue
       connectedInputTypes.push(sourceNode.type)
-      if (IMAGE_SOURCE_TYPES.has(sourceNode.type)) referenceImageCount++
+      if (IMAGE_SOURCE_TYPES.has(sourceNode.type)) {
+        // Extract image URL from connected node's result data
+        const d = sourceNode.data as Record<string, unknown>
+        const results = d.generatedResults as Array<{ url: string }> | undefined
+        const activeIdx = (d.activeResultIndex as number) ?? 0
+        const imageUrl = results?.[activeIdx]?.url ?? (d.generatedImageUrl as string) ?? (d.url as string)
+        if (imageUrl) referenceImageUrls.push(imageUrl)
+      }
       if (sourceNode.type.includes("video") || sourceNode.type === "upload-video") hasSourceVideo = true
     }
 
+    const referenceImageCount = referenceImageUrls.length
     if (!connectedInputTypes.length && !referenceImageCount && !hasSourceVideo) return undefined
 
-    return { connectedInputTypes, referenceImageCount, hasSourceVideo }
+    return { connectedInputTypes, referenceImageCount, referenceImageUrls, hasSourceVideo }
   }, [selectedNodeId, allEdges, allNodes])
 
   if (!hasCredits()) return null

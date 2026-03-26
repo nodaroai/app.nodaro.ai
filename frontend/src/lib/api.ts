@@ -2533,6 +2533,7 @@ export async function wizardAnalyze(params: {
   nodeContext?: {
     connectedInputTypes?: string[]
     referenceImageCount?: number
+    referenceImageUrls?: string[]
     hasSourceVideo?: boolean
   }
   userPreference?: string
@@ -2571,6 +2572,7 @@ export async function wizardGenerate(params: {
   nodeContext?: {
     connectedInputTypes?: string[]
     referenceImageCount?: number
+    referenceImageUrls?: string[]
     hasSourceVideo?: boolean
   }
   userPreference?: string
