@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useRef, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Video, Upload, Link, Loader2, AlertCircle, X, Play, Expand, Download, Scissors } from "lucide-react"
+import { Video, Upload, Link, Loader2, AlertCircle, X, Play, Expand, Download, Scissors, LayoutGrid } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
@@ -14,7 +14,7 @@ import { useFileUpload } from "@/hooks/use-file-upload"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
-import type { UploadVideoData } from "@/types/nodes"
+import type { UploadVideoData, GeneratedResult } from "@/types/nodes"
 
 const HANDLES = [
   { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
@@ -26,17 +26,24 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as UploadVideoData
   const [mode, setMode] = useState<"upload" | "url">(nodeData.externalUrl ? "url" : "upload")
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [showThumbnails, setShowThumbnails] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const { isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
   const mediaEditor = useMediaEditor({
-    onComplete: async (results) => {
-      const result = results[0]
+    onComplete: async (uploadResults) => {
+      const result = uploadResults[0]
       if (!result) return
       const url = result.processedUrl ?? result.uploadResult.url
       const thumb = result.processedThumbnailUrl ?? result.uploadResult.thumbnailUrl ?? ""
+      const newResult: GeneratedResult = {
+        url,
+        thumbnailUrl: thumb || undefined,
+        jobId: `upload-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+      }
       updateNodeData(id, {
         assetId: result.uploadResult.assetId ?? "",
         url,
@@ -49,11 +56,16 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
         isUploading: false,
         uploadError: "",
         externalUrl: "",
+        generatedResults: [...(nodeData.generatedResults ?? []), newResult],
+        activeResultIndex: (nodeData.generatedResults ?? []).length,
       })
     },
   })
-  const videoUrl = nodeData.r2Url || nodeData.url
-  const thumbnailUrl = nodeData.thumbnailUrl
+  const results = nodeData.generatedResults ?? []
+  const activeIndex = nodeData.activeResultIndex ?? 0
+  const activeResult = results[activeIndex]
+  const videoUrl = activeResult?.url ?? nodeData.r2Url ?? nodeData.url
+  const thumbnailUrl = activeResult?.thumbnailUrl ?? nodeData.thumbnailUrl
   const hasFile = Boolean(videoUrl) && !nodeData.externalUrl
   const [isDragOver, setIsDragOver] = useState(false)
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
@@ -148,10 +160,59 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
         imageAspectRatio={mediaAspectRatio}
         hideHeader
         handles={HANDLES}
+        bottomToolbarContent={
+          showThumbnails && results.length > 1 ? (
+            <div className="flex gap-2 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
+              {results.slice(0, 8).map((r, i) => (
+                r.thumbnailUrl ? (
+                  <CachedImage
+                    key={`${r.jobId}-${i}`}
+                    src={r.thumbnailUrl}
+                    alt={`Result ${i + 1}`}
+                    className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
+                      i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
+                    }`}
+                    thumbnail
+                    thumbnailWidth={128}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
+                    }}
+                  />
+                ) : (
+                  <video
+                    key={`${r.jobId}-${i}`}
+                    src={r.url}
+                    crossOrigin="anonymous"
+                    muted
+                    className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
+                      i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
+                    }}
+                  />
+                )
+              ))}
+            </div>
+          ) : undefined
+        }
       >
         {/* Flush: video result display (when hasFile=true and not uploading) */}
         {!isUploading && !nodeData.isUploading && hasFile && mode === "upload" && (
           <div className="relative w-full h-full group">
+            {results.length > 1 && (
+              <button
+                type="button"
+                className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-md z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
+                title="Show versions"
+              >
+                <LayoutGrid className="w-3 h-3" />
+                <span className="text-[11px] font-medium">{results.length}</span>
+              </button>
+            )}
             {thumbnailUrl ? (
               <CachedImage
                 src={thumbnailUrl}

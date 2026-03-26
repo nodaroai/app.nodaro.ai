@@ -2,7 +2,7 @@
 
 import { memo, useRef, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Maximize2, Upload, Link, Download, Loader2, AlertCircle, X, Pencil } from "lucide-react"
+import { ImageIcon, Maximize2, Upload, Link, Download, Loader2, AlertCircle, X, Pencil, LayoutGrid } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
@@ -31,6 +31,7 @@ function formatBytes(bytes: number): string {
 function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as UploadImageData
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+  const [showThumbnails, setShowThumbnails] = useState(false)
   const [mode, setMode] = useState<"upload" | "url">(nodeData.externalUrl ? "url" : "upload")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -155,10 +156,43 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
           hideHeader
           handles={HANDLES}
           imageAspectRatio={imgAspectRatio}
+          bottomToolbarContent={
+            showThumbnails && results.length > 1 ? (
+              <div className="flex gap-1.5 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
+                {results.slice(0, 8).map((r, i) => (
+                  <CachedImage
+                    key={`${r.jobId}-${i}`}
+                    src={r.url}
+                    alt={`Result ${i + 1}`}
+                    className={`w-12 h-12 object-cover rounded-lg cursor-pointer transition-all ${
+                      i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
+                    }`}
+                    thumbnail
+                    thumbnailWidth={96}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
+                    }}
+                  />
+                ))}
+              </div>
+            ) : undefined
+          }
         >
           {/* Flush: image result display (when hasFile=true and not uploading) */}
           {!isUploading && !nodeData.isUploading && hasFile && mode === "upload" && (
             <div className="relative w-full h-full group">
+              {results.length > 1 && (
+                <button
+                  type="button"
+                  className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-md z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
+                  title="Show versions"
+                >
+                  <LayoutGrid className="w-3 h-3" />
+                  <span className="text-[11px] font-medium">{results.length}</span>
+                </button>
+              )}
               <CachedImage
                 src={imageUrl}
                 alt={nodeData.filename || "Uploaded image"}
@@ -166,7 +200,6 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                 thumbnail={!useFull}
                 thumbnailWidth={320}
               />
-              {/* Top-right: delete button */}
               <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button type="button" aria-label="Remove image"
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-red-600/80 border border-white/10 text-white rounded-full shadow-sm"
