@@ -66,7 +66,8 @@ export function VideoOutputCard({ label, status, url, nodeId, onOpenMedia, eleme
               playsInline
             />
             {/* Bottom-left: play/pause — visible on hover/touch */}
-            <div className="media-overlay-controls absolute bottom-2 left-2 hidden md:flex opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions */}
+            <div className="media-overlay-controls absolute bottom-2 left-2 hidden md:flex opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
               <GlassButton onClick={togglePlay} title={paused ? "Play" : "Pause"}>
                 {paused
                   ? <Play className="w-3.5 h-3.5 ml-0.5" fill="white" />
@@ -74,7 +75,8 @@ export function VideoOutputCard({ label, status, url, nodeId, onOpenMedia, eleme
               </GlassButton>
             </div>
             {/* Bottom-right: mute/unmute — visible on hover/touch */}
-            <div className="media-overlay-controls absolute bottom-2 right-2 hidden md:flex opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions */}
+            <div className="media-overlay-controls absolute bottom-2 right-2 hidden md:flex opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
               <GlassButton onClick={toggleMute} title={muted ? "Unmute" : "Mute"}>
                 {muted
                   ? <VolumeX className="w-3.5 h-3.5" />
@@ -82,7 +84,8 @@ export function VideoOutputCard({ label, status, url, nodeId, onOpenMedia, eleme
               </GlassButton>
             </div>
             {/* Top-right: download, copy, menu — visible on hover/touch */}
-            <div className="media-overlay-controls absolute top-2 right-2 hidden md:flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions */}
+            <div className="media-overlay-controls absolute top-2 right-2 hidden md:flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
               <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.mp4`)} title="Download">
                 <Download className="w-3.5 h-3.5" />
               </GlassButton>
