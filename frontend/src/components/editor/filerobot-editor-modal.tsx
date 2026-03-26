@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
-import { Loader2, Check } from "lucide-react"
+import { Loader2, Check, X } from "lucide-react"
 import { useTheme } from "next-themes"
 import FilerobotImageEditor, { TABS } from "react-filerobot-image-editor"
 
@@ -238,6 +238,22 @@ export function FilerobotEditorModal({
           )}
         </div>
       )}
+
+      {/* Our close button — replaces Filerobot's broken one (library bug: isResetted=false disables click) */}
+      <button
+        type="button"
+        aria-label="Close editor"
+        className="absolute top-2 right-2 z-[10001] w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 transition-colors"
+        onClick={() => hasChanges ? setShowCloseConfirm(true) : onClose()}
+      >
+        <X className={`w-5 h-5 ${isDark ? "text-white/70 hover:text-white" : "text-[#64748B] hover:text-[#1E293B]"}`} />
+      </button>
+
+      {/* Hide Filerobot's broken close button + fix hardcoded white spinner overlay */}
+      <style>{`
+        .FIE_buttons-close-btn { display: none !important; }
+        .sc-m42fbk-0 { background: ${isDark ? "rgba(18,18,18,0.85)" : "rgba(248,250,252,0.85)"} !important; }
+      `}</style>
 
       <div className="flex-1 min-h-0 overflow-hidden">
         {!designStateFetched ? (
