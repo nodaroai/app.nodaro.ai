@@ -8,7 +8,7 @@
  */
 
 import { config } from "./config.js"
-import { getLlmModel, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
+import { getLlmModel, LLM_FEATURE_DEFAULTS, calculateLlmCost } from "../../../packages/shared/src/llm-models.js"
 import type { LlmModelDef, LlmFeature } from "../../../packages/shared/src/llm-models.js"
 import { getAnthropicClient } from "./anthropic.js"
 import { KIE_API_BASE } from "../providers/kie/client.js"
@@ -42,6 +42,8 @@ export interface LlmResponse {
   text: string
   usage?: { inputTokens: number; outputTokens: number }
   model: string
+  /** Estimated provider cost in USD based on token usage */
+  providerCost?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +178,16 @@ function buildAnthropicMessages(req: LlmRequest) {
   })
 }
 
+/** Build LlmResponse with computed provider cost from token usage. */
+function buildResponse(model: LlmModelDef, text: string, usage?: { inputTokens: number; outputTokens: number }): LlmResponse {
+  return {
+    text,
+    usage,
+    model: model.id,
+    providerCost: usage ? calculateLlmCost(model.id, usage) : undefined,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // KIE.ai adapters
 // ---------------------------------------------------------------------------
@@ -235,11 +247,7 @@ async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Prom
   const text = (choices?.[0]?.message as Record<string, unknown>)?.content as string ?? ""
   const usage = data.usage as Record<string, number> | undefined
 
-  return {
-    text,
-    usage: usage ? { inputTokens: usage.prompt_tokens ?? 0, outputTokens: usage.completion_tokens ?? 0 } : undefined,
-    model: model.id,
-  }
+  return buildResponse(model, text, usage ? { inputTokens: usage.prompt_tokens ?? 0, outputTokens: usage.completion_tokens ?? 0 } : undefined)
 }
 
 async function streamKieChatCompletions(
@@ -294,11 +302,7 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
   const text = (textBlock?.text as string) ?? ""
   const usage = data.usage as Record<string, number> | undefined
 
-  return {
-    text,
-    usage: usage ? { inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0 } : undefined,
-    model: model.id,
-  }
+  return buildResponse(model, text, usage ? { inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0 } : undefined)
 }
 
 async function streamKieMessages(
@@ -354,11 +358,7 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
   const text = (textBlock?.text as string) ?? ""
   const usage = data.usage as Record<string, number> | undefined
 
-  return {
-    text,
-    usage: usage ? { inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0 } : undefined,
-    model: model.id,
-  }
+  return buildResponse(model, text, usage ? { inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0 } : undefined)
 }
 
 async function streamKieResponses(
@@ -406,11 +406,8 @@ async function callAnthropicDirect(model: LlmModelDef, req: LlmRequest): Promise
   )
 
   const textBlock = response.content.find((b) => b.type === "text")
-  return {
-    text: textBlock?.text ?? "",
-    usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens },
-    model: model.id,
-  }
+  const usage = { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }
+  return buildResponse(model, textBlock?.text ?? "", usage)
 }
 
 async function streamAnthropicDirect(
@@ -440,12 +437,8 @@ async function streamAnthropicDirect(
   })
 
   const finalMessage = await stream.finalMessage()
-
-  return {
-    text: fullText,
-    usage: { inputTokens: finalMessage.usage.input_tokens, outputTokens: finalMessage.usage.output_tokens },
-    model: model.id,
-  }
+  const usage = { inputTokens: finalMessage.usage.input_tokens, outputTokens: finalMessage.usage.output_tokens }
+  return buildResponse(model, fullText, usage)
 }
 
 // ---------------------------------------------------------------------------
@@ -538,5 +531,10 @@ async function parseSseStream(
     reader.cancel().catch(() => {})
   }
 
-  return { text: fullText, usage, model: modelId }
+  return {
+    text: fullText,
+    usage,
+    model: modelId,
+    providerCost: usage ? calculateLlmCost(modelId, usage) : undefined,
+  }
 }

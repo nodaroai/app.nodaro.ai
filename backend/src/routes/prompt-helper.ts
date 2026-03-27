@@ -238,7 +238,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
         try {
           await supabase
             .from("jobs")
-            .update({ status: "completed", output_data: { ...result, usage: response.usage } })
+            .update({ status: "completed", output_data: { ...result, usage: response.usage }, provider_cost: response.providerCost ?? null })
             .eq("id", job.id)
           if (usageLogId) await CreditsService.commitCredits(usageLogId)
         } catch (postErr) {
