@@ -142,15 +142,30 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
 }
 
 const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx) {
-  const { videoUrl, prompt, provider } = job.data as {
+  const { videoUrl, prompt, provider, duration, resolution, audio, multiShots, aspectRatio, seed, referenceImageUrl } = job.data as {
     jobId: string
     videoUrl: string
     prompt?: string
     provider?: string
+    duration?: string
+    resolution?: string
+    audio?: boolean
+    multiShots?: boolean
+    aspectRatio?: string
+    seed?: number
+    referenceImageUrl?: string
   }
   console.log(`[worker] video-to-video ${ctx.jobId} (provider: ${provider ?? "wan"})`)
 
-  const result = await videoToVideo(videoUrl, provider ?? "wan", prompt)
+  const result = await videoToVideo(videoUrl, provider ?? "wan", prompt, {
+    duration,
+    resolution,
+    audio,
+    multiShots,
+    aspectRatio,
+    seed,
+    referenceImageUrl,
+  })
   await job.updateProgress(50)
 
   const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)

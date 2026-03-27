@@ -93,7 +93,27 @@ export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoProvider; label: st
   { value: "luma-modify", label: "Luma Modify", desc: "Luma video modification" },
   { value: "runway-aleph", label: "Runway Aleph", desc: "Runway AI video-to-video conversion" },
   { value: "wan", label: "Wan 2.6", desc: "High quality video-to-video" },
+  { value: "wan-flash", label: "Wan 2.6 Flash", desc: "Fast V2V with audio & multi-shot" },
 ]
+
+export const V2V_DURATION_OPTIONS = [
+  { value: "5", label: "5 seconds" },
+  { value: "10", label: "10 seconds" },
+] as const
+
+export const V2V_RESOLUTION_OPTIONS = [
+  { value: "720p", label: "720p" },
+  { value: "1080p", label: "1080p" },
+] as const
+
+export const V2V_ALEPH_ASPECT_RATIOS = [
+  { value: "16:9", label: "16:9" },
+  { value: "9:16", label: "9:16" },
+  { value: "4:3", label: "4:3" },
+  { value: "3:4", label: "3:4" },
+  { value: "1:1", label: "1:1" },
+  { value: "21:9", label: "21:9" },
+] as const
 
 // =============================================================================
 // VARIABLE CREDIT RANGES — for displaying price ranges in model dropdowns

@@ -750,6 +750,18 @@ export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     extraParams: {},
   },
 
+  // Wan 2.6 Flash - faster V2V variant with audio + multi-shot support
+  // See: docs.kie.ai/market/wan/2-6-flash-video-to-video.md
+  // Supports: duration (5/10s), resolution (720p/1080p), audio (bool), multi_shots (bool)
+  // Prompt max 1500 chars (vs 5000 for standard)
+  "wan-flash": {
+    model: "wan/2-6-flash-video-to-video",
+    credits: 40,
+    cost: 0.20,  // Estimated — flash variant ~57% of standard
+    imageParam: "video_urls",
+    extraParams: {},
+  },
+
   // Luma Modify - special endpoint: /api/v1/modify/generate
   // See: docs.kie.ai/luma-api/generate-luma-modify-video.md
   // English prompts only, input video max 500MB/10s

@@ -889,11 +889,17 @@ export async function generateVideo(
   return res.json()
 }
 
-export async function videoToVideo(videoUrl: string, prompt?: string, provider?: string, userId?: string): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { videoUrl, prompt, provider }
-  if (userId) {
-    body.userId = userId
-  }
+export async function videoToVideo(videoUrl: string, prompt?: string, provider?: string, userId?: string, options?: {
+  duration?: string
+  resolution?: string
+  audio?: boolean
+  multiShots?: boolean
+  aspectRatio?: string
+  seed?: number
+  referenceImageUrl?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, prompt, provider, ...options }
+  if (userId) body.userId = userId
   const res = await fetch(`${API_BASE_URL}/v1/video-to-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },

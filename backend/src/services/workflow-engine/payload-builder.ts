@@ -664,6 +664,13 @@ export function buildPayload(
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
           prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
           provider: v2vProvider,
+          duration: data.v2vDuration as string | undefined,
+          resolution: data.v2vResolution as string | undefined,
+          audio: data.audio as boolean | undefined,
+          multiShots: data.multiShots as boolean | undefined,
+          aspectRatio: data.aspectRatio as string | undefined,
+          seed: data.seed as number | undefined,
+          referenceImageUrl: (typeof resolvedInputs.referenceImageUrls === "string" ? resolvedInputs.referenceImageUrls : Array.isArray(resolvedInputs.referenceImageUrls) ? resolvedInputs.referenceImageUrls[0] : undefined) as string | undefined,
           usageLogId,
         },
       }

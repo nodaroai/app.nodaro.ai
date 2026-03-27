@@ -659,6 +659,15 @@ export type VideoToVideoData = {
   provider: VideoToVideoProvider
   duration: number
   fieldMappings: FieldMappings
+  // Wan / Wan Flash params
+  v2vDuration?: "5" | "10"
+  v2vResolution?: "720p" | "1080p"
+  // Wan Flash only
+  audio?: boolean
+  multiShots?: boolean
+  // Runway Aleph params
+  aspectRatio?: string
+  seed?: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string

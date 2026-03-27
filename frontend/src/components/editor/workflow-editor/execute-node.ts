@@ -724,6 +724,15 @@ export function executeNode(
       ctx,
       prompt,
       provider,
+      {
+        duration: v2vData.v2vDuration,
+        resolution: v2vData.v2vResolution,
+        audio: v2vData.audio,
+        multiShots: v2vData.multiShots,
+        aspectRatio: v2vData.aspectRatio,
+        seed: v2vData.seed,
+        referenceImageUrl: typeof inputs.referenceImageUrls === "string" ? inputs.referenceImageUrls : Array.isArray(inputs.referenceImageUrls) ? inputs.referenceImageUrls[0] : undefined,
+      },
     );
   }
 

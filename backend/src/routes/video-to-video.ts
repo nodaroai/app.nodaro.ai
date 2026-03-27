@@ -9,8 +9,18 @@ import { VIDEO_TO_VIDEO_PROVIDERS } from "../../../packages/shared/src/model-con
 
 const videoToVideoBody = z.object({
   videoUrl: safeUrlSchema,
-  prompt: z.string().max(2000).optional(),
+  prompt: z.string().max(5000).optional(),
   provider: z.enum(VIDEO_TO_VIDEO_PROVIDERS).optional(),
+  // Wan / Wan Flash params
+  duration: z.enum(["5", "10"]).optional(),
+  resolution: z.enum(["720p", "1080p"]).optional(),
+  // Wan Flash only
+  audio: z.boolean().optional(),
+  multiShots: z.boolean().optional(),
+  // Runway Aleph params
+  aspectRatio: z.enum(["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"]).optional(),
+  seed: z.number().int().min(0).optional(),
+  referenceImageUrl: safeUrlSchema.optional(),
 })
 
 export async function videoToVideoRoutes(app: FastifyInstance) {
@@ -25,7 +35,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrl, prompt, provider } = parsed.data
+    const { videoUrl, prompt, provider, duration, resolution, audio, multiShots, aspectRatio, seed, referenceImageUrl } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -67,6 +77,13 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       videoUrl,
       prompt,
       provider: modelIdentifier,
+      duration,
+      resolution,
+      audio,
+      multiShots,
+      aspectRatio,
+      seed,
+      referenceImageUrl,
       usageLogId,
     })
 
