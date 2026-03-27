@@ -94,6 +94,7 @@ import { TeleportSendNode, TeleportReceiveNode } from "./teleport-node-shell";
 import { SubWorkflowInputNode } from "./sub-workflow-input-node";
 import { SubWorkflowOutputNode } from "./sub-workflow-output-node";
 import { SubWorkflowNode } from "./sub-workflow-node";
+import { ComponentNode } from "./component-node";
 import { WebhookTriggerNode } from "./webhook-trigger-node";
 import { ScheduleTriggerNode } from "./schedule-trigger-node";
 import { SocialNode } from "./social-node";
@@ -212,6 +213,8 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "sub-workflow-input": SubWorkflowInputNode,
   "sub-workflow-output": SubWorkflowOutputNode,
   "sub-workflow": SubWorkflowNode,
+  // Component
+  "component": ComponentNode,
   // Social Media
   "instagram-post": SocialNode,
   "tiktok-post": SocialNode,

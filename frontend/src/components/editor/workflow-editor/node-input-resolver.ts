@@ -1065,8 +1065,8 @@ export function resolveNodeInputs(
       }
     } else if (src.type === "schedule-trigger") {
       inputs.prompt = output;
-    } else if (src.type === "sub-workflow" || src.type === "sub-workflow-input") {
-      // Route sub-workflow output by the sourceHandle to the correct media type
+    } else if (src.type === "sub-workflow" || src.type === "sub-workflow-input" || src.type === "component") {
+      // Route sub-workflow/component output by the sourceHandle to the correct media type
       const srcData = src.data as Record<string, unknown>;
       const routeSnapshot = srcData.routeSnapshot as { outputPorts?: Array<{ id: string; mediaType: string }> } | undefined;
       const subEdge = incomingEdges.find((e) => e.source === src.id);
@@ -1078,6 +1078,16 @@ export function resolveNodeInputs(
         const portId = sourceHandle.replace(/^out_/, "");
         const port = routeSnapshot.outputPorts.find((p) => p.id === portId);
         mediaType = port?.mediaType;
+      }
+
+      // For component nodes, determine type from componentMetadata outputs
+      if (src.type === "component" && !mediaType) {
+        const metadata = srcData.componentMetadata as { outputs?: Array<{ id: string; mediaType: string }> } | undefined;
+        if (sourceHandle && metadata?.outputs) {
+          const handleId = sourceHandle.replace(/^out_/, "");
+          const port = metadata.outputs.find((o) => o.id === handleId);
+          mediaType = port?.mediaType;
+        }
       }
 
       // For sub-workflow-input, determine type from __injectedPortValues mapping

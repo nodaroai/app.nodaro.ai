@@ -408,6 +408,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "telegram-post": 1,
   "save-to-storage": 0,
   "router": 0,
+  "component": 0,               // Component node itself is free; inner nodes have their own costs
 }
 
 // Tier order for restriction checks

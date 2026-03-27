@@ -99,6 +99,10 @@ export interface WorkflowExecutionJob {
   inputOverrides?: Record<string, Record<string, unknown>>
   /** When running a published app version, load snapshot from published_apps instead of workflows. */
   appVersionId?: string
+  /** Current component nesting depth (limit 5, like sub-workflows) */
+  componentDepth?: number
+  /** Slugs of ancestor components in the execution chain — used for cycle detection */
+  executingComponentIds?: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -187,6 +191,10 @@ export interface OrchestratorContext {
   uploadDescendantIds?: Set<string>
   /** Whether this execution is running a published app (affects free-tier app credit allowance) */
   isAppRun?: boolean
+  /** Current component nesting depth (limit 5, like sub-workflows) */
+  componentDepth?: number
+  /** Slugs of ancestor components in the execution chain — used for cycle detection */
+  executingComponentIds?: string[]
 }
 
 // ---------------------------------------------------------------------------

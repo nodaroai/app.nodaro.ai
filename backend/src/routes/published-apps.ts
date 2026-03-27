@@ -78,6 +78,8 @@ function toCamelCase(row: Record<string, unknown>) {
     monetizationEnabled: row.monetization_enabled ?? false,
     monetizationFlatFee: row.monetization_flat_fee ?? 0,
     monetizationPercent: row.monetization_percent ?? 0,
+    publishType: row.publish_type ?? "app",
+    componentMetadata: row.component_metadata ?? null,
   }
 }
 
@@ -101,9 +103,33 @@ function toBrowseCard(row: Record<string, unknown>) {
     totalRunCount: row.total_run_count ?? 0,
     favoriteCount: row.favorite_count ?? 0,
     monetizationEnabled: row.monetization_enabled ?? false,
+    publishType: row.publish_type ?? "app",
+    componentMetadata: row.component_metadata ?? null,
     createdAt: row.created_at,
   }
 }
+
+const componentIOSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1),
+  type: z.enum(["image", "video", "audio", "text"]),
+  required: z.boolean(),
+  mediaPreview: z.boolean().optional(),
+  fieldKey: z.string(),
+})
+
+const componentMetadataSchema = z.object({
+  inputs: z.array(componentIOSchema).min(1),
+  outputs: z.array(componentIOSchema).min(1),
+  exposedSettings: z.array(z.object({
+    nodeId: z.string(),
+    field: z.string(),
+    label: z.string(),
+    type: z.enum(["select", "text", "number", "toggle"]),
+    allowedValues: z.array(z.unknown()).optional(),
+    defaultValue: z.unknown(),
+  })),
+})
 
 const publishBodySchema = z.object({
   workflowId: z.string().uuid(),
@@ -120,6 +146,9 @@ const publishBodySchema = z.object({
   previewMediaType: z.enum(["image", "video"]).optional(),
   supportsRemix: z.boolean().optional(),
   isListed: z.boolean().optional(),
+  // Component fields
+  publishType: z.enum(["app", "component"]).optional(),
+  componentMetadata: componentMetadataSchema.optional(),
 })
 
 const updateBodySchema = z.object({
@@ -154,6 +183,7 @@ const browseQuerySchema = z.object({
   sort: z.enum(["popular", "newest", "most-favorited"]).optional().default("popular"),
   creatorId: z.string().uuid().optional(),
   favoritesOnly: z.coerce.boolean().optional(),
+  publishType: z.enum(["app", "component"]).optional(),
 })
 
 // getCreatorDisplayName imported from lib/marketplace-helpers.ts
@@ -166,7 +196,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: parsed.error.flatten() })
     }
 
-    const { cursor, limit, category, outputType, tag, search, sort, creatorId, favoritesOnly } = parsed.data
+    const { cursor, limit, category, outputType, tag, search, sort, creatorId, favoritesOnly, publishType } = parsed.data
 
     // If favoritesOnly, require auth
     if (favoritesOnly && !req.userId) {
@@ -174,7 +204,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     }
 
     // Card-only columns (no snapshot_nodes/edges/settings)
-    const selectCols = "id, slug, name, description, icon_url, estimated_credits, category, output_types, tags, preview_media_url, preview_media_type, supports_remix, creator_id, creator_display_name, total_run_count, favorite_count, created_at, monetization_enabled"
+    const selectCols = "id, slug, name, description, icon_url, estimated_credits, category, output_types, tags, preview_media_url, preview_media_type, supports_remix, creator_id, creator_display_name, total_run_count, favorite_count, created_at, monetization_enabled, publish_type, component_metadata"
 
     let query = supabase
       .from("published_apps")
@@ -188,6 +218,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     if (outputType) query = query.contains("output_types", [outputType])
     if (tag) query = query.contains("tags", [tag])
     if (creatorId) query = query.eq("creator_id", creatorId)
+    if (publishType) query = query.eq("publish_type", publishType)
 
     // Full-text search
     if (search) {
@@ -264,6 +295,25 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     })
   })
 
+  // GET /v1/apps/by-slug/:slug/latest-version — Check latest version of a published app/component
+  app.get("/v1/apps/by-slug/:slug/latest-version", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+
+    const { slug } = req.params as { slug: string }
+    const { data } = await supabase
+      .from("published_apps")
+      .select("id, version")
+      .eq("slug", slug)
+      .eq("is_active", true)
+      .order("version", { ascending: false })
+      .limit(1)
+      .single()
+
+    if (!data) return reply.status(404).send({ error: "Component not found" })
+    return { latestVersion: data.version, latestVersionId: data.id }
+  })
+
   // POST /v1/apps/favorite — Toggle favorite
   app.post("/v1/apps/favorite", async (req, reply) => {
     const userId = req.userId
@@ -333,7 +383,23 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     const {
       workflowId, name, description, slug: providedSlug, iconUrl, thumbnailNodeId,
       category, outputTypes, tags, previewMediaUrl, previewMediaType, supportsRemix, isListed,
+      publishType: rawPublishType, componentMetadata,
     } = parsed.data
+
+    const publishType = rawPublishType ?? "app"
+
+    // Validate component metadata when publishing as a component
+    if (publishType === "component") {
+      if (!componentMetadata) {
+        return reply.status(400).send({ error: { code: "bad_request", message: "componentMetadata is required for component publish type" } })
+      }
+
+      // Exactly one output must have mediaPreview: true
+      const previewOutputs = componentMetadata.outputs.filter((o) => o.mediaPreview)
+      if (previewOutputs.length !== 1) {
+        return reply.status(400).send({ error: { code: "bad_request", message: "Exactly one output must have mediaPreview: true" } })
+      }
+    }
 
     // Verify user owns the workflow
     const { data: workflow, error: wfError } = await supabase
@@ -347,6 +413,31 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     }
     if (workflow.user_id !== userId) {
       return reply.status(403).send({ error: { code: "forbidden", message: "Not your workflow" } })
+    }
+
+    // Validate component handles and exposed settings against snapshot nodes
+    if (publishType === "component" && componentMetadata) {
+      const snapshotNodes = (workflow.nodes || []) as Array<Record<string, unknown>>
+      const nodeIds = new Set(snapshotNodes.map((n) => n.id as string))
+
+      // Validate input/output handle IDs reference real nodes
+      for (const input of componentMetadata.inputs) {
+        if (!nodeIds.has(input.id)) {
+          return reply.status(400).send({ error: { code: "bad_request", message: `Input handle references unknown node: ${input.id}` } })
+        }
+      }
+      for (const output of componentMetadata.outputs) {
+        if (!nodeIds.has(output.id)) {
+          return reply.status(400).send({ error: { code: "bad_request", message: `Output handle references unknown node: ${output.id}` } })
+        }
+      }
+
+      // Validate exposed setting nodeIds reference real nodes
+      for (const setting of componentMetadata.exposedSettings) {
+        if (!nodeIds.has(setting.nodeId)) {
+          return reply.status(400).send({ error: { code: "bad_request", message: `Exposed setting references unknown node: ${setting.nodeId}` } })
+        }
+      }
     }
 
     // Compute version + deactivate old versions
@@ -485,6 +576,8 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           supports_remix: supportsRemix ?? false,
           is_listed: effectiveIsListed,
           creator_display_name: creatorDisplayName,
+          publish_type: publishType,
+          component_metadata: publishType === "component" ? componentMetadata : null,
         })
         .select()
         .single()
@@ -569,6 +662,8 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       favoriteCount: app.favorite_count ?? 0,
       createdAt: app.created_at,
       runCount: app.app_runs?.[0]?.count ?? 0,
+      publishType: app.publish_type ?? "app",
+      componentMetadata: app.component_metadata ?? null,
     }))
 
     return reply.send(result)

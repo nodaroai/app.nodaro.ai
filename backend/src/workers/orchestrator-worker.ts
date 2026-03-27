@@ -133,6 +133,8 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     triggerData,
     cancelled: false,
     isAppRun: !!appVersionId,
+    componentDepth: job.data.componentDepth ?? 0,
+    executingComponentIds: job.data.executingComponentIds ?? [],
   }
 
   try {

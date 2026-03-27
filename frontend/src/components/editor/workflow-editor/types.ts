@@ -207,6 +207,7 @@ export const EXECUTABLE_TYPES = new Set([
   "save-to-storage",
   "qa-check",
   "router",
+  "component",
 ]);
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 20;

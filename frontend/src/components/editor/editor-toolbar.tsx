@@ -325,6 +325,14 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.subWorkflowProgress = undefined
           break
 
+        case "component":
+          data.executionStatus = "idle"
+          data.errorMessage = undefined
+          data.outputResults = undefined
+          data.generatedResults = []
+          data.activeResultIndex = 0
+          break
+
         case "webhook-trigger":
         case "schedule-trigger":
           break

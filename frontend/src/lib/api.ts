@@ -3816,6 +3816,8 @@ export interface PublishedApp {
   monetizationEnabled?: boolean
   monetizationFlatFee?: number
   monetizationPercent?: number
+  publishType?: "app" | "component"
+  componentMetadata?: Record<string, unknown> | null
 }
 
 /** Slim card type returned by /v1/apps/browse (no snapshot data) */
@@ -3837,6 +3839,8 @@ export interface AppBrowseCard {
   totalRunCount: number
   favoriteCount: number
   createdAt: string
+  publishType?: "app" | "component"
+  componentMetadata?: Record<string, unknown> | null
 }
 
 export interface AppRun {
@@ -3870,7 +3874,7 @@ export interface AppRun {
   }
 }
 
-/** Publish a workflow as a mini-app. */
+/** Publish a workflow as a mini-app or component. */
 export async function publishApp(data: {
   workflowId: string
   name: string
@@ -3885,6 +3889,8 @@ export async function publishApp(data: {
   previewMediaType?: string
   supportsRemix?: boolean
   isListed?: boolean
+  publishType?: "app" | "component"
+  componentMetadata?: Record<string, unknown>
 }): Promise<PublishedApp> {
   return apiRequest<PublishedApp>(
     "/v1/apps/publish",
@@ -3903,6 +3909,17 @@ export async function getAppByWorkflow(workflowId: string): Promise<PublishedApp
   } catch {
     return null
   }
+}
+
+/** Get the latest version info for a component by slug. */
+export async function getLatestComponentVersion(slug: string): Promise<{
+  latestVersion: number
+  latestVersionId: string
+}> {
+  return apiRequest(
+    `/v1/apps/by-slug/${encodeURIComponent(slug)}/latest-version`,
+    "Failed to fetch latest component version",
+  )
 }
 
 /** List creator's published apps. */
@@ -3959,6 +3976,7 @@ export async function browseApps(params: {
   sort?: "popular" | "newest" | "most-favorited"
   creatorId?: string
   favoritesOnly?: boolean
+  publishType?: "app" | "component"
 }): Promise<{ data: AppBrowseCard[]; nextCursor: string | null }> {
   const qs = new URLSearchParams()
   if (params.cursor) qs.set("cursor", params.cursor)
@@ -3970,6 +3988,7 @@ export async function browseApps(params: {
   if (params.sort) qs.set("sort", params.sort)
   if (params.creatorId) qs.set("creatorId", params.creatorId)
   if (params.favoritesOnly) qs.set("favoritesOnly", "true")
+  if (params.publishType) qs.set("publishType", params.publishType)
   const qsStr = qs.toString()
   const headers: Record<string, string> = params.favoritesOnly ? await getAuthHeaders() : {}
   const res = await fetch(`/v1/apps/browse${qsStr ? `?${qsStr}` : ""}`, { headers })
@@ -4013,11 +4032,12 @@ export async function runPublishedApp(
   inputOverrides?: Record<string, Record<string, unknown>>,
   runId?: string,
   version?: number,
+  headless?: boolean,
 ): Promise<{ executionId: string; runId: string; status: string }> {
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/run`,
     "Failed to run app",
-    { method: "POST", body: { inputOverrides, runId, version } },
+    { method: "POST", body: { inputOverrides, runId, version, headless } },
   )
 }
 

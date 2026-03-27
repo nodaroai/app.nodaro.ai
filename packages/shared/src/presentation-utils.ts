@@ -66,6 +66,7 @@ const NON_OUTPUT_TYPES = new Set([
   "split-text",
   "save-to-storage",
   "webhook-output",
+  "component",
 ])
 
 const MEDIA_PRODUCING_TYPES = new Set([
@@ -251,7 +252,7 @@ export interface InputFieldSchema {
   options?: string[]
 }
 
-const INPUT_FIELD_MAP: Record<string, InputFieldSchema> = {
+export const INPUT_FIELD_MAP: Record<string, InputFieldSchema> = {
   "text-prompt": { key: "text", type: "text" },
   "upload-image": { key: "url", type: "image-url" },
   "upload-video": { key: "url", type: "video-url" },

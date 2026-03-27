@@ -13,9 +13,9 @@ import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { hasCredits } from "../lib/config.js"
 import { CreditsService } from "../billing/credits.js"
-import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { flattenItems } from "../../../packages/shared/src/presentation-utils.js"
 import type { PresentationItem } from "../../../packages/shared/src/presentation-types.js"
+import { executeAppRun } from "../services/app-execution.js"
 
 // In-memory cache for published app data (30min TTL — explicit invalidation on publish)
 const APP_CACHE_TTL_MS = 30 * 60_000
@@ -39,6 +39,7 @@ const runBody = z.object({
   inputOverrides: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
   runId: z.string().uuid().optional(),
   version: z.coerce.number().int().min(1).optional(),
+  headless: z.boolean().optional(),
 })
 
 const createRunBody = z.object({
@@ -250,7 +251,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     const { slug } = paramsParsed.data
-    const { inputOverrides, runId, version } = bodyParsed.data
+    const { inputOverrides, runId, version, headless } = bodyParsed.data
 
     const workflowId = await resolveSlug(slug)
     if (!workflowId) {
@@ -273,8 +274,8 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "validation_error", message: restrictedError } })
     }
 
-    // Run rate limit + app credits allowance checks in parallel
-    const rateLimitPromise = appRow.max_runs_per_user_per_day != null
+    // Run rate limit (skip for headless/component calls) + app credits allowance checks in parallel
+    const rateLimitPromise = !headless && appRow.max_runs_per_user_per_day != null
       ? (async () => {
           const todayStart = new Date()
           todayStart.setUTCHours(0, 0, 0, 0)
@@ -313,28 +314,40 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       })
     }
 
-    // Create workflow_execution under runner's userId
-    const { data: execution, error: execError } = await supabase
-      .from("workflow_executions")
-      .insert({
-        workflow_id: appRow.workflow_id,
-        user_id: req.userId,
-        status: "pending",
-        trigger_type: "manual",
-      })
-      .select("id")
-      .single()
-
-    if (execError || !execution) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to create execution" },
-      })
+    // Compute nodeIds if baked presentation settings target a specific route
+    let nodeIds: string[] | undefined
+    const snapshotSettings = (appRow.snapshot_settings ?? {}) as Record<string, unknown>
+    const presSettings = snapshotSettings.presentationSettings as { runTarget?: string; selectedRouteId?: string } | undefined
+    if (presSettings?.runTarget === "route" && presSettings?.selectedRouteId) {
+      const { getRouteReachableNodeIds } = await import("../../../packages/shared/src/route-filter.js")
+      const nodes = (appRow.snapshot_nodes ?? []) as Array<{ id: string; type?: string; data: Record<string, unknown> }>
+      const edges = (appRow.snapshot_edges ?? []) as Array<{ source: string; target: string }>
+      const reachable = getRouteReachableNodeIds(nodes, edges, presSettings.selectedRouteId)
+      if (reachable.size > 0) {
+        nodeIds = [...reachable]
+      }
+      // If empty (stale routeId in snapshot), fall through → runs entire workflow
     }
 
-    let appRunId: string
-
     if (runId) {
-      // Link existing draft run to this execution
+      // Existing draft run path — create execution inline then link the draft
+      const { data: execution, error: execError } = await supabase
+        .from("workflow_executions")
+        .insert({
+          workflow_id: appRow.workflow_id,
+          user_id: req.userId,
+          status: "pending",
+          trigger_type: "manual",
+        })
+        .select("id")
+        .single()
+
+      if (execError || !execution) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: "Failed to create execution" },
+        })
+      }
+
       const { data: updated, error: updateError } = await supabase
         .from("app_runs")
         .update({
@@ -352,65 +365,50 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           error: { code: "not_found", message: "Run not found" },
         })
       }
-      appRunId = updated.id
-    } else {
-      // Create new app_run record
-      const { data: appRun, error: runError } = await supabase
-        .from("app_runs")
-        .insert({
-          app_id: appRow.id,
-          execution_id: execution.id,
-          runner_id: req.userId,
-          status: "running",
-          input_values: inputOverrides ?? undefined,
-        })
-        .select("id")
-        .single()
 
-      if (runError || !appRun) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: "Failed to create app run" },
-        })
+      // Enqueue orchestration job for the existing draft
+      const jobData: import("../services/workflow-engine/types.js").WorkflowExecutionJob = {
+        executionId: execution.id,
+        workflowId: appRow.workflow_id,
+        userId: req.userId,
+        triggerType: "manual",
+        inputOverrides,
+        appVersionId: appRow.id,
+        nodeIds,
       }
-      appRunId = appRun.id
+
+      await orchestrationQueue.add("workflow-execution", jobData, {
+        jobId: execution.id,
+      })
+
+      return reply.status(202).send({
+        executionId: execution.id,
+        runId: updated.id,
+        status: "pending",
+      })
     }
 
-    // Compute nodeIds if baked presentation settings target a specific route
-    let nodeIds: string[] | undefined
-    const snapshotSettings = (appRow.snapshot_settings ?? {}) as Record<string, unknown>
-    const presSettings = snapshotSettings.presentationSettings as { runTarget?: string; selectedRouteId?: string } | undefined
-    if (presSettings?.runTarget === "route" && presSettings?.selectedRouteId) {
-      const { getRouteReachableNodeIds } = await import("../../../packages/shared/src/route-filter.js")
-      const nodes = (appRow.snapshot_nodes ?? []) as Array<{ id: string; type?: string; data: Record<string, unknown> }>
-      const edges = (appRow.snapshot_edges ?? []) as Array<{ source: string; target: string }>
-      const reachable = getRouteReachableNodeIds(nodes, edges, presSettings.selectedRouteId)
-      if (reachable.size > 0) {
-        nodeIds = [...reachable]
-      }
-      // If empty (stale routeId in snapshot), fall through → runs entire workflow
+    // New run path — use extracted core function
+    try {
+      const result = await executeAppRun({
+        appVersionId: appRow.id,
+        workflowId: appRow.workflow_id,
+        userId: req.userId,
+        appId: appRow.id,
+        inputOverrides,
+        nodeIds,
+      })
+
+      return reply.status(202).send({
+        executionId: result.executionId,
+        runId: result.appRunId,
+        status: "pending",
+      })
+    } catch {
+      return reply.status(500).send({
+        error: { code: "internal_error", message: "Failed to create app run" },
+      })
     }
-
-    // Enqueue orchestration job — use the app's workflow_id since the orchestrator loads by workflow ID
-    // Pass appVersionId so the orchestrator uses the snapshot from this specific version
-    const jobData: WorkflowExecutionJob = {
-      executionId: execution.id,
-      workflowId: appRow.workflow_id,
-      userId: req.userId,
-      triggerType: "manual",
-      inputOverrides,
-      appVersionId: appRow.id,
-      nodeIds,
-    }
-
-    await orchestrationQueue.add("workflow-execution", jobData, {
-      jobId: execution.id,
-    })
-
-    return reply.status(202).send({
-      executionId: execution.id,
-      runId: appRunId,
-      status: "pending",
-    })
   })
 
   // --- Create a draft run (no execution yet) ---

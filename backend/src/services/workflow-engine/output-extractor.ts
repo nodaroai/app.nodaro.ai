@@ -239,8 +239,8 @@ export function getPrimaryOutput(
   sourceType: string,
   sourceHandle?: string | null,
 ): string | undefined {
-  // Sub-workflow output routing by handle (matches frontend)
-  if (sourceType === "sub-workflow") {
+  // Sub-workflow / component output routing by handle (matches frontend)
+  if (sourceType === "sub-workflow" || sourceType === "component") {
     const outputResults = output._outputResults
     if (sourceHandle && outputResults) {
       const portId = sourceHandle.replace(/^out_/, "")
@@ -652,8 +652,8 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return plan ? { plan } : undefined
   }
 
-  // Sub-workflow — support handle-based routing (matches frontend)
-  if (type === "sub-workflow") {
+  // Sub-workflow / component — support handle-based routing (matches frontend)
+  if (type === "sub-workflow" || type === "component") {
     const outputResults = data.outputResults as Record<string, string> | undefined
     if (!outputResults) return undefined
     // Return all port values so getPrimaryOutput can route by handle

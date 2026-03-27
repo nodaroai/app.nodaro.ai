@@ -495,6 +495,25 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     const values = Object.values(outputResults);
     return values.length > 0 ? values[0] : undefined;
   }
+  // Component: return the output for a specific port (via sourceHandle) or mediaPreview output
+  if (type === "component") {
+    const outputResults = data.outputResults as Record<string, string> | undefined;
+    if (!outputResults) return undefined;
+    // If sourceHandle specifies a port (format: "out_<handleId>"), return that port's value
+    if (sourceHandle) {
+      const handleId = sourceHandle.replace(/^out_/, "");
+      if (outputResults[handleId]) return outputResults[handleId];
+    }
+    // Fallback: mediaPreview output
+    const metadata = data.componentMetadata as { outputs?: Array<{ id: string; mediaPreview?: boolean }> } | undefined;
+    if (metadata?.outputs) {
+      const previewHandle = metadata.outputs.find((o) => o.mediaPreview);
+      if (previewHandle && outputResults[previewHandle.id]) return outputResults[previewHandle.id];
+    }
+    // Fallback: first available
+    const values = Object.values(outputResults);
+    return values.length > 0 ? values[0] : undefined;
+  }
   // Sub-workflow-input: return injected port value (used inside namespaced execution)
   if (type === "sub-workflow-input") {
     const injected = data.__injectedPortValues as Record<string, string> | undefined;
