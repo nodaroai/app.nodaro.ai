@@ -152,6 +152,7 @@ You MUST respond with ONLY a valid JSON object in this exact format, no other te
                 checkType,
                 usage: response.usage,
               },
+              provider_cost: response.providerCost ?? null,
             })
             .eq("id", job.id)
 

@@ -855,6 +855,9 @@ export class KieVideoProvider
       if (options?.seed !== undefined && options.seed >= 0) {
         alephInput.seed = options.seed
       }
+      if (options?.referenceImageUrl) {
+        alephInput.referenceImage = options.referenceImageUrl
+      }
       const { resultJson, taskId: alephTaskId } = await runAlephTask(alephInput)
       const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!outputUrl) {
@@ -888,11 +891,28 @@ export class KieVideoProvider
       return { url: outputUrl, cost: modelConfig.cost }
     }
 
-    // Standard createTask endpoint for other V2V providers (Wan 2.6)
+    // Standard createTask endpoint for Wan V2V providers (Wan 2.6, Wan Flash)
     const input: Record<string, unknown> = {
       ...(modelConfig.extraParams ?? {}),
       prompt: finalPrompt,
       video_urls: [videoUrl], // Standard V2V models use video_urls array
+    }
+
+    // Wan / Wan Flash optional params
+    if (options?.duration) {
+      input.duration = options.duration
+    }
+    if (options?.resolution) {
+      input.resolution = options.resolution
+    }
+    // Wan Flash specific params
+    if (provider === "wan-flash") {
+      if (options?.audio !== undefined) {
+        input.audio = options.audio
+      }
+      if (options?.multiShots !== undefined) {
+        input.multi_shots = options.multiShots
+      }
     }
 
     console.log(

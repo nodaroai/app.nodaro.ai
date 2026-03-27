@@ -120,6 +120,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
             .update({
               status: "completed",
               output_data: { generatedText, model: llmModel, usage: response.usage },
+              provider_cost: response.providerCost ?? null,
             })
             .eq("id", job.id)
 
@@ -277,6 +278,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
                 model: llmModel,
                 usage: finalResponse.usage,
               },
+              provider_cost: finalResponse.providerCost ?? null,
             })
             .eq("id", job.id)
 
@@ -296,6 +298,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
               model: llmModel,
               usage: finalResponse.usage,
             },
+            provider_cost: finalResponse.providerCost ?? null,
           })
           .eq("id", job.id)
 

@@ -22,6 +22,10 @@ export interface LlmModelDef {
   maxOutputTokens: number
   /** If set, fallback to direct Anthropic SDK with this model ID when KIE.ai fails */
   directFallbackModel?: string
+  /** Cost per million input tokens (USD) */
+  inputPricePerM: number
+  /** Cost per million output tokens (USD) */
+  outputPricePerM: number
 }
 
 export const LLM_MODELS: readonly LlmModelDef[] = [
@@ -34,6 +38,8 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     vendor: "google",
     supportsImages: true,
     maxOutputTokens: 8192,
+    inputPricePerM: 0.10,
+    outputPricePerM: 0.40,
   },
   {
     id: "claude-haiku-4.5",
@@ -45,6 +51,8 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     supportsImages: true,
     maxOutputTokens: 8192,
     directFallbackModel: "claude-haiku-4-5-20251001",
+    inputPricePerM: 0.80,
+    outputPricePerM: 4.00,
   },
   {
     id: "claude-sonnet-4.6",
@@ -56,6 +64,8 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     supportsImages: true,
     maxOutputTokens: 16384,
     directFallbackModel: "claude-sonnet-4-6",
+    inputPricePerM: 3.00,
+    outputPricePerM: 15.00,
   },
   {
     id: "gpt-5.2",
@@ -66,6 +76,8 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     vendor: "openai",
     supportsImages: true,
     maxOutputTokens: 16384,
+    inputPricePerM: 2.50,
+    outputPricePerM: 10.00,
   },
   {
     id: "gemini-3.1-pro",
@@ -76,6 +88,8 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     vendor: "google",
     supportsImages: true,
     maxOutputTokens: 16384,
+    inputPricePerM: 3.50,
+    outputPricePerM: 10.50,
   },
   {
     id: "claude-opus-4.6",
@@ -87,6 +101,8 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     supportsImages: true,
     maxOutputTokens: 16384,
     directFallbackModel: "claude-opus-4-6",
+    inputPricePerM: 15.00,
+    outputPricePerM: 75.00,
   },
   {
     id: "gpt-5.4",
@@ -97,10 +113,22 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     vendor: "openai",
     supportsImages: true,
     maxOutputTokens: 16384,
+    inputPricePerM: 10.00,
+    outputPricePerM: 40.00,
   },
 ] as const
 
 export const LLM_MODEL_IDS = LLM_MODELS.map((m) => m.id)
+
+/** Calculate provider cost in USD from token usage and model pricing. */
+export function calculateLlmCost(
+  modelId: string,
+  usage: { inputTokens: number; outputTokens: number },
+): number {
+  const model = getLlmModel(modelId)
+  if (!model) return 0
+  return (usage.inputTokens * model.inputPricePerM + usage.outputTokens * model.outputPricePerM) / 1_000_000
+}
 
 export type LlmFeature =
   | "ai-writer"

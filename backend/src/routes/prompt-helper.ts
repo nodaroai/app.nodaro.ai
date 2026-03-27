@@ -196,7 +196,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
           modelId: llmModel,
           system: systemPrompt,
           messages: [{ role: "user", content: messageContent }],
-          maxTokens: 2048,
+          maxTokens: 4096,
           temperature: 0.7,
         })
 
@@ -238,7 +238,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
         try {
           await supabase
             .from("jobs")
-            .update({ status: "completed", output_data: { ...result, usage: response.usage } })
+            .update({ status: "completed", output_data: { ...result, usage: response.usage }, provider_cost: response.providerCost ?? null })
             .eq("id", job.id)
           if (usageLogId) await CreditsService.commitCredits(usageLogId)
         } catch (postErr) {

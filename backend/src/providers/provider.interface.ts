@@ -49,6 +49,10 @@ export interface ProviderOptions {
   enablePromptExpansion?: boolean // Wan Turbo prompt expansion
   promptOptimizer?: boolean // Hailuo prompt optimizer
   characterIdList?: string[] // Sora 2 / Sora 2 Pro character IDs (max 5)
+  // V2V-specific
+  referenceImageUrl?: string // Runway Aleph style reference image
+  audio?: boolean            // Wan Flash: generate with audio (affects pricing)
+  duration?: string          // Wan V2V duration: "5" or "10" seconds
 }
 
 // Each provider implements the capabilities it supports

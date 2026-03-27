@@ -35,7 +35,7 @@ import type {
   GeneratedScript,
   GeneratedScriptResult,
 } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS } from "./model-options"
+import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
@@ -569,11 +569,16 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
 }
 
 export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<VideoToVideoData>) {
+  const provider = data.provider || "wan"
+  const isWan = provider === "wan" || provider === "wan-flash"
+  const isWanFlash = provider === "wan-flash"
+  const isAleph = provider === "runway-aleph"
+
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
-          value={data.provider || "wan"}
+          value={provider}
           onValueChange={(v) => onUpdate({ provider: v as VideoToVideoData["provider"] })}
         >
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
@@ -596,6 +601,84 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           refMap={refMap}
         />
       </MappableField>
+
+      {/* Wan / Wan Flash: Duration & Resolution */}
+      {isWan && (
+        <>
+          <MappableField field="v2vDuration" label="Duration" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select value={data.v2vDuration || "5"} onValueChange={(v) => onUpdate({ v2vDuration: v as "5" | "10" })}>
+              <SelectTrigger aria-label="Duration"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {V2V_DURATION_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </MappableField>
+          <MappableField field="v2vResolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select value={data.v2vResolution || "1080p"} onValueChange={(v) => onUpdate({ v2vResolution: v as "720p" | "1080p" })}>
+              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {V2V_RESOLUTION_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </MappableField>
+        </>
+      )}
+
+      {/* Wan Flash: Audio & Multi-shots */}
+      {isWanFlash && (
+        <>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="v2vAudio"
+              checked={data.audio || false}
+              onChange={(e) => onUpdate({ audio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="v2vAudio" className="text-xs">Generate Audio (affects pricing)</label>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="v2vMultiShots"
+              checked={data.multiShots || false}
+              onChange={(e) => onUpdate({ multiShots: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="v2vMultiShots" className="text-xs">Multi-shot composition</label>
+          </div>
+        </>
+      )}
+
+      {/* Runway Aleph: Aspect Ratio & Seed */}
+      {isAleph && (
+        <>
+          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select value={data.aspectRatio || ""} onValueChange={(v) => onUpdate({ aspectRatio: v || undefined })}>
+              <SelectTrigger aria-label="Aspect Ratio"><SelectValue placeholder="Auto" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Auto</SelectItem>
+                {V2V_ALEPH_ASPECT_RATIOS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </MappableField>
+          <MappableField field="seed" label="Seed" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Input
+              type="number"
+              min={0}
+              value={data.seed ?? ""}
+              onChange={(e) => onUpdate({ seed: e.target.value ? Number(e.target.value) : undefined })}
+              placeholder="Random"
+            />
+          </MappableField>
+        </>
+      )}
     </div>
   )
 }

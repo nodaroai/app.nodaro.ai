@@ -206,10 +206,19 @@ export function runVideoToVideoGeneration(
   ctx: ExecutionContext,
   prompt?: string,
   provider?: string,
+  options?: {
+    duration?: string;
+    resolution?: string;
+    audio?: boolean;
+    multiShots?: boolean;
+    aspectRatio?: string;
+    seed?: number;
+    referenceImageUrl?: string;
+  },
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
-    () => videoToVideo(sourceVideoUrl, prompt, provider, ctx.userId),
+    () => videoToVideo(sourceVideoUrl, prompt, provider, ctx.userId, options),
     "generatedVideoUrl",
     "Video-to-video generation",
     ctx,
