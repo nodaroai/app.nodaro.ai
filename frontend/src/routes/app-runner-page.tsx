@@ -87,6 +87,14 @@ export default function AppRunnerPage() {
     }
   }, [runSlots.activeSlotId, slug])
 
+  // Persist edited node states (from media edit) to the backend
+  const handleNodeStatesChange = useCallback((editedNodeStates: Record<string, unknown>) => {
+    const activeId = runSlots.activeSlotId
+    if (activeId && activeId !== ORIGINAL_SLOT_ID && slug) {
+      updateAppRunInputs(slug, activeId, undefined, undefined, undefined, editedNodeStates).catch(() => {})
+    }
+  }, [runSlots.activeSlotId, slug])
+
   // Loading / error states — show spinner until app is loaded (no blank flash)
   if (errorMessage && !app) {
     return (
@@ -188,6 +196,7 @@ export default function AppRunnerPage() {
           suppressOutputFallback={(runSlots.activeSlotId !== null && runSlots.activeSlotId !== ORIGINAL_SLOT_ID) || !!initialRunId}
           showFullscreenToggle
           onHiddenNodesChange={handleHiddenNodesChange}
+          onNodeStatesChange={handleNodeStatesChange}
           headerLeft={
             user && !runSlots.showHistory ? (
               <Button

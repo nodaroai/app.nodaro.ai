@@ -145,9 +145,11 @@ interface PresentationViewProps {
   headerLeft?: React.ReactNode
   /** Called when hidden nodes change (for external persistence -- e.g., app runner) */
   onHiddenNodesChange?: (nodeIds: string[]) => void
+  /** Called when node states change due to media edits (for external persistence -- e.g., app runner) */
+  onNodeStatesChange?: (nodeStates: Record<string, unknown>) => void
 }
 
-export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle, headerLeft, onHiddenNodesChange }: PresentationViewProps) {
+export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle, headerLeft, onHiddenNodesChange, onNodeStatesChange }: PresentationViewProps) {
   const { user, signOut: globalSignOut } = useAuth()
   const navigate = useNavigate()
   const [isEditMode, setIsEditMode] = useState(false)
@@ -510,9 +512,18 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     const file = new File([blob], meta.filename, { type: meta.mime })
     const { uploadFile: doUpload } = await import("@/lib/api")
     const result = await doUpload(file)
-    usePresentationStore.getState().updateNodeOutput(editState.nodeId, { [meta.outputKey]: result.url, url: result.url })
+    const outputUpdate = { [meta.outputKey]: result.url, url: result.url }
+    usePresentationStore.getState().updateNodeOutput(editState.nodeId, outputUpdate)
+    // Persist edited node state for app runner
+    if (onNodeStatesChange) {
+      const currentStates = usePresentationStore.getState().nodeStates
+      const editedNode = currentStates[editState.nodeId]
+      if (editedNode) {
+        onNodeStatesChange({ [editState.nodeId]: editedNode })
+      }
+    }
     setEditState(null)
-  }, [editState])
+  }, [editState, onNodeStatesChange])
 
   /** Remove a specific item from an items list by sortId */
   const handleRemoveItem = useCallback(

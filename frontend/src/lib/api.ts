@@ -4017,18 +4017,20 @@ export async function createAppRun(
   )
 }
 
-/** Update a draft run's input values, name, and/or hidden nodes. */
+/** Update a draft run's input values, name, hidden nodes, and/or edited node states. */
 export async function updateAppRunInputs(
   slug: string,
   runId: string,
   inputValues?: Record<string, Record<string, unknown>>,
   name?: string | null,
   hiddenNodes?: string[],
+  nodeStates?: Record<string, unknown>,
 ): Promise<{ id: string; inputValues: Record<string, Record<string, unknown>> }> {
   const body: Record<string, unknown> = {}
   if (inputValues !== undefined) body.inputValues = inputValues
   if (name !== undefined) body.name = name
   if (hiddenNodes !== undefined) body.hiddenNodes = hiddenNodes
+  if (nodeStates !== undefined) body.nodeStates = nodeStates
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}`,
     "Failed to update run",
