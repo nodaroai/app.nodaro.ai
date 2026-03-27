@@ -604,6 +604,8 @@ describe("image-to-video", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
+      undefined,
     )
   })
 })
@@ -636,6 +638,15 @@ describe("video-to-video", () => {
       expect.anything(),
       undefined,
       undefined,
+      expect.objectContaining({
+        aspectRatio: undefined,
+        audio: undefined,
+        duration: undefined,
+        multiShots: undefined,
+        referenceImageUrl: undefined,
+        resolution: undefined,
+        seed: undefined,
+      }),
     )
   })
 })

@@ -308,7 +308,7 @@ describe("video-to-video handler", () => {
     const job = makeJob("video-to-video", { videoUrl: "https://vid.mp4", prompt: "stylize" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockVideoToVideo).toHaveBeenCalledWith("https://vid.mp4", "wan", "stylize")
+    expect(mocks.mockVideoToVideo).toHaveBeenCalledWith("https://vid.mp4", "wan", "stylize", expect.any(Object))
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", VIDEO_RESULT.cost)
@@ -318,14 +318,14 @@ describe("video-to-video handler", () => {
     const job = makeJob("video-to-video", { videoUrl: "https://vid.mp4" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockVideoToVideo).toHaveBeenCalledWith("https://vid.mp4", "wan", undefined)
+    expect(mocks.mockVideoToVideo).toHaveBeenCalledWith("https://vid.mp4", "wan", undefined, expect.any(Object))
   })
 
   it("uses custom provider when specified", async () => {
     const job = makeJob("video-to-video", { videoUrl: "https://vid.mp4", provider: "custom" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockVideoToVideo).toHaveBeenCalledWith("https://vid.mp4", "custom", undefined)
+    expect(mocks.mockVideoToVideo).toHaveBeenCalledWith("https://vid.mp4", "custom", undefined, expect.any(Object))
   })
 })
 
