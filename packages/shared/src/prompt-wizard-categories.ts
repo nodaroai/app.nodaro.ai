@@ -40,6 +40,11 @@ export interface RecommendedModel {
   reason: string
 }
 
+export interface ModelChange {
+  field: string
+  value: string
+}
+
 // ── Category Definitions ──
 
 // ── Image (generate-image, image-to-image) ──

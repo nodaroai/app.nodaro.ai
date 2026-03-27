@@ -4,14 +4,9 @@ import { useState, useMemo } from "react"
 import { Sparkles } from "lucide-react"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { hasCredits } from "@/lib/edition"
-import { isWizardSupported } from "@nodaro-shared/prompt-wizard-categories"
+import { isWizardSupported, type ModelChange } from "@nodaro-shared/prompt-wizard-categories"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { PromptHelperDialog } from "./prompt-helper-dialog"
-
-interface ModelChange {
-  field: string
-  value: string
-}
 
 interface PromptHelperButtonProps {
   readonly nodeType: string

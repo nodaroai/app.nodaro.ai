@@ -184,7 +184,7 @@ function buildResponse(model: LlmModelDef, text: string, usage?: { inputTokens: 
     text,
     usage,
     model: model.id,
-    providerCost: usage ? calculateLlmCost(model.id, usage) : undefined,
+    providerCost: usage ? calculateLlmCost(model, usage) : undefined,
   }
 }
 

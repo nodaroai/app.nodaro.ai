@@ -8,6 +8,7 @@ import { llmComplete } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildWizardAnalyzeSystem, buildWizardGenerateSystem } from "../prompts/prompt-wizard-system.js"
+import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 
 const nodeContextSchema = z.object({
   connectedInputTypes: z.array(z.string()).optional(),
@@ -185,7 +186,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
 
         if (refUrls.length > 0) {
           messageContent = [
-            ...refUrls.map((url, i) => ({ type: "image" as const, url })),
+            ...refUrls.map((url) => ({ type: "image" as const, url })),
             { type: "text" as const, text: `The above ${refUrls.length === 1 ? "image is a" : `${refUrls.length} images are`} reference image${refUrls.length > 1 ? "s" : ""} connected to this node.\n\n${userMessage}` },
           ]
         } else {
@@ -201,15 +202,9 @@ export async function promptHelperRoutes(app: FastifyInstance) {
         })
 
         // Parse and validate JSON response
-        let responseText = response.text.trim()
-        // Strip markdown code fences if present
-        if (responseText.startsWith("```")) {
-          responseText = responseText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "")
-        }
-
         let parsedResponse: unknown
         try {
-          parsedResponse = JSON.parse(responseText)
+          parsedResponse = JSON.parse(extractJsonFromAIResponse(response.text))
         } catch {
           throw new Error("LLM returned invalid JSON")
         }
@@ -236,11 +231,10 @@ export async function promptHelperRoutes(app: FastifyInstance) {
 
         // Mark job completed and commit credits
         try {
-          await supabase
-            .from("jobs")
-            .update({ status: "completed", output_data: { ...result, usage: response.usage }, provider_cost: response.providerCost ?? null })
-            .eq("id", job.id)
-          if (usageLogId) await CreditsService.commitCredits(usageLogId)
+          await Promise.all([
+            supabase.from("jobs").update({ status: "completed", output_data: { ...result, usage: response.usage }, provider_cost: response.providerCost ?? null }).eq("id", job.id),
+            usageLogId ? CreditsService.commitCredits(usageLogId) : undefined,
+          ])
         } catch (postErr) {
           console.error("[prompt-wizard] Post-API error:", postErr)
         }
@@ -249,12 +243,10 @@ export async function promptHelperRoutes(app: FastifyInstance) {
       } catch (err) {
         const message = err instanceof Error ? err.message : "Prompt wizard failed"
 
-        await supabase
-          .from("jobs")
-          .update({ status: "failed", output_data: { error: message } })
-          .eq("id", job.id)
-
-        if (usageLogId) await CreditsService.refundCredits(usageLogId)
+        await Promise.all([
+          supabase.from("jobs").update({ status: "failed", output_data: { error: message } }).eq("id", job.id),
+          usageLogId ? CreditsService.refundCredits(usageLogId) : undefined,
+        ])
 
         const isMalformed = message.includes("Malformed") || message.includes("invalid JSON")
         return reply.status(isMalformed ? 502 : 500).send({

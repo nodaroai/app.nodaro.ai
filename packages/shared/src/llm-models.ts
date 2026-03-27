@@ -122,10 +122,10 @@ export const LLM_MODEL_IDS = LLM_MODELS.map((m) => m.id)
 
 /** Calculate provider cost in USD from token usage and model pricing. */
 export function calculateLlmCost(
-  modelId: string,
+  modelOrId: string | LlmModelDef,
   usage: { inputTokens: number; outputTokens: number },
 ): number {
-  const model = getLlmModel(modelId)
+  const model = typeof modelOrId === "string" ? getLlmModel(modelOrId) : modelOrId
   if (!model) return 0
   return (usage.inputTokens * model.inputPricePerM + usage.outputTokens * model.outputPricePerM) / 1_000_000
 }
