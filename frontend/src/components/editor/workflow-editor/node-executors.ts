@@ -162,6 +162,8 @@ export function runVideoGeneration(
   cameraFixed?: boolean,
   removeWatermark?: boolean,
   characterIdList?: string[],
+  referenceImageUrls?: string[],
+  generationType?: string,
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
@@ -189,6 +191,8 @@ export function runVideoGeneration(
         cameraFixed,
         removeWatermark,
         characterIdList,
+        referenceImageUrls,
+        generationType,
         userId: ctx.userId,
       }),
     "generatedVideoUrl",

@@ -616,6 +616,9 @@ export function buildPayload(
           grokMode: data.grokMode,
           videoSize: data.videoSize,
           removeWatermark: data.removeWatermark,
+          characterIdList: resolvedInputs.characterIdList,
+          referenceImageUrls: resolvedInputs.referenceImageUrls,
+          generationType: data.veoMode === "reference" ? "REFERENCE_2_VIDEO" : undefined,
           usageLogId,
         },
       }

@@ -3,7 +3,7 @@
 import { memo, useState, useMemo, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Maximize2, Download, Settings, LayoutGrid, Expand, Users, Link, Scissors } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, Images, Volume2, Maximize2, Download, Settings, LayoutGrid, Expand, Users, Link, Scissors } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -18,6 +18,7 @@ import { useFullResolution } from "@/hooks/use-full-resolution"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
+import { PROVIDERS_WITH_REFERENCES } from "../editor/config-panels/model-options"
 
 // Fallback credit costs per video provider (shown until API responds)
 const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
@@ -128,12 +129,19 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const showEndFrame = supportsEndFrame && !isKling3MultiShot
   const isSora = provider === "sora2" || provider === "sora2-pro"
   const charactersConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "characters").length
+  const supportsReferences = PROVIDERS_WITH_REFERENCES.includes(provider)
+  const isVeo = provider === "veo3" || provider === "veo3.1"
+  const isVeoRefMode = isVeo && nodeData.veoMode === "reference"
+  const showReferences = supportsReferences && (!isVeo || isVeoRefMode)
+  const showStartFrame = !isVeoRefMode
+  const referencesConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "references").length
+  const referencesTop = 445 * 0.70
 
   const resultHeight = videoDimensions?.height ?? 445
   const startFrameTop = 445 * 0.157
   const endFrameTop = 445 * 0.36
   const audioTop = 445 * 0.53
-  const charactersTop = 445 * 0.70
+  const charactersTop = showReferences ? 445 * 0.85 : 445 * 0.70
 
   useEffect(() => { if (activeUrl) setShowConfig(false) }, [activeUrl])
   useEffect(() => { setVideoDimensions(null) }, [activeUrl])
@@ -204,14 +212,15 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
   // Build dynamic handles
   const handles = useMemo(() => [
-    { id: "startFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${startFrameTop}px`, left: '-29px' }, hideHandle: true },
-    ...(showEndFrame ? [{ id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${endFrameTop}px`, left: '-29px' }, hideHandle: true }] : []),
+    ...(showStartFrame ? [{ id: "startFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${startFrameTop}px`, left: '-29px' }, hideHandle: true }] : []),
+    ...((showEndFrame && showStartFrame) ? [{ id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${endFrameTop}px`, left: '-29px' }, hideHandle: true }] : []),
     { id: "audio", type: "target" as const, position: Position.Left, customStyle: { top: `${audioTop}px`, left: '-29px' }, hideHandle: true },
+    ...(showReferences ? [{ id: "references", type: "target" as const, position: Position.Left, customStyle: { top: `${referencesTop}px`, left: '-29px' }, hideHandle: true }] : []),
     ...(isSora ? [{ id: "characters", type: "target" as const, position: Position.Left, customStyle: { top: `${charactersTop}px`, left: '-29px' }, hideHandle: true }] : []),
     { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: `${videoTop}px`, right: '-29px' }, hideHandle: true },
-  ], [startFrameTop, endFrameTop, audioTop, charactersTop, videoTop, activeUrl, showConfig, showEndFrame, isSora])
+  ], [startFrameTop, endFrameTop, audioTop, referencesTop, charactersTop, videoTop, activeUrl, showConfig, showEndFrame, showStartFrame, showReferences, isSora])
 
-  const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo || (isSora && charactersConnectionCount > 0)
+  const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo || (isSora && charactersConnectionCount > 0) || (showReferences && referencesConnectionCount > 0)
 
   return (
     <div className="relative group/node" style={{ width: (activeUrl && !showConfig) ? (videoDimensions?.width ?? 245) : 245, height: (activeUrl && !showConfig) ? (videoDimensions?.height ?? 445) : 445, minHeight: 200, overflow: 'visible', position: 'relative' }}>
@@ -651,6 +660,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
 
     {/* startFrame handle icon */}
+    {showStartFrame && (
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
       style={{ top: `${startFrameTop - 14}px`, left: '-29px' }}>
       <ImageIcon className="w-3.5 h-3.5 text-white" />
@@ -659,9 +669,10 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">{startFrameConnectionCount}</div>
       )}
     </div>
+    )}
 
     {/* endFrame handle icon */}
-    {showEndFrame && (
+    {showEndFrame && showStartFrame && (
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
       style={{ top: `${endFrameTop - 14}px`, left: '-29px' }}>
       <ImageIcon className="w-3.5 h-3.5 text-white" />
@@ -673,6 +684,18 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       style={{ top: `${audioTop - 14}px`, left: '-29px' }}>
       <Volume2 className="w-3.5 h-3.5 text-white" />
     </div>
+
+    {/* references handle icon (Grok I2V / VEO reference mode) */}
+    {showReferences && (
+      <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
+        style={{ top: `${referencesTop - 14}px`, left: '-29px' }}>
+        <Images className="w-3.5 h-3.5 text-white" />
+        <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">+</div>
+        {referencesConnectionCount >= 1 && (
+          <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">{referencesConnectionCount}</div>
+        )}
+      </div>
+    )}
 
     {/* characters handle icon (Sora only) */}
     {isSora && (

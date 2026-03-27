@@ -445,7 +445,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     imageParam: "input_urls",  // Array format: [startFrame] or [startFrame, endFrame]
     extraParams: { resolution: "720p", fixed_lens: false, generate_audio: false },
     allowedDurations: [4, 8, 12],
-    supportsEndFrame: false,  // End frame via input_urls array (handled in video.ts)
+    supportsEndFrame: true,  // End frame via input_urls array (handled in video.ts)
   },
 
   // Wan 2.6 I2V - docs.kie.ai/market/wan/2-6-image-to-video

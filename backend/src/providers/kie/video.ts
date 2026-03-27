@@ -445,14 +445,19 @@ export class KieVideoProvider
 
     // VEO3 uses a special API endpoint
     if (provider === "veo3" || provider === "veo3.1") {
-      const imageUrls = endFrameUrl
-        ? [imageUrl, endFrameUrl]
-        : [imageUrl]
+      let imageUrls: string[]
+      if (options?.generationType === "REFERENCE_2_VIDEO" && options?.referenceImageUrls?.length) {
+        imageUrls = options.referenceImageUrls.slice(0, 3)
+      } else {
+        imageUrls = endFrameUrl
+          ? [imageUrl, endFrameUrl]
+          : [imageUrl]
+      }
       const { resultJson, taskId: veoTaskId } = await runVeoTask(
         modelConfig.model,
         prompt ?? "smooth cinematic motion",
         imageUrls,
-        { aspectRatio: options?.aspectRatio, seed: options?.seed }
+        { aspectRatio: options?.aspectRatio, seed: options?.seed, generationType: options?.generationType }
       )
 
       const videoUrl =
@@ -515,6 +520,12 @@ export class KieVideoProvider
       input[imageParamName] = effectiveImageUrl
     }
 
+    // Merge reference images for providers that support multiple inputs
+    if (provider === "grok-i2v" && options?.referenceImageUrls?.length) {
+      const merged = [effectiveImageUrl, ...options.referenceImageUrls]
+      input.image_urls = merged.slice(0, 7) // Grok max 7 images
+    }
+
     // Override duration if provided
     if (duration) {
       const snapped = snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
@@ -533,7 +544,10 @@ export class KieVideoProvider
 
     // Handle end frame for models that support it
     if (endFrameUrl) {
-      if (provider === "kling-turbo") {
+      if (provider === "seedance") {
+        // Seedance uses input_urls array: [startFrame, endFrame]
+        input.input_urls = [effectiveImageUrl, endFrameUrl]
+      } else if (provider === "kling-turbo") {
         input.tail_image_url = endFrameUrl
       } else if (provider === "minimax" || provider === "hailuo-standard" || provider === "bytedance-lite") {
         input.end_image_url = endFrameUrl

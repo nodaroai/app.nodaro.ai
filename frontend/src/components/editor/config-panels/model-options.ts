@@ -402,9 +402,17 @@ export const PROVIDERS_WITH_END_FRAME: string[] = [
   "kling-3.0",
   "hailuo-standard",
   "bytedance-lite",
+  "seedance",
   // Replicate disabled
   // "runway",
   // "pika",
+]
+
+// Providers that support additional reference images beyond start frame
+export const PROVIDERS_WITH_REFERENCES: string[] = [
+  "grok-i2v",
+  "veo3",
+  "veo3.1",
 ]
 
 // KIE.ai allowed durations per text-to-video provider

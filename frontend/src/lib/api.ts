@@ -824,6 +824,8 @@ export interface GenerateVideoOptions {
   cameraFixed?: boolean    // Camera fixed (Bytedance, Seedance)
   removeWatermark?: boolean // Sora2/Sora2-Pro watermark removal post-processing
   characterIdList?: string[] // Sora character IDs from connected sora-character nodes
+  referenceImageUrls?: string[]  // Grok I2V (up to 6) / VEO reference mode (up to 3)
+  generationType?: string        // VEO: REFERENCE_2_VIDEO
   userId?: string
 }
 
@@ -865,6 +867,8 @@ export async function generateVideo(
       cameraFixed: opts.cameraFixed,
       removeWatermark: opts.removeWatermark,
       characterIdList: opts.characterIdList,
+      referenceImageUrls: opts.referenceImageUrls,
+      generationType: opts.generationType,
     }
     if (opts.userId) {
       body.userId = opts.userId

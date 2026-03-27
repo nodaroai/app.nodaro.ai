@@ -601,6 +601,7 @@ export type ImageToVideoData = {
   kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
   connectedImageOrder?: readonly string[]
   characterIdList?: string[]
+  veoMode?: "frame-to-frame" | "reference"  // VEO 3/3.1: toggle between start+end frame and reference mode
 }
 
 export type TextToSpeechData = {

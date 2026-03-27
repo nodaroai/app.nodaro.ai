@@ -25,7 +25,7 @@ import {
 } from "../shared.js"
 
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, removeWatermark, characterIdList } = job.data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, removeWatermark, characterIdList, referenceImageUrls, generationType } = job.data as {
     jobId: string
     imageUrl: string
     endFrameUrl?: string
@@ -50,6 +50,8 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     cameraFixed?: boolean
     removeWatermark?: boolean
     characterIdList?: string[]
+    referenceImageUrls?: string[]
+    generationType?: string
   }
   console.log(`[worker] image-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}${removeWatermark ? " [remove watermark]" : ""}`)
 
@@ -67,7 +69,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
   }
 
-  const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, videoSize, seed, cameraFixed, generateAudio, characterIdList })
+  const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, videoSize, seed, cameraFixed, generateAudio, characterIdList, referenceImageUrls, generationType })
 
   // Sora 2 watermark removal post-processing step
   if (removeWatermark && (provider === "sora2" || provider === "sora2-pro")) {
