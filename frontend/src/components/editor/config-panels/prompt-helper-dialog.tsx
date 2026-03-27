@@ -23,12 +23,7 @@ import { wizardAnalyze, wizardGenerate } from "@/lib/api"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
 import { LlmModelSelect } from "./llm-model-select"
-import type { WizardQuestion, RecommendedModel } from "@nodaro-shared/prompt-wizard-categories"
-
-interface ModelChange {
-  field: string
-  value: string
-}
+import type { WizardQuestion, RecommendedModel, ModelChange } from "@nodaro-shared/prompt-wizard-categories"
 
 interface PromptHelperDialogProps {
   readonly open: boolean
