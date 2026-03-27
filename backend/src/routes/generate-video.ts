@@ -10,7 +10,7 @@ import { IMAGE_TO_VIDEO_PROVIDERS } from "../../../packages/shared/src/model-con
 import { buildVideoCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 const generateVideoBody = z.object({
-  imageUrl: safeUrlSchema,
+  imageUrl: safeUrlSchema.optional(),  // Optional in VEO REFERENCE_2_VIDEO mode
   endFrameUrl: safeUrlSchema.optional(),
   audioUrl: safeUrlSchema.optional(),
   prompt: z.string().max(2500).optional(),
@@ -33,6 +33,8 @@ const generateVideoBody = z.object({
   cameraFixed: z.boolean().optional(),
   removeWatermark: z.boolean().optional(),
   characterIdList: z.array(z.string()).max(5).optional(),
+  referenceImageUrls: z.array(safeUrlSchema).max(6).optional(),
+  generationType: z.enum(["TEXT_2_VIDEO", "FIRST_AND_LAST_FRAMES_2_VIDEO", "REFERENCE_2_VIDEO"]).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -48,12 +50,19 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, removeWatermark, characterIdList } = parsed.data
+    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, removeWatermark, characterIdList, referenceImageUrls, generationType } = parsed.data
     const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    // imageUrl is required for all modes except VEO REFERENCE_2_VIDEO
+    if (!imageUrl && generationType !== "REFERENCE_2_VIDEO") {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: "imageUrl is required" },
       })
     }
 
@@ -67,7 +76,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, removeWatermark, characterIdList, type: "image-to-video" },
+        input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, removeWatermark, characterIdList, referenceImageUrls, generationType, type: "image-to-video" },
       })
       .select("id")
       .single()
@@ -108,6 +117,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       cameraFixed,
       removeWatermark,
       characterIdList,
+      referenceImageUrls,
+      generationType,
       usageLogId,
     })
 

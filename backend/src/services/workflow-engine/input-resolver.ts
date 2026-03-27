@@ -645,6 +645,11 @@ function routeOutput(
     }
     return
   }
+  if (edge.targetHandle === "references") {
+    // Accumulate reference images from upstream image-producing nodes
+    inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+    return
+  }
 
   // --- List node output mode routing (reads mode from edge data) ---
   if (srcType === "list") {

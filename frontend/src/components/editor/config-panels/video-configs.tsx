@@ -35,14 +35,14 @@ import type {
   GeneratedScript,
   GeneratedScriptResult,
 } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS } from "./model-options"
+import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
 import { Kling3StudioConfig } from "./kling3-studio-config"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { getConnectedProviderModel } from "./helpers"
-import { ConnectedMediaList } from "./connected-media-list"
+import { ConnectedMediaList, getSourceThumbnail } from "./connected-media-list"
 import type { ConfigProps } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { buildEnrichedScenePrompt, type EnrichableScene } from "@nodaro-shared/prompt-builder"
@@ -57,34 +57,13 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
     ? baseDurations.filter((d) => d <= 6)
     : baseDurations
   const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(data.provider || "minimax")
+  const supportsReferences = PROVIDERS_WITH_REFERENCES.includes(data.provider || "minimax")
+  const isVeo = data.provider === "veo3" || data.provider === "veo3.1"
+  const isVeoRefMode = isVeo && data.veoMode === "reference"
 
   const connectedImages = useMemo(() => {
     const imageTypes = ["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"]
-    return sources.filter((s) => imageTypes.includes(s.type)).map((s) => {
-      let imageUrl: string | undefined
-      const nodeData = s.nodeData || {}
-
-      if (s.type === "upload-image") {
-        imageUrl = (nodeData.url as string) || undefined
-      } else if (s.type === "generate-image" || s.type === "edit-image" || s.type === "image-to-image" || s.type === "scene") {
-        const results = nodeData.generatedResults as Array<{ url?: string }> | undefined
-        // Edge output mode: "item:N" overrides activeResultIndex
-        let activeIndex = (nodeData.activeResultIndex as number) ?? 0
-        if (s.edgeOutputMode?.startsWith("item:")) {
-          activeIndex = parseInt(s.edgeOutputMode.split(":")[1], 10)
-        } else if (s.edgeOutputMode === "last" && results && results.length > 0) {
-          activeIndex = results.length - 1
-        }
-        if (results && results.length > 0) {
-          imageUrl = results[activeIndex]?.url || results[0]?.url
-        }
-        if (!imageUrl) {
-          imageUrl = (nodeData.generatedImageUrl as string) || undefined
-        }
-      } else if (s.type === "character" || s.type === "object" || s.type === "location") {
-        imageUrl = (nodeData.sourceImageUrl as string) || undefined
-      }
-
+    return sources.filter((s) => imageTypes.includes(s.type) && s.targetHandle !== "references").map((s) => {
       let displayLabel = s.label
       if (s.targetHandle === "startFrame") {
         displayLabel = `Start: ${s.label}`
@@ -96,11 +75,19 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         id: s.id,
         type: s.type,
         label: displayLabel,
-        imageUrl,
+        imageUrl: getSourceThumbnail(s),
         targetHandle: s.targetHandle,
       }
     })
   }, [sources])
+
+  const connectedRefImages = useMemo(() => {
+    return sources.filter((s) => s.targetHandle === "references").map((s) => ({
+      id: s.id, type: s.type, label: s.label, imageUrl: getSourceThumbnail(s),
+    }))
+  }, [sources])
+
+  const maxRefImages = data.provider === "grok-i2v" ? 6 : 3
 
   if (data.provider === "kling-3.0") {
     return <Kling3StudioConfig data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} onUpdateNode={onUpdateNode} />
@@ -132,6 +119,46 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           </SelectContent>
         </Select>
       </MappableField>
+
+      {/* VEO mode toggle */}
+      {isVeo && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Generation Mode</Label>
+          <Select value={data.veoMode || "frame-to-frame"} onValueChange={(v) => onUpdate({ veoMode: v as "frame-to-frame" | "reference" })}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="frame-to-frame">Frame-to-Frame</SelectItem>
+              <SelectItem value="reference">Reference Mode</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground px-1">
+            {isVeoRefMode
+              ? "Reference mode uses 1-3 reference images to guide generation (not as start/end frames)."
+              : "Frame-to-frame mode uses start and optional end frame images."}
+          </p>
+        </div>
+      )}
+
+      {/* Reference images section (Grok / VEO reference mode) */}
+      {supportsReferences && (!isVeo || isVeoRefMode) && connectedRefImages.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Reference Images ({connectedRefImages.length}/{maxRefImages})</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {connectedRefImages.map((img) => (
+              <div key={img.id} className="relative w-12 h-12 rounded border border-border overflow-hidden">
+                {img.imageUrl ? (
+                  <img src={img.imageUrl} alt={img.label} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-muted flex items-center justify-center text-[8px] text-muted-foreground">No img</div>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground px-1">
+            Connect image nodes to the References handle. Up to {maxRefImages} additional reference images.
+          </p>
+        </div>
+      )}
 
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea

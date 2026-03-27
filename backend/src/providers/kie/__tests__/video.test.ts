@@ -195,6 +195,92 @@ describe("KieVideoProvider.imageToVideo", () => {
     expect(result.cost).toBe(1.00)
   })
 
+  it("handles end frame for seedance via input_urls array", async () => {
+    await provider.imageToVideo(
+      "https://start.png",
+      "cinematic",
+      "seedance",
+      undefined,
+      "https://end.png",
+    )
+    const input = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
+    // Seedance sends both frames in input_urls array, NOT a separate end_frame param
+    expect(input.input_urls).toEqual(["https://start.png", "https://end.png"])
+    expect(input.end_frame).toBeUndefined()
+    expect(input.end_image_url).toBeUndefined()
+    expect(input.tail_image_url).toBeUndefined()
+  })
+
+  it("veo3 sends REFERENCE_2_VIDEO generationType when explicitly set", async () => {
+    await provider.imageToVideo(
+      "https://placeholder.png",
+      "cinematic scene",
+      "veo3",
+      undefined,
+      undefined,
+      {
+        referenceImageUrls: ["https://ref1.png", "https://ref2.png"],
+        generationType: "REFERENCE_2_VIDEO",
+      },
+    )
+    expect(mocks.mockRunVeoTask).toHaveBeenCalledWith(
+      "veo3",
+      "cinematic scene",
+      ["https://ref1.png", "https://ref2.png"],
+      expect.objectContaining({ generationType: "REFERENCE_2_VIDEO" }),
+    )
+  })
+
+  it("veo3 caps reference images at 3 in reference mode", async () => {
+    await provider.imageToVideo(
+      "https://placeholder.png",
+      "cinematic scene",
+      "veo3",
+      undefined,
+      undefined,
+      {
+        referenceImageUrls: ["https://r1.png", "https://r2.png", "https://r3.png", "https://r4.png"],
+        generationType: "REFERENCE_2_VIDEO",
+      },
+    )
+    const imageUrls = mocks.mockRunVeoTask.mock.calls[0][2]
+    expect(imageUrls).toHaveLength(3)
+  })
+
+  it("grok-i2v merges startFrame + referenceImageUrls into image_urls array (max 7)", async () => {
+    await provider.imageToVideo(
+      "https://start.png",
+      "animate",
+      "grok-i2v",
+      6,
+      undefined,
+      { referenceImageUrls: ["https://ref1.png", "https://ref2.png", "https://ref3.png"] },
+    )
+    expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        image_urls: ["https://start.png", "https://ref1.png", "https://ref2.png", "https://ref3.png"],
+      }),
+      expect.any(Number),
+      undefined,
+    )
+  })
+
+  it("grok-i2v caps merged image_urls at 7 total", async () => {
+    const refs = Array.from({ length: 8 }, (_, i) => `https://ref${i}.png`)
+    await provider.imageToVideo(
+      "https://start.png",
+      "animate",
+      "grok-i2v",
+      6,
+      undefined,
+      { referenceImageUrls: refs },
+    )
+    const callArgs = mocks.mockRunKieTask.mock.calls[0][1]
+    expect(callArgs.image_urls).toHaveLength(7)
+    expect(callArgs.image_urls[0]).toBe("https://start.png")
+  })
+
   it("returns correct cost for each model", async () => {
     const r1 = await provider.imageToVideo("https://img.png", "test", "minimax")
     expect(r1.cost).toBe(0.285)

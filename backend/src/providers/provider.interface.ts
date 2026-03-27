@@ -49,6 +49,8 @@ export interface ProviderOptions {
   enablePromptExpansion?: boolean // Wan Turbo prompt expansion
   promptOptimizer?: boolean // Hailuo prompt optimizer
   characterIdList?: string[] // Sora 2 / Sora 2 Pro character IDs (max 5)
+  referenceImageUrls?: string[] // Reference images for generation (e.g., VEO 3 reference-to-video)
+  generationType?: string // Generation type (e.g., "TEXT_2_VIDEO", "FIRST_AND_LAST_FRAMES_2_VIDEO", "REFERENCE_2_VIDEO")
   // V2V-specific
   referenceImageUrl?: string // Runway Aleph style reference image
   audio?: boolean            // Wan Flash: generate with audio (affects pricing)

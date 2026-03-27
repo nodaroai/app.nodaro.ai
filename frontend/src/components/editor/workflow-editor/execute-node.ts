@@ -617,7 +617,9 @@ export function executeNode(
     }
     if (!startFrameUrl) startFrameUrl = inputs.imageUrl;
 
-    if (!startFrameUrl) {
+    // VEO reference mode doesn't use start frame — skip the requirement
+    const isVeoRefMode = (nodeProvider === "veo3" || nodeProvider === "veo3.1") && i2vData.veoMode === "reference"
+    if (!startFrameUrl && !isVeoRefMode) {
       toast.error(`Node "${i2vData.label}": no start frame image found`);
       return Promise.reject(new Error("No start frame image"));
     }
@@ -656,6 +658,8 @@ export function executeNode(
 
     if (audioUrl && !audioUrl.startsWith("http")) audioUrl = undefined;
 
+    const referenceImageUrls = inputs.referenceImageUrls as string[] | undefined
+
     let prompt = (inputs.prompt ?? resolveTextRefs(i2vData.prompt?.trim() || undefined, refMap)) as string | undefined;
     // Inject motion/camera hints into prompt when enabled
     const motionHints: string[] = [];
@@ -676,7 +680,7 @@ export function executeNode(
       | undefined;
     return runVideoGeneration(
       node.id,
-      startFrameUrl,
+      startFrameUrl ?? "",  // Empty string in VEO reference mode (backend ignores imageUrl)
       ctx,
       endFrameUrl,
       audioUrl,
@@ -699,6 +703,8 @@ export function executeNode(
       i2vData.cameraFixed,
       i2vData.removeWatermark,
       inputs.characterIdList || (i2vData as unknown as Record<string, unknown>).characterIdList as string[] | undefined,
+      referenceImageUrls?.length ? referenceImageUrls : undefined,
+      i2vData.veoMode === "reference" ? "REFERENCE_2_VIDEO" : undefined,
     );
   }
 

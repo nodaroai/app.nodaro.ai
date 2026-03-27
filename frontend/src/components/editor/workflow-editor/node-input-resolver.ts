@@ -501,6 +501,10 @@ export function resolveNodeInputs(
       }
       continue;
     }
+    if (srcEdge.targetHandle === "references") {
+      inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
+      continue;
+    }
     if (srcEdge.targetHandle === "audio") {
       if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
         inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
