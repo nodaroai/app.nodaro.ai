@@ -157,6 +157,7 @@ Prompt: ${prompt}`
               autoFixes: validation.autoFixed,
               usage: response.usage,
             },
+            provider_cost: response.providerCost ?? null,
           })
           .eq("id", job.id)
 

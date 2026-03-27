@@ -128,6 +128,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
                 detailLevel,
                 usage: response.usage,
               },
+              provider_cost: response.providerCost ?? null,
             })
             .eq("id", job.id)
 
