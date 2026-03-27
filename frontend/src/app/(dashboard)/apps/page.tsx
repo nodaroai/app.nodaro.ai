@@ -19,6 +19,7 @@ import {
   SlidersHorizontal,
   Pencil,
   Workflow,
+  Settings,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,10 +37,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { getMyApps, updateApp, deactivateApp, type PublishedApp } from "@/lib/api"
+import { getMyApps, updateApp, deactivateApp, getMonetizationDefaults, updateMonetizationDefaults, type PublishedApp } from "@/lib/api"
+import { hasCredits } from "@/lib/edition"
+import { calculateMonetizedCost } from "@nodaro-shared/monetization"
 import { useAuth } from "@/hooks/use-auth"
+import { Label } from "@/components/ui/label"
 import { APP_CATEGORIES, OUTPUT_TYPES, CATEGORY_COLORS } from "@/lib/app-categories"
 import {
   useAppBrowseInfinite,
@@ -106,6 +111,34 @@ export default function AppsPage() {
     queryKey: ["my-apps"],
     queryFn: getMyApps,
     enabled: viewMode === "my-apps",
+  })
+
+  // Monetization defaults
+  const [defaultFlatFee, setDefaultFlatFee] = useState(0)
+  const [defaultPercent, setDefaultPercent] = useState(0)
+
+  const { data: monetizationDefaults } = useQuery({
+    queryKey: ["monetization-defaults"],
+    queryFn: getMonetizationDefaults,
+    enabled: hasCredits() && viewMode === "my-apps",
+  })
+
+  useEffect(() => {
+    if (monetizationDefaults) {
+      setDefaultFlatFee(monetizationDefaults.flatFee)
+      setDefaultPercent(monetizationDefaults.percent)
+    }
+  }, [monetizationDefaults])
+
+  const saveDefaultsMutation = useMutation({
+    mutationFn: () => updateMonetizationDefaults({ flatFee: defaultFlatFee, percent: defaultPercent }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["monetization-defaults"] })
+      toast.success("Monetization defaults saved")
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to save defaults")
+    },
   })
 
   const toggleMutation = useMutation({
@@ -246,6 +279,51 @@ export default function AppsPage() {
               </>
             )}
           </div>
+
+          {/* Monetization defaults (my-apps only, cloud edition) */}
+          {hasCredits() && viewMode === "my-apps" && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Settings className="h-3.5 w-3.5 mr-1.5" />
+                  Monetization Defaults
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64">
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium">Default Pricing</h4>
+                  <p className="text-xs text-muted-foreground">Applied to new apps when monetization is first enabled.</p>
+                  <div>
+                    <Label className="text-xs">Flat Fee (CR)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={defaultFlatFee}
+                      onChange={(e) => setDefaultFlatFee(Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Percentage (%)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={500}
+                      value={defaultPercent}
+                      onChange={(e) => setDefaultPercent(Number(e.target.value))}
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={() => saveDefaultsMutation.mutate()}
+                    disabled={saveDefaultsMutation.isPending}
+                  >
+                    {saveDefaultsMutation.isPending ? "Saving..." : "Save Defaults"}
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
 
           {/* Search (browse/favorites only) */}
           {showBrowse && (
@@ -590,7 +668,13 @@ function MyAppCard({
       {/* Stats row */}
       <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground">
         <span>{app.runCount ?? app.totalRunCount ?? 0} runs</span>
-        <span>{app.estimatedCredits ?? 0} CR/run</span>
+        {app.monetizationEnabled ? (
+          <span className="text-xs text-muted-foreground">
+            Base: {app.baseEstimatedCredits ?? 0} CR | Total: {app.estimatedCredits ?? 0} CR
+          </span>
+        ) : (
+          <span>{app.estimatedCredits ?? 0} CR/run</span>
+        )}
         {app.favoriteCount > 0 && <span>{app.favoriteCount} favorites</span>}
       </div>
 
@@ -761,6 +845,10 @@ function EditAppDialog({
   const [previewMediaUrl, setPreviewMediaUrl] = useState("")
   const [supportsRemix, setSupportsRemix] = useState(false)
   const [isListed, setIsListed] = useState(false)
+  const [monetizationEnabled, setMonetizationEnabled] = useState(false)
+  const [monetizationFlatFee, setMonetizationFlatFee] = useState(0)
+  const [monetizationPercent, setMonetizationPercent] = useState(0)
+  const [loadingDefaults, setLoadingDefaults] = useState(false)
 
   // Re-populate form when app changes or dialog opens
   useEffect(() => {
@@ -774,8 +862,45 @@ function EditAppDialog({
       setPreviewMediaUrl(app.previewMediaUrl ?? "")
       setSupportsRemix(app.supportsRemix ?? false)
       setIsListed(app.isListed ?? false)
+      setMonetizationEnabled(app.monetizationEnabled ?? false)
+      setMonetizationFlatFee(app.monetizationFlatFee ?? 0)
+      setMonetizationPercent(app.monetizationPercent ?? 0)
     }
   }, [app, open])
+
+  const handleToggleMonetization = useCallback(async (enabled: boolean) => {
+    setMonetizationEnabled(enabled)
+    if (enabled && monetizationFlatFee === 0 && monetizationPercent === 0) {
+      try {
+        setLoadingDefaults(true)
+        const defaults = await getMonetizationDefaults()
+        setMonetizationFlatFee(defaults.flatFee)
+        setMonetizationPercent(defaults.percent)
+      } catch {
+        // Ignore — user can still set manually
+      } finally {
+        setLoadingDefaults(false)
+      }
+    }
+  }, [monetizationFlatFee, monetizationPercent])
+
+  const handleLoadDefaults = useCallback(async () => {
+    try {
+      setLoadingDefaults(true)
+      const defaults = await getMonetizationDefaults()
+      setMonetizationFlatFee(defaults.flatFee)
+      setMonetizationPercent(defaults.percent)
+    } catch {
+      toast.error("Failed to load defaults")
+    } finally {
+      setLoadingDefaults(false)
+    }
+  }, [])
+
+  const baseCredits = app?.baseEstimatedCredits ?? 0
+  const calculatedCredits = monetizationEnabled
+    ? calculateMonetizedCost(baseCredits, monetizationFlatFee, monetizationPercent)
+    : baseCredits
 
   const handleAddTag = useCallback(() => {
     const trimmed = tagInput.trim().toLowerCase()
@@ -801,7 +926,7 @@ function EditAppDialog({
       return
     }
     const mediaUrl = previewMediaUrl.trim() || null
-    onSave(app.id, {
+    const data: Record<string, unknown> = {
       name: name.trim(),
       description: description.trim(),
       category,
@@ -811,8 +936,14 @@ function EditAppDialog({
       previewMediaType: mediaUrl ? detectMediaType(mediaUrl) : null,
       supportsRemix,
       isListed,
-    })
-  }, [app, name, description, category, outputTypes, tags, previewMediaUrl, supportsRemix, isListed, onSave])
+    }
+    if (hasCredits()) {
+      data.monetizationEnabled = monetizationEnabled
+      data.monetizationFlatFee = monetizationFlatFee
+      data.monetizationPercent = monetizationPercent
+    }
+    onSave(app.id, data)
+  }, [app, name, description, category, outputTypes, tags, previewMediaUrl, supportsRemix, isListed, monetizationEnabled, monetizationFlatFee, monetizationPercent, onSave])
 
   if (!app) return null
 
@@ -959,6 +1090,63 @@ function EditAppDialog({
             </div>
             <Switch checked={isListed} onCheckedChange={setIsListed} />
           </div>
+
+          {/* Monetization section (cloud only) */}
+          {hasCredits() && (
+            <div className="space-y-3 border-t border-border pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Monetization</p>
+                  <p className="text-xs text-muted-foreground">Charge a markup when others run your app</p>
+                </div>
+                <Switch checked={monetizationEnabled} onCheckedChange={handleToggleMonetization} />
+              </div>
+
+              {monetizationEnabled && (
+                <div className="space-y-3 pl-1">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Flat fee (CR)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={monetizationFlatFee}
+                        onChange={(e) => setMonetizationFlatFee(Math.max(0, Number(e.target.value) || 0))}
+                        className="h-8 text-xs mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Percentage (%)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={500}
+                        value={monetizationPercent}
+                        onChange={(e) => setMonetizationPercent(Math.min(500, Math.max(0, Number(e.target.value) || 0)))}
+                        className="h-8 text-xs mt-1"
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-muted-foreground">
+                    If this app costs {baseCredits} CR to run, users will pay {calculatedCredits} CR
+                  </p>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={handleLoadDefaults}
+                    disabled={loadingDefaults}
+                  >
+                    {loadingDefaults && <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />}
+                    Use my defaults
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Save button */}
           <Button

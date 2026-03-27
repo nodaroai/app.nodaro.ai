@@ -108,6 +108,7 @@ import { workflowTemplatesRoutes } from "./routes/workflow-templates.js"
 import { appRunnerRoutes } from "./routes/app-runner.js"
 import { ogTagsRoutes } from "./routes/og-tags.js"
 import { appAnalyticsRoutes } from "./routes/app-analytics.js"
+import { monetizationRoutes } from "./routes/monetization.js"
 import { embedRoutes } from "./routes/embed.js"
 import { qaCheckRoutes } from "./routes/qa-check.js"
 import { saveToStorageRoutes } from "./routes/save-to-storage.js"
@@ -251,6 +252,7 @@ export async function buildApp() {
   await app.register(appRunnerRoutes)
   await app.register(ogTagsRoutes)
   await app.register(appAnalyticsRoutes)
+  await app.register(monetizationRoutes)
   await app.register(embedRoutes)
   await app.register(qaCheckRoutes)
   await app.register(saveToStorageRoutes)

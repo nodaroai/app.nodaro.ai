@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowCredits } from "../billing/credits.js"
 import { invalidateAppCache } from "./app-runner.js"
 import { getNodeResult, getOutputType } from "../../../packages/shared/src/presentation-utils.js"
+import { calculateMonetizationMarkup, calculateMonetizedCost } from "../../../packages/shared/src/monetization.js"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 
 const VALID_CATEGORIES = [
@@ -62,6 +63,7 @@ function toCamelCase(row: Record<string, unknown>) {
     isEmbeddable: row.is_embeddable,
     allowedOrigins: row.allowed_origins,
     estimatedCredits: row.estimated_credits,
+    baseEstimatedCredits: row.base_estimated_credits ?? 0,
     thumbnailNodeId: row.thumbnail_node_id ?? null,
     category: row.category ?? "other",
     outputTypes: row.output_types ?? [],
@@ -73,6 +75,9 @@ function toCamelCase(row: Record<string, unknown>) {
     totalRunCount: row.total_run_count ?? 0,
     favoriteCount: row.favorite_count ?? 0,
     createdAt: row.created_at,
+    monetizationEnabled: row.monetization_enabled ?? false,
+    monetizationFlatFee: row.monetization_flat_fee ?? 0,
+    monetizationPercent: row.monetization_percent ?? 0,
   }
 }
 
@@ -95,6 +100,7 @@ function toBrowseCard(row: Record<string, unknown>) {
     creatorDisplayName: row.creator_display_name ?? null,
     totalRunCount: row.total_run_count ?? 0,
     favoriteCount: row.favorite_count ?? 0,
+    monetizationEnabled: row.monetization_enabled ?? false,
     createdAt: row.created_at,
   }
 }
@@ -132,6 +138,10 @@ const updateBodySchema = z.object({
   previewMediaUrl: z.string().url().nullable().optional(),
   previewMediaType: z.enum(["image", "video"]).nullable().optional(),
   supportsRemix: z.boolean().optional(),
+  // Monetization fields
+  monetizationEnabled: z.boolean().optional(),
+  monetizationFlatFee: z.number().int().min(0).optional(),
+  monetizationPercent: z.number().int().min(0).max(500).optional(),
 })
 
 const browseQuerySchema = z.object({
@@ -164,7 +174,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     }
 
     // Card-only columns (no snapshot_nodes/edges/settings)
-    const selectCols = "id, slug, name, description, icon_url, estimated_credits, category, output_types, tags, preview_media_url, preview_media_type, supports_remix, creator_id, creator_display_name, total_run_count, favorite_count, created_at"
+    const selectCols = "id, slug, name, description, icon_url, estimated_credits, category, output_types, tags, preview_media_url, preview_media_type, supports_remix, creator_id, creator_display_name, total_run_count, favorite_count, created_at, monetization_enabled"
 
     let query = supabase
       .from("published_apps")
@@ -342,7 +352,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // Compute version + deactivate old versions
     const { data: existingApps } = await supabase
       .from("published_apps")
-      .select("id, version, slug, is_listed")
+      .select("id, version, slug, is_listed, monetization_enabled, monetization_flat_fee, monetization_percent")
       .eq("workflow_id", workflowId)
       .order("version", { ascending: false })
       .limit(1)
@@ -383,7 +393,39 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // Estimate credits
     const nodes = workflow.nodes || []
     const edges = workflow.edges || []
-    const estimatedCredits = estimateWorkflowCredits(nodes as Array<{ type: string; data?: Record<string, unknown> }>)
+    const baseEstimatedCredits = estimateWorkflowCredits(nodes as Array<{ type: string; data?: Record<string, unknown> }>)
+
+    // Inherit monetization from previous version, then user defaults, then zeros
+    let inheritedMonetizationEnabled = false
+    let inheritedMonetizationFlatFee = 0
+    let inheritedMonetizationPercent = 0
+
+    if (prevVersion) {
+      inheritedMonetizationEnabled = prevVersion.monetization_enabled ?? false
+      inheritedMonetizationFlatFee = prevVersion.monetization_flat_fee ?? 0
+      inheritedMonetizationPercent = prevVersion.monetization_percent ?? 0
+    } else {
+      // Check user's global defaults
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("default_monetization_flat_fee, default_monetization_percent")
+        .eq("id", userId)
+        .single()
+
+      if (profile) {
+        const hasFee = (profile.default_monetization_flat_fee ?? 0) > 0
+        const hasPct = (profile.default_monetization_percent ?? 0) > 0
+        inheritedMonetizationEnabled = hasFee || hasPct
+        inheritedMonetizationFlatFee = profile.default_monetization_flat_fee ?? 0
+        inheritedMonetizationPercent = profile.default_monetization_percent ?? 0
+      }
+    }
+
+    // Calculate estimated_credits including monetization markup
+    let estimatedCredits = baseEstimatedCredits
+    if (inheritedMonetizationEnabled && baseEstimatedCredits > 0) {
+      estimatedCredits = calculateMonetizedCost(baseEstimatedCredits, inheritedMonetizationFlatFee, inheritedMonetizationPercent)
+    }
 
     // Auto-derive preview media from snapshot nodes if not provided
     let effectivePreviewUrl = previewMediaUrl ?? null
@@ -429,7 +471,11 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           snapshot_nodes: nodes,
           snapshot_edges: edges,
           snapshot_settings: workflow.settings || {},
+          base_estimated_credits: baseEstimatedCredits,
           estimated_credits: estimatedCredits,
+          monetization_enabled: inheritedMonetizationEnabled,
+          monetization_flat_fee: inheritedMonetizationFlatFee,
+          monetization_percent: inheritedMonetizationPercent,
           thumbnail_node_id: thumbnailNodeId ?? null,
           category: category ?? "other",
           output_types: outputTypes ?? [],
@@ -507,6 +553,10 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       isEmbeddable: app.is_embeddable,
       allowedOrigins: app.allowed_origins,
       estimatedCredits: app.estimated_credits,
+      baseEstimatedCredits: app.base_estimated_credits ?? 0,
+      monetizationEnabled: app.monetization_enabled ?? false,
+      monetizationFlatFee: app.monetization_flat_fee ?? 0,
+      monetizationPercent: app.monetization_percent ?? 0,
       thumbnailNodeId: app.thumbnail_node_id ?? null,
       category: app.category ?? "other",
       outputTypes: app.output_types ?? [],
@@ -563,10 +613,10 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: parsed.error.flatten() })
     }
 
-    // Verify ownership
+    // Verify ownership (include monetization fields to avoid a second SELECT)
     const { data: existing, error: fetchError } = await supabase
       .from("published_apps")
-      .select("id, creator_id")
+      .select("id, creator_id, base_estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, slug")
       .eq("id", appId)
       .single()
 
@@ -594,6 +644,26 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     if (body.previewMediaUrl !== undefined) updates.preview_media_url = body.previewMediaUrl
     if (body.previewMediaType !== undefined) updates.preview_media_type = body.previewMediaType
     if (body.supportsRemix !== undefined) updates.supports_remix = body.supportsRemix
+    if (body.monetizationEnabled !== undefined) updates.monetization_enabled = body.monetizationEnabled
+    if (body.monetizationFlatFee !== undefined) updates.monetization_flat_fee = body.monetizationFlatFee
+    if (body.monetizationPercent !== undefined) updates.monetization_percent = body.monetizationPercent
+
+    // Recalculate estimated_credits when any monetization field changes
+    const monetizationChanged = body.monetizationEnabled !== undefined || body.monetizationFlatFee !== undefined || body.monetizationPercent !== undefined
+    if (monetizationChanged) {
+      const base = existing.base_estimated_credits ?? 0
+      const enabled = body.monetizationEnabled ?? existing.monetization_enabled
+      const flat = body.monetizationFlatFee ?? existing.monetization_flat_fee ?? 0
+      const pct = body.monetizationPercent ?? existing.monetization_percent ?? 0
+
+      if (enabled && base > 0) {
+        updates.estimated_credits = calculateMonetizedCost(base, flat, pct)
+      } else {
+        updates.estimated_credits = base
+      }
+
+      invalidateAppCache(existing.slug)
+    }
 
     if (Object.keys(updates).length === 0) {
       return reply.status(400).send({ error: { code: "bad_request", message: "No fields to update" } })

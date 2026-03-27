@@ -37,6 +37,7 @@ import { migrateEdgeOutputMode } from "../../../packages/shared/src/edge-range.j
 import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, expandItemsWithRepeat } from "../../../packages/shared/src/repeat-types.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { settledWithLimit } from "../lib/settled-with-limit.js"
+import { calculateMonetizationMarkup } from "../../../packages/shared/src/monetization.js"
 
 /** Env-var ceiling — tier limits are capped by this. */
 const MAX_CONCURRENT_NODES_CEILING = config.MAX_CONCURRENT_NODES_PER_EXECUTION
@@ -667,6 +668,54 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       failedNodes: 0,
       totalCreditsUsed: totalCredits,
     })
+
+    // --- App monetization: credit creator earnings ---
+    if (ctx.isAppRun && appVersionId && hasCredits()) {
+      try {
+        const { data: appVersion } = await supabase
+          .from("published_apps")
+          .select("creator_id, monetization_enabled, monetization_flat_fee, monetization_percent")
+          .eq("id", appVersionId)
+          .single()
+
+        if (
+          appVersion?.monetization_enabled &&
+          appVersion.creator_id !== ctx.userId &&
+          totalCredits > 0
+        ) {
+          const flatFee = appVersion.monetization_flat_fee ?? 0
+          const percent = appVersion.monetization_percent ?? 0
+          const markup = calculateMonetizationMarkup(totalCredits, flatFee, percent)
+          const percentFee = markup - flatFee
+
+          if (markup > 0) {
+            // Look up the app_run row for this execution
+            const { data: appRun } = await supabase
+              .from("app_runs")
+              .select("id")
+              .eq("execution_id", executionId)
+              .single()
+
+            if (appRun) {
+              await supabase.rpc("process_app_monetization", {
+                p_runner_id: ctx.userId,
+                p_creator_id: appVersion.creator_id,
+                p_markup_amount: markup,
+                p_app_id: appVersionId,
+                p_run_id: appRun.id,
+                p_base_cost: totalCredits,
+                p_flat_fee: flatFee,
+                p_percent_fee: percentFee,
+              })
+              console.log(`[monetization] Credited ${markup} CR to creator ${appVersion.creator_id} from runner ${ctx.userId}`)
+            }
+          }
+        }
+      } catch (err) {
+        // Best-effort: earnings failure must not fail the completed execution
+        console.error("[monetization] Failed to process app earnings:", err)
+      }
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[orchestrator] Execution ${executionId} error:`, message)

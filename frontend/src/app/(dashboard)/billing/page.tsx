@@ -23,14 +23,67 @@ import { useSubscription, useTransactions, useStorageProfile, useManageSubscript
 import { CreditTopup } from "@/components/credits/CreditTopup"
 import { PRICING_TIERS, getBillingCycleFromPriceId } from "@/lib/pricing-data"
 import { toast } from "sonner"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { queryKeys } from "@/lib/query-keys"
+import { getUserEarnings } from "@/lib/api"
+import { Card } from "@/components/ui/card"
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+}
+
+function EarningsSection() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["user-earnings"],
+    queryFn: () => getUserEarnings({ limit: 10 }),
+    staleTime: 30_000,
+  })
+
+  if (isLoading || !data || data.totalLifetime === 0) return null
+
+  return (
+    <Card className="p-6">
+      <h3 className="text-sm font-medium mb-4">App Earnings</h3>
+      <div className="grid grid-cols-3 gap-4 mb-4">
+        <div>
+          <p className="text-xs text-muted-foreground">Total Lifetime</p>
+          <p className="text-lg font-semibold">{data.totalLifetime} CR</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">This Month</p>
+          <p className="text-lg font-semibold">{data.thisMonth} CR</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Last 30 Days</p>
+          <p className="text-lg font-semibold">{data.last30Days} CR</p>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground mb-4">
+        Earnings are added to your top-up balance and never expire.
+      </p>
+      {data.items.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-xs font-medium text-muted-foreground">Recent Earnings</h4>
+          <div className="divide-y">
+            {data.items.map((item) => (
+              <div key={item.id} className="flex items-center justify-between py-2 text-sm">
+                <div>
+                  <span className="font-medium">{item.appName}</span>
+                  <span className="text-muted-foreground ml-2 text-xs">
+                    {new Date(item.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <span className="text-green-600 font-medium">+{item.totalEarned} CR</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
+  )
 }
 
 export default function BillingPage() {
@@ -273,6 +326,9 @@ export default function BillingPage() {
 
         {user && <CreditTopup />}
       </section>
+
+      {/* App Earnings */}
+      <EarningsSection />
 
       {/* Storage */}
       {(() => {

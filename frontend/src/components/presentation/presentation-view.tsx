@@ -46,6 +46,7 @@ import { EXECUTABLE_TYPES, estimateNodeCredits, isExecutableNode, getFanOutMulti
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits"
 import { isExpandedClone } from "@nodaro-shared/clone-utils"
+import { calculateMonetizedCost } from "@nodaro-shared/monetization"
 import { shareWorkflow } from "@/lib/api"
 import { createClient } from "@/lib/supabase"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
@@ -266,6 +267,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const appRunnerInsufficientCredits = useAppRunnerStore((s) => s.insufficientCredits)
   const appSupportsRemix = useAppRunnerStore((s) => s.app?.supportsRemix ?? false)
   const combinedProgress = useAppRunnerStore((s) => s.combinedProgress)
+  const monetizationEnabled = useAppRunnerStore((s) => s.app?.monetizationEnabled ?? false)
+  const monetizationFlatFee = useAppRunnerStore((s) => s.app?.monetizationFlatFee ?? 0)
+  const monetizationPercent = useAppRunnerStore((s) => s.app?.monetizationPercent ?? 0)
   const { data: userCredits } = useUserCredits(user?.id)
 
   const handleViewModeChange = useCallback((newMode: PresentationViewMode) => {
@@ -358,7 +362,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     computeEstimate()
   }, [nodes, edges, inputValues])
 
-  const estimatedCost = dynamicEstimatedCost || (isFullscreen ? presEstimatedCost : 0)
+  const rawEstimatedCost = dynamicEstimatedCost || (isFullscreen ? presEstimatedCost : 0)
+  const estimatedCost = useMemo(() => {
+    if (!rawEstimatedCost || !isAppRunner || !monetizationEnabled) return rawEstimatedCost
+    return calculateMonetizedCost(rawEstimatedCost, monetizationFlatFee ?? 0, monetizationPercent ?? 0)
+  }, [rawEstimatedCost, isAppRunner, monetizationEnabled, monetizationFlatFee, monetizationPercent])
 
   // Pre-check: does the user need more credits to run this app?
   const needsMoreCredits = useMemo(() => {

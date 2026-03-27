@@ -14,10 +14,13 @@ import { Button } from "@/components/ui/button"
 import {
   getAppAnalytics,
   getAppAnalyticsRuns,
+  getAppEarnings,
   type AnalyticsPeriod,
   type DailyAnalytics,
   type AnalyticsRun,
 } from "@/lib/api"
+import { Card } from "@/components/ui/card"
+import { hasCredits } from "@/lib/edition"
 
 export default function AppAnalyticsPage() {
   const { appId } = useParams<{ appId: string }>()
@@ -34,6 +37,12 @@ export default function AppAnalyticsPage() {
     queryKey: ["app-analytics-runs", appId, runsCursor],
     queryFn: () => getAppAnalyticsRuns(appId!, runsCursor),
     enabled: !!appId,
+  })
+
+  const { data: earnings } = useQuery({
+    queryKey: ["app-earnings", appId],
+    queryFn: () => getAppEarnings(appId!),
+    enabled: !!appId && hasCredits(),
   })
 
   if (isLoading) {
@@ -86,6 +95,24 @@ export default function AppAnalyticsPage() {
           </button>
         ))}
       </div>
+
+      {/* Earnings cards */}
+      {hasCredits() && earnings && earnings.totalEarned > 0 && (
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <Card className="p-4">
+            <p className="text-xs text-muted-foreground">Total Earned</p>
+            <p className="text-lg font-semibold">{earnings.totalEarned} CR</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-xs text-muted-foreground">Paid Runs</p>
+            <p className="text-lg font-semibold">{earnings.paidRuns}</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-xs text-muted-foreground">This Month</p>
+            <p className="text-lg font-semibold">{earnings.thisMonth} CR</p>
+          </Card>
+        </div>
+      )}
 
       {/* Stats cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">

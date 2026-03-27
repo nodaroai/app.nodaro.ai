@@ -3799,6 +3799,7 @@ export interface PublishedApp {
   isEmbeddable: boolean
   allowedOrigins: string[]
   estimatedCredits: number
+  baseEstimatedCredits?: number
   thumbnailNodeId: string | null
   category: string
   outputTypes: string[]
@@ -3812,6 +3813,9 @@ export interface PublishedApp {
   createdAt: string
   runCount?: number
   versions?: AppVersion[]
+  monetizationEnabled?: boolean
+  monetizationFlatFee?: number
+  monetizationPercent?: number
 }
 
 /** Slim card type returned by /v1/apps/browse (no snapshot data) */
@@ -3924,6 +3928,9 @@ export async function updateApp(appId: string, data: {
   previewMediaUrl?: string | null
   previewMediaType?: string | null
   supportsRemix?: boolean
+  monetizationEnabled?: boolean
+  monetizationFlatFee?: number
+  monetizationPercent?: number
 }): Promise<PublishedApp> {
   return apiRequest<PublishedApp>(
     `/v1/apps/${encodeURIComponent(appId)}`,
@@ -4157,6 +4164,59 @@ export async function getAppAnalyticsRuns(appId: string, cursor?: string): Promi
     `/v1/apps/${encodeURIComponent(appId)}/analytics/runs${qs ? `?${qs}` : ""}`,
     "Failed to load analytics runs",
   )
+}
+
+// ---------------------------------------------------------------------------
+// Monetization Defaults & Earnings
+// ---------------------------------------------------------------------------
+
+/** Get user's default monetization fees. */
+export async function getMonetizationDefaults(): Promise<{ flatFee: number; percent: number }> {
+  return apiRequest("/v1/user/monetization-defaults", "Failed to get monetization defaults")
+}
+
+/** Update user's default monetization fees. */
+export async function updateMonetizationDefaults(data: { flatFee: number; percent: number }): Promise<{ flatFee: number; percent: number }> {
+  return apiRequest("/v1/user/monetization-defaults", "Failed to update monetization defaults", {
+    method: "PUT",
+    body: data,
+  })
+}
+
+/** Get paginated earnings for the current user. */
+export async function getUserEarnings(params?: { cursor?: string; limit?: number }): Promise<{
+  totalLifetime: number
+  thisMonth: number
+  last30Days: number
+  items: Array<{
+    id: string
+    appId: string
+    appName: string
+    runId: string
+    runnerId: string
+    baseCost: number
+    flatFee: number
+    percentFee: number
+    totalEarned: number
+    totalCharged: number
+    createdAt: string
+  }>
+  nextCursor: string | null
+}> {
+  const query = new URLSearchParams()
+  if (params?.cursor) query.set("cursor", params.cursor)
+  if (params?.limit) query.set("limit", String(params.limit))
+  const qs = query.toString()
+  return apiRequest(`/v1/user/earnings${qs ? `?${qs}` : ""}`, "Failed to get earnings")
+}
+
+/** Get earnings summary for a specific published app. */
+export async function getAppEarnings(appId: string): Promise<{
+  totalEarned: number
+  paidRuns: number
+  thisMonth: number
+}> {
+  return apiRequest(`/v1/apps/${encodeURIComponent(appId)}/earnings`, "Failed to get app earnings")
 }
 
 // ---------- QA Check ----------
