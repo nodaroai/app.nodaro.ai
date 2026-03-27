@@ -196,7 +196,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
           modelId: llmModel,
           system: systemPrompt,
           messages: [{ role: "user", content: messageContent }],
-          maxTokens: 2048,
+          maxTokens: 4096,
           temperature: 0.7,
         })
 
