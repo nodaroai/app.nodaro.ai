@@ -543,18 +543,29 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       const item = items.find((i) => getItemSortId(i) === sortId)
       if (!item) return
       const filtered = items.filter((i) => getItemSortId(i) !== sortId)
-      updatePresentationSettings({ [key]: filtered })
-      // If removing a node item and no other items reference this node, also remove from presentation
-      if (item.type === "node") {
+      // Check if this was the last item referencing the node
+      if (item.type === "node" || item.type === "field" || item.type === "output") {
         const nodeId = item.nodeId
         const hasOtherItems = filtered.some((i) => i.type !== "richtext" && i.type !== "group" && i.nodeId === nodeId)
         if (!hasOtherItems) {
-          const flag = section === "inputs" ? "presentationInput" : "presentationOutput"
-          updateNodeData(nodeId, { [flag]: false })
+          if (item.type === "node") {
+            // Removing the whole node — clear the presentation flag
+            const flag = section === "inputs" ? "presentationInput" : "presentationOutput"
+            updateNodeData(nodeId, { [flag]: false })
+          } else {
+            // Removing the last field/output sub-item — re-add as a whole-node item
+            // so the node stays visible (matches handleFieldToggle/handleOutputToggle behavior)
+            const nodeData = nodes.find((n) => n.id === nodeId)?.data as Record<string, unknown> | undefined
+            const flag = section === "inputs" ? "presentationInput" : "presentationOutput"
+            if (nodeData?.[flag]) {
+              filtered.push({ type: "node" as const, nodeId })
+            }
+          }
         }
       }
+      updatePresentationSettings({ [key]: filtered })
     },
-    [settings, inputItems, outputItems, updateNodeData, updatePresentationSettings],
+    [settings, inputItems, outputItems, nodes, updateNodeData, updatePresentationSettings],
   )
 
   // Remix: create a workflow from the app's snapshot and open in a new tab

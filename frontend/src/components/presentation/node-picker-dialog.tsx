@@ -411,6 +411,13 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
 
   const handleToggle = (nodeId: string, checked: boolean) => {
     const field = section === "inputs" ? "presentationInput" : "presentationOutput"
+    const itemsKey = section === "inputs" ? "inputItems" : "outputItems"
+    const orderKey = section === "inputs" ? "inputOrder" : "outputOrder"
+    // Use resolved items (includes legacy migration from outputOrder/inputOrder)
+    // so that toggles stay in sync with what the presentation view renders.
+    const resolvedItems = presentationSettings[itemsKey]
+      ?? migrateToItems(presentationSettings[orderKey])
+      ?? []
     if (!checked) {
       updateNodeData(nodeId, { [field]: false, presentationReadOnly: false })
       // Collapse and clear any field/output items for this node
@@ -419,26 +426,22 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
         next.delete(nodeId)
         return next
       })
-      const itemsKey = section === "inputs" ? "inputItems" : "outputItems"
-      const currentItems = presentationSettings[itemsKey] ?? []
-      const filtered = currentItems.filter(
+      const filtered = resolvedItems.filter(
         (item) => !("nodeId" in item && item.nodeId === nodeId)
       )
-      if (filtered.length !== currentItems.length) {
+      if (filtered.length !== resolvedItems.length) {
         updatePresentationSettings({ [itemsKey]: filtered })
       }
     } else {
       updateNodeData(nodeId, { [field]: true })
       // When items-based rendering is active, also add a node item so it appears
-      const itemsKey = section === "inputs" ? "inputItems" : "outputItems"
-      const currentItems = presentationSettings[itemsKey] ?? []
-      if (currentItems.length > 0) {
-        const alreadyPresent = currentItems.some(
+      if (resolvedItems.length > 0) {
+        const alreadyPresent = resolvedItems.some(
           (item) => item.type === "node" && item.nodeId === nodeId
         )
         if (!alreadyPresent) {
           updatePresentationSettings({
-            [itemsKey]: [...currentItems, { type: "node" as const, nodeId }],
+            [itemsKey]: [...resolvedItems, { type: "node" as const, nodeId }],
           })
         }
       }
