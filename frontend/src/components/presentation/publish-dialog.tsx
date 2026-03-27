@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react"
-import { Rocket, Copy, Check, Loader2, ExternalLink, ChevronDown, ChevronRight, X, Store } from "lucide-react"
+import { Rocket, Copy, Check, Loader2, ExternalLink, ChevronDown, ChevronRight, X, Store, AlertTriangle } from "lucide-react"
 import type { WorkflowNode } from "@/types/nodes"
 import { getNodeLabel } from "@/lib/presentation-utils"
 import { Button } from "@/components/ui/button"
@@ -25,6 +25,7 @@ import { getNodeResult, getOutputType } from "@/lib/presentation-utils"
 import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-workflow-store"
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
 import { APP_CATEGORIES, OUTPUT_TYPES } from "@/lib/app-categories"
+import { INPUT_FIELD_MAP, OUTPUT_FIELD_MAP } from "@nodaro-shared/component-types"
 
 interface PublishDialogProps {
   workflowId: string
@@ -43,6 +44,15 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
   const [publishCopied, setPublishCopied] = useState(false)
   const [thumbnailNodeId, setThumbnailNodeId] = useState<string>("__none__")
   const [loadingExisting, setLoadingExisting] = useState(false)
+
+  // Publish type (app vs component)
+  const [publishType, setPublishType] = useState<"app" | "component">("app")
+
+  // Component handle configuration
+  const [componentHandles, setComponentHandles] = useState<{
+    inputs: Array<{ id: string; name: string; type: string; required: boolean; fieldKey: string }>
+    outputs: Array<{ id: string; name: string; type: string; required: boolean; mediaPreview: boolean; fieldKey: string }>
+  }>({ inputs: [], outputs: [] })
 
   // Marketplace settings
   const [showMarketplace, setShowMarketplace] = useState(false)
@@ -81,6 +91,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
       setOutputTypes(app.outputTypes || [])
       setTags(app.tags || [])
       setSupportsRemix(app.supportsRemix)
+      setPublishType(app.publishType || "app")
       if (app.isListed || app.category !== "other" || (app.tags && app.tags.length > 0)) {
         setShowMarketplace(true)
       }
@@ -88,6 +99,49 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     })
     return () => { cancelled = true }
   }, [open, workflowId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Derive component handles from presentation-flagged nodes
+  useEffect(() => {
+    if (publishType !== "component" || !nodes) {
+      setComponentHandles({ inputs: [], outputs: [] })
+      return
+    }
+
+    const inputNodes = nodes.filter((n) => (n.data as Record<string, unknown>)?.presentationInput)
+    const outputNodes = nodes.filter((n) => (n.data as Record<string, unknown>)?.presentationOutput)
+
+    const inputs = inputNodes.map((n) => {
+      const nodeType = n.type || ""
+      const outputType = getOutputType(nodeType)
+      // For input nodes, determine type from their node type category
+      const handleType = outputType !== "data" ? outputType : "text"
+      const fieldKey = INPUT_FIELD_MAP[nodeType] || "text"
+      return {
+        id: n.id,
+        name: getNodeLabel(n),
+        type: handleType,
+        required: true,
+        fieldKey,
+      }
+    })
+
+    const outputs = outputNodes.map((n, idx) => {
+      const nodeType = n.type || ""
+      const outputType = getOutputType(nodeType)
+      const handleType = outputType !== "data" ? outputType : "text"
+      const fieldKey = OUTPUT_FIELD_MAP[handleType] || "text"
+      return {
+        id: n.id,
+        name: getNodeLabel(n),
+        type: handleType,
+        required: true,
+        mediaPreview: idx === 0, // First output gets mediaPreview by default
+        fieldKey,
+      }
+    })
+
+    setComponentHandles({ inputs, outputs })
+  }, [publishType, nodes])
 
   const handlePublish = useCallback(async () => {
     if (!publishName.trim()) {
@@ -141,15 +195,22 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
         supportsRemix: supportsRemix || undefined,
         previewMediaUrl,
         previewMediaType,
+        // Component fields
+        publishType,
+        componentMetadata: publishType === "component" ? {
+          inputs: componentHandles.inputs.map((h) => ({ ...h, type: h.type as "image" | "video" | "audio" | "text" })),
+          outputs: componentHandles.outputs.map((h) => ({ ...h, type: h.type as "image" | "video" | "audio" | "text" })),
+          exposedSettings: [],
+        } : undefined,
       })
       setPublishedSlug(result.slug)
-      toast.success("App published!")
+      toast.success(publishType === "component" ? "Component published!" : "App published!")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to publish")
     } finally {
       setPublishing(false)
     }
-  }, [workflowId, publishName, publishSlug, publishDesc, thumbnailNodeId, isListed, category, outputTypes, tags, supportsRemix])
+  }, [workflowId, publishName, publishSlug, publishDesc, thumbnailNodeId, isListed, category, outputTypes, tags, supportsRemix, publishType, componentHandles])
 
   const publishedUrl = publishedSlug
     ? `${window.location.origin}/app/${publishedSlug}`
@@ -236,12 +297,14 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
       </DialogTrigger>
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Publish App</DialogTitle>
+          <DialogTitle>Publish {publishType === "component" ? "Component" : "App"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Publish as a standalone mini-app with its own URL, persistent run history, and versioning.
+            {publishType === "component"
+              ? "Publish as a reusable component that can be used inside other workflows."
+              : "Publish as a standalone mini-app with its own URL, persistent run history, and versioning."}
           </p>
 
           {loadingExisting ? (
@@ -267,13 +330,35 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                 }}
               >
                 <ExternalLink className="h-4 w-4 mr-1" />
-                Open App
+                Open {publishType === "component" ? "Component" : "App"}
               </Button>
             </>
           ) : (
             <>
+              {/* Publish type selector */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className={`flex-1 rounded-lg border p-2 text-sm font-medium transition-colors ${
+                    publishType === "app" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
+                  }`}
+                  onClick={() => setPublishType("app")}
+                >
+                  App
+                </button>
+                <button
+                  type="button"
+                  className={`flex-1 rounded-lg border p-2 text-sm font-medium transition-colors ${
+                    publishType === "component" ? "border-purple-400 bg-purple-400/10 text-purple-400" : "border-border text-muted-foreground"
+                  }`}
+                  onClick={() => setPublishType("component")}
+                >
+                  Component
+                </button>
+              </div>
+
               <div>
-                <label className="text-sm font-medium mb-1 block">App Name *</label>
+                <label className="text-sm font-medium mb-1 block">{publishType === "component" ? "Component" : "App"} Name *</label>
                 <Input
                   value={publishName}
                   onChange={(e) => setPublishName(e.target.value)}
@@ -301,6 +386,97 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                   placeholder="What does this app do?"
                 />
               </div>
+
+              {/* Component handle configuration */}
+              {publishType === "component" && (
+                <div className="space-y-3 border border-border rounded-lg p-3">
+                  <h3 className="text-sm font-medium text-foreground">Component Handles</h3>
+
+                  {componentHandles.inputs.length === 0 && componentHandles.outputs.length === 0 && (
+                    <div className="flex items-start gap-2 text-xs text-amber-500 bg-amber-500/10 rounded-md p-2.5">
+                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>No presentation inputs or outputs flagged. Mark nodes as presentation I/O in the workflow editor to define component handles.</span>
+                    </div>
+                  )}
+
+                  {componentHandles.inputs.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Inputs</p>
+                      <div className="space-y-2">
+                        {componentHandles.inputs.map((handle) => (
+                          <div key={handle.id} className="flex items-center gap-2">
+                            <Input
+                              value={handle.name}
+                              onChange={(e) => {
+                                setComponentHandles((prev) => ({
+                                  ...prev,
+                                  inputs: prev.inputs.map((h) =>
+                                    h.id === handle.id ? { ...h, name: e.target.value } : h,
+                                  ),
+                                }))
+                              }}
+                              className="h-8 text-xs flex-1"
+                              placeholder="Handle name"
+                            />
+                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+                              {handle.type}
+                            </span>
+                            {handle.required && (
+                              <span className="text-[11px] text-amber-500 shrink-0">req</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {componentHandles.outputs.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Outputs</p>
+                      <div className="space-y-2">
+                        {componentHandles.outputs.map((handle) => (
+                          <div key={handle.id} className="flex items-center gap-2">
+                            <Input
+                              value={handle.name}
+                              onChange={(e) => {
+                                setComponentHandles((prev) => ({
+                                  ...prev,
+                                  outputs: prev.outputs.map((h) =>
+                                    h.id === handle.id ? { ...h, name: e.target.value } : h,
+                                  ),
+                                }))
+                              }}
+                              className="h-8 text-xs flex-1"
+                              placeholder="Handle name"
+                            />
+                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+                              {handle.type}
+                            </span>
+                            <label className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="mediaPreview"
+                                checked={handle.mediaPreview}
+                                onChange={() => {
+                                  setComponentHandles((prev) => ({
+                                    ...prev,
+                                    outputs: prev.outputs.map((h) => ({
+                                      ...h,
+                                      mediaPreview: h.id === handle.id,
+                                    })),
+                                  }))
+                                }}
+                                className="h-3 w-3"
+                              />
+                              preview
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Marketplace Settings (collapsible) */}
               <div className="border border-border rounded-lg">
@@ -554,7 +730,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                 ) : (
                   <Rocket className="h-4 w-4 mr-2" />
                 )}
-                Publish App
+                Publish {publishType === "component" ? "Component" : "App"}
               </Button>
             </>
           )}

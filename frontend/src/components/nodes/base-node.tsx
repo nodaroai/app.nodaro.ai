@@ -21,7 +21,7 @@ interface BaseNodeProps {
   readonly id: string
   readonly label: string
   readonly icon: ReactNode
-  readonly category: "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "location" | "script" | "i2v"
+  readonly category: "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "location" | "script" | "i2v" | "component"
   readonly credits?: number
   readonly handles: ReadonlyArray<HandleConfig>
   readonly children?: ReactNode
@@ -54,6 +54,7 @@ const CATEGORY_STYLES: Record<string, string> = {
   location: "bg-white border-[#E2E8F0] dark:border-[#22D3EE] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   script: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   i2v: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  component: "bg-white border-[#E2E8F0] dark:border-[#A855F7] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
 }
 
 // Light mode: light gray header with colored icon, Dark mode: colored headers
@@ -71,6 +72,7 @@ const CATEGORY_HEADER: Record<string, string> = {
   location: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#06B6D4] dark:bg-[#22D3EE] dark:text-white dark:border-t-0",
   script: "bg-[#282828] text-white dark:bg-[#ff0073] dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
   i2v: "bg-[#282828] text-white dark:bg-[#ff0073] dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
+  component: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#A855F7] dark:bg-[#A855F7] dark:text-white dark:border-t-0",
 }
 
 // Icon colors for light mode (category-specific)
@@ -87,6 +89,7 @@ const CATEGORY_ICON_COLOR: Record<string, string> = {
   location: "text-[#06B6D4] dark:text-white",
   script: "text-white",
   i2v: "text-white",
+  component: "text-[#A855F7] dark:text-white",
 }
 
 function BaseNodeComponent({
@@ -226,6 +229,7 @@ function BaseNodeComponent({
           isEditing && category === "location" && "dark:shadow-[0_0_20px_rgba(34,211,238,0.4)]",
           isEditing && category === "object" && "dark:shadow-[0_0_20px_rgba(52,211,153,0.4)]",
           isEditing && category === "output" && "dark:shadow-[0_0_20px_rgba(34,197,94,0.4)]",
+          isEditing && category === "component" && "dark:shadow-[0_0_20px_rgba(168,85,247,0.4)]",
           isRunning && "node-running",
           isNew && !isRunning && "node-new-pulse",
           isSkipped && "opacity-40 border-dashed",
@@ -267,6 +271,10 @@ function BaseNodeComponent({
             </span>
           ) : category === "object" ? (
             <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+              {icon}
+            </span>
+          ) : category === "component" ? (
+            <span className="w-6 h-6 rounded-md bg-[#A855F7]/10 dark:bg-white/20 flex items-center justify-center text-[#A855F7] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
               {icon}
             </span>
           ) : (category === "ai" || category === "scene" || category === "script" || category === "i2v") ? (

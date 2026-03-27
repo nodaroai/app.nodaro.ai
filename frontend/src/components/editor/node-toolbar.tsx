@@ -7,13 +7,14 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch,
+  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useReactFlow } from "@xyflow/react"
 import { cn } from "@/lib/utils"
 const UnifiedAssetLibraryButton = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryButton })))
+const ComponentBrowserDialog = lazy(() => import("./component-browser-dialog").then(m => ({ default: m.ComponentBrowserDialog })))
 import type { SceneNodeType } from "@/types/nodes"
 import { useAuth } from "@/hooks/use-auth"
 
@@ -149,6 +150,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "sub-workflow-input", label: "Sub-Workflow Input", icon: <LogIn className="h-4 w-4" />, category: "Workflow" },
   { type: "sub-workflow-output", label: "Sub-Workflow Output", icon: <LogOut className="h-4 w-4" />, category: "Workflow" },
   { type: "sub-workflow", label: "Sub-Workflow", icon: <Workflow className="h-4 w-4" />, category: "Workflow" },
+  { type: "component" as SceneNodeType, label: "Component", icon: <Puzzle className="h-4 w-4" />, category: "Workflow" },
   // Utility
   { type: "teleport-send", label: "Teleport Send", icon: <Send className="h-4 w-4" />, category: "Processing", group: "Text" },
   { type: "teleport-receive", label: "Teleport Receive", icon: <Download className="h-4 w-4" />, category: "Processing", group: "Text" },
@@ -246,23 +248,41 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
   const addNode = useWorkflowStore((s) => s.addNode)
   const { getViewport } = useReactFlow()
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [componentBrowserOpen, setComponentBrowserOpen] = useState(false)
+
+  const getViewportCenterPosition = useCallback(() => {
+    const el = document.querySelector('.react-flow')
+    const rect = el?.getBoundingClientRect()
+    const viewportWidth = rect?.width ?? window.innerWidth
+    const viewportHeight = rect?.height ?? window.innerHeight
+    const { x, y, zoom } = getViewport()
+    const z = zoom || 1
+    return {
+      x: (-x + viewportWidth / 2) / z,
+      y: (-y + viewportHeight / 2) / z,
+    }
+  }, [getViewport])
 
   const handleAddNode = useCallback(
     (type: SceneNodeType) => {
-      const el = document.querySelector('.react-flow')
-      const rect = el?.getBoundingClientRect()
-      const viewportWidth = rect?.width ?? window.innerWidth
-      const viewportHeight = rect?.height ?? window.innerHeight
-      const { x, y, zoom } = getViewport()
-      const z = zoom || 1
-      const position = {
-        x: (-x + viewportWidth / 2) / z,
-        y: (-y + viewportHeight / 2) / z,
+      if (type === "component") {
+        setComponentBrowserOpen(true)
+        return
       }
+      const position = getViewportCenterPosition()
       addNode(type, position)
       setSheetOpen(false)
     },
-    [addNode, getViewport],
+    [addNode, getViewportCenterPosition],
+  )
+
+  const handleComponentSelect = useCallback(
+    (component: Record<string, unknown>) => {
+      const position = getViewportCenterPosition()
+      addNode("component", position, component)
+      setSheetOpen(false)
+    },
+    [addNode, getViewportCenterPosition],
   )
 
   // Close sheet on Escape
@@ -326,6 +346,15 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
           </div>
         </div>
       )}
+
+      {/* Component Browser Dialog */}
+      <Suspense fallback={null}>
+        <ComponentBrowserDialog
+          open={componentBrowserOpen}
+          onOpenChange={setComponentBrowserOpen}
+          onSelect={handleComponentSelect}
+        />
+      </Suspense>
     </>
   )
 }

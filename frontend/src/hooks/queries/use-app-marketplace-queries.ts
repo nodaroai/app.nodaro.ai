@@ -11,6 +11,7 @@ export interface AppBrowseParams {
   sort?: "popular" | "newest" | "most-favorited"
   creatorId?: string
   favoritesOnly?: boolean
+  publishType?: "app" | "component"
 }
 
 export function useAppBrowseInfinite(params: AppBrowseParams) {
@@ -22,6 +23,7 @@ export function useAppBrowseInfinite(params: AppBrowseParams) {
     params.sort ?? "popular",
     params.creatorId ?? "",
     params.favoritesOnly ? "fav" : "",
+    params.publishType ?? "",
   ].filter(Boolean).join(":")
 
   return useInfiniteQuery({

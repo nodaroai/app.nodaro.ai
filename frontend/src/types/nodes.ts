@@ -8,6 +8,7 @@ import type {
   SunoModel, VoiceDesignModel,
 } from "@nodaro-shared/model-constants"
 import type { ExposableField, ExposableOutput } from "@nodaro-shared/presentation-types"
+import type { ComponentMetadata } from "@nodaro-shared/component-types"
 import { IMAGE_STYLE_PRESETS } from "@/components/editor/config-panels/model-options"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "location" | "utility"
@@ -2146,6 +2147,24 @@ export type SubWorkflowData = {
   subWorkflowProgress?: { currentNode: string; completed: number; total: number }
 }
 
+export type ComponentNodeData = {
+  [key: string]: unknown
+  label: string
+  appSlug: string
+  appVersionId: string
+  pinnedVersion: number
+  componentMetadata: ComponentMetadata
+  exposedSettings: Record<string, unknown>
+  outputResults?: Record<string, string>
+  creatorName: string
+  creatorId: string
+  estimatedCredits: number
+  executionStatus: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+}
+
 // --- Webhook Parameter Type (shared between trigger + output) ---
 
 export type WebhookParam = {
@@ -2284,6 +2303,7 @@ export type SceneNodeData =
   | SubWorkflowInputData
   | SubWorkflowOutputData
   | SubWorkflowData
+  | ComponentNodeData
   | WebhookTriggerData
   | ScheduleTriggerData
   | TelegramTriggerData
@@ -2397,6 +2417,7 @@ export type SceneNodeType =
   | "facebook-post"
   | "telegram-post"
   | "telegram-trigger"
+  | "component"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
 export type WorkflowEdge = Edge
@@ -4048,6 +4069,27 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Telegram Trigger",
       messageTypeFilters: ["text", "photo", "video", "audio", "document"],
     } as TelegramTriggerData,
+  },
+  // Components
+  {
+    type: "component",
+    label: "Component",
+    category: "utility" as const,
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: {
+      label: "Component",
+      appSlug: "",
+      appVersionId: "",
+      pinnedVersion: 0,
+      componentMetadata: { inputs: [], outputs: [], exposedSettings: [] },
+      exposedSettings: {},
+      creatorName: "",
+      creatorId: "",
+      estimatedCredits: 0,
+      executionStatus: "idle",
+    } as ComponentNodeData,
   },
 ]
 

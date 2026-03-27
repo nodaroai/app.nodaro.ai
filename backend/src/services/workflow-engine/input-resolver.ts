@@ -981,8 +981,8 @@ function routeOutput(
     return
   }
 
-  // --- Sub-workflow output routing ---
-  if (srcType === "sub-workflow" || srcType === "sub-workflow-input") {
+  // --- Sub-workflow / component output routing ---
+  if (srcType === "sub-workflow" || srcType === "sub-workflow-input" || srcType === "component") {
     const routeSnapshot = src.data.routeSnapshot as {
       outputPorts?: Array<{ id: string; mediaType: string }>
     } | undefined

@@ -112,7 +112,7 @@ export async function monetizationRoutes(app: FastifyInstance) {
     // Paginated earnings log
     let query = supabase
       .from("app_earnings")
-      .select("id, app_id, run_id, runner_id, base_cost, flat_fee, percent_fee, total_earned, total_charged, created_at, published_apps!app_id(name)")
+      .select("id, app_id, run_id, runner_id, base_cost, flat_fee, percent_fee, total_earned, total_charged, created_at, published_apps!app_id(name, publish_type)")
       .eq("creator_id", req.userId)
       .order("created_at", { ascending: false })
       .limit(limit + 1)
@@ -135,6 +135,7 @@ export async function monetizationRoutes(app: FastifyInstance) {
       id: r.id,
       appId: r.app_id,
       appName: (r.published_apps as Record<string, unknown> | null)?.name ?? "Unknown",
+      publishType: (r.published_apps as Record<string, unknown> | null)?.publish_type ?? "app",
       runId: r.run_id,
       runnerId: r.runner_id,
       baseCost: r.base_cost,

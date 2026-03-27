@@ -633,11 +633,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [addNodeAtCenter, setAddNodeAtCenter] = useState(false)
 
   const handleAddNode = useCallback(
-    (type: SceneNodeType) => {
+    (type: SceneNodeType, initialData?: Record<string, unknown>) => {
       const position = addNodeAtCenter || !addNodePopupPosition
         ? screenToFlowPosition(getViewportCenter())
         : screenToFlowPosition(addNodePopupPosition)
-      addNode(type, position)
+      addNode(type, position, initialData)
       setAddNodePopupOpen(false)
       setAddNodePopupPosition(undefined)
       setAddNodeAtCenter(false)

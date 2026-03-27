@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from "react";
 import {
   Type,
   List,
@@ -69,6 +69,7 @@ import {
   UserRound,
   Send,
   GitBranch,
+  Puzzle,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -76,6 +77,8 @@ import type { SceneNodeType } from "@/types/nodes";
 import type { ConnectionContext, NodeOption } from "@/lib/node-compatibility";
 import { getCompatibleNodes, resolveTargetHandle } from "@/lib/node-compatibility";
 import { useAuth } from "@/hooks/use-auth";
+
+const ComponentBrowserDialog = lazy(() => import("./component-browser-dialog").then(m => ({ default: m.ComponentBrowserDialog })));
 
 const EMPTY_SET = new Set<string>();
 
@@ -782,6 +785,12 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Workflow className="h-4 w-4" />,
     category: "Workflow",
   },
+  {
+    type: "component" as SceneNodeType,
+    label: "Component",
+    icon: <Puzzle className="h-4 w-4" />,
+    category: "Workflow",
+  },
   // Utility
   {
     type: "teleport-send",
@@ -878,10 +887,10 @@ const CATEGORY_COLORS: Record<string, string> = {
 interface AddNodePopupProps {
   readonly open: boolean;
   readonly onClose: () => void;
-  readonly onAddNode: (type: SceneNodeType) => void;
+  readonly onAddNode: (type: SceneNodeType, initialData?: Record<string, unknown>) => void;
   readonly position?: { x: number; y: number };
   readonly connectionContext?: ConnectionContext | null;
-  readonly storeAddNode?: (type: SceneNodeType, position: { x: number; y: number }) => string | undefined;
+  readonly storeAddNode?: (type: SceneNodeType, position: { x: number; y: number }, initialData?: Record<string, unknown>) => string | undefined;
   readonly storeOnConnect?: (connection: Connection) => void;
 }
 
@@ -898,6 +907,7 @@ export function AddNodePopup({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [componentBrowserOpen, setComponentBrowserOpen] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -916,6 +926,10 @@ export function AddNodePopup({
   // Handle node selection — auto-connects edge when connectionContext is present
   const handleNodeSelect = useCallback(
     (type: SceneNodeType) => {
+      if (type === "component") {
+        setComponentBrowserOpen(true);
+        return;
+      }
       if (connectionContext && storeAddNode && storeOnConnect) {
         const newNodeId = storeAddNode(type, connectionContext.dropPosition);
         if (!newNodeId) {
@@ -945,6 +959,15 @@ export function AddNodePopup({
       }
     },
     [connectionContext, storeAddNode, storeOnConnect, onAddNode, onClose],
+  );
+
+  // Handle component selected from browser dialog
+  const handleComponentSelect = useCallback(
+    (component: Record<string, unknown>) => {
+      onAddNode("component", component);
+      onClose();
+    },
+    [onAddNode, onClose],
   );
 
   // Effective node pool: filtered by compatibility when edge-dropping, otherwise all visible
@@ -1065,14 +1088,15 @@ export function AddNodePopup({
     setHighlightedIndex(0);
   }, [searchQuery, selectedCategory]);
 
-  if (!open) return null;
+  if (!open && !componentBrowserOpen) return null;
 
   const popupStyle = position
     ? { left: position.x, top: position.y }
     : { left: 70, top: "50%", transform: "translateY(-50%)" };
 
   return (
-    <div
+    <>
+    {open && <div
       ref={popupRef}
       className={cn(
         "fixed z-[100] w-72",
@@ -1361,6 +1385,16 @@ export function AddNodePopup({
           </span>
         </div>
       </div>
-    </div>
+    </div>}
+
+    {/* Component Browser Dialog */}
+    <Suspense fallback={null}>
+      <ComponentBrowserDialog
+        open={componentBrowserOpen}
+        onOpenChange={setComponentBrowserOpen}
+        onSelect={handleComponentSelect}
+      />
+    </Suspense>
+    </>
   );
 }

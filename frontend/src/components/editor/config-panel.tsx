@@ -124,6 +124,7 @@ import {
   SubWorkflowInputConfig,
   SubWorkflowOutputConfig,
   SubWorkflowConfig,
+  ComponentConfig,
   WebhookTriggerConfig,
   ScheduleTriggerConfig,
   TelegramTriggerConfig,
@@ -221,6 +222,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "sub-workflow-input": "Sub-Workflow Input",
   "sub-workflow-output": "Sub-Workflow Output",
   "sub-workflow": "Sub-Workflow",
+  "component": "Component",
   "webhook-trigger": "Webhook Trigger",
   "schedule-trigger": "Schedule Trigger",
   "instagram-post": "Instagram Post",
@@ -253,6 +255,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "sora-character",
   "render-video",
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post",
+  "component",
   // FFmpeg processing (tiered credits)
   "merge-video-audio", "combine-videos", "trim-audio", "split-media", "trim-video",
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume",
@@ -401,6 +404,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "sub-workflow-input": return <SubWorkflowInputConfig {...configProps} />
     case "sub-workflow-output": return <SubWorkflowOutputConfig {...configProps} />
     case "sub-workflow": return <SubWorkflowConfig {...configProps} />
+    case "component": return <ComponentConfig {...configProps} />
     case "character": return <CharacterConfig {...configProps} />
     case "face": return <FaceConfig data={nodeData as any} onUpdate={update} />
     case "object": return <ObjectConfig data={nodeData as any} onUpdate={update} />

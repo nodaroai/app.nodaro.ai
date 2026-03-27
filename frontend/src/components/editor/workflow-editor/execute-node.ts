@@ -3918,6 +3918,13 @@ export function executeNode(
     );
   }
 
+  // Component — delegates to the component executor (runs published app via backend)
+  if (node.type === "component") {
+    return import("./component-executor").then(({ executeComponent }) =>
+      executeComponent(node, inputs, ctx),
+    )
+  }
+
   // Sub-Workflow — delegates to the sub-workflow executor
   if (node.type === "sub-workflow") {
     return import("./sub-workflow-executor").then(({ executeSubWorkflow }) =>
