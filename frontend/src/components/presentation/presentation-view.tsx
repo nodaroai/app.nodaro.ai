@@ -35,7 +35,7 @@ import { hasCredits } from "@/lib/edition"
 import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useWorkflowStore, type PresentationViewMode, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
-import type { WorkflowNode, PresentationDisplay } from "@/types/nodes"
+import type { WorkflowNode, PresentationDisplay, GeneratedResult } from "@/types/nodes"
 import {
   getInputNodes,
   getOutputNodes,
@@ -102,6 +102,17 @@ const EDITOR_META: Record<string, { filename: string; mime: string; outputKey: s
   video: { filename: "edited-video.mp4", mime: "video/mp4", outputKey: "videoUrl" },
   image: { filename: "edited-image.png", mime: "image/png", outputKey: "imageUrl" },
   audio: { filename: "edited-audio.mp3", mime: "audio/mpeg", outputKey: "audioUrl" },
+}
+
+/** Extract generatedResults into a flat string[] for gallery display (shared by both fullscreen and tab branches). */
+function extractGeneratedListResults(
+  source: Record<string, unknown>,
+): { listResults: string[] } | undefined {
+  const results = source.generatedResults as Array<{ url?: string; text?: string }> | undefined
+  if (!results || results.length <= 1) return undefined
+  const allOutputs = results.map((r) => r.url || r.text || "").filter((v) => v.length > 0)
+  if (allOutputs.length <= 1) return undefined
+  return { listResults: allOutputs }
 }
 
 /** Recursively update a richtext item's content by id */
@@ -520,8 +531,22 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     const file = new File([blob], meta.filename, { type: meta.mime })
     const { uploadFile: doUpload } = await import("@/lib/api")
     const result = await doUpload(file)
-    const outputUpdate = { [meta.outputKey]: result.url, url: result.url }
-    usePresentationStore.getState().updateNodeOutput(editState.nodeId, outputUpdate)
+
+    const store = usePresentationStore.getState()
+    const prevOutput = (store.nodeStates[editState.nodeId]?.output ?? {}) as Record<string, unknown>
+    const existing = (prevOutput.generatedResults as readonly GeneratedResult[] | undefined) ?? []
+    // Seed with the original URL so first edit preserves the pre-edit result
+    const newEntry: GeneratedResult = { url: result.url, jobId: `edit-${Date.now()}`, timestamp: new Date().toISOString() }
+    const generatedResults: GeneratedResult[] = existing.length === 0 && editState.url
+      ? [{ url: editState.url, jobId: `original-${Date.now()}`, timestamp: new Date().toISOString() }, newEntry]
+      : [...existing, newEntry]
+
+    store.updateNodeOutput(editState.nodeId, {
+      [meta.outputKey]: result.url,
+      url: result.url,
+      generatedResults,
+      activeResultIndex: generatedResults.length - 1,
+    })
     // Persist edited node state for app runner
     if (onNodeStatesChange) {
       const currentStates = usePresentationStore.getState().nodeStates
@@ -901,6 +926,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               iterationCompleted: stateRecord.iterationCompleted as number | undefined,
             }
           }
+          const fromEdits = extractGeneratedListResults(output)
+          if (fromEdits) return fromEdits
         }
       } else {
         const data = node.data as Record<string, unknown>
@@ -912,18 +939,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             iterationCompleted: data.__listCompleted as number | undefined,
           }
         }
-        // Fallback: accumulated generatedResults from multiple manual runs
-        const results = data.generatedResults as
-          | Array<{ url?: string; text?: string }>
-          | undefined
-        if (results && results.length > 1) {
-          const allOutputs = results
-            .map((r) => r.url || r.text || "")
-            .filter((v) => v.length > 0)
-          if (allOutputs.length > 1) {
-            return { listResults: allOutputs }
-          }
-        }
+        const fromResults = extractGeneratedListResults(data)
+        if (fromResults) return fromResults
       }
       return {}
     },
