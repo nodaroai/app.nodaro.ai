@@ -262,8 +262,13 @@ export function getListInputForNode(
     }
 
     if (sourceNode.type === "loop") {
-      const raw = resolveLoopColumnValues(sourceNode, edge.sourceHandle ?? undefined, edges, nodes);
       const edgeData = edge.data as Record<string, unknown> | undefined;
+      const loopEdgeMode = edgeData?.outputMode as string | undefined;
+      // Only fan-out for "each" mode (default for loop) — item/last/all produce single values
+      if (loopEdgeMode === "item" || loopEdgeMode === "last" || loopEdgeMode?.startsWith("item:")) {
+        continue;
+      }
+      const raw = resolveLoopColumnValues(sourceNode, edge.sourceHandle ?? undefined, edges, nodes);
       const items = applyRange(
         raw,
         edgeData?.rangeFrom as string | undefined,
@@ -453,7 +458,7 @@ export function resolveNodeInputs(
         output = srcListResults[listIterationIndex % srcListResults.length];
       }
     }
-    if (!output && src.type === "loop" && listIterationIndex !== undefined) {
+    if (!output && src.type === "loop") {
       const raw = resolveLoopColumnValues(src, srcEdge.sourceHandle ?? undefined, edges, nodes);
       const edgeData = srcEdge.data as Record<string, unknown> | undefined;
       const ranged = applyRange(
@@ -462,8 +467,24 @@ export function resolveNodeInputs(
         edgeData?.rangeTo as string | undefined,
         edgeData?.rangeStep as number | undefined,
       );
-      // Wrap with modulo for shorter sources when multiple "each" sources drive fan-out
-      output = ranged.length > 0 ? ranged[listIterationIndex % ranged.length] : "";
+      if (ranged.length > 0) {
+        const loopEdgeMode = edgeData?.outputMode as string | undefined;
+        if (loopEdgeMode === "item") {
+          const itemIndex = edgeData?.itemIndex as string | undefined;
+          output = ranged[resolveIndex(itemIndex ?? "1", ranged.length)];
+        } else if (loopEdgeMode?.startsWith("item:")) {
+          const idx = parseInt(loopEdgeMode.split(":")[1], 10);
+          output = ranged[idx] ?? ranged[0];
+        } else if (loopEdgeMode === "last") {
+          output = ranged[ranged.length - 1];
+        } else if (listIterationIndex !== undefined) {
+          // Fan-out: wrap with modulo for shorter sources
+          output = ranged[listIterationIndex % ranged.length];
+        } else {
+          // Single execution: use first item
+          output = ranged[0];
+        }
+      }
     }
 
     // During fan-out: resolve per-iteration values from non-loop list sources
