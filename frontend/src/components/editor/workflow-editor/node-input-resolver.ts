@@ -23,25 +23,33 @@ export function resolveLoopColumnValues(
   nodes: ReadonlyArray<{ id: string; type?: string; data: Record<string, unknown> }>,
 ): string[] {
   const loopData = loopNode.data as LoopNodeData;
-  const colIndex = (loopData.columns ?? []).findIndex(
-    (c) => c.handleId === sourceHandle,
-  );
-  const col = colIndex >= 0 ? loopData.columns[colIndex] : undefined;
+  const cols = loopData.columns ?? [];
+  const colIndex = cols.findIndex((c) => c.handleId === sourceHandle);
+  const col = colIndex >= 0 ? cols[colIndex] : undefined;
 
   // 1. Per-column connected edge
   if (col) {
+    const targetHandle = loopColInputHandle(col.handleId);
     const colInEdge = edges.find(
-      (e) => e.target === loopNode.id && e.targetHandle === loopColInputHandle(col.handleId),
+      (e) => e.target === loopNode.id && e.targetHandle === targetHandle,
     );
     if (colInEdge) {
       const upstreamNode = nodes.find((n) => n.id === colInEdge.source);
       if (upstreamNode) {
-        // Try list output first (all generatedResults / __listResults)
+        // Upstream is also a loop — recursively resolve its column values
+        if (upstreamNode.type === "loop") {
+          const upstreamVals = resolveLoopColumnValues(
+            { id: upstreamNode.id, data: upstreamNode.data as Record<string, unknown> },
+            colInEdge.sourceHandle ?? undefined,
+            edges,
+            nodes,
+          );
+          if (upstreamVals.length > 0) return upstreamVals;
+        }
         const edgeData = colInEdge.data as Record<string, unknown> | undefined;
         const useAll = !!edgeData?.useAllResults;
         const allOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll);
         if (allOutputs && allOutputs.length > 0) return allOutputs.map((v) => v.trim());
-        // Fallback: single output + delimiter split (text sources)
         const upstreamOutput = extractNodeOutput(
           upstreamNode as WorkflowNode,
           colInEdge.sourceHandle ?? undefined,
@@ -73,9 +81,7 @@ export function resolveLoopColumnValues(
 
   // 3. Manual rows (only when a column was matched)
   if (colIndex >= 0) {
-    return (loopData.rows ?? [])
-      .map((row) => row[colIndex])
-      .filter((v) => v?.trim());
+    return (loopData.rows ?? []).map((row) => row[colIndex]).filter((v) => v?.trim());
   }
 
   return [];
