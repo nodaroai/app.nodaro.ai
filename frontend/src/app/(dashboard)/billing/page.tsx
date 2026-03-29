@@ -369,7 +369,7 @@ export default function BillingPage() {
             </div>
 
             <div className="flex justify-end">
-              <Link to="/library">
+              <Link to="/my-files">
                 <Button variant="outline" size="sm">
                   <FolderOpen className="h-4 w-4 mr-2" />
                   Manage Files

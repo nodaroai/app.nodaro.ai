@@ -574,7 +574,45 @@ export function resolveNodeInputs(
       continue;
     }
 
-    if (src.type === "teleport-send" || src.type === "teleport-receive") {
+    if (src.type === "component") {
+      // Component output routing — determine media type from the output handle metadata.
+      const compMeta = (src.data as Record<string, unknown>).componentMetadata as
+        { outputs?: Array<{ id: string; type: string }> } | undefined
+      const handleId = srcEdge.sourceHandle?.replace(/^out_/, "")
+      const handleType = compMeta?.outputs?.find((o) => o.id === handleId)?.type
+
+      if (handleType === "image") {
+        if (node.type === "generate-image" || node.type === "edit-image" || node.type === "image-to-image") {
+          inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+        } else {
+          inputs.imageUrl = output
+        }
+      } else if (handleType === "video") {
+        if (node.type === "combine-videos") {
+          inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
+          inputs.videoUrlsWithSourceIds = [
+            ...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []),
+            { nodeId: src.id, url: output },
+          ]
+        } else {
+          inputs.videoUrl = output
+        }
+      } else if (handleType === "audio") {
+        if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
+          inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
+          inputs.audioUrlsWithSourceIds = [
+            ...(inputs.audioUrlsWithSourceIds ?? []),
+            { nodeId: src.id, url: output },
+          ]
+        } else if (node.type === "merge-video-audio") {
+          inputs.audioSources = [...(inputs.audioSources ?? []), { url: output, sourceNodeId: src.id }]
+        } else {
+          inputs.audioUrl = output
+        }
+      } else {
+        inputs.prompt = output
+      }
+    } else if (src.type === "teleport-send" || src.type === "teleport-receive") {
       // Teleporter passthrough — detect media type from URL
       if (IMAGE_URL_RE.test(output)) {
         inputs.imageUrl = output
@@ -1100,8 +1138,8 @@ export function resolveNodeInputs(
       }
     } else if (src.type === "schedule-trigger") {
       inputs.prompt = output;
-    } else if (src.type === "sub-workflow" || src.type === "sub-workflow-input" || src.type === "component") {
-      // Route sub-workflow/component output by the sourceHandle to the correct media type
+    } else if (src.type === "sub-workflow" || src.type === "sub-workflow-input") {
+      // Route sub-workflow output by the sourceHandle to the correct media type
       const srcData = src.data as Record<string, unknown>;
       const routeSnapshot = srcData.routeSnapshot as { outputPorts?: Array<{ id: string; mediaType: string }> } | undefined;
       const subEdge = incomingEdges.find((e) => e.source === src.id);
@@ -1113,16 +1151,6 @@ export function resolveNodeInputs(
         const portId = sourceHandle.replace(/^out_/, "");
         const port = routeSnapshot.outputPorts.find((p) => p.id === portId);
         mediaType = port?.mediaType;
-      }
-
-      // For component nodes, determine type from componentMetadata outputs
-      if (src.type === "component" && !mediaType) {
-        const metadata = srcData.componentMetadata as { outputs?: Array<{ id: string; mediaType: string }> } | undefined;
-        if (sourceHandle && metadata?.outputs) {
-          const handleId = sourceHandle.replace(/^out_/, "");
-          const port = metadata.outputs.find((o) => o.id === handleId);
-          mediaType = port?.mediaType;
-        }
       }
 
       // For sub-workflow-input, determine type from __injectedPortValues mapping

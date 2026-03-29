@@ -92,7 +92,7 @@ export function StorageExceededModal({
             </a>
           </Button>
           <Button variant="outline" asChild className="flex-1">
-            <a href="/library">
+            <a href="/my-files">
               <FolderOpen className="w-4 h-4" />
               Manage Files
             </a>

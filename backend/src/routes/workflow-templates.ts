@@ -347,7 +347,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const nodeCount = nodes.length
     const complexity = calculateComplexity(nodes, edges)
     const estimatedCredits = estimateWorkflowCredits(nodes as Array<{ type: string; data?: Record<string, unknown> }>)
-    const snapshotNodes = stripExecutionData(nodes)
+    const snapshotNodes = nodes
 
     // Auto-derive preview media from snapshot nodes if not provided
     let effectivePreviewUrl = previewMediaUrl ?? null
@@ -620,9 +620,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     }
 
     // Strip execution data from snapshot nodes
-    const cleanNodes = stripExecutionData(
-      (template.snapshot_nodes || []) as Array<Record<string, unknown>>,
-    )
+    const cleanNodes = (template.snapshot_nodes || []) as Array<Record<string, unknown>>
 
     // Create new workflow in target project
     const workflowName = customName || template.name

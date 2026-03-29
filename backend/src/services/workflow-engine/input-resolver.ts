@@ -1028,6 +1028,14 @@ function routeOutput(
       }
     }
 
+    // Component nodes: read output type from componentMetadata.outputs
+    if (!mediaType && srcType === "component" && sourceHandle) {
+      const compMeta = src.data.componentMetadata as { outputs?: Array<{ id: string; type: string }> } | undefined
+      const portId = sourceHandle.replace(/^out_/, "")
+      const handleType = compMeta?.outputs?.find((o) => o.id === portId)?.type
+      if (handleType) mediaType = handleType
+    }
+
     if (mediaType === "image") {
       if (targetType === "generate-image" || targetType === "edit-image" || targetType === "image-to-image") {
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]

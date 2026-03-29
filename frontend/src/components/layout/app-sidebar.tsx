@@ -47,19 +47,36 @@ interface NavItem {
   readonly billingOnly?: boolean
 }
 
-const NAV_ITEMS: readonly NavItem[] = [
-  { href: "/projects", label: "Projects", icon: FolderOpen },
-  { href: "/apps", label: "Apps", icon: Rocket },
-  { href: "/templates", label: "Templates", icon: LayoutTemplate },
-  { href: "/executions", label: "Executions", icon: History },
-  { href: "/library", label: "Library", icon: Archive },
-  { href: "/_gallery", label: "Gallery", icon: Images },
-  { href: "/integrations", label: "Integrations", icon: Plug },
-  { href: "/_pricing", label: "Pricing", icon: Sparkles, billingOnly: true },
-  { href: "/billing", label: "Billing", icon: CreditCard, billingOnly: true },
-  { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/admin", label: "Admin", icon: Shield, adminOnly: true },
-]
+const NAV_SECTIONS = [
+  {
+    label: "WORKSPACE",
+    items: [
+      { href: "/projects", label: "Projects", icon: FolderOpen },
+      { href: "/apps", label: "Apps", icon: Rocket },
+      { href: "/templates", label: "Templates", icon: LayoutTemplate },
+    ]
+  },
+  {
+    label: "ACTIVITY",
+    items: [
+      { href: "/executions", label: "Executions", icon: History },
+      { href: "/my-files", label: "My Files", icon: Archive },
+      { href: "/_gallery", label: "Gallery", icon: Images },
+    ]
+  },
+  {
+    label: "ACCOUNT",
+    items: [
+      { href: "/integrations", label: "Integrations", icon: Plug },
+      { href: "/_pricing", label: "Pricing", icon: Sparkles, billingOnly: true },
+      { href: "/billing", label: "Billing", icon: CreditCard, billingOnly: true },
+      { href: "/settings", label: "Settings", icon: Settings },
+      { href: "/admin", label: "Admin", icon: Shield, adminOnly: true },
+    ]
+  },
+] as const
+
+const NAV_ITEMS: readonly NavItem[] = NAV_SECTIONS.flatMap(s => s.items)
 
 function formatRenewalTime(periodEnd: string): string | null {
   const msLeft = new Date(periodEnd).getTime() - Date.now()
@@ -187,9 +204,9 @@ export function AppSidebar({
                   <button
                     type="button"
                     onClick={() => navigate("/billing")}
-                    className="w-full h-9 flex items-center justify-center gap-1 rounded-md text-xs font-medium text-[#ff0073] hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                    className="w-full h-9 flex items-center justify-center gap-1 rounded-md text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                   >
-                    <Coins className="h-4 w-4" />
+                    <Coins className="h-4 w-4" strokeWidth={1.5} />
                     <span className="font-mono text-[11px]">{creditBalance.total}</span>
                   </button>
                 </TooltipTrigger>
@@ -212,133 +229,159 @@ export function AppSidebar({
             </div>
           ) : (
             <div
-              className="mx-2 mt-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left"
+              className="mx-2 mt-2 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 p-4 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors text-left"
               onClick={() => navigate("/billing")}
             >
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400 capitalize">
-                    {creditBalance.tier === "free" ? "Free Plan" : `${creditBalance.tier} Plan`}
-                  </span>
-                  {(creditBalance.tier === "free" || creditBalance.total <= (PRICING_TIERS.find((t) => t.id === creditBalance.tier)?.credits ?? 150) * 0.1) && (
-                    <Link
-                      to="/_pricing"
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-[10px] font-medium text-[#ff0073] hover:text-[#ff0073]/80 px-1.5 py-0.5 rounded border border-[#ff0073]/30 hover:bg-[#ff0073]/10 transition-colors"
-                    >
-                      Upgrade
-                    </Link>
-                  )}
-                </div>
-                {(() => {
-                  const tierAllocation = PRICING_TIERS.find((t) => t.id === creditBalance.tier)?.credits ?? 150
-                  const remainPercent = Math.min(100, Math.max(0, Math.round((creditBalance.total / tierAllocation) * 100)))
-                  return (
-                    <>
-                      <p className="text-sm font-semibold text-[#ff0073] font-mono">
-                        {creditBalance.total} <span className="text-[10px] font-normal text-zinc-500 dark:text-zinc-400">credits left</span>
-                      </p>
-                      <div className="mt-1 w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-[#ff0073] transition-all"
-                          style={{ width: `${remainPercent}%` }}
-                        />
-                      </div>
-                    </>
-                  )
-                })()}
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                  {creditBalance.tier === "free" ? "Free Plan" : `${creditBalance.tier.charAt(0).toUpperCase() + creditBalance.tier.slice(1)} Plan`}
+                </span>
+                {(creditBalance.tier === "free" || creditBalance.total <= (PRICING_TIERS.find((t) => t.id === creditBalance.tier)?.credits ?? 150) * 0.1) && (
+                  <Link
+                    to="/_pricing"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[10px] font-medium text-[#ff0073] hover:text-[#ff0073]/80 transition-colors"
+                  >
+                    Upgrade →
+                  </Link>
+                )}
               </div>
-              {creditBalance.tier === "free" ? (
-                creditBalance.dailyLimit != null && (
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Daily limit &middot; <span className="font-mono text-zinc-600 dark:text-zinc-300">{Math.max(0, creditBalance.dailyLimit - creditBalance.dailySpent)}</span> credits left
-                  </p>
+
+              <div className="mb-3">
+                <span className="text-2xl font-bold text-zinc-900 dark:text-white font-mono tracking-tight">
+                  {creditBalance.total.toLocaleString()}
+                </span>
+                <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-500">credits</span>
+              </div>
+
+              {(() => {
+                const tierAllocation = PRICING_TIERS.find((t) => t.id === creditBalance.tier)?.credits ?? 150
+                const remainPercent = Math.min(100, Math.max(0, Math.round((creditBalance.total / tierAllocation) * 100)))
+                return (
+                  <div className="mb-3">
+                    <div className="w-full h-[2px] bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-[#ff0073] transition-all"
+                        style={{ width: `${remainPercent}%` }}
+                      />
+                    </div>
+                  </div>
                 )
-              ) : (
-                <div className="space-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                  {(() => {
-                    const tierAllocation = PRICING_TIERS.find((t) => t.id === creditBalance.tier)?.credits ?? 0
-                    return tierAllocation > 0 && (
-                      <p>Monthly limit: <span className="font-mono text-zinc-600 dark:text-zinc-300">{tierAllocation}</span></p>
-                    )
-                  })()}
-                  {creditBalance.periodEnd && formatRenewalTime(creditBalance.periodEnd) && (
-                    <p>
-                      Renews {formatRenewalTime(creditBalance.periodEnd)}
+              })()}
+
+              <div className="space-y-0.5">
+                {creditBalance.tier === "free" ? (
+                  creditBalance.dailyLimit != null && (
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-500">
+                      <span className="font-mono text-zinc-600 dark:text-zinc-400">{Math.max(0, creditBalance.dailyLimit - creditBalance.dailySpent)}</span> daily credits left
                     </p>
-                  )}
-                </div>
-              )}
+                  )
+                ) : (
+                  <>
+                    {creditBalance.periodEnd && formatRenewalTime(creditBalance.periodEnd) && (
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-500">
+                        Renews {formatRenewalTime(creditBalance.periodEnd)}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           )
         )}
 
         {/* Navigation */}
         <nav className="flex-1 px-2 py-3 flex flex-col gap-1">
-          {NAV_ITEMS.map((item) => {
-            // Skip admin item if not admin or feature not enabled
-            if (item.adminOnly && (!isFeatureEnabled("adminPanel") || !isAdmin)) {
-              return null
-            }
-            // Skip billing items if billing feature not enabled
-            if (item.billingOnly && !isFeatureEnabled("billing")) {
-              return null
-            }
+          {isCollapsed ? (
+            // Collapsed: flat icon list, no labels
+            NAV_ITEMS.map((item) => {
+              if (item.adminOnly && (!isFeatureEnabled("adminPanel") || !isAdmin)) return null
+              if (item.billingOnly && !isFeatureEnabled("billing")) return null
 
-            const isActive = item.href === "/admin"
-              ? pathname.startsWith("/admin")
-              : pathname === item.href || pathname.startsWith(item.href + "/")
+              const isActive = item.href === "/admin"
+                ? pathname.startsWith("/admin")
+                : pathname === item.href || pathname.startsWith(item.href + "/")
 
-            const showBadge = item.adminOnly && pendingReportsCount > 0
+              const showBadge = item.adminOnly && pendingReportsCount > 0
 
-            const linkContent = (
-              <Link
-                to={item.href}
-                onClick={handleNavClick}
-                aria-label={item.label}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200",
-                  isCollapsed ? "justify-center px-0" : "",
-                  isActive
-                    ? "bg-pink-50 dark:bg-[#ff0073]/10 text-[#ff0073] border-l-2 border-[#ff0073] -ml-0.5 pl-[10px]"
-                    : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/50 dark:hover:text-white",
-                )}
-              >
-                <span className="relative flex-shrink-0">
-                  <item.icon className={cn("h-5 w-5", isActive && "text-[#ff0073]")} />
-                  {showBadge && isCollapsed && (
-                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-[#ff0073]" />
-                  )}
-                </span>
-                {!isCollapsed && (
-                  <>
-                    <span>{item.label}</span>
-                    {showBadge && (
-                      <span className="ml-auto px-1.5 py-0.5 text-xs font-medium bg-[#ff0073] text-white rounded-full">
-                        {pendingReportsCount}
-                      </span>
-                    )}
-                  </>
-                )}
-              </Link>
-            )
-
-            if (isCollapsed) {
               return (
                 <Tooltip key={item.href}>
-                  <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
-                  <TooltipContent
-                    side="right"
-                    className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
-                  >
+                  <TooltipTrigger asChild>
+                    <Link
+                      to={item.href}
+                      onClick={handleNavClick}
+                      aria-label={item.label}
+                      className={cn(
+                        "flex items-center justify-center w-full h-9 rounded-md transition-all duration-200",
+                        isActive
+                          ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                          : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/50 dark:hover:text-white",
+                      )}
+                    >
+                      <span className="relative">
+                        <item.icon className="h-4 w-4" strokeWidth={1.5} />
+                        {showBadge && (
+                          <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500" />
+                        )}
+                      </span>
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700">
                     {item.label}
                   </TooltipContent>
                 </Tooltip>
               )
-            }
+            })
+          ) : (
+            // Expanded: sections with labels
+            NAV_SECTIONS.map((section) => {
+              const visibleItems = section.items.filter((item) => {
+                if (item.adminOnly && (!isFeatureEnabled("adminPanel") || !isAdmin)) return false
+                if (item.billingOnly && !isFeatureEnabled("billing")) return false
+                return true
+              })
 
-            return <div key={item.href}>{linkContent}</div>
-          })}
+              if (visibleItems.length === 0) return null
+
+              return (
+                <div key={section.label} className="mb-4">
+                  <p className="px-3 mb-1 text-[10px] font-semibold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">
+                    {section.label}
+                  </p>
+                  {visibleItems.map((item) => {
+                    const isActive = item.href === "/admin"
+                      ? pathname.startsWith("/admin")
+                      : pathname === item.href || pathname.startsWith(item.href + "/")
+
+                    const showBadge = item.adminOnly && pendingReportsCount > 0
+
+                    return (
+                      <Link
+                        key={item.href}
+                        to={item.href}
+                        onClick={handleNavClick}
+                        aria-label={item.label}
+                        className={cn(
+                          "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200",
+                          isActive
+                            ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white border-l-2 border-zinc-400 dark:border-zinc-500 -ml-0.5 pl-[10px]"
+                            : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/50 dark:hover:text-white",
+                        )}
+                      >
+                        <item.icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
+                        <span>{item.label}</span>
+                        {showBadge && (
+                          <span className="ml-auto px-1.5 py-0.5 text-xs font-medium bg-red-500 text-white rounded-full">
+                            {pendingReportsCount}
+                          </span>
+                        )}
+                      </Link>
+                    )
+                  })}
+                </div>
+              )
+            })
+          )}
         </nav>
 
         {/* Bottom section */}
@@ -361,7 +404,7 @@ export function AppSidebar({
                       className="h-9 w-9 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
                       onClick={signOut}
                     >
-                      <div className="h-6 w-6 rounded-full bg-[#ff0073]/20 flex items-center justify-center text-[#ff0073] text-xs font-medium">
+                      <div className="h-6 w-6 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-zinc-700 dark:text-zinc-300 text-xs font-medium">
                         {user.email?.[0]?.toUpperCase() || "U"}
                       </div>
                     </Button>
@@ -377,7 +420,7 @@ export function AppSidebar({
               ) : (
                 <>
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="h-6 w-6 rounded-full bg-[#ff0073]/20 flex items-center justify-center text-[#ff0073] text-xs font-medium flex-shrink-0">
+                    <div className="h-6 w-6 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-zinc-700 dark:text-zinc-300 text-xs font-medium flex-shrink-0">
                       {user.email?.[0]?.toUpperCase() || "U"}
                     </div>
                     <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{user.email}</span>
