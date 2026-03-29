@@ -11,7 +11,7 @@ import type {
   LoopNodeData,
 } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
-import { applyRange } from "@nodaro-shared/edge-range";
+import { applyRange, resolveIndex } from "@nodaro-shared/edge-range";
 import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
 
 /** Node types whose edges default to "each" output mode (fan-out) */
@@ -352,7 +352,13 @@ export function resolveNodeInputs(
       : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData)));
     let output: string | undefined;
     if (edgeMode && srcListResults && srcListResults.length > 0) {
-      if (edgeMode.startsWith("item:")) {
+      if (edgeMode === "item") {
+        // Structured item mode: use resolveIndex on itemIndex expression
+        const itemIndex = (srcEdge.data as Record<string, unknown> | undefined)
+          ?.itemIndex as string | undefined;
+        const idx = resolveIndex(itemIndex ?? "1", srcListResults.length);
+        output = srcListResults[idx] ?? srcListResults[0];
+      } else if (edgeMode.startsWith("item:")) {
         const idx = parseInt(edgeMode.split(":")[1], 10);
         output = srcListResults[idx] ?? srcListResults[0];
       } else if (edgeMode === "last") {
@@ -607,6 +613,11 @@ export function resolveNodeInputs(
         inputs.prompt = items.join(", ") || output;
       } else if (outputMode === "last") {
         inputs.prompt = items[items.length - 1] || output;
+      } else if (outputMode === "item") {
+        const itemIndex = (srcEdge.data as Record<string, unknown> | undefined)
+          ?.itemIndex as string | undefined;
+        const idx = resolveIndex(itemIndex ?? "1", items.length);
+        inputs.prompt = items[idx] ?? items[0] ?? output;
       } else if (outputMode.startsWith("item:")) {
         const idx = parseInt(outputMode.split(":")[1], 10);
         inputs.prompt = items[idx] ?? items[0] ?? output;

@@ -130,7 +130,7 @@ function SpeedRampNodeComponent({ id, data, selected }: NodeProps) {
     )}
     <HandleIcon icon={<Clapperboard />} color="steel" side="left" top="calc(100% - 20px)" />
     <HandleIcon icon={<Film />} color="steel" top="20px" />
-    {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} />}
+    {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} results={results} initialIndex={activeIndex} />}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>
   )

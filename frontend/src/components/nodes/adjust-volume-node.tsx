@@ -112,7 +112,7 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
     <HandleIcon icon={<AudioLines />} color="steel" top="20px" />
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     {activeUrl && !isVideoOutput && (
-      <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="audio" url={activeUrl} />
+      <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="audio" url={activeUrl} results={results} initialIndex={activeIndex} />
     )}
     </div>
   )
