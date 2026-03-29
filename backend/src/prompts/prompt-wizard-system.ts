@@ -48,6 +48,7 @@ const NODE_CATEGORY_MAP: Record<string, string> = {
   "generate-music": "music",
   "suno-generate": "music",
   "text-to-audio": "audio",
+  "text-prompt": "text",
 }
 
 const PERSONA: Record<string, string> = {
@@ -55,6 +56,7 @@ const PERSONA: Record<string, string> = {
   video: "You are a cinematography and motion design expert specializing in AI video generation. You understand camera movement, pacing, visual storytelling, and how different AI video models work.",
   music: "You are a music production expert specializing in AI music generation. You understand genre conventions, instrumentation, arrangement, and how to describe music for AI models.",
   audio: "You are a sound design expert specializing in AI audio/SFX generation. You understand acoustics, layering, environmental audio, and how to describe sounds precisely.",
+  text: "You are an expert creative writer and prompt engineer. You understand narrative structure, tone, audience targeting, and how to craft clear, effective text for any purpose.",
 }
 
 export function buildWizardAnalyzeSystem(ctx: WizardAnalyzeContext): string {

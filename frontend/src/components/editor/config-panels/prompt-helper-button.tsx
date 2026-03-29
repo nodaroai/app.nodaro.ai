@@ -37,6 +37,7 @@ export function PromptHelperButton({
   // Collect node context from connected edges
   const nodeContext = useMemo(() => {
     if (!selectedNodeId) return undefined
+    if (nodeType === "text-prompt") return undefined // text-prompt uses downstream targeting, not upstream context
 
     const incomingEdges = allEdges.filter((e) => e.target === selectedNodeId)
     const connectedInputTypes: string[] = []
@@ -62,7 +63,32 @@ export function PromptHelperButton({
     if (!connectedInputTypes.length && !referenceImageCount && !hasSourceVideo) return undefined
 
     return { connectedInputTypes, referenceImageCount, referenceImageUrls, hasSourceVideo }
-  }, [selectedNodeId, allEdges, allNodes])
+  }, [selectedNodeId, allEdges, allNodes, nodeType])
+
+  // For text-prompt nodes: detect downstream wizard-supported nodes
+  const downstreamTargets = useMemo(() => {
+    if (nodeType !== "text-prompt" || !selectedNodeId) return undefined
+
+    const outgoingEdges = allEdges.filter((e) => e.source === selectedNodeId)
+    const targets: Array<{ id: string; type: string; label: string }> = []
+    const seenTypes = new Set<string>()
+
+    for (const edge of outgoingEdges) {
+      const targetNode = allNodes.find((n) => n.id === edge.target)
+      if (!targetNode?.type || seenTypes.has(targetNode.type)) continue
+      if (isWizardSupported(targetNode.type) && targetNode.type !== "text-prompt") {
+        seenTypes.add(targetNode.type)
+        const label = (targetNode.data as Record<string, unknown>).label as string | undefined
+        targets.push({
+          id: targetNode.id,
+          type: targetNode.type,
+          label: label || targetNode.type,
+        })
+      }
+    }
+
+    return targets
+  }, [nodeType, selectedNodeId, allEdges, allNodes])
 
   if (!hasCredits()) return null
   if (!isWizardSupported(nodeType)) return null
@@ -97,6 +123,7 @@ export function PromptHelperButton({
           aspectRatio={aspectRatio}
           duration={duration}
           nodeContext={nodeContext}
+          downstreamTargets={downstreamTargets}
           onAccept={onAccept}
         />
       )}

@@ -52,6 +52,7 @@ import {
   type ReferenceAudioData,
 } from "@/types/nodes"
 import type { ConfigProps } from "./types"
+import { PromptHelperButton } from "./prompt-helper-button"
 
 const COLUMN_ACCEPT: Record<string, string> = {
   "image-url": "image/png,image/jpeg,image/webp,image/gif",
@@ -63,7 +64,14 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Prompt Text</Label>
+        <div className="flex items-center justify-between mb-1">
+          <Label>Prompt Text</Label>
+          <PromptHelperButton
+            nodeType="text-prompt"
+            currentPrompt={data.text || ""}
+            onAccept={(prompt) => onUpdate({ text: prompt })}
+          />
+        </div>
         <TagTextarea
           rows={5}
           value={data.text}

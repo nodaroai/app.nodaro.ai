@@ -87,6 +87,14 @@ export const AUDIO_WIZARD_CATEGORIES: readonly WizardCategory[] = [
   { key: "texture-quality", label: "Texture / Quality" },
 ]
 
+// ── Text / General (text-prompt) ──
+export const TEXT_WIZARD_CATEGORIES: readonly WizardCategory[] = [
+  { key: "purpose-intent", label: "Purpose / Intent" },
+  { key: "tone-voice", label: "Tone / Voice" },
+  { key: "audience", label: "Audience" },
+  { key: "length-format", label: "Length / Format" },
+]
+
 // ── LLM Chat (llm-chat) ──
 export const LLM_CHAT_WIZARD_CATEGORIES: readonly WizardCategory[] = [
   { key: "task", label: "Task / Goal" },
@@ -110,6 +118,7 @@ const NODE_TYPE_TO_CATEGORIES: Record<string, readonly WizardCategory[]> = {
   "generate-music": MUSIC_WIZARD_CATEGORIES,
   "suno-generate": MUSIC_WIZARD_CATEGORIES,
   "text-to-audio": AUDIO_WIZARD_CATEGORIES,
+  "text-prompt": TEXT_WIZARD_CATEGORIES,
 }
 
 export function getCategoriesForNodeType(nodeType: string): readonly WizardCategory[] | undefined {
@@ -232,6 +241,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
   "text-to-audio": {
     "elevenlabs-sfx": "High quality sound effects and ambient audio",
   },
+  "text-prompt": {},
 }
 
 /** Reference image role options (for multi-select) */

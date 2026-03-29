@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Sparkles, Loader2, ArrowLeft, Check, Lightbulb, Settings } from "lucide-react"
 import {
   Dialog,
@@ -15,7 +15,10 @@ import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -40,12 +43,53 @@ interface PromptHelperDialogProps {
     referenceImageUrls?: string[]
     hasSourceVideo?: boolean
   }
+  readonly downstreamTargets?: ReadonlyArray<{ id: string; type: string; label: string }>
   readonly onAccept: (enhancedPrompt: string, modelChange?: ModelChange) => void
 }
 
 type Phase = "input" | "review" | "result"
 
 const CUSTOM_VALUE = "__custom__"
+
+const GENERAL_TEXT_VALUE = "text-prompt"
+
+// Keep in sync with NODE_TYPE_TO_CATEGORIES in packages/shared/src/prompt-wizard-categories.ts
+const WIZARD_TARGET_OPTIONS: ReadonlyArray<{
+  group: string
+  items: ReadonlyArray<{ value: string; label: string }>
+}> = [
+  {
+    group: "Image",
+    items: [
+      { value: "generate-image", label: "Generate Image" },
+      { value: "image-to-image", label: "Image to Image" },
+    ],
+  },
+  {
+    group: "Video",
+    items: [
+      { value: "text-to-video", label: "Text to Video" },
+      { value: "image-to-video", label: "Image to Video" },
+      { value: "video-to-video", label: "Video to Video" },
+      { value: "motion-transfer", label: "Motion Transfer" },
+      { value: "extend-video", label: "Extend Video" },
+      { value: "speech-to-video", label: "Speech to Video" },
+    ],
+  },
+  {
+    group: "Music",
+    items: [
+      { value: "generate-music", label: "Generate Music" },
+      { value: "suno-generate", label: "Suno Generate" },
+    ],
+  },
+  {
+    group: "Audio",
+    items: [
+      { value: "text-to-audio", label: "Text to Audio" },
+    ],
+  },
+]
 
 export function PromptHelperDialog({
   open,
@@ -57,6 +101,7 @@ export function PromptHelperDialog({
   aspectRatio,
   duration,
   nodeContext,
+  downstreamTargets,
   onAccept,
 }: PromptHelperDialogProps) {
   // Shared state
@@ -65,6 +110,22 @@ export function PromptHelperDialog({
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+
+  // Target selector state (only for text-prompt nodes)
+  const hasTargetSelector = !!downstreamTargets
+  const defaultTarget = downstreamTargets?.[0]?.type ?? GENERAL_TEXT_VALUE
+  const [selectedTargetType, setSelectedTargetType] = useState<string>(
+    downstreamTargets ? defaultTarget : nodeType,
+  )
+
+  // The nodeType sent to the backend — either the selected target or the raw prop
+  const effectiveNodeType = hasTargetSelector ? selectedTargetType : nodeType
+
+  // Types already shown in Connected group — excluded from static groups to avoid duplicate Radix Select values
+  const connectedTypes = useMemo(
+    () => new Set(downstreamTargets?.map((t) => t.type) ?? []),
+    [downstreamTargets],
+  )
 
   // Phase 1 state
   const [roughIdea, setRoughIdea] = useState(currentPrompt || "")
@@ -112,7 +173,7 @@ export function PromptHelperDialog({
     setError("")
     try {
       const result = await wizardAnalyze({
-        nodeType,
+        nodeType: effectiveNodeType,
         prompt: roughIdea || undefined,
         provider,
         style,
@@ -170,7 +231,7 @@ export function PromptHelperDialog({
       }).filter((s) => s.value)
 
       const result = await wizardGenerate({
-        nodeType,
+        nodeType: effectiveNodeType,
         provider,
         style,
         aspectRatio,
@@ -203,6 +264,9 @@ export function PromptHelperDialog({
 
   function handleClose() {
     setPhase("input")
+    if (downstreamTargets) {
+      setSelectedTargetType(defaultTarget)
+    }
     setRoughIdea(currentPrompt || "")
     // Don't reset llmModel — persisted in localStorage
     setQuestions([])
@@ -261,7 +325,7 @@ export function PromptHelperDialog({
         <div className="flex flex-col gap-3">
           {/* Context badges */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{nodeType}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{effectiveNodeType}</span>
             {provider && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{provider}</span>}
           </div>
 
@@ -288,6 +352,48 @@ export function PromptHelperDialog({
           {/* PHASE 1: Input */}
           {phase === "input" && (
             <>
+              {hasTargetSelector && (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                    Prompt target
+                  </label>
+                  <Select value={selectedTargetType} onValueChange={setSelectedTargetType}>
+                    <SelectTrigger className="h-auto min-h-[2rem] sm:min-h-[2.5rem] text-xs py-1.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {downstreamTargets && downstreamTargets.length > 0 && (
+                        <>
+                          <SelectGroup>
+                            <SelectLabel className="text-[10px] text-muted-foreground">Connected</SelectLabel>
+                            {downstreamTargets.map((t) => (
+                              <SelectItem key={t.id} value={t.type}>
+                                <span>{t.label}</span>
+                                <span className="ml-1.5 text-[10px] text-muted-foreground">{t.type}</span>
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                          <SelectSeparator />
+                        </>
+                      )}
+                      {WIZARD_TARGET_OPTIONS.map((group) => {
+                        const filtered = group.items.filter((item) => !connectedTypes.has(item.value))
+                        if (!filtered.length) return null
+                        return (
+                          <SelectGroup key={group.group}>
+                            <SelectLabel className="text-[10px] text-muted-foreground">{group.group}</SelectLabel>
+                            {filtered.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )
+                      })}
+                      <SelectSeparator />
+                      <SelectItem value={GENERAL_TEXT_VALUE}>General text</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">
                   Describe what you want (or leave empty to build from scratch)
