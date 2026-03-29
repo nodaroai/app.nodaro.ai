@@ -52,6 +52,12 @@ function detectLoopColumnType(
   sourceNode: WorkflowNode,
   sourceHandle: string | null | undefined,
 ): LoopColumn["type"] {
+  // Upstream loop node — inherit the source column's type directly
+  if (sourceNode.type === "loop" && sourceHandle) {
+    const srcColumns = ((sourceNode.data as Record<string, unknown>).columns ?? []) as Array<{ handleId: string; type?: string }>
+    const srcCol = srcColumns.find((c) => c.handleId === sourceHandle)
+    if (srcCol?.type) return srcCol.type as LoopColumn["type"]
+  }
   const def = NODE_DEF_MAP.get(sourceNode.type ?? "")
   if (!def) return "text"
   const outputs = def.outputs ?? []
@@ -191,7 +197,9 @@ interface WorkflowState {
   readonly selectNode: (nodeId: string | null) => void
   readonly setUserPromptTemplates: (templates: Record<string, string>) => void
   readonly setFlowPromptTemplates: (templates: Record<string, string>) => void
-  readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[], characterDefinitions?: CharacterDefinition[], flowPromptTemplates?: Record<string, string>, presentationSettings?: PresentationSettings) => void
+  readonly savedViewport: { x: number; y: number; zoom: number } | null
+  readonly setSavedViewport: (vp: { x: number; y: number; zoom: number } | null) => void
+  readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[], characterDefinitions?: CharacterDefinition[], flowPromptTemplates?: Record<string, string>, presentationSettings?: PresentationSettings, viewport?: { x: number; y: number; zoom: number } | null) => void
   readonly clearWorkflow: () => void
   readonly markClean: () => void
   readonly setSaveStatus: (status: SaveStatus, error?: string | null) => void
@@ -275,6 +283,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   videoAutoplay: typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.getItem === "function" && localStorage.getItem("videoAutoplay") !== null
     ? localStorage.getItem("videoAutoplay") === "true"
     : true,
+  savedViewport: null,
+  setSavedViewport: (vp) => set({ savedViewport: vp }),
   freecutEdit: null,
   imageEdit: null,
   variableDisplayMode: "raw" as const,
@@ -816,7 +826,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   setFlowPromptTemplates: (templates) => set({ flowPromptTemplates: templates, isDirty: true }),
 
-  loadWorkflow: (id, name, nodes, edges, characterDefinitions, flowPromptTemplates, presentationSettings) => {
+  loadWorkflow: (id, name, nodes, edges, characterDefinitions, flowPromptTemplates, presentationSettings, viewport) => {
     nextNodeId =
       nodes.reduce((max, n) => {
         const num = parseInt(n.id.replace("node_", ""), 10)
@@ -896,6 +906,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       characterDefinitions: characterDefinitions ?? [],
       flowPromptTemplates: flowPromptTemplates ?? {},
       presentationSettings: presentationSettings ?? DEFAULT_PRESENTATION_SETTINGS,
+      savedViewport: viewport ?? null,
     }))
   },
 

@@ -610,7 +610,10 @@ export function executeNode(
       );
       if (startEdge) {
         const startNode = nodes.find((n) => n.id === startEdge.source);
-        if (startNode) startFrameUrl = extractNodeOutput(startNode, startEdge.sourceHandle ?? undefined);
+        if (startNode && startNode.type !== "loop") {
+          startFrameUrl = extractNodeOutput(startNode, startEdge.sourceHandle ?? undefined);
+        }
+        // Loop nodes: already resolved via resolveNodeInputs → inputs.startFrameUrl
       }
     }
     if (!startFrameUrl && i2vData.selectedStartFrameNodeId) {
@@ -624,7 +627,8 @@ export function executeNode(
     // VEO reference mode doesn't use start frame — skip the requirement
     const isVeoRefMode = (nodeProvider === "veo3" || nodeProvider === "veo3.1") && i2vData.veoMode === "reference"
     if (!startFrameUrl && !isVeoRefMode) {
-      toast.error(`Node "${i2vData.label}": no start frame image found`);
+      const debugSources = edges.filter((e) => e.target === node.id).map((e) => `${e.sourceHandle ?? "?"}→${e.targetHandle ?? "?"}`).join(", ")
+      toast.error(`Node "${i2vData.label}": no start frame image found (inputs: startFrame=${inputs.startFrameUrl ?? "none"}, imageUrl=${inputs.imageUrl ?? "none"}, edges: ${debugSources || "none"})`);
       return Promise.reject(new Error("No start frame image"));
     }
 
@@ -684,7 +688,7 @@ export function executeNode(
       | undefined;
     return runVideoGeneration(
       node.id,
-      startFrameUrl ?? "",  // Empty string in VEO reference mode (backend ignores imageUrl)
+      startFrameUrl ?? "",
       ctx,
       endFrameUrl,
       audioUrl,

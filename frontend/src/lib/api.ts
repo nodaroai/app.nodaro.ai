@@ -845,9 +845,9 @@ export async function generateVideo(
   if (typeof imageUrlOrOptions === "object") {
     const opts = imageUrlOrOptions
     body = {
-      imageUrl: opts.startFrameUrl,  // Backend still expects imageUrl for backward compat
-      endFrameUrl: opts.endFrameUrl,
-      audioUrl: opts.audioUrl,
+      imageUrl: opts.startFrameUrl || undefined,
+      endFrameUrl: opts.endFrameUrl || undefined,
+      audioUrl: opts.audioUrl || undefined,
       prompt: opts.prompt,
       provider: opts.provider,
       generateAudio: opts.generateAudio,

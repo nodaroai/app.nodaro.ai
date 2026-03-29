@@ -34,11 +34,13 @@ import {
 } from "@/components/ui/select"
 import { CachedImage } from "@/components/ui/cached-image"
 import { toast } from "sonner"
-import { spliceDelimitedRows } from "@nodaro-shared/loop-delimiter"
+import { spliceDelimitedRows, splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter"
+import { applyRange, resolveIndex } from "@nodaro-shared/edge-range"
 import { uploadAudio, fetchYouTubeOEmbed, extractYouTubeAudioApi, getJobStatus, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
 import type { DownloadProgressEvent } from "@/lib/api"
 import {
   LOOP_COLUMN_TYPE_META,
+  loopColInputHandle,
   type TextPromptData,
   type ListNodeData,
   type LoopNodeData,
@@ -49,9 +51,13 @@ import {
   type RSSFeedData,
   type YouTubeVideoData,
   type ReferenceAudioData,
+  type WorkflowNode,
 } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
+import { extractNodeOutputAsList, resolveLoopColumnValues } from "@/components/editor/workflow-editor/node-input-resolver"
 
 const COLUMN_ACCEPT: Record<string, string> = {
   "image-url": "image/png,image/jpeg,image/webp,image/gif",
@@ -409,15 +415,116 @@ function DelimiterSelect({
   )
 }
 
-export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes }: {
+export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId }: {
   data: LoopNodeData
   onUpdate: (patch: Partial<LoopNodeData>) => void
   onRemoveColumnEdges?: (colHandleId: string) => void
   nodes?: ReadonlyArray<{ id: string; type?: string; data: Record<string, unknown> }>
+  nodeId?: string
 }) {
   const [activeTab, setActiveTab] = useState<"configure" | "data">("configure")
   const columns = data.columns ?? []
   const rows = data.rows ?? []
+  const edges = useWorkflowStore((s) => s.edges)
+  const allNodes = useWorkflowStore((s) => s.nodes)
+
+  /** Resolve connected rows — respects edge outputMode & useAllResults. */
+  const connectedRows = useMemo<string[][] | null>(() => {
+    if (!nodeId || columns.length === 0) return null
+
+    function resolveEdge(
+      edge: { source: string; sourceHandle?: string | null; data?: unknown },
+      upstream: WorkflowNode,
+    ): string[] | null {
+      const ed = edge.data as Record<string, unknown> | undefined
+      const edgeMode = ed?.outputMode as string | undefined
+      // Table columns exist to collect items — default to "each" (show all results)
+      const outputMode = edgeMode ?? "each"
+      const useAll = !!ed?.useAllResults
+
+      // Resolve all outputs — loop nodes need special handling
+      const allOutputs = upstream.type === "loop"
+        ? resolveLoopColumnValues(
+            { id: upstream.id, data: upstream.data as Record<string, unknown> },
+            edge.sourceHandle ?? undefined,
+            edges as Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+            allNodes as Array<{ id: string; type?: string; data: Record<string, unknown> }>,
+          )
+        : (extractNodeOutputAsList(upstream, useAll) ?? [])
+
+      if (outputMode === "item") {
+        const itemIndex = ed?.itemIndex as string | undefined
+        if (allOutputs.length > 0) {
+          const idx = resolveIndex(itemIndex ?? "1", allOutputs.length)
+          return [allOutputs[idx] ?? allOutputs[0]]
+        }
+        const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
+        return single ? [single] : null
+      }
+      if (outputMode.startsWith("item:")) {
+        const idx = parseInt(outputMode.split(":")[1], 10)
+        if (allOutputs.length > 0) return [allOutputs[idx] ?? allOutputs[0]]
+        const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
+        return single ? [single] : null
+      }
+      if (outputMode === "last") {
+        if (allOutputs.length > 0) return [allOutputs[allOutputs.length - 1]]
+        const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
+        return single ? [single] : null
+      }
+      if (outputMode === "each" || outputMode === "all") {
+        if (allOutputs.length > 0) {
+          return applyRange(
+            allOutputs,
+            ed?.rangeFrom as string | undefined,
+            ed?.rangeTo as string | undefined,
+            ed?.rangeStep as number | undefined,
+          )
+        }
+        const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
+        if (!single) return null
+        return splitByLoopDelimiter(single, columns)
+      }
+      const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
+      if (!single) return null
+      return splitByLoopDelimiter(single, columns)
+    }
+
+    const colValues: (string[] | null)[] = columns.map((col) => {
+      const colInEdge = edges.find(
+        (e) => e.target === nodeId && e.targetHandle === loopColInputHandle(col.handleId),
+      )
+      if (!colInEdge) return null
+      const upstream = allNodes.find((n) => n.id === colInEdge.source)
+      if (!upstream) return null
+      return resolveEdge(colInEdge, upstream as WorkflowNode)
+    })
+
+    const legacyEdge = edges.find((e) => e.target === nodeId && e.targetHandle === "in")
+    let legacyValues: string[] | null = null
+    if (legacyEdge) {
+      const upstream = allNodes.find((n) => n.id === legacyEdge.source)
+      if (upstream) legacyValues = resolveEdge(legacyEdge, upstream as WorkflowNode)
+    }
+
+    if (!colValues.some((d) => d !== null) && !legacyValues) return null
+
+    const maxRows = Math.max(...colValues.map((d) => d?.length ?? 0), legacyValues?.length ?? 0)
+    const result: string[][] = []
+    for (let r = 0; r < maxRows; r++) {
+      result.push(
+        columns.map((_col, ci) => {
+          if (colValues[ci]) return colValues[ci]![r] ?? ""
+          if (legacyValues) return legacyValues[r] ?? ""
+          return ""
+        }),
+      )
+    }
+    return result
+  }, [nodeId, columns, edges, allNodes])
+
+  const displayRows = connectedRows ?? rows
+  const isConnectedData = connectedRows !== null
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -760,6 +867,17 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes }: {
               className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
             />
           </div>
+          <div className="flex items-center gap-2 mt-2">
+            <label className="text-xs text-muted-foreground">Gallery items per row</label>
+            <input
+              type="number"
+              min={1}
+              max={6}
+              value={data.galleryCols ?? 3}
+              onChange={(e) => onUpdate({ galleryCols: Math.max(1, Math.min(6, parseInt(e.target.value, 10) || 3)) })}
+              className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
+            />
+          </div>
         </>
       )}
 
@@ -768,6 +886,10 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes }: {
           {columns.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
               No columns configured. Switch to Configure tab to add columns.
+            </p>
+          ) : displayRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No data yet. Add rows manually or connect an upstream node.
             </p>
           ) : (
             <div className="max-h-[400px] overflow-auto rounded-lg border border-gray-200 dark:border-[#2D2D2D]">
@@ -798,14 +920,15 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes }: {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row, ri) => (
+                  {displayRows.map((row, ri) => (
                     <tr key={ri} className={ri % 2 === 1 ? "bg-muted/5" : ""}>
                       <td className="px-3 py-2 text-[10px] text-muted-foreground/50 font-mono">{ri + 1}</td>
                       {columns.map((col, ci) => {
                         const val = row[ci] ?? ""
                         const isMedia = col.type !== "text"
+                        const isConnected = isConnectedData || !!col.connectedSourceId
                         return (
-                          <td key={col.id} className={`px-3 py-2 text-sm text-foreground ${col.connectedSourceId ? "opacity-70" : ""}`}>
+                          <td key={col.id} className={`px-3 py-2 text-sm text-foreground ${isConnected ? "opacity-70" : ""}`}>
                             {isMedia && val ? (
                               col.type === "image-url" ? (
                                 <img src={val} alt="" className="w-12 h-12 rounded object-cover" />
@@ -814,7 +937,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes }: {
                                   {col.type === "video-url" ? "Video file" : "Audio file"}
                                 </span>
                               )
-                            ) : col.connectedSourceId ? (
+                            ) : isConnected ? (
                               <span className="text-muted-foreground/50 italic">{val || "Waiting..."}</span>
                             ) : (
                               <span className={val ? "" : "text-muted-foreground/40"}>{val || "—"}</span>
@@ -829,7 +952,8 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes }: {
             </div>
           )}
           <p className="text-[10px] text-muted-foreground/50 text-center">
-            {rows.length} row{rows.length !== 1 ? "s" : ""} × {columns.length} column{columns.length !== 1 ? "s" : ""}
+            {displayRows.length} row{displayRows.length !== 1 ? "s" : ""} × {columns.length} column{columns.length !== 1 ? "s" : ""}
+            {isConnectedData && " (from connected node)"}
           </p>
         </div>
       )}

@@ -108,6 +108,7 @@ export type LoopNodeData = {
   minRows?: number
   defaultRows?: number
   thumbnailSize?: "sm" | "md" | "lg"
+  galleryCols?: number
 }
 
 export type UploadImageData = {
