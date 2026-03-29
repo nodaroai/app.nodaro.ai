@@ -144,7 +144,7 @@ export const router = createBrowserRouter([
         element: <SuspenseWrapper><ExecutionsPage /></SuspenseWrapper>,
       },
       {
-        path: "/library",
+        path: "/my-files",
         element: <SuspenseWrapper><LibraryPage /></SuspenseWrapper>,
       },
       {
