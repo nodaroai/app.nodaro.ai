@@ -1,6 +1,6 @@
 "use client"
 
-import { Plus, Search, Package, Film, StickyNote, Wand2, PanelLeft, Undo2, Redo2, ChevronLeft } from "lucide-react"
+import { Plus, Search, Package, Film, StickyNote, Wand2, PanelLeft, Undo2, Redo2, ChevronLeft, Puzzle } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-is-mobile"
@@ -14,6 +14,7 @@ import { useSidebar } from "@/components/layout/sidebar-context"
 
 interface CanvasToolbarProps {
   readonly onAddNode: (position?: { x: number; y: number }, placeAtCenter?: boolean) => void
+  readonly onComponents: () => void
   readonly onSearch: () => void
   readonly onAssetLibrary: () => void
   readonly onMediaLibrary: () => void
@@ -117,6 +118,7 @@ const isMac = typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(na
 
 export function CanvasToolbar({
   onAddNode,
+  onComponents,
   onSearch,
   onAssetLibrary,
   onMediaLibrary,
@@ -161,6 +163,11 @@ export function CanvasToolbar({
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
             onAddNode({ x: rect.right + 8, y: rect.bottom + 8 }, true)
           }}
+        />
+        <MobileToolbarButton
+          icon={<Puzzle className="w-5 h-5" />}
+          label="Components"
+          onClick={onComponents}
         />
         <MobileToolbarButton
           icon={<Undo2 className="w-5 h-5" />}
@@ -222,6 +229,13 @@ export function CanvasToolbar({
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
             onAddNode({ x: rect.right + 8, y: rect.top }, true)
           }}
+        />
+
+        <ToolbarButton
+          icon={<Puzzle className="w-5 h-5" />}
+          label="Components"
+          shortcut=""
+          onClick={onComponents}
         />
 
         <ToolbarButton

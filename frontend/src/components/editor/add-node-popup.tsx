@@ -78,7 +78,8 @@ import type { ConnectionContext, NodeOption } from "@/lib/node-compatibility";
 import { getCompatibleNodes, resolveTargetHandle } from "@/lib/node-compatibility";
 import { useAuth } from "@/hooks/use-auth";
 
-const ComponentBrowserDialog = lazy(() => import("./component-browser-dialog").then(m => ({ default: m.ComponentBrowserDialog })));
+const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })));
+import type { ComponentSelection } from "./component-marketplace-modal";
 
 const EMPTY_SET = new Set<string>();
 
@@ -961,10 +962,10 @@ export function AddNodePopup({
     [connectionContext, storeAddNode, storeOnConnect, onAddNode, onClose],
   );
 
-  // Handle component selected from browser dialog
+  // Handle component selected from marketplace modal
   const handleComponentSelect = useCallback(
-    (component: Record<string, unknown>) => {
-      onAddNode("component", component);
+    (component: ComponentSelection) => {
+      onAddNode("component", component as unknown as Record<string, unknown>);
       onClose();
     },
     [onAddNode, onClose],
@@ -1387,14 +1388,16 @@ export function AddNodePopup({
       </div>
     </div>}
 
-    {/* Component Browser Dialog */}
-    <Suspense fallback={null}>
-      <ComponentBrowserDialog
-        open={componentBrowserOpen}
-        onOpenChange={setComponentBrowserOpen}
-        onSelect={handleComponentSelect}
-      />
-    </Suspense>
+    {/* Component Marketplace Modal */}
+    {componentBrowserOpen && (
+      <Suspense fallback={null}>
+        <ComponentMarketplaceModal
+          open={componentBrowserOpen}
+          onOpenChange={setComponentBrowserOpen}
+          onSelect={handleComponentSelect}
+        />
+      </Suspense>
+    )}
     </>
   );
 }

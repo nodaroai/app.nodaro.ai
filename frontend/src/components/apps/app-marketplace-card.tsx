@@ -9,6 +9,7 @@ interface AppMarketplaceCardProps {
   isFavorited: boolean
   onToggleFavorite: (appId: string) => void
   videoAutoplay?: boolean
+  onSelect?: (app: AppBrowseCard) => void
 }
 
 function formatCount(n: number): string {
@@ -16,7 +17,7 @@ function formatCount(n: number): string {
   return String(n)
 }
 
-export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAutoplay = true }: AppMarketplaceCardProps) {
+export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAutoplay = true, onSelect }: AppMarketplaceCardProps) {
   const navigate = useNavigate()
   const categoryLabel = APP_CATEGORIES.find((c) => c.value === app.category)?.label ?? "Other"
   const categoryColor = CATEGORY_COLORS[app.category] ?? CATEGORY_COLORS.other
@@ -24,7 +25,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
   return (
     <div
       className="group relative bg-card border border-border rounded-xl overflow-hidden hover:border-zinc-400 dark:hover:border-zinc-600 transition-all cursor-pointer"
-      onClick={() => navigate(`/app/${app.slug}`)}
+      onClick={() => onSelect ? onSelect(app) : navigate(`/app/${app.slug}`)}
     >
       {/* Preview media (16:9) */}
       <div className="relative aspect-video bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-900 overflow-hidden">
