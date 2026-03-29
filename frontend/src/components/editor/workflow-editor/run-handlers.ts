@@ -686,6 +686,7 @@ interface NodeExecutionState {
     thumbnailUrl?: string;
     paramOutputs?: Record<string, string>;
     previewItems?: Array<{ type: string; value: string; sourceNodeId: string; sourceNodeLabel: string }>;
+    _outputResults?: Record<string, string>;
   };
   error?: string;
 }
@@ -785,6 +786,24 @@ function syncNodeStatesToStore(
           updates.previewItems = state.output.previewItems;
         if (state.output.paramOutputs)
           updates.__triggerData = state.output.paramOutputs;
+
+        // Component node: map _outputResults to outputResults + extract preview URL
+        if (state.output._outputResults && node.type === "component") {
+          const outputResults = state.output._outputResults as Record<string, string>;
+          updates.outputResults = outputResults;
+          // Find the first output URL for generatedResults / preview
+          const firstUrl = Object.values(outputResults).find((v) => typeof v === "string" && v.startsWith("http"));
+          if (firstUrl) {
+            // Determine media type from URL for legacy field mapping
+            if (/\.(png|jpg|jpeg|webp|gif|svg)/i.test(firstUrl)) {
+              updates.generatedImageUrl = firstUrl;
+            } else if (/\.(mp4|mov|webm)/i.test(firstUrl)) {
+              updates.generatedVideoUrl = firstUrl;
+            } else if (/\.(mp3|wav|ogg|m4a)/i.test(firstUrl)) {
+              updates.generatedAudioUrl = firstUrl;
+            }
+          }
+        }
         if (state.output.thumbnailUrl)
           updates.thumbnailUrl = state.output.thumbnailUrl;
         if (state.output.listResults && state.output.listResults.length > 0) {
