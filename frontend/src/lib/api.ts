@@ -881,6 +881,8 @@ export async function generateVideo(
     }
   }
 
+  // Debug: log imageUrl to diagnose "invalid url" from Zod validation
+  if (body.imageUrl) console.warn("[generateVideo] imageUrl:", JSON.stringify(body.imageUrl))
   const res = await fetch(`${API_BASE_URL}/v1/generate-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
