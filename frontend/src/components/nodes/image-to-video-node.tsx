@@ -722,6 +722,8 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         onClose={() => setPreviewOpen(false)}
         type="video"
         url={activeUrl}
+        results={results}
+        initialIndex={activeIndex}
       />
     )}
 

@@ -293,6 +293,8 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         onClose={() => setPreviewOpen(false)}
         type="image"
         url={activeUrl}
+        results={results}
+        initialIndex={activeIndex}
       />
     )}
     <DeleteConfirmationDialog

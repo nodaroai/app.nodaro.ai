@@ -158,6 +158,8 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
         onClose={() => setPreviewOpen(false)}
         type="audio"
         url={activeUrl}
+        results={results}
+        initialIndex={activeIndex}
       />
     )}
     </div>

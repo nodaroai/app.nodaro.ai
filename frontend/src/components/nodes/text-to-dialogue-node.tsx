@@ -164,7 +164,7 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
       }}
     />
     {activeUrl && (
-      <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="audio" url={activeUrl} />
+      <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="audio" url={activeUrl} results={results} initialIndex={activeIndex} />
     )}
     </div>
   )
