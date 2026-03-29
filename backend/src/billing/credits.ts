@@ -3,6 +3,7 @@ import { hasCredits } from "../lib/config.js"
 import { getAppSettings } from "../lib/app-settings.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
+import { buildLlmCreditIdentifier } from "../../../packages/shared/src/llm-models.js"
 
 // ============================================================
 // Types
@@ -331,6 +332,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "ai-writer": 5,                // standard
   "ai-writer:economy": 3,
   "ai-writer:premium": 15,
+  "llm-chat": 5,                 // standard
+  "llm-chat:economy": 3,
+  "llm-chat:premium": 15,
   "scene-graph-ai": 10,          // standard
   "scene-graph-ai:economy": 5,
   "scene-graph-ai:premium": 30,
@@ -1402,6 +1406,12 @@ function getNodeModelIdentifier(node: { type: string; data?: Record<string, unkn
 
   // AI Writer always uses "ai-writer"
   if (nodeType === "ai-writer") return "ai-writer"
+
+  // LLM Chat uses tiered credit identifier based on selected model
+  if (nodeType === "llm-chat") {
+    const llmModel = data.llmModel as string | undefined
+    return buildLlmCreditIdentifier("llm-chat", llmModel)
+  }
 
   // Suno generate/cover/extend use "model" field (V4/V5)
   if (nodeType.startsWith("suno-") && nodeType !== "suno-lyrics" && nodeType !== "suno-separate" && nodeType !== "suno-music-video") {

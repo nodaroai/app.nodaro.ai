@@ -56,6 +56,7 @@ import {
   generateImage,
   getJobStatus,
   generateAIWriterStream,
+  llmChatStream,
   setForcePrivate,
   qaCheckApi,
   saveToStorageApi,
@@ -95,6 +96,7 @@ import type {
   TranscribeData,
   ImageToTextData,
   AIWriterNodeData,
+  LLMChatData,
   LipSyncData,
   SpeechToVideoData,
   SoraStoryboardData,
@@ -1881,6 +1883,80 @@ export function executeNode(
           errorMessage: errMsg,
         });
         guardedToast.error("Image description failed", { description: errMsg });
+        throw err;
+      });
+  }
+
+  if (node.type === "llm-chat") {
+    const chatData = node.data as LLMChatData;
+    const { updateNodeData } = useWorkflowStore.getState();
+
+    const systemPrompt =
+      typeof inputs.systemPrompt === "string" && inputs.systemPrompt.trim()
+        ? inputs.systemPrompt
+        : chatData.systemPrompt;
+
+    const userInput =
+      overridePrompt ||
+      (typeof inputs.prompt === "string" && inputs.prompt.trim()
+        ? inputs.prompt
+        : chatData.userInput);
+
+    if (!userInput?.trim()) {
+      toast.error(`Node "${chatData.label}": no user prompt provided`);
+      return Promise.reject(new Error("No user prompt"));
+    }
+
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      errorMessage: undefined,
+      generatedText: "",
+      activeResultIndex: -1,
+    });
+
+    return llmChatStream({
+      userId: ctx.userId ?? "",
+      systemPrompt: systemPrompt || "",
+      userInput,
+      referenceImageUrls: inputs.referenceImageUrls,
+      temperature: chatData.temperature ?? 0.7,
+      maxTokens: chatData.maxTokens ?? 2048,
+      llmModel: chatData.llmModel,
+      onToken: (token) => {
+        const fresh = useWorkflowStore
+          .getState()
+          .nodes.find((n) => n.id === node.id);
+        const prev =
+          (fresh?.data as LLMChatData | undefined)?.generatedText ?? "";
+        updateNodeData(node.id, { generatedText: prev + token });
+      },
+    })
+      .then((result) => {
+        const existingResults =
+          (
+            useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
+              ?.data as LLMChatData | undefined
+          )?.generatedResults ?? [];
+        const newResult = {
+          text: result.generatedText,
+          jobId: result.jobId,
+          timestamp: new Date().toISOString(),
+        };
+        updateNodeData(node.id, {
+          executionStatus: "completed",
+          generatedText: result.generatedText,
+          generatedResults: [newResult, ...existingResults].slice(0, 10),
+          activeResultIndex: 0,
+        });
+        guardedToast.success("LLM Chat completed");
+        return result.generatedText ?? "";
+      })
+      .catch((err: Error) => {
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err.message || "LLM Chat failed",
+        });
+        guardedToast.error(`LLM Chat failed: ${err.message}`);
         throw err;
       });
   }

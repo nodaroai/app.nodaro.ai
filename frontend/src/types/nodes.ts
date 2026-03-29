@@ -1877,6 +1877,24 @@ export type FaceNodeData = {
   fieldMappings: FieldMappings
 }
 
+// --- LLM Chat Node Data ---
+
+export type LLMChatData = {
+  [key: string]: unknown
+  label: string
+  systemPrompt: string
+  userInput: string
+  llmModel?: string
+  temperature: number
+  maxTokens: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedText?: string
+  generatedResults?: Array<{ text: string; jobId?: string; timestamp?: string }>
+  activeResultIndex?: number
+}
+
 // --- AI Writer Node Data ---
 
 export type AIWriterNodeData = {
@@ -2291,6 +2309,7 @@ export type SceneNodeData =
   | ObjectNodeData
   | LocationNodeData
   | FaceNodeData
+  | LLMChatData
   | AIWriterNodeData
   | ListNodeData
   | LoopNodeData
@@ -2397,6 +2416,7 @@ export type SceneNodeType =
   | "face"
   | "object"
   | "location"
+  | "llm-chat"
   | "ai-writer"
   | "combine-text"
   | "split-text"
@@ -3773,6 +3793,30 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedVideoUrl: "",
       videoExecutionStatus: "idle",
     } as SceneNodeDataType,
+  },
+  // LLM Chat
+  {
+    type: "llm-chat",
+    label: "LLM Chat",
+    category: "ai",
+    creditCost: 3,
+    inputs: ["prompt", "references", "system-prompt"],
+    outputs: ["text"],
+    defaultData: {
+      label: "LLM Chat",
+      systemPrompt: "",
+      userInput: "",
+      temperature: 0.7,
+      maxTokens: 2048,
+      fieldMappings: {},
+    } as LLMChatData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "text" as const }],
+    exposableFields: [
+      { key: "systemPrompt", label: "System Prompt", type: "text" as const },
+      { key: "userInput", label: "User Prompt", type: "text" as const },
+      { key: "temperature", label: "Temperature", type: "slider" as const, min: 0, max: 2, step: 0.1 },
+      { key: "maxTokens", label: "Max Tokens", type: "slider" as const, min: 256, max: 16384, step: 256 },
+    ],
   },
   // AI Agent
   {

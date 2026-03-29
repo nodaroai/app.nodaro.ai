@@ -132,6 +132,7 @@ export function calculateLlmCost(
 
 export type LlmFeature =
   | "ai-writer"
+  | "llm-chat"
   | "prompt-helper"
   | "scene-graph-ai"
   | "after-effects"
@@ -146,6 +147,7 @@ export type LlmFeature =
 /** Feature → default model when user hasn't selected one */
 export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   "ai-writer": "claude-sonnet-4.6",
+  "llm-chat": "gemini-3-flash",
   "prompt-helper": "gemini-3-flash",
   "scene-graph-ai": "claude-sonnet-4.6",
   "after-effects": "claude-sonnet-4.6",

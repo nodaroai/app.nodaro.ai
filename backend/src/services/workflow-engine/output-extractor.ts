@@ -599,7 +599,7 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   }
 
   // Text-generating nodes
-  if (type === "ai-writer" || type === "suno-lyrics" || type === "suno-style-boost") {
+  if (type === "ai-writer" || type === "llm-chat" || type === "suno-lyrics" || type === "suno-style-boost") {
     const text = data.generatedText as string | undefined
     return text ? { text } : undefined
   }

@@ -165,6 +165,7 @@ export interface ResolvedInputs {
   maskUrl?: string
   kieTaskId?: string
   caption?: string
+  systemPrompt?: string
   characterIdList?: string[]
   componentInputMap?: Record<string, string>
 }

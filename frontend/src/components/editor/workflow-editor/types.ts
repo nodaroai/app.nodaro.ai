@@ -184,6 +184,7 @@ export const EXECUTABLE_TYPES = new Set([
   "object",
   "location",
   "ai-writer",
+  "llm-chat",
   "combine-text",
   "split-text",
   "audio-isolation",

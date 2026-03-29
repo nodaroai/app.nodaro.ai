@@ -476,6 +476,7 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "suno-lyrics",
   "image-to-text",
   "ai-writer",
+  "llm-chat",
   "combine-text",
   "split-text",
   "suno-style-boost",
@@ -654,6 +655,10 @@ function routeOutput(
   if (edge.targetHandle === "references") {
     // Accumulate reference images from upstream image-producing nodes
     inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+    return
+  }
+  if (edge.targetHandle === "system-prompt") {
+    inputs.systemPrompt = output
     return
   }
 

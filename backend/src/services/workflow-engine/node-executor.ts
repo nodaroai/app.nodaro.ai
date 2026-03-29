@@ -39,6 +39,7 @@ import { isSourceNode, isSkipNode } from "./execution-graph.js"
 
 const SYNC_HTTP_NODES = new Set([
   "ai-writer",
+  "llm-chat",
   "video-composer",
   "after-effects",
   "lottie-overlay",
@@ -60,6 +61,7 @@ const SYNC_HTTP_NODES = new Set([
 // Maps node type to internal route path
 const SYNC_HTTP_ROUTES: Record<string, string> = {
   "ai-writer": "/v1/ai-writer/generate",
+  "llm-chat": "/v1/llm-chat/generate",
   "video-composer": "/v1/scene-graph-ai/generate",
   "after-effects": "/v1/after-effects-ai/generate",
   "lottie-overlay": "/v1/lottie-overlay-ai/generate",
@@ -283,6 +285,17 @@ function buildSyncHttpBody(
         llmModel: data.llmModel,
         temperature: data.temperature ?? 0.7,
         maxTokens: data.maxTokens ?? 4096,
+      }
+
+    case "llm-chat":
+      return {
+        systemPrompt: resolvedInputs.systemPrompt || data.systemPrompt,
+        userInput: resolvedInputs.prompt || data.userInput,
+        referenceImageUrls: resolvedInputs.referenceImageUrls,
+        llmModel: data.llmModel,
+        temperature: data.temperature ?? 0.7,
+        maxTokens: data.maxTokens ?? 2048,
+        userId: ctx.userId,
       }
 
     case "video-composer": {

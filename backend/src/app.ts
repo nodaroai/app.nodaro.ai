@@ -72,6 +72,7 @@ import { adminCreditAnomalyRoutes } from "./routes/admin-credit-anomalies.js"
 import { adminKieCreditsRoutes } from "./routes/admin-kie-credits.js"
 import { adminSubscriptionHealthRoutes } from "./routes/admin-subscription-health.js"
 import { aiWriterRoutes } from "./routes/ai-writer.js"
+import { llmChatRoutes } from "./routes/llm-chat.js"
 import { downloadRoutes } from "./routes/download.js"
 import { renderVideoRoutes } from "./routes/render-video.js"
 import { sceneGraphAIRoutes } from "./routes/scene-graph-ai.js"
@@ -217,6 +218,7 @@ export async function buildApp() {
   await app.register(adminKieCreditsRoutes)
   await app.register(adminSubscriptionHealthRoutes)
   await app.register(aiWriterRoutes)
+  await app.register(llmChatRoutes)
   await app.register(downloadRoutes)
   await app.register(renderVideoRoutes)
   await app.register(sceneGraphAIRoutes)

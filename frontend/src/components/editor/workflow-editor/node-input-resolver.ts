@@ -76,6 +76,7 @@ export interface FrontendResolvedInputs {
   kieTaskId?: string;
   characterIdList?: string[];
   componentInputMap?: Record<string, string>;
+  systemPrompt?: string;
 }
 
 /** Route audio to suno-mashup's dual-input fields (audioUrl + audioUrl2). */
@@ -512,6 +513,10 @@ export function resolveNodeInputs(
     }
     if (srcEdge.targetHandle === "references") {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
+      continue;
+    }
+    if (srcEdge.targetHandle === "system-prompt") {
+      inputs.systemPrompt = output;
       continue;
     }
     if (srcEdge.targetHandle === "audio") {
@@ -959,7 +964,7 @@ export function resolveNodeInputs(
       }
     } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "suno-style-boost" || src.type === "image-to-text" || src.type === "forced-alignment" || src.type === "qa-check") {
       inputs.prompt = output;
-    } else if (src.type === "ai-writer") {
+    } else if (src.type === "ai-writer" || src.type === "llm-chat") {
       inputs.prompt = output;
     } else if (src.type === "combine-text") {
       inputs.prompt = output;
