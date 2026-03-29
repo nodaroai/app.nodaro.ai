@@ -881,8 +881,8 @@ export async function generateVideo(
     }
   }
 
-  // Debug: log imageUrl to diagnose "invalid url" from Zod validation
-  if (body.imageUrl) console.warn("[generateVideo] imageUrl:", JSON.stringify(body.imageUrl))
+  // Debug: log full body to diagnose 400 from Zod validation
+  console.warn("[generateVideo] body:", JSON.stringify(body, null, 2))
   const res = await fetch(`${API_BASE_URL}/v1/generate-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
@@ -890,6 +890,7 @@ export async function generateVideo(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
+    console.warn("[generateVideo] error response:", JSON.stringify(err))
     throwApiError(err, "Failed to start video generation")
   }
   return res.json()
