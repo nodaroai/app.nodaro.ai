@@ -40,14 +40,14 @@ export function resolveLoopColumnValues(
         const edgeData = colInEdge.data as Record<string, unknown> | undefined;
         const useAll = !!edgeData?.useAllResults;
         const allOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll);
-        if (allOutputs && allOutputs.length > 0) return allOutputs;
+        if (allOutputs && allOutputs.length > 0) return allOutputs.map((v) => v.trim());
         // Fallback: single output + delimiter split (text sources)
         const upstreamOutput = extractNodeOutput(
           upstreamNode as WorkflowNode,
           colInEdge.sourceHandle ?? undefined,
         );
         if (upstreamOutput) {
-          return splitByLoopDelimiter(upstreamOutput, loopData.columns);
+          return splitByLoopDelimiter(upstreamOutput, loopData.columns).map((v) => v.trim());
         }
       }
     }
@@ -63,10 +63,10 @@ export function resolveLoopColumnValues(
       const edgeData = loopInEdges[0].data as Record<string, unknown> | undefined;
       const useAll = !!edgeData?.useAllResults;
       const allOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll);
-      if (allOutputs && allOutputs.length > 0) return allOutputs;
+      if (allOutputs && allOutputs.length > 0) return allOutputs.map((v) => v.trim());
       const upstreamOutput = extractNodeOutput(upstreamNode as WorkflowNode);
       if (upstreamOutput) {
-        return splitByLoopDelimiter(upstreamOutput, loopData.columns);
+        return splitByLoopDelimiter(upstreamOutput, loopData.columns).map((v) => v.trim());
       }
     }
   }
@@ -469,21 +469,21 @@ export function resolveNodeInputs(
       );
       if (ranged.length > 0) {
         const loopEdgeMode = edgeData?.outputMode as string | undefined;
+        let picked: string | undefined;
         if (loopEdgeMode === "item") {
           const itemIndex = edgeData?.itemIndex as string | undefined;
-          output = ranged[resolveIndex(itemIndex ?? "1", ranged.length)];
+          picked = ranged[resolveIndex(itemIndex ?? "1", ranged.length)];
         } else if (loopEdgeMode?.startsWith("item:")) {
           const idx = parseInt(loopEdgeMode.split(":")[1], 10);
-          output = ranged[idx] ?? ranged[0];
+          picked = ranged[idx] ?? ranged[0];
         } else if (loopEdgeMode === "last") {
-          output = ranged[ranged.length - 1];
+          picked = ranged[ranged.length - 1];
         } else if (listIterationIndex !== undefined) {
-          // Fan-out: wrap with modulo for shorter sources
-          output = ranged[listIterationIndex % ranged.length];
+          picked = ranged[listIterationIndex % ranged.length];
         } else {
-          // Single execution: use first item
-          output = ranged[0];
+          picked = ranged[0];
         }
+        if (picked) output = picked.trim();
       }
     }
 
