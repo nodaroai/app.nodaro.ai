@@ -117,6 +117,10 @@ const MOTION_CREDIT_COSTS: Record<string, number> = {
  */
 export function estimateNodeCredits(node: { type?: string; data?: Record<string, unknown> }): number {
   const nodeType = node.type ?? ""
+  // Component nodes: use the published estimatedCredits stored on the node data
+  if (nodeType === "component" && node.data) {
+    return (node.data.estimatedCredits as number) ?? 0
+  }
   if (nodeType === "motion-transfer" && node.data) {
     const provider = (node.data.provider as string) ?? "kling"
     const resolution = (node.data.resolution as string) ?? "720p"

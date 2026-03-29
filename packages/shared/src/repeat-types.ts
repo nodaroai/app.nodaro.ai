@@ -10,6 +10,7 @@ export const REPEATABLE_NODE_TYPES = new Set([
   "motion-transfer", "extend-video",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "voice-changer", "dubbing", "voice-remix", "voice-design",
+  "component",
 ])
 
 /** Sentinel value used as list item for repeat-only execution (no list fan-out input).

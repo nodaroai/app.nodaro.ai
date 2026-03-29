@@ -27,6 +27,19 @@ import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-wor
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
 import { APP_CATEGORIES, OUTPUT_TYPES } from "@/lib/app-categories"
 import { INPUT_FIELD_MAP, OUTPUT_FIELD_MAP } from "@nodaro-shared/component-types"
+import type { PresentationItem } from "@nodaro-shared/presentation-types"
+
+/** Extract unique node IDs from a PresentationItem list (recursive for groups). */
+function extractItemNodeIds(items: readonly PresentationItem[]): Set<string> {
+  const ids = new Set<string>()
+  for (const item of items) {
+    if ("nodeId" in item) ids.add(item.nodeId)
+    if (item.type === "group") {
+      for (const id of extractItemNodeIds(item.items)) ids.add(id)
+    }
+  }
+  return ids
+}
 
 interface PublishDialogProps {
   workflowId: string
@@ -115,8 +128,48 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     if (handlesInitialized.current || !nodes) return
     handlesInitialized.current = true
 
-    const inputNodes = nodes.filter((n) => (n.data as Record<string, unknown>)?.presentationInput)
-    const outputNodes = nodes.filter((n) => (n.data as Record<string, unknown>)?.presentationOutput)
+    // Derive from curated presentation settings (outputItems/inputItems) to match
+    // what the user sees in Present mode.  Falls back to raw flags when no curated
+    // list exists (e.g. first-time publish before using the node-picker dialog).
+    const oItems = presentationSettings?.outputItems
+    const oOrder = presentationSettings?.outputOrder
+    const iItems = presentationSettings?.inputItems
+    const iOrder = presentationSettings?.inputOrder
+
+    let outputNodeIds: Set<string>
+    if (oItems && oItems.length > 0) {
+      outputNodeIds = extractItemNodeIds(oItems)
+    } else if (oOrder && oOrder.length > 0) {
+      outputNodeIds = new Set(oOrder)
+    } else {
+      outputNodeIds = new Set(
+        nodes.filter((n) => (n.data as Record<string, unknown>)?.presentationOutput).map((n) => n.id),
+      )
+    }
+
+    let inputNodeIds: Set<string>
+    if (iItems && iItems.length > 0) {
+      inputNodeIds = extractItemNodeIds(iItems)
+    } else if (iOrder && iOrder.length > 0) {
+      inputNodeIds = new Set(iOrder)
+    } else {
+      inputNodeIds = new Set(
+        nodes.filter((n) => (n.data as Record<string, unknown>)?.presentationInput).map((n) => n.id),
+      )
+    }
+
+    // Deduplicate by node ID — the nodes array is [...inputNodes, ...outputNodes]
+    // so a node with BOTH flags appears twice in the array.
+    const dedupById = (arr: typeof nodes) => {
+      const seen = new Set<string>()
+      return arr.filter((n) => {
+        if (seen.has(n.id)) return false
+        seen.add(n.id)
+        return true
+      })
+    }
+    const inputNodes = dedupById(nodes.filter((n) => inputNodeIds.has(n.id)))
+    const outputNodes = dedupById(nodes.filter((n) => outputNodeIds.has(n.id)))
 
     // Only source node types (text-prompt, upload-*, parameters) can be component
     // input handles. AI generation nodes (generate-image etc.) are NOT valid inputs —
@@ -172,38 +225,90 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
   // with proper option lists (same data the Present mode uses).
   const buildExposedSettings = useCallback(() => {
     if (!nodes) return []
-    const inputNodes = nodes.filter((n) => (n.data as Record<string, unknown>)?.presentationInput)
+
+    // Use curated input list (same source as handle derivation) so we only
+    // expose settings for nodes actually visible in Present mode.
+    const iItems = presentationSettings?.inputItems
+    const iOrder = presentationSettings?.inputOrder
+    let inputNodeIds: Set<string>
+    if (iItems && iItems.length > 0) {
+      inputNodeIds = extractItemNodeIds(iItems)
+    } else if (iOrder && iOrder.length > 0) {
+      inputNodeIds = new Set(iOrder)
+    } else {
+      inputNodeIds = new Set(
+        nodes.filter((n) => (n.data as Record<string, unknown>)?.presentationInput).map((n) => n.id),
+      )
+    }
+
+    // Build per-node field selections from curated input items.
+    // When a user toggles specific fields in the node-picker dialog,
+    // those become type:"field" items (replacing the type:"node" item).
+    // If a node has field items → only expose those specific fields.
+    // If a node has a "node" item (no field selections) → expose all fields.
+    const fieldSelections = new Map<string, Set<string>>() // nodeId → selected field keys
+    const nodeItemIds = new Set<string>() // nodes present as type:"node" (all fields)
+    if (iItems && iItems.length > 0) {
+      const collect = (items: readonly PresentationItem[]) => {
+        for (const item of items) {
+          if (item.type === "field") {
+            let fields = fieldSelections.get(item.nodeId)
+            if (!fields) { fields = new Set(); fieldSelections.set(item.nodeId, fields) }
+            fields.add(item.field)
+          } else if (item.type === "node") {
+            nodeItemIds.add(item.nodeId)
+          } else if (item.type === "group") {
+            collect(item.items)
+          }
+        }
+      }
+      collect(iItems)
+    }
+
+    const inputNodes = nodes.filter((n) => inputNodeIds.has(n.id))
     const nonSourceInputNodes = inputNodes.filter((n) => !INPUT_FIELD_MAP[n.type || ""])
-    const settings: Array<{ nodeId: string; field: string; label: string; type: "select" | "text" | "number" | "toggle"; allowedValues?: unknown[]; defaultValue: unknown }> = []
-    const seen = new Set<string>() // deduplicate by nodeType — only first node of each type
+    const settings: Array<{ nodeId: string; field: string; label: string; type: "select" | "text" | "number" | "toggle"; allowedValues?: unknown[]; options?: Array<{ value: string; label: string }>; defaultValue: unknown }> = []
+    const seen = new Set<string>() // deduplicate by nodeId:field — prevents duplicate entries
 
     for (const node of nonSourceInputNodes) {
       const nodeType = node.type || ""
-      if (seen.has(nodeType)) continue
-      seen.add(nodeType)
-
       const def = NODE_DEF_MAP.get(nodeType)
       if (!def?.exposableFields) continue
+
+      // Only expose fields the user explicitly toggled as type:"field" items
+      // in the node-picker dialog.  A type:"node" item (or raw flag fallback)
+      // means the node is visible in Present mode, but the user didn't choose
+      // which settings to expose — so we expose NONE by default.
+      const selectedFields = fieldSelections.get(node.id)
+      if (!selectedFields || selectedFields.size === 0) continue
 
       const nd = (node.data ?? {}) as Record<string, unknown>
       const nodeLabel = getNodeLabel(node)
 
       for (const f of def.exposableFields) {
+        if (!selectedFields.has(f.key)) continue
+
+        const dedup = `${node.id}:${f.key}`
+        if (seen.has(dedup)) continue
+        seen.add(dedup)
+
         const val = nd[f.key]
         if (val === undefined) continue
         const settingType = f.type === "slider" ? "number" as const : f.type as "select" | "text" | "number" | "toggle"
+        const opts = f.options?.map((o) => ({ value: String(o.value), label: o.label }))
         settings.push({
           nodeId: node.id,
           field: f.key,
           label: `${nodeLabel} — ${f.label}`,
           type: settingType,
           allowedValues: f.options?.map((o) => o.value),
+          options: opts,
           defaultValue: val,
         })
       }
     }
     return settings
-  }, [nodes])
+  }, [nodes, presentationSettings])
 
   const handlePublish = useCallback(async () => {
     if (!publishName.trim()) {
