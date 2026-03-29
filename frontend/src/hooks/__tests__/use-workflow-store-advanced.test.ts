@@ -188,7 +188,7 @@ describe("useWorkflowStore advanced", () => {
       expect(state.isDirty).toBe(true)
     })
 
-    it("auto-creates a Prompt column when connecting to a Loop node with 0 columns", () => {
+    it("auto-creates a column via quick-add handle when connecting to a Loop node", () => {
       const loopNode = {
         id: "loop_1",
         type: "loop",
@@ -206,14 +206,14 @@ describe("useWorkflowStore advanced", () => {
         source: "src_1",
         target: "loop_1",
         sourceHandle: null,
-        targetHandle: "in",
+        targetHandle: "col_add",
       })
 
       const loop = useWorkflowStore.getState().nodes.find((n) => n.id === "loop_1")!
       const loopData = loop.data as Record<string, unknown>
       const columns = loopData.columns as { name: string }[]
       expect(columns).toHaveLength(1)
-      expect(columns[0].name).toBe("Prompt")
+      expect(columns[0].name).toBe("Text Prompt")
     })
 
     it("does NOT auto-create columns on a Loop node that already has columns", () => {
