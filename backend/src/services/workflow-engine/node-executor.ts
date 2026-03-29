@@ -20,7 +20,6 @@ import { buildNodeOutputFromJobData } from "./output-extractor.js"
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
-import { executeAppRun } from "../app-execution.js"
 import { mergeExposedSettings } from "../../../../packages/shared/src/component-types.js"
 import type { ComponentMetadata } from "../../../../packages/shared/src/component-types.js"
 import type {
@@ -696,7 +695,6 @@ async function executeComponentNode(
 ): Promise<NodeOutput> {
   const data = node.data as Record<string, unknown>
   const appSlug = data.appSlug as string
-  const appVersionId = data.appVersionId as string
   const componentMetadata = data.componentMetadata as ComponentMetadata
   const exposedSettings = (data.exposedSettings as Record<string, unknown>) ?? {}
   const depth = ctx.componentDepth ?? 0
@@ -712,87 +710,70 @@ async function executeComponentNode(
     throw new Error(`Component nesting depth exceeded (max 5). Current depth: ${depth}`)
   }
 
-  // Look up published_apps record for workflow_id
-  const { data: appVersion } = await supabase
-    .from("published_apps")
-    .select("id, workflow_id")
-    .eq("id", appVersionId)
-    .single()
-
-  if (!appVersion) {
-    throw new Error(`Component version not found: ${appVersionId}`)
-  }
-
-  // Build inputOverrides from resolved inputs + exposed settings
+  // Build inputOverrides (handle-aware)
   const inputOverrides: Record<string, Record<string, unknown>> = {}
 
   for (const handle of componentMetadata.inputs) {
-    // Map upstream resolved values to inner node overrides
-    // Try the handle's fieldKey first, then fall back to type-based matching
-    const value = resolvedInputs[handle.fieldKey as keyof ResolvedInputs]
-      ?? (handle.type === "image" ? resolvedInputs.imageUrl : undefined)
-      ?? (handle.type === "video" ? resolvedInputs.videoUrl : undefined)
-      ?? (handle.type === "audio" ? resolvedInputs.audioUrl : undefined)
-      ?? (handle.type === "text" ? resolvedInputs.prompt : undefined)
+    const value =
+      resolvedInputs.componentInputMap?.[handle.id] ??
+      resolvedInputs[handle.fieldKey as keyof ResolvedInputs] ??
+      (handle.type === "image" ? resolvedInputs.imageUrl : undefined) ??
+      (handle.type === "video" ? resolvedInputs.videoUrl : undefined) ??
+      (handle.type === "audio" ? resolvedInputs.audioUrl : undefined) ??
+      (handle.type === "text" ? resolvedInputs.prompt : undefined)
     if (value !== undefined) {
       inputOverrides[handle.id] = { ...inputOverrides[handle.id], [handle.fieldKey]: value }
     }
   }
 
-  // Merge exposed settings into inputOverrides
   const mergedOverrides = mergeExposedSettings(inputOverrides, exposedSettings, componentMetadata)
 
-  // Execute via app-runner core function (QUEUED execution)
-  const result = await executeAppRun({
-    appVersionId: appVersion.id,
-    workflowId: appVersion.workflow_id,
-    userId: ctx.userId,
-    appId: appVersion.id,
-    inputOverrides: mergedOverrides,
-    componentDepth: depth + 1,
-    executingComponentIds: [...ancestorIds, appSlug],
+  // Call the component-execute route via internal HTTP
+  // Uses the same X-Internal-Orchestrator pattern as other sync HTTP nodes
+  const port = process.env.BACKEND_PORT || process.env.PORT || "8000"
+  const res = await fetch(`http://localhost:${port}/v1/component/execute`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Internal-Orchestrator": "true",
+    },
+    body: JSON.stringify({
+      appSlug,
+      inputOverrides: mergedOverrides,
+      pinnedVersion: data.pinnedVersion as number | undefined,
+      componentDepth: depth + 1,
+      executingComponentIds: [...ancestorIds, appSlug],
+      userId: ctx.userId,
+    }),
   })
 
-  // Poll for completion
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}))
+    throw new Error((errBody as Record<string, { message?: string }>).error?.message ?? `Component execute failed (${res.status})`)
+  }
+
+  const { jobId } = (await res.json()) as { jobId: string }
+
+  // Poll wrapper job
   const startTime = Date.now()
-
   while (Date.now() - startTime < COMPONENT_TIMEOUT_MS) {
-    if (ctx.cancelled) {
-      throw new Error("Component execution cancelled")
-    }
+    if (ctx.cancelled) throw new Error("Component execution cancelled")
 
-    const { data: exec } = await supabase
-      .from("workflow_executions")
-      .select("status")
-      .eq("id", result.executionId)
+    const { data: job } = await supabase
+      .from("jobs")
+      .select("status, output_data, error_message, credits_actual")
+      .eq("id", jobId)
       .single()
 
-    if (!exec) throw new Error("Component execution record not found")
+    if (!job) throw new Error("Component wrapper job not found")
 
-    if (exec.status === "completed") {
-      // Only fetch node_states when completed (avoid transferring large JSONB during polling)
-      const { data: fullExec } = await supabase
-        .from("workflow_executions")
-        .select("node_states")
-        .eq("id", result.executionId)
-        .single()
-
-      const nodeStates = (fullExec?.node_states ?? {}) as Record<string, { output?: Record<string, unknown> }>
-      const outputResults: Record<string, string> = {}
-
-      for (const handle of componentMetadata.outputs) {
-        const nodeState = nodeStates[handle.id]
-        const value = nodeState?.output?.[handle.fieldKey]
-        if (value && typeof value === "string") {
-          outputResults[handle.id] = value
-        }
-      }
-
-      return { _outputResults: outputResults } as NodeOutput
+    if (job.status === "completed") {
+      const outputData = (job.output_data ?? {}) as Record<string, string>
+      return { _outputResults: outputData }
     }
 
-    if (exec.status === "failed") {
-      throw new Error("Component execution failed")
+    if (job.status === "failed") {
+      throw new Error(job.error_message ?? "Component execution failed")
     }
 
     await sleep(COMPONENT_POLL_INTERVAL_MS)

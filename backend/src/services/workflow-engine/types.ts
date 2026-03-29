@@ -166,6 +166,7 @@ export interface ResolvedInputs {
   kieTaskId?: string
   caption?: string
   characterIdList?: string[]
+  componentInputMap?: Record<string, string>
 }
 
 // ---------------------------------------------------------------------------

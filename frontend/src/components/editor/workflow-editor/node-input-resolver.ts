@@ -74,6 +74,7 @@ export interface FrontendResolvedInputs {
   maskUrl?: string;
   kieTaskId?: string;
   characterIdList?: string[];
+  componentInputMap?: Record<string, string>;
 }
 
 /** Route audio to suno-mashup's dual-input fields (audioUrl + audioUrl2). */
@@ -478,6 +479,16 @@ export function resolveNodeInputs(
       output = extractNodeOutput(src, srcEdge.sourceHandle ?? undefined);
     }
     if (!output) continue;
+
+    // Component-specific target routing — route by handle ID, not media type.
+    // This MUST come before generic handle routing so each component input
+    // gets its own distinct value even when multiple inputs share the same type.
+    if (node.type === "component" && srcEdge.targetHandle?.startsWith("in_")) {
+      const handleId = srcEdge.targetHandle.replace(/^in_/, "")
+      if (!inputs.componentInputMap) inputs.componentInputMap = {}
+      inputs.componentInputMap[handleId] = output
+      continue
+    }
 
     // --- Handle-specific routing takes priority (matches backend) ---
     if (srcEdge.targetHandle === "startFrame") {

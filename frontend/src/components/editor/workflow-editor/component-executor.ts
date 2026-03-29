@@ -1,15 +1,17 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { runPublishedApp, getAppExecutionStatus } from "@/lib/api"
-import { mergeExposedSettings, OUTPUT_FIELD_MAP } from "@nodaro-shared/component-types"
+import { executeComponent as executeComponentApi, getJobStatus } from "@/lib/api"
+import { mergeExposedSettings } from "@nodaro-shared/component-types"
 import type { ComponentMetadata } from "@nodaro-shared/component-types"
 import type { WorkflowNode, ComponentNodeData, GeneratedResult } from "@/types/nodes"
 import type { ExecutionContext } from "./types"
 import type { FrontendResolvedInputs } from "./node-input-resolver"
 
+const POLL_INTERVAL_MS = 2_500
+const TIMEOUT_MS = 30 * 60 * 1000
+
 /**
- * Execute a component node by calling the published app runner API and
- * polling for completion. Mirrors the sub-workflow-executor pattern but
- * delegates execution entirely to the backend orchestrator.
+ * Execute a component node via POST /v1/component/execute.
+ * Creates a wrapper job (black box) and polls it to completion.
  */
 export async function executeComponent(
   node: WorkflowNode,
@@ -32,13 +34,12 @@ export async function executeComponent(
 
   const exposedSettings = (data.exposedSettings as Record<string, unknown>) ?? {}
 
-  // Build inputOverrides from resolved upstream inputs.
-  // Each handle maps to a node ID in the underlying app; the fieldKey
-  // tells us which field on that node should receive the value.
+  // Build inputOverrides from resolved upstream inputs (handle-aware)
   const inputOverrides: Record<string, Record<string, unknown>> = {}
 
   for (const handle of metadata.inputs) {
     const value =
+      inputs.componentInputMap?.[handle.id] ??
       inputs[handle.fieldKey as keyof FrontendResolvedInputs] ??
       (handle.type === "image" ? inputs.imageUrl : undefined) ??
       (handle.type === "video" ? inputs.videoUrl : undefined) ??
@@ -50,7 +51,6 @@ export async function executeComponent(
     }
   }
 
-  // Merge user-configured exposed settings into the overrides
   const merged = mergeExposedSettings(inputOverrides, exposedSettings, metadata)
 
   // Mark running
@@ -63,44 +63,39 @@ export async function executeComponent(
   })
 
   try {
-    const { executionId } = await runPublishedApp(
-      data.appSlug,
-      merged,
-      undefined,
-      data.pinnedVersion || undefined,
-      true, // headless
-    )
+    // Get current workflow ID for job tagging
+    const workflowId = useWorkflowStore.getState().workflowId
 
-    // Poll for completion
-    const maxWaitMs = 30 * 60 * 1000
-    const pollIntervalMs = 3000
+    const { jobId } = await executeComponentApi({
+      appSlug: data.appSlug,
+      inputOverrides: merged,
+      pinnedVersion: data.pinnedVersion || undefined,
+      workflowId: workflowId || undefined,
+    })
+
+    // Poll wrapper job
     const startTime = Date.now()
     let lastProgress = -1
 
-    while (Date.now() - startTime < maxWaitMs) {
+    while (Date.now() - startTime < TIMEOUT_MS) {
       if (ctx.isWorkflowStale()) throw new Error("Workflow changed during execution")
 
-      const status = await getAppExecutionStatus(executionId)
+      const job = await getJobStatus(jobId)
 
-      if (status.status === "completed") {
-        const nodeStates = status.node_states as Record<string, { output?: Record<string, unknown> }>
+      if (job.status === "completed") {
+        const outputData = (job.output_data ?? {}) as Record<string, string>
         const outputResults: Record<string, string> = {}
 
         for (const handle of metadata.outputs) {
-          const nodeState = nodeStates[handle.id]
-          // Try the handle's fieldKey first, then fall back to the OUTPUT_FIELD_MAP lookup
-          const fieldKey = handle.fieldKey || OUTPUT_FIELD_MAP[handle.type] || handle.type
-          const value = nodeState?.output?.[fieldKey]
-          if (value && typeof value === "string") {
-            outputResults[handle.id] = value
+          if (outputData[handle.id]) {
+            outputResults[handle.id] = outputData[handle.id]
           }
         }
 
-        // Build generatedResults from the first media output for display
         const generatedResults: GeneratedResult[] = []
         const firstOutput = Object.values(outputResults)[0]
         if (firstOutput) {
-          generatedResults.push({ url: firstOutput, timestamp: new Date().toISOString(), jobId: "" })
+          generatedResults.push({ url: firstOutput, timestamp: new Date().toISOString(), jobId })
         }
 
         updateNodeData(node.id, {
@@ -114,20 +109,18 @@ export async function executeComponent(
         return firstOutput ?? ""
       }
 
-      if (status.status === "failed") {
-        throw new Error(status.error_message ?? "Component execution failed")
+      if (job.status === "failed") {
+        throw new Error(job.error_message ?? "Component execution failed")
       }
 
-      // Update progress only when changed to avoid unnecessary re-renders
-      if (status.total_nodes > 0) {
-        const progress = Math.round((status.completed_nodes / status.total_nodes) * 100)
-        if (progress !== lastProgress) {
-          updateNodeData(node.id, { currentJobProgress: progress })
-          lastProgress = progress
-        }
+      // Update progress from job progress field
+      const progress = typeof job.progress === "number" ? job.progress : 0
+      if (progress !== lastProgress) {
+        updateNodeData(node.id, { currentJobProgress: progress })
+        lastProgress = progress
       }
 
-      await new Promise((r) => setTimeout(r, pollIntervalMs))
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
     }
 
     throw new Error("Component execution timed out")

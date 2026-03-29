@@ -616,6 +616,14 @@ function routeOutput(
   const srcType = src.type
   const targetType = target.type
 
+  // Component-specific target routing — route by handle ID, not media type.
+  if (target.type === "component" && edge.targetHandle?.startsWith("in_")) {
+    const handleId = edge.targetHandle.replace(/^in_/, "")
+    if (!inputs.componentInputMap) inputs.componentInputMap = {}
+    inputs.componentInputMap[handleId] = output
+    return
+  }
+
   // --- Handle-specific routing takes priority for named input slots ---
   // These MUST be checked before source-type routing, otherwise source-type
   // handlers (e.g., generate-image → imageUrl) return early and these are

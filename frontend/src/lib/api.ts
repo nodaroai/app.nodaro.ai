@@ -4041,6 +4041,20 @@ export async function runPublishedApp(
   )
 }
 
+/** Execute a component node — creates a wrapper job and runs the inner workflow. */
+export async function executeComponent(params: {
+  appSlug: string
+  inputOverrides?: Record<string, Record<string, unknown>>
+  pinnedVersion?: number
+  workflowId?: string
+}): Promise<{ jobId: string }> {
+  return apiRequest(
+    "/v1/component/execute",
+    "Failed to execute component",
+    { method: "POST", body: params },
+  )
+}
+
 /** Create a draft run (before execution). */
 export async function createAppRun(
   slug: string,
