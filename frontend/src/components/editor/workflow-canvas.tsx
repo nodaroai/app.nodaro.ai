@@ -233,6 +233,26 @@ function getEdgeLabel(
     }
   }
 
+  // Component outputs — resolve type from metadata
+  if (srcType === "component" && srcHandle?.startsWith("out_") && sourceNode?.data) {
+    const metadata = sourceNode.data.componentMetadata as
+      { outputs?: Array<{ id: string; name?: string; type?: string }> } | undefined
+    const handleId = srcHandle.replace(/^out_/, "")
+    const port = metadata?.outputs?.find((o) => o.id === handleId)
+    if (port) {
+      const portType = port.type ?? "text"
+      // Image output → reference image target
+      if (portType === "image" && tgtType && REFERENCE_IMAGE_TARGETS.has(tgtType)) {
+        return { label: "Reference Image" }
+      }
+      const typeLabel = portType === "image" ? "Image"
+        : portType === "video" ? "Video"
+        : portType === "audio" ? "Audio"
+        : "Text"
+      return { label: port.name ?? typeLabel }
+    }
+  }
+
   // Otherwise use source handle label
   if (srcHandle && SOURCE_LABELS[srcHandle]) {
     return { label: SOURCE_LABELS[srcHandle] }

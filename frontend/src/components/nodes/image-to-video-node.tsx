@@ -289,21 +289,16 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     >
       {activeUrl && !showConfig && !isKling3 ? (
       <div className="relative w-full h-full group/video">
-        {activeThumbnail ? (
-          <CachedImage src={activeThumbnail} alt="Video preview"
-            className="w-full h-full object-cover rounded-xl"
-            thumbnail={!useFull} thumbnailWidth={320} />
-        ) : (
-          <video src={activeUrl} crossOrigin="anonymous" autoPlay={videoAutoplay} loop={videoAutoplay} muted playsInline
-            className="w-full h-full object-cover rounded-xl"
-            onLoadedMetadata={(e) => {
-              const video = e.currentTarget
-              const ratio = video.videoWidth / video.videoHeight
-              const baseWidth = 490
-              const baseHeight = Math.round(baseWidth / ratio)
-              setVideoDimensions({ width: baseWidth, height: Math.max(180, Math.min(600, baseHeight)) })
-            }} />
-        )}
+        <video src={activeUrl} crossOrigin="anonymous" autoPlay={videoAutoplay} loop={videoAutoplay} muted playsInline
+          poster={activeThumbnail}
+          className="w-full h-full object-cover rounded-xl"
+          onLoadedMetadata={(e) => {
+            const video = e.currentTarget
+            const ratio = video.videoWidth / video.videoHeight
+            const baseWidth = 490
+            const baseHeight = Math.round(baseWidth / ratio)
+            setVideoDimensions({ width: baseWidth, height: Math.max(180, Math.min(600, baseHeight)) })
+          }} />
         {/* Version badge */}
         {results.length > 1 && (
           <button type="button"
@@ -560,21 +555,15 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 </button>
               )}
 
-              {activeThumbnail ? (
-                <CachedImage src={activeThumbnail} alt="Video preview"
-                  className="w-full h-full object-cover"
-                  thumbnail={!useFull} thumbnailWidth={320}
-                />
-              ) : (
-                <video src={activeUrl} crossOrigin="anonymous"
-                  className="w-full h-full object-cover"
-                  autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline
-                  onLoadedMetadata={(e) => {
-                    const v = e.currentTarget
-                    if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
-                  }}
-                />
-              )}
+              <video src={activeUrl} crossOrigin="anonymous"
+                className="w-full h-full object-cover"
+                poster={activeThumbnail}
+                autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline
+                onLoadedMetadata={(e) => {
+                  const v = e.currentTarget
+                  if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
+                }}
+              />
 
               {/* Top-right: delete */}
               <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
