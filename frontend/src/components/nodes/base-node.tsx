@@ -129,20 +129,23 @@ function BaseNodeComponent({
     }
   }, [])
 
-  // When image aspect ratio changes (switching results), update the node's
-  // explicit height to match the new image. applyNodeChanges sets top-level
-  // node.width/node.height (NOT node.style.*), so we must read/write those.
+  // When image/video aspect ratio is known, update the node's explicit
+  // width + height so the box matches the content. If the node has no
+  // explicit width yet (never manually resized), promote it to 320px.
   useEffect(() => {
     if (!imageAspectRatio || !id) return
     const state = useWorkflowStore.getState()
     const node = state.nodes.find((n) => n.id === id)
-    const w = node?.width
-    if (typeof w !== "number") return // auto-sized node — CSS handles it
+    const hasExplicitWidth = typeof node?.width === "number"
+    const w = hasExplicitWidth ? node!.width! : 320
     const correctH = w / imageAspectRatio
-    if (typeof node?.height === "number" && Math.abs(node.height - correctH) < 2) return
+    if (hasExplicitWidth && typeof node?.height === "number" && Math.abs(node.height - correctH) < 2) return
+    const cls = node?.className?.includes("rf-resized")
+      ? node.className
+      : ((node?.className ?? "") + " rf-resized").trim()
     useWorkflowStore.setState({
       nodes: state.nodes.map((n) =>
-        n.id === id ? { ...n, height: correctH } : n
+        n.id === id ? { ...n, width: w, height: correctH, className: cls } : n
       ),
     })
   }, [imageAspectRatio, id])
