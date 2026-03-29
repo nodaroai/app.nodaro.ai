@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Film, GripVertical, Image, Info, Loader2, Music, Plus, Repeat, Table2, Type, Upload, X } from "lucide-react"
+import { Film, GripVertical, Image, Info, Link, Loader2, Music, Plus, Repeat, Table2, Type, Upload, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -23,7 +23,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { LOOP_COLUMN_TYPE_META, type LoopNodeData, type LoopColumn } from "@/types/nodes"
+import { LOOP_COLUMN_TYPE_META, LOOP_COL_ADD_HANDLE, loopColBaseHandle, type LoopNodeData, type LoopColumn } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
@@ -35,6 +35,13 @@ const HANDLE_COLOR_MAP: Record<string, "pink" | "indigo" | "green" | "cyan"> = {
   "text": "cyan",
 }
 
+const COLUMN_TYPE_ICON: Record<string, React.ReactElement> = {
+  "image-url": <Image />,
+  "video-url": <Film />,
+  "audio-url": <Music />,
+  text: <Type />,
+}
+
 const THUMB_SIZE_CONFIG = {
   sm: { px: 24, maxWidth: 220, imgClass: "w-6 h-6" },
   md: { px: 48, maxWidth: 280, imgClass: "w-12 h-12" },
@@ -42,35 +49,60 @@ const THUMB_SIZE_CONFIG = {
 } as const
 
 function buildHandles(columns: ReadonlyArray<LoopColumn>) {
-  const target = {
-    id: "in",
+  type HandleDef = {
+    id: string
+    type: "source" | "target"
+    position: typeof Position.Left | typeof Position.Right
+    top?: string
+    customStyle: Record<string, string>
+    hideHandle: boolean
+  }
+
+  // Quick-add target handle — always present at top
+  const quickAdd: HandleDef = {
+    id: LOOP_COL_ADD_HANDLE,
     type: "target" as const,
     position: Position.Left,
-    customStyle: { top: 'calc(100% - 20px)', left: '-29px' },
+    top: "15%",
+    customStyle: { top: '15%', left: '-29px' },
     hideHandle: true,
   }
 
   if (columns.length === 0) {
-    return [target]
+    return [quickAdd]
   }
 
   const startPct = 30
   const endPct = 80
-  const sources = columns.map((col, i) => {
+  const handles: HandleDef[] = [quickAdd]
+
+  columns.forEach((col, i) => {
     const pct = columns.length === 1
       ? Math.round((startPct + endPct) / 2)
       : Math.round(startPct + (i / (columns.length - 1)) * (endPct - startPct))
-    return {
+
+    // Per-column target handle (left side)
+    handles.push({
+      id: `${col.handleId}_in`,
+      type: "target" as const,
+      position: Position.Left,
+      top: `${pct}%`,
+      customStyle: { top: `${pct}%`, left: '-29px' },
+      hideHandle: true,
+    })
+
+    // Per-column source handle (right side) — existing behavior
+    handles.push({
       id: col.handleId,
       type: "source" as const,
       position: Position.Right,
       top: `${pct}%`,
       customStyle: { top: `${pct}%`, right: '-29px' },
       hideHandle: true,
-    }
+    })
   })
 
-  return [target, ...sources]
+  return handles
 }
 
 function SortableNodeRow({
@@ -137,9 +169,14 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
   const columns = nodeData.columns ?? []
   const handles = useMemo(() => buildHandles(columns), [columns])
 
+  const targetHandleIds = useMemo(
+    () => new Set(handles.filter(h => h.type === "target").map(h => h.id)),
+    [handles],
+  )
+
   const hasUpstreamInput = useMemo(
-    () => edges.some((e) => e.target === id && e.targetHandle === "in"),
-    [edges, id],
+    () => edges.some((e) => e.target === id && e.targetHandle && targetHandleIds.has(e.targetHandle)),
+    [edges, id, targetHandleIds],
   )
 
   useEffect(() => {
@@ -318,7 +355,7 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   const sourceHandles = handles.filter(h => h.type === "source")
-  const hasTarget = handles.some(h => h.id === "in")
+  const targetHandles = handles.filter(h => h.type === "target" && h.id !== LOOP_COL_ADD_HANDLE)
 
   return (
     <div className="relative" style={showingPresentation ? undefined : { maxWidth: `${nodeWidth}px` }}>
@@ -443,7 +480,11 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
                                 </span>
                               )
                             }
-                            return (
+                            return col.connectedSourceId ? (
+                              <div key={col.id} className="px-1 py-0.5 text-[10px] text-muted-foreground/60 truncate">
+                                {cell || "..."}
+                              </div>
+                            ) : (
                               <span key={col.id} className="text-[10px] text-muted-foreground truncate block py-1" title={cell}>
                                 {cell || "\u2014"}
                               </span>
@@ -485,12 +526,13 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
                   {columns.map((col) => {
                     const colColor = LOOP_COLUMN_TYPE_META[col.type ?? "text"]?.color ?? "#38BDF8"
                     return (
-                      <span key={col.id} className="text-[9px] px-1.5 py-0.5 rounded font-semibold"
+                      <span key={col.id} className="text-[9px] px-1.5 py-0.5 rounded font-semibold inline-flex items-center gap-0.5"
                         style={{
                           background: `${colColor}20`,
                           color: colColor,
                         }}>
                         {col.name}
+                        {col.connectedSourceId && <Link className="w-2.5 h-2.5 opacity-60" />}
                       </span>
                     )
                   })}
@@ -500,14 +542,23 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      {hasTarget && <HandleIcon icon={<Type />} side="left" top="calc(100% - 20px)" />}
+      {/* Quick-add target icon (top-left) */}
+      <HandleIcon icon={<Plus />} color="cyan" side="left" top="15%" />
+      {/* Per-column target icons (left side) */}
+      {targetHandles.map((h) => {
+        const handleBase = loopColBaseHandle(h.id)
+        const col = columns.find((c) => c.handleId === handleBase)
+        const colType = col?.type ?? "text"
+        const icon = COLUMN_TYPE_ICON[colType] ?? COLUMN_TYPE_ICON.text
+        return (
+          <HandleIcon key={h.id} icon={icon} color={HANDLE_COLOR_MAP[colType] ?? "cyan"} side="left" top={h.top} />
+        )
+      })}
+      {/* Per-column source icons (right side) */}
       {sourceHandles.map((h) => {
         const col = columns.find((c) => c.handleId === h.id)
         const colType = col?.type ?? "text"
-        const icon = colType === "image-url" ? <Image />
-          : colType === "video-url" ? <Film />
-          : colType === "audio-url" ? <Music />
-          : <Type />
+        const icon = COLUMN_TYPE_ICON[colType] ?? COLUMN_TYPE_ICON.text
         return (
           <HandleIcon key={h.id} icon={icon} color={HANDLE_COLOR_MAP[colType] ?? "cyan"} top={h.top} />
         )

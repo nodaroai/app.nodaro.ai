@@ -991,6 +991,40 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             target: idMap[edge.target] || edge.target,
           }))
 
+          // Regenerate loop column UUIDs and remap connectedSourceId references
+          const handleMap: Record<string, string> = {}
+          for (const node of newNodes) {
+            if (node.type !== "loop") continue
+            const d = node.data as Record<string, unknown>
+            const cols = d.columns as Array<{ id: string; handleId: string; connectedSourceId?: string; connectedSourceHandle?: string }> | undefined
+            if (!cols) continue
+            d.columns = cols.map((c) => {
+              const newId = crypto.randomUUID()
+              const newHandleId = `col_${newId}`
+              handleMap[c.handleId] = newHandleId
+              handleMap[`${c.handleId}_in`] = `${newHandleId}_in`
+              return {
+                ...c,
+                id: newId,
+                handleId: newHandleId,
+                connectedSourceId: c.connectedSourceId
+                  ? (idMap[c.connectedSourceId] ?? undefined)
+                  : undefined,
+                connectedSourceHandle: c.connectedSourceId && idMap[c.connectedSourceId]
+                  ? c.connectedSourceHandle
+                  : undefined,
+              }
+            })
+          }
+          for (const edge of newEdges) {
+            if (edge.sourceHandle && handleMap[edge.sourceHandle]) {
+              edge.sourceHandle = handleMap[edge.sourceHandle]
+            }
+            if (edge.targetHandle && handleMap[edge.targetHandle]) {
+              edge.targetHandle = handleMap[edge.targetHandle]
+            }
+          }
+
           const state = useWorkflowStore.getState()
           const canvasEmpty = state.nodes.length === 0
 

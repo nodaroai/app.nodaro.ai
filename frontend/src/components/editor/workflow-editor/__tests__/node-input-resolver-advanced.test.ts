@@ -1132,3 +1132,59 @@ describe("getListInputForNode — useAllResults", () => {
     expect(result).toBeUndefined()
   })
 })
+
+// ---------------------------------------------------------------------------
+// loop per-column connected source
+// ---------------------------------------------------------------------------
+
+describe("loop per-column connected source", () => {
+  it("resolves connected column data from upstream node via col_*_in edges", () => {
+    const loopNode = makeNode("loop1", "loop", {
+      columns: [
+        { id: "c1", name: "Prompt", handleId: "col_c1", type: "text", connectedSourceId: "text1" },
+      ],
+      rows: [["manual data"]],
+    })
+    const textNode = makeNode("text1", "text-prompt", { text: "upstream value" })
+    const imgNode = makeNode("img1", "generate-image", {})
+
+    const nodes = [textNode, imgNode, loopNode]
+    const edges = [
+      makeEdge("text1", "loop1", undefined, "col_c1_in"),
+      makeEdge("loop1", "img1", "col_c1", undefined),
+    ]
+
+    mockExtractNodeOutput.mockImplementation((node: any, sourceHandle?: string) => {
+      if (node.id === "text1") return "upstream value"
+      // Loop node returns first row for the matched column (real extractNodeOutput behaviour)
+      if (node.id === "loop1" && sourceHandle === "col_c1") return "manual data"
+      return undefined
+    })
+
+    const result = resolveNodeInputs(imgNode, nodes, edges)
+    expect(result.prompt).toBe("upstream value")
+  })
+
+  it("falls back to manual rows when no per-column edge exists", () => {
+    const loopNode = makeNode("loop1", "loop", {
+      columns: [
+        { id: "c1", name: "Prompt", handleId: "col_c1", type: "text" },
+      ],
+      rows: [["manual value"]],
+    })
+    const imgNode = makeNode("img1", "generate-image", {})
+
+    const nodes = [imgNode, loopNode]
+    const edges = [
+      makeEdge("loop1", "img1", "col_c1", undefined),
+    ]
+
+    mockExtractNodeOutput.mockImplementation((node: any, sourceHandle?: string) => {
+      if (node.id === "loop1" && sourceHandle === "col_c1") return "manual value"
+      return undefined
+    })
+
+    const result = resolveNodeInputs(imgNode, nodes, edges)
+    expect(result.prompt).toBe("manual value")
+  })
+})

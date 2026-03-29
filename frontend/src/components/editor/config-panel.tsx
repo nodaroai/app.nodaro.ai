@@ -435,6 +435,7 @@ export function ConfigPanel() {
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
+  const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const variableDisplayMode = useWorkflowStore((s) => s.variableDisplayMode)
@@ -572,6 +573,16 @@ export function ConfigPanel() {
     }
   }, [fieldMappings, update])
 
+  const removeLoopColumnEdges = useCallback((colHandleId: string) => {
+    const targetHandle = `${colHandleId}_in`
+    const edgesToRemove = edges.filter(
+      (e) => e.target === selectedNodeId && e.targetHandle === targetHandle,
+    )
+    for (const edge of edgesToRemove) {
+      deleteEdge(edge.id)
+    }
+  }, [edges, selectedNodeId, deleteEdge])
+
   function handleDelete() {
     if (!selectedNodeId) return
     deleteNode(selectedNodeId)
@@ -589,8 +600,9 @@ export function ConfigPanel() {
       nodeRefs,
       refMap,
       variableDisplayMode,
+      onRemoveColumnEdges: removeLoopColumnEdges,
     }),
-    [displayNode?.data, update, sources, fieldMappings, handleMapField, nodes, nodeRefs, refMap, variableDisplayMode]
+    [displayNode?.data, update, sources, fieldMappings, handleMapField, nodes, nodeRefs, refMap, variableDisplayMode, removeLoopColumnEdges]
   )
 
   if (!displayNode) {
