@@ -42,12 +42,17 @@ const STORAGE_KEY = "nodaro-sidebar-collapsed"
 interface NavItem {
   readonly href: string
   readonly label: string
-  readonly icon: React.ComponentType<{ className?: string }>
+  readonly icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
   readonly adminOnly?: boolean
   readonly billingOnly?: boolean
 }
 
-const NAV_SECTIONS = [
+interface NavSection {
+  readonly label: string
+  readonly items: readonly NavItem[]
+}
+
+const NAV_SECTIONS: readonly NavSection[] = [
   {
     label: "WORKSPACE",
     items: [
@@ -74,7 +79,7 @@ const NAV_SECTIONS = [
       { href: "/admin", label: "Admin", icon: Shield, adminOnly: true },
     ]
   },
-] as const
+]
 
 const NAV_ITEMS: readonly NavItem[] = NAV_SECTIONS.flatMap(s => s.items)
 
