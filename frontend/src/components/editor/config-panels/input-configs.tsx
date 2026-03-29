@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef, useMemo } from "react"
-import { X, Plus, Loader2, Check, Download, AlertCircle, Upload, Film, Music, Link, GripVertical } from "lucide-react"
+import { X, Plus, Loader2, Check, Download, AlertCircle, Upload, Film, Music, Link, GripVertical, Settings2, Scissors } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -32,7 +32,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { CachedImage } from "@/components/ui/cached-image"
+import { toast } from "sonner"
+import { spliceDelimitedRows } from "@nodaro-shared/loop-delimiter"
 import { uploadAudio, fetchYouTubeOEmbed, extractYouTubeAudioApi, getJobStatus, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
 import type { DownloadProgressEvent } from "@/lib/api"
 import {
@@ -299,6 +302,105 @@ const COLUMN_TYPES = Object.entries(LOOP_COLUMN_TYPE_META).map(([value, meta]) =
   color: meta.color,
 }))
 
+const DELIMITER_PRESETS = [
+  { label: "Comma", value: "," },
+  { label: "Pipe", value: "|" },
+  { label: "Semicolon", value: ";" },
+  { label: "Newline", value: "\n" },
+] as const
+
+function ColumnSettingsPopover({
+  column,
+  colIndex,
+  onDelimiterChange,
+  onSplit,
+}: {
+  column: LoopColumn
+  colIndex: number
+  onDelimiterChange: (colIndex: number, delimiter: string | undefined) => void
+  onSplit: (colIndex: number) => void
+}) {
+  const current = column.splitDelimiter
+  const isPreset = DELIMITER_PRESETS.some((p) => p.value === current)
+  const isCustom = !!current && !isPreset
+  const [showCustom, setShowCustom] = useState(isCustom)
+  const [customValue, setCustomValue] = useState(isCustom ? current : "")
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`shrink-0 transition-colors ${current ? "text-[#ff0073]" : "text-muted-foreground/40 hover:text-muted-foreground"}`}
+          title="Column split settings"
+        >
+          <Settings2 className="w-3 h-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-52 p-3" side="bottom" align="start">
+        <div className="flex flex-col gap-2">
+          <span className="text-[11px] font-medium text-muted-foreground">Split delimiter</span>
+          <div className="flex flex-wrap gap-1">
+            {DELIMITER_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                className={`px-2 py-0.5 rounded text-[11px] border transition-colors ${
+                  current === preset.value
+                    ? "border-[#ff0073] bg-[#ff0073]/10 text-[#ff0073]"
+                    : "border-border text-muted-foreground hover:border-foreground/30"
+                }`}
+                onClick={() => onDelimiterChange(colIndex, current === preset.value ? undefined : preset.value)}
+              >
+                {preset.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className={`px-2 py-0.5 rounded text-[11px] border transition-colors ${
+                showCustom
+                  ? "border-[#ff0073] bg-[#ff0073]/10 text-[#ff0073]"
+                  : "border-border text-muted-foreground hover:border-foreground/30"
+              }`}
+              onClick={() => {
+                if (showCustom) {
+                  setShowCustom(false)
+                  if (isCustom) onDelimiterChange(colIndex, undefined)
+                } else {
+                  setShowCustom(true)
+                  if (customValue) onDelimiterChange(colIndex, customValue)
+                }
+              }}
+            >
+              Custom
+            </button>
+          </div>
+          {showCustom && (
+            <input
+              className="w-full text-xs bg-muted/30 rounded px-1.5 py-1 border border-border focus:border-[#ff0073] focus:outline-none"
+              value={customValue}
+              onChange={(e) => {
+                setCustomValue(e.target.value)
+                if (e.target.value) onDelimiterChange(colIndex, e.target.value)
+              }}
+              placeholder="Enter delimiter..."
+            />
+          )}
+          <button
+            type="button"
+            disabled={!current}
+            className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border border-border hover:bg-muted/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            onClick={() => onSplit(colIndex)}
+          >
+            <Scissors className="w-3 h-3" />
+            Split Rows
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (patch: Partial<LoopNodeData>) => void }) {
   const [activeTab, setActiveTab] = useState<"configure" | "data">("configure")
   const columns = data.columns ?? []
@@ -347,6 +449,45 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
       i === colIndex ? { ...c, type } : c
     )
     onUpdate({ columns: newColumns })
+  }
+
+  function updateColumnDelimiter(colIndex: number, delimiter: string | undefined) {
+    const newColumns = columns.map((c, i) =>
+      i === colIndex ? { ...c, splitDelimiter: delimiter } : c
+    )
+    onUpdate({ columns: newColumns })
+  }
+
+  function splitColumnRows(colIndex: number) {
+    const delimiter = columns[colIndex]?.splitDelimiter
+    if (!delimiter) return
+
+    const maxItems = data.maxItems ?? Infinity
+    const newRows: string[][] = []
+
+    for (const row of rows) {
+      const cellValue = row[colIndex] ?? ""
+      const parts = cellValue.split(delimiter).map((s) => s.trim()).filter((s) => s.length > 0)
+      if (parts.length <= 1) {
+        newRows.push(row)
+        continue
+      }
+      const firstRow = [...row]
+      firstRow[colIndex] = parts[0]
+      newRows.push(firstRow)
+      for (let p = 1; p < parts.length; p++) {
+        const newRow = columns.map(() => "")
+        newRow[colIndex] = parts[p]
+        newRows.push(newRow)
+      }
+    }
+
+    if (newRows.length > maxItems) {
+      toast.warning(`Split produced ${newRows.length} rows but max is ${maxItems}. Truncated to ${maxItems}.`)
+      onUpdate({ rows: newRows.slice(0, maxItems) })
+    } else {
+      onUpdate({ rows: newRows })
+    }
   }
 
   function addRow() {
@@ -425,6 +566,14 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
                             value={col.name}
                             onChange={(e) => renameColumn(ci, e.target.value)}
                           />
+                          {(col.type ?? "text") === "text" && (
+                            <ColumnSettingsPopover
+                              column={col}
+                              colIndex={ci}
+                              onDelimiterChange={updateColumnDelimiter}
+                              onSplit={splitColumnRows}
+                            />
+                          )}
                           <button
                             type="button"
                             className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors"
@@ -502,6 +651,16 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
                                       className="w-full min-w-[60px] text-xs bg-muted/30 rounded px-1.5 py-1 border border-border focus:border-[#ff0073] focus:outline-none"
                                       value={row[ci] ?? ""}
                                       onChange={(e) => updateCell(ri, ci, e.target.value)}
+                                      onPaste={(e) => {
+                                        const delimiter = col.splitDelimiter
+                                        if (!delimiter) return
+                                        const pasted = e.clipboardData.getData("text/plain")
+                                        if (!pasted.includes(delimiter)) return
+                                        e.preventDefault()
+                                        const { newRows, truncated, totalProduced } = spliceDelimitedRows(rows, ri, ci, pasted, delimiter, columns.length, data.maxItems ?? Infinity)
+                                        if (truncated) toast.warning(`Paste produced ${totalProduced} rows but max is ${data.maxItems}. Truncated to ${data.maxItems}.`)
+                                        onUpdate({ rows: newRows })
+                                      }}
                                       placeholder={col.name}
                                     />
                                   )}

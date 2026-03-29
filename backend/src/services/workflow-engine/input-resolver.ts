@@ -16,6 +16,7 @@ import { buildNodeRefMap } from "./payload-builder.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 import { applyRange, resolveIndex } from "../../../../packages/shared/src/edge-range.js"
+import { splitByLoopDelimiter } from "../../../../packages/shared/src/loop-delimiter.js"
 
 /**
  * Resolve a node's primary output from execution state or source node data.
@@ -113,7 +114,7 @@ export function resolveNodeInputs(
     if (!output) {
       // Loop node column routing: resolve correct column value by sourceHandle (matches frontend)
       if (sourceNode.type === "loop" && edge.sourceHandle) {
-        const columns = sourceNode.data.columns as Array<{ id: string; handleId: string }> | undefined
+        const columns = sourceNode.data.columns as Array<{ id: string; handleId: string; type?: string; splitDelimiter?: string }> | undefined
         const colIndex = (columns ?? []).findIndex((c) => c.handleId === edge.sourceHandle)
         if (colIndex >= 0) {
           // Check connected mode first
@@ -123,7 +124,7 @@ export function resolveNodeInputs(
             if (upstreamNode) {
               const upstreamText = getNodeOutput(upstreamNode, loopInEdges[0].sourceHandle, nodeStates, triggerData)
               if (upstreamText) {
-                const lines = upstreamText.split("\n").map((s) => s.trim()).filter((s) => s.length > 0)
+                const lines = splitByLoopDelimiter(upstreamText, columns)
                 if (listIterationIndex != null) {
                   const rf = edgeData?.rangeFrom as string | undefined
                   const rt = edgeData?.rangeTo as string | undefined
@@ -261,7 +262,7 @@ export function getListInputForNode(
     // 1. Loop node — column routing via sourceHandle
     if (sourceNode.type === "loop") {
       const columns = sourceNode.data.columns as
-        | Array<{ id: string; handleId: string }>
+        | Array<{ id: string; handleId: string; type?: string; splitDelimiter?: string }>
         | undefined
       const colIndex = (columns ?? []).findIndex(
         (c) => c.handleId === edge.sourceHandle,
@@ -277,10 +278,7 @@ export function getListInputForNode(
         if (upstreamNode) {
           const upstreamText = getNodeOutput(upstreamNode, upstreamEdge.sourceHandle, nodeStates, triggerData)
           if (upstreamText) {
-            const items = upstreamText
-              .split("\n")
-              .map((s) => s.trim())
-              .filter((s) => s.length > 0)
+            const items = splitByLoopDelimiter(upstreamText, columns)
             const filtered = applyRange(items, rangeFrom, rangeTo, rangeStep)
             if (filtered.length > 1) return filtered
           }

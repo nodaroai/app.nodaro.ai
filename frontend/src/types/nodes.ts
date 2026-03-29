@@ -63,6 +63,7 @@ export interface LoopColumn {
   readonly handleId: string
   readonly type: "text" | "image-url" | "video-url" | "audio-url"
   readonly width?: number
+  readonly splitDelimiter?: string
 }
 
 export const LOOP_COLUMN_TYPE_META: Record<LoopColumn["type"], { label: string; shortLabel: string; color: string }> = {
