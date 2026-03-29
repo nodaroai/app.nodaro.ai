@@ -40,7 +40,6 @@ import { Switch } from "@/components/ui/switch"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
 import { getMyApps, updateApp, deactivateApp, getMonetizationDefaults, updateMonetizationDefaults, type PublishedApp } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { calculateMonetizedCost } from "@nodaro-shared/monetization"
@@ -64,9 +63,6 @@ export default function AppsPage() {
   const { data: appSettings } = useAppSettings()
   const videoAutoplay = appSettings?.apps_page_video_autoplay ?? true
 
-  // Publish type toggle (apps vs components)
-  const [publishType, setPublishType] = useState<"app" | "component">("app")
-
   // Browse state
   const [viewMode, setViewMode] = useState<ViewMode>("browse")
   const [searchInput, setSearchInput] = useState("")
@@ -89,8 +85,8 @@ export default function AppsPage() {
     outputType: selectedOutputType,
     sort: sortBy,
     favoritesOnly: viewMode === "favorites" ? true : undefined,
-    publishType,
-  }), [debouncedSearch, selectedCategory, selectedOutputType, sortBy, viewMode, publishType])
+    publishType: "app" as const,
+  }), [debouncedSearch, selectedCategory, selectedOutputType, sortBy, viewMode])
 
   // Browse query
   const {
@@ -229,37 +225,11 @@ export default function AppsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {publishType === "component" ? "Components" : "Apps"}
-          </h1>
+          <h1 className="text-2xl font-bold text-foreground">Apps</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {publishType === "component"
-              ? "Discover and use reusable workflow components, or manage your own"
-              : "Discover and run AI-powered apps, or manage your own"}
+            Discover and run AI-powered apps, or manage your own
           </p>
         </div>
-      </div>
-
-      {/* Publish type toggle (Apps vs Components) */}
-      <div className="flex gap-1 rounded-lg bg-muted p-1 mb-4">
-        <button
-          type="button"
-          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            publishType === "app" ? "bg-background shadow-sm" : "text-muted-foreground"
-          }`}
-          onClick={() => setPublishType("app")}
-        >
-          Apps
-        </button>
-        <button
-          type="button"
-          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            publishType === "component" ? "bg-background shadow-sm" : "text-muted-foreground"
-          }`}
-          onClick={() => setPublishType("component")}
-        >
-          Components
-        </button>
       </div>
 
       {/* View mode tabs + search */}
@@ -496,9 +466,7 @@ export default function AppsPage() {
         /* My Apps grid */
         <>
           <MyAppsGrid
-            apps={myApps?.filter((a) =>
-              publishType === "component" ? a.publishType === "component" : a.publishType !== "component"
-            )}
+            apps={myApps?.filter((a) => a.publishType !== "component")}
             onCopyUrl={handleCopyUrl}
             onCopyEmbed={handleCopyEmbed}
             onToggle={(appId, isActive) => toggleMutation.mutate({ appId, isActive })}
@@ -648,10 +616,6 @@ function MyAppCard({
           <p className="text-xs text-muted-foreground mt-0.5">/app/{app.slug}</p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0 ml-2">
-          {/* Component badge */}
-          {app.publishType === "component" && (
-            <Badge className="text-[10px] bg-purple-400/20 text-purple-400 border-0">Component</Badge>
-          )}
           {/* Marketplace status badge */}
           <span
             className={cn(

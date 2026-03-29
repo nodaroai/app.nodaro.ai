@@ -1,7 +1,6 @@
 import { Heart, Play, Sparkles, Coins } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
 import type { AppBrowseCard } from "@/lib/api"
 import { APP_CATEGORIES, OUTPUT_TYPE_COLORS, CATEGORY_COLORS } from "@/lib/app-categories"
 
@@ -55,17 +54,12 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
           </div>
         )}
 
-        {/* RemX + Component badges */}
-        <div className="absolute top-2 left-2 flex items-center gap-1">
-          {app.supportsRemix && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/90 text-white font-medium">
-              RemX
-            </span>
-          )}
-          {app.publishType === "component" && (
-            <Badge className="text-[10px] bg-purple-400/20 text-purple-400 border-0">Component</Badge>
-          )}
-        </div>
+        {/* RemX badge */}
+        {app.supportsRemix && (
+          <span className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/90 text-white font-medium">
+            RemX
+          </span>
+        )}
 
       </div>
 

@@ -28,6 +28,8 @@ export interface ExecuteAppRunParams {
   componentDepth?: number
   /** Ancestor component IDs for cycle detection */
   executingComponentIds?: string[]
+  /** Mark the created workflow_execution as a component inner execution */
+  isComponentExecution?: boolean
 }
 
 export interface ExecuteAppRunResult {
@@ -57,6 +59,7 @@ export async function executeAppRun(
     nodeIds,
     componentDepth,
     executingComponentIds,
+    isComponentExecution,
   } = params
 
   // 1. Create workflow_execution record
@@ -67,6 +70,7 @@ export async function executeAppRun(
       user_id: userId,
       status: "pending",
       trigger_type: "manual",
+      ...(isComponentExecution ? { is_component_execution: true } : {}),
     })
     .select("id")
     .single()

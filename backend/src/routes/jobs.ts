@@ -118,7 +118,8 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type")
+      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, workflow_executions!left(is_component_execution)")
+      .or("workflow_execution_id.is.null,workflow_executions.is_component_execution.neq.true")
       .order("created_at", { ascending: false })
       .limit(limitNum)
 
@@ -131,8 +132,9 @@ export async function jobRoutes(app: FastifyInstance) {
 
     const { data: jobs } = await query
 
-    // Sanitize jobs for public response
-    const sanitizedJobs = (jobs ?? []).map((job) => sanitizeJobForPublic(job as JobRecord, isAdmin))
+    // Strip the joined workflow_executions data (only used for filtering)
+    const cleanedJobs = (jobs ?? []).map(({ workflow_executions: _we, ...job }) => job)
+    const sanitizedJobs = cleanedJobs.map((job) => sanitizeJobForPublic(job as JobRecord, isAdmin))
 
     // Determine next cursor
     const nextCursor = jobs && jobs.length === limitNum ? jobs[jobs.length - 1]?.created_at : null
