@@ -689,6 +689,9 @@ interface NodeExecutionState {
     _outputResults?: Record<string, string>;
   };
   error?: string;
+  jobId?: string;
+  nodeType?: string;
+  progress?: number;
 }
 
 /**
@@ -850,8 +853,16 @@ function syncNodeStatesToStore(
         }
       }
       patchMap.set(node.id, updates);
-    } else if (state.status === "running" && currentStatus !== "running") {
-      patchMap.set(node.id, { executionStatus: "running" });
+    } else if (state.status === "running") {
+      // Always update running nodes (may have progress changes)
+      const runPatch: Record<string, unknown> = { executionStatus: "running" }
+      if (state.jobId && node.type === "component") {
+        // Component nodes: subWorkflowProgress from nodeState if available
+        runPatch.currentJobProgress = state.progress ?? undefined
+      }
+      if (currentStatus !== "running" || runPatch.currentJobProgress !== undefined) {
+        patchMap.set(node.id, runPatch)
+      }
     } else if (
       state.status === "pending" &&
       currentStatus !== "pending" &&

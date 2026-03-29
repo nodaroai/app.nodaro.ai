@@ -64,13 +64,10 @@ export async function executeComponent(
 
   const merged = mergeExposedSettings(inputOverrides, exposedSettings, metadata)
 
-  // Mark running — clear previous results so only latest run is shown
+  // Mark running — keep previous results for history
   updateNodeData(node.id, {
     executionStatus: "running",
     errorMessage: undefined,
-    outputResults: undefined,
-    generatedResults: undefined,
-    activeResultIndex: undefined,
     currentJobProgress: 0,
   })
 
@@ -104,16 +101,17 @@ export async function executeComponent(
           }
         }
 
-        const generatedResults: GeneratedResult[] = []
+        // Prepend new result to history (like generate-image)
         const firstOutput = Object.values(outputResults)[0]
-        if (firstOutput) {
-          generatedResults.push({ url: firstOutput, timestamp: new Date().toISOString(), jobId })
-        }
+        const existingResults = ((node.data as ComponentNodeData).generatedResults ?? []) as GeneratedResult[]
+        const newResults = firstOutput
+          ? [{ url: firstOutput, timestamp: new Date().toISOString(), jobId }, ...existingResults]
+          : existingResults
 
         updateNodeData(node.id, {
           executionStatus: "completed",
           outputResults,
-          generatedResults,
+          generatedResults: newResults,
           activeResultIndex: 0,
           currentJobProgress: 100,
         })

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useEffect, useRef } from "react"
+import { useCallback, useMemo, useEffect, useRef, useState } from "react"
 import { Puzzle, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
@@ -16,10 +16,11 @@ import type { ComponentMetadata, ExposedSetting } from "@nodaro-shared/component
 
 export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<ComponentNodeData> & { nodeId?: string }) {
   const nodeData = data as ComponentNodeData
-  const meta = nodeData.componentMetadata ?? { inputs: [], outputs: [], exposedSettings: [] }
   const edges = useEdges()
 
-  // Auto-refresh metadata + credits from the latest published version on first open
+  // Auto-refresh metadata + credits from the latest published version on first open.
+  // Uses local state so the UI updates immediately without waiting for parent re-render.
+  const [freshMeta, setFreshMeta] = useState<ComponentMetadata | null>(null)
   const refreshed = useRef(false)
   useEffect(() => {
     if (refreshed.current || !nodeData.appSlug) return
@@ -27,19 +28,18 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
     getPublishedApp(nodeData.appSlug, nodeData.pinnedVersion || undefined)
       .then((app) => {
         const fresh = app.componentMetadata as ComponentMetadata | null
-        const updates: Record<string, unknown> = {}
-        // Sync metadata if changed
-        if (fresh && JSON.stringify(nodeData.componentMetadata) !== JSON.stringify(fresh)) {
-          updates.componentMetadata = fresh
+        if (fresh) {
+          setFreshMeta(fresh) // immediate local update
+          onUpdate({ componentMetadata: fresh }) // persist to store
         }
-        // Always sync credits (includes monetization markup)
         if (app.estimatedCredits != null && app.estimatedCredits !== nodeData.estimatedCredits) {
-          updates.estimatedCredits = app.estimatedCredits
+          onUpdate({ estimatedCredits: app.estimatedCredits })
         }
-        if (Object.keys(updates).length > 0) onUpdate(updates)
       })
-      .catch(() => { /* silently ignore — stale metadata is still usable */ })
+      .catch(() => {})
   }, [nodeData.appSlug, nodeData.pinnedVersion]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const meta = freshMeta ?? nodeData.componentMetadata ?? { inputs: [], outputs: [], exposedSettings: [] }
 
   // Determine which input handles have a wired connection
   const connectedInputIds = useMemo(() => {

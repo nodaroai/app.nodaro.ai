@@ -87,7 +87,15 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
   const status = nodeData.executionStatus ?? "idle"
 
   const inputHandles = metadata.inputs ?? []
-  const outputHandles = metadata.outputs ?? []
+  // Deduplicate outputs by node ID (same node can be input+output, show once)
+  const outputHandles = useMemo(() => {
+    const seen = new Set<string>()
+    return (metadata.outputs ?? []).filter((h) => {
+      if (seen.has(h.id)) return false
+      seen.add(h.id)
+      return true
+    })
+  }, [metadata.outputs])
   const handleKey = [...inputHandles, ...outputHandles].map((h) => h.id).join(",")
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const handles = useMemo(() => buildHandles(inputHandles, outputHandles), [handleKey])
