@@ -166,53 +166,6 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     setComponentHandles({ inputs, outputs })
   }, [publishType, nodes])
 
-  // Build exposed settings fresh from current nodes — called at publish time
-  // so it's never stale. Detects configurable fields from presentationInput
-  // nodes that are NOT source types (e.g., generate-image settings).
-  const CONFIGURABLE_FIELDS: Record<string, Array<{ field: string; label: string; type: "select" | "text" | "number" | "toggle" }>> = {
-    "generate-image": [
-      { field: "provider", label: "Model", type: "select" },
-      { field: "aspectRatio", label: "Aspect Ratio", type: "select" },
-      { field: "quality", label: "Quality", type: "select" },
-      { field: "style", label: "Style", type: "text" },
-    ],
-    "image-to-video": [
-      { field: "provider", label: "Model", type: "select" },
-      { field: "duration", label: "Duration", type: "number" },
-    ],
-    "text-to-video": [
-      { field: "provider", label: "Model", type: "select" },
-      { field: "duration", label: "Duration", type: "number" },
-    ],
-    "text-to-speech": [
-      { field: "provider", label: "Model", type: "select" },
-      { field: "voiceId", label: "Voice", type: "select" },
-    ],
-    "generate-music": [
-      { field: "provider", label: "Model", type: "select" },
-    ],
-  }
-
-  const buildExposedSettingsFromNodes = useCallback(() => {
-    if (!nodes) return []
-    const inputNodes = nodes.filter((n) => (n.data as Record<string, unknown>)?.presentationInput)
-    const nonSourceInputNodes = inputNodes.filter((n) => !INPUT_FIELD_MAP[n.type || ""])
-    const settings: Array<{ nodeId: string; field: string; label: string; type: "select" | "text" | "number" | "toggle"; allowedValues?: unknown[]; defaultValue: unknown }> = []
-    for (const node of nonSourceInputNodes) {
-      const fields = CONFIGURABLE_FIELDS[node.type || ""]
-      if (!fields) continue
-      const nd = (node.data ?? {}) as Record<string, unknown>
-      const label = getNodeLabel(node)
-      for (const f of fields) {
-        const val = nd[f.field]
-        if (val !== undefined) {
-          settings.push({ nodeId: node.id, field: f.field, label: `${label} — ${f.label}`, type: f.type, defaultValue: val })
-        }
-      }
-    }
-    return settings
-  }, [nodes])
-
   const handlePublish = useCallback(async () => {
     if (!publishName.trim()) {
       toast.error("Name is required")
@@ -270,7 +223,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
         componentMetadata: publishType === "component" ? {
           inputs: componentHandles.inputs.map((h) => ({ ...h, type: h.type as "image" | "video" | "audio" | "text" })),
           outputs: componentHandles.outputs.map((h) => ({ ...h, type: h.type as "image" | "video" | "audio" | "text" })),
-          exposedSettings: buildExposedSettingsFromNodes(),
+          exposedSettings: [],
         } : undefined,
       })
       setPublishedSlug(result.slug)
@@ -280,7 +233,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     } finally {
       setPublishing(false)
     }
-  }, [workflowId, publishName, publishSlug, publishDesc, thumbnailNodeId, isListed, category, outputTypes, tags, supportsRemix, publishType, componentHandles, buildExposedSettingsFromNodes])
+  }, [workflowId, publishName, publishSlug, publishDesc, thumbnailNodeId, isListed, category, outputTypes, tags, supportsRemix, publishType, componentHandles])
 
   const publishedUrl = publishedSlug
     ? `${window.location.origin}/app/${publishedSlug}`
