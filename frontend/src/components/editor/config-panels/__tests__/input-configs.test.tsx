@@ -58,6 +58,7 @@ vi.mock("lucide-react", () => ({
   Check: () => <span data-testid="check-icon" />,
   Download: () => <span data-testid="download-icon" />,
   AlertCircle: () => <span data-testid="alert-icon" />,
+  Sparkles: () => <span data-testid="sparkles-icon" />,
 }))
 
 function createDefaultProps(overrides: Record<string, unknown> = {}) {

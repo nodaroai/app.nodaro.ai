@@ -306,6 +306,7 @@ describe("buildLlmCreditIdentifier", () => {
   it("works with all LLM feature names", () => {
     const features: LlmFeature[] = [
       "ai-writer",
+      "llm-chat",
       "prompt-helper",
       "scene-graph-ai",
       "after-effects",
@@ -388,6 +389,7 @@ describe("resolveLlmCreditId", () => {
 describe("LLM_FEATURE_DEFAULTS", () => {
   const ALL_FEATURES: LlmFeature[] = [
     "ai-writer",
+    "llm-chat",
     "prompt-helper",
     "scene-graph-ai",
     "after-effects",
@@ -400,8 +402,8 @@ describe("LLM_FEATURE_DEFAULTS", () => {
     "translate",
   ]
 
-  it("has entries for all 11 features", () => {
-    expect(Object.keys(LLM_FEATURE_DEFAULTS)).toHaveLength(11)
+  it("has entries for all 12 features", () => {
+    expect(Object.keys(LLM_FEATURE_DEFAULTS)).toHaveLength(12)
     for (const feature of ALL_FEATURES) {
       expect(LLM_FEATURE_DEFAULTS).toHaveProperty(feature)
     }
