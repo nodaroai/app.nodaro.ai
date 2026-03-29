@@ -215,6 +215,24 @@ function getEdgeLabel(
     }
   }
 
+  // Loop (table) column outputs — show role-aware label
+  if (srcType === "loop" && srcHandle && sourceNode?.data) {
+    const columns = (sourceNode.data as Record<string, unknown>).columns as
+      Array<{ handleId: string; name: string; type?: string }> | undefined
+    const col = columns?.find((c) => c.handleId === srcHandle)
+    if (col) {
+      // Image column → reference image target = "Reference Image"
+      if (col.type === "image-url" && tgtType && REFERENCE_IMAGE_TARGETS.has(tgtType)) {
+        return { label: "Reference Image" }
+      }
+      const typeLabel = col.type === "image-url" ? "Image"
+        : col.type === "video-url" ? "Video"
+        : col.type === "audio-url" ? "Audio"
+        : "Text"
+      return { label: `${col.name} (${typeLabel})` }
+    }
+  }
+
   // Otherwise use source handle label
   if (srcHandle && SOURCE_LABELS[srcHandle]) {
     return { label: SOURCE_LABELS[srcHandle] }
@@ -328,6 +346,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const addNode = useWorkflowStore((s) => s.addNode)
+  const updateEdgeData = useWorkflowStore((s) => s.updateEdgeData)
   const replaceEdgeWithTeleporter = useWorkflowStore((s) => s.replaceEdgeWithTeleporter)
   const { screenToFlowPosition, setNodes, getNode, setCenter, fitView, getViewport } = useReactFlow()
   const { undo, redo, canUndo, canRedo } = useUndoRedoActions()
@@ -447,6 +466,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     if (params.handleType) setConnectingFromType(params.handleType)
   }, [])
   const edgeDropRef = useRef(false)
+  const pendingEdgeDataRef = useRef<Record<string, unknown> | null>(null)
   const handleConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
       setConnectingFromType(null)
@@ -683,6 +703,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     setAddNodePopupOpen(false)
     setAddNodePopupPosition(undefined)
     setConnectionContext(null)
+    pendingEdgeDataRef.current = null
   }, [])
   const handleToggleSnap = useCallback(() => {
     setSnapEnabled((prev) => {
@@ -1172,8 +1193,26 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       if (!imageUrl) return
       e.preventDefault()
 
+      const edgeCtxStr = e.dataTransfer.getData("application/nodaro-edge-context")
+      if (edgeCtxStr) {
+        // Dragged from table node — open node picker + auto-connect with item:N
+        try {
+          const { sourceNodeId, sourceHandle, itemIndex } = JSON.parse(edgeCtxStr)
+          pendingEdgeDataRef.current = { outputMode: "item", itemIndex: String(itemIndex) }
+          setAddNodePopupPosition({ x: e.clientX, y: e.clientY })
+          setConnectionContext({
+            nodeId: sourceNodeId,
+            handleId: sourceHandle,
+            direction: "source",
+            dropPosition: screenToFlowPosition({ x: e.clientX, y: e.clientY }),
+          })
+          setAddNodePopupOpen(true)
+        } catch { /* ignore malformed data */ }
+        return
+      }
+
+      // Plain image drag (from character/object/location pages) — create generate-image node
       const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-      // Create generate-image node with the image already set as a result
       addNode("generate-image", position, {
         generatedResults: [{
           url: imageUrl,
@@ -1306,7 +1345,15 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         position={addNodePopupPosition}
         connectionContext={connectionContext}
         storeAddNode={addNode}
-        storeOnConnect={onConnect}
+        storeOnConnect={useCallback((connection: import("@xyflow/react").Connection) => {
+          onConnect(connection)
+          if (pendingEdgeDataRef.current) {
+            const { edges: latestEdges } = useWorkflowStore.getState()
+            const newEdge = latestEdges.find((ed) => ed.source === connection.source && ed.target === connection.target && ed.sourceHandle === connection.sourceHandle)
+            if (newEdge) updateEdgeData(newEdge.id, pendingEdgeDataRef.current)
+            pendingEdgeDataRef.current = null
+          }
+        }, [onConnect, updateEdgeData])}
       />
 
       {/* Search Modal */}

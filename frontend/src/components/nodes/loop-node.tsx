@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Film, GripVertical, Image, Info, Link, Loader2, Music, Plus, Repeat, Table2, Type, Upload, X } from "lucide-react"
+import { ArrowUpRight, Download, Expand, Film, GripVertical, Image, Info, Link, Loader2, Music, Plus, Repeat, Table2, Type, Upload, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -23,10 +23,16 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { LOOP_COLUMN_TYPE_META, LOOP_COL_ADD_HANDLE, loopColBaseHandle, type LoopNodeData, type LoopColumn } from "@/types/nodes"
+import { LOOP_COLUMN_TYPE_META, LOOP_COL_ADD_HANDLE, loopColBaseHandle, loopColInputHandle, type LoopNodeData, type LoopColumn, type WorkflowNode } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { copyToClipboard } from "@/lib/utils"
+import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
+import { extractNodeOutputAsList, resolveLoopColumnValues } from "@/components/editor/workflow-editor/node-input-resolver"
+import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter"
+import { applyRange, resolveIndex } from "@nodaro-shared/edge-range"
 
 const HANDLE_COLOR_MAP: Record<string, "pink" | "indigo" | "green" | "cyan"> = {
   "image-url": "pink",
@@ -41,6 +47,8 @@ const COLUMN_TYPE_ICON: Record<string, React.ReactElement> = {
   "audio-url": <Music />,
   text: <Type />,
 }
+
+const DEFAULT_GALLERY_COLS = 3
 
 const THUMB_SIZE_CONFIG = {
   sm: { px: 24, maxWidth: 220, imgClass: "w-6 h-6" },
@@ -149,6 +157,7 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as LoopNodeData
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const edges = useWorkflowStore((s) => s.edges)
+  const nodes = useWorkflowStore((s) => s.nodes)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNodeInternals = useUpdateNodeInternals()
   const status = (nodeData as Record<string, unknown>).executionStatus as string | undefined ?? "idle"
@@ -157,6 +166,7 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
 
   const thumbSize = nodeData.thumbnailSize ?? "md"
   const sizeConfig = THUMB_SIZE_CONFIG[thumbSize]
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
 
   const { upload, storageExceeded, clearStorageExceeded } = useFileUpload()
   const [isDragOver, setIsDragOver] = useState(false)
@@ -178,6 +188,111 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
     () => edges.some((e) => e.target === id && e.targetHandle && targetHandleIds.has(e.targetHandle)),
     [edges, id, targetHandleIds],
   )
+
+  /** Resolve rows from connected upstream nodes — respects edge outputMode & useAllResults. */
+  const connectedRows = useMemo<string[][] | null>(() => {
+    if (columns.length === 0) return null
+
+    function resolveEdgeValues(
+      edge: { source: string; sourceHandle?: string | null; data?: unknown },
+      upstream: WorkflowNode,
+    ): string[] | null {
+      const ed = edge.data as Record<string, unknown> | undefined
+      const edgeMode = ed?.outputMode as string | undefined
+      // Table columns exist to collect items — default to "each" (show all results)
+      const outputMode = edgeMode ?? "each"
+      const useAll = !!ed?.useAllResults
+
+      // Resolve all outputs — loop nodes need special handling
+      const allOutputs = upstream.type === "loop"
+        ? resolveLoopColumnValues(
+            { id: upstream.id, data: upstream.data as Record<string, unknown> },
+            edge.sourceHandle ?? undefined,
+            edges as Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+            nodes as Array<{ id: string; type?: string; data: Record<string, unknown> }>,
+          )
+        : (extractNodeOutputAsList(upstream, useAll) ?? [])
+
+      // item mode — single item by index
+      if (outputMode === "item") {
+        const itemIndex = ed?.itemIndex as string | undefined
+        if (allOutputs.length > 0) {
+          const idx = resolveIndex(itemIndex ?? "1", allOutputs.length)
+          return [allOutputs[idx] ?? allOutputs[0]]
+        }
+        const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
+        return single ? [single] : null
+      }
+      // legacy item:N (0-based)
+      if (outputMode.startsWith("item:")) {
+        const idx = parseInt(outputMode.split(":")[1], 10)
+        if (allOutputs.length > 0) return [allOutputs[idx] ?? allOutputs[0]]
+        const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
+        return single ? [single] : null
+      }
+      // last — single last item
+      if (outputMode === "last") {
+        if (allOutputs.length > 0) return [allOutputs[allOutputs.length - 1]]
+        const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
+        return single ? [single] : null
+      }
+      // each / all — full list with optional range
+      if (outputMode === "each" || outputMode === "all") {
+        if (allOutputs.length > 0) {
+          return applyRange(
+            allOutputs,
+            ed?.rangeFrom as string | undefined,
+            ed?.rangeTo as string | undefined,
+            ed?.rangeStep as number | undefined,
+          )
+        }
+        const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
+        if (!single) return null
+        return splitByLoopDelimiter(single, columns)
+      }
+      // default — single value
+      const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
+      if (!single) return null
+      return splitByLoopDelimiter(single, columns)
+    }
+
+    const colValues: (string[] | null)[] = columns.map((col) => {
+      const colInEdge = edges.find(
+        (e) => e.target === id && e.targetHandle === loopColInputHandle(col.handleId),
+      )
+      if (!colInEdge) return null
+      const upstream = nodes.find((n) => n.id === colInEdge.source)
+      if (!upstream) return null
+      return resolveEdgeValues(colInEdge, upstream as WorkflowNode)
+    })
+
+    const legacyEdge = edges.find((e) => e.target === id && e.targetHandle === "in")
+    let legacyValues: string[] | null = null
+    if (legacyEdge) {
+      const upstream = nodes.find((n) => n.id === legacyEdge.source)
+      if (upstream) {
+        legacyValues = resolveEdgeValues(legacyEdge, upstream as WorkflowNode)
+      }
+    }
+
+    if (!colValues.some((d) => d !== null) && !legacyValues) return null
+
+    const maxRows = Math.max(
+      ...colValues.map((d) => d?.length ?? 0),
+      legacyValues?.length ?? 0,
+    )
+    const result: string[][] = []
+    for (let r = 0; r < maxRows; r++) {
+      result.push(
+        columns.map((_col, ci) => {
+          if (colValues[ci]) return colValues[ci]![r] ?? ""
+          if (legacyValues) return legacyValues[r] ?? ""
+          return ""
+        }),
+      )
+    }
+    return result
+  }, [id, columns, edges, nodes])
 
   useEffect(() => {
     updateNodeInternals(id)
@@ -225,6 +340,10 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
   const rows = nodeData.rows ?? []
   const rowCount = rows.length
   const colCount = nodeData.columns?.length ?? 0
+
+  const displayRows = connectedRows ?? rows
+  const displayRowCount = displayRows.length
+  const isConnectedData = connectedRows !== null
 
   const firstImageColIdx = columns.findIndex((c) => c.type === "image-url")
   const maxItems = nodeData.maxItems ?? 20
@@ -342,14 +461,30 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
     [rowIds, rows, id, updateNodeData],
   )
 
-  const showingPresentation = showData && colCount > 0 && rowCount > 0
-  const nodeWidth = showingPresentation ? 350 : sizeConfig.maxWidth
+  const showingPresentation = showData && colCount > 0 && displayRowCount > 0
+  const isGallery = isConnectedData && columns.every((c) => c.type === "image-url")
+  const galleryCols = nodeData.galleryCols ?? DEFAULT_GALLERY_COLS
+  const nodeWidth = showingPresentation ? (isGallery ? Math.max(350, galleryCols * 100) : 350) : sizeConfig.maxWidth
+
+  // Collect all image URLs from display rows for fullscreen navigation
+  const allImageUrls = useMemo(() => {
+    if (!isConnectedData) return []
+    const urls: { url: string }[] = []
+    for (const row of displayRows) {
+      for (let ci = 0; ci < columns.length; ci++) {
+        if ((columns[ci].type ?? "text") === "image-url" && row[ci]) {
+          urls.push({ url: row[ci] })
+        }
+      }
+    }
+    return urls
+  }, [isConnectedData, displayRows, columns])
 
   let statusText: string
-  if (hasUpstreamInput) {
+  if (hasUpstreamInput && !connectedRows) {
     statusText = "Connected: waiting for input..."
   } else if (colCount > 0) {
-    statusText = `${rowCount} row${rowCount !== 1 ? "s" : ""} \u00D7 ${colCount} col${colCount !== 1 ? "s" : ""}`
+    statusText = `${displayRowCount} row${displayRowCount !== 1 ? "s" : ""} \u00D7 ${colCount} col${colCount !== 1 ? "s" : ""}`
   } else {
     statusText = "Click to configure..."
   }
@@ -395,7 +530,7 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         topToolbarContent={
           <div className="flex items-center gap-1">
-            {colCount > 0 && rowCount > 0 && (
+            {colCount > 0 && displayRowCount > 0 && (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setShowData(!showData) }}
@@ -405,7 +540,7 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
                 {showData ? <Info className="w-3.5 h-3.5" /> : <Table2 className="w-3.5 h-3.5" />}
               </button>
             )}
-            {showingPresentation && (
+            {showingPresentation && !isConnectedData && (
               <>
                 <span className="text-[9px] text-muted-foreground/60">
                   {rowCount} of {maxItems} max
@@ -435,79 +570,176 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
         >
-          {showData && colCount > 0 && rowCount > 0 ? (
+          {showData && colCount > 0 && displayRowCount > 0 ? (
             <div className="relative">
-              <div className="nodrag flex flex-col gap-2">
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleReorderRows}>
-                  <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
-                    {rows.map((row, rowIdx) => (
-                      <SortableNodeRow key={rowIds[rowIdx]} id={rowIds[rowIdx]} onRemove={() => handleRemoveRow(rowIdx)}>
-                        {uploadingRows.has(rowIdx) ? (
-                          <div className="flex items-center justify-center py-8 rounded-lg bg-muted/10">
-                            <Loader2 className="w-5 h-5 animate-spin text-[#38BDF8]" />
-                          </div>
-                        ) : (
-                          columns.map((col, colIdx) => {
-                            const cell = row[colIdx] ?? ""
-                            const colType = col.type ?? "text"
-                            if (colType === "image-url") {
-                              return cell ? (
-                                <CachedImage
-                                  key={col.id}
-                                  src={cell}
-                                  alt=""
-                                  className="w-full h-auto rounded-lg"
-                                />
-                              ) : (
-                                <button
-                                  key={col.id}
-                                  type="button"
-                                  className="w-full h-14 rounded-lg border-2 border-dashed border-muted-foreground/20 flex items-center justify-center hover:border-[#ff0073]/50 hover:bg-[#ff0073]/5 transition-colors"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    fileInputRef.current = { rowIdx, colIdx }
-                                    hiddenFileRef.current?.click()
+              {isConnectedData ? (
+                <div className="flex flex-col gap-2">
+                  {isGallery ? (
+                    <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${galleryCols}, 1fr)` }}>
+                      {(() => { let imgIdx = 0; return displayRows.flatMap((row, rowIdx) =>
+                        columns.map((col, colIdx) => {
+                          const cell = row[colIdx] ?? ""
+                          if (!cell) return null
+                          const idx = imgIdx++
+                          const sourceHandle = col.handleId
+                          return (
+                            <div key={`${rowIdx}-${col.id}`} className="relative group/img rounded-lg overflow-hidden">
+                              <CachedImage src={cell} alt="" className="w-full h-auto rounded-lg object-cover aspect-square" />
+                              <span className="absolute top-1 left-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 text-white text-[9px] font-medium tabular-nums opacity-0 group-hover/img:opacity-100 transition-opacity">{idx + 1}</span>
+                              <div className="nodrag nopan absolute inset-x-0 bottom-0 flex justify-center gap-1 py-1 opacity-0 group-hover/img:opacity-100 transition-opacity bg-gradient-to-t from-black/50 to-transparent">
+                                <button type="button" className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); setPreviewIndex(idx) }} title="Expand"><Expand className="w-3 h-3" /></button>
+                                <button type="button" className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = `/v1/image-proxy?url=${encodeURIComponent(cell)}&download=1`; a.download = "image.png"; a.click() }} title="Download"><Download className="w-3 h-3" /></button>
+                                <button type="button" className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "URL copied") }} title="Copy URL"><Link className="w-3 h-3" /></button>
+                              </div>
+                              <div
+                                className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-[#ff0073]/80 text-white cursor-grab active:cursor-grabbing opacity-0 group-hover/img:opacity-100 transition-opacity"
+                                title={`Drag out as item ${idx + 1}`}
+                                draggable
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData("application/nodaro-image", cell)
+                                  e.dataTransfer.setData("application/nodaro-edge-context", JSON.stringify({ sourceNodeId: id, sourceHandle, itemIndex: idx + 1 }))
+                                  e.dataTransfer.effectAllowed = "copy"
+                                }}
+                              >
+                                <ArrowUpRight className="w-3 h-3" />
+                              </div>
+                            </div>
+                          )
+                        }),
+                      ) })()}
+                    </div>
+                  ) : (
+                    (() => { let imgIdx = 0; return displayRows.map((row, rowIdx) => (
+                      <div key={rowIdx} className="flex-1 min-w-0">
+                        {columns.map((col, colIdx) => {
+                          const cell = row[colIdx] ?? ""
+                          const colType = col.type ?? "text"
+                          if (colType === "image-url") {
+                            if (!cell) {
+                              return (
+                                <div key={col.id} className="w-full h-10 rounded-lg border border-dashed border-muted-foreground/10 flex items-center justify-center">
+                                  <span className="text-[9px] text-muted-foreground/30">{"\u2014"}</span>
+                                </div>
+                              )
+                            }
+                            const idx = imgIdx++
+                            const sourceHandle = col.handleId
+                            return (
+                              <div key={col.id} className="relative group/img rounded-lg overflow-hidden">
+                                <CachedImage src={cell} alt="" className="w-full h-auto rounded-lg" />
+                                <span className="absolute top-2 left-2 min-w-[20px] h-[20px] flex items-center justify-center rounded-full bg-black/50 text-white text-[10px] font-medium tabular-nums opacity-0 group-hover/img:opacity-100 transition-opacity">{idx + 1}</span>
+                                <div className="nodrag nopan absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/img:opacity-100 transition-opacity">
+                                  <button type="button" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm" onClick={(e) => { e.stopPropagation(); setPreviewIndex(idx) }} title="Expand"><Expand className="w-3.5 h-3.5" /></button>
+                                  <button type="button" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm" onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = `/v1/image-proxy?url=${encodeURIComponent(cell)}&download=1`; a.download = "image.png"; a.click() }} title="Download"><Download className="w-3.5 h-3.5" /></button>
+                                  <button type="button" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm" onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "URL copied") }} title="Copy URL"><Link className="w-3.5 h-3.5" /></button>
+                                </div>
+                                <div
+                                  className="nodrag nopan absolute top-2 right-2 w-[20px] h-[20px] flex items-center justify-center rounded-full bg-black/50 hover:bg-[#ff0073]/80 text-white cursor-grab active:cursor-grabbing opacity-0 group-hover/img:opacity-100 transition-opacity shadow-sm"
+                                  title={`Drag out as item ${idx + 1}`}
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.setData("application/nodaro-image", cell)
+                                    e.dataTransfer.setData("application/nodaro-edge-context", JSON.stringify({ sourceNodeId: id, sourceHandle, itemIndex: idx + 1 }))
+                                    e.dataTransfer.effectAllowed = "copy"
                                   }}
                                 >
-                                  <Plus className="w-4 h-4 text-muted-foreground/40" />
-                                </button>
-                              )
-                            }
-                            if (colType === "video-url" || colType === "audio-url") {
-                              return (
-                                <span key={col.id} className="text-[10px] text-muted-foreground/60 italic block py-1">
-                                  {cell ? "media" : "\u2014"}
-                                </span>
-                              )
-                            }
-                            return col.connectedSourceId ? (
-                              <div key={col.id} className="px-1 py-0.5 text-[10px] text-muted-foreground/60 truncate">
-                                {cell || "..."}
+                                  <ArrowUpRight className="w-3.5 h-3.5" />
+                                </div>
                               </div>
-                            ) : (
-                              <span key={col.id} className="text-[10px] text-muted-foreground truncate block py-1" title={cell}>
-                                {cell || "\u2014"}
+                            )
+                          }
+                          if (colType === "video-url" || colType === "audio-url") {
+                            return (
+                              <span key={col.id} className="text-[10px] text-muted-foreground/60 italic block py-1">
+                                {cell ? "media" : "\u2014"}
                               </span>
                             )
-                          })
-                        )}
-                      </SortableNodeRow>
-                    ))}
-                  </SortableContext>
-                </DndContext>
-                {firstImageColIdx >= 0 && rows.length < maxItems && (
-                  <div
-                    className="flex items-center justify-center py-3 border-2 border-dashed rounded-lg transition-colors cursor-pointer border-muted-foreground/15 hover:border-[#ff0073]/40"
-                    onClick={(e) => { e.stopPropagation(); dropZoneFileRef.current?.click() }}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <Upload className="w-3.5 h-3.5 text-muted-foreground/40" />
-                      <span className="text-[10px] text-muted-foreground/60">Drop files to add rows, or click to browse</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-              {isDragOver && firstImageColIdx >= 0 && (
+                          }
+                          return (
+                            <span key={col.id} className="text-[10px] text-muted-foreground truncate block py-1" title={cell}>
+                              {cell || "\u2014"}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )) })()
+                  )}
+                </div>
+              ) : (
+                <div className="nodrag flex flex-col gap-2">
+                  <>
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleReorderRows}>
+                      <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
+                        {rows.map((row, rowIdx) => (
+                          <SortableNodeRow key={rowIds[rowIdx]} id={rowIds[rowIdx]} onRemove={() => handleRemoveRow(rowIdx)}>
+                            {uploadingRows.has(rowIdx) ? (
+                              <div className="flex items-center justify-center py-8 rounded-lg bg-muted/10">
+                                <Loader2 className="w-5 h-5 animate-spin text-[#38BDF8]" />
+                              </div>
+                            ) : (
+                              columns.map((col, colIdx) => {
+                                const cell = row[colIdx] ?? ""
+                                const colType = col.type ?? "text"
+                                if (colType === "image-url") {
+                                  return cell ? (
+                                    <CachedImage
+                                      key={col.id}
+                                      src={cell}
+                                      alt=""
+                                      className="w-full h-auto rounded-lg"
+                                    />
+                                  ) : (
+                                    <button
+                                      key={col.id}
+                                      type="button"
+                                      className="w-full h-14 rounded-lg border-2 border-dashed border-muted-foreground/20 flex items-center justify-center hover:border-[#ff0073]/50 hover:bg-[#ff0073]/5 transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        fileInputRef.current = { rowIdx, colIdx }
+                                        hiddenFileRef.current?.click()
+                                      }}
+                                    >
+                                      <Plus className="w-4 h-4 text-muted-foreground/40" />
+                                    </button>
+                                  )
+                                }
+                                if (colType === "video-url" || colType === "audio-url") {
+                                  return (
+                                    <span key={col.id} className="text-[10px] text-muted-foreground/60 italic block py-1">
+                                      {cell ? "media" : "\u2014"}
+                                    </span>
+                                  )
+                                }
+                                return col.connectedSourceId ? (
+                                  <div key={col.id} className="px-1 py-0.5 text-[10px] text-muted-foreground/60 truncate">
+                                    {cell || "..."}
+                                  </div>
+                                ) : (
+                                  <span key={col.id} className="text-[10px] text-muted-foreground truncate block py-1" title={cell}>
+                                    {cell || "\u2014"}
+                                  </span>
+                                )
+                              })
+                            )}
+                          </SortableNodeRow>
+                        ))}
+                      </SortableContext>
+                    </DndContext>
+                    {firstImageColIdx >= 0 && rows.length < maxItems && (
+                      <div
+                        className="flex items-center justify-center py-3 border-2 border-dashed rounded-lg transition-colors cursor-pointer border-muted-foreground/15 hover:border-[#ff0073]/40"
+                        onClick={(e) => { e.stopPropagation(); dropZoneFileRef.current?.click() }}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <Upload className="w-3.5 h-3.5 text-muted-foreground/40" />
+                          <span className="text-[10px] text-muted-foreground/60">Drop files to add rows, or click to browse</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                </div>
+              )}
+              {isDragOver && firstImageColIdx >= 0 && !isConnectedData && (
                 <div className="absolute inset-0 bg-[#ff0073]/5 border-2 border-dashed border-[#ff0073]/60 rounded-lg flex items-center justify-center z-10">
                   <div className="flex items-center gap-1.5 text-[#ff0073] text-xs font-medium">
                     <Upload className="w-3.5 h-3.5" />
@@ -570,6 +802,16 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
         quotaBytes={storageExceeded.quotaBytes}
         tier={storageExceeded.tier}
       />
+      {previewIndex !== null && (
+        <MediaPreviewModal
+          isOpen={previewIndex !== null}
+          onClose={() => setPreviewIndex(null)}
+          type="image"
+          url={allImageUrls[previewIndex]?.url ?? ""}
+          results={allImageUrls}
+          initialIndex={previewIndex}
+        />
+      )}
     </div>
   )
 }

@@ -52,6 +52,12 @@ function detectLoopColumnType(
   sourceNode: WorkflowNode,
   sourceHandle: string | null | undefined,
 ): LoopColumn["type"] {
+  // Upstream loop node — inherit the source column's type directly
+  if (sourceNode.type === "loop" && sourceHandle) {
+    const srcColumns = ((sourceNode.data as Record<string, unknown>).columns ?? []) as Array<{ handleId: string; type?: string }>
+    const srcCol = srcColumns.find((c) => c.handleId === sourceHandle)
+    if (srcCol?.type) return srcCol.type as LoopColumn["type"]
+  }
   const def = NODE_DEF_MAP.get(sourceNode.type ?? "")
   if (!def) return "text"
   const outputs = def.outputs ?? []

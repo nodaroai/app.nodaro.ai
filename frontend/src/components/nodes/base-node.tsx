@@ -357,11 +357,13 @@ function BaseNodeComponent({
             id={h.id}
             type={h.type}
             position={h.position}
+            isConnectable
             className="!w-7 !h-7 !bg-transparent !border-0 touch-manipulation"
             style={{
               ...(h.customStyle ?? (h.top ? { top: h.top } : undefined)),
               ...(h.hideHandle ? { background: 'transparent', opacity: 0 } : undefined),
               transform: 'translateY(-60%)',
+              zIndex: 30,
             }}
           />
           {h.label && h.top && (

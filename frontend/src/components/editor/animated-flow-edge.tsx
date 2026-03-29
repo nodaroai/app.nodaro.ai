@@ -127,7 +127,9 @@ function AnimatedFlowEdgeComponent({
 
   const hasLabel = !!(edgeData?.edgeLabel || edgeData?.edgeModeLabel || edgeData?.edgeRangeLabel)
   const showButtons = selected || showModeMenu
-  const showEdgeUI = (hasLabel || selected || showModeMenu) && zoom >= 0.5
+  const showEdgeUI = (hasLabel || selected || showModeMenu) && zoom >= 0.25
+  // Keep labels readable when zoomed out: scale up inversely below zoom 0.6
+  const labelScale = zoom < 0.6 ? Math.min(0.6 / zoom, 2.5) : 1
 
   return (
     <>
@@ -173,7 +175,7 @@ function AnimatedFlowEdgeComponent({
             ref={menuRef}
             className="nodrag nopan absolute select-none flex flex-col items-center"
             style={{
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)${labelScale !== 1 ? ` scale(${labelScale})` : ""}`,
               pointerEvents: "all",
               zIndex: showModeMenu ? 1000 : 0,
             }}

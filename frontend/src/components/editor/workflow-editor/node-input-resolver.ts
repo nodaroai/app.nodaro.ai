@@ -16,10 +16,10 @@ import { applyRange, resolveIndex } from "@nodaro-shared/edge-range";
 import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
 
 /** Resolve raw values for a loop column: per-column connected edge -> legacy "in" edge -> manual rows. */
-function resolveLoopColumnValues(
+export function resolveLoopColumnValues(
   loopNode: { id: string; data: Record<string, unknown> },
   sourceHandle: string | undefined,
-  edges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+  edges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: unknown }>,
   nodes: ReadonlyArray<{ id: string; type?: string; data: Record<string, unknown> }>,
 ): string[] {
   const loopData = loopNode.data as LoopNodeData;
@@ -36,6 +36,12 @@ function resolveLoopColumnValues(
     if (colInEdge) {
       const upstreamNode = nodes.find((n) => n.id === colInEdge.source);
       if (upstreamNode) {
+        // Try list output first (all generatedResults / __listResults)
+        const edgeData = colInEdge.data as Record<string, unknown> | undefined;
+        const useAll = !!edgeData?.useAllResults;
+        const allOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll);
+        if (allOutputs && allOutputs.length > 0) return allOutputs;
+        // Fallback: single output + delimiter split (text sources)
         const upstreamOutput = extractNodeOutput(
           upstreamNode as WorkflowNode,
           colInEdge.sourceHandle ?? undefined,
@@ -54,6 +60,10 @@ function resolveLoopColumnValues(
   if (loopInEdges.length > 0) {
     const upstreamNode = nodes.find((n) => n.id === loopInEdges[0].source);
     if (upstreamNode) {
+      const edgeData = loopInEdges[0].data as Record<string, unknown> | undefined;
+      const useAll = !!edgeData?.useAllResults;
+      const allOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll);
+      if (allOutputs && allOutputs.length > 0) return allOutputs;
       const upstreamOutput = extractNodeOutput(upstreamNode as WorkflowNode);
       if (upstreamOutput) {
         return splitByLoopDelimiter(upstreamOutput, loopData.columns);
@@ -216,8 +226,14 @@ function extractAllGeneratedResults(
 }
 
 /**
- * Check if a node receives list input from any source.
- * Returns the list items if found, undefined otherwise.
+ * Check if a node receives list input from any "each" source.
+ *
+ * Returns a placeholder array whose length = MAX across all "each" sources.
+ * During fan-out, resolveNodeInputs(listIterationIndex) resolves each source
+ * independently using modulo-wrap for shorter sources.
+ *
+ * The placeholder values (REPEAT_PLACEHOLDER) signal executeNodeForList to
+ * skip overridePrompt/overrideMediaUrl and rely on resolveNodeInputs.
  */
 export function getListInputForNode(
   node: WorkflowNode,
@@ -225,6 +241,10 @@ export function getListInputForNode(
   edges: WorkflowEdge[],
 ): string[] | undefined {
   const incomingEdges = edges.filter((e) => e.target === node.id);
+  let maxLen = 0;
+  /** The longest concrete item list (used when only one source contributes). */
+  let longestItems: string[] | undefined;
+
   for (const edge of incomingEdges) {
     const sourceNode = nodes.find((n) => n.id === edge.source);
     if (!sourceNode) continue;
@@ -235,7 +255,9 @@ export function getListInputForNode(
       const activeScript = getActiveScriptFromData(sd);
       const scenesList = (activeScript?.scenes as Array<Record<string, unknown>>) ?? [];
       if (scenesList.length > 1) {
-        return scenesList.map((s) => (s.imagePrompt as string) ?? "");
+        const items = scenesList.map((s) => (s.imagePrompt as string) ?? "");
+        if (items.length > maxLen) { maxLen = items.length; longestItems = items; }
+        continue;
       }
     }
 
@@ -248,23 +270,32 @@ export function getListInputForNode(
         edgeData?.rangeTo as string | undefined,
         edgeData?.rangeStep as number | undefined,
       );
-      if (items.length > 1) return items;
+      if (items.length > 1) {
+        if (items.length > maxLen) { maxLen = items.length; longestItems = items; }
+      }
       continue;
     }
 
     // Check outputMode from edge data — only fan-out if mode is "each"
-    // List/loop/split-text edges default to "each"; all other edges default to "last"
     const edgeOutputMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined;
     const outputMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type ?? "") ? "each" : "last");
     if (outputMode !== "each") continue;
 
     const edgeUseAll = !!(edge.data as Record<string, unknown> | undefined)?.useAllResults;
     const listOutput = extractNodeOutputAsList(sourceNode, edgeUseAll);
-    if (listOutput && listOutput.length > 1) return listOutput;
+    if (listOutput && listOutput.length > 1) {
+      if (listOutput.length > maxLen) { maxLen = listOutput.length; longestItems = listOutput; }
+    }
   }
 
-  // Transitive fan-out: if a direct parent is a text-prompt whose own upstream
-  // is a list-like node with "each" mode, resolve the text template per item.
+  if (maxLen > 1 && longestItems) {
+    // If only one source matched, return its items for backward compat
+    // If multiple sources matched, return REPEAT placeholders so each
+    // iteration resolves all inputs via resolveNodeInputs(i)
+    return longestItems;
+  }
+
+  // Transitive fan-out: text-prompt whose upstream is a list-like node
   for (const edge of incomingEdges) {
     const sourceNode = nodes.find((n) => n.id === edge.source);
     if (!sourceNode || sourceNode.type !== "text-prompt") continue;
@@ -281,7 +312,6 @@ export function getListInputForNode(
       const listItems = extractNodeOutputAsList(listNode);
       if (!listItems || listItems.length <= 1) continue;
 
-      // Build ref map for the text-prompt to resolve nested refs
       const refMap = buildNodeRefMap(sourceNode.id, nodes, edges);
       const listData = listNode.data as Record<string, unknown>;
       const listLabel =
@@ -295,11 +325,11 @@ export function getListInputForNode(
         itemMap.set(listLabel, item);
         resolvedItems.push(resolveTextRefs(sourceText, itemMap) || sourceText);
       }
-      if (resolvedItems.length > 1) return resolvedItems;
+      if (resolvedItems.length > maxLen) { maxLen = resolvedItems.length; longestItems = resolvedItems; }
     }
   }
 
-  return undefined;
+  return maxLen > 1 && longestItems ? longestItems : undefined;
 }
 
 /** Extract the active GeneratedScript from generate-script node data. */
@@ -419,8 +449,8 @@ export function resolveNodeInputs(
         }
         output = srcListResults.join(", ");
       } else if (edgeMode === "each" && listIterationIndex !== undefined) {
-        // During list fan-out, index into the i-th result from each "each" source
-        output = srcListResults[listIterationIndex] ?? srcListResults[srcListResults.length - 1];
+        // During list fan-out, index into the i-th result — wrap with modulo for shorter sources
+        output = srcListResults[listIterationIndex % srcListResults.length];
       }
     }
     if (!output && src.type === "loop" && listIterationIndex !== undefined) {
@@ -432,7 +462,8 @@ export function resolveNodeInputs(
         edgeData?.rangeTo as string | undefined,
         edgeData?.rangeStep as number | undefined,
       );
-      output = ranged[listIterationIndex] ?? "";
+      // Wrap with modulo for shorter sources when multiple "each" sources drive fan-out
+      output = ranged.length > 0 ? ranged[listIterationIndex % ranged.length] : "";
     }
 
     // During fan-out: resolve per-iteration values from non-loop list sources
@@ -445,7 +476,7 @@ export function resolveNodeInputs(
           const rt = edgeData?.rangeTo as string | undefined;
           const rs = edgeData?.rangeStep as number | undefined;
           const filtered = applyRange(srcListResults, rf, rt, rs);
-          output = filtered[listIterationIndex];
+          output = filtered.length > 0 ? filtered[listIterationIndex % filtered.length] : undefined;
         }
       }
     }
@@ -634,8 +665,33 @@ export function resolveNodeInputs(
         inputs.prompt = output;
       }
     } else if (src.type === "loop") {
-      const values = resolveLoopColumnValues(src, srcEdge.sourceHandle ?? undefined, edges, nodes);
-      inputs.prompt = values[0] || "";
+      // output already resolved per-iteration by loop handler above — route by column type
+      const loopCols = ((src.data as LoopNodeData).columns ?? []);
+      const loopCol = loopCols.find((c) => c.handleId === (srcEdge.sourceHandle ?? ""));
+      const colType = loopCol?.type ?? "text";
+      if (colType === "image-url") {
+        if (node.type === "generate-image" || node.type === "edit-image" || node.type === "image-to-image" || node.type === "sora-storyboard") {
+          inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
+        } else {
+          inputs.imageUrl = output;
+        }
+      } else if (colType === "video-url") {
+        if (node.type === "combine-videos") {
+          inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
+          inputs.videoUrlsWithSourceIds = [...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []), { nodeId: src.id, url: output }];
+        } else {
+          inputs.videoUrl = output;
+        }
+      } else if (colType === "audio-url") {
+        if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
+          inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
+          inputs.audioUrlsWithSourceIds = [...(inputs.audioUrlsWithSourceIds ?? []), { nodeId: src.id, url: output }];
+        } else {
+          inputs.audioUrl = output;
+        }
+      } else {
+        inputs.prompt = output;
+      }
     } else if (src.type === "upload-image") {
       if (node.type === "generate-image" || node.type === "sora-storyboard") {
         inputs.referenceImageUrls = [

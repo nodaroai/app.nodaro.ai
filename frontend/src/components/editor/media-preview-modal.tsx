@@ -62,15 +62,15 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
   const hasNav = effectiveIndex !== undefined && effectiveTotal !== undefined
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === "Escape") onClose()
-    if (e.key === "ArrowLeft" && effectivePrev) effectivePrev()
-    if (e.key === "ArrowRight" && effectiveNext) effectiveNext()
+    if (e.key === "Escape") { e.stopImmediatePropagation(); onClose() }
+    if (e.key === "ArrowLeft" && effectivePrev) { e.stopImmediatePropagation(); effectivePrev() }
+    if (e.key === "ArrowRight" && effectiveNext) { e.stopImmediatePropagation(); effectiveNext() }
   }, [onClose, effectivePrev, effectiveNext])
 
   useEffect(() => {
     if (!isOpen) return
-    document.addEventListener("keydown", handleKeyDown)
-    return () => document.removeEventListener("keydown", handleKeyDown)
+    document.addEventListener("keydown", handleKeyDown, true)
+    return () => document.removeEventListener("keydown", handleKeyDown, true)
   }, [isOpen, handleKeyDown])
 
   // Touch swipe support
@@ -113,10 +113,10 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
           <X className="w-7 h-7" />
         </button>
 
-        {/* Counter */}
+        {/* Counter — bottom center */}
         {hasNav && (
-          <div className="absolute -top-10 left-1/2 -translate-x-1/2 text-white/70 text-sm tabular-nums">
-            {effectiveIndex! + 1} of {effectiveTotal}
+          <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-white/70 text-sm tabular-nums">
+            {effectiveIndex! + 1} / {effectiveTotal}
           </div>
         )}
 
