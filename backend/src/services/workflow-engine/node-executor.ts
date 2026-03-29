@@ -143,8 +143,8 @@ export async function executeNode(
 
   // Component nodes (published apps executed as sub-executions)
   if (node.type === "component") {
-    const output = await executeComponentNode(node, resolvedInputs, ctx)
-    return { output }
+    const result = await executeComponentNode(node, resolvedInputs, ctx)
+    return { output: result.output, jobId: result.jobId }
   }
 
   // Sub-workflow nodes
@@ -705,7 +705,7 @@ async function executeComponentNode(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
   ctx: OrchestratorContext,
-): Promise<NodeOutput> {
+): Promise<{ output: NodeOutput; jobId: string }> {
   const data = node.data as Record<string, unknown>
   const appSlug = data.appSlug as string
   const componentMetadata = data.componentMetadata as ComponentMetadata
@@ -739,6 +739,16 @@ async function executeComponentNode(
     }
   }
 
+  // Pick up config-panel input values (stored in exposedSettings as "nodeId:fieldKey")
+  for (const handle of componentMetadata.inputs) {
+    if (inputOverrides[handle.id]?.[handle.fieldKey] !== undefined) continue
+    const settingKey = `${handle.id}:${handle.fieldKey}`
+    const settingVal = exposedSettings[settingKey]
+    if (settingVal !== undefined && settingVal !== "") {
+      inputOverrides[handle.id] = { ...inputOverrides[handle.id], [handle.fieldKey]: settingVal }
+    }
+  }
+
   const mergedOverrides = mergeExposedSettings(inputOverrides, exposedSettings, componentMetadata)
 
   // Call the component-execute route via internal HTTP
@@ -753,7 +763,7 @@ async function executeComponentNode(
     body: JSON.stringify({
       appSlug,
       inputOverrides: mergedOverrides,
-      pinnedVersion: data.pinnedVersion as number | undefined,
+      pinnedVersion: (data.pinnedVersion as number) || undefined,
       componentDepth: depth + 1,
       executingComponentIds: [...ancestorIds, appSlug],
       userId: ctx.userId,
@@ -782,7 +792,7 @@ async function executeComponentNode(
 
     if (job.status === "completed") {
       const outputData = (job.output_data ?? {}) as Record<string, string>
-      return { _outputResults: outputData }
+      return { output: { _outputResults: outputData }, jobId }
     }
 
     if (job.status === "failed") {

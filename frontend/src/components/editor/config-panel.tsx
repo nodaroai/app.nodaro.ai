@@ -407,7 +407,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "sub-workflow-input": return <SubWorkflowInputConfig {...configProps} />
     case "sub-workflow-output": return <SubWorkflowOutputConfig {...configProps} />
     case "sub-workflow": return <SubWorkflowConfig {...configProps} />
-    case "component": return <ComponentConfig {...configProps} />
+    case "component": return <ComponentConfig {...configProps} nodeId={selectedNodeId} />
     case "character": return <CharacterConfig {...configProps} />
     case "face": return <FaceConfig data={nodeData as any} onUpdate={update} />
     case "object": return <ObjectConfig data={nodeData as any} onUpdate={update} />

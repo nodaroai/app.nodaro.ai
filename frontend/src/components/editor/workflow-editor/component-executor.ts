@@ -51,14 +51,26 @@ export async function executeComponent(
     }
   }
 
+  // Pick up config-panel input values (stored in exposedSettings as "nodeId:fieldKey")
+  // for input handles that weren't supplied by wired connections above.
+  for (const handle of metadata.inputs) {
+    if (inputOverrides[handle.id]?.[handle.fieldKey] !== undefined) continue // already wired
+    const settingKey = `${handle.id}:${handle.fieldKey}`
+    const settingVal = exposedSettings[settingKey]
+    if (settingVal !== undefined && settingVal !== "") {
+      inputOverrides[handle.id] = { ...inputOverrides[handle.id], [handle.fieldKey]: settingVal }
+    }
+  }
+
   const merged = mergeExposedSettings(inputOverrides, exposedSettings, metadata)
 
-  // Mark running
+  // Mark running — clear previous results so only latest run is shown
   updateNodeData(node.id, {
     executionStatus: "running",
     errorMessage: undefined,
     outputResults: undefined,
-    generatedResults: [],
+    generatedResults: undefined,
+    activeResultIndex: undefined,
     currentJobProgress: 0,
   })
 

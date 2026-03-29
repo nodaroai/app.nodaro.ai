@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react"
+import { useState, useCallback, useMemo, useEffect, useRef } from "react"
 import { Rocket, Copy, Check, Loader2, ExternalLink, ChevronDown, ChevronRight, X, Store, AlertTriangle } from "lucide-react"
 import type { WorkflowNode } from "@/types/nodes"
 import { getNodeLabel } from "@/lib/presentation-utils"
@@ -54,6 +54,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     outputs: Array<{ id: string; name: string; type: string; required: boolean; mediaPreview: boolean; fieldKey: string }>
   }>({ inputs: [], outputs: [] })
 
+
   // Marketplace settings
   const [showMarketplace, setShowMarketplace] = useState(false)
   const [isListed, setIsListed] = useState(false)
@@ -100,20 +101,30 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     return () => { cancelled = true }
   }, [open, workflowId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Derive component handles from presentation-flagged nodes
+  // Derive component handles from presentation-flagged nodes.
+  // Uses a ref to only derive ONCE when switching to component mode,
+  // so user edits (rename, delete) are not overwritten by re-derivation.
+  const handlesInitialized = useRef(false)
   useEffect(() => {
-    if (publishType !== "component" || !nodes) {
+    if (publishType !== "component") {
       setComponentHandles({ inputs: [], outputs: [] })
+      handlesInitialized.current = false
       return
     }
+    if (handlesInitialized.current || !nodes) return
+    handlesInitialized.current = true
 
     const inputNodes = nodes.filter((n) => (n.data as Record<string, unknown>)?.presentationInput)
     const outputNodes = nodes.filter((n) => (n.data as Record<string, unknown>)?.presentationOutput)
 
-    const inputs = inputNodes.map((n) => {
+    // Only source node types (text-prompt, upload-*, parameters) can be component
+    // input handles. AI generation nodes (generate-image etc.) are NOT valid inputs —
+    // their settings should be exposed settings, not input handles.
+    const validInputNodes = inputNodes.filter((n) => INPUT_FIELD_MAP[n.type || ""])
+
+    const inputs = validInputNodes.map((n) => {
       const nodeType = n.type || ""
       const outputType = getOutputType(nodeType)
-      // For input nodes, determine type from their node type category
       const handleType = outputType !== "data" ? outputType : "text"
       const fieldKey = INPUT_FIELD_MAP[nodeType] || "text"
       return {
@@ -125,7 +136,19 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
       }
     })
 
-    const outputs = outputNodes.map((n, idx) => {
+    // Exclude from outputs: nodes already used as input handles,
+    // AND nodes that are ONLY presentationInput (not also presentationOutput)
+    // — those are input-config-only nodes, not true outputs.
+    const inputIdSet = new Set(inputs.map((h) => h.id))
+    const outputIdSet = new Set(outputNodes.map((n) => n.id))
+    const inputOnlyIds = new Set(
+      inputNodes.filter((n) => !outputIdSet.has(n.id)).map((n) => n.id),
+    )
+    const validOutputNodes = outputNodes.filter((n) =>
+      !inputIdSet.has(n.id) && !inputOnlyIds.has(n.id),
+    )
+
+    const outputs = validOutputNodes.map((n, idx) => {
       const nodeType = n.type || ""
       const outputType = getOutputType(nodeType)
       const handleType = outputType !== "data" ? outputType : "text"
@@ -142,6 +165,53 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
 
     setComponentHandles({ inputs, outputs })
   }, [publishType, nodes])
+
+  // Build exposed settings fresh from current nodes — called at publish time
+  // so it's never stale. Detects configurable fields from presentationInput
+  // nodes that are NOT source types (e.g., generate-image settings).
+  const CONFIGURABLE_FIELDS: Record<string, Array<{ field: string; label: string; type: "select" | "text" | "number" | "toggle" }>> = {
+    "generate-image": [
+      { field: "provider", label: "Model", type: "select" },
+      { field: "aspectRatio", label: "Aspect Ratio", type: "select" },
+      { field: "quality", label: "Quality", type: "select" },
+      { field: "style", label: "Style", type: "text" },
+    ],
+    "image-to-video": [
+      { field: "provider", label: "Model", type: "select" },
+      { field: "duration", label: "Duration", type: "number" },
+    ],
+    "text-to-video": [
+      { field: "provider", label: "Model", type: "select" },
+      { field: "duration", label: "Duration", type: "number" },
+    ],
+    "text-to-speech": [
+      { field: "provider", label: "Model", type: "select" },
+      { field: "voiceId", label: "Voice", type: "select" },
+    ],
+    "generate-music": [
+      { field: "provider", label: "Model", type: "select" },
+    ],
+  }
+
+  const buildExposedSettingsFromNodes = useCallback(() => {
+    if (!nodes) return []
+    const inputNodes = nodes.filter((n) => (n.data as Record<string, unknown>)?.presentationInput)
+    const nonSourceInputNodes = inputNodes.filter((n) => !INPUT_FIELD_MAP[n.type || ""])
+    const settings: Array<{ nodeId: string; field: string; label: string; type: "select" | "text" | "number" | "toggle"; allowedValues?: unknown[]; defaultValue: unknown }> = []
+    for (const node of nonSourceInputNodes) {
+      const fields = CONFIGURABLE_FIELDS[node.type || ""]
+      if (!fields) continue
+      const nd = (node.data ?? {}) as Record<string, unknown>
+      const label = getNodeLabel(node)
+      for (const f of fields) {
+        const val = nd[f.field]
+        if (val !== undefined) {
+          settings.push({ nodeId: node.id, field: f.field, label: `${label} — ${f.label}`, type: f.type, defaultValue: val })
+        }
+      }
+    }
+    return settings
+  }, [nodes])
 
   const handlePublish = useCallback(async () => {
     if (!publishName.trim()) {
@@ -200,7 +270,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
         componentMetadata: publishType === "component" ? {
           inputs: componentHandles.inputs.map((h) => ({ ...h, type: h.type as "image" | "video" | "audio" | "text" })),
           outputs: componentHandles.outputs.map((h) => ({ ...h, type: h.type as "image" | "video" | "audio" | "text" })),
-          exposedSettings: [],
+          exposedSettings: buildExposedSettingsFromNodes(),
         } : undefined,
       })
       setPublishedSlug(result.slug)
@@ -210,7 +280,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     } finally {
       setPublishing(false)
     }
-  }, [workflowId, publishName, publishSlug, publishDesc, thumbnailNodeId, isListed, category, outputTypes, tags, supportsRemix, publishType, componentHandles])
+  }, [workflowId, publishName, publishSlug, publishDesc, thumbnailNodeId, isListed, category, outputTypes, tags, supportsRemix, publishType, componentHandles, buildExposedSettingsFromNodes])
 
   const publishedUrl = publishedSlug
     ? `${window.location.origin}/app/${publishedSlug}`
@@ -424,6 +494,16 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                             {handle.required && (
                               <span className="text-[11px] text-amber-500 shrink-0">req</span>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => setComponentHandles((prev) => ({
+                                ...prev,
+                                inputs: prev.inputs.filter((h) => h.id !== handle.id),
+                              }))}
+                              className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -470,6 +550,16 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                               />
                               preview
                             </label>
+                            <button
+                              type="button"
+                              onClick={() => setComponentHandles((prev) => ({
+                                ...prev,
+                                outputs: prev.outputs.filter((h) => h.id !== handle.id),
+                              }))}
+                              className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         ))}
                       </div>

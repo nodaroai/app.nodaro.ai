@@ -152,7 +152,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "sub-workflow-input", label: "Sub-Workflow Input", icon: <LogIn className="h-4 w-4" />, category: "Workflow" },
   { type: "sub-workflow-output", label: "Sub-Workflow Output", icon: <LogOut className="h-4 w-4" />, category: "Workflow" },
   { type: "sub-workflow", label: "Sub-Workflow", icon: <Workflow className="h-4 w-4" />, category: "Workflow" },
-  { type: "component" as SceneNodeType, label: "Component", icon: <Puzzle className="h-4 w-4" />, category: "Workflow" },
+  { type: "component" as SceneNodeType, label: "Component", icon: <Puzzle className="h-4 w-4" />, category: "Component" },
   // Utility
   { type: "teleport-send", label: "Teleport Send", icon: <Send className="h-4 w-4" />, category: "Processing", group: "Text" },
   { type: "teleport-receive", label: "Teleport Receive", icon: <Download className="h-4 w-4" />, category: "Processing", group: "Text" },
@@ -176,6 +176,7 @@ const CATEGORY_ICON_HOVER: Record<string, string> = {
   Scene: "group-hover:text-[#8B5CF6]",
   Output: "group-hover:text-[#22C55E]",
   Workflow: "group-hover:text-[#F59E0B]",
+  Component: "group-hover:text-[#A855F7]",
 }
 
 function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) {
