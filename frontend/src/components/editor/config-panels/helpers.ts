@@ -127,6 +127,10 @@ const LLM_NODE_FEATURE_MAP: Record<string, LlmFeature> = {
 export function getModelIdentifier(node: WorkflowNode): string {
   const data = node.data as Record<string, unknown>
 
+  // Component nodes: return empty string so the fallback estimateNodeCredits is used
+  // (component cost depends on estimatedCredits from the published metadata, not a model lookup)
+  if (node.type === "component") return ""
+
   // LLM-powered nodes: use composite credit identifier based on selected model tier
   const llmFeature = LLM_NODE_FEATURE_MAP[node.type ?? ""]
   if (llmFeature) {

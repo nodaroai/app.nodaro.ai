@@ -238,6 +238,15 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
             newData.webhookStatusCode = outputData.statusCode
             newData.webhookResponseBody = outputData.responseBody
             break
+          case "component": {
+            // Component output_data is { handleId: url } — restore outputResults
+            const outputResults: Record<string, string> = {}
+            for (const [k, v] of Object.entries(outputData)) {
+              if (typeof v === "string") outputResults[k] = v
+            }
+            newData.outputResults = outputResults
+            break
+          }
         }
       }
 

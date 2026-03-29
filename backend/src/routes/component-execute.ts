@@ -5,6 +5,9 @@ import { executeAppRun } from "../services/app-execution.js"
 import { OUTPUT_FIELD_MAP } from "../../../packages/shared/src/component-types.js"
 import type { ComponentMetadata } from "../../../packages/shared/src/component-types.js"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
+import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
+import { CREDIT_COSTS } from "../billing/credit-manager.js"
+import { buildCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 
 const bodySchema = z.object({
@@ -65,7 +68,9 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         user_id: req.userId,
         provider: "component",
         status: "processing",
+        started_at: new Date().toISOString(),
         input_data: {
+          type: "component",
           componentName: appRow.name,
           appSlug,
           inputs: inputOverrides ?? {},
@@ -140,13 +145,18 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
 
               await updateWrapperJob(wrapperJob.id, {
                 status: "completed",
-                output_data: outputData,
+                output_data: {
+                  ...outputData,
+                  _executionId: result.executionId,
+                  _appRunId: result.appRunId,
+                },
                 credits_actual: fullExec.total_credits_used ?? 0,
               })
             } else {
               await updateWrapperJob(wrapperJob.id, {
                 status: "failed",
                 error_message: fullExec?.error_message ?? "Component execution failed",
+                output_data: { _executionId: result.executionId, _appRunId: result.appRunId },
               })
             }
             return
@@ -163,5 +173,75 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         })
       }
     })
+  })
+
+  // ── Estimate credits for a component with setting overrides ──
+  const estimateSchema = z.object({
+    appSlug: z.string().min(1),
+    pinnedVersion: z.number().int().min(0).optional(),
+    exposedSettings: z.record(z.string(), z.unknown()).optional(),
+  })
+
+  app.post("/v1/component/estimate-credits", async (req: FastifyRequest, reply: FastifyReply) => {
+    const parsed = estimateSchema.safeParse(req.body ?? {})
+    if (!parsed.success) {
+      return reply.status(400).send({ error: { code: "bad_request", message: parsed.error.message } })
+    }
+
+    const { appSlug, pinnedVersion, exposedSettings } = parsed.data
+
+    let query = supabase
+      .from("published_apps")
+      .select("snapshot_nodes, component_metadata")
+      .eq("slug", appSlug)
+      .eq("publish_type", "component")
+      .eq("is_active", true)
+
+    if (pinnedVersion && pinnedVersion > 0) {
+      query = query.eq("version", pinnedVersion)
+    } else {
+      query = query.order("version", { ascending: false }).limit(1)
+    }
+
+    const { data: app } = await query.single()
+    if (!app) {
+      return reply.status(404).send({ error: { code: "not_found", message: "Component not found" } })
+    }
+
+    const nodes = (app.snapshot_nodes ?? []) as Array<{ id?: string; type?: string; data?: Record<string, unknown> }>
+    const overrides = exposedSettings ?? {}
+
+    let total = 0
+    for (const node of nodes) {
+      const nodeId = (node.id ?? "") as string
+      const nodeType = (node.type ?? "") as string
+      const data = { ...(node.data ?? {}) } as Record<string, unknown>
+
+      // Apply exposed-setting overrides for this node
+      for (const [key, value] of Object.entries(overrides)) {
+        const sep = key.indexOf(":")
+        if (sep < 0) continue
+        const oNodeId = key.slice(0, sep)
+        const oField = key.slice(sep + 1)
+        if (oNodeId === nodeId) data[oField] = value
+      }
+
+      const provider = data.provider as string | undefined
+      if (!provider) {
+        total += CREDIT_COSTS[nodeType] ?? 0
+        continue
+      }
+
+      const creditModelId = buildCreditModelIdentifier(
+        provider,
+        data.quality as string | undefined,
+        data.resolution as string | undefined,
+        data.renderingSpeed as string | undefined,
+        data.targetResolution as string | undefined,
+      )
+      total += STATIC_CREDIT_COSTS[creditModelId] ?? STATIC_CREDIT_COSTS[provider] ?? CREDIT_COSTS[nodeType] ?? 0
+    }
+
+    return reply.send({ estimatedCredits: total })
   })
 }

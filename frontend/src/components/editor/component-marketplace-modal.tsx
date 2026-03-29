@@ -1,7 +1,9 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react"
 import { createPortal } from "react-dom"
-import { Puzzle, Search, X, Loader2, ImageIcon, Video, AudioLines, FileText, Star, Coins } from "lucide-react"
+import { Puzzle, Search, X, Loader2, ImageIcon, Video, AudioLines, FileText, Star, Coins, ExternalLink, Pencil, ToggleLeft, ToggleRight } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import {
   Select,
   SelectContent,
@@ -9,10 +11,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { getMyApps } from "@/lib/api"
+import { toast } from "sonner"
+import { getMyApps, updateApp, deactivateApp, getMonetizationDefaults } from "@/lib/api"
 import type { AppBrowseCard, PublishedApp } from "@/lib/api"
-import { OUTPUT_TYPE_COLORS } from "@/lib/app-categories"
+import { hasCredits } from "@/lib/edition"
+import { calculateMonetizedCost } from "@nodaro-shared/monetization"
+import { OUTPUT_TYPE_COLORS, APP_CATEGORIES, OUTPUT_TYPES } from "@/lib/app-categories"
 import { AppMarketplaceCard, AppMarketplaceCardSkeleton } from "@/components/apps/app-marketplace-card"
 import {
   useAppBrowseInfinite,
@@ -20,7 +27,7 @@ import {
   useToggleAppFavoriteMutation,
   type AppBrowseParams,
 } from "@/hooks/queries/use-app-marketplace-queries"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import type { ComponentMetadata } from "@nodaro-shared/component-types"
 
 // ---------------------------------------------------------------------------
@@ -281,15 +288,56 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
     staleTime: 60_000,
   })
 
-  const myComponents = useMemo(
-    () => (allMyApps ?? []).filter((a) => a.publishType === "component"),
-    [allMyApps],
-  )
+  // Only show latest version per slug — older versions are superseded
+  const myComponents = useMemo(() => {
+    const all = (allMyApps ?? []).filter((a) => a.publishType === "component")
+    const bySlug = new Map<string, PublishedApp>()
+    for (const app of all) {
+      const existing = bySlug.get(app.slug)
+      if (!existing || app.version > existing.version) bySlug.set(app.slug, app)
+    }
+    return [...bySlug.values()]
+  }, [allMyApps])
 
   const myComponentsAsBrowseCards: AppBrowseCard[] = useMemo(
     () => myComponents.map(publishedAppToBrowseCard),
     [myComponents],
   )
+
+  // Management mutations for My Components tab
+  const qc = useQueryClient()
+  const toggleListMutation = useMutation({
+    mutationFn: async ({ appId, isListed }: { appId: string; isListed: boolean }) => {
+      await updateApp(appId, { isListed })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-apps"] })
+      qc.invalidateQueries({ queryKey: ["app-marketplace"] })
+      toast.success("Updated")
+    },
+  })
+  const toggleActiveMutation = useMutation({
+    mutationFn: async ({ appId, isActive }: { appId: string; isActive: boolean }) => {
+      if (isActive) await updateApp(appId, { isActive: true })
+      else await deactivateApp(appId)
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["my-apps"] }) },
+  })
+
+  // Edit dialog
+  const [editComp, setEditComp] = useState<PublishedApp | null>(null)
+  const editMutation = useMutation({
+    mutationFn: async ({ appId, data }: { appId: string; data: Record<string, unknown> }) => {
+      await updateApp(appId, data)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-apps"] })
+      qc.invalidateQueries({ queryKey: ["app-marketplace"] })
+      setEditComp(null)
+      toast.success("Component updated")
+    },
+    onError: (err: Error) => { toast.error(err.message || "Failed to update") },
+  })
 
   const scrollRef = useRef({ hasNextPage, isFetchingNextPage, fetchNextPage })
   scrollRef.current = { hasNextPage, isFetchingNextPage, fetchNextPage }
@@ -495,6 +543,91 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                     : "Components will appear here as creators publish them"}
               </p>
             </div>
+          ) : activeTab === "my-components" ? (
+            (() => {
+              const activeComps = myComponents.filter((c) => c.isActive !== false)
+              const archivedComps = myComponents.filter((c) => c.isActive === false)
+
+              const renderCard = (comp: PublishedApp) => (
+                <div key={comp.id} className="bg-card border border-border rounded-xl p-4 transition-colors">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-semibold text-foreground truncate">{comp.name}</h3>
+                      <p className="text-[11px] text-muted-foreground font-mono mt-0.5">/app/{comp.slug}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      <span
+                        className={cn(
+                          "text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors",
+                          comp.isListed
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
+                            : "bg-zinc-100 dark:bg-zinc-800 text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700",
+                        )}
+                        onClick={() => toggleListMutation.mutate({ appId: comp.id, isListed: !comp.isListed })}
+                        title={comp.isListed ? "Click to unlist" : "Click to list on marketplace"}
+                      >
+                        {comp.isListed ? "Listed" : "Unlisted"}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">v{comp.version}</span>
+                    </div>
+                  </div>
+                  {comp.description && <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{comp.description}</p>}
+                  {comp.previewMediaUrl && (
+                    <div className="mb-2 rounded-md overflow-hidden aspect-video bg-zinc-100 dark:bg-zinc-800">
+                      <img src={comp.previewMediaUrl} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 mb-3 text-xs text-muted-foreground">
+                    <span>{comp.totalRunCount ?? 0} runs</span>
+                    <span>{comp.estimatedCredits ?? 0} CR/run</span>
+                    {(comp.favoriteCount ?? 0) > 0 && <span>{comp.favoriteCount} favs</span>}
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <a href={`/app/${comp.slug}`} target="_blank" rel="noopener noreferrer">
+                      <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
+                        <ExternalLink className="h-3 w-3 mr-1" /> Open
+                      </Button>
+                    </a>
+                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setEditComp(comp)}>
+                      <Pencil className="h-3 w-3 mr-1" /> Edit
+                    </Button>
+                    <Button
+                      variant={comp.isActive === false ? "default" : "outline"}
+                      size="sm"
+                      className="h-7 px-2 text-xs ml-auto"
+                      onClick={() => toggleActiveMutation.mutate({ appId: comp.id, isActive: comp.isActive === false })}
+                    >
+                      {comp.isActive === false ? "Restore" : "Archive"}
+                    </Button>
+                  </div>
+                </div>
+              )
+
+              return (
+                <div className="space-y-6">
+                  {activeComps.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {activeComps.map(renderCard)}
+                    </div>
+                  )}
+                  {archivedComps.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground mb-3">Archived</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 opacity-60">
+                        {archivedComps.map(renderCard)}
+                      </div>
+                    </div>
+                  )}
+                  <ComponentEditDialog
+                    comp={editComp}
+                    open={editComp !== null}
+                    onOpenChange={(o) => { if (!o) setEditComp(null) }}
+                    onSave={(appId, data) => editMutation.mutate({ appId, data })}
+                    isSaving={editMutation.isPending}
+                  />
+                </div>
+              )
+            })()
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {currentItems.map((card) => (
@@ -664,5 +797,211 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
       </div>
     </>,
     document.body,
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Component Edit Dialog (name, description, category, tags, monetization)
+// ---------------------------------------------------------------------------
+
+function ComponentEditDialog({
+  comp,
+  open,
+  onOpenChange,
+  onSave,
+  isSaving,
+}: {
+  comp: PublishedApp | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSave: (appId: string, data: Record<string, unknown>) => void
+  isSaving: boolean
+}) {
+  const [name, setName] = useState("")
+  const [description, setDescription] = useState("")
+  const [category, setCategory] = useState("other")
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState("")
+  const [isListed, setIsListed] = useState(false)
+  const [monetizationEnabled, setMonetizationEnabled] = useState(false)
+  const [monetizationFlatFee, setMonetizationFlatFee] = useState(0)
+  const [monetizationPercent, setMonetizationPercent] = useState(0)
+
+  useEffect(() => {
+    if (comp && open) {
+      setName(comp.name ?? "")
+      setDescription(comp.description ?? "")
+      setCategory(comp.category ?? "other")
+      setTags(comp.tags ?? [])
+      setTagInput("")
+      setIsListed(comp.isListed ?? false)
+      setMonetizationEnabled(comp.monetizationEnabled ?? false)
+      setMonetizationFlatFee(comp.monetizationFlatFee ?? 0)
+      setMonetizationPercent(comp.monetizationPercent ?? 0)
+    }
+  }, [comp, open])
+
+  const handleToggleMonetization = useCallback(async (enabled: boolean) => {
+    setMonetizationEnabled(enabled)
+    if (enabled && monetizationFlatFee === 0 && monetizationPercent === 0) {
+      try {
+        const defaults = await getMonetizationDefaults()
+        setMonetizationFlatFee(defaults.flatFee)
+        setMonetizationPercent(defaults.percent)
+      } catch { /* user can set manually */ }
+    }
+  }, [monetizationFlatFee, monetizationPercent])
+
+  const baseCredits = comp?.baseEstimatedCredits ?? 0
+  const calculatedCredits = monetizationEnabled
+    ? calculateMonetizedCost(baseCredits, monetizationFlatFee, monetizationPercent)
+    : baseCredits
+
+  const handleSave = useCallback(() => {
+    if (!comp || !name.trim()) return
+    const data: Record<string, unknown> = {
+      name: name.trim(),
+      description: description.trim(),
+      category,
+      tags,
+      isListed,
+    }
+    if (hasCredits()) {
+      data.monetizationEnabled = monetizationEnabled
+      data.monetizationFlatFee = monetizationFlatFee
+      data.monetizationPercent = monetizationPercent
+    }
+    onSave(comp.id, data)
+  }, [comp, name, description, category, tags, isListed, monetizationEnabled, monetizationFlatFee, monetizationPercent, onSave])
+
+  if (!comp) return null
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Component</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label className="text-sm font-medium mb-1 block">Name *</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Component name" />
+          </div>
+          <div>
+            <Label className="text-sm font-medium mb-1 block">Description</Label>
+            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What does this component do?" />
+          </div>
+          <div>
+            <Label className="text-sm font-medium mb-1.5 block">Category</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="w-full h-9 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {APP_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-sm font-medium mb-1.5 block">
+              Tags <span className="text-xs text-muted-foreground font-normal">({tags.length}/10)</span>
+            </Label>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-1.5">
+                {tags.map((tag) => (
+                  <span key={tag} className="inline-flex items-center gap-1 text-[11px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground">
+                    {tag}
+                    <button type="button" onClick={() => setTags(tags.filter((t) => t !== tag))} className="hover:text-destructive">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-1.5">
+              <Input
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                placeholder="Add a tag..."
+                className="h-8 text-xs flex-1"
+                maxLength={30}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    const trimmed = tagInput.trim().toLowerCase()
+                    if (trimmed && !tags.includes(trimmed) && tags.length < 10) {
+                      setTags([...tags, trimmed])
+                      setTagInput("")
+                    }
+                  }
+                }}
+                disabled={tags.length >= 10}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2 text-xs"
+                onClick={() => {
+                  const trimmed = tagInput.trim().toLowerCase()
+                  if (trimmed && !tags.includes(trimmed) && tags.length < 10) {
+                    setTags([...tags, trimmed])
+                    setTagInput("")
+                  }
+                }}
+                disabled={!tagInput.trim() || tags.length >= 10}
+              >
+                Add
+              </Button>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Listed on marketplace</p>
+              <p className="text-xs text-muted-foreground">Make discoverable in the component browser</p>
+            </div>
+            <Switch checked={isListed} onCheckedChange={setIsListed} />
+          </div>
+
+          {hasCredits() && (
+            <div className="space-y-3 border-t border-border pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Monetization</p>
+                  <p className="text-xs text-muted-foreground">Charge a markup when others use this component</p>
+                </div>
+                <Switch checked={monetizationEnabled} onCheckedChange={handleToggleMonetization} />
+              </div>
+              {monetizationEnabled && (
+                <div className="space-y-3 pl-1">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Flat fee (CR)</Label>
+                      <Input type="number" min={0} value={monetizationFlatFee} onChange={(e) => setMonetizationFlatFee(Math.max(0, Number(e.target.value) || 0))} className="h-8 text-xs mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Percentage (%)</Label>
+                      <Input type="number" min={0} max={500} value={monetizationPercent} onChange={(e) => setMonetizationPercent(Math.min(500, Math.max(0, Number(e.target.value) || 0)))} className="h-8 text-xs mt-1" />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Base cost: {baseCredits} CR | Users will pay: {calculatedCredits} CR
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <Button
+            onClick={handleSave}
+            disabled={isSaving || !name.trim()}
+            className="w-full text-white hover:opacity-90"
+            style={{ backgroundColor: "#ff0073" }}
+          >
+            {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save Changes
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

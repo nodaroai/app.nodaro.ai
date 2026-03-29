@@ -760,6 +760,7 @@ export function ConfigPanel() {
                 userId={userId ?? ""}
                 label="Run This Node"
                 isRunning={nodeData.executionStatus === "running"}
+                creditOverride={nodeType === "component" ? (nodeData.estimatedCredits as number) || undefined : undefined}
               />
             )}
 

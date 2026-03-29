@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useEdges } from "@xyflow/react"
-import { getPublishedApp } from "@/lib/api"
+import { getPublishedApp, estimateComponentCredits } from "@/lib/api"
 import type { ConfigProps } from "./types"
 import type { ComponentNodeData } from "@/types/nodes"
 import type { ComponentMetadata, ExposedSetting } from "@nodaro-shared/component-types"
@@ -19,7 +19,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
   const edges = useEdges()
 
   // Auto-refresh metadata + credits from the latest published version on first open.
-  // Uses local state so the UI updates immediately without waiting for parent re-render.
+  // Also pre-populates exposedSettings with defaults so selects show current values.
   const [freshMeta, setFreshMeta] = useState<ComponentMetadata | null>(null)
   const refreshed = useRef(false)
   useEffect(() => {
@@ -31,6 +31,19 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
         if (fresh) {
           setFreshMeta(fresh) // immediate local update
           onUpdate({ componentMetadata: fresh }) // persist to store
+
+          // Pre-populate exposedSettings with defaults from metadata so
+          // select dropdowns show the current value on first open.
+          const defaults: Record<string, unknown> = {}
+          for (const s of fresh.exposedSettings ?? []) {
+            const key = `${s.nodeId}:${s.field}`
+            if (nodeData.exposedSettings[key] === undefined && s.defaultValue !== undefined) {
+              defaults[key] = s.defaultValue
+            }
+          }
+          if (Object.keys(defaults).length > 0) {
+            onUpdate({ exposedSettings: { ...nodeData.exposedSettings, ...defaults } })
+          }
         }
         if (app.estimatedCredits != null && app.estimatedCredits !== nodeData.estimatedCredits) {
           onUpdate({ estimatedCredits: app.estimatedCredits })
@@ -39,7 +52,26 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
       .catch(() => {})
   }, [nodeData.appSlug, nodeData.pinnedVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const meta = freshMeta ?? nodeData.componentMetadata ?? { inputs: [], outputs: [], exposedSettings: [] }
+  const rawMeta = freshMeta ?? nodeData.componentMetadata ?? { inputs: [], outputs: [], exposedSettings: [] }
+
+  // Deduplicate outputs by handle id and settings by nodeId:field to handle
+  // any stale/duplicate metadata from previous publishes.
+  const meta = useMemo(() => {
+    const seenOutputs = new Set<string>()
+    const outputs = (rawMeta.outputs ?? []).filter((h) => {
+      if (seenOutputs.has(h.id)) return false
+      seenOutputs.add(h.id)
+      return true
+    })
+    const seenSettings = new Set<string>()
+    const exposedSettings = (rawMeta.exposedSettings ?? []).filter((s) => {
+      const key = `${s.nodeId}:${s.field}`
+      if (seenSettings.has(key)) return false
+      seenSettings.add(key)
+      return true
+    })
+    return { ...rawMeta, outputs, exposedSettings }
+  }, [rawMeta])
 
   // Determine which input handles have a wired connection
   const connectedInputIds = useMemo(() => {
@@ -53,15 +85,30 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
     return set
   }, [edges, nodeId])
 
+  // Debounced credit re-estimation when settings change
+  const creditTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reEstimateCredits = useCallback((newSettings: Record<string, unknown>) => {
+    if (!nodeData.appSlug) return
+    if (creditTimer.current) clearTimeout(creditTimer.current)
+    creditTimer.current = setTimeout(() => {
+      estimateComponentCredits({
+        appSlug: nodeData.appSlug,
+        pinnedVersion: nodeData.pinnedVersion || undefined,
+        exposedSettings: newSettings,
+      })
+        .then((res) => {
+          if (res.estimatedCredits > 0) onUpdate({ estimatedCredits: res.estimatedCredits })
+        })
+        .catch(() => {})
+    }, 400)
+  }, [nodeData.appSlug, nodeData.pinnedVersion, onUpdate])
+
   const handleSettingChange = useCallback((setting: ExposedSetting, value: unknown) => {
     const key = `${setting.nodeId}:${setting.field}`
-    onUpdate({
-      exposedSettings: {
-        ...nodeData.exposedSettings,
-        [key]: value,
-      },
-    })
-  }, [nodeData.exposedSettings, onUpdate])
+    const newSettings = { ...nodeData.exposedSettings, [key]: value }
+    onUpdate({ exposedSettings: newSettings })
+    reEstimateCredits(newSettings)
+  }, [nodeData.exposedSettings, onUpdate, reEstimateCredits])
 
   // Input handle values are stored in exposedSettings with the same "nodeId:fieldKey" format
   const handleInputChange = useCallback((handleId: string, fieldKey: string, value: string) => {
@@ -94,18 +141,11 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
           <Puzzle className="w-4 h-4 text-[#ff0073]" />
           <span className="text-sm font-medium truncate">{nodeData.label || "Component"}</span>
         </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {nodeData.pinnedVersion > 0 && (
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-              v{nodeData.pinnedVersion}
-            </Badge>
-          )}
-          {nodeData.estimatedCredits > 0 && (
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-              {nodeData.estimatedCredits} CR
-            </Badge>
-          )}
-        </div>
+        {nodeData.pinnedVersion > 0 && (
+          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 mt-1">
+            v{nodeData.pinnedVersion}
+          </Badge>
+        )}
       </div>
 
       {/* Input handles — editable when not wired */}
@@ -154,27 +194,36 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
             const value = getSettingValue(setting)
 
             switch (setting.type) {
-              case "select":
+              case "select": {
+                // Prefer options (value+label) over raw allowedValues
+                const opts: Array<{ value: string; label: string }> = setting.options
+                  ?? (setting.allowedValues ?? []).map((v) => ({ value: String(v), label: String(v) }))
+                // Ensure the current value is in the options list (may be absent if
+                // the option set changed after the component was published).
+                const strVal = String(value ?? "")
+                const hasCurrentValue = !strVal || opts.some((o) => o.value === strVal)
+                const displayOpts = hasCurrentValue ? opts : [{ value: strVal, label: strVal }, ...opts]
                 return (
                   <div key={key}>
                     <Label className="text-[10px] text-muted-foreground">{setting.label}</Label>
                     <Select
-                      value={String(value ?? "")}
+                      value={strVal}
                       onValueChange={(v) => handleSettingChange(setting, v)}
                     >
                       <SelectTrigger className="mt-1 h-8 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {(setting.allowedValues ?? []).map((opt) => (
-                          <SelectItem key={String(opt)} value={String(opt)}>
-                            {String(opt)}
+                        {displayOpts.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                 )
+              }
               case "toggle":
                 return (
                   <div key={key} className="flex items-center justify-between">

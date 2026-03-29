@@ -127,6 +127,7 @@ const componentMetadataSchema = z.object({
     label: z.string(),
     type: z.enum(["select", "text", "number", "toggle"]),
     allowedValues: z.array(z.unknown()).optional(),
+    options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
     defaultValue: z.unknown(),
   })),
 })
@@ -393,6 +394,21 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       if (!componentMetadata) {
         return reply.status(400).send({ error: { code: "bad_request", message: "componentMetadata is required for component publish type" } })
       }
+
+      // Server-side dedup: remove duplicate outputs (by id) and settings (by nodeId:field)
+      const seenOutputIds = new Set<string>()
+      componentMetadata.outputs = componentMetadata.outputs.filter((o) => {
+        if (seenOutputIds.has(o.id)) return false
+        seenOutputIds.add(o.id)
+        return true
+      })
+      const seenSettingKeys = new Set<string>()
+      componentMetadata.exposedSettings = componentMetadata.exposedSettings.filter((s) => {
+        const k = `${s.nodeId}:${s.field}`
+        if (seenSettingKeys.has(k)) return false
+        seenSettingKeys.add(k)
+        return true
+      })
 
       // Exactly one output must have mediaPreview: true
       const previewOutputs = componentMetadata.outputs.filter((o) => o.mediaPreview)

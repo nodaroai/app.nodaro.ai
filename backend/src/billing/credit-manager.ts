@@ -1,4 +1,4 @@
-const CREDIT_COSTS: Record<string, number> = {
+export const CREDIT_COSTS: Record<string, number> = {
   "generate-script": 2,
   "generate-image": 5,
   "image-to-video": 20,

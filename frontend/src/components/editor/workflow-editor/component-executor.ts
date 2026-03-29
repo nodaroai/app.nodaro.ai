@@ -68,6 +68,7 @@ export async function executeComponent(
   updateNodeData(node.id, {
     executionStatus: "running",
     errorMessage: undefined,
+    currentJobId: undefined,
     currentJobProgress: 0,
   })
 
@@ -81,6 +82,9 @@ export async function executeComponent(
       pinnedVersion: data.pinnedVersion || undefined,
       workflowId: workflowId || undefined,
     })
+
+    // Store job ID so cancel + resume-after-refresh can find it
+    updateNodeData(node.id, { currentJobId: jobId })
 
     // Poll wrapper job
     const startTime = Date.now()
@@ -113,6 +117,7 @@ export async function executeComponent(
           outputResults,
           generatedResults: newResults,
           activeResultIndex: 0,
+          currentJobId: undefined,
           currentJobProgress: 100,
         })
 
@@ -138,6 +143,7 @@ export async function executeComponent(
     updateNodeData(node.id, {
       executionStatus: "failed",
       errorMessage: err instanceof Error ? err.message : "Unknown error",
+      currentJobId: undefined,
       currentJobProgress: undefined,
     })
     throw err

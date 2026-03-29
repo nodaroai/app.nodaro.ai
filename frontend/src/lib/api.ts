@@ -4094,6 +4094,19 @@ export async function executeComponent(params: {
   )
 }
 
+/** Estimate component credits with setting overrides. */
+export async function estimateComponentCredits(params: {
+  appSlug: string
+  pinnedVersion?: number
+  exposedSettings?: Record<string, unknown>
+}): Promise<{ estimatedCredits: number }> {
+  return apiRequest(
+    "/v1/component/estimate-credits",
+    "Failed to estimate credits",
+    { method: "POST", body: params },
+  )
+}
+
 /** Create a draft run (before execution). */
 export async function createAppRun(
   slug: string,

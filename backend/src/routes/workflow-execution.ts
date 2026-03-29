@@ -450,7 +450,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // --- Source 2: standalone jobs (single-node runs with no execution record) ---
     let jobsQuery = supabase
       .from("jobs")
-      .select("id, status, input_data, credits, error_message, started_at, completed_at, created_at")
+      .select("id, status, provider, input_data, credits, error_message, started_at, completed_at, created_at")
       .eq("workflow_id", workflowId)
       .eq("user_id", req.userId)
       .is("workflow_execution_id", null)
@@ -481,7 +481,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 
     // Merge both sources, sort by created_at desc, take limit + 1
     const execRows = (execResult.data ?? []).map(toExecutionSummary)
-    const jobRows = (jobsResult.data ?? []).map(jobToExecutionSummary)
+    const jobRows = (jobsResult.data ?? []).map((row) => jobToExecutionSummary(row))
     const merged = [...execRows, ...jobRows]
       .sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime())
 
@@ -727,7 +727,11 @@ const JOB_STATUS_MAP: Record<string, string> = {
 
 function jobToExecutionSummary(row: Record<string, unknown>) {
   const inputData = (row.input_data ?? {}) as Record<string, unknown>
-  const jobType = (inputData.type as string) ?? "unknown"
+  const provider = row.provider as string | undefined
+  // Component jobs: show the component name as the node type label
+  const jobType = provider === "component"
+    ? (inputData.componentName as string) ?? "Component"
+    : (inputData.type as string) ?? (provider ?? "unknown")
   const mappedStatus = JOB_STATUS_MAP[row.status as string] ?? (row.status as string)
 
   return {

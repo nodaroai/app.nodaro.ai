@@ -12,6 +12,8 @@ interface GenerateButtonProps {
   userId: string
   label?: string
   children?: React.ReactNode
+  /** Override the credit cost shown on the button (e.g. for component nodes). */
+  creditOverride?: number
 }
 
 export function GenerateButton({
@@ -22,8 +24,10 @@ export function GenerateButton({
   userId,
   label = "Generate",
   children,
+  creditOverride,
 }: GenerateButtonProps) {
-  const { data: creditCost } = useModelCreditCost(modelIdentifier)
+  const { data: lookedUp } = useModelCreditCost(modelIdentifier)
+  const creditCost = creditOverride ?? lookedUp
   const { data: balance } = useUserCredits(userId)
 
   const creditsActive = hasCredits()

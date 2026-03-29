@@ -15,6 +15,8 @@ export interface ExposedSetting {
   label: string
   type: "select" | "text" | "number" | "toggle"
   allowedValues?: unknown[]
+  /** Full option list with labels for select fields (preferred over allowedValues). */
+  options?: Array<{ value: string; label: string }>
   defaultValue: unknown
 }
 
