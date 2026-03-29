@@ -496,6 +496,7 @@ export function useWorkflowPersistence(projectId?: string) {
             characterDefinitions: JSON.parse(JSON.stringify(characterDefinitions)),
             flowPromptTemplates: JSON.parse(JSON.stringify(flowPromptTemplates)),
             presentationSettings: JSON.parse(JSON.stringify(presentationSettings)),
+            viewport: useWorkflowStore.getState().savedViewport,
           },
         }
 
@@ -581,6 +582,7 @@ export function useWorkflowPersistence(projectId?: string) {
         const charDefs = (settings.characterDefinitions ?? []) as CharacterDefinition[]
         const flowTemplates = (settings.flowPromptTemplates ?? {}) as Record<string, string>
         const presSettings = (settings.presentationSettings ?? undefined) as PresentationSettings | undefined
+        const savedViewport = (settings.viewport ?? null) as { x: number; y: number; zoom: number } | null
         let nodes = data.nodes as unknown as WorkflowNode[]
         const edges = data.edges as unknown as WorkflowEdge[]
 
@@ -651,6 +653,7 @@ export function useWorkflowPersistence(projectId?: string) {
           charDefs,
           flowTemplates,
           presSettings,
+          savedViewport,
         )
 
         // Prefetch model credit costs for all nodes in one batch request

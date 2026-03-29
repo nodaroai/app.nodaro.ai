@@ -368,7 +368,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const addNode = useWorkflowStore((s) => s.addNode)
   const updateEdgeData = useWorkflowStore((s) => s.updateEdgeData)
   const replaceEdgeWithTeleporter = useWorkflowStore((s) => s.replaceEdgeWithTeleporter)
-  const { screenToFlowPosition, setNodes, getNode, setCenter, fitView, getViewport } = useReactFlow()
+  const { screenToFlowPosition, setNodes, getNode, setCenter, fitView, getViewport, setViewport } = useReactFlow()
+  const savedViewport = useWorkflowStore((s) => s.savedViewport)
+  const setSavedViewport = useWorkflowStore((s) => s.setSavedViewport)
   const { undo, redo, canUndo, canRedo } = useUndoRedoActions()
   const [searchParams, setSearchParams] = useSearchParams()
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null)
@@ -451,6 +453,19 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     return () => clearTimeout(timer)
   }, [isMobile, selectedNodeId, setCenter, getNode])
 
+  // Restore saved viewport or fitView on workflow load
+  const viewportRestoredRef = useRef<string | null>(null)
+  useEffect(() => {
+    const wfId = useWorkflowStore.getState().workflowId
+    if (!wfId || wfId === viewportRestoredRef.current || nodes.length === 0) return
+    viewportRestoredRef.current = wfId
+    if (savedViewport) {
+      requestAnimationFrame(() => setViewport(savedViewport, { duration: 0 }))
+    } else {
+      requestAnimationFrame(() => fitView({ maxZoom: 1, padding: 0.2 }))
+    }
+  }, [nodes.length, savedViewport, setViewport, fitView])
+
   // Mobile: auto-focus the first non-sticky node after workflow loads
   const autoFocusedRef = useRef(false)
   useEffect(() => {
@@ -473,6 +488,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       setFocusMode(false)
     }
   }, [isMobile, focusMode])
+
+  const handleMoveEnd = useCallback(() => {
+    setSavedViewport(getViewport())
+  }, [getViewport, setSavedViewport])
 
   const handleFocusNavigate = useCallback((nodeId: string) => {
     selectNode(nodeId)
@@ -1440,6 +1459,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           onPaneContextMenu={isMobile ? undefined : handlePaneContextMenu}
           onEdgeContextMenu={isMobile ? undefined : onEdgeContextMenu}
           onMoveStart={handleMoveStart}
+          onMoveEnd={handleMoveEnd}
           onNodeDragStart={handleNodeDragStart}
           onNodeDrag={handleNodeDrag}
           onNodeDragStop={handleNodeDragStop}
@@ -1451,8 +1471,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           connectionMode={ConnectionMode.Loose}
           connectOnClick={isMobile}
           selectNodesOnDrag={!isMobile}
-          fitView
-          fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
           deleteKeyCode={["Delete", "Backspace"]}
           className={cn(
             "bg-background touch-manipulation",
