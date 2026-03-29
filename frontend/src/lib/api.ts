@@ -845,9 +845,9 @@ export async function generateVideo(
   if (typeof imageUrlOrOptions === "object") {
     const opts = imageUrlOrOptions
     body = {
-      imageUrl: opts.startFrameUrl || undefined,  // Backend still expects imageUrl for backward compat; don't send empty string
-      endFrameUrl: opts.endFrameUrl,
-      audioUrl: opts.audioUrl,
+      imageUrl: opts.startFrameUrl || undefined,
+      endFrameUrl: opts.endFrameUrl || undefined,
+      audioUrl: opts.audioUrl || undefined,
       prompt: opts.prompt,
       provider: opts.provider,
       generateAudio: opts.generateAudio,
@@ -881,8 +881,6 @@ export async function generateVideo(
     }
   }
 
-  // Debug: log full body to diagnose 400 from Zod validation
-  console.warn("[generateVideo] body:", JSON.stringify(body, null, 2))
   const res = await fetch(`${API_BASE_URL}/v1/generate-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
@@ -890,7 +888,6 @@ export async function generateVideo(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    console.warn("[generateVideo] error response:", JSON.stringify(err))
     throwApiError(err, "Failed to start video generation")
   }
   return res.json()

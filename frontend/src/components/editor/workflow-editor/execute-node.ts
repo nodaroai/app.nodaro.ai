@@ -686,8 +686,6 @@ export function executeNode(
     const i2vCfgScale = (i2vData as Record<string, unknown>).cfgScale as
       | number
       | undefined;
-    // Debug: log the resolved URL to help diagnose "invalid url" errors
-    if (startFrameUrl) console.warn("[i2v] startFrameUrl:", JSON.stringify(startFrameUrl), "length:", startFrameUrl.length)
     return runVideoGeneration(
       node.id,
       startFrameUrl ?? "",
