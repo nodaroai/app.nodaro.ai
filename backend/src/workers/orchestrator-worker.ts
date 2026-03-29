@@ -428,10 +428,13 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
 
       // Execute nodes in this level with concurrency cap to prevent starving other users
       const tasks = executableNodes.map((node) => async () => {
-          // Mark as running
+          // Mark as running — for component nodes, use the component's label as display name
+          const displayType = node.type === "component"
+            ? (node.data as Record<string, unknown>).label as string || "Component"
+            : node.type
           nodeStates[node.id] = {
             status: "running",
-            nodeType: node.type,
+            nodeType: displayType,
             startedAt: new Date().toISOString(),
           }
           await updateExecution(executionId, { node_states: nodeStates })

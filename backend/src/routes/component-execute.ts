@@ -6,10 +6,11 @@ import { OUTPUT_FIELD_MAP } from "../../../packages/shared/src/component-types.j
 import type { ComponentMetadata } from "../../../packages/shared/src/component-types.js"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 
+
 const bodySchema = z.object({
   appSlug: z.string().min(1),
   inputOverrides: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
-  pinnedVersion: z.number().int().positive().optional(),
+  pinnedVersion: z.number().int().min(0).optional(),
   workflowId: z.string().uuid().optional(),
   componentDepth: z.number().int().min(0).max(5).optional(),
   executingComponentIds: z.array(z.string()).optional(),
@@ -35,7 +36,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     // Look up published app by slug
     let appQuery = supabase
       .from("published_apps")
-      .select("id, workflow_id, name, component_metadata, estimated_credits, snapshot_nodes, snapshot_edges, snapshot_settings")
+      .select("id, workflow_id, name, component_metadata, estimated_credits")
       .eq("slug", appSlug)
       .eq("publish_type", "component")
       .eq("is_active", true)
@@ -81,7 +82,9 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     // Return immediately — run inner execution in background
     reply.status(202).send({ jobId: wrapperJob.id })
 
-    // Background: execute inner workflow, poll status, update wrapper job
+    // Background: execute inner workflow, poll status, update wrapper job.
+    // Runs the full published workflow (same as app runner) — no node subset
+    // filtering so the execution is identical to Present mode.
     setImmediate(async () => {
       try {
         const result = await executeAppRun({
@@ -97,14 +100,22 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
 
         const startTime = Date.now()
         while (Date.now() - startTime < POLL_ABSOLUTE_TIMEOUT_MS) {
-          // Poll status only — avoid transferring large node_states JSONB on every tick
+          // Poll status + progress counts to propagate progress to wrapper job
           const { data: exec } = await supabase
             .from("workflow_executions")
-            .select("status")
+            .select("status, completed_nodes, total_nodes")
             .eq("id", result.executionId)
             .single()
 
           if (!exec) break
+
+          // Propagate progress percentage to wrapper job so frontend can display it
+          const total = (exec.total_nodes as number) ?? 0
+          const completed = (exec.completed_nodes as number) ?? 0
+          if (total > 0) {
+            const pct = Math.round((completed / total) * 100)
+            await supabase.from("jobs").update({ progress: pct }).eq("id", wrapperJob.id)
+          }
 
           if (exec.status === "completed" || exec.status === "failed") {
             // Fetch full data only on terminal status

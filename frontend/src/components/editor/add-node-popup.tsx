@@ -798,7 +798,7 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "component" as SceneNodeType,
     label: "Component",
     icon: <Puzzle className="h-4 w-4" />,
-    category: "Workflow",
+    category: "Component",
   },
   // Utility
   {
@@ -880,6 +880,12 @@ export const CATEGORIES = [
     icon: <Workflow className="h-4 w-4" />,
     description: "Sub-Workflows",
   },
+  {
+    id: "Component",
+    label: "COMPONENT",
+    icon: <Puzzle className="h-4 w-4" />,
+    description: "Reusable Components",
+  },
 ];
 
 // Category icon colors
@@ -891,6 +897,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   Assets: "text-[#EC4899]",
   Output: "text-[#22C55E]",
   Workflow: "text-[#F59E0B]",
+  Component: "text-[#A855F7]",
 };
 
 interface AddNodePopupProps {
@@ -1105,7 +1112,7 @@ export function AddNodePopup({
 
   return (
     <>
-    {open && <div
+    {open && !componentBrowserOpen && <div
       ref={popupRef}
       className={cn(
         "fixed z-[100] w-72",
@@ -1403,6 +1410,7 @@ export function AddNodePopup({
           open={componentBrowserOpen}
           onOpenChange={setComponentBrowserOpen}
           onSelect={handleComponentSelect}
+          position={position}
         />
       </Suspense>
     )}

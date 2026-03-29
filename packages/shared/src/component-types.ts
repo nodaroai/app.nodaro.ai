@@ -40,6 +40,11 @@ export const OUTPUT_FIELD_MAP: Record<string, string> = {
 /**
  * Merge exposed settings into inputOverrides format.
  * exposedSettings is keyed by "nodeId:field" -> value on the component node data.
+ *
+ * Connected inputs (already present in inputOverrides) always take priority
+ * over exposed settings for the same node+field combination.  This ensures
+ * that mandatory upstream wires are never silently overwritten by stale
+ * default / user-configured exposed-setting values.
  */
 export function mergeExposedSettings(
   inputOverrides: Record<string, Record<string, unknown>>,
@@ -51,6 +56,8 @@ export function mergeExposedSettings(
     const key = `${setting.nodeId}:${setting.field}`
     const value = exposedSettings[key]
     if (value !== undefined) {
+      // Skip if a connected input already provided this field
+      if (merged[setting.nodeId]?.[setting.field] !== undefined) continue
       merged[setting.nodeId] = { ...merged[setting.nodeId], [setting.field]: value }
     }
   }

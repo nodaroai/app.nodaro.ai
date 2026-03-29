@@ -94,6 +94,7 @@ export const JOB_TYPE_LABELS: Record<string, string> = {
   "mix-audio": "Mix Audio",
   "adjust-volume": "Adjust Volume",
   "translate": "Translation",
+  "component": "Component",
 }
 
 export function formatNodeType(nodeType: string): string {

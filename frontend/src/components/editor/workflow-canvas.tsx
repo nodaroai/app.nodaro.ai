@@ -1312,6 +1312,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             open={componentMarketplaceOpen}
             onOpenChange={setComponentMarketplaceOpen}
             onSelect={handleComponentSelect}
+            variant="fullscreen"
           />
         </Suspense>
       )}
