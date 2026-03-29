@@ -367,6 +367,33 @@ export function MobileAppShell({
 
   const handleOpenMedia = setLightboxNodeId
 
+  // Extract listResults for gallery/individual display (mirrors PresentationView)
+  const getListResults = useCallback(
+    (node: WorkflowNode): { listResults?: string[]; iterationTotal?: number; iterationCompleted?: number } => {
+      const nodeState = presNodeStates[node.id]
+      if (nodeState?.output) {
+        const output = nodeState.output as Record<string, unknown>
+        const listResults = output.listResults as string[] | undefined
+        if (listResults && listResults.length > 0) {
+          const stateRecord = nodeState as unknown as Record<string, unknown>
+          return {
+            listResults,
+            iterationTotal: stateRecord.iterationTotal as number | undefined,
+            iterationCompleted: stateRecord.iterationCompleted as number | undefined,
+          }
+        }
+        // Check generatedResults array
+        const results = output.generatedResults as Array<{ url?: string; text?: string }> | undefined
+        if (results && results.length > 1) {
+          const allOutputs = results.map((r) => r.url || r.text || "").filter((v) => v.length > 0)
+          if (allOutputs.length > 1) return { listResults: allOutputs }
+        }
+      }
+      return {}
+    },
+    [presNodeStates],
+  )
+
   // ---- Item-based input renderer (mirrors PresentationView renderInputItem) ----
   const renderInputItem = useCallback(
     (item: PresentationItem): React.ReactNode => {
@@ -693,6 +720,54 @@ export function MobileAppShell({
     const cardDisplay = settings.cardMeta?.[node.id]?.display
     const elementSize = cardDisplay?.elementSize ?? nodeDisplay?.elementSize ?? "md"
     const fieldBadges = fieldBadgesByNode.get(node.id)
+    const displayMode = settings.outputDisplayModes?.[node.id] ?? "individual"
+    const { listResults, iterationTotal, iterationCompleted } = getListResults(node)
+
+    // Gallery mode: single card with all results
+    if (listResults && listResults.length > 1 && displayMode === "gallery") {
+      return (
+        <OutputCard
+          key={node.id}
+          nodeId={node.id}
+          label={getCardTitle(node)}
+          outputType={outputType}
+          status={status}
+          url={result.url}
+          text={result.text}
+          onOpenMedia={handleOpenMedia}
+          progress={progress}
+          listResults={listResults}
+          displayMode="gallery"
+          iterationTotal={iterationTotal}
+          iterationCompleted={iterationCompleted}
+          elementSize={elementSize}
+          fieldBadges={fieldBadges}
+        />
+      )
+    }
+
+    // Individual mode with listResults: render multiple OutputCard instances
+    if (listResults && listResults.length > 1 && displayMode === "individual") {
+      return (
+        <div className="flex flex-col gap-2">
+          {listResults.filter(Boolean).map((resultUrl, i) => (
+            <OutputCard
+              key={`${node.id}-${i}`}
+              nodeId={node.id}
+              label={`${getCardTitle(node)} #${i + 1}`}
+              outputType={outputType}
+              status={status}
+              url={outputType !== "text" ? resultUrl : undefined}
+              text={outputType === "text" ? resultUrl : undefined}
+              onOpenMedia={handleOpenMedia}
+              elementSize={elementSize}
+              fieldBadges={i === 0 ? fieldBadges : undefined}
+            />
+          ))}
+        </div>
+      )
+    }
+
     return (
       <OutputCard
         key={node.id}
@@ -708,7 +783,7 @@ export function MobileAppShell({
         fieldBadges={fieldBadges}
       />
     )
-  }, [getNodeStatus, getFullscreenResult, getCardTitle, handleOpenMedia, combinedProgress, settings.cardMeta, fieldBadgesByNode])
+  }, [getNodeStatus, getFullscreenResult, getCardTitle, handleOpenMedia, combinedProgress, settings.cardMeta, fieldBadgesByNode, settings.outputDisplayModes, getListResults])
 
   // ---- Item-based output renderer (mirrors PresentationView renderOutputItem) ----
   const renderOutputItem = useCallback(
