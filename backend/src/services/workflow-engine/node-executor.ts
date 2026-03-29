@@ -777,6 +777,9 @@ async function executeComponentNode(
 
   const { jobId } = (await res.json()) as { jobId: string }
 
+  // Surface the wrapper jobId so the orchestrator can track it
+  if (ctx.onJobCreated) ctx.onJobCreated(node.id, jobId)
+
   // Poll wrapper job
   const startTime = Date.now()
   while (Date.now() - startTime < COMPONENT_TIMEOUT_MS) {
@@ -784,7 +787,7 @@ async function executeComponentNode(
 
     const { data: job } = await supabase
       .from("jobs")
-      .select("status, output_data, error_message, credits_actual")
+      .select("status, output_data, error_message, credits_actual, progress")
       .eq("id", jobId)
       .single()
 

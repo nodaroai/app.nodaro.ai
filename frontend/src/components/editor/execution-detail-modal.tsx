@@ -60,6 +60,10 @@ function getOutputUrl(outputData: Job["output_data"]): string | null {
   if (Array.isArray(outputData.output) && outputData.output.length > 0 && typeof outputData.output[0] === "string") {
     return outputData.output[0]
   }
+  // Component jobs: output_data is { nodeId: "url" } — find first URL value
+  for (const val of Object.values(outputData)) {
+    if (typeof val === "string" && (val.startsWith("https://") || val.startsWith("http://"))) return val
+  }
   return null
 }
 
@@ -114,8 +118,9 @@ function isUrlArray(value: unknown): boolean {
   return value.every(item => typeof item === "string" && (item.startsWith("http://") || item.startsWith("https://")))
 }
 
-function extractJobType(inputData: Job["input_data"]): string {
+function extractJobType(inputData: Job["input_data"], job?: Job): string {
   if (inputData.type) return inputData.type
+  if (job?.provider === "component") return inputData.componentName as string || "Component"
   if (inputData.imageUrl && inputData.prompt) return "image-to-video"
   if (inputData.videoUrl) return "video-to-video"
   if (inputData.prompt) return "generate-image"
@@ -500,7 +505,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
   const outputUrl = getOutputUrl(job.output_data)
   const isVideo = outputUrl ? isVideoUrl(outputUrl) : false
   const isAudio = outputUrl ? isAudioUrl(outputUrl) : false
-  const jobType = extractJobType(job.input_data)
+  const jobType = extractJobType(job.input_data, job)
   const provider = extractProvider(job.input_data, job)
 
   const handleCopyId = () => {
