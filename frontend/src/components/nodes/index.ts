@@ -60,6 +60,7 @@ import { SplitMediaNode } from "./split-media-node";
 import { MixAudioNode } from "./mix-audio-node";
 import { AdjustVolumeNode } from "./adjust-volume-node";
 import { TrimVideoNode } from "./trim-video-node";
+import { ExtractFrameNode } from "./extract-frame-node";
 import { VideoComposerNode } from "./video-composer-node";
 import { AfterEffectsNode } from "./after-effects-node";
 import { LottieOverlayNode } from "./lottie-overlay-node";
@@ -176,6 +177,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "mix-audio": MixAudioNode,
   "adjust-volume": AdjustVolumeNode,
   "trim-video": TrimVideoNode,
+  "extract-frame": ExtractFrameNode,
   "video-composer": VideoComposerNode,
   "after-effects": AfterEffectsNode,
   "lottie-overlay": LottieOverlayNode,

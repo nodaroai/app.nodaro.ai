@@ -46,7 +46,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "forced-alignment": "Forced Alignment",
   "lip-sync": "Lip Sync",
   "motion-transfer": "Motion Transfer",
-  "video-upscale": "Video Upscale",
+  "video-upscale": "Upscale Video",
   "render-video": "Render Video",
   "text-prompt": "Text Prompt",
   "upload-image": "Upload Image",

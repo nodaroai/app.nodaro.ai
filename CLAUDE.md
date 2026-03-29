@@ -167,7 +167,7 @@ frontend/src/
   app/gallery/            — Public community gallery
   routes/                 — Route wrapper components (workflow-editor-page, etc.)
   layouts/                — DashboardLayout, AdminLayout
-  components/nodes/       — 100+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, extend-video-node, webhook-trigger-node, schedule-trigger-node, social-node, speech-to-video-node, sora-storyboard-node, sora-character-node, 13 suno-*-nodes, preview-node)
+  components/nodes/       — 100+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, extend-video-node, extract-frame-node, webhook-trigger-node, schedule-trigger-node, social-node, speech-to-video-node, sora-storyboard-node, sora-character-node, 13 suno-*-nodes, preview-node)
   components/editor/
     config-panel.tsx      — Thin dispatcher (~520 lines), delegates to config-panels/
     config-panels/        — 24 files: per-category node config components (image, video, audio, composition, entity, trigger, social, etc.) + tag-textarea.tsx (autocomplete for audio tags & Suno metatags) + prompt-helper-dialog.tsx (AI prompt enhancement) + aspect-ratio-selector.tsx (visual SVG tile grid) + llm-model-select.tsx (tiered model dropdown)
@@ -245,7 +245,7 @@ backend/src/
 | Composite | Client-side plan builder → Composite Plan JSON | Multi-layer video compositor: PiP, split screen, overlays with positioning/opacity/blend modes (0 credits), no AI, no backend route — plan built entirely in frontend DAG executor |
 | Multi-plan rendering | `POST /v1/render-video/plan` | Generic `{ planType, plan }` envelope — any composer node can feed plans to Render Video |
 | Video extend | VEO Extend + Runway Extend via KIE.ai | `POST /v1/extend-video` (40/32 credits), requires upstream `kieTaskId` from VEO/Runway generation; new `extend-video` node type with provider-specific params (model/seeds for VEO, quality for Runway) |
-| Media processing | FFmpeg in worker | 12 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale), 0 credits |
+| Media processing | FFmpeg in worker | 13 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale, extract-frame), 0 credits |
 | Image generation | Per-model params via `model-options.ts` | Config panel layout: Provider → Prompt → Style → Negative Prompt → Assets → Model Settings; style uses `IMAGE_STYLE_PRESETS` dropdown (16 presets) + "Custom..." free text; aspect ratios, resolution (Flux/Nano Banana 2), quality (GPT Image/Seedream) filtered per provider; Nano Banana v1 uses `image_size` (not `aspect_ratio`) and has no `resolution`; Nano Banana 2 uses native `aspect_ratio` with 1K/2K/4K resolution; `output_format` only sent to Nano Banana family; Flux Kontext/Max use own aspect ratio set (1:1, 16:9, 9:16, 4:3, 3:4, 21:9); style appended to prompt at execution; `negative_prompt` sent natively for imagen4/ideogram/qwen, appended as "Avoid: ..." for others; Ideogram uses `reference_image_urls` for character refs; reference image UI hidden for models that don't support it (`MODELS_WITH_REFERENCE_IMAGE_SUPPORT`: nano-banana, nano-banana-pro, ideogram only) |
 | LLM routing | KIE.ai unified client + Anthropic fallback | `packages/shared/src/llm-models.ts` (model registry), `backend/src/lib/llm-client.ts` (`llmComplete()` + `llmStream()`, 3 format adapters: chat-completions, messages, responses); 7 models across 3 tiers (economy/standard/premium); all 11 LLM routes + translate migrated; `LlmModelSelect` component in all LLM config panels; `LlmFeature` type covers 11 features; `buildLlmCreditIdentifier()` for tiered pricing; `resolveLlmCreditId()` reads `llmModel` from raw body before Zod strips it |
 | AI prompt wizard | LLM-powered interactive prompt builder | `POST /v1/prompt-helper/wizard` — two-action flow (analyze + generate); `PromptHelperButton` (pink sparkles, gated behind `hasCredits()` + `isWizardSupported()`); three-phase `PromptHelperDialog` (Input → Review Form → Result); AI picks 3-5 categories per node type (image 7, video 6, music 6, audio 4) and generates pre-filled questions with curated options; reference image role assignment (multi-select); model recommendation with one-click Apply; categories + provider capabilities in `packages/shared/src/prompt-wizard-categories.ts`; default model `gemini-3-flash` (economy tier); 2 credits per full wizard flow |
@@ -319,8 +319,10 @@ backend/src/
 - [x] Credit system improvements: FFmpeg tiered pricing (1/2/3 CR), dynamic credit labels, entity node model selection, scene node credit badges
 - [x] Route-scoped preset mode (run only a route in presentation mode + published apps)
 - [x] Prompt Wizard (interactive AI prompt builder with category questions, model recommendation, reference image roles)
+- [x] Extract Frame node (video→image frame extraction, 3 modes: first/last/timestamp, 1 CR)
+- [x] Video node display name audit (de-vendored Sora/Suno prefixes, standardized verb-object order)
 
 ---
 
-*Last updated: 2026-03-26*
-*Version: 1.74.0*
+*Last updated: 2026-03-29*
+*Version: 1.75.0*

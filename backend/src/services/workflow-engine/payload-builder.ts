@@ -1259,6 +1259,15 @@ export function buildPayload(
         usageLogId,
       })
 
+    case "extract-frame":
+      return ffmpegResult("extract-frame", {
+        jobId,
+        videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+        mode: data.mode || "first",
+        timestamp: data.timestamp,
+        usageLogId,
+      })
+
     case "resize-video":
       return ffmpegResult("resize-video", {
         jobId,

@@ -23,6 +23,7 @@ import type {
   MixAudioData,
   AdjustVolumeData,
   TrimVideoData,
+  ExtractFrameData,
   SpeedRampData,
   LoopVideoData,
   FadeVideoData,
@@ -549,6 +550,37 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
         />
         <label htmlFor="outputSilentVideo" className="text-xs text-muted-foreground">Output Silent Video</label>
       </div>
+    </div>
+  )
+}
+
+export function ExtractFrameConfig({ data, onUpdate }: ConfigProps<ExtractFrameData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="extract-mode">Frame Selection</Label>
+        <Select value={data.mode || "first"} onValueChange={(v) => onUpdate({ mode: v as ExtractFrameData["mode"] })}>
+          <SelectTrigger id="extract-mode"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="first">First Frame</SelectItem>
+            <SelectItem value="last">Last Frame</SelectItem>
+            <SelectItem value="timestamp">At Timestamp</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {data.mode === "timestamp" && (
+        <div>
+          <Label htmlFor="extract-timestamp">Timestamp (seconds)</Label>
+          <Input
+            id="extract-timestamp"
+            type="number"
+            min={0}
+            step={0.1}
+            value={data.timestamp ?? 0}
+            onChange={(e) => onUpdate({ timestamp: e.target.value === "" ? 0 : parseFloat(e.target.value) })}
+          />
+        </div>
+      )}
     </div>
   )
 }

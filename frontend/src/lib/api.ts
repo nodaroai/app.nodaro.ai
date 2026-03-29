@@ -1103,6 +1103,22 @@ export async function trimVideoApi(videoUrl: string, startTime: number, endTime?
   return res.json()
 }
 
+export async function extractFrameApi(videoUrl: string, mode: "first" | "last" | "timestamp" = "first", timestamp?: number, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, mode }
+  if (timestamp !== undefined) body.timestamp = timestamp
+  if (userId) body.userId = userId
+  const res = await fetch(`${API_BASE_URL}/v1/extract-frame`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to extract frame")
+  }
+  return res.json()
+}
+
 export async function transcodeVideoApi(videoUrl: string, codec?: string, crf?: number, resolution?: string, audioBitrate?: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, codec, crf, resolution, audioBitrate }
   if (userId) {
@@ -2012,7 +2028,7 @@ export async function soraStoryboardApi(opts: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start Sora Storyboard generation")
+    throwApiError(err, "Failed to start Storyboard generation")
   }
   return res.json()
 }
@@ -2044,7 +2060,7 @@ export async function extractSoraCharacter(params: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start Sora Character extraction")
+    throwApiError(err, "Failed to start character extraction")
   }
   return res.json()
 }

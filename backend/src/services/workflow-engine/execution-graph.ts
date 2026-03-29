@@ -232,6 +232,7 @@ export const IMAGE_SOURCE_TYPES = new Set([
   "upload-image",
   "edit-image",
   "image-to-image",
+  "extract-frame",
   "character",
   "face",
   "object",

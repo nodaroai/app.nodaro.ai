@@ -8,6 +8,7 @@ import { socialMediaFormat } from "../../providers/video/social-media-format.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { trimAudio } from "../../providers/video/trim-audio.js"
 import { trimVideo } from "../../providers/video/trim-video.js"
+import { extractFrame } from "../../providers/video/extract-frame.js"
 import { splitMedia } from "../../providers/video/split-media.js"
 import { resizeVideo } from "../../providers/video/resize-video.js"
 import { adjustVolume } from "../../providers/video/adjust-volume.js"
@@ -117,6 +118,27 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
     status: "completed",
     progress: 100,
     output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...(silentVideoR2Url ? { videoUrlSilent: silentVideoR2Url } : {}) },
+    completed_at: new Date().toISOString(),
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
+const handleExtractFrame: HandlerFn = async function handleExtractFrame(job, ctx) {
+  const { videoUrl, mode, timestamp } = job.data as {
+    jobId: string; videoUrl: string; mode: "first" | "last" | "timestamp"; timestamp?: number
+  }
+  console.log(`[worker] extract-frame ${ctx.jobId}`)
+  const result = await extractFrame({ videoUrl, mode, timestamp })
+  await job.updateProgress(80)
+  const r2Url = await uploadFileToR2(result.imagePath, ctx.jobId, "image", ctx.jobUserId)
+  await cleanupWorkDir(dirname(result.imagePath))
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed",
+    progress: 100,
+    output_data: { imageUrl: r2Url, thumbnailUrl: r2Url },
     completed_at: new Date().toISOString(),
   }).eq("id", ctx.jobId)
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
@@ -318,6 +340,7 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "merge-video-audio": handleMergeVideoAudio,
   "trim-audio": handleTrimAudio,
   "trim-video": handleTrimVideo,
+  "extract-frame": handleExtractFrame,
   "speed-ramp": handleSpeedRamp,
   "loop-video": handleLoopVideo,
   "fade-video": handleFadeVideo,

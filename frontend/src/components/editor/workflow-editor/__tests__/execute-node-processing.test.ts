@@ -463,7 +463,7 @@ describe("video-upscale", () => {
       "n1",
       expect.any(Function),
       "generatedVideoUrl",
-      "Video Upscale",
+      "Upscale Video",
       expect.anything(),
       undefined,
     )
@@ -1324,7 +1324,7 @@ describe("sora-storyboard", () => {
       "n1",
       expect.any(Function),
       "generatedVideoUrl",
-      "Sora Storyboard",
+      "Storyboard",
       expect.anything(),
       undefined,
     )

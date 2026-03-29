@@ -122,7 +122,7 @@ function SoraCharacterNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           <div className="flex justify-between text-muted-foreground">
-            <span>Sora Character</span>
+            <span>Extract Character</span>
           </div>
         </div>
       </BaseNode>

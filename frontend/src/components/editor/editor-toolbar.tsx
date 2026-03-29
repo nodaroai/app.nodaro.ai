@@ -168,6 +168,13 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.executionStatus = undefined
           break
 
+        case "extract-frame":
+          data.generatedResults = []
+          data.generatedImageUrl = undefined
+          data.activeResultIndex = 0
+          data.executionStatus = undefined
+          break
+
         case "generate-image":
         case "edit-image":
         case "image-to-image":

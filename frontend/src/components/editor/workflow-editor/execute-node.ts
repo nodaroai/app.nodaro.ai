@@ -44,6 +44,7 @@ import {
   trimAudioApi,
   splitMediaApi,
   trimVideoApi,
+  extractFrameApi,
   transcodeVideoApi,
   speedRampApi,
   loopVideoApi,
@@ -116,6 +117,7 @@ import type {
   TrimAudioData,
   SplitMediaData,
   TrimVideoData,
+  ExtractFrameData,
   TranscodeVideoData,
   ManualEditData,
   SpeedRampData,
@@ -243,7 +245,7 @@ function resolveSunoIds(
 function runProcessingNode(
   nodeId: string,
   apiCall: () => Promise<{ jobId: string }>,
-  outputKey: "generatedVideoUrl" | "generatedAudioUrl",
+  outputKey: "generatedVideoUrl" | "generatedAudioUrl" | "generatedImageUrl",
   label: string,
   ctx: ExecutionContext,
   extraOutputFields?: (
@@ -1454,7 +1456,7 @@ export function executeNode(
           userId: ctx.userId,
         }),
       "generatedVideoUrl",
-      "Suno Music Video",
+      "Music Video",
       ctx,
     );
   }
@@ -2243,7 +2245,7 @@ export function executeNode(
           userId: ctx.userId,
         }),
       "generatedVideoUrl",
-      "Sora Storyboard",
+      "Storyboard",
       ctx,
     );
   }
@@ -2260,7 +2262,7 @@ export function executeNode(
     const kieTaskId = resolveUpstreamKieTaskId(node.id, scData as unknown as Record<string, unknown>) ?? inputs.kieTaskId;
 
     if (scData.mode === "sora-task" && !kieTaskId) {
-      toast.error(`Node "${scData.label}": no upstream kieTaskId found. Connect a Sora Storyboard node.`);
+      toast.error(`Node "${scData.label}": no upstream kieTaskId found. Connect a Storyboard node.`);
       return Promise.reject(new Error("No kieTaskId"));
     }
     if (scData.mode === "video" && !videoUrl) {
@@ -2289,7 +2291,7 @@ export function executeNode(
         userId: ctx.userId,
       })
         .then(({ jobId }) => {
-          guardedToast.info("Sora Character extraction started", { description: `Job ID: ${jobId}` });
+          guardedToast.info("Extract Character started", { description: `Job ID: ${jobId}` });
           updateNodeData(node.id, { currentJobId: jobId });
 
           let pollFailures = 0;
@@ -2318,7 +2320,7 @@ export function executeNode(
                       currentJobId: undefined,
                       currentJobProgress: undefined,
                     });
-                    guardedToast.error("Sora Character failed", { description: errMsg });
+                    guardedToast.error("Extract Character failed", { description: errMsg });
                     reject(new Error(errMsg));
                     return;
                   }
@@ -2328,18 +2330,18 @@ export function executeNode(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.success("Sora Character extraction complete");
+                  guardedToast.success("Extract Character complete");
                   resolve(characterId);
                 } else if (job.status === "failed") {
                   ctx.untrackInterval(poll);
-                  const errMsg = job.error_message ?? "Sora Character extraction failed";
+                  const errMsg = job.error_message ?? "Character extraction failed";
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     errorMessage: errMsg,
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.error("Sora Character failed", { description: errMsg });
+                  guardedToast.error("Extract Character failed", { description: errMsg });
                   reject(new Error(errMsg));
                 }
               } catch (err) {
@@ -2358,7 +2360,7 @@ export function executeNode(
                           currentJobId: undefined,
                           currentJobProgress: undefined,
                         });
-                        guardedToast.success("Sora Character extraction complete");
+                        guardedToast.success("Extract Character complete");
                         resolve(characterId);
                         return;
                       }
@@ -2371,7 +2373,7 @@ export function executeNode(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.error("Failed to check Sora Character status");
+                  guardedToast.error("Failed to check Extract Character status");
                   reject(err);
                 }
               }
@@ -2385,7 +2387,7 @@ export function executeNode(
             currentJobProgress: undefined,
           });
           if (!checkStorageError(err, ctx)) {
-            guardedToast.error("Failed to start Sora Character extraction", {
+            guardedToast.error("Failed to start character extraction", {
               description: err instanceof Error ? err.message : "Unknown error",
             });
           }
@@ -2449,7 +2451,7 @@ export function executeNode(
         node.id,
         () => videoUpscaleApi({ userId: ctx.userId, provider, kieTaskId }),
         "generatedVideoUrl",
-        "Video Upscale",
+        "Upscale Video",
         ctx,
       );
     }
@@ -2465,7 +2467,7 @@ export function executeNode(
       node.id,
       () => videoUpscaleApi({ videoUrl, upscaleFactor: vuData.upscaleFactor || undefined, userId: ctx.userId, provider: "topaz" }),
       "generatedVideoUrl",
-      "Video Upscale",
+      "Upscale Video",
       ctx,
     );
   }
@@ -2714,6 +2716,25 @@ export function executeNode(
       (od) => ({
         generatedSilentVideoUrl: od.videoUrlSilent as string | undefined,
       }),
+    );
+  }
+
+  if (node.type === "extract-frame") {
+    const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
+    if (!videoUrl) {
+      toast.error(
+        `Node "${(node.data as ExtractFrameData).label}": no video input`,
+      );
+      return Promise.reject(new Error("No video"));
+    }
+    const d = node.data as ExtractFrameData;
+    return runProcessingNode(
+      node.id,
+      () =>
+        extractFrameApi(videoUrl, d.mode || "first", d.timestamp || undefined, ctx.userId),
+      "generatedImageUrl",
+      "Extract Frame",
+      ctx,
     );
   }
 

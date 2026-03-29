@@ -96,6 +96,7 @@ import {
   MixAudioConfig,
   AdjustVolumeConfig,
   TrimVideoConfig,
+  ExtractFrameConfig,
   SpeedRampConfig,
   LoopVideoConfig,
   FadeVideoConfig,
@@ -180,7 +181,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "suno-extend": "Suno Extend",
   "suno-lyrics": "Suno Lyrics",
   "suno-separate": "Suno Separate",
-  "suno-music-video": "Suno Music Video",
+  "suno-music-video": "Music Video",
   "suno-mashup": "Suno Mashup",
   "suno-replace-section": "Suno Replace Section",
   "suno-style-boost": "Suno Style Boost",
@@ -202,6 +203,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "mix-audio": "Mix Audio",
   "adjust-volume": "Adjust Volume",
   "trim-video": "Trim Video",
+  "extract-frame": "Extract Frame",
   "speed-ramp": "Adjust Speed",
   "loop-video": "Loop Video",
   "fade-video": "Fade In/Out",
@@ -209,8 +211,9 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "manual-edit": "Manual Edit",
   "extend-video": "Extend Video",
   "speech-to-video": "Speech to Video",
-  "sora-storyboard": "Sora Storyboard",
-  "sora-character": "Sora Character",
+  "sora-storyboard": "Storyboard",
+  "sora-character": "Extract Character",
+  "video-upscale": "Upscale Video",
   "combine-text": "Combine Text",
   "split-text": "Split Text",
   "preview": "Preview",
@@ -259,7 +262,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post",
   "component",
   // FFmpeg processing (tiered credits)
-  "merge-video-audio", "combine-videos", "trim-audio", "split-media", "trim-video",
+  "merge-video-audio", "combine-videos", "trim-audio", "split-media", "trim-video", "extract-frame",
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume",
   "add-captions", "mix-audio",
 ])
@@ -377,6 +380,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "mix-audio": return <MixAudioConfig {...configProps} />
     case "adjust-volume": return <AdjustVolumeConfig {...configProps} />
     case "trim-video": return <TrimVideoConfig {...configProps} />
+    case "extract-frame": return <ExtractFrameConfig {...configProps} />
     case "video-composer": return <VideoComposerConfig {...configProps} />
     case "after-effects": return <AfterEffectsConfig {...configProps} />
     case "lottie-overlay": return <LottieOverlayConfig {...configProps} />
