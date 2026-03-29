@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react"
 import { Rocket, Copy, Check, Loader2, ExternalLink, ChevronDown, ChevronRight, X, Store, AlertTriangle } from "lucide-react"
 import type { WorkflowNode } from "@/types/nodes"
 import { getNodeLabel } from "@/lib/presentation-utils"
+import { NODE_DEF_MAP } from "@/types/nodes"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -166,6 +167,44 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     setComponentHandles({ inputs, outputs })
   }, [publishType, nodes])
 
+  // Build exposed settings from presentationInput nodes that are NOT source
+  // types. Uses NODE_DEF_MAP.exposableFields to get real field definitions
+  // with proper option lists (same data the Present mode uses).
+  const buildExposedSettings = useCallback(() => {
+    if (!nodes) return []
+    const inputNodes = nodes.filter((n) => (n.data as Record<string, unknown>)?.presentationInput)
+    const nonSourceInputNodes = inputNodes.filter((n) => !INPUT_FIELD_MAP[n.type || ""])
+    const settings: Array<{ nodeId: string; field: string; label: string; type: "select" | "text" | "number" | "toggle"; allowedValues?: unknown[]; defaultValue: unknown }> = []
+    const seen = new Set<string>() // deduplicate by nodeType — only first node of each type
+
+    for (const node of nonSourceInputNodes) {
+      const nodeType = node.type || ""
+      if (seen.has(nodeType)) continue
+      seen.add(nodeType)
+
+      const def = NODE_DEF_MAP.get(nodeType)
+      if (!def?.exposableFields) continue
+
+      const nd = (node.data ?? {}) as Record<string, unknown>
+      const nodeLabel = getNodeLabel(node)
+
+      for (const f of def.exposableFields) {
+        const val = nd[f.key]
+        if (val === undefined) continue
+        const settingType = f.type === "slider" ? "number" as const : f.type as "select" | "text" | "number" | "toggle"
+        settings.push({
+          nodeId: node.id,
+          field: f.key,
+          label: `${nodeLabel} — ${f.label}`,
+          type: settingType,
+          allowedValues: f.options?.map((o) => o.value),
+          defaultValue: val,
+        })
+      }
+    }
+    return settings
+  }, [nodes])
+
   const handlePublish = useCallback(async () => {
     if (!publishName.trim()) {
       toast.error("Name is required")
@@ -223,7 +262,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
         componentMetadata: publishType === "component" ? {
           inputs: componentHandles.inputs.map((h) => ({ ...h, type: h.type as "image" | "video" | "audio" | "text" })),
           outputs: componentHandles.outputs.map((h) => ({ ...h, type: h.type as "image" | "video" | "audio" | "text" })),
-          exposedSettings: [],
+          exposedSettings: buildExposedSettings(),
         } : undefined,
       })
       setPublishedSlug(result.slug)
@@ -233,7 +272,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     } finally {
       setPublishing(false)
     }
-  }, [workflowId, publishName, publishSlug, publishDesc, thumbnailNodeId, isListed, category, outputTypes, tags, supportsRemix, publishType, componentHandles])
+  }, [workflowId, publishName, publishSlug, publishDesc, thumbnailNodeId, isListed, category, outputTypes, tags, supportsRemix, publishType, componentHandles, buildExposedSettings])
 
   const publishedUrl = publishedSlug
     ? `${window.location.origin}/app/${publishedSlug}`
