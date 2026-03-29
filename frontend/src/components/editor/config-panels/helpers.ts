@@ -113,6 +113,7 @@ export function extractDisplayValue(data: Record<string, unknown>, nodeType: str
 /** Map node types that use LLM models to their credit feature names */
 const LLM_NODE_FEATURE_MAP: Record<string, LlmFeature> = {
   "ai-writer": "ai-writer",
+  "llm-chat": "llm-chat",
   "video-composer": "scene-graph-ai",
   "after-effects": "after-effects",
   "lottie-overlay": "lottie-overlay",

@@ -2603,24 +2603,18 @@ export async function wizardGenerate(params: {
   return res.json()
 }
 
-// --- AI Writer ---
+// --- LLM SSE Streaming (shared by AI Writer + LLM Chat) ---
 
-
-export async function generateAIWriterStream(params: {
-  systemPrompt: string
-  userInput: string
-  temperature: number
-  maxTokens: number
-  userId: string
-  llmModel?: string
-  onToken: (token: string) => void
-  signal?: AbortSignal
-}): Promise<{ jobId: string; generatedText: string }> {
-  const { onToken, signal, ...body } = params
+async function llmStreamGeneric(
+  endpoint: string,
+  body: Record<string, unknown>,
+  onToken: (token: string) => void,
+  signal?: AbortSignal,
+): Promise<{ jobId: string; generatedText: string }> {
   let collectedText = ""
   let jobId = ""
 
-  // SSE streaming must bypass the Next.js rewrite proxy (which buffers the
+  // SSE streaming must bypass the Vite rewrite proxy (which buffers the
   // response body) and call the backend directly so tokens arrive in real-time.
   const sseBaseUrl = import.meta.env.VITE_API_URL || ""
 
@@ -2628,7 +2622,7 @@ export async function generateAIWriterStream(params: {
     const { streamRequest } = await import("@/lib/sse-client")
     const authHeaders = await getAuthHeaders()
 
-    for await (const event of streamRequest("/v1/ai-writer/generate-stream", {
+    for await (const event of streamRequest(endpoint, {
       body: withWorkflowId(body),
       signal,
       baseUrl: sseBaseUrl || undefined,
@@ -2663,6 +2657,35 @@ export async function generateAIWriterStream(params: {
   }
 
   throw new Error("Stream ended without completion")
+}
+
+export async function generateAIWriterStream(params: {
+  systemPrompt: string
+  userInput: string
+  temperature: number
+  maxTokens: number
+  userId: string
+  llmModel?: string
+  onToken: (token: string) => void
+  signal?: AbortSignal
+}): Promise<{ jobId: string; generatedText: string }> {
+  const { onToken, signal, ...body } = params
+  return llmStreamGeneric("/v1/ai-writer/generate-stream", body, onToken, signal)
+}
+
+export async function llmChatStream(params: {
+  systemPrompt: string
+  userInput: string
+  referenceImageUrls?: string[]
+  temperature: number
+  maxTokens: number
+  userId: string
+  llmModel?: string
+  onToken: (token: string) => void
+  signal?: AbortSignal
+}): Promise<{ jobId: string; generatedText: string }> {
+  const { onToken, signal, ...body } = params
+  return llmStreamGeneric("/v1/llm-chat/generate-stream", body, onToken, signal)
 }
 
 // Stats types

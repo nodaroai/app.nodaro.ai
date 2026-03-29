@@ -90,3 +90,5 @@ export { settledWithLimit } from "./settled-with-limit.js"
 export type { ExposableField, ExposableOutput, PresentationItem } from "./presentation-types.js"
 
 export { calculateMonetizationMarkup, calculateMonetizedCost } from "./monetization.js"
+
+export { splitByLoopDelimiter, spliceDelimitedRows } from "./loop-delimiter.js"

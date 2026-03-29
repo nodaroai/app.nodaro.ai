@@ -87,9 +87,18 @@ export const AUDIO_WIZARD_CATEGORIES: readonly WizardCategory[] = [
   { key: "texture-quality", label: "Texture / Quality" },
 ]
 
+// ── LLM Chat (llm-chat) ──
+export const LLM_CHAT_WIZARD_CATEGORIES: readonly WizardCategory[] = [
+  { key: "task", label: "Task / Goal" },
+  { key: "tone", label: "Tone & Style" },
+  { key: "format", label: "Output Format" },
+  { key: "constraints", label: "Constraints" },
+]
+
 // ── Node Type Mapping ──
 
 const NODE_TYPE_TO_CATEGORIES: Record<string, readonly WizardCategory[]> = {
+  "llm-chat": LLM_CHAT_WIZARD_CATEGORIES,
   "generate-image": IMAGE_WIZARD_CATEGORIES,
   "image-to-image": IMAGE_WIZARD_CATEGORIES,
   "text-to-video": VIDEO_WIZARD_CATEGORIES,

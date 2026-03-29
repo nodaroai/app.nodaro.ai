@@ -70,6 +70,7 @@ import {
   Send,
   GitBranch,
   Puzzle,
+  MessageSquare,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -205,6 +206,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "generate-script",
     label: "Generate Script",
     icon: <BookOpen className="h-4 w-4" />,
+    category: "AI",
+    group: "Script & Text",
+  },
+  {
+    type: "llm-chat",
+    label: "LLM Chat",
+    icon: <MessageSquare className="h-4 w-4" />,
     category: "AI",
     group: "Script & Text",
   },

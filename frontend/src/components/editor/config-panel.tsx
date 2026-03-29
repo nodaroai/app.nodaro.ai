@@ -114,6 +114,7 @@ import {
   ObjectConfig,
   LocationConfig,
   AIWriterConfig,
+  LLMChatConfig,
   CombineTextConfig,
   SaveToStorageConfig,
   WebhookOutputConfig,
@@ -189,6 +190,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "suno-upload-extend": "Suno Upload Extend",
   "transcribe": "Transcribe",
   "image-to-text": "Describe Image",
+  "llm-chat": "LLM Chat",
   "ai-writer": "AI Agent",
   "combine-videos": "Combine Videos",
   "merge-video-audio": "Merge Video & Audio",
@@ -249,7 +251,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "video-upscale", "extend-video", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
-  "ai-writer",
+  "ai-writer", "llm-chat",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "image-to-text", "qa-check", "transcribe",
   "sora-character",
@@ -277,7 +279,7 @@ const RESULT_PRODUCING_TYPES = new Set([
   t !== "combine-text" && t !== "split-text" && t !== "preview" && t !== "sub-workflow" &&
   t !== "instagram-post" && t !== "tiktok-post" && t !== "youtube-upload" &&
   t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post" && t !== "telegram-post" &&
-  t !== "image-to-text" && t !== "qa-check" && t !== "transcribe"
+  t !== "image-to-text" && t !== "qa-check" && t !== "transcribe" && t !== "llm-chat"
 ))
 
 /** Extracted to isolate type checking scope — TS JSX children inference limit */
@@ -361,6 +363,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "motion-transfer": return <MotionTransferConfig {...configProps} />
     case "transcribe": return <TranscribeConfig {...configProps} />
     case "image-to-text": return <ImageToTextConfig {...configProps} />
+    case "llm-chat": return <LLMChatConfig {...configProps} />
     case "ai-writer": return <AIWriterConfig {...configProps} />
     case "video-upscale": return <VideoUpscaleConfig {...configProps} />
     case "extend-video": return <ExtendVideoConfig {...configProps} />

@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react"
+import { toast } from "sonner"
+import { spliceDelimitedRows } from "@nodaro-shared/loop-delimiter"
 import { Plus, X, Upload, Film, Maximize2, Download, Link, GripVertical } from "lucide-react"
 import {
   DndContext,
@@ -428,6 +430,20 @@ export function LoopInputCard({
     [columns, maxItems, updateRows, upload],
   )
 
+  const handlePasteSplit = useCallback(
+    (e: React.ClipboardEvent, rowIndex: number, colIndex: number, delimiter: string | undefined) => {
+      if (!delimiter) return
+      const pasted = e.clipboardData.getData("text/plain")
+      if (!pasted.includes(delimiter)) return
+      e.preventDefault()
+      const currentRows: string[][] = (nodeInputVals?.rows as string[][]) ?? (node.data.rows as string[][]) ?? []
+      const { newRows, truncated, totalProduced } = spliceDelimitedRows(currentRows, rowIndex, colIndex, pasted, delimiter, columns.length, maxItems)
+      if (truncated) toast.warning(`Paste produced ${totalProduced} rows but max is ${maxItems}. Truncated to ${maxItems}.`)
+      onUpdateInput(node.id, "rows", newRows)
+    },
+    [node.id, nodeInputVals, node.data.rows, columns.length, maxItems, onUpdateInput],
+  )
+
   const firstMediaColIndex = useMemo(
     () => columns.findIndex((col) => isMediaColumn(col.type ?? "text")),
     [columns],
@@ -485,6 +501,7 @@ export function LoopInputCard({
           onReorder={handleReorderRows}
           onMultiFileDrop={handleMultiFileDrop}
           promptHelper={promptHelper}
+          onPasteSplit={handlePasteSplit}
         />
       ) : (
         <CardsView
@@ -501,6 +518,7 @@ export function LoopInputCard({
           sensors={sensors}
           onReorder={handleReorderRows}
           promptHelper={promptHelper}
+          onPasteSplit={handlePasteSplit}
         />
       )}
 
@@ -543,6 +561,7 @@ interface ViewProps {
   onReorder: (event: DragEndEvent) => void
   onMultiFileDrop?: (files: File[], colIndex: number) => void
   promptHelper?: PromptContext
+  onPasteSplit?: (e: React.ClipboardEvent, rowIndex: number, colIndex: number, delimiter: string | undefined) => void
 }
 
 interface CardsViewProps extends ViewProps {
@@ -653,6 +672,7 @@ function CardsView({
   sensors,
   onReorder,
   promptHelper,
+  onPasteSplit,
 }: CardsViewProps) {
   const hasMedia = mediaColIndices.length > 0
   const imgSize = ELEMENT_SIZES.cardsImage[resolved.elementSize]
@@ -729,6 +749,7 @@ function CardsView({
                             <textarea
                               value={row[ci] ?? ""}
                               onChange={(e) => handleCellChange(rowIndex, ci, e.target.value)}
+                              onPaste={(e) => onPasteSplit?.(e, rowIndex, ci, col.splitDelimiter)}
                               readOnly={readOnly}
                               placeholder={`${col.name}...`}
                               className={`${TEXTAREA_CLS}${readOnly ? " opacity-70 cursor-default" : ""}`}
@@ -760,6 +781,7 @@ function CardsView({
                       <textarea
                         value={row[colIndex] ?? ""}
                         onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                        onPaste={(e) => onPasteSplit?.(e, rowIndex, colIndex, col.splitDelimiter)}
                         readOnly={readOnly}
                         placeholder={`${col.name}...`}
                         className={`w-full min-h-[56px] bg-muted/30 border border-border rounded-lg px-3 py-2 text-[14px] text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200${readOnly ? " opacity-70 cursor-default" : ""}`}
@@ -792,6 +814,7 @@ function TableView({
   onReorder,
   onMultiFileDrop,
   promptHelper,
+  onPasteSplit,
 }: ViewProps) {
   if (rows.length === 0) return <EmptyRowsPlaceholder />
 
@@ -849,6 +872,7 @@ function TableView({
                           type="text"
                           value={cellValue}
                           onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                          onPaste={(e) => onPasteSplit?.(e, rowIndex, colIndex, col.splitDelimiter)}
                           readOnly={readOnly}
                           disabled={readOnly}
                           placeholder={`${col.name}...`}

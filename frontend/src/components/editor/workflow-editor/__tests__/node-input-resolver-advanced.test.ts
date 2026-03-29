@@ -809,6 +809,60 @@ describe("getListInputForNode", () => {
     const result = getListInputForNode(target, [loopNode, target], edges)
     expect(result).toBeUndefined()
   })
+
+  it("splits upstream text by column splitDelimiter instead of newline", () => {
+    mockExtractNodeOutput.mockReturnValue("alpha,beta,gamma")
+
+    const textNode = makeNode("t1", "text-prompt", { text: "alpha,beta,gamma" })
+    const loopNode = makeNode("loop1", "loop", {
+      columns: [{ handleId: "col-0", name: "Prompt", type: "text", splitDelimiter: "," }],
+      rows: [],
+    })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [
+      makeEdge("t1", "loop1", undefined, "in"),
+      makeEdge("loop1", "gen1", "col-0"),
+    ]
+
+    const result = getListInputForNode(target, [textNode, loopNode, target], edges)
+    expect(result).toEqual(["alpha", "beta", "gamma"])
+  })
+
+  it("falls back to newline when no splitDelimiter set", () => {
+    mockExtractNodeOutput.mockReturnValue("line1\nline2")
+
+    const textNode = makeNode("t1", "text-prompt", { text: "line1\nline2" })
+    const loopNode = makeNode("loop1", "loop", {
+      columns: [{ handleId: "col-0", name: "Prompt", type: "text" }],
+      rows: [],
+    })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [
+      makeEdge("t1", "loop1", undefined, "in"),
+      makeEdge("loop1", "gen1", "col-0"),
+    ]
+
+    const result = getListInputForNode(target, [textNode, loopNode, target], edges)
+    expect(result).toEqual(["line1", "line2"])
+  })
+
+  it("uses pipe delimiter to split upstream text", () => {
+    mockExtractNodeOutput.mockReturnValue("one|two|three|four")
+
+    const textNode = makeNode("t1", "text-prompt", { text: "one|two|three|four" })
+    const loopNode = makeNode("loop1", "loop", {
+      columns: [{ handleId: "col-0", name: "Items", type: "text", splitDelimiter: "|" }],
+      rows: [],
+    })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [
+      makeEdge("t1", "loop1", undefined, "in"),
+      makeEdge("loop1", "gen1", "col-0"),
+    ]
+
+    const result = getListInputForNode(target, [textNode, loopNode, target], edges)
+    expect(result).toEqual(["one", "two", "three", "four"])
+  })
 })
 
 // ---------------------------------------------------------------------------
