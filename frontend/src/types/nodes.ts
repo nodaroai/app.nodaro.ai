@@ -64,6 +64,8 @@ export interface LoopColumn {
   readonly type: "text" | "image-url" | "video-url" | "audio-url"
   readonly width?: number
   readonly splitDelimiter?: string
+  readonly connectedSourceId?: string
+  readonly connectedSourceHandle?: string
 }
 
 export const LOOP_COLUMN_TYPE_META: Record<LoopColumn["type"], { label: string; shortLabel: string; color: string }> = {
@@ -71,6 +73,19 @@ export const LOOP_COLUMN_TYPE_META: Record<LoopColumn["type"], { label: string; 
   "image-url": { label: "Image", shortLabel: "IMG", color: "#F472B6" },
   "video-url": { label: "Video", shortLabel: "VID", color: "#818CF8" },
   "audio-url": { label: "Audio", shortLabel: "AUD", color: "#22c55e" },
+}
+
+/** Stable handle ID for the loop node's "quick-add column" target. */
+export const LOOP_COL_ADD_HANDLE = "col_add"
+
+/** Derive the target (input) handle ID for a loop column from its base handleId. */
+export function loopColInputHandle(handleId: string): string {
+  return `${handleId}_in`
+}
+
+/** Extract the base handleId from a loop column's target handle ID. */
+export function loopColBaseHandle(inputHandle: string): string {
+  return inputHandle.replace(/_in$/, "")
 }
 
 export interface PresentationDisplay {

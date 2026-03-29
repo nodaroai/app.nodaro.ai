@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef, useMemo } from "react"
-import { X, Plus, Loader2, Check, Download, AlertCircle, Upload, Film, Music, Link, GripVertical, Settings2, Scissors } from "lucide-react"
+import { X, Plus, Loader2, Check, Download, AlertCircle, Upload, Film, Music, Link, GripVertical, Scissors } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -32,7 +32,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { CachedImage } from "@/components/ui/cached-image"
 import { toast } from "sonner"
 import { spliceDelimitedRows } from "@nodaro-shared/loop-delimiter"
@@ -58,6 +57,14 @@ const COLUMN_ACCEPT: Record<string, string> = {
   "image-url": "image/png,image/jpeg,image/webp,image/gif",
   "video-url": "video/mp4,video/webm,video/quicktime",
   "audio-url": "audio/mpeg,audio/wav,audio/ogg,audio/webm",
+}
+
+function getSourceLabel(
+  nodes: ReadonlyArray<{ id: string; type?: string; data: Record<string, unknown> }> | undefined,
+  sourceId: string | undefined,
+): string {
+  if (!sourceId || !nodes) return ""
+  return (nodes.find((n) => n.id === sourceId)?.data?.label as string) || ""
 }
 
 export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextPromptData>) {
@@ -317,7 +324,16 @@ const DELIMITER_PRESETS = [
   { label: "Newline", value: "\n" },
 ] as const
 
-function ColumnSettingsPopover({
+const DELIMITER_OPTIONS = [
+  { label: "None", value: "__none__" },
+  { label: "Comma", value: "," },
+  { label: "Pipe", value: "|" },
+  { label: "Semicolon", value: ";" },
+  { label: "Newline", value: "\n" },
+  { label: "Custom", value: "__custom__" },
+] as const
+
+function DelimiterSelect({
   column,
   colIndex,
   onDelimiterChange,
@@ -331,85 +347,74 @@ function ColumnSettingsPopover({
   const current = column.splitDelimiter
   const isPreset = DELIMITER_PRESETS.some((p) => p.value === current)
   const isCustom = !!current && !isPreset
-  const [showCustom, setShowCustom] = useState(isCustom)
   const [customValue, setCustomValue] = useState(isCustom ? current : "")
 
+  const selectValue = !current
+    ? "__none__"
+    : isCustom
+      ? "__custom__"
+      : current
+
+  function handleChange(value: string) {
+    if (value === "__none__") {
+      onDelimiterChange(colIndex, undefined)
+    } else if (value === "__custom__") {
+      if (customValue) onDelimiterChange(colIndex, customValue)
+      else onDelimiterChange(colIndex, undefined)
+    } else {
+      onDelimiterChange(colIndex, value)
+    }
+  }
+
   return (
-    <Popover>
-      <PopoverTrigger asChild>
+    <div className="flex flex-col gap-0.5">
+      <Select value={selectValue} onValueChange={handleChange}>
+        <SelectTrigger
+          className={`h-5 px-1.5 text-[10px] border-none gap-0.5 ${
+            current ? "text-[#ff0073]" : "text-muted-foreground"
+          }`}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent position="popper">
+          {DELIMITER_OPTIONS.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value}>
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {selectValue === "__custom__" && (
+        <input
+          className="w-full text-xs bg-muted/30 rounded px-1.5 py-0.5 border border-border focus:border-[#ff0073] focus:outline-none"
+          value={customValue}
+          onChange={(e) => {
+            setCustomValue(e.target.value)
+            if (e.target.value) onDelimiterChange(colIndex, e.target.value)
+          }}
+          placeholder="Delimiter..."
+        />
+      )}
+      {!!current && (
         <button
           type="button"
-          className={`shrink-0 transition-colors ${current ? "text-[#ff0073]" : "text-muted-foreground/40 hover:text-muted-foreground"}`}
-          title="Column split settings"
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
+          onClick={() => onSplit(colIndex)}
         >
-          <Settings2 className="w-3 h-3" />
+          <Scissors className="w-3 h-3" />
+          Split
         </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-52 p-3" side="bottom" align="start">
-        <div className="flex flex-col gap-2">
-          <span className="text-[11px] font-medium text-muted-foreground">Split delimiter</span>
-          <div className="flex flex-wrap gap-1">
-            {DELIMITER_PRESETS.map((preset) => (
-              <button
-                key={preset.value}
-                type="button"
-                className={`px-2 py-0.5 rounded text-[11px] border transition-colors ${
-                  current === preset.value
-                    ? "border-[#ff0073] bg-[#ff0073]/10 text-[#ff0073]"
-                    : "border-border text-muted-foreground hover:border-foreground/30"
-                }`}
-                onClick={() => onDelimiterChange(colIndex, current === preset.value ? undefined : preset.value)}
-              >
-                {preset.label}
-              </button>
-            ))}
-            <button
-              type="button"
-              className={`px-2 py-0.5 rounded text-[11px] border transition-colors ${
-                showCustom
-                  ? "border-[#ff0073] bg-[#ff0073]/10 text-[#ff0073]"
-                  : "border-border text-muted-foreground hover:border-foreground/30"
-              }`}
-              onClick={() => {
-                if (showCustom) {
-                  setShowCustom(false)
-                  if (isCustom) onDelimiterChange(colIndex, undefined)
-                } else {
-                  setShowCustom(true)
-                  if (customValue) onDelimiterChange(colIndex, customValue)
-                }
-              }}
-            >
-              Custom
-            </button>
-          </div>
-          {showCustom && (
-            <input
-              className="w-full text-xs bg-muted/30 rounded px-1.5 py-1 border border-border focus:border-[#ff0073] focus:outline-none"
-              value={customValue}
-              onChange={(e) => {
-                setCustomValue(e.target.value)
-                if (e.target.value) onDelimiterChange(colIndex, e.target.value)
-              }}
-              placeholder="Enter delimiter..."
-            />
-          )}
-          <button
-            type="button"
-            disabled={!current}
-            className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border border-border hover:bg-muted/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            onClick={() => onSplit(colIndex)}
-          >
-            <Scissors className="w-3 h-3" />
-            Split Rows
-          </button>
-        </div>
-      </PopoverContent>
-    </Popover>
+      )}
+    </div>
   )
 }
 
-export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (patch: Partial<LoopNodeData>) => void }) {
+export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes }: {
+  data: LoopNodeData
+  onUpdate: (patch: Partial<LoopNodeData>) => void
+  onRemoveColumnEdges?: (colHandleId: string) => void
+  nodes?: ReadonlyArray<{ id: string; type?: string; data: Record<string, unknown> }>
+}) {
   const [activeTab, setActiveTab] = useState<"configure" | "data">("configure")
   const columns = data.columns ?? []
   const rows = data.rows ?? []
@@ -440,6 +445,10 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
   }
 
   function removeColumn(colIndex: number) {
+    const col = columns[colIndex]
+    if (col && onRemoveColumnEdges) {
+      onRemoveColumnEdges(col.handleId)
+    }
     const updatedCols = columns.filter((_, i) => i !== colIndex)
     const updatedRows = rows.map((row) => row.filter((_, i) => i !== colIndex))
     onUpdate({ columns: updatedCols, rows: updatedRows })
@@ -570,12 +579,19 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
                       <th key={col.id} className="pb-1 px-0.5">
                         <div className="flex items-center gap-0.5">
                           <input
-                            className="flex-1 min-w-[60px] text-xs font-medium bg-muted/30 rounded px-1.5 py-1 border border-border focus:border-[#ff0073] focus:outline-none"
+                            className={`flex-1 min-w-[60px] text-xs font-medium bg-muted/30 rounded px-1.5 py-1 border border-border focus:border-[#ff0073] focus:outline-none ${col.connectedSourceId ? "opacity-70" : ""}`}
                             value={col.name}
                             onChange={(e) => renameColumn(ci, e.target.value)}
+                            readOnly={!!col.connectedSourceId}
                           />
+                          {col.connectedSourceId && (
+                            <span className="shrink-0 flex items-center gap-0.5 text-[9px] text-muted-foreground/60" title="Connected to upstream node">
+                              <Link className="w-3 h-3" />
+                              {getSourceLabel(nodes, col.connectedSourceId)}
+                            </span>
+                          )}
                           {(col.type ?? "text") === "text" && (
-                            <ColumnSettingsPopover
+                            <DelimiterSelect
                               column={col}
                               colIndex={ci}
                               onDelimiterChange={updateColumnDelimiter}
@@ -654,6 +670,10 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
                                       colType={col.type}
                                       onChange={(val) => updateCell(ri, ci, val)}
                                     />
+                                  ) : col.connectedSourceId ? (
+                                    <div className="w-full min-w-[60px] text-xs bg-muted/20 rounded px-1.5 py-1 border border-border opacity-70 truncate">
+                                      {row[ci] || <span className="text-muted-foreground/50 italic">Waiting...</span>}
+                                    </div>
                                   ) : (
                                     <input
                                       className="w-full min-w-[60px] text-xs bg-muted/30 rounded px-1.5 py-1 border border-border focus:border-[#ff0073] focus:outline-none"
@@ -764,7 +784,13 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
                               style={{ background: `${meta.color}20`, color: meta.color }}>
                               {meta.shortLabel}
                             </span>
-                            <span className="text-[11px] font-medium text-muted-foreground">{col.name}</span>
+                            <span className={`text-[11px] font-medium text-muted-foreground ${col.connectedSourceId ? "opacity-70" : ""}`}>{col.name}</span>
+                            {col.connectedSourceId && (
+                              <span className="shrink-0 flex items-center gap-0.5 text-[9px] text-muted-foreground/60">
+                                <Link className="w-3 h-3" />
+                                {getSourceLabel(nodes, col.connectedSourceId)}
+                              </span>
+                            )}
                           </div>
                         </th>
                       )
@@ -779,7 +805,7 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
                         const val = row[ci] ?? ""
                         const isMedia = col.type !== "text"
                         return (
-                          <td key={col.id} className="px-3 py-2 text-sm text-foreground">
+                          <td key={col.id} className={`px-3 py-2 text-sm text-foreground ${col.connectedSourceId ? "opacity-70" : ""}`}>
                             {isMedia && val ? (
                               col.type === "image-url" ? (
                                 <img src={val} alt="" className="w-12 h-12 rounded object-cover" />
@@ -788,6 +814,8 @@ export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (
                                   {col.type === "video-url" ? "Video file" : "Audio file"}
                                 </span>
                               )
+                            ) : col.connectedSourceId ? (
+                              <span className="text-muted-foreground/50 italic">{val || "Waiting..."}</span>
                             ) : (
                               <span className={val ? "" : "text-muted-foreground/40"}>{val || "—"}</span>
                             )}

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { spliceDelimitedRows } from "@nodaro-shared/loop-delimiter"
-import { Plus, X, Upload, Film, Maximize2, Download, Link, GripVertical } from "lucide-react"
+import { Plus, X, Upload, Film, Maximize2, Download, Link, Link2, GripVertical } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -296,6 +296,26 @@ export function LoopInputCard({
     [node.data.columns],
   )
 
+  // Narrow store subscription: only extract labels for connected source nodes (avoids re-render on unrelated node changes)
+  const connectedIds = useMemo(
+    () => columns.map((c) => c.connectedSourceId).filter(Boolean) as string[],
+    [columns],
+  )
+  const sourceLabels = useWorkflowStore(
+    useCallback(
+      (s: { nodes: ReadonlyArray<WorkflowNode> }) => {
+        const map: Record<string, string> = {}
+        for (const id of connectedIds) {
+          const n = s.nodes.find((nd) => nd.id === id)
+          if (n) map[id] = (n.data as Record<string, unknown>).label as string || ""
+        }
+        return map
+      },
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [connectedIds.join(",")],
+    ),
+  )
+
   const resolved = useMemo(
     () => resolveDisplay(
       node.data.presentationDisplay as PresentationDisplay | undefined,
@@ -502,6 +522,7 @@ export function LoopInputCard({
           onMultiFileDrop={handleMultiFileDrop}
           promptHelper={promptHelper}
           onPasteSplit={handlePasteSplit}
+          sourceLabels={sourceLabels}
         />
       ) : (
         <CardsView
@@ -519,6 +540,7 @@ export function LoopInputCard({
           onReorder={handleReorderRows}
           promptHelper={promptHelper}
           onPasteSplit={handlePasteSplit}
+          sourceLabels={sourceLabels}
         />
       )}
 
@@ -562,6 +584,7 @@ interface ViewProps {
   onMultiFileDrop?: (files: File[], colIndex: number) => void
   promptHelper?: PromptContext
   onPasteSplit?: (e: React.ClipboardEvent, rowIndex: number, colIndex: number, delimiter: string | undefined) => void
+  sourceLabels?: Record<string, string>
 }
 
 interface CardsViewProps extends ViewProps {
@@ -673,6 +696,7 @@ function CardsView({
   onReorder,
   promptHelper,
   onPasteSplit,
+  sourceLabels,
 }: CardsViewProps) {
   const hasMedia = mediaColIndices.length > 0
   const imgSize = ELEMENT_SIZES.cardsImage[resolved.elementSize]
@@ -713,14 +737,30 @@ function CardsView({
                     {mediaColIndices.map((ci) => {
                       const col = columns[ci]
                       const colType = col.type ?? "text"
+                      const cellVal = row[ci] ?? ""
                       return (
                         <div key={col.id}>
-                          <RichMediaCell
-                            value={row[ci] ?? ""}
-                            onChange={(val) => handleCellChange(rowIndex, ci, val)}
-                            mimePrefix={colTypeToMimePrefix(colType)}
-                            readOnly={readOnly}
-                          />
+                          {col.connectedSourceId ? (
+                            cellVal ? (
+                              <RichMediaCell
+                                value={cellVal}
+                                onChange={() => {}}
+                                mimePrefix={colTypeToMimePrefix(colType)}
+                                readOnly
+                              />
+                            ) : (
+                              <div className="w-full min-h-[56px] bg-muted/10 border border-border/50 rounded-lg px-3 py-2 text-[14px] text-muted-foreground/60 italic flex items-center justify-center">
+                                Waiting...
+                              </div>
+                            )
+                          ) : (
+                            <RichMediaCell
+                              value={cellVal}
+                              onChange={(val) => handleCellChange(rowIndex, ci, val)}
+                              mimePrefix={colTypeToMimePrefix(colType)}
+                              readOnly={readOnly}
+                            />
+                          )}
                         </div>
                       )
                     })}
@@ -731,14 +771,18 @@ function CardsView({
                     <div className="flex-1 min-w-0 flex flex-col gap-2">
                       {textColIndices.map((ci) => {
                         const col = columns[ci]
+                        const cellVal = row[ci] ?? ""
                         return (
                           <div key={col.id} className="flex flex-col gap-1">
                             <div className="flex items-center justify-between">
-                              <span className="text-[11px] text-muted-foreground/70">{col.name}</span>
-                              {promptHelper && (
+                              <span className={`text-[11px] text-muted-foreground/70 inline-flex items-center gap-1${col.connectedSourceId ? " opacity-70" : ""}`}>
+                                {col.name}
+                                {col.connectedSourceId && (<><Link2 className="w-3 h-3 text-muted-foreground/50" /><span className="text-[9px] text-muted-foreground/50">{(col.connectedSourceId && sourceLabels?.[col.connectedSourceId]) || ""}</span></>)}
+                              </span>
+                              {!col.connectedSourceId && promptHelper && (
                                 <PromptHelperButton
                                   nodeType={promptHelper.nodeType}
-                                  currentPrompt={row[ci] ?? ""}
+                                  currentPrompt={cellVal}
                                   provider={promptHelper.provider}
                                   aspectRatio={promptHelper.aspectRatio}
                                   duration={promptHelper.duration}
@@ -746,14 +790,20 @@ function CardsView({
                                 />
                               )}
                             </div>
-                            <textarea
-                              value={row[ci] ?? ""}
-                              onChange={(e) => handleCellChange(rowIndex, ci, e.target.value)}
-                              onPaste={(e) => onPasteSplit?.(e, rowIndex, ci, col.splitDelimiter)}
-                              readOnly={readOnly}
-                              placeholder={`${col.name}...`}
-                              className={`${TEXTAREA_CLS}${readOnly ? " opacity-70 cursor-default" : ""}`}
-                            />
+                            {col.connectedSourceId ? (
+                              <div className="w-full min-h-[56px] bg-muted/10 border border-border/50 rounded-lg px-3 py-2 text-[14px] text-muted-foreground/60 italic">
+                                {cellVal || "Waiting..."}
+                              </div>
+                            ) : (
+                              <textarea
+                                value={cellVal}
+                                onChange={(e) => handleCellChange(rowIndex, ci, e.target.value)}
+                                onPaste={(e) => onPasteSplit?.(e, rowIndex, ci, col.splitDelimiter)}
+                                readOnly={readOnly}
+                                placeholder={`${col.name}...`}
+                                className={`${TEXTAREA_CLS}${readOnly ? " opacity-70 cursor-default" : ""}`}
+                              />
+                            )}
                           </div>
                         )
                       })}
@@ -763,31 +813,43 @@ function CardsView({
               ) : (
                 /* No media — text-only vertical stack */
                 <div className="flex flex-col gap-2">
-                  {columns.map((col, colIndex) => (
-                    <div key={col.id} className="flex flex-col gap-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-muted-foreground/70">{col.name}</span>
-                        {promptHelper && (
-                          <PromptHelperButton
-                            nodeType={promptHelper.nodeType}
-                            currentPrompt={row[colIndex] ?? ""}
-                            provider={promptHelper.provider}
-                            aspectRatio={promptHelper.aspectRatio}
-                            duration={promptHelper.duration}
-                            onAccept={(text) => handleCellChange(rowIndex, colIndex, text)}
+                  {columns.map((col, colIndex) => {
+                    const cellVal = row[colIndex] ?? ""
+                    return (
+                      <div key={col.id} className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[11px] text-muted-foreground/70 inline-flex items-center gap-1${col.connectedSourceId ? " opacity-70" : ""}`}>
+                            {col.name}
+                            {col.connectedSourceId && (<><Link2 className="w-3 h-3 text-muted-foreground/50" /><span className="text-[9px] text-muted-foreground/50">{(col.connectedSourceId && sourceLabels?.[col.connectedSourceId]) || ""}</span></>)}
+                          </span>
+                          {!col.connectedSourceId && promptHelper && (
+                            <PromptHelperButton
+                              nodeType={promptHelper.nodeType}
+                              currentPrompt={cellVal}
+                              provider={promptHelper.provider}
+                              aspectRatio={promptHelper.aspectRatio}
+                              duration={promptHelper.duration}
+                              onAccept={(text) => handleCellChange(rowIndex, colIndex, text)}
+                            />
+                          )}
+                        </div>
+                        {col.connectedSourceId ? (
+                          <div className="w-full min-h-[56px] bg-muted/10 border border-border/50 rounded-lg px-3 py-2 text-[14px] text-muted-foreground/60 italic">
+                            {cellVal || "Waiting..."}
+                          </div>
+                        ) : (
+                          <textarea
+                            value={cellVal}
+                            onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                            onPaste={(e) => onPasteSplit?.(e, rowIndex, colIndex, col.splitDelimiter)}
+                            readOnly={readOnly}
+                            placeholder={`${col.name}...`}
+                            className={`${TEXTAREA_CLS}${readOnly ? " opacity-70 cursor-default" : ""}`}
                           />
                         )}
                       </div>
-                      <textarea
-                        value={row[colIndex] ?? ""}
-                        onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
-                        onPaste={(e) => onPasteSplit?.(e, rowIndex, colIndex, col.splitDelimiter)}
-                        readOnly={readOnly}
-                        placeholder={`${col.name}...`}
-                        className={`w-full min-h-[56px] bg-muted/30 border border-border rounded-lg px-3 py-2 text-[14px] text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200${readOnly ? " opacity-70 cursor-default" : ""}`}
-                      />
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </SortableCardRow>
@@ -815,6 +877,7 @@ function TableView({
   onMultiFileDrop,
   promptHelper,
   onPasteSplit,
+  sourceLabels,
 }: ViewProps) {
   if (rows.length === 0) return <EmptyRowsPlaceholder />
 
@@ -838,8 +901,9 @@ function TableView({
                   if (files.length > 0) onMultiFileDrop?.(files, colIndex)
                 } : undefined}
               >
-                <span className="text-[11px] text-muted-foreground/70 font-medium">
+                <span className={`text-[11px] text-muted-foreground/70 font-medium inline-flex items-center gap-1${col.connectedSourceId ? " opacity-70" : ""}`}>
                   {col.name}
+                  {col.connectedSourceId && (<><Link2 className="w-3 h-3 text-muted-foreground/50" /><span className="text-[9px] text-muted-foreground/50">{(col.connectedSourceId && sourceLabels?.[col.connectedSourceId]) || ""}</span></>)}
                 </span>
               </div>
             )
@@ -859,7 +923,26 @@ function TableView({
                 const isMedia = isMediaColumn(colType)
                 return (
                   <div key={col.id} className="flex-1 min-w-0 px-2">
-                    {isMedia ? (
+                    {col.connectedSourceId ? (
+                      isMedia ? (
+                        cellValue ? (
+                          <RichMediaCell
+                            value={cellValue}
+                            onChange={() => {}}
+                            mimePrefix={colTypeToMimePrefix(colType)}
+                            readOnly
+                          />
+                        ) : (
+                          <div className="w-full min-h-[56px] bg-muted/10 border border-border/50 rounded-lg px-3 py-2 text-[14px] text-muted-foreground/60 italic flex items-center">
+                            Waiting...
+                          </div>
+                        )
+                      ) : (
+                        <div className="w-full min-h-[32px] bg-muted/10 border border-border/50 rounded-lg px-3 py-2 text-[13px] text-muted-foreground/60 italic truncate">
+                          {cellValue || "Waiting..."}
+                        </div>
+                      )
+                    ) : isMedia ? (
                       <RichMediaCell
                         value={cellValue}
                         onChange={(val) => handleCellChange(rowIndex, colIndex, val)}

@@ -7,9 +7,9 @@ import {
   type EdgeChange,
   type Connection,
 } from "@xyflow/react"
-import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition, LoopNodeData, PreviewItem, PreviewNodeData, TeleportSendData, TeleportReceiveData } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition, LoopNodeData, LoopColumn, PreviewItem, PreviewNodeData, TeleportSendData, TeleportReceiveData } from "@/types/nodes"
 import type { PresentationDisplay, InputMode } from "@/types/nodes"
-import { NODE_DEFINITIONS, TELEPORTER_CHANNEL_COLORS } from "@/types/nodes"
+import { NODE_DEFINITIONS, NODE_DEF_MAP, TELEPORTER_CHANNEL_COLORS, LOOP_COL_ADD_HANDLE, loopColInputHandle, loopColBaseHandle } from "@/types/nodes"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
 import { filterCloneNodes } from "@nodaro-shared/clone-utils"
@@ -46,6 +46,20 @@ const EXECUTION_DATA_KEYS = new Set([
   "shots",
   "result",
 ])
+
+/** Detect loop column type from upstream node's output handle. */
+function detectLoopColumnType(
+  sourceNode: WorkflowNode,
+  sourceHandle: string | null | undefined,
+): LoopColumn["type"] {
+  const def = NODE_DEF_MAP.get(sourceNode.type ?? "")
+  if (!def) return "text"
+  const outputs = def.outputs ?? []
+  if (sourceHandle === "image" || (sourceHandle === "out" && outputs.includes("image"))) return "image-url"
+  if (sourceHandle === "video" || outputs.includes("video")) return "video-url"
+  if (sourceHandle === "audio" || outputs.includes("audio")) return "audio-url"
+  return "text"
+}
 
 /**
  * Simplified output extraction for preview auto-populate (avoids circular import
@@ -386,31 +400,74 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   onConnect: (connection) =>
     set((state) => {
-      const newEdges = addEdge(
+      let newEdges = addEdge(
         { ...connection, id: `edge_${Date.now()}` },
         state.edges,
       )
 
-      // Auto-create "Prompt" column when connecting to a Loop node with 0 columns
+      // --- Loop node: quick-add handle or per-column-target handle ---
       let newNodes = state.nodes
-      if (connection.targetHandle === "in") {
-        const targetNode = state.nodes.find((n) => n.id === connection.target)
-        if (targetNode?.type === "loop") {
-          const loopData = targetNode.data as LoopNodeData
-          if (!loopData.columns || loopData.columns.length === 0) {
-            newNodes = state.nodes.map((n) =>
-              n.id === connection.target
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      columns: [{ id: crypto.randomUUID(), name: "Prompt", handleId: "prompt", type: "text" as const }],
-                      rows: [[""]],
-                    },
-                  }
-                : n,
-            )
+      const targetNode = state.nodes.find((n) => n.id === connection.target)
+      if (targetNode?.type === "loop") {
+        const loopData = targetNode.data as LoopNodeData
+        const sourceNode = state.nodes.find((n) => n.id === connection.source)
+
+        if (connection.targetHandle === LOOP_COL_ADD_HANDLE && sourceNode) {
+          // Quick-add: create a new column from the upstream node
+          const colId = crypto.randomUUID()
+          const handleId = `col_${colId}`
+          const colType = detectLoopColumnType(sourceNode, connection.sourceHandle)
+          const sourceLabel = (sourceNode.data as Record<string, unknown>).label as string || sourceNode.type || "Column"
+          const newCol: LoopColumn = {
+            id: colId,
+            name: sourceLabel,
+            handleId,
+            type: colType,
+            connectedSourceId: connection.source!,
+            connectedSourceHandle: connection.sourceHandle ?? undefined,
           }
+          const updatedColumns = [...(loopData.columns ?? []), newCol]
+          let updatedRows = (loopData.rows ?? []).map((row) => [...row, ""])
+          if (updatedRows.length === 0) updatedRows = [updatedColumns.map(() => "")]
+
+          newNodes = newNodes.map((n) =>
+            n.id === connection.target
+              ? { ...n, data: { ...n.data, columns: updatedColumns, rows: updatedRows } }
+              : n,
+          )
+
+          // Rewire: the edge was just added targeting "col_add" — update to target the new column
+          newEdges = newEdges.map((e) =>
+            e.source === connection.source &&
+            e.target === connection.target &&
+            e.targetHandle === LOOP_COL_ADD_HANDLE
+              ? { ...e, targetHandle: loopColInputHandle(handleId) }
+              : e,
+          )
+
+          return { nodes: newNodes, edges: newEdges, isDirty: true }
+        }
+
+        // Per-column target: set connectedSourceId on the matching column
+        const targetHandle = connection.targetHandle ?? ""
+        if (targetHandle.endsWith("_in") && sourceNode) {
+          const baseHandleId = loopColBaseHandle(targetHandle)
+          const updatedColumns = (loopData.columns ?? []).map((col) =>
+            col.handleId === baseHandleId
+              ? {
+                  ...col,
+                  connectedSourceId: connection.source!,
+                  connectedSourceHandle: connection.sourceHandle ?? undefined,
+                  name: (sourceNode.data as Record<string, unknown>).label as string || col.name,
+                  type: detectLoopColumnType(sourceNode, connection.sourceHandle),
+                }
+              : col,
+          )
+          newNodes = newNodes.map((n) =>
+            n.id === connection.target
+              ? { ...n, data: { ...n.data, columns: updatedColumns } }
+              : n,
+          )
         }
       }
 
@@ -605,6 +662,23 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         }
       }
 
+      // Generate fresh UUIDs for loop column IDs and handleIds, clear connections
+      if (source.type === "loop") {
+        const cols = d.columns as LoopColumn[] | undefined
+        if (cols) {
+          d.columns = cols.map((c) => {
+            const newId = crypto.randomUUID()
+            return {
+              ...c,
+              id: newId,
+              handleId: `col_${newId}`,
+              connectedSourceId: undefined,
+              connectedSourceHandle: undefined,
+            }
+          })
+        }
+      }
+
       // Spread the full source node (preserves measured, style, width, height,
       // className — same as copy+paste) then override id, position, data.
       const newId = generateNodeId()
@@ -628,7 +702,22 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   deleteNode: (nodeId) =>
     set((state) => {
-      const remainingNodes = state.nodes.filter((n) => n.id !== nodeId)
+      let remainingNodes = state.nodes.filter((n) => n.id !== nodeId)
+
+      // Clear connectedSourceId on loop columns that referenced the deleted node
+      remainingNodes = remainingNodes.map((n) => {
+        if (n.type !== "loop") return n
+        const loopData = n.data as LoopNodeData
+        const hasConnected = (loopData.columns ?? []).some((c) => c.connectedSourceId === nodeId)
+        if (!hasConnected) return n
+        const updatedColumns = (loopData.columns ?? []).map((col) =>
+          col.connectedSourceId === nodeId
+            ? { ...col, connectedSourceId: undefined, connectedSourceHandle: undefined }
+            : col,
+        )
+        return { ...n, data: { ...n.data, columns: updatedColumns } }
+      })
+
       const remainingNodeIds = new Set(remainingNodes.map((n) => n.id))
       const ps = state.presentationSettings
       const updatedPs = {
@@ -670,6 +759,19 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
       const nodes = state.nodes.map((node) => {
         if (node.id !== removedEdge.target) return node
+
+        // Clear loop column connection refs when edge is deleted
+        if (node.type === "loop" && removedEdge.targetHandle?.endsWith("_in")) {
+          const loopData = node.data as LoopNodeData
+          const baseHandleId = loopColBaseHandle(removedEdge.targetHandle)
+          const updatedColumns = (loopData.columns ?? []).map((col) =>
+            col.handleId === baseHandleId
+              ? { ...col, connectedSourceId: undefined, connectedSourceHandle: undefined }
+              : col,
+          )
+          return { ...node, data: { ...node.data, columns: updatedColumns } as SceneNodeData }
+        }
+
         const nodeData = node.data as Record<string, unknown>
         const fieldMappings = (nodeData.fieldMappings ?? {}) as Record<string, { sourceNodeId: string }>
         if (Object.keys(fieldMappings).length === 0) return node
@@ -728,11 +830,64 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const cleanedNodeIds = new Set(cleanedNodes.map((n) => n.id))
     const cleanedEdges = cleaned.edges.filter((e) => cleanedNodeIds.has(e.source) && cleanedNodeIds.has(e.target))
 
+    // Migrate legacy "in" target handles on loop nodes to per-column handles
+    const loopNodeMap = new Map(
+      cleanedNodes.filter((n) => n.type === "loop").map((n) => [n.id, n])
+    )
+    let migratedNodes = cleanedNodes
+    let migratedEdges = cleanedEdges
+
+    for (const [loopId, loopNode] of loopNodeMap) {
+      const inEdges = migratedEdges.filter((e) => e.target === loopId && e.targetHandle === "in")
+      if (inEdges.length === 0) continue
+
+      const loopData = loopNode.data as LoopNodeData
+      const cols = loopData.columns ?? []
+
+      if (cols.length > 0) {
+        // Rewire to first column's target handle
+        const firstCol = cols[0]
+        migratedEdges = migratedEdges.map((e) =>
+          e.target === loopId && e.targetHandle === "in"
+            ? { ...e, targetHandle: loopColInputHandle(firstCol.handleId) }
+            : e,
+        )
+        // Set connectedSourceId on first column
+        const sourceId = inEdges[0].source
+        const sourceHandle = inEdges[0].sourceHandle
+        const updatedCols = cols.map((c, i) =>
+          i === 0 ? { ...c, connectedSourceId: sourceId, connectedSourceHandle: sourceHandle ?? undefined } : c,
+        )
+        migratedNodes = migratedNodes.map((n) =>
+          n.id === loopId ? { ...n, data: { ...n.data, columns: updatedCols } } : n,
+        )
+      } else {
+        // No columns — just drop the "in" edges
+        migratedEdges = migratedEdges.filter((e) => !(e.target === loopId && e.targetHandle === "in"))
+      }
+    }
+
+    // Validate: drop edges with stale loop column handles
+    migratedEdges = migratedEdges.filter((e) => {
+      const targetLoop = loopNodeMap.get(e.target)
+      if (targetLoop && e.targetHandle?.startsWith("col_") && e.targetHandle !== LOOP_COL_ADD_HANDLE) {
+        const baseHandle = loopColBaseHandle(e.targetHandle)
+        const cols = ((targetLoop.data as LoopNodeData).columns ?? [])
+        return cols.some((c) => c.handleId === baseHandle)
+      }
+      const sourceLoop = loopNodeMap.get(e.source)
+      if (sourceLoop && e.sourceHandle?.startsWith("col_")) {
+        const cols = ((sourceLoop.data as LoopNodeData).columns ?? [])
+        return cols.some((c) => c.handleId === e.sourceHandle)
+      }
+      return true
+    })
+
     set((state) => ({
       workflowId: id,
       workflowName: name,
-      nodes: cleanedNodes,
-      edges: cleanedEdges,
+      nodes: migratedNodes,
+      edges: migratedEdges,
       selectedNodeId: null,
       isDirty: false,
       loadGeneration: state.loadGeneration + 1,

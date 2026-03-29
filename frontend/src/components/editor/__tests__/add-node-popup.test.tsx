@@ -23,7 +23,7 @@ vi.mock("lucide-react", () => {
     RefreshCw: I, Shapes: I, Box: I, AudioWaveform: I, Eye: I,
     Languages: I, AlignLeft: I, Workflow: I, LogIn: I, LogOut: I, Share2: I,
     Instagram: I, Youtube: I, Linkedin: I, Twitter: I, Facebook: I, StickyNote: I, UserRound: I, Send: I,
-    GitBranch: I, Puzzle: I, MessageSquare: I,
+    GitBranch: I, Puzzle: I, MessageSquare: I, Frame: I,
   }
 })
 

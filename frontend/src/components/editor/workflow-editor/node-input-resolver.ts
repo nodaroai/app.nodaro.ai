@@ -10,9 +10,66 @@ import type {
   GeneratedResult,
   LoopNodeData,
 } from "@/types/nodes";
+import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
 import { applyRange, resolveIndex } from "@nodaro-shared/edge-range";
 import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
+
+/** Resolve raw values for a loop column: per-column connected edge -> legacy "in" edge -> manual rows. */
+function resolveLoopColumnValues(
+  loopNode: { id: string; data: Record<string, unknown> },
+  sourceHandle: string | undefined,
+  edges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+  nodes: ReadonlyArray<{ id: string; type?: string; data: Record<string, unknown> }>,
+): string[] {
+  const loopData = loopNode.data as LoopNodeData;
+  const colIndex = (loopData.columns ?? []).findIndex(
+    (c) => c.handleId === sourceHandle,
+  );
+  const col = colIndex >= 0 ? loopData.columns[colIndex] : undefined;
+
+  // 1. Per-column connected edge
+  if (col) {
+    const colInEdge = edges.find(
+      (e) => e.target === loopNode.id && e.targetHandle === loopColInputHandle(col.handleId),
+    );
+    if (colInEdge) {
+      const upstreamNode = nodes.find((n) => n.id === colInEdge.source);
+      if (upstreamNode) {
+        const upstreamOutput = extractNodeOutput(
+          upstreamNode as WorkflowNode,
+          colInEdge.sourceHandle ?? undefined,
+        );
+        if (upstreamOutput) {
+          return splitByLoopDelimiter(upstreamOutput, loopData.columns);
+        }
+      }
+    }
+  }
+
+  // 2. Legacy "in" handle
+  const loopInEdges = edges.filter(
+    (e) => e.target === loopNode.id && e.targetHandle === "in",
+  );
+  if (loopInEdges.length > 0) {
+    const upstreamNode = nodes.find((n) => n.id === loopInEdges[0].source);
+    if (upstreamNode) {
+      const upstreamOutput = extractNodeOutput(upstreamNode as WorkflowNode);
+      if (upstreamOutput) {
+        return splitByLoopDelimiter(upstreamOutput, loopData.columns);
+      }
+    }
+  }
+
+  // 3. Manual rows (only when a column was matched)
+  if (colIndex >= 0) {
+    return (loopData.rows ?? [])
+      .map((row) => row[colIndex])
+      .filter((v) => v?.trim());
+  }
+
+  return [];
+}
 
 /** Node types whose edges default to "each" output mode (fan-out) */
 const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"]);
@@ -183,44 +240,15 @@ export function getListInputForNode(
     }
 
     if (sourceNode.type === "loop") {
-      const loopData = sourceNode.data as LoopNodeData;
-      const colIndex = (loopData.columns ?? []).findIndex(
-        (c) => c.handleId === edge.sourceHandle,
+      const raw = resolveLoopColumnValues(sourceNode, edge.sourceHandle ?? undefined, edges, nodes);
+      const edgeData = edge.data as Record<string, unknown> | undefined;
+      const items = applyRange(
+        raw,
+        edgeData?.rangeFrom as string | undefined,
+        edgeData?.rangeTo as string | undefined,
+        edgeData?.rangeStep as number | undefined,
       );
-
-      const loopIncomingEdges = edges.filter(
-        (e) => e.target === sourceNode.id && e.targetHandle === "in",
-      );
-      if (loopIncomingEdges.length > 0) {
-        const upstreamEdge = loopIncomingEdges[0];
-        const upstreamNode = nodes.find((n) => n.id === upstreamEdge.source);
-        if (upstreamNode) {
-          const upstreamOutput = extractNodeOutput(upstreamNode);
-          if (upstreamOutput) {
-            const raw = splitByLoopDelimiter(upstreamOutput, loopData.columns);
-            const edgeData = edge.data as Record<string, unknown> | undefined;
-            const items = applyRange(
-              raw,
-              edgeData?.rangeFrom as string | undefined,
-              edgeData?.rangeTo as string | undefined,
-              edgeData?.rangeStep as number | undefined,
-            );
-            if (items.length > 1) return items;
-          }
-        }
-      } else if (colIndex >= 0) {
-        const raw = (loopData.rows ?? [])
-          .map((row) => row[colIndex])
-          .filter((v) => v?.trim());
-        const edgeData = edge.data as Record<string, unknown> | undefined;
-        const items = applyRange(
-          raw,
-          edgeData?.rangeFrom as string | undefined,
-          edgeData?.rangeTo as string | undefined,
-          edgeData?.rangeStep as number | undefined,
-        );
-        if (items.length > 1) return items;
-      }
+      if (items.length > 1) return items;
       continue;
     }
 
@@ -396,78 +424,20 @@ export function resolveNodeInputs(
       }
     }
     if (!output && src.type === "loop" && listIterationIndex !== undefined) {
-      // Per-iteration resolution for correlated loop columns during fan-out
-      const loopData = src.data as LoopNodeData;
-      const colIndex = (loopData.columns ?? []).findIndex(
-        (c) => c.handleId === srcEdge.sourceHandle,
+      const raw = resolveLoopColumnValues(src, srcEdge.sourceHandle ?? undefined, edges, nodes);
+      const edgeData = srcEdge.data as Record<string, unknown> | undefined;
+      const ranged = applyRange(
+        raw,
+        edgeData?.rangeFrom as string | undefined,
+        edgeData?.rangeTo as string | undefined,
+        edgeData?.rangeStep as number | undefined,
       );
-      if (colIndex >= 0) {
-        const loopInEdges = edges.filter(
-          (e) => e.target === src.id && e.targetHandle === "in",
-        );
-        let raw: string[];
-        if (loopInEdges.length > 0) {
-          const upstreamNode = nodes.find((n) => n.id === loopInEdges[0].source);
-          const upstreamText = upstreamNode ? extractNodeOutput(upstreamNode) : undefined;
-          raw = upstreamText
-            ? splitByLoopDelimiter(upstreamText, (src.data as LoopNodeData).columns)
-            : [];
-        } else {
-          raw = (loopData.rows ?? [])
-            .map((row) => row[colIndex])
-            .filter((v) => v?.trim());
-        }
-        const edgeData = srcEdge.data as Record<string, unknown> | undefined;
-        const ranged = applyRange(
-          raw,
-          edgeData?.rangeFrom as string | undefined,
-          edgeData?.rangeTo as string | undefined,
-          edgeData?.rangeStep as number | undefined,
-        );
-        output = ranged[listIterationIndex] ?? "";
-      }
+      output = ranged[listIterationIndex] ?? "";
     }
 
-    // During fan-out: resolve per-iteration values from loop columns and list sources
+    // During fan-out: resolve per-iteration values from non-loop list sources
     if (!output && listIterationIndex != null) {
-      if (src.type === "loop") {
-        const loopData = src.data as LoopNodeData;
-        const colIndex = (loopData.columns ?? []).findIndex(
-          (c) => c.handleId === srcEdge.sourceHandle,
-        );
-        if (colIndex >= 0) {
-          const loopIncomingEdges = edges.filter(
-            (e) => e.target === src.id && e.targetHandle === "in",
-          );
-          if (loopIncomingEdges.length > 0) {
-            const upstreamEdge = loopIncomingEdges[0];
-            const upstreamNode = nodes.find((n) => n.id === upstreamEdge.source);
-            if (upstreamNode) {
-              const upstreamOutput = extractNodeOutput(upstreamNode);
-              if (upstreamOutput) {
-                const lines = splitByLoopDelimiter(upstreamOutput, (src.data as LoopNodeData).columns);
-                const edgeData = srcEdge.data as Record<string, unknown> | undefined;
-                const rf = edgeData?.rangeFrom as string | undefined;
-                const rt = edgeData?.rangeTo as string | undefined;
-                const rs = edgeData?.rangeStep as number | undefined;
-                const filtered = applyRange(lines, rf, rt, rs);
-                output = filtered[listIterationIndex];
-              }
-            }
-          } else {
-            const items = (loopData.rows ?? [])
-              .map((row) => row[colIndex])
-              .filter((v) => v?.trim());
-            const edgeData = srcEdge.data as Record<string, unknown> | undefined;
-            const rf = edgeData?.rangeFrom as string | undefined;
-            const rt = edgeData?.rangeTo as string | undefined;
-            const rs = edgeData?.rangeStep as number | undefined;
-            const filtered = applyRange(items, rf, rt, rs);
-            output = filtered[listIterationIndex];
-          }
-        }
-      } else if (srcListResults && srcListResults.length > 0) {
-        // Non-loop source with listResults: advance per iteration for "each" mode
+      if (srcListResults && srcListResults.length > 0) {
         const effectiveMode = edgeMode ?? (DEFAULT_EACH_TYPES.has(src.type ?? "") ? "each" : "last");
         if (effectiveMode === "each") {
           const edgeData = srcEdge.data as Record<string, unknown> | undefined;
@@ -664,29 +634,8 @@ export function resolveNodeInputs(
         inputs.prompt = output;
       }
     } else if (src.type === "loop") {
-      const loopData = src.data as LoopNodeData;
-
-      const loopIncomingEdges = edges.filter(
-        (e) => e.target === src.id && e.targetHandle === "in",
-      );
-      if (loopIncomingEdges.length > 0) {
-        const upstreamEdge = loopIncomingEdges[0];
-        const upstreamNode = nodes.find((n) => n.id === upstreamEdge.source);
-        if (upstreamNode) {
-          const upstreamOutput = extractNodeOutput(upstreamNode);
-          if (upstreamOutput) {
-            const lines = splitByLoopDelimiter(upstreamOutput, loopData.columns);
-            inputs.prompt = lines[0] || "";
-          }
-        }
-      } else {
-        const colIndex = (loopData.columns ?? []).findIndex(
-          (c) => c.handleId === srcEdge.sourceHandle,
-        );
-        if (colIndex >= 0) {
-          inputs.prompt = loopData.rows?.[0]?.[colIndex]?.trim() || "";
-        }
-      }
+      const values = resolveLoopColumnValues(src, srcEdge.sourceHandle ?? undefined, edges, nodes);
+      inputs.prompt = values[0] || "";
     } else if (src.type === "upload-image") {
       if (node.type === "generate-image" || node.type === "sora-storyboard") {
         inputs.referenceImageUrls = [

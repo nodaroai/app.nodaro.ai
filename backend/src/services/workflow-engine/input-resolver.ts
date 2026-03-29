@@ -114,15 +114,19 @@ export function resolveNodeInputs(
     if (!output) {
       // Loop node column routing: resolve correct column value by sourceHandle (matches frontend)
       if (sourceNode.type === "loop" && edge.sourceHandle) {
-        const columns = sourceNode.data.columns as Array<{ id: string; handleId: string; type?: string; splitDelimiter?: string }> | undefined
+        const columns = sourceNode.data.columns as Array<{ id: string; handleId: string; type?: string; splitDelimiter?: string; connectedSourceId?: string; connectedSourceHandle?: string }> | undefined
         const colIndex = (columns ?? []).findIndex((c) => c.handleId === edge.sourceHandle)
         if (colIndex >= 0) {
-          // Check connected mode first
-          const loopInEdges = edges.filter((e) => e.target === sourceNode.id && e.targetHandle === "in")
-          if (loopInEdges.length > 0) {
-            const upstreamNode = allNodes.find((n) => n.id === loopInEdges[0].source)
+          const col = columns![colIndex]
+
+          // Per-column connected source: find edge targeting this column's input handle
+          const colInEdge = edges.find(
+            (e) => e.target === sourceNode.id && e.targetHandle === `${col.handleId}_in`,
+          )
+          if (colInEdge) {
+            const upstreamNode = allNodes.find((n) => n.id === colInEdge.source)
             if (upstreamNode) {
-              const upstreamText = getNodeOutput(upstreamNode, loopInEdges[0].sourceHandle, nodeStates, triggerData)
+              const upstreamText = getNodeOutput(upstreamNode, colInEdge.sourceHandle, nodeStates, triggerData)
               if (upstreamText) {
                 const lines = splitByLoopDelimiter(upstreamText, columns)
                 if (listIterationIndex != null) {
@@ -136,8 +140,33 @@ export function resolveNodeInputs(
                 }
               }
             }
-          } else {
-            // Manual mode: get correct column value for current iteration
+          }
+
+          // Fallback: check global "in" handle (connected mode)
+          if (!output) {
+            const loopInEdges = edges.filter((e) => e.target === sourceNode.id && e.targetHandle === "in")
+            if (loopInEdges.length > 0) {
+              const upstreamNode = allNodes.find((n) => n.id === loopInEdges[0].source)
+              if (upstreamNode) {
+                const upstreamText = getNodeOutput(upstreamNode, loopInEdges[0].sourceHandle, nodeStates, triggerData)
+                if (upstreamText) {
+                  const lines = splitByLoopDelimiter(upstreamText, columns)
+                  if (listIterationIndex != null) {
+                    const rf = edgeData?.rangeFrom as string | undefined
+                    const rt = edgeData?.rangeTo as string | undefined
+                    const rs = edgeData?.rangeStep as number | undefined
+                    const filtered = applyRange(lines, rf, rt, rs)
+                    output = filtered[listIterationIndex]
+                  } else {
+                    output = lines[0]
+                  }
+                }
+              }
+            }
+          }
+
+          // Fallback: manual mode — get correct column value for current iteration
+          if (!output) {
             const rows = sourceNode.data.rows as string[][] | undefined
             if (listIterationIndex != null) {
               const items = (rows ?? []).map((row) => row[colIndex]?.trim()).filter(Boolean) as string[]
@@ -262,13 +291,32 @@ export function getListInputForNode(
     // 1. Loop node — column routing via sourceHandle
     if (sourceNode.type === "loop") {
       const columns = sourceNode.data.columns as
-        | Array<{ id: string; handleId: string; type?: string; splitDelimiter?: string }>
+        | Array<{ id: string; handleId: string; type?: string; splitDelimiter?: string; connectedSourceId?: string; connectedSourceHandle?: string }>
         | undefined
       const colIndex = (columns ?? []).findIndex(
         (c) => c.handleId === edge.sourceHandle,
       )
 
-      // Check if loop has upstream "in" connection (connected mode)
+      // Per-column connected source: find edge targeting this column's input handle
+      if (colIndex >= 0) {
+        const col = columns![colIndex]
+        const colInEdge = edges.find(
+          (e) => e.target === sourceNode.id && e.targetHandle === `${col.handleId}_in`,
+        )
+        if (colInEdge) {
+          const upstreamNode = allNodes.find((n) => n.id === colInEdge.source)
+          if (upstreamNode) {
+            const upstreamText = getNodeOutput(upstreamNode, colInEdge.sourceHandle, nodeStates, triggerData)
+            if (upstreamText) {
+              const items = splitByLoopDelimiter(upstreamText, columns)
+              const filtered = applyRange(items, rangeFrom, rangeTo, rangeStep)
+              if (filtered.length > 1) return filtered
+            }
+          }
+        }
+      }
+
+      // Fallback: check global "in" handle (connected mode)
       const loopInEdges = edges.filter(
         (e) => e.target === sourceNode.id && e.targetHandle === "in",
       )
