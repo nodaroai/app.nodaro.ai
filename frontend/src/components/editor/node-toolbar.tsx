@@ -14,7 +14,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useReactFlow } from "@xyflow/react"
 import { cn } from "@/lib/utils"
 const UnifiedAssetLibraryButton = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryButton })))
-const ComponentBrowserDialog = lazy(() => import("./component-browser-dialog").then(m => ({ default: m.ComponentBrowserDialog })))
+const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })))
+import type { ComponentSelection } from "./component-marketplace-modal"
 import type { SceneNodeType } from "@/types/nodes"
 import { useAuth } from "@/hooks/use-auth"
 
@@ -277,9 +278,9 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
   )
 
   const handleComponentSelect = useCallback(
-    (component: Record<string, unknown>) => {
+    (component: ComponentSelection) => {
       const position = getViewportCenterPosition()
-      addNode("component", position, component)
+      addNode("component", position, component as unknown as Record<string, unknown>)
       setSheetOpen(false)
     },
     [addNode, getViewportCenterPosition],
@@ -347,14 +348,16 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
         </div>
       )}
 
-      {/* Component Browser Dialog */}
-      <Suspense fallback={null}>
-        <ComponentBrowserDialog
-          open={componentBrowserOpen}
-          onOpenChange={setComponentBrowserOpen}
-          onSelect={handleComponentSelect}
-        />
-      </Suspense>
+      {/* Component Marketplace Modal */}
+      {componentBrowserOpen && (
+        <Suspense fallback={null}>
+          <ComponentMarketplaceModal
+            open={componentBrowserOpen}
+            onOpenChange={setComponentBrowserOpen}
+            onSelect={handleComponentSelect}
+          />
+        </Suspense>
+      )}
     </>
   )
 }

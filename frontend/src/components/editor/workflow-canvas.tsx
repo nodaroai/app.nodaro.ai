@@ -32,6 +32,8 @@ import { AlignmentGuideLines } from "./alignment-guide-lines"
 import { useAlignmentGuides, type GuideLine, type DraggedNodeRect } from "@/hooks/use-alignment-guides"
 const UnifiedAssetLibraryModal = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryModal })))
 const MediaLibraryModal = lazy(() => import("./media-library-modal").then(m => ({ default: m.MediaLibraryModal })))
+const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })))
+import type { ComponentSelection } from "./component-marketplace-modal"
 import { SelectionActionBar } from "./selection-action-bar"
 import { FocusModeNav } from "./focus-mode-nav"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -326,7 +328,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const addNode = useWorkflowStore((s) => s.addNode)
   const replaceEdgeWithTeleporter = useWorkflowStore((s) => s.replaceEdgeWithTeleporter)
-  const { screenToFlowPosition, setNodes, getNode, setCenter, fitView } = useReactFlow()
+  const { screenToFlowPosition, setNodes, getNode, setCenter, fitView, getViewport } = useReactFlow()
   const { undo, redo, canUndo, canRedo } = useUndoRedoActions()
   const [searchParams, setSearchParams] = useSearchParams()
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null)
@@ -339,6 +341,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [searchModalOpen, setSearchModalOpen] = useState(false)
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false)
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false)
+  const [componentMarketplaceOpen, setComponentMarketplaceOpen] = useState(false)
   const [pendingImportData, setPendingImportData] = useState<{ nodes: WorkflowNode[]; edges: WorkflowEdge[]; name: string; mousePos: { x: number; y: number } } | null>(null)
   const navigate = useNavigate()
   const createWorkflow = useProjectsStore((s) => s.createWorkflow)
@@ -657,6 +660,23 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const handleOpenSearch = useCallback(() => setSearchModalOpen(true), [])
   const handleOpenAssetLibrary = useCallback(() => setAssetLibraryOpen(true), [])
   const handleOpenMediaLibrary = useCallback(() => setMediaLibraryOpen(true), [])
+  const handleOpenComponentMarketplace = useCallback(() => setComponentMarketplaceOpen(true), [])
+  const handleComponentSelect = useCallback(
+    (component: ComponentSelection) => {
+      const el = document.querySelector('.react-flow')
+      const rect = el?.getBoundingClientRect()
+      const viewportWidth = rect?.width ?? window.innerWidth
+      const viewportHeight = rect?.height ?? window.innerHeight
+      const { x, y, zoom } = getViewport()
+      const z = zoom || 1
+      const position = {
+        x: (-x + viewportWidth / 2) / z,
+        y: (-y + viewportHeight / 2) / z,
+      }
+      addNode("component", position, component as unknown as Record<string, unknown>)
+    },
+    [addNode, getViewport],
+  )
   const handleToggleMiniMap = useCallback(() => setShowMiniMap((prev) => !prev), [])
   const handleCloseAddNodePopup = useCallback(() => {
     setAddNodePopupOpen(false)
@@ -1218,6 +1238,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       {/* Canvas Toolbar (icon buttons on left) */}
       <CanvasToolbar
         onAddNode={handleOpenAddNodePopup}
+        onComponents={handleOpenComponentMarketplace}
         onSearch={handleOpenSearch}
         onAssetLibrary={handleOpenAssetLibrary}
         onMediaLibrary={handleOpenMediaLibrary}
@@ -1280,6 +1301,17 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             open={mediaLibraryOpen}
             onClose={() => setMediaLibraryOpen(false)}
             onAddToCanvas={handleAddAssetToCanvas}
+          />
+        </Suspense>
+      )}
+
+      {/* Component Marketplace Modal */}
+      {componentMarketplaceOpen && (
+        <Suspense fallback={null}>
+          <ComponentMarketplaceModal
+            open={componentMarketplaceOpen}
+            onOpenChange={setComponentMarketplaceOpen}
+            onSelect={handleComponentSelect}
           />
         </Suspense>
       )}
