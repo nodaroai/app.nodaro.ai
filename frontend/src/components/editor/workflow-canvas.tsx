@@ -139,17 +139,18 @@ function getEdgeOutputMode(edge: WorkflowEdge, sourceNode: { type?: string } | u
 }
 
 /** Get the output mode label for display (separate from the edge label).
- *  Returns undefined when default mode (no badge needed). */
+ *  Only hides the label for "last" mode (the quiet default). */
 function getOutputModeLabel(edge: WorkflowEdge, sourceNode: { type?: string } | undefined): string | undefined {
   const edgeDataRaw = edge.data as Record<string, unknown> | undefined
   const explicitMode = edgeDataRaw?.outputMode as string | undefined
-  // Only show label when explicitly set (overriding default)
-  if (!explicitMode) return undefined
-  // Default-each types: don't show if still "each"
-  if (sourceNode?.type && DEFAULT_EACH_EDGE_TYPES.has(sourceNode.type) && explicitMode === "each") return undefined
+  // Resolve effective mode: explicit edge mode, or default for source type
+  const effectiveMode = explicitMode
+    ?? (sourceNode?.type && DEFAULT_EACH_EDGE_TYPES.has(sourceNode.type) ? "each" : undefined)
+  // "last" is the quiet default — no label needed
+  if (!effectiveMode || effectiveMode === "last") return undefined
   // Normalize legacy "item:N" to "item"
-  if (explicitMode.startsWith("item:")) return "item"
-  return explicitMode
+  if (effectiveMode.startsWith("item:")) return "item"
+  return effectiveMode
 }
 
 /** Build a range/step label pill from edge data. Returns undefined when no range is configured. */
