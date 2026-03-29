@@ -19,6 +19,7 @@ import { combineVideosRoutes } from "./routes/combine-videos.js"
 import { mergeVideoAudioRoutes } from "./routes/merge-video-audio.js"
 import { trimAudioRoutes } from "./routes/trim-audio.js"
 import { trimVideoRoutes } from "./routes/trim-video.js"
+import { extractFrameRoutes } from "./routes/extract-frame.js"
 import { resizeVideoRoutes } from "./routes/resize-video.js"
 import { adjustVolumeRoutes } from "./routes/adjust-volume.js"
 import { speedRampRoutes } from "./routes/speed-ramp.js"
@@ -164,6 +165,7 @@ export async function buildApp() {
   await app.register(mergeVideoAudioRoutes)
   await app.register(trimAudioRoutes)
   await app.register(trimVideoRoutes)
+  await app.register(extractFrameRoutes)
   await app.register(resizeVideoRoutes)
   await app.register(adjustVolumeRoutes)
   await app.register(speedRampRoutes)

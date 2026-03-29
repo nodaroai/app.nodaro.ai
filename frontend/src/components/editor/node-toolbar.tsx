@@ -7,7 +7,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare,
+  SlidersHorizontal, Scissors, Frame, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -66,8 +66,8 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "text-to-video", label: "Text to Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "lip-sync", label: "Lip Sync", icon: <Users className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "speech-to-video", label: "Speech to Video", icon: <AudioLines className="h-4 w-4" />, category: "AI", group: "Video" },
-  { type: "sora-storyboard", label: "Sora Storyboard", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Video" },
-  { type: "sora-character", label: "Sora Character", icon: <UserRound className="h-4 w-4" />, category: "AI", group: "Video" },
+  { type: "sora-storyboard", label: "Storyboard", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Video" },
+  { type: "sora-character", label: "Extract Character", icon: <UserRound className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "motion-transfer", label: "Motion Transfer", icon: <Waypoints className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "extend-video", label: "Extend Video", icon: <FastForward className="h-4 w-4" />, category: "AI", group: "Video" },
   // AI — Audio & Speech
@@ -87,7 +87,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "suno-extend", label: "Suno Extend", icon: <FastForward className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-lyrics", label: "Suno Lyrics", icon: <FileText className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-separate", label: "Suno Separate", icon: <Scissors className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-music-video", label: "Suno Music Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Suno Music" },
+  { type: "suno-music-video", label: "Music Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-mashup", label: "Suno Mashup", icon: <Merge className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-replace-section", label: "Suno Replace Section", icon: <Scissors className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-style-boost", label: "Suno Style Boost", icon: <Sparkles className="h-4 w-4" />, category: "AI", group: "Suno Music" },
@@ -102,7 +102,8 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "resize-video", label: "Resize Video", icon: <Maximize className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "social-media-format", label: "Social Media Format", icon: <Share2 className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "trim-video", label: "Trim Video", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Video" },
-  { type: "video-upscale", label: "Video Upscale", icon: <ArrowUpFromLine className="h-4 w-4" />, category: "Processing", group: "Video" },
+  { type: "extract-frame", label: "Extract Frame", icon: <Frame className="h-4 w-4" />, category: "Processing", group: "Video" },
+  { type: "video-upscale", label: "Upscale Video", icon: <ArrowUpFromLine className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "speed-ramp", label: "Adjust Speed", icon: <Gauge className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "loop-video", label: "Loop Video", icon: <Repeat className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "fade-video", label: "Fade In/Out", icon: <SunDim className="h-4 w-4" />, category: "Processing", group: "Video" },

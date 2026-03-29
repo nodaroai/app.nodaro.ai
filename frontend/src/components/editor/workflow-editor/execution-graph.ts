@@ -155,6 +155,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     // Fallback: return text as primary output
     return fields.text || undefined;
   }
+  if (type === "extract-frame") {
+    const results =
+      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+    return (
+      results[activeIndex]?.url ??
+      (data.generatedImageUrl as string | undefined)
+    );
+  }
   if (type === "generate-image") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
@@ -564,6 +573,7 @@ export const IMAGE_SOURCE_TYPES = new Set([
   "upload-image",
   "edit-image",
   "image-to-image",
+  "extract-frame",
   "character",
   "face",
   "object",

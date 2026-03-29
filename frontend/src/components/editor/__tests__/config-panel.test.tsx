@@ -41,7 +41,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "suno-extend": "Suno Extend",
   "suno-lyrics": "Suno Lyrics",
   "suno-separate": "Suno Separate",
-  "suno-music-video": "Suno Music Video",
+  "suno-music-video": "Music Video",
   "transcribe": "Transcribe",
   "image-to-text": "Describe Image",
   "ai-writer": "AI Agent",

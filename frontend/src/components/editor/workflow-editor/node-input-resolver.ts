@@ -735,6 +735,19 @@ export function resolveNodeInputs(
       } else {
         inputs.imageUrl = output;
       }
+    } else if (src.type === "extract-frame") {
+      if (
+        node.type === "generate-image" ||
+        node.type === "edit-image" ||
+        node.type === "image-to-image"
+      ) {
+        inputs.referenceImageUrls = [
+          ...(inputs.referenceImageUrls ?? []),
+          output,
+        ];
+      } else {
+        inputs.imageUrl = output;
+      }
     } else if (VIDEO_OUTPUT_NODE_TYPES.has(src.type!)) {
       if (node.type === "combine-videos") {
         inputs.videoUrls = [...(inputs.videoUrls ?? []), output];

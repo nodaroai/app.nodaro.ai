@@ -1504,7 +1504,7 @@ describe("video-upscale", () => {
       "n1",
       expect.any(Function),
       "generatedVideoUrl",
-      "Video Upscale",
+      "Upscale Video",
       expect.anything(),
       undefined,
     )
@@ -1748,7 +1748,7 @@ describe("suno-music-video", () => {
       "n1",
       expect.any(Function),
       "generatedVideoUrl",
-      "Suno Music Video",
+      "Music Video",
       expect.anything(),
       undefined,
     )

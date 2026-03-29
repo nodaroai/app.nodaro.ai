@@ -856,6 +856,20 @@ function routeOutput(
     return
   }
 
+  // --- Extract frame → image output (like generate-image) ---
+  if (srcType === "extract-frame") {
+    if (
+      targetType === "generate-image" ||
+      targetType === "edit-image" ||
+      targetType === "image-to-image"
+    ) {
+      inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+    } else {
+      inputs.imageUrl = output
+    }
+    return
+  }
+
   // --- Edit/I2I image → reference for image nodes, imageUrl for others ---
   if (srcType === "edit-image" || srcType === "image-to-image") {
     if (

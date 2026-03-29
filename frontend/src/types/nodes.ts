@@ -1489,6 +1489,20 @@ export type TrimVideoData = {
   activeResultIndex?: number
 }
 
+export type ExtractFrameData = {
+  [key: string]: unknown
+  label: string
+  mode: "first" | "last" | "timestamp"
+  timestamp: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedImageUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobProgress?: number
+}
+
 export type VideoComposerData = {
   [key: string]: unknown
   label: string
@@ -2283,6 +2297,7 @@ export type SceneNodeData =
   | MixAudioData
   | AdjustVolumeData
   | TrimVideoData
+  | ExtractFrameData
   | VideoComposerData
   | AfterEffectsData
   | LottieOverlayData
@@ -2390,6 +2405,7 @@ export type SceneNodeType =
   | "mix-audio"
   | "adjust-volume"
   | "trim-video"
+  | "extract-frame"
   | "video-composer"
   | "after-effects"
   | "lottie-overlay"
@@ -2953,12 +2969,12 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   },
   {
     type: "suno-music-video",
-    label: "Suno Music Video",
+    label: "Music Video",
     category: "ai",
     creditCost: 1,
     inputs: ["audio"],
     outputs: ["video"],
-    defaultData: { label: "Suno Music Video", taskId: "", audioId: "", fieldMappings: {} } as SunoMusicVideoData,
+    defaultData: { label: "Music Video", taskId: "", audioId: "", fieldMappings: {} } as SunoMusicVideoData,
   },
   {
     type: "suno-mashup",
@@ -3275,6 +3291,23 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: { label: "Trim Video", startTime: 0, endTime: 0, fieldMappings: {} },
   },
   {
+    type: "extract-frame",
+    label: "Extract Frame",
+    category: "processing",
+    creditCost: 1,
+    inputs: ["in"],
+    outputs: ["image"],
+    defaultData: {
+      label: "Extract Frame",
+      mode: "first",
+      timestamp: 0,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as ExtractFrameData,
+  },
+  {
     type: "video-composer",
     label: "Compose Video",
     category: "processing",
@@ -3499,13 +3532,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // Sora 2 Pro Storyboard (multi-shot video)
   {
     type: "sora-storyboard",
-    label: "Sora Storyboard",
+    label: "Storyboard",
     category: "ai",
     creditCost: 47,
     inputs: ["image"],
     outputs: ["video"],
     defaultData: {
-      label: "Sora Storyboard",
+      label: "Storyboard",
       shots: [{ scene: "", duration: 5 }],
       nFrames: "10",
       aspectRatio: "landscape",
@@ -3518,13 +3551,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // Sora Character (consistent character generation)
   {
     type: "sora-character",
-    label: "Sora Character",
+    label: "Extract Character",
     category: "ai",
     creditCost: 5,
     inputs: ["video"],
     outputs: ["characterId"],
     defaultData: {
-      label: "Sora Character",
+      label: "Extract Character",
       mode: "video",
       characterPrompt: "",
       fieldMappings: {},
@@ -3552,16 +3585,16 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       activeResultIndex: 0,
     } as MotionTransferData,
   },
-  // Video Upscale (Topaz)
+  // Upscale Video (Topaz)
   {
     type: "video-upscale",
-    label: "Video Upscale",
+    label: "Upscale Video",
     category: "processing",
     creditCost: 15,
     inputs: ["in"],
     outputs: ["video"],
     defaultData: {
-      label: "Video Upscale",
+      label: "Upscale Video",
       provider: "topaz",
       upscaleFactor: "2",
       fieldMappings: {},

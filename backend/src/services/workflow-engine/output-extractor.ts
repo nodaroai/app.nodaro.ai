@@ -401,6 +401,7 @@ const IMAGE_RESULT_TYPES = new Set([
   "generate-image",
   "edit-image",
   "image-to-image",
+  "extract-frame",
   "upload-image",
 ])
 

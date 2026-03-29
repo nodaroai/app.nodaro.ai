@@ -41,7 +41,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "generate-location": "Generate Location",
   "generate-location-asset": "Location Asset",
   "motion-transfer": "Motion Transfer",
-  "video-upscale": "Video Upscale",
+  "video-upscale": "Upscale Video",
   "lip-sync": "Lip Sync",
   "text-to-dialogue": "Text to Dialogue",
 }
