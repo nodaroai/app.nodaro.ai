@@ -57,8 +57,7 @@ import { handleGenerateSceneImage as generateSceneImage, handleExpandStoryboard 
 import { handleGenerateCharacterAsset, handleGenerateObjectAsset, handleGenerateLocationAsset } from "./asset-executors";
 import { handleCreateNodesFromWriter as createNodesFromWriter, handleRunAllWriterImageNodes as runAllWriterImageNodes } from "./ai-writer-handlers";
 import { resolveManualEdit } from "./execute-node";
-import { extractNodeOutput } from "./execution-graph";
-import { getOutputType } from "@nodaro-shared/presentation-utils";
+import { collectMediaAssets } from "./execution-graph";
 import { FreeCutImportPicker } from "../freecut-import-picker";
 import type { ManualEditData, GeneratedResult } from "@/types/nodes";
 const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));
@@ -121,33 +120,20 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     [storeNodes],
   );
 
-  // Determine which FreeCut source is active: manual-edit node or universal edit
-  // Resolve assets from graph topology (not executor-populated inputAssets)
-  // so "Open Editor" works before any workflow run
+  // Resolve assets from graph topology so "Open Editor" works before any workflow run
   const freecutAssets = useMemo(() => {
     if (!manualEditNode) return undefined;
-    const meId = manualEditNode.id;
-    const inEdges = storeEdges.filter((e) => e.target === meId);
-    const assets: Array<{ nodeId: string; url: string; type: "video" | "image" | "audio"; label?: string }> = [];
-    for (const edge of inEdges) {
-      const src = storeNodes.find((n) => n.id === edge.source);
-      if (!src?.type) continue;
-      const srcData = src.data as Record<string, unknown>;
-      const label = (srcData.label as string) ?? src.type;
-      const outputType = getOutputType(src.type);
-      if (outputType !== "video" && outputType !== "image" && outputType !== "audio") continue;
-      const url = extractNodeOutput(src);
-      if (!url) continue;
-      assets.push({ nodeId: src.id, url, type: outputType, label });
-    }
-    return assets.length > 0 ? assets : undefined;
+    const collected = collectMediaAssets(manualEditNode, storeEdges, storeNodes);
+    if (collected.length === 0) return undefined;
+    return collected.map(a => ({ nodeId: a.id, url: a.url, type: a.type, label: a.label }));
   }, [manualEditNode, storeEdges, storeNodes]);
 
+  const meData = manualEditNode?.data as ManualEditData | undefined;
   const freecutVideoUrl = manualEditNode
-    ? (freecutAssets?.find(a => a.type === "video")?.url ?? (manualEditNode.data as ManualEditData).inputVideoUrl ?? "")
+    ? (freecutAssets?.find(a => a.type === "video")?.url ?? meData?.inputVideoUrl ?? "")
     : (freecutEdit?.videoUrl ?? "");
   const freecutProjectUrl = manualEditNode
-    ? ((manualEditNode.data as ManualEditData).generatedResults?.[(manualEditNode.data as ManualEditData).activeResultIndex ?? 0]?.freecutProjectUrl)
+    ? (meData?.generatedResults?.[meData?.activeResultIndex ?? 0]?.freecutProjectUrl)
     : freecutEdit?.freecutProjectUrl;
   const freecutNodeId = manualEditNode ? manualEditNode.id : freecutEdit?.nodeId;
   const isFreeCutOpen = !!manualEditNode || !!freecutEdit;
