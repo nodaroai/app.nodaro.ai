@@ -36,6 +36,7 @@ import type {
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
+import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
 import { Kling3StudioConfig } from "./kling3-studio-config"
@@ -117,6 +118,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.provider} />
 
       {/* VEO mode toggle */}
       {isVeo && (
@@ -582,6 +584,7 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.provider} />
 
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="video-to-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
@@ -887,6 +890,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.provider} />
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="text-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
           rows={3}

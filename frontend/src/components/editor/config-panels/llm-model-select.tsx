@@ -1,17 +1,12 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectTrigger, SelectValue, SelectItemWithMeta } from "@/components/ui/select"
 import { LLM_MODELS, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
 import type { LlmTier, LlmFeature } from "@nodaro-shared/llm-models"
+import { ModelDescriptionHint } from "./model-description-hint"
 
 const TIER_LABELS: Record<LlmTier, string> = {
   economy: "Economy",
   standard: "Standard",
   premium: "Premium",
-}
-
-const TIER_COLORS: Record<LlmTier, string> = {
-  economy: "text-green-400",
-  standard: "text-blue-400",
-  premium: "text-amber-400",
 }
 
 interface LlmModelSelectProps {
@@ -33,17 +28,19 @@ export function LlmModelSelect({ feature, value, onChange }: LlmModelSelectProps
         </SelectTrigger>
         <SelectContent>
           {LLM_MODELS.map((model) => (
-            <SelectItem key={model.id} value={model.id} className="text-xs">
-              <span className="flex items-center gap-2">
-                <span>{model.displayName}</span>
-                <span className={`text-[10px] font-medium ${TIER_COLORS[model.tier]}`}>
-                  {TIER_LABELS[model.tier]}
-                </span>
-              </span>
-            </SelectItem>
+            <SelectItemWithMeta
+              key={model.id}
+              value={model.id}
+              badge={TIER_LABELS[model.tier]}
+              description={model.desc}
+              className="text-xs"
+            >
+              {model.displayName}
+            </SelectItemWithMeta>
           ))}
         </SelectContent>
       </Select>
+      <ModelDescriptionHint modelId={currentValue} />
     </div>
   )
 }

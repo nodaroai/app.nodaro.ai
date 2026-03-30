@@ -1,4 +1,4 @@
-import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider } from "@nodaro-shared/model-constants"
+import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, TextToVideoProvider, VideoToVideoProvider } from "@nodaro-shared/model-constants"
 
 export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string; desc: string }[] = [
   { value: "flux", label: "Flux", desc: "Photorealistic, highest quality output" },
@@ -436,3 +436,52 @@ export const KIE_T2V_DURATIONS: Record<string, number[]> = {
   "wan-turbo": [5],
   "runway-kie": [5, 10],
 }
+
+// =============================================================================
+// ADDITIONAL MODEL DESCRIPTION ARRAYS (lip-sync, TTS, Suno, motion transfer)
+// =============================================================================
+
+export const LIP_SYNC_MODELS: readonly { value: LipSyncProvider; label: string; desc: string }[] = [
+  { value: "kling-avatar", label: "Kling Avatar", desc: "KIE talking head, 720p, speech-optimized" },
+  { value: "kling-avatar-pro", label: "Kling Avatar Pro", desc: "KIE premium talking head, 1080p" },
+  { value: "infinitalk", label: "Infinitalk", desc: "KIE flexible resolution, 480p\u2013720p" },
+  { value: "latentsync", label: "LatentSync", desc: "Diffusion-based, best for singing" },
+  { value: "wav2lip", label: "Wav2Lip", desc: "Fastest and cheapest, image or video input" },
+  { value: "video-retalking", label: "Video-Retalking", desc: "Built-in face enhancement, clean output" },
+  { value: "sadtalker", label: "SadTalker", desc: "Talking avatar from single image" },
+]
+
+export const TTS_MODELS: readonly { value: string; label: string; desc: string }[] = [
+  { value: "elevenlabs-v3", label: "ElevenLabs v3", desc: "Latest, supports audio tags for emotions" },
+  { value: "elevenlabs-turbo", label: "ElevenLabs Turbo v2.5", desc: "Fast generation, 32 languages" },
+  { value: "elevenlabs-multilingual", label: "ElevenLabs Multilingual v2", desc: "29 languages, natural delivery" },
+]
+
+export const SUNO_MODELS: readonly { value: string; label: string; desc: string }[] = [
+  { value: "V4", label: "Suno V4", desc: "Stable, proven music generation" },
+  { value: "V4_5", label: "Suno V4.5", desc: "Improved quality and coherence" },
+  { value: "V4_5ALL", label: "Suno V4.5 All", desc: "Full instrument + vocal generation" },
+  { value: "V4_5PLUS", label: "Suno V4.5 Plus", desc: "Extended duration support" },
+  { value: "V5", label: "Suno V5", desc: "Latest, highest quality" },
+]
+
+export const MOTION_TRANSFER_MODELS: readonly { value: MotionTransferProviderType; label: string; desc: string }[] = [
+  { value: "kling", label: "Kling 2.6", desc: "Standard motion transfer" },
+  { value: "kling-3.0", label: "Kling 3.0", desc: "Advanced motion control with prompts" },
+  { value: "wan-animate-move", label: "Wan Animate Move", desc: "Move subjects within scene" },
+  { value: "wan-animate-replace", label: "Wan Animate Replace", desc: "Replace subjects with motion" },
+]
+
+/** Flat lookup of model ID to description, built from all model arrays */
+export const MODEL_DESCRIPTIONS: Record<string, string> = Object.fromEntries([
+  ...IMAGE_GEN_MODELS,
+  ...IMAGE_I2I_MODELS,
+  ...IMAGE_EDIT_MODELS,
+  ...VIDEO_I2V_MODELS,
+  ...VIDEO_T2V_MODELS,
+  ...VIDEO_V2V_MODELS,
+  ...LIP_SYNC_MODELS,
+  ...TTS_MODELS,
+  ...SUNO_MODELS,
+  ...MOTION_TRANSFER_MODELS,
+].map(m => [m.value, m.desc]))

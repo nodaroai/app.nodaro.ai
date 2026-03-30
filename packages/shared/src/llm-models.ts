@@ -11,6 +11,7 @@ export type KieApiFormat = "chat-completions" | "messages" | "responses"
 export interface LlmModelDef {
   id: string
   displayName: string
+  desc: string
   tier: LlmTier
   kieFormat: KieApiFormat
   /** For chat-completions: the slug prefix (e.g. "gemini-3-flash").
@@ -32,6 +33,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gemini-3-flash",
     displayName: "Gemini 3 Flash",
+    desc: "Fast and cheap, good for simple tasks",
     tier: "economy",
     kieFormat: "chat-completions",
     kieSlugOrModel: "gemini-3-flash",
@@ -44,6 +46,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "claude-haiku-4.5",
     displayName: "Claude Haiku 4.5",
+    desc: "Fast economy, good reasoning",
     tier: "economy",
     kieFormat: "messages",
     kieSlugOrModel: "claude-haiku-4-5",
@@ -57,6 +60,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "claude-sonnet-4.6",
     displayName: "Claude Sonnet 4.6",
+    desc: "Balanced quality and speed",
     tier: "standard",
     kieFormat: "messages",
     kieSlugOrModel: "claude-sonnet-4-6",
@@ -70,6 +74,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gpt-5.2",
     displayName: "GPT-5.2",
+    desc: "Strong general purpose",
     tier: "standard",
     kieFormat: "chat-completions",
     kieSlugOrModel: "gpt-5-2",
@@ -82,6 +87,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gemini-3.1-pro",
     displayName: "Gemini 3.1 Pro",
+    desc: "Advanced reasoning, large context",
     tier: "premium",
     kieFormat: "chat-completions",
     kieSlugOrModel: "gemini-3.1-pro",
@@ -94,6 +100,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "claude-opus-4.6",
     displayName: "Claude Opus 4.6",
+    desc: "Highest quality, complex tasks",
     tier: "premium",
     kieFormat: "messages",
     kieSlugOrModel: "claude-opus-4-6",
@@ -107,6 +114,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gpt-5.4",
     displayName: "GPT-5.4",
+    desc: "Latest GPT, premium quality",
     tier: "premium",
     kieFormat: "responses",
     kieSlugOrModel: "gpt-5-4",
