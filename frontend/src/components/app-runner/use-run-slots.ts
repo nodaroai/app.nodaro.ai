@@ -256,15 +256,21 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
 
     if (activeSlotId) {
       const mapped = toSlotStatus(executionStatus)
-      // Extract thumbnail when execution completes
+      // Extract thumbnail when execution completes — prefer thumbnailNodeId, fall back to first media
       let thumbnailUrl: string | null = null
       if (mapped === "completed" && nodeStates) {
-        for (const state of Object.values(nodeStates)) {
-          const output = state.output as Record<string, unknown> | undefined
+        const thumbNodeId = app?.thumbnailNodeId
+        const extractUrl = (output: Record<string, unknown> | undefined): string | null => {
           const url = (output?.url ?? output?.imageUrl ?? output?.videoUrl ?? output?.audioUrl ?? output?.resultUrl) as string | undefined
-          if (url && isMediaUrl(url)) {
-            thumbnailUrl = url
-            break
+          return url && isMediaUrl(url) ? url : null
+        }
+        if (thumbNodeId && nodeStates[thumbNodeId]) {
+          thumbnailUrl = extractUrl(nodeStates[thumbNodeId].output)
+        }
+        if (!thumbnailUrl) {
+          for (const state of Object.values(nodeStates)) {
+            thumbnailUrl = extractUrl(state.output)
+            if (thumbnailUrl) break
           }
         }
       }

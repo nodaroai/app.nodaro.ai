@@ -125,7 +125,7 @@ const componentMetadataSchema = z.object({
     nodeId: z.string(),
     field: z.string(),
     label: z.string(),
-    type: z.enum(["select", "text", "number", "toggle"]),
+    type: z.enum(["select", "text", "number", "toggle", "aspect-ratio"]),
     allowedValues: z.array(z.unknown()).optional(),
     options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
     defaultValue: z.unknown(),
