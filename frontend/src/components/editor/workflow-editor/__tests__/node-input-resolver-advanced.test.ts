@@ -887,18 +887,24 @@ function makeEdgeWithData(
 
 describe("getListInputForNode — edge output mode", () => {
   it("fans out when list edge mode is 'each' (default)", () => {
-    const listNode = makeNode("l1", "list", { items: "a\nb\nc" })
+    const listNode = makeNode("l1", "list", {
+      columns: [{ id: "default", name: "Items", handleId: "col_default", type: "text" }],
+      rows: [["a"], ["b"], ["c"]],
+    })
     const target = makeNode("gen1", "generate-image")
-    const edges = [makeEdge("l1", "gen1")]
+    const edges = [makeEdge("l1", "gen1", "col_default")]
 
     const result = getListInputForNode(target, [listNode, target], edges)
     expect(result).toEqual(["a", "b", "c"])
   })
 
   it("fans out when list edge mode is explicitly 'each'", () => {
-    const listNode = makeNode("l1", "list", { items: "a\nb\nc" })
+    const listNode = makeNode("l1", "list", {
+      columns: [{ id: "default", name: "Items", handleId: "col_default", type: "text" }],
+      rows: [["a"], ["b"], ["c"]],
+    })
     const target = makeNode("gen1", "generate-image")
-    const edges = [makeEdgeWithData("l1", "gen1", { outputMode: "each" })]
+    const edges = [makeEdgeWithData("l1", "gen1", { outputMode: "each" }, "col_default")]
 
     const result = getListInputForNode(target, [listNode, target], edges)
     expect(result).toEqual(["a", "b", "c"])
