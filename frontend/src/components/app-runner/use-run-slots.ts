@@ -256,11 +256,23 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
 
     if (activeSlotId) {
       const mapped = toSlotStatus(executionStatus)
+      // Extract thumbnail when execution completes
+      let thumbnailUrl: string | null = null
+      if (mapped === "completed" && nodeStates) {
+        for (const state of Object.values(nodeStates)) {
+          const output = state.output as Record<string, unknown> | undefined
+          const url = (output?.url ?? output?.imageUrl ?? output?.videoUrl ?? output?.audioUrl ?? output?.resultUrl) as string | undefined
+          if (url && isMediaUrl(url)) {
+            thumbnailUrl = url
+            break
+          }
+        }
+      }
       setSlots((prev) => prev.map((s) => {
         if (s.id !== activeSlotId) return s
         // Skip update when nothing changed to avoid unnecessary re-renders
-        if (s.nodeStates === nodeStates && s.executionStatus === mapped && s.completedNodes === completedNodes && s.totalNodes === totalNodes) return s
-        return { ...s, nodeStates: nodeStates as Record<string, RunSlotNodeState>, executionStatus: mapped, completedNodes, totalNodes }
+        if (s.nodeStates === nodeStates && s.executionStatus === mapped && s.completedNodes === completedNodes && s.totalNodes === totalNodes && !thumbnailUrl) return s
+        return { ...s, nodeStates: nodeStates as Record<string, RunSlotNodeState>, executionStatus: mapped, completedNodes, totalNodes, ...(thumbnailUrl ? { thumbnailUrl } : {}) }
       }))
     }
   }, [executionStatus, nodeStates, completedNodes, totalNodes, activeSlotId])
