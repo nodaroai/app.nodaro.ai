@@ -3625,7 +3625,7 @@ export function executeNode(
       if (output) { value = output; break }
     }
     updateNodeData(node.id, { result: value, executionStatus: "completed" })
-    return Promise.resolve("")
+    return Promise.resolve(value)
   }
 
   if (node.type === "router") {
