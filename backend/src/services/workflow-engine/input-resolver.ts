@@ -215,6 +215,7 @@ const SELECTED_NODE_FALLBACKS: Record<string, Array<{ dataField: string; inputFi
   ],
   "lip-sync": [
     { dataField: "selectedImageNodeId", inputField: "imageUrl" },
+    { dataField: "selectedVideoNodeId", inputField: "videoUrl" },
     { dataField: "selectedAudioNodeId", inputField: "audioUrl" },
   ],
   "speech-to-video": [
