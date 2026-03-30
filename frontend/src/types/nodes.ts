@@ -708,7 +708,23 @@ export type LipSyncData = {
   activeResultIndex?: number
   // Multi-input selection fields
   selectedImageNodeId?: string   // ID of node selected for portrait/face image
+  selectedVideoNodeId?: string   // ID of node selected for video input
   selectedAudioNodeId?: string   // ID of node selected for audio track
+  // LatentSync params
+  guidanceScale?: number
+  inferenceSteps?: number
+  seed?: number
+  // Wav2Lip params
+  pads?: string
+  smooth?: boolean
+  fps?: number
+  resizeFactor?: number
+  // SadTalker params
+  enhancer?: "gfpgan" | "RestoreFormer"
+  preprocess?: "crop" | "resize" | "full"
+  still?: boolean
+  poseStyle?: number
+  expressionScale?: number
 }
 
 export type SpeechToVideoData = {

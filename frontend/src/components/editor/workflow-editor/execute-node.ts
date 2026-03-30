@@ -61,7 +61,7 @@ import {
   saveToStorageApi,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
-import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP } from "@nodaro-shared/model-constants";
+import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS } from "@nodaro-shared/model-constants";
 import { getAIWriterTemplate } from "@/lib/ai-writer-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import type {
@@ -2067,7 +2067,9 @@ export function executeNode(
 
   if (node.type === "lip-sync") {
     const lsData = node.data as LipSyncData;
+    const lsProvider = lsData.provider || "kling-avatar";
 
+    // Resolve image URL (for image-input providers)
     let imageUrl: string | undefined = overrideMediaUrl;
     if (!imageUrl && lsData.selectedImageNodeId) {
       const imageNode = nodes.find(
@@ -2081,6 +2083,21 @@ export function executeNode(
       imageUrl = inputs.imageUrl;
     }
 
+    // Resolve video URL (for video-input providers)
+    let videoUrl: string | undefined;
+    if (lsData.selectedVideoNodeId) {
+      const videoNode = nodes.find(
+        (n) => n.id === lsData.selectedVideoNodeId,
+      );
+      if (videoNode) {
+        videoUrl = extractNodeOutput(videoNode);
+      }
+    }
+    if (!videoUrl) {
+      videoUrl = inputs.videoUrl;
+    }
+
+    // Resolve audio URL
     let audioUrl: string | undefined;
     if (lsData.selectedAudioNodeId) {
       const audioNode = nodes.find(
@@ -2094,9 +2111,22 @@ export function executeNode(
       audioUrl = inputs.audioUrl;
     }
 
-    if (!imageUrl) {
+    // Validate required inputs based on provider
+    const needsVideo = VIDEO_INPUT_LIP_SYNC_PROVIDERS.has(lsProvider as never);
+    const needsImage = !needsVideo && !FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS.has(lsProvider as never);
+    const faceUrl = videoUrl || imageUrl;
+
+    if (needsVideo && !videoUrl) {
+      toast.error(`Node "${lsData.label}": ${lsProvider} requires a video input`);
+      return Promise.reject(new Error("No video input"));
+    }
+    if (needsImage && !imageUrl) {
       toast.error(`Node "${lsData.label}": no portrait image found`);
       return Promise.reject(new Error("No portrait image"));
+    }
+    if (!faceUrl) {
+      toast.error(`Node "${lsData.label}": no image or video input found`);
+      return Promise.reject(new Error("No face input"));
     }
     if (!audioUrl) {
       toast.error(`Node "${lsData.label}": no audio track found`);
@@ -2107,12 +2137,27 @@ export function executeNode(
       node.id,
       () =>
         lipSyncApi(
-          imageUrl!,
+          needsVideo ? undefined : (imageUrl || undefined),
           audioUrl!,
           lsData.prompt || "A person talking naturally",
           lsData.provider || undefined,
           lsData.resolution || undefined,
           ctx.userId,
+          {
+            videoUrl: videoUrl || undefined,
+            guidanceScale: lsData.guidanceScale,
+            inferenceSteps: lsData.inferenceSteps,
+            seed: lsData.seed,
+            pads: lsData.pads,
+            smooth: lsData.smooth,
+            fps: lsData.fps,
+            resizeFactor: lsData.resizeFactor,
+            enhancer: lsData.enhancer,
+            preprocess: lsData.preprocess,
+            still: lsData.still,
+            poseStyle: lsData.poseStyle,
+            expressionScale: lsData.expressionScale,
+          },
         ),
       "generatedVideoUrl",
       "Lip Sync",

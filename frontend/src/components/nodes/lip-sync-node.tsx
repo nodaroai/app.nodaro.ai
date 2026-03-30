@@ -22,6 +22,7 @@ import { useFullResolution } from "@/hooks/use-full-resolution"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { LipSyncData, GeneratedResult } from "@/types/nodes"
+import { VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS } from "@nodaro-shared/model-constants"
 
 // Node types that output images (for portrait/face)
 const IMAGE_OUTPUT_TYPES = [
@@ -50,10 +51,37 @@ const AUDIO_OUTPUT_TYPES = [
   "mix-audio",
 ]
 
+// Node types that output video (for video-input lip-sync providers)
+const VIDEO_OUTPUT_TYPES = [
+  "image-to-video",
+  "text-to-video",
+  "video-to-video",
+  "upload-video",
+  "speech-to-video",
+  "sora-storyboard",
+  "motion-transfer",
+  "video-upscale",
+  "extend-video",
+  "lip-sync",
+  "render-video",
+  "combine-videos",
+  "merge-video-audio",
+  "resize-video",
+  "trim-video",
+  "speed-ramp",
+  "loop-video",
+  "fade-video",
+  "suno-music-video",
+]
+
 const PROVIDER_LABELS: Record<string, string> = {
   "kling-avatar": "Kling Avatar",
   "kling-avatar-pro": "Kling Avatar Pro",
   "infinitalk": "Infinitalk",
+  "latentsync": "LatentSync",
+  "wav2lip": "Wav2Lip",
+  "video-retalking": "Video-Retalking",
+  "sadtalker": "SadTalker",
 }
 
 interface ConnectedNodeInfo {
@@ -123,6 +151,8 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         outputType = "image"
       } else if (AUDIO_OUTPUT_TYPES.includes(nodeType)) {
         outputType = "audio"
+      } else if (VIDEO_OUTPUT_TYPES.includes(nodeType)) {
+        outputType = "video"
       }
 
       let thumbnailUrl: string | undefined
@@ -136,6 +166,12 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
           (srcData.portraitUrl as string | undefined) ??
           (srcData.mainImageUrl as string | undefined) ??
           (srcData.sourceImageUrl as string | undefined)
+      }
+
+      if (outputType === "video") {
+        const vResults = (srcData.generatedResults as readonly GeneratedResult[] | undefined) ?? []
+        const vActiveIdx = (srcData.activeResultIndex as number | undefined) ?? 0
+        thumbnailUrl = vResults[vActiveIdx]?.thumbnailUrl
       }
 
       nodeMap.set(srcNode.id, {
@@ -160,6 +196,11 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
     [connectedNodes]
   )
 
+  const videoNodes = useMemo(
+    () => connectedNodes.filter((n) => n.outputType === "video"),
+    [connectedNodes]
+  )
+
   // Auto-select first image when connected
   useEffect(() => {
     if (imageNodes.length > 0 && !nodeData.selectedImageNodeId) {
@@ -174,10 +215,18 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
     }
   }, [audioNodes, nodeData.selectedAudioNodeId, id, updateNodeData])
 
+  // Auto-select first video when connected
+  useEffect(() => {
+    if (videoNodes.length > 0 && !nodeData.selectedVideoNodeId) {
+      updateNodeData(id, { selectedVideoNodeId: videoNodes[0].id })
+    }
+  }, [videoNodes, nodeData.selectedVideoNodeId, id, updateNodeData])
+
   // Clear selections if corresponding nodes are disconnected
   useEffect(() => {
     const imageNodeIds = imageNodes.map((n) => n.id)
     const audioNodeIds = audioNodes.map((n) => n.id)
+    const videoNodeIds = videoNodes.map((n) => n.id)
 
     const updates: Partial<LipSyncData> = {}
 
@@ -187,11 +236,14 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
     if (nodeData.selectedAudioNodeId && !audioNodeIds.includes(nodeData.selectedAudioNodeId)) {
       updates.selectedAudioNodeId = audioNodes[0]?.id
     }
+    if (nodeData.selectedVideoNodeId && !videoNodeIds.includes(nodeData.selectedVideoNodeId)) {
+      updates.selectedVideoNodeId = videoNodes[0]?.id
+    }
 
     if (Object.keys(updates).length > 0) {
       updateNodeData(id, updates)
     }
-  }, [imageNodes, audioNodes, nodeData.selectedImageNodeId, nodeData.selectedAudioNodeId, id, updateNodeData])
+  }, [imageNodes, audioNodes, videoNodes, nodeData.selectedImageNodeId, nodeData.selectedAudioNodeId, nodeData.selectedVideoNodeId, id, updateNodeData])
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
@@ -199,11 +251,22 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
 
   const selectedImage = imageNodes.find((n) => n.id === nodeData.selectedImageNodeId)
   const selectedAudio = audioNodes.find((n) => n.id === nodeData.selectedAudioNodeId)
+  const selectedVideo = videoNodes.find((n) => n.id === nodeData.selectedVideoNodeId)
+
+  const needsVideoInput = VIDEO_INPUT_LIP_SYNC_PROVIDERS.has(lipSyncProvider as never)
+  const needsImageInput = !needsVideoInput && !FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS.has(lipSyncProvider as never)
+  const needsBothInputs = FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS.has(lipSyncProvider as never)
+  const hasVideoConnection = videoNodes.length > 0
 
   const hasConnections = connectedNodes.length > 0
   const hasImageConnection = imageNodes.length > 0
   const hasAudioConnection = audioNodes.length > 0
-  const hasRequiredInputs = hasImageConnection && hasAudioConnection
+  const hasRequiredInputs = (() => {
+    if (!hasAudioConnection) return false
+    if (needsVideoInput) return hasVideoConnection
+    if (needsBothInputs) return hasImageConnection || hasVideoConnection
+    return hasImageConnection
+  })()
 
   const providerLabel = PROVIDER_LABELS[nodeData.provider] ?? nodeData.provider
 
@@ -270,7 +333,8 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "image", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
+        { id: "image", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 80px)', left: '-29px' }, hideHandle: true },
+        { id: "videoIn", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
         { id: "audio", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
@@ -364,63 +428,91 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         {/* Input Selection Dropdowns */}
         {hasConnections && (
           <div className="flex flex-col gap-1.5 px-3 pt-2">
-            {/* Portrait/Face Image - Required */}
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] text-muted-foreground/60 text-center">Portrait Image</span>
-              {hasImageConnection ? (
-                <Select
-                  value={nodeData.selectedImageNodeId ?? ""}
-                  onValueChange={(v) => updateNodeData(id, { selectedImageNodeId: v || undefined })}
-                >
-                  <SelectTrigger className="bg-black/30 border-white/10 text-white/80 h-7 text-[11px]" aria-label="Select portrait image">
-                    <SelectValue placeholder="Select image...">
-                      {selectedImage && (
-                        <div className="flex items-center gap-2">
-                          {selectedImage.thumbnailUrl ? (
-                            <CachedImage
-                              src={selectedImage.thumbnailUrl}
-                              alt=""
-                              className="w-5 h-5 object-cover rounded"
-                              thumbnail
-                              thumbnailWidth={80}
-                            />
-                          ) : (
-                            <ImageIcon className="w-4 h-4 text-[#ff0073]" />
-                          )}
-                          <span className="truncate">{selectedImage.label}</span>
-                        </div>
-                      )}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {imageNodes.map((node) => (
-                      <SelectItem key={node.id} value={node.id}>
-                        <div className="flex items-center gap-2">
-                          {node.thumbnailUrl ? (
-                            <CachedImage
-                              src={node.thumbnailUrl}
-                              alt=""
-                              className="w-5 h-5 object-cover rounded"
-                              thumbnail
-                              thumbnailWidth={80}
-                            />
-                          ) : (
-                            <ImageIcon className="w-4 h-4 text-[#ff0073]" />
-                          )}
-                          <span>{node.label}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="h-7 px-3 flex items-center text-[11px] text-white/30 bg-black/20 rounded-md border border-dashed border-white/10">
-                  Connect portrait image
-                </div>
-              )}
-            </div>
+            {/* Portrait Image - shown for image-input and flexible providers */}
+            {(needsImageInput || needsBothInputs) && (
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-muted-foreground/60 text-center">Portrait Image</span>
+                {hasImageConnection ? (
+                  <Select
+                    value={nodeData.selectedImageNodeId ?? ""}
+                    onValueChange={(v) => updateNodeData(id, { selectedImageNodeId: v || undefined })}
+                  >
+                    <SelectTrigger className="bg-black/30 border-white/10 text-white/80 h-7 text-[11px]" aria-label="Select portrait image">
+                      <SelectValue placeholder="Select image...">
+                        {selectedImage && (
+                          <div className="flex items-center gap-2">
+                            {selectedImage.thumbnailUrl ? (
+                              <CachedImage src={selectedImage.thumbnailUrl} alt="" className="w-5 h-5 object-cover rounded" thumbnail thumbnailWidth={80} />
+                            ) : (
+                              <ImageIcon className="w-4 h-4 text-[#ff0073]" />
+                            )}
+                            <span className="truncate">{selectedImage.label}</span>
+                          </div>
+                        )}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {imageNodes.map((node) => (
+                        <SelectItem key={node.id} value={node.id}>
+                          <div className="flex items-center gap-2">
+                            {node.thumbnailUrl ? (
+                              <CachedImage src={node.thumbnailUrl} alt="" className="w-5 h-5 object-cover rounded" thumbnail thumbnailWidth={80} />
+                            ) : (
+                              <ImageIcon className="w-4 h-4 text-[#ff0073]" />
+                            )}
+                            <span>{node.label}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="h-7 px-3 flex items-center text-[11px] text-white/30 bg-black/20 rounded-md border border-dashed border-white/10">
+                    Connect portrait image
+                  </div>
+                )}
+              </div>
+            )}
 
-            {/* Audio Track - Required */}
+            {/* Video Input - shown for video-input and flexible providers */}
+            {(needsVideoInput || needsBothInputs) && (
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-muted-foreground/60 text-center">Source Video</span>
+                {hasVideoConnection ? (
+                  <Select
+                    value={nodeData.selectedVideoNodeId ?? ""}
+                    onValueChange={(v) => updateNodeData(id, { selectedVideoNodeId: v || undefined })}
+                  >
+                    <SelectTrigger className="bg-black/30 border-white/10 text-white/80 h-7 text-[11px]" aria-label="Select source video">
+                      <SelectValue placeholder="Select video...">
+                        {selectedVideo && (
+                          <div className="flex items-center gap-2">
+                            <Clapperboard className="w-4 h-4 text-[#ff0073]" />
+                            <span className="truncate">{selectedVideo.label}</span>
+                          </div>
+                        )}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {videoNodes.map((node) => (
+                        <SelectItem key={node.id} value={node.id}>
+                          <div className="flex items-center gap-2">
+                            <Clapperboard className="w-4 h-4 text-[#ff0073]" />
+                            <span>{node.label}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="h-7 px-3 flex items-center text-[11px] text-white/30 bg-black/20 rounded-md border border-dashed border-white/10">
+                    Connect source video
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Audio Track - Required for all providers */}
             <div className="flex flex-col gap-1">
               <span className="text-[10px] text-muted-foreground/60 text-center">Audio Track</span>
               {hasAudioConnection ? (
@@ -462,7 +554,9 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         {!hasConnections && status !== "running" && !activeUrl && (
           <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground/60">
             <Users className="w-8 h-8" />
-            <span className="text-[10px] text-center">Connect portrait image + audio</span>
+            <span className="text-[10px] text-center">
+              {needsVideoInput ? "Connect video + audio" : needsBothInputs ? "Connect image or video + audio" : "Connect portrait image + audio"}
+            </span>
           </div>
         )}
 
@@ -494,13 +588,25 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
       )}
     </BaseNode>
 
-    {/* image input handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(100% - 50px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <ImageIcon className="w-3.5 h-3.5 text-white" />
-    </div>
+    {/* image input handle icon — only for image-input/flexible providers */}
+    {(needsImageInput || needsBothInputs) && (
+      <div
+        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
+        style={{ top: 'calc(100% - 80px)', left: '-29px', transform: 'translateY(-50%)' }}
+      >
+        <ImageIcon className="w-3.5 h-3.5 text-white" />
+      </div>
+    )}
+
+    {/* video input handle icon — only for video-input/flexible providers */}
+    {(needsVideoInput || needsBothInputs) && (
+      <div
+        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
+        style={{ top: 'calc(100% - 50px)', left: '-29px', transform: 'translateY(-50%)' }}
+      >
+        <Clapperboard className="w-3.5 h-3.5 text-white" />
+      </div>
+    )}
 
     {/* audio input handle icon */}
     <div

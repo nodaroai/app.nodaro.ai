@@ -11,6 +11,8 @@ import { getLanguagesForModel, ALL_LANGUAGES, isV3Model } from "@/lib/audio-tags
 import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Slider } from "@/components/ui/slider"
+import { Switch } from "@/components/ui/switch"
 import {
   Select,
   SelectContent,
@@ -51,6 +53,7 @@ import type {
 import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits"
+import { REPLICATE_LIP_SYNC_PROVIDERS } from "@nodaro-shared/model-constants"
 import type { ConfigProps } from "./types"
 
 export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToSpeechData>) {
@@ -853,36 +856,166 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
 
 export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<LipSyncData>) {
   useEffect(() => {
-    prefetchModelCredits(["kling-avatar", "kling-avatar-pro", "infinitalk", "infinitalk:480p"])
+    prefetchModelCredits([
+      "kling-avatar", "kling-avatar-pro", "infinitalk", "infinitalk:480p",
+      "latentsync", "wav2lip", "video-retalking", "sadtalker",
+    ])
   }, [])
+
+  const provider = data.provider || "kling-avatar"
+  const isKie = !REPLICATE_LIP_SYNC_PROVIDERS.has(provider as never)
 
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.provider || "kling-avatar"} onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"] })}>
+        <Select value={provider} onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"] })}>
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="infinitalk">{`Infinitalk (${getCachedCredits("infinitalk:480p") ?? 11}–${getCachedCredits("infinitalk") ?? 42} credits)`}</SelectItem>
-            <SelectItem value="kling-avatar">{`Kling Avatar (${getCachedCredits("kling-avatar") ?? 28} credits)`}</SelectItem>
-            <SelectItem value="kling-avatar-pro">{`Kling Avatar Pro (${getCachedCredits("kling-avatar-pro") ?? 56} credits)`}</SelectItem>
+            <SelectItem value="infinitalk">{`Infinitalk (${getCachedCredits("infinitalk:480p") ?? 11}–${getCachedCredits("infinitalk") ?? 42} CR)`}</SelectItem>
+            <SelectItem value="kling-avatar">{`Kling Avatar (${getCachedCredits("kling-avatar") ?? 28} CR)`}</SelectItem>
+            <SelectItem value="kling-avatar-pro">{`Kling Avatar Pro (${getCachedCredits("kling-avatar-pro") ?? 56} CR)`}</SelectItem>
+            <SelectItem value="latentsync">{`LatentSync (${getCachedCredits("latentsync") ?? 5} CR)`}</SelectItem>
+            <SelectItem value="sadtalker">{`SadTalker (${getCachedCredits("sadtalker") ?? 9} CR)`}</SelectItem>
+            <SelectItem value="video-retalking">{`Video-Retalking (${getCachedCredits("video-retalking") ?? 20} CR)`}</SelectItem>
+            <SelectItem value="wav2lip">{`Wav2Lip (${getCachedCredits("wav2lip") ?? 1} CR)`}</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
-      <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.resolution || "720p"} onValueChange={(v) => onUpdate({ resolution: v as LipSyncData["resolution"] })}>
-          <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="480p">480p</SelectItem>
-            <SelectItem value="720p">720p (default)</SelectItem>
-          </SelectContent>
-        </Select>
-      </MappableField>
-      <MappableField field="prompt" label="Motion Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea rows={2} value={data.prompt ?? ""} onChange={(e) => onUpdate({ prompt: e.target.value })} placeholder="Optional: describe head/expression motions..." />
-      </MappableField>
-      <p className="text-xs text-muted-foreground">
-        Connect a portrait image and an audio track (speech/voiceover) to generate a talking head video.
-      </p>
+
+      {/* Resolution — KIE providers only */}
+      {isKie && (
+        <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Select value={data.resolution || "720p"} onValueChange={(v) => onUpdate({ resolution: v as LipSyncData["resolution"] })}>
+            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="480p">480p</SelectItem>
+              <SelectItem value="720p">720p (default)</SelectItem>
+            </SelectContent>
+          </Select>
+        </MappableField>
+      )}
+
+      {/* Motion Prompt — KIE providers only */}
+      {isKie && (
+        <MappableField field="prompt" label="Motion Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Textarea rows={2} value={data.prompt ?? ""} onChange={(e) => onUpdate({ prompt: e.target.value })} placeholder="Optional: describe head/expression motions..." />
+        </MappableField>
+      )}
+
+      {/* LatentSync params */}
+      {provider === "latentsync" && (
+        <>
+          <div>
+            <Label>Guidance Scale ({data.guidanceScale ?? 2})</Label>
+            <Slider min={1} max={3} step={0.1} value={[data.guidanceScale ?? 2]} onValueChange={(vals) => onUpdate({ guidanceScale: vals[0] })} />
+            <p className="text-xs text-muted-foreground mt-1">Higher = better sync but may cause distortion</p>
+          </div>
+          <div>
+            <Label>Inference Steps ({data.inferenceSteps ?? 20})</Label>
+            <Slider min={20} max={50} step={1} value={[data.inferenceSteps ?? 20]} onValueChange={(vals) => onUpdate({ inferenceSteps: vals[0] })} />
+            <p className="text-xs text-muted-foreground mt-1">More steps = higher quality, slower</p>
+          </div>
+          <div>
+            <Label>Seed</Label>
+            <Input type="number" value={data.seed ?? 0} onChange={(e) => onUpdate({ seed: parseInt(e.target.value) || 0 })} placeholder="0 = random" />
+          </div>
+        </>
+      )}
+
+      {/* Wav2Lip params */}
+      {provider === "wav2lip" && (
+        <>
+          <div>
+            <Label>Face Padding</Label>
+            <Input value={data.pads ?? "0 10 0 0"} onChange={(e) => onUpdate({ pads: e.target.value })} placeholder="top bottom left right" />
+            <p className="text-xs text-muted-foreground mt-1">Padding for detected face bounding box</p>
+          </div>
+          <div className="flex items-center justify-between">
+            <Label>Smooth</Label>
+            <Switch checked={data.smooth !== false} onCheckedChange={(v) => onUpdate({ smooth: v })} />
+          </div>
+          <div>
+            <Label>FPS</Label>
+            <Input type="number" value={data.fps ?? 25} onChange={(e) => onUpdate({ fps: parseInt(e.target.value) || 25 })} />
+            <p className="text-xs text-muted-foreground mt-1">Only applies when input is a static image</p>
+          </div>
+          <div>
+            <Label>Resize Factor</Label>
+            <Input type="number" min={1} max={4} value={data.resizeFactor ?? 1} onChange={(e) => onUpdate({ resizeFactor: parseInt(e.target.value) || 1 })} />
+            <p className="text-xs text-muted-foreground mt-1">Reduce resolution by this factor</p>
+          </div>
+        </>
+      )}
+
+      {/* SadTalker params */}
+      {provider === "sadtalker" && (
+        <>
+          <div>
+            <Label>Face Enhancer</Label>
+            <Select value={data.enhancer ?? "gfpgan"} onValueChange={(v) => onUpdate({ enhancer: v as "gfpgan" | "RestoreFormer" })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gfpgan">GFPGAN</SelectItem>
+                <SelectItem value="RestoreFormer">RestoreFormer</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Preprocess</Label>
+            <Select value={data.preprocess ?? "full"} onValueChange={(v) => onUpdate({ preprocess: v as "crop" | "resize" | "full" })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="crop">Crop</SelectItem>
+                <SelectItem value="resize">Resize</SelectItem>
+                <SelectItem value="full">Full</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between">
+            <Label>Still Mode</Label>
+            <Switch checked={data.still ?? false} onCheckedChange={(v) => onUpdate({ still: v })} />
+          </div>
+          <div>
+            <Label>Pose Style ({data.poseStyle ?? 0})</Label>
+            <Slider min={0} max={45} step={1} value={[data.poseStyle ?? 0]} onValueChange={(vals) => onUpdate({ poseStyle: vals[0] })} />
+            <p className="text-xs text-muted-foreground mt-1">Head movement pattern (0-45)</p>
+          </div>
+          <div>
+            <Label>Expression Scale ({data.expressionScale ?? 1})</Label>
+            <Slider min={0} max={3} step={0.1} value={[data.expressionScale ?? 1]} onValueChange={(vals) => onUpdate({ expressionScale: vals[0] })} />
+            <p className="text-xs text-muted-foreground mt-1">Expression motion strength</p>
+          </div>
+        </>
+      )}
+
+      {/* Video-Retalking has no configurable params */}
+      {provider === "video-retalking" && (
+        <p className="text-xs text-muted-foreground">
+          Connect a talking-head video and audio track. Includes built-in face enhancement.
+        </p>
+      )}
+
+      {/* Help text per provider category */}
+      {isKie && (
+        <p className="text-xs text-muted-foreground">
+          Connect a portrait image and an audio track (speech/voiceover) to generate a talking head video.
+        </p>
+      )}
+      {provider === "latentsync" && (
+        <p className="text-xs text-muted-foreground">
+          Connect a video and audio track. Best for singing — uses diffusion for high-quality lip sync.
+        </p>
+      )}
+      {provider === "wav2lip" && (
+        <p className="text-xs text-muted-foreground">
+          Connect a video or image and audio track. Fast and cheap lip sync.
+        </p>
+      )}
+      {provider === "sadtalker" && (
+        <p className="text-xs text-muted-foreground">
+          Connect a portrait image and audio to generate a talking head with natural motion.
+        </p>
+      )}
     </div>
   )
 }

@@ -2040,18 +2040,47 @@ export async function speechToVideoApi(opts: {
 }
 
 export async function lipSyncApi(
-  imageUrl: string,
+  imageUrl: string | undefined,
   audioUrl: string,
   prompt?: string,
   provider?: string,
   resolution?: string,
-  userId?: string
+  userId?: string,
+  opts: {
+    videoUrl?: string
+    guidanceScale?: number
+    inferenceSteps?: number
+    seed?: number
+    pads?: string
+    smooth?: boolean
+    fps?: number
+    resizeFactor?: number
+    enhancer?: string
+    preprocess?: string
+    still?: boolean
+    poseStyle?: number
+    expressionScale?: number
+  } = {},
 ): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { imageUrl, audioUrl }
+  const body: Record<string, unknown> = { audioUrl }
+  if (imageUrl) body.imageUrl = imageUrl
+  if (opts.videoUrl) body.videoUrl = opts.videoUrl
   if (prompt) body.prompt = prompt
   if (provider) body.provider = provider
   if (resolution) body.resolution = resolution
   if (userId) body.userId = userId
+  if (opts.guidanceScale !== undefined) body.guidanceScale = opts.guidanceScale
+  if (opts.inferenceSteps !== undefined) body.inferenceSteps = opts.inferenceSteps
+  if (opts.seed !== undefined) body.seed = opts.seed
+  if (opts.pads !== undefined) body.pads = opts.pads
+  if (opts.smooth !== undefined) body.smooth = opts.smooth
+  if (opts.fps !== undefined) body.fps = opts.fps
+  if (opts.resizeFactor !== undefined) body.resizeFactor = opts.resizeFactor
+  if (opts.enhancer) body.enhancer = opts.enhancer
+  if (opts.preprocess) body.preprocess = opts.preprocess
+  if (opts.still !== undefined) body.still = opts.still
+  if (opts.poseStyle !== undefined) body.poseStyle = opts.poseStyle
+  if (opts.expressionScale !== undefined) body.expressionScale = opts.expressionScale
   const res = await fetch(`${API_BASE_URL}/v1/lip-sync`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },

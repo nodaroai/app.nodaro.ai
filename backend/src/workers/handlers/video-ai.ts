@@ -13,6 +13,8 @@ import type { ProgressCallback } from "../../providers/provider.interface.js"
 import { runVeoExtendTask, runVeo1080pTask, runVeo4kTask } from "../../providers/kie/client.js"
 
 import { runRunwayExtendTask } from "../../providers/kie/runway-client.js"
+import { replicateLipSync } from "../../providers/replicate/lip-sync.js"
+import { REPLICATE_LIP_SYNC_PROVIDERS } from "../../../../packages/shared/src/model-constants.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import {
@@ -234,20 +236,68 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
 }
 
 const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
-  const { imageUrl, audioUrl, prompt, provider, resolution } = job.data as {
+  const {
+    imageUrl, videoUrl, audioUrl, prompt, provider, resolution,
+    guidanceScale, inferenceSteps, seed,
+    pads, smooth, fps, resizeFactor,
+    enhancer, preprocess, still, poseStyle, expressionScale,
+  } = job.data as {
     jobId: string
-    imageUrl: string
+    imageUrl?: string
+    videoUrl?: string
     audioUrl: string
     prompt?: string
     provider?: string
     resolution?: string
+    guidanceScale?: number
+    inferenceSteps?: number
+    seed?: number
+    pads?: string
+    smooth?: boolean
+    fps?: number
+    resizeFactor?: number
+    enhancer?: string
+    preprocess?: string
+    still?: boolean
+    poseStyle?: number
+    expressionScale?: number
   }
-  console.log(`[worker] lip-sync ${ctx.jobId} (provider: ${provider ?? "kling-avatar"})`)
 
-  const result = await lipSync(imageUrl, audioUrl, provider ?? "kling-avatar", prompt, resolution)
+  const resolvedProvider = provider ?? "kling-avatar"
+  console.log(`[worker] lip-sync ${ctx.jobId} (provider: ${resolvedProvider})`)
+
+  let resultUrl: string
+  let resultCost: number | null = null
+  let resultDisplayCost: number | null = null
+  let resultProviderUsed: string = resolvedProvider
+
+  if (REPLICATE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
+    // Replicate path
+    const faceUrl = videoUrl || imageUrl
+    if (!faceUrl) throw new Error("No face input (imageUrl or videoUrl) provided")
+
+    const { videoUrl: outUrl, cost } = await replicateLipSync(
+      resolvedProvider,
+      faceUrl,
+      audioUrl,
+      { guidanceScale, inferenceSteps, seed, pads, smooth, fps, resizeFactor, enhancer, preprocess, still, poseStyle, expressionScale },
+    )
+    resultUrl = outUrl
+    resultCost = cost
+    resultDisplayCost = cost
+    resultProviderUsed = `replicate:${resolvedProvider}`
+  } else {
+    // KIE path (existing)
+    const result = await lipSync(imageUrl!, audioUrl, resolvedProvider, prompt, resolution)
+    resultUrl = result.url
+    resultCost = result.cost
+    resultDisplayCost = result.displayCost
+    resultProviderUsed = result.providerUsed
+  }
+
   await job.updateProgress(50)
 
-  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const r2Url = await uploadVideoMaybeWatermark(resultUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await job.updateProgress(100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -261,14 +311,14 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       progress: 100,
       output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
       completed_at: new Date().toISOString(),
-      provider: result.providerUsed,
-      provider_cost: result.cost,
-      display_cost: result.displayCost,
+      provider: resultProviderUsed,
+      provider_cost: resultCost,
+      display_cost: resultDisplayCost,
     })
     .eq("id", ctx.jobId)
 
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, resultCost)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${resultProviderUsed}, cost: $${resultCost?.toFixed(6) ?? "N/A"})`)
 }
 
 const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, ctx) {

@@ -185,8 +185,31 @@ export const LIP_SYNC_PROVIDERS = [
   "kling-avatar",
   "kling-avatar-pro",
   "infinitalk",
+  "latentsync",
+  "wav2lip",
+  "video-retalking",
+  "sadtalker",
 ] as const
 export type LipSyncProvider = typeof LIP_SYNC_PROVIDERS[number]
+
+/** Replicate-based lip-sync providers (video or image+audio via Replicate SDK) */
+export const REPLICATE_LIP_SYNC_PROVIDERS = new Set([
+  "latentsync",
+  "wav2lip",
+  "video-retalking",
+  "sadtalker",
+] as const)
+
+/** Lip-sync providers that require video input (not image) */
+export const VIDEO_INPUT_LIP_SYNC_PROVIDERS = new Set([
+  "latentsync",
+  "video-retalking",
+] as const)
+
+/** Lip-sync providers that accept either video or image input */
+export const FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS = new Set([
+  "wav2lip",
+] as const)
 
 /** Standard aspect ratio → pixel dimensions for composition nodes */
 export const ASPECT_RATIO_DIMENSIONS: Record<string, { width: number; height: number }> = {
