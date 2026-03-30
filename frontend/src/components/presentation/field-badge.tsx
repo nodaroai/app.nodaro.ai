@@ -7,7 +7,8 @@ interface FieldBadgeProps {
 
 function resolveDisplayValue(field: ExposableField, value: unknown): string {
   switch (field.type) {
-    case "select": {
+    case "select":
+    case "aspect-ratio": {
       const strVal = String(value ?? "")
       const match = field.options?.find((o) => o.value === strVal)
       return match ? match.label : strVal

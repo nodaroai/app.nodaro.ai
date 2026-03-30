@@ -1,7 +1,7 @@
 export interface ExposableField {
   readonly key: string
   readonly label: string
-  readonly type: "select" | "slider" | "toggle" | "text"
+  readonly type: "select" | "slider" | "toggle" | "text" | "aspect-ratio"
   readonly options?: ReadonlyArray<{ value: string; label: string }>
   readonly min?: number
   readonly max?: number

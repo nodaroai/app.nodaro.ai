@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import type { ExposableField } from "@nodaro-shared/presentation-types"
+import { AspectRatioSelector } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { GlassCard } from "./output-cards/shared"
 
 interface FieldInputCardProps {
@@ -127,6 +128,34 @@ function ToggleField({
   )
 }
 
+function AspectRatioField({
+  field,
+  value,
+  onChange,
+  allowedValues,
+  readOnly,
+}: FieldInputCardProps) {
+  const options = allowedValues
+    ? (field.options ?? []).filter((o) =>
+        allowedValues.some((av) => String(av) === o.value),
+      )
+    : (field.options ?? [])
+
+  const strValue = String(value ?? "")
+
+  return (
+    <GlassCard>
+      <Label className={cn(LABEL_CLS, "mb-2 block")}>{field.label}</Label>
+      <AspectRatioSelector
+        options={options}
+        value={strValue}
+        onValueChange={(v) => onChange(v)}
+        className={cn(readOnly && "opacity-70 pointer-events-none")}
+      />
+    </GlassCard>
+  )
+}
+
 function TextField({
   field,
   value,
@@ -160,6 +189,8 @@ export function FieldInputCard(props: FieldInputCardProps) {
   switch (props.field.type) {
     case "select":
       return <SelectField {...effectiveProps} />
+    case "aspect-ratio":
+      return <AspectRatioField {...effectiveProps} />
     case "slider":
       return <SliderField {...effectiveProps} />
     case "toggle":
