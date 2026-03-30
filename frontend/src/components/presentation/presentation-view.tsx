@@ -416,7 +416,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     if (!isFullscreen) return []
     return orderedInputNodes
       .filter((n) => {
-        if (n.type !== "loop") return false
+        if (n.type !== "loop" && n.type !== "list") return false
         const minRows = ((n.data as Record<string, unknown>).minRows as number) ?? 0
         if (minRows === 0) return false
         const inputVals = presInputValues[n.id] as Record<string, unknown> | undefined
@@ -749,7 +749,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       }
       // Loop/table node: user-edited rows are inputs (always shown), but snapshot rows respect suppressOutputFallback
       const node = nodeMap.get(nodeId)
-      if (node?.type === "loop") {
+      if (node?.type === "loop" || node?.type === "list") {
         const loopRows = presInputValues[nodeId]?.rows as string[][] | undefined
         if (loopRows) return getLoopFirstMedia(node.data as Record<string, unknown>, loopRows)
         if (suppressOutputFallback) return { url: undefined, text: undefined }

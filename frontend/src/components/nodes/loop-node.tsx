@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { ArrowUpRight, Download, Expand, Film, GripVertical, Image, Info, Link, Loader2, Music, Plus, Repeat, Table2, Type, Upload, X } from "lucide-react"
+import { ArrowUpRight, Download, Expand, Film, GripVertical, Image, Info, Link, List, Loader2, Music, Plus, Repeat, Table2, Type, Upload, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -153,14 +153,31 @@ function SortableNodeRow({
   )
 }
 
-function LoopNodeComponent({ id, data, selected }: NodeProps) {
+function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
   const nodeData = data as LoopNodeData
+  const isList = type === "list"
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const edges = useWorkflowStore((s) => s.edges)
   const nodes = useWorkflowStore((s) => s.nodes)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNodeInternals = useUpdateNodeInternals()
   const status = (nodeData as Record<string, unknown>).executionStatus as string | undefined ?? "idle"
+
+  // Migrate legacy list data (items string → columns + rows)
+  useEffect(() => {
+    if (!isList) return
+    const d = data as Record<string, unknown>
+    if (typeof d.items === "string" && !d.columns) {
+      const items = (d.items as string).split("\n").filter((l: string) => l.trim() !== "").map((l: string) => l.trim())
+      const colId = crypto.randomUUID()
+      const col: LoopColumn = { id: colId, name: "Items", handleId: `col_${colId}`, type: "text" }
+      updateNodeData(id, { columns: [col], rows: items.map((item) => [item]), items: undefined })
+    } else if (!d.columns) {
+      const colId = crypto.randomUUID()
+      const col: LoopColumn = { id: colId, name: "Items", handleId: `col_${colId}`, type: "text" }
+      updateNodeData(id, { columns: [col], rows: [[""]] })
+    }
+  }, [isList, id]) // eslint-disable-line react-hooks/exhaustive-deps
   const showData = !!(nodeData as Record<string, unknown>).showData
   const setShowData = useCallback((v: boolean) => updateNodeData(id, { showData: v }), [id, updateNodeData])
 
@@ -204,7 +221,7 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
       const useAll = !!ed?.useAllResults
 
       // Resolve all outputs — loop nodes need special handling
-      const allOutputs = upstream.type === "loop"
+      const allOutputs = (upstream.type === "loop" || upstream.type === "list")
         ? resolveLoopColumnValues(
             { id: upstream.id, data: upstream.data as Record<string, unknown> },
             edge.sourceHandle ?? undefined,
@@ -257,13 +274,18 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
     }
 
     const colValues: (string[] | null)[] = columns.map((col) => {
-      const colInEdge = edges.find(
+      const colInEdges = edges.filter(
         (e) => e.target === id && e.targetHandle === loopColInputHandle(col.handleId),
       )
-      if (!colInEdge) return null
-      const upstream = nodes.find((n) => n.id === colInEdge.source)
-      if (!upstream) return null
-      return resolveEdgeValues(colInEdge, upstream as WorkflowNode)
+      if (colInEdges.length === 0) return null
+      const allValues: string[] = []
+      for (const edge of colInEdges) {
+        const upstream = nodes.find((n) => n.id === edge.source)
+        if (!upstream) continue
+        const vals = resolveEdgeValues(edge, upstream as WorkflowNode)
+        if (vals) allValues.push(...vals)
+      }
+      return allValues.length > 0 ? allValues : null
     })
 
     const legacyEdge = edges.find((e) => e.target === id && e.targetHandle === "in")
@@ -515,13 +537,13 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
       />
       <EditableNodeLabel
         label={nodeData.label}
-        icon={<Repeat className="w-3.5 h-3.5" />}
+        icon={isList ? <List className="w-3.5 h-3.5" /> : <Repeat className="w-3.5 h-3.5" />}
         onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
       />
       <BaseNode
         id={id}
         label={nodeData.label}
-        icon={<Repeat className="h-4 w-4" />}
+        icon={isList ? <List className="h-4 w-4" /> : <Repeat className="h-4 w-4" />}
         category="input"
         credits={0}
         selected={selected}
@@ -656,9 +678,27 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
                                 </div>
                               )
                             }
+                            const sourceHandle = col.handleId
                             return (
-                              <div key={col.id} className="relative rounded-lg overflow-hidden">
-                                <video src={cell} crossOrigin="anonymous" className="w-full h-auto rounded-lg" muted playsInline />
+                              <div key={col.id} className="relative group/vid rounded-lg overflow-hidden">
+                                <video src={cell} crossOrigin="anonymous" className="w-full h-auto rounded-lg" autoPlay loop muted playsInline />
+                                <div className="nodrag nopan absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/vid:opacity-100 transition-opacity">
+                                  <button type="button" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm" onClick={(e) => { e.stopPropagation(); window.open(cell, "_blank") }} title="Open"><Expand className="w-3.5 h-3.5" /></button>
+                                  <button type="button" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm" onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = cell; a.download = "video.mp4"; a.click() }} title="Download"><Download className="w-3.5 h-3.5" /></button>
+                                  <button type="button" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm" onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "URL copied") }} title="Copy URL"><Link className="w-3.5 h-3.5" /></button>
+                                </div>
+                                <div
+                                  className="nodrag nopan absolute top-2 right-2 w-[20px] h-[20px] flex items-center justify-center rounded-full bg-black/50 hover:bg-[#ff0073]/80 text-white cursor-grab active:cursor-grabbing opacity-0 group-hover/vid:opacity-100 transition-opacity shadow-sm"
+                                  title="Drag out"
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.setData("application/nodaro-video", cell)
+                                    e.dataTransfer.setData("application/nodaro-edge-context", JSON.stringify({ sourceNodeId: id, sourceHandle, itemIndex: 1 }))
+                                    e.dataTransfer.effectAllowed = "copy"
+                                  }}
+                                >
+                                  <ArrowUpRight className="w-3.5 h-3.5" />
+                                </div>
                               </div>
                             )
                           }

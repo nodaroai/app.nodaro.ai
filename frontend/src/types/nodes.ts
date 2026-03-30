@@ -54,9 +54,14 @@ export type TextPromptData = {
 export type ListNodeData = {
   [key: string]: unknown
   label: string
-  items: string
+  items?: string // Legacy (migrated to columns + rows at load)
+  columns?: LoopColumn[]
+  rows?: string[][]
   fieldMappings: Record<string, string>
   maxItems?: number
+  showData?: boolean
+  thumbnailSize?: "sm" | "md" | "lg"
+  galleryCols?: number
 }
 
 export interface LoopColumn {
@@ -2556,8 +2561,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "input",
     creditCost: 0,
     inputs: ["in"],
-    outputs: ["list"],
-    defaultData: { label: "List", items: "", fieldMappings: {} },
+    outputs: [],
+    defaultData: { label: "List", columns: [{ id: "default", name: "Items", handleId: "col_default", type: "text" }], rows: [[""]], fieldMappings: {} } as ListNodeData,
   },
   {
     type: "loop",

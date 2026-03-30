@@ -49,7 +49,7 @@ export function getNodeResultWithInputFallback(node: WorkflowNode): { url?: stri
   if (result.url || result.text) return result
 
   // Loop/table node: extract first media URL from rows
-  if (node.type === "loop") {
+  if (node.type === "loop" || node.type === "list") {
     const loopResult = getLoopFirstMedia(data)
     if (loopResult.url || loopResult.text) return loopResult
   }

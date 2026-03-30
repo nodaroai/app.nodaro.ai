@@ -216,7 +216,7 @@ function getEdgeLabel(
   }
 
   // Loop (table) column outputs — show role-aware label
-  if (srcType === "loop" && srcHandle && sourceNode?.data) {
+  if ((srcType === "loop" || srcType === "list") && srcHandle && sourceNode?.data) {
     const columns = (sourceNode.data as Record<string, unknown>).columns as
       Array<{ handleId: string; name: string; type?: string }> | undefined
     const col = columns?.find((c) => c.handleId === srcHandle)
@@ -1054,7 +1054,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           // Regenerate loop column UUIDs and remap connectedSourceId references
           const handleMap: Record<string, string> = {}
           for (const node of newNodes) {
-            if (node.type !== "loop") continue
+            if (node.type !== "loop" && node.type !== "list") continue
             const d = node.data as Record<string, unknown>
             const cols = d.columns as Array<{ id: string; handleId: string; connectedSourceId?: string; connectedSourceHandle?: string }> | undefined
             if (!cols) continue

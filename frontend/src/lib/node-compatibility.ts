@@ -114,6 +114,8 @@ export function resolveTargetHandle(
   const compatible = HANDLE_COMPATIBILITY[sourceHandleId] ?? [sourceHandleId]
 
   if (direction === "source") {
+    // Loop/list nodes use "col_add" quick-add handle (not static "in")
+    if (nodeType === "loop" || nodeType === "list") return "col_add"
     return def.inputs.find((h) => compatible.includes(h)) ?? "in"
   } else {
     return def.outputs.find((h) => compatible.includes(h)) ?? def.outputs[0] ?? "out"

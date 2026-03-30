@@ -74,10 +74,20 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   const type = node.type;
 
   if (type === "list") {
+    // New format: columns + rows (same as loop)
+    const loopData = data as LoopNodeData;
+    if (loopData.columns) {
+      if (sourceHandle) {
+        const colIndex = (loopData.columns ?? []).findIndex(
+          (c: { handleId: string }) => c.handleId === sourceHandle,
+        );
+        if (colIndex >= 0) return loopData.rows?.[0]?.[colIndex]?.trim() || "";
+      }
+      return loopData.rows?.[0]?.[0]?.trim() || "";
+    }
+    // Legacy format: items string
     const items = (data.items as string | undefined) || "";
-    const lines = items
-      .split("\n")
-      .filter((l: string) => l.trim().length > 0);
+    const lines = items.split("\n").filter((l: string) => l.trim().length > 0);
     return lines[0]?.trim();
   }
   if (type === "loop") {

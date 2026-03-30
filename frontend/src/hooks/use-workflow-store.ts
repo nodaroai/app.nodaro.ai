@@ -78,12 +78,28 @@ const EXECUTION_DATA_KEYS = new Set([
 function detectLoopColumnType(
   sourceNode: WorkflowNode,
   sourceHandle: string | null | undefined,
+  allNodes?: WorkflowNode[],
+  allEdges?: WorkflowEdge[],
 ): LoopColumn["type"] {
-  // Upstream loop node — inherit the source column's type directly
-  if (sourceNode.type === "loop" && sourceHandle) {
+  // Upstream loop/list node — inherit the source column's type directly
+  if ((sourceNode.type === "loop" || sourceNode.type === "list") && sourceHandle) {
     const srcColumns = ((sourceNode.data as Record<string, unknown>).columns ?? []) as Array<{ handleId: string; type?: string }>
     const srcCol = srcColumns.find((c) => c.handleId === sourceHandle)
     if (srcCol?.type) return srcCol.type as LoopColumn["type"]
+  }
+  // Teleport-receive: follow chain to the SEND node's upstream to detect actual type
+  if (sourceNode.type === "teleport-receive" && allNodes && allEdges) {
+    const recvChannel = (sourceNode.data as TeleportReceiveData).channel
+    const sendNode = allNodes.find(
+      (n) => n.type === "teleport-send" && (n.data as TeleportSendData).channel === recvChannel,
+    )
+    if (sendNode) {
+      const sendInEdge = allEdges.find((e) => e.target === sendNode.id)
+      if (sendInEdge) {
+        const upstream = allNodes.find((n) => n.id === sendInEdge.source)
+        if (upstream) return detectLoopColumnType(upstream, sendInEdge.sourceHandle, allNodes, allEdges)
+      }
+    }
   }
   const def = NODE_DEF_MAP.get(sourceNode.type ?? "")
   if (!def) return "text"
@@ -457,15 +473,33 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       // --- Loop node: quick-add handle or per-column-target handle ---
       let newNodes = state.nodes
       const targetNode = state.nodes.find((n) => n.id === connection.target)
-      if (targetNode?.type === "loop") {
+      if (targetNode?.type === "loop" || targetNode?.type === "list") {
         const loopData = targetNode.data as LoopNodeData
         const sourceNode = state.nodes.find((n) => n.id === connection.source)
 
         if (connection.targetHandle === LOOP_COL_ADD_HANDLE && sourceNode) {
+          const colType = detectLoopColumnType(sourceNode, connection.sourceHandle, state.nodes as WorkflowNode[], newEdges as WorkflowEdge[])
+
+          // If a column of the same type already exists (with a connected source),
+          // route the new edge to that column instead of creating a new one.
+          // This makes multiple same-type sources appear as rows, not columns.
+          const existingCol = (loopData.columns ?? []).find(
+            (c) => c.type === colType && c.connectedSourceId,
+          )
+          if (existingCol) {
+            newEdges = newEdges.map((e) =>
+              e.source === connection.source &&
+              e.target === connection.target &&
+              e.targetHandle === LOOP_COL_ADD_HANDLE
+                ? { ...e, targetHandle: loopColInputHandle(existingCol.handleId) }
+                : e,
+            )
+            return { nodes: newNodes, edges: newEdges, isDirty: true }
+          }
+
           // Quick-add: create a new column from the upstream node
           const colId = crypto.randomUUID()
           const handleId = `col_${colId}`
-          const colType = detectLoopColumnType(sourceNode, connection.sourceHandle)
           const sourceLabel = (sourceNode.data as Record<string, unknown>).label as string || sourceNode.type || "Column"
           const newCol: LoopColumn = {
             id: colId,
@@ -508,7 +542,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
                   connectedSourceId: connection.source!,
                   connectedSourceHandle: connection.sourceHandle ?? undefined,
                   name: (sourceNode.data as Record<string, unknown>).label as string || col.name,
-                  type: detectLoopColumnType(sourceNode, connection.sourceHandle),
+                  type: detectLoopColumnType(sourceNode, connection.sourceHandle, state.nodes as WorkflowNode[], newEdges as WorkflowEdge[]),
                 }
               : col,
           )
@@ -716,7 +750,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       }
 
       // Generate fresh UUIDs for loop column IDs and handleIds, clear connections
-      if (source.type === "loop") {
+      if (source.type === "loop" || source.type === "list") {
         const cols = d.columns as LoopColumn[] | undefined
         if (cols) {
           d.columns = cols.map((c) => {
@@ -759,7 +793,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
       // Clear connectedSourceId on loop columns that referenced the deleted node
       remainingNodes = remainingNodes.map((n) => {
-        if (n.type !== "loop") return n
+        if (n.type !== "loop" && n.type !== "list") return n
         const loopData = n.data as LoopNodeData
         const hasConnected = (loopData.columns ?? []).some((c) => c.connectedSourceId === nodeId)
         if (!hasConnected) return n
@@ -814,7 +848,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         if (node.id !== removedEdge.target) return node
 
         // Clear loop column connection refs when edge is deleted
-        if (node.type === "loop" && removedEdge.targetHandle?.endsWith("_in")) {
+        if ((node.type === "loop" || node.type === "list") && removedEdge.targetHandle?.endsWith("_in")) {
           const loopData = node.data as LoopNodeData
           const baseHandleId = loopColBaseHandle(removedEdge.targetHandle)
           const updatedColumns = (loopData.columns ?? []).map((col) =>
@@ -888,7 +922,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
     // Migrate legacy "in" target handles on loop nodes to per-column handles
     const loopNodeMap = new Map(
-      cleanedNodes.filter((n) => n.type === "loop").map((n) => [n.id, n])
+      cleanedNodes.filter((n) => n.type === "loop" || n.type === "list").map((n) => [n.id, n])
     )
     let migratedNodes = cleanedNodes
     let migratedEdges = cleanedEdges

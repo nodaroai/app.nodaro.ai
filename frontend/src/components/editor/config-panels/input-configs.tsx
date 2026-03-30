@@ -415,12 +415,13 @@ function DelimiterSelect({
   )
 }
 
-export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId }: {
+export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId, singleColumn }: {
   data: LoopNodeData
   onUpdate: (patch: Partial<LoopNodeData>) => void
   onRemoveColumnEdges?: (colHandleId: string) => void
   nodes?: ReadonlyArray<{ id: string; type?: string; data: Record<string, unknown> }>
   nodeId?: string
+  singleColumn?: boolean
 }) {
   const [activeTab, setActiveTab] = useState<"configure" | "data">("configure")
   const columns = data.columns ?? []
@@ -443,7 +444,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
       const useAll = !!ed?.useAllResults
 
       // Resolve all outputs — loop nodes need special handling
-      const allOutputs = upstream.type === "loop"
+      const allOutputs = (upstream.type === "loop" || upstream.type === "list")
         ? resolveLoopColumnValues(
             { id: upstream.id, data: upstream.data as Record<string, unknown> },
             edge.sourceHandle ?? undefined,
@@ -491,13 +492,18 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
     }
 
     const colValues: (string[] | null)[] = columns.map((col) => {
-      const colInEdge = edges.find(
+      const colInEdges = edges.filter(
         (e) => e.target === nodeId && e.targetHandle === loopColInputHandle(col.handleId),
       )
-      if (!colInEdge) return null
-      const upstream = allNodes.find((n) => n.id === colInEdge.source)
-      if (!upstream) return null
-      return resolveEdge(colInEdge, upstream as WorkflowNode)
+      if (colInEdges.length === 0) return null
+      const allValues: string[] = []
+      for (const edge of colInEdges) {
+        const upstream = allNodes.find((n) => n.id === edge.source)
+        if (!upstream) continue
+        const vals = resolveEdge(edge, upstream as WorkflowNode)
+        if (vals) allValues.push(...vals)
+      }
+      return allValues.length > 0 ? allValues : null
     })
 
     const legacyEdge = edges.find((e) => e.target === nodeId && e.targetHandle === "in")
@@ -660,15 +666,17 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
       {activeTab === "configure" && (
         <>
           <div className="flex items-center justify-between">
-            <Label>Table</Label>
-            <button
-              type="button"
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              onClick={addColumn}
-            >
-              <Plus className="w-3 h-3" />
-              Add Column
-            </button>
+            <Label>{singleColumn ? "List" : "Table"}</Label>
+            {!singleColumn && (
+              <button
+                type="button"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={addColumn}
+              >
+                <Plus className="w-3 h-3" />
+                Add Column
+              </button>
+            )}
           </div>
 
           {columns.length === 0 ? (
@@ -705,13 +713,15 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                               onSplit={splitColumnRows}
                             />
                           )}
-                          <button
-                            type="button"
-                            className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors"
-                            onClick={() => removeColumn(ci)}
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
+                          {!singleColumn && (
+                            <button
+                              type="button"
+                              className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors"
+                              onClick={() => removeColumn(ci)}
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                         <Select
                           value={col.type ?? "text"}
