@@ -242,6 +242,10 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
                       {isSelected && <Check className="absolute top-0.5 right-0.5 w-3 h-3 text-[#ff0073]" />}
                       {asset.thumbnailUrl ? (
                         <CachedImage src={asset.thumbnailUrl} alt="" className="w-14 h-14 object-cover rounded" thumbnail thumbnailWidth={112} />
+                      ) : asset.mimeType.startsWith("image/") ? (
+                        <CachedImage src={asset.url} alt="" className="w-14 h-14 object-cover rounded" thumbnail thumbnailWidth={112} />
+                      ) : asset.mimeType.startsWith("video/") ? (
+                        <video src={asset.url} crossOrigin="anonymous" className="w-14 h-14 object-cover rounded bg-black" muted playsInline preload="metadata" />
                       ) : (
                         <div className="w-14 h-14 flex items-center justify-center rounded bg-white/5">
                           <Film className="w-5 h-5 text-white/20" />
