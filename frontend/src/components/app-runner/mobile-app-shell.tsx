@@ -166,7 +166,6 @@ export function MobileAppShell({
   const [showGetCreditsModal, setShowGetCreditsModal] = useState(false)
   const [configNode, setConfigNode] = useState<WorkflowNode | null>(null)
   const [lightboxNodeId, setLightboxNodeId] = useState<string | null>(null)
-  const [isInputFocused, setIsInputFocused] = useState(false)
   const [isRemixing, setIsRemixing] = useState(false)
 
   // Auto-create new run after login redirect (?newrun=1)
@@ -288,18 +287,6 @@ export function MobileAppShell({
     }
   }, [appRunnerInsufficientCredits])
 
-  // ---- Virtual keyboard detection (hide tab bar + sticky action when keyboard is open) ----
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!vv) return
-    // Threshold: if visual viewport is significantly smaller than window height, keyboard is open
-    const handleResize = () => {
-      const keyboardOpen = vv.height < window.innerHeight * 0.75
-      setIsInputFocused(keyboardOpen)
-    }
-    vv.addEventListener("resize", handleResize)
-    return () => vv.removeEventListener("resize", handleResize)
-  }, [])
 
   // ---- Scroll position save/restore ----
   const handleTabChange = useCallback((tab: MobileTab) => {
@@ -832,7 +819,7 @@ export function MobileAppShell({
 
   // ---- Content height accounting for header + tab bar + sticky action ----
   // Header ~48px, tab bar ~56px, sticky action ~56px
-  const showStickyAction = activeTab === "inputs" && !isInputFocused && !inputsReadOnly && !isViewOverride
+  const showStickyAction = activeTab === "inputs" && !inputsReadOnly && !isViewOverride
   const bottomPadding = showStickyAction ? "calc(112px + var(--safe-area-bottom, 0px))" : "calc(56px + var(--safe-area-bottom, 0px))"
 
   return (
@@ -1016,7 +1003,7 @@ export function MobileAppShell({
           newRunLabel={runSlots.newRunLabel}
           onGetCredits={() => setShowGetCreditsModal(true)}
           inputsReadOnly={inputsReadOnly}
-          hidden={activeTab !== "inputs" || isInputFocused}
+          hidden={activeTab !== "inputs"}
         />
       )}
 
@@ -1028,7 +1015,6 @@ export function MobileAppShell({
           showRunsTab={!!user}
           hasUnseenOutputs={hasUnseenOutputs}
           runCount={runSlots.slots.length}
-          hidden={isInputFocused}
         />
       )}
 
