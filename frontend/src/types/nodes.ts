@@ -4002,7 +4002,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       channel: "A",
       channelColor: "#f59e0b",
     } as TeleportSendData,
-    width: 150,
   },
   {
     type: "teleport-receive",
@@ -4016,7 +4015,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       channel: "A",
       channelColor: "#f59e0b",
     } as TeleportReceiveData,
-    width: 150,
   },
   // Sub-Workflow
   {

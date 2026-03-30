@@ -597,7 +597,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
     if (type === "teleport-send" || type === "teleport-receive") {
       const { channel, channelColor } = getNextChannel(get().nodes, type)
-      newNode.data = { ...newNode.data, channel, channelColor, label: channel }
+      let label = channel
+      if (type === "teleport-receive") {
+        const matchedSend = get().nodes.find(
+          (n) => n.type === "teleport-send" && (n.data as TeleportSendData).channel === channel
+        )
+        if (matchedSend) label = (matchedSend.data as TeleportSendData).label
+      }
+      newNode.data = { ...newNode.data, channel, channelColor, label }
     }
 
     set((state) => ({

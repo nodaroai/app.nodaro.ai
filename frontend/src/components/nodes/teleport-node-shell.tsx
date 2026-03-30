@@ -25,20 +25,27 @@ function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { varian
       (sel.data as TeleporterNodeData).channel === nodeData.channel
   })
 
-  const firstPartnerId = useWorkflowStore((s) => {
+  const partnerData = useWorkflowStore((s) => {
     const partner = s.nodes.find(
       (n) => n.type === partnerType && (n.data as TeleporterNodeData).channel === nodeData.channel
     )
-    return partner?.id ?? null
+    if (!partner) return null
+    const d = partner.data as TeleporterNodeData
+    return { id: partner.id, label: d.label, result: d.result }
   })
 
-  const result = nodeData.result ?? ""
-  const isImage = typeof result === "string" && isImageUrl(result)
-  const isVideo = typeof result === "string" && isVideoUrl(result)
+  const firstPartnerId = partnerData?.id ?? null
+
+  // Receive nodes show the send's label and result
+  const displayLabel = variant === "receive" && partnerData?.label ? partnerData.label : nodeData.label
+  const displayResult = variant === "receive" && partnerData?.result ? partnerData.result : (nodeData.result ?? "")
+
+  const isImage = typeof displayResult === "string" && isImageUrl(displayResult)
+  const isVideo = typeof displayResult === "string" && isVideoUrl(displayResult)
   const hasThumb = isImage || isVideo
 
-  const hasCustomName = !isTeleportDefaultLabel(nodeData.label, nodeData.channel)
-  const badgeText = hasCustomName ? `${nodeData.channel} \u00b7 ${nodeData.label}` : nodeData.channel
+  const hasCustomName = !isTeleportDefaultLabel(displayLabel, nodeData.channel)
+  const badgeText = hasCustomName ? `${nodeData.channel} \u00b7 ${displayLabel}` : nodeData.channel
 
   const handleJump = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -67,9 +74,9 @@ function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { varian
       style={{ borderColor: nodeData.channelColor + "40" }}
     >
       {isImage ? (
-        <img src={result} alt="" className="w-full h-full object-cover" loading="lazy" />
+        <img src={displayResult} alt="" className="w-full h-full object-cover" loading="lazy" />
       ) : (
-        <video src={result} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+        <video src={displayResult} className="w-full h-full object-cover" muted playsInline preload="metadata" />
       )}
     </div>
   ) : null
