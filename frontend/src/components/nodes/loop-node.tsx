@@ -648,17 +648,38 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
                               </div>
                             )
                           }
-                          if (colType === "video-url" || colType === "audio-url") {
+                          if (colType === "video-url") {
+                            if (!cell) {
+                              return (
+                                <div key={col.id} className="w-full h-10 rounded-lg border border-dashed border-muted-foreground/10 flex items-center justify-center">
+                                  <span className="text-[9px] text-muted-foreground/30">{"\u2014"}</span>
+                                </div>
+                              )
+                            }
                             return (
-                              <span key={col.id} className="text-[10px] text-muted-foreground/60 italic block py-1">
-                                {cell ? "media" : "\u2014"}
-                              </span>
+                              <div key={col.id} className="relative rounded-lg overflow-hidden">
+                                <video src={cell} crossOrigin="anonymous" className="w-full h-auto rounded-lg" muted playsInline />
+                              </div>
+                            )
+                          }
+                          if (colType === "audio-url") {
+                            if (!cell) {
+                              return (
+                                <div key={col.id} className="w-full h-10 rounded-lg border border-dashed border-muted-foreground/10 flex items-center justify-center">
+                                  <span className="text-[9px] text-muted-foreground/30">{"\u2014"}</span>
+                                </div>
+                              )
+                            }
+                            return (
+                              <div key={col.id} className="nodrag nopan">
+                                <audio src={cell} controls className="w-full h-8 rounded" style={{ minWidth: 0 }} />
+                              </div>
                             )
                           }
                           return (
-                            <span key={col.id} className="text-[10px] text-muted-foreground truncate block py-1" title={cell}>
-                              {cell || "\u2014"}
-                            </span>
+                            <div key={col.id} className="text-xs text-foreground/80 py-1 break-words line-clamp-3" title={cell}>
+                              {cell || <span className="text-muted-foreground/30">{"\u2014"}</span>}
+                            </div>
                           )
                         })}
                       </div>
