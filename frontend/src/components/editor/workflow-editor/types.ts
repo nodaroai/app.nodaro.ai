@@ -214,6 +214,8 @@ export const EXECUTABLE_TYPES = new Set([
   "save-to-storage",
   "qa-check",
   "router",
+  "teleport-send",
+  "teleport-receive",
   "component",
 ]);
 
