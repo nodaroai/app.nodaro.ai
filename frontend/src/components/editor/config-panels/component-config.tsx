@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { useEdges } from "@xyflow/react"
 import { getPublishedApp, estimateComponentCredits } from "@/lib/api"
 import type { ConfigProps } from "./types"
@@ -194,6 +195,20 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
             const value = getSettingValue(setting)
 
             switch (setting.type) {
+              case "aspect-ratio": {
+                const opts = setting.options ?? (setting.allowedValues ?? []).map((v) => ({ value: String(v), label: String(v) }))
+                return (
+                  <div key={key}>
+                    <Label className="text-[10px] text-muted-foreground">{setting.label}</Label>
+                    <AspectRatioSelector
+                      options={opts}
+                      value={String(value ?? "")}
+                      onValueChange={(v) => handleSettingChange(setting, v)}
+                      className="mt-1"
+                    />
+                  </div>
+                )
+              }
               case "select": {
                 // Prefer options (value+label) over raw allowedValues
                 const opts: Array<{ value: string; label: string }> = setting.options

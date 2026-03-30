@@ -27,6 +27,7 @@ import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-wor
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
 import { APP_CATEGORIES, OUTPUT_TYPES } from "@/lib/app-categories"
 import { INPUT_FIELD_MAP, OUTPUT_FIELD_MAP } from "@nodaro-shared/component-types"
+import type { ExposedSetting } from "@nodaro-shared/component-types"
 import type { PresentationItem } from "@nodaro-shared/presentation-types"
 
 /** Extract unique node IDs from a PresentationItem list (recursive for groups). */
@@ -267,7 +268,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
 
     const inputNodes = nodes.filter((n) => inputNodeIds.has(n.id))
     const nonSourceInputNodes = inputNodes.filter((n) => !INPUT_FIELD_MAP[n.type || ""])
-    const settings: Array<{ nodeId: string; field: string; label: string; type: "select" | "text" | "number" | "toggle"; allowedValues?: unknown[]; options?: Array<{ value: string; label: string }>; defaultValue: unknown }> = []
+    const settings: ExposedSetting[] = []
     const seen = new Set<string>() // deduplicate by nodeId:field — prevents duplicate entries
 
     for (const node of nonSourceInputNodes) {
@@ -294,7 +295,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
 
         const val = nd[f.key]
         if (val === undefined) continue
-        const settingType = f.type === "slider" ? "number" as const : f.type as "select" | "text" | "number" | "toggle"
+        const settingType = f.type === "slider" ? "number" as const : f.type as ExposedSetting["type"]
         const opts = f.options?.map((o) => ({ value: String(o.value), label: o.label }))
         settings.push({
           nodeId: node.id,

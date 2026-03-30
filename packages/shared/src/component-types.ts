@@ -13,7 +13,7 @@ export interface ExposedSetting {
   nodeId: string
   field: string
   label: string
-  type: "select" | "text" | "number" | "toggle"
+  type: "select" | "text" | "number" | "toggle" | "aspect-ratio"
   allowedValues?: unknown[]
   /** Full option list with labels for select fields (preferred over allowedValues). */
   options?: Array<{ value: string; label: string }>
