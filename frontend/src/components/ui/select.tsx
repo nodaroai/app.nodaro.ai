@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
+import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -170,7 +171,7 @@ function SelectItemWithMeta({
   description?: string
   descriptionClassName?: string
 }) {
-  return (
+  const item = (
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
@@ -201,6 +202,27 @@ function SelectItemWithMeta({
         </span>
       )}
     </SelectPrimitive.Item>
+  )
+
+  if (!description) return item
+
+  return (
+    <TooltipPrimitive.Provider delayDuration={2000}>
+      <TooltipPrimitive.Root>
+        <TooltipPrimitive.Trigger asChild>
+          {item}
+        </TooltipPrimitive.Trigger>
+        <TooltipPrimitive.Portal>
+          <TooltipPrimitive.Content
+            side="right"
+            sideOffset={8}
+            className="bg-foreground text-background z-50 rounded-md px-3 py-1.5 text-xs max-w-[200px]"
+          >
+            {description}
+          </TooltipPrimitive.Content>
+        </TooltipPrimitive.Portal>
+      </TooltipPrimitive.Root>
+    </TooltipPrimitive.Provider>
   )
 }
 

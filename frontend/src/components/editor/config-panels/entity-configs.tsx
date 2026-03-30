@@ -40,6 +40,7 @@ import {
 } from "./entity-shared"
 import { IMAGE_GEN_MODELS, IMAGE_GEN_MODEL_IDS } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
+import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { prefetchModelCredits, useModelCredits } from "@/hooks/use-model-credits"
 import type { ConfigProps } from "./types"
@@ -268,6 +269,7 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.provider} />
 
       <Separator />
 
@@ -471,6 +473,7 @@ export function FaceConfig({ data, onUpdate }: { readonly data: FaceNodeData; re
           </SelectContent>
         </Select>
       </div>
+      <ModelDescriptionHint modelId={data.provider} />
 
       <Separator />
 
@@ -627,6 +630,7 @@ export function ObjectConfig({ data, onUpdate }: { readonly data: ObjectNodeData
           </SelectContent>
         </Select>
       </div>
+      <ModelDescriptionHint modelId={data.provider} />
 
       <Separator />
 
@@ -870,6 +874,7 @@ export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapFi
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.provider} />
 
       <Separator />
 
