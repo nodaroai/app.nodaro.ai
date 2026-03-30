@@ -17,8 +17,9 @@ import { CameraMotionNode } from "./camera-motion-node";
 import { ReferenceAudioNode } from "./reference-audio-node";
 import { GenerateScriptNode } from "./generate-script-node";
 import { GenerateImageNode } from "./generate-image-node";
-import { EditImageNode } from "./edit-image-node";
-import { ImageToImageNode } from "./image-to-image-node";
+import { ModifyImageNode } from "./modify-image-node";
+import { UpscaleImageNode } from "./upscale-image-node";
+import { RemoveBackgroundNode } from "./remove-background-node";
 import { ImageToVideoNode } from "./image-to-video-node";
 import { VideoToVideoNode } from "./video-to-video-node";
 import { TextToVideoNode } from "./text-to-video-node";
@@ -126,8 +127,9 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   // AI
   "generate-script": GenerateScriptNode,
   "generate-image": GenerateImageNode,
-  "edit-image": EditImageNode,
-  "image-to-image": ImageToImageNode,
+  "modify-image": ModifyImageNode,
+  "upscale-image": UpscaleImageNode,
+  "remove-background": RemoveBackgroundNode,
   "image-to-video": ImageToVideoNode,
   "video-to-video": VideoToVideoNode,
   "text-to-video": TextToVideoNode,

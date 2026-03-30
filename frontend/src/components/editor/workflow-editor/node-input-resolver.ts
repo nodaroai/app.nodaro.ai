@@ -599,7 +599,7 @@ export function resolveNodeInputs(
       const handleType = compMeta?.outputs?.find((o) => o.id === handleId)?.type
 
       if (handleType === "image") {
-        if (node.type === "generate-image" || node.type === "edit-image" || node.type === "image-to-image") {
+        if (node.type === "generate-image" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
           inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
         } else {
           inputs.imageUrl = output
@@ -686,7 +686,7 @@ export function resolveNodeInputs(
       const loopCol = loopCols.find((c) => c.handleId === (srcEdge.sourceHandle ?? ""));
       const colType = loopCol?.type ?? "text";
       if (colType === "image-url") {
-        if (node.type === "generate-image" || node.type === "edit-image" || node.type === "image-to-image") {
+        if (node.type === "generate-image" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
           inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
         } else {
           inputs.imageUrl = output;
@@ -774,11 +774,12 @@ export function resolveNodeInputs(
       } else {
         inputs.imageUrl = output;
       }
-    } else if (src.type === "edit-image") {
+    } else if ((src.type as string) === "edit-image" || src.type === "modify-image" || src.type === "upscale-image" || src.type === "remove-background") {
       if (
         node.type === "generate-image" ||
-        node.type === "edit-image" ||
-        node.type === "image-to-image"
+        (node.type as string) === "edit-image" ||
+        (node.type as string) === "image-to-image" ||
+        node.type === "modify-image"
       ) {
         inputs.referenceImageUrls = [
           ...(inputs.referenceImageUrls ?? []),
@@ -787,11 +788,12 @@ export function resolveNodeInputs(
       } else {
         inputs.imageUrl = output;
       }
-    } else if (src.type === "image-to-image") {
+    } else if ((src.type as string) === "image-to-image") {
       if (
         node.type === "generate-image" ||
-        node.type === "edit-image" ||
-        node.type === "image-to-image"
+        (node.type as string) === "edit-image" ||
+        (node.type as string) === "image-to-image" ||
+        node.type === "modify-image"
       ) {
         inputs.referenceImageUrls = [
           ...(inputs.referenceImageUrls ?? []),
@@ -803,8 +805,9 @@ export function resolveNodeInputs(
     } else if (src.type === "extract-frame") {
       if (
         node.type === "generate-image" ||
-        node.type === "edit-image" ||
-        node.type === "image-to-image"
+        (node.type as string) === "edit-image" ||
+        (node.type as string) === "image-to-image" ||
+        node.type === "modify-image"
       ) {
         inputs.referenceImageUrls = [
           ...(inputs.referenceImageUrls ?? []),
@@ -1176,7 +1179,7 @@ export function resolveNodeInputs(
 
       // Route by media type, respecting target node expectations
       if (mediaType === "image") {
-        if (node.type === "generate-image" || node.type === "edit-image" || node.type === "image-to-image") {
+        if (node.type === "generate-image" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
           inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
         } else {
           inputs.imageUrl = output;

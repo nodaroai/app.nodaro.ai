@@ -174,7 +174,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.url as string | undefined)
     );
   }
-  if (type === "edit-image") {
+  if ((type as string) === "edit-image" || (type as string) === "image-to-image") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
     const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
@@ -183,7 +183,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.generatedImageUrl as string | undefined)
     );
   }
-  if (type === "image-to-image") {
+  if (type === "modify-image" || type === "upscale-image" || type === "remove-background") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
     const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
@@ -569,6 +569,9 @@ export const IMAGE_SOURCE_TYPES = new Set([
   "upload-image",
   "edit-image",
   "image-to-image",
+  "modify-image",
+  "upscale-image",
+  "remove-background",
   "extract-frame",
   "character",
   "face",

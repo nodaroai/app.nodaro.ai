@@ -50,8 +50,9 @@ import {
   GenerateScriptConfig,
   QACheckConfig,
   GenerateImageConfig,
-  EditImageConfig,
-  ImageToImageConfig,
+  ModifyImageConfig,
+  UpscaleImageConfig,
+  RemoveBackgroundConfig,
   ImageToVideoConfig,
   VideoToVideoConfig,
   MotionTransferConfig,
@@ -159,7 +160,9 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "camera-motion": "Camera Motion",
   "generate-script": "Generate Script",
   "generate-image": "Generate Image",
-  "edit-image": "Edit Image",
+  "modify-image": "Modify Image",
+  "upscale-image": "Upscale Image",
+  "remove-background": "Remove Background",
   "image-to-video": "Image to Video",
   "video-to-video": "Video to Video",
   "text-to-video": "Text to Video",
@@ -244,7 +247,7 @@ export function getNodeTypeDisplayName(type: string): string {
 }
 
 export const GENERATE_BUTTON_TYPES = new Set([
-  "generate-script", "generate-image", "edit-image", "image-to-image",
+  "generate-script", "generate-image", "modify-image", "upscale-image", "remove-background",
   "image-to-video", "video-to-video", "text-to-video", "text-to-speech",
   "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
   "video-upscale", "extend-video", "suno-generate", "suno-cover", "suno-extend",
@@ -313,8 +316,9 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "camera-motion": return <CameraMotionConfig {...configProps} />
     case "generate-script": return <GenerateScriptConfig {...configProps} />
     case "generate-image": return <GenerateImageConfig {...configProps} />
-    case "edit-image": return <EditImageConfig {...configProps} />
-    case "image-to-image": return <ImageToImageConfig {...configProps} />
+    case "modify-image": return <ModifyImageConfig {...configProps} />
+    case "upscale-image": return <UpscaleImageConfig {...configProps} />
+    case "remove-background": return <RemoveBackgroundConfig {...configProps} />
     case "image-to-video": return (nodeData as ImageToVideoData).provider === "kling-3.0"
       ? <Suspense fallback={null}><Kling3StudioConfig {...configProps} /></Suspense>
       : <ImageToVideoConfig {...configProps} onUpdateNode={updateNodeData} />

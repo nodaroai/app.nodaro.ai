@@ -395,6 +395,9 @@ const IMAGE_RESULT_TYPES = new Set([
   "generate-image",
   "edit-image",
   "image-to-image",
+  "modify-image",
+  "upscale-image",
+  "remove-background",
   "extract-frame",
   "upload-image",
 ])

@@ -294,6 +294,59 @@ export async function imageToImage(
   return res.json()
 }
 
+// --- Modify Image (delegates to edit-image or image-to-image backend routes) ---
+
+export async function modifyImage(
+  imageUrl: string,
+  prompt: string,
+  provider?: string,
+  userId?: string,
+  referenceImageUrls?: string[],
+  options?: {
+    strength?: number
+    aspectRatio?: string
+    resolution?: string
+    quality?: string
+    negativePrompt?: string
+    seed?: number
+    renderingSpeed?: string
+    guidanceScale?: number
+    maskUrl?: string
+    style?: string
+  }
+): Promise<{ jobId: string }> {
+  // nano-banana-edit routes through /v1/edit-image
+  if (provider === "nano-banana-edit") {
+    return editImage(imageUrl, prompt, provider, userId, {
+      aspectRatio: options?.aspectRatio,
+      negativePrompt: options?.negativePrompt,
+      style: options?.style,
+      seed: options?.seed,
+      referenceImageUrls,
+    })
+  }
+  // All other providers route through /v1/image-to-image
+  return imageToImage(imageUrl, prompt, provider, userId, referenceImageUrls, options)
+}
+
+// --- Upscale Image (delegates to edit-image backend route) ---
+
+export async function upscaleImage(
+  imageUrl: string,
+  provider?: string,
+  options?: { upscaleFactor?: string; targetResolution?: string }
+): Promise<{ jobId: string }> {
+  return editImage(imageUrl, undefined, provider ?? "recraft-upscale", undefined, options)
+}
+
+// --- Remove Background (delegates to edit-image backend route) ---
+
+export async function removeBackground(
+  imageUrl: string,
+): Promise<{ jobId: string }> {
+  return editImage(imageUrl, undefined, "recraft-remove-bg")
+}
+
 export async function generateCharacter(data: {
   name: string
   description?: string

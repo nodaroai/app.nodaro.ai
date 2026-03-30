@@ -101,6 +101,20 @@ export const IMAGE_EDIT_PROVIDERS = [
   "topaz-image-upscale",
 ] as const
 
+/** Modify image providers (I2I + edit-with-prompt) */
+export const MODIFY_IMAGE_PROVIDERS = [
+  ...IMAGE_I2I_PROVIDERS,
+  "nano-banana-edit",
+] as const
+export type ModifyImageProvider = typeof MODIFY_IMAGE_PROVIDERS[number]
+
+/** Image upscale providers */
+export const UPSCALE_IMAGE_PROVIDERS = [
+  "recraft-upscale",
+  "topaz-image-upscale",
+] as const
+export type UpscaleImageProvider = typeof UPSCALE_IMAGE_PROVIDERS[number]
+
 // Derived types from provider arrays
 export type ImageGenProvider = typeof IMAGE_GEN_PROVIDERS[number]
 export type ImageI2IProvider = typeof IMAGE_I2I_PROVIDERS[number]

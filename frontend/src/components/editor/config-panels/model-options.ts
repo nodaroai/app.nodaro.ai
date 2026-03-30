@@ -47,6 +47,16 @@ export const IMAGE_EDIT_MODELS = [
   { value: "topaz-image-upscale", label: "Topaz Upscale", desc: "Advanced upscaling with configurable factor" },
 ] as const
 
+export const MODIFY_IMAGE_MODELS = [
+  ...IMAGE_I2I_MODELS,
+  { value: "nano-banana-edit", label: "Nano Banana Edit", description: "AI-powered image editing with instructions" },
+]
+
+export const UPSCALE_IMAGE_MODELS = [
+  { value: "recraft-upscale", label: "Recraft Upscale", description: "Fast, high-quality upscaling" },
+  { value: "topaz-image-upscale", label: "Topaz Upscale", description: "Premium AI upscaling with resolution control" },
+]
+
 export const VIDEO_I2V_MODELS = [
   { value: "bytedance-lite", label: "Bytedance Lite", desc: "Light, fast, end frame support" },
   { value: "bytedance-pro", label: "Bytedance Pro", desc: "Higher quality Bytedance" },

@@ -18,6 +18,33 @@ import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems } from "@nod
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 
 /**
+ * Migrate legacy image node types to the new split types.
+ * - `edit-image` → `modify-image`, `upscale-image`, or `remove-background` based on provider
+ * - `image-to-image` → `modify-image`
+ */
+export function migrateImageNodes(nodes: WorkflowNode[]): WorkflowNode[] {
+  return nodes.map(node => {
+    // Cast to string for comparison — these legacy types are no longer in SceneNodeType
+    const nodeType = node.type as string
+    if (nodeType === "edit-image") {
+      const provider = (node.data as Record<string, unknown>).provider as string | undefined
+      if (provider === "nano-banana-edit") {
+        return { ...node, type: "modify-image" as SceneNodeType }
+      } else if (provider === "recraft-remove-bg") {
+        return { ...node, type: "remove-background" as SceneNodeType }
+      } else {
+        // recraft-upscale, topaz-image-upscale, grok-upscale, or unknown → upscale
+        return { ...node, type: "upscale-image" as SceneNodeType }
+      }
+    }
+    if (nodeType === "image-to-image") {
+      return { ...node, type: "modify-image" as SceneNodeType }
+    }
+    return node
+  })
+}
+
+/**
  * Fields that are purely execution-related (job status, progress, results).
  * When an `updateNodeData` call only touches these keys, the undo system
  * will NOT capture a snapshot — preventing job polling from polluting the
@@ -833,8 +860,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         return isNaN(num) ? max : Math.max(max, num)
       }, 0) + 1
 
+    // Migrate legacy image node types (edit-image, image-to-image → new split types)
+    const migratedImageNodes = migrateImageNodes(nodes)
+
     // Clean up stale loop expansion artifacts.
-    const cleaned = filterCloneNodes(nodes, edges)
+    const cleaned = filterCloneNodes(migratedImageNodes, edges)
     const cleanedNodes = cleaned.nodes
     // Also drop edges referencing nodes that no longer exist
     const cleanedNodeIds = new Set(cleanedNodes.map((n) => n.id))

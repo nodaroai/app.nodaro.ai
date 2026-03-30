@@ -171,8 +171,20 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       workflowData = workflow
     }
 
+    // Migrate legacy image node types (edit-image → modify/upscale/remove-background, image-to-image → modify)
+    const rawNodes = (workflowData.nodes as (SimpleNode & { hidden?: boolean })[]) ?? []
+    const allNodes = rawNodes.map(node => {
+      if (node.type === "edit-image") {
+        const provider = (node.data as Record<string, unknown> | undefined)?.provider as string | undefined
+        if (provider === "nano-banana-edit") return { ...node, type: "modify-image" }
+        if (provider === "recraft-remove-bg") return { ...node, type: "remove-background" }
+        return { ...node, type: "upscale-image" }
+      }
+      if (node.type === "image-to-image") return { ...node, type: "modify-image" }
+      return node
+    })
+
     // Filter out hidden nodes (from loop expansion) and expanded clones that were persisted
-    const allNodes = (workflowData.nodes as (SimpleNode & { hidden?: boolean })[]) ?? []
     const allEdges: SimpleEdge[] = ((workflowData.edges as SimpleEdge[]) ?? []).map(e => ({
       ...e,
       data: migrateEdgeOutputMode(e.data as Record<string, unknown> | undefined),

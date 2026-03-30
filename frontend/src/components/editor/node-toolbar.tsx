@@ -7,7 +7,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, Frame, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare,
+  SlidersHorizontal, Scissors, Frame, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -57,8 +57,9 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "transcribe", label: "Transcribe", icon: <FileText className="h-4 w-4" />, category: "AI", group: "Script & Text" },
   // AI — Image
   { type: "generate-image", label: "Generate Image", icon: <ImageIcon className="h-4 w-4" />, category: "AI", group: "Image" },
-  { type: "edit-image", label: "Edit Image", icon: <Wand2 className="h-4 w-4" />, category: "AI", group: "Image" },
-  { type: "image-to-image", label: "Image to Image", icon: <Layers className="h-4 w-4" />, category: "AI", group: "Image" },
+  { type: "modify-image", label: "Modify Image", icon: <Layers className="h-4 w-4" />, category: "AI", group: "Image" },
+  { type: "upscale-image", label: "Upscale Image", icon: <ZoomIn className="h-4 w-4" />, category: "AI", group: "Image" },
+  { type: "remove-background", label: "Remove Background", icon: <Eraser className="h-4 w-4" />, category: "AI", group: "Image" },
   { type: "image-to-text", label: "Describe Image", icon: <Eye className="h-4 w-4" />, category: "AI", group: "Image" },
   // AI — Video
   { type: "image-to-video", label: "Image to Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Video" },

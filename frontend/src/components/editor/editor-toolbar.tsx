@@ -176,8 +176,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           break
 
         case "generate-image":
-        case "edit-image":
-        case "image-to-image":
+        case "modify-image":
           // Clear generated image results, keep settings
           data.generatedResults = []
           data.generatedImageUrl = undefined
@@ -186,6 +185,14 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.referenceImageUrls = undefined
           data.referenceImageOrder = undefined
           data.connectedMediaOrder = undefined
+          break
+
+        case "upscale-image":
+        case "remove-background":
+          data.generatedResults = []
+          data.generatedImageUrl = undefined
+          data.activeResultIndex = 0
+          data.executionStatus = undefined
           break
 
         case "image-to-video":
