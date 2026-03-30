@@ -1754,12 +1754,15 @@ export type ManualEditData = {
   [key: string]: unknown
   label: string
   fieldMappings: FieldMappings
+  mode?: "bypass" | "wait"
+  editorLoad?: "first" | "all"
   executionStatus?: "idle" | "running" | "awaiting-user" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
   inputVideoUrl?: string
+  inputAssets?: Array<{ nodeId: string; url: string; type: "video" | "image" | "audio"; label?: string }>
   isEditorOpen?: boolean
 }
 

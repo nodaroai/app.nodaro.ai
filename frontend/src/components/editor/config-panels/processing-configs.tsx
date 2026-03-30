@@ -992,13 +992,40 @@ export function SocialMediaFormatConfig({ data, onUpdate, sources, fieldMappings
   )
 }
 
-export function ManualEditConfig({ data }: ConfigProps<ManualEditData>) {
+export function ManualEditConfig({ data, onUpdate }: ConfigProps<ManualEditData>) {
   const status = data.executionStatus ?? "idle"
+  const mode = data.mode ?? "bypass"
+  const editorLoad = data.editorLoad ?? "first"
+
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-muted-foreground">
-        Pauses the workflow so you can manually edit the video in a browser-based editor. The edited video is sent back to continue the pipeline.
-      </p>
+      <div>
+        <Label>Run Mode</Label>
+        <Select value={mode} onValueChange={(v) => onUpdate({ mode: v as "bypass" | "wait" })}>
+          <SelectTrigger aria-label="Run Mode"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="bypass">Bypass (pass through)</SelectItem>
+            <SelectItem value="wait">Wait for Edit</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground mt-1">
+          {mode === "bypass" ? "Passes input through during workflow run. Open editor manually anytime." : "Pauses workflow until you finish editing in FreeCut."}
+        </p>
+      </div>
+
+      <div>
+        <Label>Editor Load</Label>
+        <Select value={editorLoad} onValueChange={(v) => onUpdate({ editorLoad: v as "first" | "all" })}>
+          <SelectTrigger aria-label="Editor Load"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="first">First asset to timeline</SelectItem>
+            <SelectItem value="all">All assets to timeline</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground mt-1">
+          {editorLoad === "first" ? "First video on timeline, others in asset library." : "All assets loaded to timeline on open."}
+        </p>
+      </div>
 
       {status === "awaiting-user" && (
         <div className="flex items-center gap-2 rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2">
@@ -1007,17 +1034,8 @@ export function ManualEditConfig({ data }: ConfigProps<ManualEditData>) {
         </div>
       )}
 
-      {data.inputVideoUrl && (
-        <div>
-          <Label>Input Video</Label>
-          <p className="text-[10px] text-muted-foreground truncate" title={data.inputVideoUrl}>
-            {data.inputVideoUrl}
-          </p>
-        </div>
-      )}
-
       <p className="text-[10px] text-muted-foreground">
-        0 credits — no AI processing. Click "Open Editor" on the node when prompted during execution.
+        0 credits — connect videos, images, and audio. Open FreeCut to edit anytime.
       </p>
     </div>
   )

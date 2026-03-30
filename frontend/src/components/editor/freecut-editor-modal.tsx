@@ -10,11 +10,14 @@ const FREECUT_ORIGIN = new URL(FREECUT_URL).origin
 interface FreeCutEditorModalProps {
   readonly videoUrl: string
   readonly freecutProjectUrl?: string
+  readonly assets?: Array<{ nodeId: string; url: string; type: "video" | "image" | "audio"; label?: string }>
   readonly onExportComplete: (videoBlob: Blob, projectJson?: unknown) => Promise<void>
   readonly onClose: () => void
+  readonly onImportRequest?: (accept: string, multiple: boolean) => void
+  readonly sendImportFilesRef?: React.MutableRefObject<((files: Array<{ name: string; type: string; size: number; buffer: ArrayBuffer }>) => void) | null>
 }
 
-export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, onExportComplete, onClose }: FreeCutEditorModalProps) {
+export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, assets, onExportComplete, onClose, onImportRequest, sendImportFilesRef }: FreeCutEditorModalProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [iframeLoaded, setIframeLoaded] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "done">("idle")
@@ -49,6 +52,51 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, onExportComple
     [videoUrl, freecutProjectUrl],
   )
 
+  const sendAssetsToFreeCut = useCallback(
+    async (iframe: HTMLIFrameElement, assetsToSend: NonNullable<typeof assets>) => {
+      if (!assetsToSend.length) return
+      const files = await Promise.all(
+        assetsToSend.map(async (asset) => {
+          const buffer = await fetch(asset.url).then(r => r.arrayBuffer())
+          const ext = asset.type === "video" ? "mp4" : asset.type === "audio" ? "mp3" : "png"
+          const mime = asset.type === "video" ? "video/mp4" : asset.type === "audio" ? "audio/mpeg" : "image/png"
+          return {
+            name: `${asset.label ?? asset.nodeId}.${ext}`,
+            type: mime,
+            size: buffer.byteLength,
+            buffer,
+          }
+        }),
+      )
+      const buffers = files.map(f => f.buffer)
+      iframe.contentWindow!.postMessage(
+        { type: "NODARO_IMPORT_FILES", payload: { files } },
+        FREECUT_ORIGIN,
+        buffers,
+      )
+    },
+    [],
+  )
+
+  const sendImportFiles = useCallback(
+    (files: Array<{ name: string; type: string; size: number; buffer: ArrayBuffer }>) => {
+      const iframe = iframeRef.current
+      if (!iframe?.contentWindow) return
+      const buffers = files.map(f => f.buffer)
+      iframe.contentWindow.postMessage(
+        { type: "NODARO_IMPORT_FILES", payload: { files } },
+        FREECUT_ORIGIN,
+        buffers,
+      )
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (sendImportFilesRef) sendImportFilesRef.current = sendImportFiles
+    return () => { if (sendImportFilesRef) sendImportFilesRef.current = null }
+  }, [sendImportFiles, sendImportFilesRef])
+
   const handleMessage = useCallback(
     (event: MessageEvent) => {
       if (event.origin !== FREECUT_ORIGIN) return
@@ -58,7 +106,15 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, onExportComple
           sentVideoRef.current = true
           const iframe = iframeRef.current
           if (iframe?.contentWindow) {
-            sendVideoToFreeCut(iframe, true).catch(() => {
+            sendVideoToFreeCut(iframe, true).then(() => {
+              // Auto-import remaining connected assets to FreeCut's asset library
+              if (assets && assets.length > 0) {
+                const remaining = assets.filter(a => a.url !== videoUrl)
+                if (remaining.length > 0) {
+                  sendAssetsToFreeCut(iframe, remaining)
+                }
+              }
+            }).catch(() => {
               // Fallback: send URL only
               iframe.contentWindow!.postMessage(
                 { type: "NODARO_LOAD_VIDEO", payload: { videoUrl } },
@@ -86,6 +142,10 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, onExportComple
 
       if (event.data?.type === "FREECUT_REQUEST_IMPORT") {
         const { accept, multiple } = event.data.payload
+        if (onImportRequest) {
+          onImportRequest(accept || "video/*,audio/*,image/*", multiple ?? true)
+          return
+        }
         const input = document.createElement("input")
         input.type = "file"
         input.accept = accept || "video/*,audio/*,image/*"
@@ -111,7 +171,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, onExportComple
         input.click()
       }
     },
-    [onExportComplete, onClose, videoUrl, sendVideoToFreeCut],
+    [onExportComplete, onClose, videoUrl, sendVideoToFreeCut, sendAssetsToFreeCut, assets, onImportRequest],
   )
 
   useEffect(() => {

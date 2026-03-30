@@ -121,7 +121,7 @@ function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { varian
           {typeLabel}
         </span>
         <span
-          className="text-[10px] font-medium px-1.5 py-0.5 rounded-full truncate max-w-[140px]"
+          className="text-[10px] font-medium px-1.5 py-0.5 rounded-full truncate max-w-[200px]"
           style={{ backgroundColor: nodeData.channelColor + "20", color: nodeData.channelColor }}
         >
           {badgeText}
