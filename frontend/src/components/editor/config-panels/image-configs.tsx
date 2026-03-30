@@ -33,6 +33,7 @@ import type {
 } from "@/types/nodes"
 import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, IMAGE_EDIT_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
+import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { ReferenceImageList } from "./reference-image-list"
@@ -193,6 +194,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.provider} />
 
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="generate-image" currentPrompt={data.prompt || ""} provider={data.provider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
@@ -558,6 +560,7 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.provider} />
       {isNanoBananaEdit && (
         <>
           <MappableField field="prompt" label="Edit Instructions" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="edit-image" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
@@ -936,6 +939,7 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.provider} />
       <MappableField field="prompt" label="Transformation Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-image" currentPrompt={data.prompt || ""} provider={data.provider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
           rows={3}

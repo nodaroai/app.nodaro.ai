@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useCallback, useEffect } from "react"
+import { useMemo, useCallback } from "react"
 import { Plus, Trash2, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
@@ -52,7 +52,9 @@ import type {
 } from "@/types/nodes"
 import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
-import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits"
+import { ModelSelectOption } from "./model-select-option"
+import { ModelDescriptionHint } from "./model-description-hint"
+import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
 import { REPLICATE_LIP_SYNC_PROVIDERS } from "@nodaro-shared/model-constants"
 import type { ConfigProps } from "./types"
 
@@ -86,12 +88,13 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
         >
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="elevenlabs-multilingual">ElevenLabs Multilingual v2</SelectItem>
-            <SelectItem value="elevenlabs-turbo">ElevenLabs Turbo v2.5 (fast)</SelectItem>
-            <SelectItem value="elevenlabs-v3">ElevenLabs v3 (recommended)</SelectItem>
+            {TTS_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")} />
       {textSource === "direct" && (
         <div>
           <Label>Text</Label>
@@ -265,14 +268,13 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoGenerateData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="V4">Suno V4</SelectItem>
-            <SelectItem value="V4_5">Suno V4.5</SelectItem>
-            <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
-            <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
-            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            {SUNO_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.model} />
       <MappableField field="title" label="Title (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input value={data.title ?? ""} maxLength={200} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Song title" />
       </MappableField>
@@ -386,14 +388,13 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoCoverData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="V4">Suno V4</SelectItem>
-            <SelectItem value="V4_5">Suno V4.5</SelectItem>
-            <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
-            <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
-            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            {SUNO_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.model} />
       <MappableField field="title" label="Title (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input value={data.title ?? ""} maxLength={200} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Cover title" />
       </MappableField>
@@ -481,14 +482,13 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoExtendData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="V4">Suno V4</SelectItem>
-            <SelectItem value="V4_5">Suno V4.5</SelectItem>
-            <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
-            <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
-            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            {SUNO_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.model} />
       <MappableField field="title" label="Title (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input value={data.title ?? ""} maxLength={80} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Extended track title" />
       </MappableField>
@@ -618,14 +618,13 @@ export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMap
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoMashupData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="V4">Suno V4</SelectItem>
-            <SelectItem value="V4_5">Suno V4.5</SelectItem>
-            <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
-            <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
-            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            {SUNO_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.model} />
       <div className="flex items-center gap-2">
         <Checkbox id="mashup-custom-mode" checked={data.customMode} onCheckedChange={(v) => onUpdate({ customMode: !!v })} />
         <Label htmlFor="mashup-custom-mode" className="text-xs">Custom Mode</Label>
@@ -704,11 +703,13 @@ export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappin
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoAddInstrumentalData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
-            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            {SUNO_MODELS.filter(m => m.value === "V4_5PLUS" || m.value === "V5").map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.model} />
     </div>
   )
 }
@@ -721,11 +722,13 @@ export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, on
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoAddVocalsData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
-            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            {SUNO_MODELS.filter(m => m.value === "V4_5PLUS" || m.value === "V5").map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.model} />
     </div>
   )
 }
@@ -747,14 +750,13 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoUploadExtendData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="V4">Suno V4</SelectItem>
-            <SelectItem value="V4_5">Suno V4.5</SelectItem>
-            <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
-            <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
-            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            {SUNO_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={data.model} />
       <MappableField field="prompt" label="Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the extension..." maxLength={3000} customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
@@ -855,13 +857,6 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
 }
 
 export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<LipSyncData>) {
-  useEffect(() => {
-    prefetchModelCredits([
-      "kling-avatar", "kling-avatar-pro", "infinitalk", "infinitalk:480p",
-      "latentsync", "wav2lip", "video-retalking", "sadtalker",
-    ])
-  }, [])
-
   const provider = data.provider || "kling-avatar"
   const isKie = !REPLICATE_LIP_SYNC_PROVIDERS.has(provider as never)
 
@@ -871,16 +866,13 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         <Select value={provider} onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"] })}>
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="infinitalk">{`Infinitalk (${getCachedCredits("infinitalk:480p") ?? 11}–${getCachedCredits("infinitalk") ?? 42} CR)`}</SelectItem>
-            <SelectItem value="kling-avatar">{`Kling Avatar (${getCachedCredits("kling-avatar") ?? 28} CR)`}</SelectItem>
-            <SelectItem value="kling-avatar-pro">{`Kling Avatar Pro (${getCachedCredits("kling-avatar-pro") ?? 56} CR)`}</SelectItem>
-            <SelectItem value="latentsync">{`LatentSync (${getCachedCredits("latentsync") ?? 5} CR)`}</SelectItem>
-            <SelectItem value="sadtalker">{`SadTalker (${getCachedCredits("sadtalker") ?? 9} CR)`}</SelectItem>
-            <SelectItem value="video-retalking">{`Video-Retalking (${getCachedCredits("video-retalking") ?? 20} CR)`}</SelectItem>
-            <SelectItem value="wav2lip">{`Wav2Lip (${getCachedCredits("wav2lip") ?? 1} CR)`}</SelectItem>
+            {LIP_SYNC_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
+      <ModelDescriptionHint modelId={provider} />
 
       {/* Resolution — KIE providers only */}
       {isKie && (

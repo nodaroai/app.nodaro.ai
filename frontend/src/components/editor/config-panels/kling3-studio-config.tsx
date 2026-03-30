@@ -21,6 +21,7 @@ import type { ImageToVideoData } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, PROVIDERS_WITH_END_FRAME, VIDEO_RATIOS } from "./model-options"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { ModelSelectOption } from "./model-select-option"
+import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 
@@ -308,6 +309,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                   </SelectContent>
                 </Select>
               </MappableField>
+              <ModelDescriptionHint modelId={data.provider} />
             </div>
           </div>
 
