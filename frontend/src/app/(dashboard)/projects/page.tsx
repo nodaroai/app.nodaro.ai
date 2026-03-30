@@ -268,7 +268,7 @@ export default function ProjectsPage() {
   // Featured apps for the Apps tab — fetch max to allow admin limit to work without refetch
   const { data: featuredAppsData, isLoading: featuredAppsLoading } = useQuery({
     queryKey: ["featured-apps"],
-    queryFn: () => browseApps({ sort: "popular", limit: 50 }),
+    queryFn: () => browseApps({ sort: "popular", limit: 50, publishType: "app" }),
     staleTime: 60_000,
     enabled: activeTab === "apps",
   })
