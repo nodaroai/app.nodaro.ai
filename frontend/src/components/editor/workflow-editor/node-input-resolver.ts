@@ -11,7 +11,7 @@ import type {
   LoopNodeData,
 } from "@/types/nodes";
 import { loopColInputHandle } from "@/types/nodes";
-import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
+import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
 import { applyRange, resolveIndex } from "@nodaro-shared/edge-range";
 import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
 
@@ -427,6 +427,11 @@ export function resolveNodeInputs(
     let src = nodes.find((n) => n.id === srcEdge.source);
     if (!src) continue;
 
+    // Teleport transparency: resolve through the chain to the original source
+    if (src.type === "teleport-send" || src.type === "teleport-receive") {
+      src = resolveTeleportOrigin(src, nodes, edges)
+    }
+
     // Check for item:N/last/all output mode on nodes with fan-out list results
     // or accumulated generatedResults from multiple manual runs
     const edgeMode = (srcEdge.data as Record<string, unknown> | undefined)
@@ -661,60 +666,6 @@ export function resolveNodeInputs(
         } else {
           inputs.audioUrl = output
         }
-      } else {
-        inputs.prompt = output
-      }
-    } else if (src.type === "teleport-send" || src.type === "teleport-receive") {
-      // Follow chain to original source and re-route as if directly connected
-      const origin = resolveTeleportOrigin(src, nodes, edges)
-      if (origin.type && origin.type !== src.type) {
-        // Substitute origin as the source so existing routing logic handles it
-        src = origin
-        // Fall through — the next iteration won't happen, but we need to
-        // re-enter the routing switch. Use goto-equivalent: re-check src.type below.
-      }
-      // Route by origin type (or fallback to URL detection)
-      if (IMAGE_SOURCE_TYPES.has(src.type ?? "")) {
-        const nt = node.type as string
-        if (nt === "generate-image" || nt === "edit-image" || nt === "image-to-image" || nt === "modify-image") {
-          inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
-        } else if (node.type === "manual-edit") {
-          appendManualEditAsset(inputs, src.id, output, "image")
-        } else {
-          inputs.imageUrl = output
-        }
-      } else if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(src.type ?? "")) {
-        if (node.type === "combine-videos") {
-          inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
-          inputs.videoUrlsWithSourceIds = [
-            ...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []),
-            { nodeId: src.id, url: output },
-          ]
-        } else if (node.type === "manual-edit") {
-          appendManualEditAsset(inputs, src.id, output, "video")
-        } else {
-          inputs.videoUrl = output
-        }
-      } else if (AUDIO_SOURCE_TYPES.has(src.type ?? "")) {
-        if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
-          inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
-          inputs.audioUrlsWithSourceIds = [
-            ...(inputs.audioUrlsWithSourceIds ?? []),
-            { nodeId: src.id, url: output },
-          ]
-        } else if (node.type === "merge-video-audio") {
-          inputs.audioSources = [...(inputs.audioSources ?? []), { url: output, sourceNodeId: src.id }]
-        } else if (node.type === "manual-edit") {
-          appendManualEditAsset(inputs, src.id, output, "audio")
-        } else {
-          inputs.audioUrl = output
-        }
-      } else if (IMAGE_URL_RE.test(output)) {
-        inputs.imageUrl = output
-      } else if (VIDEO_URL_RE.test(output)) {
-        inputs.videoUrl = output
-      } else if (AUDIO_URL_RE.test(output)) {
-        inputs.audioUrl = output
       } else {
         inputs.prompt = output
       }
