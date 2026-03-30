@@ -347,7 +347,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     if (sourceHandle === "audio-out") return audioUrls[0];
     return videoUrls[0] ?? audioUrls[0];
   }
-  if (type === "trim-audio" || type === "mix-audio") {
+  if (type === "trim-audio" || type === "mix-audio" || type === "combine-audio") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
     const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
@@ -621,6 +621,7 @@ export const AUDIO_SOURCE_TYPES = new Set([
   "suno-upload-extend",
   "trim-audio",
   "mix-audio",
+  "combine-audio",
   "adjust-volume",
   "reference-audio",
   "voice-changer",

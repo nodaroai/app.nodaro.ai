@@ -74,6 +74,7 @@ import {
   MessageSquare,
   ZoomIn,
   Eraser,
+  ListMusic,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -652,6 +653,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "mix-audio",
     label: "Mix Audio",
     icon: <Music className="h-4 w-4" />,
+    category: "Processing",
+    group: "Audio",
+  },
+  {
+    type: "combine-audio",
+    label: "Combine Audio",
+    icon: <ListMusic className="h-4 w-4" />,
     category: "Processing",
     group: "Audio",
   },

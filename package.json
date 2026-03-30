@@ -8,5 +8,8 @@
     "start": "cd frontend && npm run start",
     "test": "cd frontend && npm test && cd ../backend && npm test",
     "test:coverage": "cd frontend && npm run test:coverage && cd ../backend && npm run test:coverage"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.58.2"
   }
 }

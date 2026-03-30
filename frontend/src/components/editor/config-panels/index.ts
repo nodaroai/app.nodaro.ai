@@ -6,6 +6,7 @@ export { ImageToVideoConfig, VideoToVideoConfig, MotionTransferConfig, VideoUpsc
 export { TextToSpeechConfig, TextToAudioConfig, AudioIsolationConfig, TextToDialogueConfig, VoiceChangerConfig, DubbingConfig, VoiceRemixConfig, VoiceDesignConfig, ForcedAlignmentConfig, SunoGenerateConfig, SunoCoverConfig, SunoExtendConfig, SunoLyricsConfig, SunoSeparateConfig, SunoMusicVideoConfig, SunoMashupConfig, SunoReplaceSectionConfig, SunoStyleBoostConfig, SunoAddInstrumentalConfig, SunoAddVocalsConfig, SunoConvertWavConfig, SunoUploadExtendConfig, TranscribeConfig, LipSyncConfig } from "./audio-configs"
 export { GenerateMusicConfig } from "./music-config"
 export { CombineVideosConfig, AddCaptionsConfig, ResizeVideoConfig, SocialMediaFormatConfig, TrimAudioConfig, SplitMediaConfig, MixAudioConfig, AdjustVolumeConfig, TrimVideoConfig, ExtractFrameConfig, SpeedRampConfig, LoopVideoConfig, FadeVideoConfig, TranscodeVideoConfig, ManualEditConfig } from "./processing-configs"
+export { CombineAudioConfig } from "./combine-audio-config"
 export { VideoComposerConfig, AfterEffectsConfig, LottieOverlayConfig, ThreeDTitleConfig, MotionGraphicsConfig, CompositeConfig, RenderVideoConfig } from "./composition-configs"
 export { MergeVideoAudioConfig } from "./merge-audio-config"
 export { CharacterConfig, FaceConfig, ObjectConfig, LocationConfig } from "./entity-configs"

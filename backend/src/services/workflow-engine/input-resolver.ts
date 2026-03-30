@@ -469,7 +469,7 @@ function routeAudioOutput(
   targetType: string,
   sourceNodeId: string,
 ): void {
-  if (targetType === "mix-audio") {
+  if (targetType === "mix-audio" || targetType === "combine-audio") {
     inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
     inputs.audioUrlsWithSourceIds = [...(inputs.audioUrlsWithSourceIds ?? []), { nodeId: sourceNodeId, url: output }]
   } else if (targetType === "merge-video-audio") {
@@ -537,7 +537,7 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
 // Social-media-format may produce images (handled in routeOutput)
 
 /** Target node types that accumulate inputs into arrays (videoUrls, audioUrls). */
-const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio"])
+const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combine-audio"])
 
 const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "location"])
 
@@ -583,6 +583,7 @@ const AUDIO_OUTPUT_NODE_TYPES = new Set([
   "suno-upload-extend",
   "trim-audio",
   "mix-audio",
+  "combine-audio",
   "voice-changer",
   "dubbing",
   "voice-remix",

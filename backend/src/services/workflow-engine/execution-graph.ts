@@ -286,6 +286,7 @@ export const AUDIO_SOURCE_TYPES = new Set([
   "suno-upload-extend",
   "trim-audio",
   "mix-audio",
+  "combine-audio",
   "adjust-volume",
   "reference-audio",
   "audio-isolation",
