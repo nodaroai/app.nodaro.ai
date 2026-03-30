@@ -396,13 +396,6 @@ describe("buildPayload", () => {
       expect(result.payload.model).toBe("fast")
     })
 
-    it("sora-character", () => {
-      const n = node("n1", "sora-character", { mode: "standard", characterPrompt: "warrior" })
-      const result = buildPayload(n, jobId, {})
-      expect(result.jobName).toBe("sora-character")
-      expect(result.modelIdentifier).toBe("sora-character")
-    })
-
     it("transcribe", () => {
       const n = node("n1", "transcribe", { provider: "elevenlabs-stt" })
       const inputs: ResolvedInputs = { audioUrl: "https://audio.mp3" }

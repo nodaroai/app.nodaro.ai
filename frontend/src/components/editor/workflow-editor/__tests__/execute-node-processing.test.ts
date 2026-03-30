@@ -51,7 +51,6 @@ const mockAdjustVolumeApi = vi.fn()
 const mockAddCaptionsApi = vi.fn()
 const mockMixAudioApi = vi.fn()
 const mockSpeechToVideoApi = vi.fn()
-const mockSoraStoryboardApi = vi.fn()
 let mockNodes: any[] = []
 let mockEdges: any[] = []
 let mockCharacterDefinitions: any[] = []
@@ -134,7 +133,6 @@ vi.mock("@/lib/api", () => ({
   addCaptionsApi: (...args: unknown[]) => mockAddCaptionsApi(...args),
   mixAudioApi: (...args: unknown[]) => mockMixAudioApi(...args),
   speechToVideoApi: (...args: unknown[]) => mockSpeechToVideoApi(...args),
-  soraStoryboardApi: (...args: unknown[]) => mockSoraStoryboardApi(...args),
   combineVideos: vi.fn(),
   editImage: vi.fn(),
   imageToImage: vi.fn(),
@@ -1282,62 +1280,6 @@ describe("speech-to-video", () => {
       inferenceSteps: undefined,
       guidanceScale: undefined,
       shift: undefined,
-      userId: "u1",
-    })
-  })
-})
-
-// ---------------------------------------------------------------------------
-// sora-storyboard
-// ---------------------------------------------------------------------------
-
-describe("sora-storyboard", () => {
-  it("rejects when no scene descriptions", async () => {
-    mockResolveNodeInputs.mockReturnValue({})
-    const promise = executeNode(
-      makeNode("sora-storyboard", { shots: [{ scene: "", duration: 5 }] }),
-      makeCtx(),
-    )
-    promise.catch(() => {})
-    await expect(promise).rejects.toThrow("No scene descriptions")
-    expect(mockToastError).toHaveBeenCalled()
-  })
-
-  it("calls soraStoryboardApi with correct args", async () => {
-    mockResolveNodeInputs.mockReturnValue({
-      imageUrl: "http://ref.png",
-    })
-    mockSoraStoryboardApi.mockResolvedValue({ jobId: "j1" })
-    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
-    await executeNode(
-      makeNode("sora-storyboard", {
-        shots: [
-          { scene: "A sunset over ocean", duration: 5 },
-          { scene: "A mountain view", duration: 3 },
-        ],
-        nFrames: "20",
-        aspectRatio: "landscape",
-      }),
-      makeCtx(),
-    )
-    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
-      "n1",
-      expect.any(Function),
-      "generatedVideoUrl",
-      "Storyboard",
-      expect.anything(),
-      undefined,
-    )
-    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
-    await apiCallFn()
-    expect(mockSoraStoryboardApi).toHaveBeenCalledWith({
-      shots: [
-        { scene: "A sunset over ocean", duration: 5 },
-        { scene: "A mountain view", duration: 3 },
-      ],
-      nFrames: "20",
-      imageUrls: ["http://ref.png"],
-      aspectRatio: "landscape",
       userId: "u1",
     })
   })

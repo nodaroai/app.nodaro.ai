@@ -103,7 +103,6 @@ describe("detectCategory", () => {
     expect(detectCategory("veo3")).toBe("video")
     expect(detectCategory("kling-3.0")).toBe("video")
     expect(detectCategory("minimax")).toBe("video")
-    expect(detectCategory("sora2-pro")).toBe("video")
     expect(detectCategory("runway")).toBe("video")
   })
 
@@ -191,19 +190,9 @@ describe("MODEL_REFERENCE", () => {
     expect(MODEL_REFERENCE["topaz-image-upscale"].provider).toBeTruthy()
   })
 
-  it("has sora-watermark-remove entry", () => {
-    expect(MODEL_REFERENCE["sora-watermark-remove"]).toBeDefined()
-    expect(MODEL_REFERENCE["sora-watermark-remove"].provider).toBeTruthy()
-  })
-
   it("has speech-to-video entry", () => {
     expect(MODEL_REFERENCE["speech-to-video"]).toBeDefined()
     expect(MODEL_REFERENCE["speech-to-video"].provider).toBeTruthy()
-  })
-
-  it("has sora-storyboard entry", () => {
-    expect(MODEL_REFERENCE["sora-storyboard"]).toBeDefined()
-    expect(MODEL_REFERENCE["sora-storyboard"].provider).toBeTruthy()
   })
 
   it("has suno-mashup entry", () => {
