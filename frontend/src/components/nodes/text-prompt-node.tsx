@@ -41,10 +41,13 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
 
   useEffect(() => {
     const storeText = nodeData.text ?? ""
-    if (storeText !== storeTextRef.current) {
+    // Only sync from store if the change came from outside (not from our own debounce)
+    if (storeText !== storeTextRef.current && storeText !== localTextRef.current) {
       storeTextRef.current = storeText
       localTextRef.current = storeText
       setLocalText(storeText)
+    } else {
+      storeTextRef.current = storeText
     }
   }, [nodeData.text])
 
