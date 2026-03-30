@@ -84,9 +84,9 @@ function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { varian
 
   return (
     <div
-      className={`relative flex items-center rounded-full border-2 px-3 py-1 transition-shadow ${
+      className={`relative flex items-center rounded-full border-2 py-1 transition-shadow ${
         selected ? "shadow-lg" : ""
-      }`}
+      } ${variant === "send" ? "pl-5 pr-3" : "pl-3 pr-5"}`}
       style={{
         borderColor: nodeData.channelColor,
         backgroundColor: "var(--card)",
@@ -129,7 +129,7 @@ function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { varian
           {typeLabel}
         </span>
         <span
-          className="text-[10px] font-medium px-1.5 py-0.5 rounded-full truncate max-w-[200px]"
+          className="text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap"
           style={{ backgroundColor: nodeData.channelColor + "20", color: nodeData.channelColor }}
         >
           {badgeText}

@@ -939,6 +939,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       return true
     })
 
+    // Strip fixed width from teleport nodes so they auto-size
+    migratedNodes = migratedNodes.map((n) =>
+      (n.type === "teleport-send" || n.type === "teleport-receive") && n.width
+        ? { ...n, width: undefined }
+        : n
+    )
+
     set((state) => ({
       workflowId: id,
       workflowName: name,
