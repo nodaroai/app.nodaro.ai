@@ -8,7 +8,7 @@ interface MobileTabBarProps {
   showRunsTab: boolean
   hasUnseenOutputs: boolean
   runCount: number
-  hidden: boolean
+  hidden?: boolean
 }
 
 export function MobileTabBar({
