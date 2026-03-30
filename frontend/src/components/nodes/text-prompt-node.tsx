@@ -17,15 +17,21 @@ import type { TextPromptData } from "@/types/nodes"
 function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as TextPromptData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const edges = useWorkflowStore((s) => s.edges)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const isEditing = useWorkflowStore((s) => s.selectedNodeId === id)
   const [isHovered, setIsHovered] = useState(false)
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
 
-  const nodeRefs = useMemo(() => getUpstreamNodes(id, nodes, edges), [id, nodes, edges])
+  // Only subscribe to full nodes/edges for nodeRefs + downstream credits,
+  // but memoize the nodeRefs result by serializing to avoid unnecessary TagTextarea re-renders
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const edges = useWorkflowStore((s) => s.edges)
+  const nodeRefsRaw = useMemo(() => getUpstreamNodes(id, nodes, edges), [id, nodes, edges])
+  const nodeRefsKey = useMemo(() => nodeRefsRaw.map(r => r.id).join(","), [nodeRefsRaw])
+  // Stable reference: only changes when the actual upstream node IDs change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const nodeRefs = useMemo(() => nodeRefsRaw, [nodeRefsKey])
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const color = nodeData.color ?? "#0f172a"
@@ -41,10 +47,13 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
 
   useEffect(() => {
     const storeText = nodeData.text ?? ""
-    if (storeText !== storeTextRef.current) {
+    // Only sync from store if the change came from outside (not from our own debounce)
+    if (storeText !== storeTextRef.current && storeText !== localTextRef.current) {
       storeTextRef.current = storeText
       localTextRef.current = storeText
       setLocalText(storeText)
+    } else {
+      storeTextRef.current = storeText
     }
   }, [nodeData.text])
 
