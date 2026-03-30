@@ -46,7 +46,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase"
-import type { WorkflowNode, WorkflowEdge, SceneNodeType } from "@/types/nodes"
+import { TELEPORTER_PAN_EVENT, type WorkflowNode, type WorkflowEdge, type SceneNodeType } from "@/types/nodes"
 import type { ConnectionContext } from "@/lib/node-compatibility"
 import type { LibraryAsset } from "@/lib/api"
 
@@ -1215,8 +1215,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         )
       }
     }
-    window.addEventListener("teleporter-pan-to", handler)
-    return () => window.removeEventListener("teleporter-pan-to", handler)
+    window.addEventListener(TELEPORTER_PAN_EVENT, handler)
+    return () => window.removeEventListener(TELEPORTER_PAN_EVENT, handler)
   }, [setCenter])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
