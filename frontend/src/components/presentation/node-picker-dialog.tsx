@@ -83,6 +83,7 @@ function getNodeDef(nodeType: string) {
 /** Type badge for exposable field types. */
 const FIELD_TYPE_LABELS: Record<ExposableField["type"], string> = {
   select: "Select",
+  "aspect-ratio": "Aspect Ratio",
   slider: "Slider",
   toggle: "Toggle",
   text: "Text",

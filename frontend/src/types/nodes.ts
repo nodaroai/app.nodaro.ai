@@ -2731,7 +2731,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
         ],
       },
       {
-        key: "aspectRatio", label: "Aspect Ratio", type: "select" as const,
+        key: "aspectRatio", label: "Aspect Ratio", type: "aspect-ratio" as const,
         options: [
           { value: "1:1", label: "1:1 (Square)" },
           { value: "16:9", label: "16:9 (Landscape)" },
@@ -2892,7 +2892,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
         ],
       },
       {
-        key: "aspectRatio", label: "Aspect Ratio", type: "select" as const,
+        key: "aspectRatio", label: "Aspect Ratio", type: "aspect-ratio" as const,
         options: [
           { value: "16:9", label: "16:9 (Landscape)" },
           { value: "9:16", label: "9:16 (Portrait)" },

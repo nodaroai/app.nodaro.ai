@@ -316,6 +316,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const outputNodes = useMemo(() => getOutputNodes(nodes, edges, true), [nodes, edges])
   const orderedInputNodes = useMemo(() => orderNodesByIds(inputNodes, settings.inputOrder), [inputNodes, settings.inputOrder])
   const orderedOutputNodes = useMemo(() => orderNodesByIds(outputNodes, settings.outputOrder), [outputNodes, settings.outputOrder])
+  const inputNodeIdSet = useMemo(() => new Set(inputNodes.map((n) => n.id)), [inputNodes])
 
   // Filter hidden output nodes (reveal toggle shows them temporarily)
   const visibleOutputNodes = useMemo(
@@ -742,8 +743,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         if (url || text) return { url, text }
       }
       // Check input values (upload nodes in fullscreen store URLs here)
-      const inputUrl = presInputValues[nodeId]?.url as string | undefined
-      if (inputUrl) return { url: inputUrl, text: undefined }
+      if (inputNodeIdSet.has(nodeId)) {
+        const inputUrl = presInputValues[nodeId]?.url as string | undefined
+        if (inputUrl) return { url: inputUrl, text: undefined }
+      }
       // Loop/table node: user-edited rows are inputs (always shown), but snapshot rows respect suppressOutputFallback
       const node = nodeMap.get(nodeId)
       if (node?.type === "loop") {
@@ -758,7 +761,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       if (!node) return { url: undefined, text: undefined }
       return getNodeResultWithInputFallback(node)
     },
-    [presNodeStates, presInputValues, nodeMap, suppressOutputFallback],
+    [presNodeStates, presInputValues, nodeMap, suppressOutputFallback, inputNodeIdSet],
   )
 
   const getResult = useCallback(
