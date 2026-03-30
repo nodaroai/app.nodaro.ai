@@ -57,7 +57,8 @@ import { handleGenerateSceneImage as generateSceneImage, handleExpandStoryboard 
 import { handleGenerateCharacterAsset, handleGenerateObjectAsset, handleGenerateLocationAsset } from "./asset-executors";
 import { handleCreateNodesFromWriter as createNodesFromWriter, handleRunAllWriterImageNodes as runAllWriterImageNodes } from "./ai-writer-handlers";
 import { resolveManualEdit } from "./execute-node";
-import { collectMediaAssets } from "./execution-graph";
+import { extractNodeOutput } from "./execution-graph";
+import { getOutputType } from "@nodaro-shared/presentation-utils";
 import { FreeCutImportPicker } from "../freecut-import-picker";
 import type { ManualEditData, GeneratedResult } from "@/types/nodes";
 const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));
@@ -120,23 +121,41 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     [storeNodes],
   );
 
-  // Resolve assets from graph topology so "Open Editor" works before any workflow run
-  const freecutAssets = useMemo(() => {
-    if (!manualEditNode) return undefined;
-    const collected = collectMediaAssets(manualEditNode, storeEdges, storeNodes);
-    if (collected.length === 0) return undefined;
-    return collected.map(a => ({ nodeId: a.id, url: a.url, type: a.type, label: a.label, thumbnailUrl: a.thumbnailUrl }));
-  }, [manualEditNode, storeEdges, storeNodes]);
-
   const meData = manualEditNode?.data as ManualEditData | undefined;
+  const freecutNodeId = manualEditNode ? manualEditNode.id : freecutEdit?.nodeId;
+  const isFreeCutOpen = !!manualEditNode || !!freecutEdit;
+
+  // Collect all media assets from every node in the workflow for the import picker
+  const allWorkflowAssets = useMemo(() => {
+    if (!isFreeCutOpen) return undefined;
+    const assets: Array<{ nodeId: string; url: string; type: "video" | "image" | "audio"; label?: string; thumbnailUrl?: string }> = [];
+    for (const node of storeNodes) {
+      if (!node.type) continue;
+      const outputType = getOutputType(node.type);
+      if (outputType !== "video" && outputType !== "image" && outputType !== "audio") continue;
+      const url = extractNodeOutput(node);
+      if (!url) continue;
+      const srcData = node.data as Record<string, unknown>;
+      const label = (srcData.label as string) ?? node.type;
+      let thumbnailUrl: string | undefined;
+      if (outputType === "image") {
+        thumbnailUrl = url;
+      } else {
+        const results = (srcData.generatedResults as Array<{ thumbnailUrl?: string }> | undefined) ?? [];
+        const activeIdx = (srcData.activeResultIndex as number | undefined) ?? 0;
+        thumbnailUrl = results[activeIdx]?.thumbnailUrl ?? (srcData.thumbnailUrl as string | undefined);
+      }
+      assets.push({ nodeId: node.id, url, type: outputType, label, thumbnailUrl });
+    }
+    return assets.length > 0 ? assets : undefined;
+  }, [isFreeCutOpen, storeNodes]);
+
   const freecutVideoUrl = manualEditNode
-    ? (freecutAssets?.find(a => a.type === "video")?.url ?? meData?.inputVideoUrl ?? "")
+    ? (allWorkflowAssets?.find(a => a.type === "video")?.url ?? meData?.inputVideoUrl ?? "")
     : (freecutEdit?.videoUrl ?? "");
   const freecutProjectUrl = manualEditNode
     ? (meData?.generatedResults?.[meData?.activeResultIndex ?? 0]?.freecutProjectUrl)
     : freecutEdit?.freecutProjectUrl;
-  const freecutNodeId = manualEditNode ? manualEditNode.id : freecutEdit?.nodeId;
-  const isFreeCutOpen = !!manualEditNode || !!freecutEdit;
 
   // ---------------------------------------------------------------------------
   // Filerobot image editor modal (universal edit from any image node)
@@ -1041,7 +1060,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
       {importPickerOpen && (
         <FreeCutImportPicker
-          workflowAssets={freecutAssets}
+          workflowAssets={allWorkflowAssets}
           accept={importPickerAccept}
           multiple={importPickerMultiple}
           onImport={handleImportFiles}
