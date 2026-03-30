@@ -148,6 +148,12 @@ export interface FrontendResolvedInputs {
   kieTaskId?: string;
   componentInputMap?: Record<string, string>;
   systemPrompt?: string;
+  inputAssets?: Array<{ nodeId: string; url: string; type: "video" | "image" | "audio" }>;
+}
+
+/** Append an asset to the manual-edit inputAssets accumulator. */
+function appendManualEditAsset(inputs: FrontendResolvedInputs, nodeId: string, url: string, type: "video" | "image" | "audio"): void {
+  inputs.inputAssets = [...(inputs.inputAssets ?? []), { nodeId, url, type }]
 }
 
 /** Route audio to suno-mashup's dual-input fields (audioUrl + audioUrl2). */
@@ -444,6 +450,14 @@ export function resolveNodeInputs(
           }
           continue;
         }
+        if (node.type === "manual-edit") {
+          for (const item of srcListResults) {
+            if (item) {
+              appendManualEditAsset(inputs, src.id, item, "video");
+            }
+          }
+          continue;
+        }
         if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
           for (const item of srcListResults) {
             if (item) {
@@ -601,6 +615,8 @@ export function resolveNodeInputs(
       if (handleType === "image") {
         if (node.type === "generate-image" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
           inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "image")
         } else {
           inputs.imageUrl = output
         }
@@ -611,6 +627,8 @@ export function resolveNodeInputs(
             ...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []),
             { nodeId: src.id, url: output },
           ]
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "video")
         } else {
           inputs.videoUrl = output
         }
@@ -623,6 +641,8 @@ export function resolveNodeInputs(
           ]
         } else if (node.type === "merge-video-audio") {
           inputs.audioSources = [...(inputs.audioSources ?? []), { url: output, sourceNodeId: src.id }]
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "audio")
         } else {
           inputs.audioUrl = output
         }
@@ -688,6 +708,8 @@ export function resolveNodeInputs(
       if (colType === "image-url") {
         if (node.type === "generate-image" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
           inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "image");
         } else {
           inputs.imageUrl = output;
         }
@@ -695,6 +717,8 @@ export function resolveNodeInputs(
         if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
           inputs.videoUrlsWithSourceIds = [...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []), { nodeId: src.id, url: output }];
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "video");
         } else {
           inputs.videoUrl = output;
         }
@@ -702,6 +726,8 @@ export function resolveNodeInputs(
         if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
           inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
           inputs.audioUrlsWithSourceIds = [...(inputs.audioUrlsWithSourceIds ?? []), { nodeId: src.id, url: output }];
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "audio");
         } else {
           inputs.audioUrl = output;
         }
@@ -714,6 +740,8 @@ export function resolveNodeInputs(
           ...(inputs.referenceImageUrls ?? []),
           output,
         ];
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "image");
       } else {
         inputs.imageUrl = output;
       }
@@ -747,6 +775,8 @@ export function resolveNodeInputs(
           }>) ?? []),
           { nodeId: src.id, url: output },
         ];
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "video");
       } else if (node.type === "merge-video-audio") {
         if (!inputs.videoUrl) {
           inputs.videoUrl = output;
@@ -771,6 +801,8 @@ export function resolveNodeInputs(
         ];
       } else if (node.type === "text-to-audio") {
         inputs.prompt = (src.data as GenerateImageData).prompt ?? "";
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "image");
       } else {
         inputs.imageUrl = output;
       }
@@ -785,6 +817,8 @@ export function resolveNodeInputs(
           ...(inputs.referenceImageUrls ?? []),
           output,
         ];
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "image");
       } else {
         inputs.imageUrl = output;
       }
@@ -799,6 +833,8 @@ export function resolveNodeInputs(
           ...(inputs.referenceImageUrls ?? []),
           output,
         ];
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "image");
       } else {
         inputs.imageUrl = output;
       }
@@ -813,6 +849,8 @@ export function resolveNodeInputs(
           ...(inputs.referenceImageUrls ?? []),
           output,
         ];
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "image");
       } else {
         inputs.imageUrl = output;
       }
@@ -826,6 +864,8 @@ export function resolveNodeInputs(
           }>) ?? []),
           { nodeId: src.id, url: output },
         ];
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "video");
       } else if (node.type === "merge-video-audio") {
         if (!inputs.videoUrl) {
           inputs.videoUrl = output;
@@ -866,6 +906,8 @@ export function resolveNodeInputs(
           ...(inputs.audioSources ?? []),
           { url: output, sourceNodeId: src.id },
         ];
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "audio");
       } else {
         inputs.audioUrl = output;
       }
@@ -903,6 +945,8 @@ export function resolveNodeInputs(
             ...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []),
             { nodeId: src.id, url: sceneVideoUrl },
           ];
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, sceneVideoUrl, "video");
         } else if (node.type === "merge-video-audio") {
           if (!inputs.videoUrl) {
             inputs.videoUrl = sceneVideoUrl;
@@ -944,6 +988,8 @@ export function resolveNodeInputs(
           ...(inputs.audioSources ?? []),
           { url: output, sourceNodeId: src.id },
         ];
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "audio");
       } else {
         inputs.audioUrl = output;
       }
@@ -965,6 +1011,8 @@ export function resolveNodeInputs(
           ...(inputs.audioSources ?? []),
           { url: output, sourceNodeId: src.id },
         ];
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "audio");
       } else {
         inputs.audioUrl = output;
       }
@@ -1026,6 +1074,8 @@ export function resolveNodeInputs(
           ...(inputs.audioSources ?? []),
           { url: output, sourceNodeId: src.id },
         ];
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "audio");
       } else {
         inputs.audioUrl = output;
       }
@@ -1130,6 +1180,8 @@ export function resolveNodeInputs(
                 ...(inputs.videoUrlsWithSourceIds ?? []),
                 { nodeId: src.id, url: output },
               ];
+            } else if (node.type === "manual-edit") {
+              appendManualEditAsset(inputs, src.id, output, "video");
             } else {
               inputs.videoUrl = output;
             }
@@ -1140,6 +1192,8 @@ export function resolveNodeInputs(
                 ...(inputs.audioUrlsWithSourceIds ?? []),
                 { nodeId: src.id, url: output },
               ];
+            } else if (node.type === "manual-edit") {
+              appendManualEditAsset(inputs, src.id, output, "audio");
             } else {
               inputs.audioUrl = output;
             }
@@ -1182,6 +1236,8 @@ export function resolveNodeInputs(
       if (mediaType === "image") {
         if (node.type === "generate-image" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
           inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "image");
         } else {
           inputs.imageUrl = output;
         }
@@ -1192,6 +1248,8 @@ export function resolveNodeInputs(
             ...(inputs.videoUrlsWithSourceIds ?? []),
             { nodeId: src.id, url: output },
           ];
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "video");
         } else if (node.type === "merge-video-audio") {
           if (!inputs.videoUrl) {
             inputs.videoUrl = output;
@@ -1216,6 +1274,8 @@ export function resolveNodeInputs(
             ...(inputs.audioUrlsWithSourceIds ?? []),
             { nodeId: src.id, url: output },
           ];
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "audio");
         } else {
           inputs.audioUrl = output;
         }

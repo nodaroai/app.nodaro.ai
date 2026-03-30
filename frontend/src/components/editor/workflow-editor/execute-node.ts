@@ -2748,17 +2748,39 @@ export function executeNode(
   }
 
   if (node.type === "manual-edit") {
+    const meData = node.data as ManualEditData;
+    const mode = meData.mode ?? "bypass";
+
+    // Collect all input assets
+    const inputAssets = (inputs.inputAssets as Array<{ nodeId: string; url: string; type: string }>) ?? [];
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
-    if (!videoUrl) {
-      toast.error(
-        `Node "${(node.data as ManualEditData).label}": no video input`,
-      );
-      return Promise.reject(new Error("No video"));
-    }
+
+    // Store assets on node for FreeCut to use
     const { updateNodeData: setNodeData } = useWorkflowStore.getState();
+    if (inputAssets.length > 0 || videoUrl) {
+      setNodeData(node.id, {
+        inputAssets: inputAssets.length > 0 ? inputAssets : videoUrl ? [{ nodeId: "upstream", url: videoUrl, type: "video" as const }] : [],
+        inputVideoUrl: videoUrl ?? inputAssets.find(a => a.type === "video")?.url,
+      });
+    }
+
+    if (mode === "bypass") {
+      const outputUrl = videoUrl ?? inputAssets.find(a => a.type === "video")?.url ?? inputAssets[0]?.url;
+      if (!outputUrl) {
+        toast.error(`Node "${meData.label}": no input assets connected`);
+        return Promise.reject(new Error("No input"));
+      }
+      setNodeData(node.id, { executionStatus: "completed", generatedVideoUrl: outputUrl });
+      return Promise.resolve(outputUrl);
+    }
+
+    // Wait mode
+    if (!videoUrl && inputAssets.length === 0) {
+      toast.error(`Node "${meData.label}": no input assets connected`);
+      return Promise.reject(new Error("No input"));
+    }
     setNodeData(node.id, {
       executionStatus: "awaiting-user",
-      inputVideoUrl: videoUrl,
       errorMessage: undefined,
     });
     guardedToast.info("Manual edit required — click 'Open Editor' on the node");

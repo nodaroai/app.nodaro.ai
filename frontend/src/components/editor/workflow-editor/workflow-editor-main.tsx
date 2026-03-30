@@ -57,6 +57,7 @@ import { handleGenerateSceneImage as generateSceneImage, handleExpandStoryboard 
 import { handleGenerateCharacterAsset, handleGenerateObjectAsset, handleGenerateLocationAsset } from "./asset-executors";
 import { handleCreateNodesFromWriter as createNodesFromWriter, handleRunAllWriterImageNodes as runAllWriterImageNodes } from "./ai-writer-handlers";
 import { resolveManualEdit } from "./execute-node";
+import { FreeCutImportPicker } from "../freecut-import-picker";
 import type { ManualEditData, GeneratedResult } from "@/types/nodes";
 const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));
 const FilerobotEditorModal = lazy(() => import("../filerobot-editor-modal").then(m => ({ default: m.FilerobotEditorModal })));
@@ -125,6 +126,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const freecutProjectUrl = freecutEdit?.freecutProjectUrl;
   const freecutNodeId = manualEditNode ? manualEditNode.id : freecutEdit?.nodeId;
   const isFreeCutOpen = !!manualEditNode || !!freecutEdit;
+
+  const freecutAssets = useMemo(() => {
+    if (!manualEditNode) return undefined;
+    const meData = manualEditNode.data as ManualEditData;
+    return meData.inputAssets;
+  }, [manualEditNode]);
 
   // ---------------------------------------------------------------------------
   // Filerobot image editor modal (universal edit from any image node)
@@ -205,6 +212,26 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       closeFreeCut();
     }
   }, [manualEditNode, freecutEdit, updateNodeData, closeFreeCut]);
+
+  // ---------------------------------------------------------------------------
+  // FreeCut import picker (workflow assets + library + file system)
+  // ---------------------------------------------------------------------------
+
+  const [importPickerOpen, setImportPickerOpen] = useState(false);
+  const [importPickerAccept, setImportPickerAccept] = useState("video/*,audio/*,image/*");
+  const [importPickerMultiple, setImportPickerMultiple] = useState(true);
+  const sendImportFilesRef = useRef<((files: Array<{ name: string; type: string; size: number; buffer: ArrayBuffer }>) => void) | null>(null);
+
+  const handleImportRequest = useCallback((accept: string, multiple: boolean) => {
+    setImportPickerAccept(accept);
+    setImportPickerMultiple(multiple);
+    setImportPickerOpen(true);
+  }, []);
+
+  const handleImportFiles = useCallback((files: Array<{ name: string; type: string; size: number; buffer: ArrayBuffer }>) => {
+    sendImportFilesRef.current?.(files);
+    setImportPickerOpen(false);
+  }, []);
 
   const handleImageEditSave = useCallback(
     async (blob: Blob, designState: unknown) => {
@@ -999,10 +1026,23 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           <FreeCutEditorModal
             videoUrl={freecutVideoUrl}
             freecutProjectUrl={freecutProjectUrl}
+            assets={freecutAssets}
             onExportComplete={handleFreeCutExport}
             onClose={handleFreeCutClose}
+            onImportRequest={handleImportRequest}
+            sendImportFilesRef={sendImportFilesRef}
           />
         </Suspense>
+      )}
+
+      {importPickerOpen && (
+        <FreeCutImportPicker
+          workflowAssets={freecutAssets}
+          accept={importPickerAccept}
+          multiple={importPickerMultiple}
+          onImport={handleImportFiles}
+          onClose={() => setImportPickerOpen(false)}
+        />
       )}
 
       {isImageEditOpen && (

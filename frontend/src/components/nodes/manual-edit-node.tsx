@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useMemo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Scissors, Loader2, AlertCircle, X, Clapperboard, Film } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -15,6 +15,23 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ManualEditData } from "@/types/nodes"
+
+const VIDEO_TYPES = new Set([
+  "image-to-video", "text-to-video", "video-to-video", "upload-video",
+  "speech-to-video", "lip-sync", "render-video", "combine-videos",
+  "merge-video-audio", "resize-video", "trim-video", "speed-ramp",
+  "loop-video", "fade-video", "extend-video", "motion-transfer",
+  "video-upscale", "suno-music-video", "manual-edit",
+])
+const IMAGE_TYPES = new Set([
+  "generate-image", "upload-image", "image-to-image", "edit-image",
+  "scene", "character", "object", "location", "face", "extract-frame",
+])
+const AUDIO_TYPES = new Set([
+  "text-to-speech", "generate-music", "text-to-audio", "upload-audio",
+  "reference-audio", "trim-audio", "adjust-volume", "mix-audio",
+  "audio-isolation", "suno-generate", "suno-cover",
+])
 
 function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as ManualEditData | undefined
@@ -33,6 +50,23 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [videoError, setVideoError] = useState(false)
+  const edges = useWorkflowStore((s) => s.edges)
+  const allNodes = useWorkflowStore((s) => s.nodes)
+
+  const connectedAssets = useMemo(() => {
+    const inEdges = edges.filter((e) => e.target === id)
+    const assets: Array<{ nodeId: string; label: string; type: "video" | "image" | "audio" }> = []
+    for (const edge of inEdges) {
+      const src = allNodes.find((n) => n.id === edge.source)
+      if (!src?.type) continue
+      const srcData = src.data as Record<string, unknown>
+      const label = (srcData.label as string) ?? src.type
+      if (VIDEO_TYPES.has(src.type)) assets.push({ nodeId: src.id, label, type: "video" })
+      else if (IMAGE_TYPES.has(src.type)) assets.push({ nodeId: src.id, label, type: "image" })
+      else if (AUDIO_TYPES.has(src.type)) assets.push({ nodeId: src.id, label, type: "audio" })
+    }
+    return assets
+  }, [edges, allNodes, id])
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
@@ -96,6 +130,7 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
               />
             )}
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">Edited</div>
+            <button type="button" onClick={handleOpenEditor} className="absolute bottom-1 left-1 px-2 py-0.5 text-[10px] font-medium rounded bg-[#ff0073] text-white opacity-0 group-hover:opacity-100 transition-opacity">Re-edit</button>
             {results.length > 0 && (
               <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
             )}
@@ -128,7 +163,24 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
         {status !== "running" && status !== "awaiting-user" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40"><Scissors className="w-5 h-5" /></div>
+          <div className="flex flex-col items-center justify-center gap-2 h-20 rounded-md border-2 border-dashed border-muted-foreground/20">
+            {connectedAssets.length > 0 ? (
+              <>
+                <span className="text-[10px] text-muted-foreground">
+                  {connectedAssets.length} asset{connectedAssets.length !== 1 ? "s" : ""} connected
+                </span>
+                <button
+                  type="button"
+                  onClick={handleOpenEditor}
+                  className="px-3 py-1 text-xs font-medium rounded-md bg-[#ff0073] text-white hover:bg-[#ff0073]/80 transition-colors"
+                >
+                  Open Editor
+                </button>
+              </>
+            ) : (
+              <Scissors className="w-5 h-5 text-muted-foreground/40" />
+            )}
+          </div>
         )}
         {results.length > 1 && (
           <div className="flex gap-1 overflow-x-auto">
@@ -144,7 +196,9 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
             ))}
           </div>
         )}
-        <p className="text-muted-foreground text-xs">Manual video editing</p>
+        <p className="text-muted-foreground text-xs">
+          {connectedAssets.length > 0 ? `${connectedAssets.length} asset${connectedAssets.length !== 1 ? "s" : ""} — click to edit` : "Connect assets to edit"}
+        </p>
       </div>
     </BaseNode>
     <HandleIcon icon={<Clapperboard />} color="steel" side="left" top="calc(100% - 20px)" />
