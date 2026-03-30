@@ -25,20 +25,21 @@ function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { varian
       (sel.data as TeleporterNodeData).channel === nodeData.channel
   })
 
-  const partnerData = useWorkflowStore((s) => {
-    const partner = s.nodes.find(
-      (n) => n.type === partnerType && (n.data as TeleporterNodeData).channel === nodeData.channel
-    )
-    if (!partner) return null
-    const d = partner.data as TeleporterNodeData
-    return { id: partner.id, label: d.label, result: d.result }
+  const findPartner = (s: { nodes: readonly { id: string; type?: string; data: Record<string, unknown> }[] }) =>
+    s.nodes.find((n) => n.type === partnerType && (n.data as TeleporterNodeData).channel === nodeData.channel)
+
+  const firstPartnerId = useWorkflowStore((s) => findPartner(s)?.id ?? null)
+  const partnerLabel = useWorkflowStore((s) => {
+    const p = findPartner(s)
+    return p ? (p.data as TeleporterNodeData).label : undefined
+  })
+  const partnerResult = useWorkflowStore((s) => {
+    const p = findPartner(s)
+    return p ? (p.data as TeleporterNodeData).result : undefined
   })
 
-  const firstPartnerId = partnerData?.id ?? null
-
-  // Receive nodes show the send's label and result
-  const displayLabel = variant === "receive" && partnerData?.label ? partnerData.label : nodeData.label
-  const displayResult = variant === "receive" && partnerData?.result ? partnerData.result : (nodeData.result ?? "")
+  const displayLabel = variant === "receive" && partnerLabel ? partnerLabel : nodeData.label
+  const displayResult = variant === "receive" && partnerResult ? partnerResult : (nodeData.result ?? "")
 
   const isImage = typeof displayResult === "string" && isImageUrl(displayResult)
   const isVideo = typeof displayResult === "string" && isVideoUrl(displayResult)
