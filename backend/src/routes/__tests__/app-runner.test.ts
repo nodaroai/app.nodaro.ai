@@ -332,7 +332,7 @@ describe("POST /v1/app/:slug/run", () => {
         executionId: TEST_EXECUTION_ID,
         workflowId: TEST_WORKFLOW_ID,
         userId: TEST_USER_ID,
-        triggerType: "manual",
+        triggerType: "app_run",
         inputOverrides: { n1: { prompt: "a cat" } },
         appVersionId: TEST_APP_ID,
       }),
