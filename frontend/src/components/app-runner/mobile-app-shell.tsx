@@ -6,7 +6,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
-import { Plus, Inbox, Play, PenLine } from "lucide-react"
+import { Plus, Inbox, Play, PenLine, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
@@ -874,7 +874,12 @@ export function MobileAppShell({
           paddingBottom: isViewOverride ? "0px" : bottomPadding,
         }}
       >
-        {isViewOverride ? (
+        {runSlots.isLoadingRun ? (
+          <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin opacity-40" />
+            <p className="mt-3 text-sm">Loading run...</p>
+          </div>
+        ) : isViewOverride ? (
           // View mode override: render the full view component
           viewMode === "gallery" ? (
             <GalleryView {...viewProps} />
