@@ -2,7 +2,7 @@
 
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Type, Users, Settings, Link, Scissors } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Type, Settings, Link, Scissors } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -20,9 +20,9 @@ import type { TextToVideoData } from "@/types/nodes"
 // Fallback credit costs per video provider (shown until API responds)
 const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
   minimax: 18, veo3: 79, "veo3.1": 19, kling: 28, "kling-turbo": 14,
-  "kling-3.0": 63, "grok-i2v": 7, "sora2-pro": 38, seedance: 7,
+  "kling-3.0": 63, "grok-i2v": 7, seedance: 7,
   "wan-i2v": 22, "wan-turbo": 13, "hailuo-2.3-pro": 20, "hailuo-2.3": 10,
-  "hailuo-standard": 10, sora2: 10, "bytedance-lite": 6, "bytedance-pro": 18,
+  "hailuo-standard": 10, "bytedance-lite": 6, "bytedance-pro": 18,
   "bytedance-pro-fast": 9, "kling-master": 50, "runway-kie": 4,
 }
 
@@ -47,8 +47,6 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const provider = nodeData.provider ?? "minimax"
   const credits = useModelCredits(provider, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
-  const isSora = provider === "sora2" || provider === "sora2-pro"
-  const charactersConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "characters").length
   const useFull = useFullResolution(id)
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
   useEffect(() => {
@@ -141,7 +139,6 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-        ...(isSora ? [{ id: "characters", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true }] : []),
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
@@ -297,21 +294,6 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
       )}
     </div>
 
-    {/* Characters handle icon (Sora only) */}
-    {isSora && (
-      <div
-        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-        style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-      >
-        <Users className="w-3.5 h-3.5 text-white" />
-        <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
-        {charactersConnectionCount >= 1 && (
-          <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
-            {charactersConnectionCount}
-          </div>
-        )}
-      </div>
-    )}
 
     {/* Video output handle icon */}
     <div

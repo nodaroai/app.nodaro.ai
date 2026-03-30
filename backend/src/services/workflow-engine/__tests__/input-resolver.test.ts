@@ -148,24 +148,6 @@ describe("resolveNodeInputs", () => {
     expect(result.maskUrl).toBe("https://mask.png")
   })
 
-  it("aggregates characterIdList from characters targetHandle", () => {
-    const target = node("t", "image-to-video")
-    const src1 = node("c1", "sora-character")
-    const src2 = node("c2", "sora-character")
-    const allNodes = [src1, src2, target]
-    const edges = [
-      edge("c1", "t", null, "characters"),
-      edge("c2", "t", null, "characters"),
-    ]
-    const states: Record<string, NodeExecutionState> = {
-      c1: { status: "completed", output: { characterId: "char-1" } },
-      c2: { status: "completed", output: { characterId: "char-2" } },
-    }
-
-    const result = resolveNodeInputs(target, edges, states, allNodes)
-    expect(result.characterIdList).toEqual(["char-1", "char-2"])
-  })
-
   it("accumulates videoUrls for combine-videos target", () => {
     const target = node("t", "combine-videos")
     const v1 = node("v1", "image-to-video")

@@ -249,7 +249,6 @@ export const VIDEO_SOURCE_TYPES = new Set([
   "combine-videos",
   "lip-sync",
   "speech-to-video",
-  "sora-storyboard",
   "motion-transfer",
   "video-upscale",
   "extend-video",

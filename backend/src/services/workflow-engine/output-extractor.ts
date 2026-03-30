@@ -42,7 +42,6 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "approved",
   "reason",
   "score",
-  "characterId",
 ]
 
 // Job output_data keys that all map to NodeOutput.plan — derived from COMPOSER_PLAN_MAP + generic "plan"
@@ -324,11 +323,6 @@ export function getPrimaryOutput(
     return output.text
   }
 
-  // Sora-character outputs a characterId string (data, not media)
-  if (sourceType === "sora-character") {
-    return output.characterId || output.text
-  }
-
   // Teleporter passthrough — return the stored text value
   if (sourceType === "teleport-send" || sourceType === "teleport-receive") {
     return output.text
@@ -412,7 +406,6 @@ const VIDEO_RESULT_TYPES = new Set([
   "text-to-video",
   "lip-sync",
   "speech-to-video",
-  "sora-storyboard",
   "motion-transfer",
   "video-upscale",
   "extend-video",
@@ -591,12 +584,6 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   if (type === "generate-script") {
     const result = getFirstSceneImagePrompt(data)
     return result ? { text: result.text, script: result.script } : undefined
-  }
-
-  // Sora-character → characterId from savedCharacterId node data field
-  if (type === "sora-character") {
-    const characterId = data.savedCharacterId as string | undefined
-    return characterId ? { characterId } : undefined
   }
 
   // Text-generating nodes

@@ -63,11 +63,6 @@ const VIDEO_MODEL_CONFIGS: Record<string, ReplicateVideoModelConfig> =
       imageParam: "image",
       endFrameParam: "end_image", // pika supports end frame
     },
-    sora: {
-      model: "openai/sora",
-      imageParam: "image",
-      // sora support unknown
-    },
   }
 
 const TEXT_TO_VIDEO_MODELS: Record<string, string> = {
@@ -76,7 +71,6 @@ const TEXT_TO_VIDEO_MODELS: Record<string, string> = {
   kling: "kwaivgi/kling-v1.6-pro",
   runway: "runwayml/gen4-turbo",
   pika: "pika-labs/pika",
-  sora: "openai/sora",
 }
 
 export class ReplicateVideoProvider

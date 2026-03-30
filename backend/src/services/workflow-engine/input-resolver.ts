@@ -546,7 +546,6 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "text-to-video",
   "lip-sync",
   "speech-to-video",
-  "sora-storyboard",
   "motion-transfer",
   "video-upscale",
   "extend-video",
@@ -691,15 +690,6 @@ function routeOutput(
     inputs.maskUrl = output
     return
   }
-  if (edge.targetHandle === "characters") {
-    // Aggregate character IDs from sora-character nodes into characterIdList
-    const state = nodeStates[src.id]
-    const characterId = state?.output?.characterId || (src.data.savedCharacterId as string | undefined)
-    if (characterId) {
-      inputs.characterIdList = [...(inputs.characterIdList ?? []), characterId]
-    }
-    return
-  }
   if (edge.targetHandle === "references") {
     // Accumulate reference images from upstream image-producing nodes
     inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
@@ -765,7 +755,7 @@ function routeOutput(
     const scenes = (script?.scenes as Array<Record<string, unknown>>) ?? []
 
     if (handle === "images" && scenes.length > 0) {
-      // Pass generated image URLs as referenceImageUrls (for sora-storyboard, etc.)
+      // Pass generated image URLs as referenceImageUrls
       const imageUrls: string[] = []
       for (const s of scenes) {
         const genImages = s.generatedImages as Array<{ url: string }> | undefined
@@ -816,9 +806,6 @@ function routeOutput(
     } else {
       inputs.prompt = output
     }
-    if (targetType === "sora-storyboard" && script) {
-      inputs.scriptData = script
-    }
     return
   }
 
@@ -863,7 +850,7 @@ function routeOutput(
 
   // --- Upload image ---
   if (srcType === "upload-image") {
-    if (targetType === "generate-image" || targetType === "sora-storyboard") {
+    if (targetType === "generate-image") {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else {
       inputs.imageUrl = output
@@ -936,8 +923,8 @@ function routeOutput(
   if (VIDEO_OUTPUT_NODE_TYPES.has(srcType)) {
     routeVideoOutput(inputs, output, targetType, src.id)
 
-    // Pass through kieTaskId for VEO/Runway extend, upscale, and sora-character nodes
-    if (targetType === "extend-video" || targetType === "video-upscale" || targetType === "sora-character") {
+    // Pass through kieTaskId for VEO/Runway extend and upscale nodes
+    if (targetType === "extend-video" || targetType === "video-upscale") {
       const state = nodeStates[src.id]
       if (state?.output?.kieTaskId) {
         inputs.kieTaskId = state.output.kieTaskId

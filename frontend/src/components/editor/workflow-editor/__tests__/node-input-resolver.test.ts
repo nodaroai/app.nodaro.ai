@@ -394,22 +394,6 @@ describe("resolveNodeInputs", () => {
     expect(inputs.prompt).toBe("A person speaking")
   })
 
-  it("resolves image inputs for sora-storyboard", () => {
-    const img1 = makeNode("u1", "upload-image", { url: "http://ref1.png" })
-    const img2 = makeNode("u2", "upload-image", { url: "http://ref2.png" })
-    const target = makeNode("sb", "sora-storyboard")
-    const edges = [makeEdge("u1", "sb"), makeEdge("u2", "sb")]
-
-    const inputs = resolveNodeInputs(
-      target,
-      [img1, img2, target],
-      edges,
-    )
-    // sora-storyboard treats upload-image as referenceImageUrls (same as generate-image)
-    expect(inputs.referenceImageUrls).toBeDefined()
-    expect(inputs.referenceImageUrls).toEqual(["http://ref1.png", "http://ref2.png"])
-  })
-
   it("resolves audio input for suno-mashup", () => {
     // suno-mashup uses routeSunoMashupAudio which fills audioUrl then audioUrl2
     const audio1 = makeNode("a1", "upload-audio", {

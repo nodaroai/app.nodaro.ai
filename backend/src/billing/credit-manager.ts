@@ -22,7 +22,6 @@ export const CREDIT_COSTS: Record<string, number> = {
   "transcode-video": 1,
   "image-to-text": 1,
   "speech-to-video": 4,
-  "sora-character": 5,
   "llm-chat": 5,
   "sub-workflow": 0,
   "social-media-format": 2,

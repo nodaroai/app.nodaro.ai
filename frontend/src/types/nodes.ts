@@ -591,7 +591,7 @@ export type ImageToVideoData = {
   motionEnabled?: boolean
   cameraMotion?: "static" | "pan-left" | "pan-right" | "zoom-in" | "zoom-out"
   cameraMotionEnabled?: boolean
-  prompt?: string  // Text description of desired motion/animation (required for Sora2)
+  prompt?: string  // Text description of desired motion/animation
   generateAudio?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -612,13 +612,11 @@ export type ImageToVideoData = {
   selectedStartFrameNodeId?: string  // ID of node selected for start frame
   selectedEndFrameNodeId?: string    // ID of node selected for end frame (optional)
   selectedAudioNodeId?: string       // ID of node selected for audio track (optional)
-  removeWatermark?: boolean          // Sora2/Sora2-Pro: post-generation watermark removal (4 CR)
   // Progress tracking fields
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
   kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
   connectedImageOrder?: readonly string[]
-  characterIdList?: string[]
   veoMode?: "frame-to-frame" | "reference"  // VEO 3/3.1: toggle between start+end frame and reference mode
 }
 
@@ -663,12 +661,10 @@ export type TextToVideoData = {
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
   seed?: number                      // VEO 3.1: reproducible generation (10000-99999)
-  removeWatermark?: boolean          // Sora2/Sora2-Pro: post-generation watermark removal (4 CR)
   // Progress tracking fields
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
   kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
-  characterIdList?: string[]
 }
 
 export type VideoToVideoData = {
@@ -735,52 +731,6 @@ export type SpeechToVideoData = {
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
-}
-
-// Sora 2 Pro Storyboard: Multi-shot video from scene descriptions
-// KIE.ai model: sora-2-pro-storyboard
-export type SoraStoryboardShot = {
-  scene: string
-  duration: number
-}
-
-export type SoraStoryboardData = {
-  [key: string]: unknown
-  label: string
-  shots: SoraStoryboardShot[]
-  nFrames: "10" | "15" | "25"
-  aspectRatio: "portrait" | "landscape"
-  imageOrder?: string[]
-  fieldMappings: FieldMappings
-  executionStatus?: "idle" | "running" | "completed" | "failed"
-  errorMessage?: string
-  generatedVideoUrl?: string
-  generatedResults?: GeneratedResult[]
-  activeResultIndex?: number
-  currentJobId?: string
-  currentJobProgress?: number
-  characterIdList?: string[]
-}
-
-// Sora Character: Generate video with consistent character using KIE.ai sora-character API
-export type SoraCharacterData = {
-  [key: string]: unknown
-  label: string
-  mode: "video" | "sora-task"
-  characterPrompt: string
-  characterName?: string
-  timestamps?: string
-  safetyInstruction?: string
-  sourceVideoUrl?: string
-  sourceKieTaskId?: string
-  generatedCharacterId?: string
-  fieldMappings: FieldMappings
-  executionStatus?: "idle" | "running" | "completed" | "failed"
-  errorMessage?: string
-  currentJobId?: string
-  currentJobProgress?: number
-  generatedResults?: GeneratedResult[]
-  activeResultIndex?: number
 }
 
 // Motion Transfer: Apply motion from video to image character
@@ -2328,8 +2278,6 @@ export type SceneNodeData =
   | ManualEditData
   | LipSyncData
   | SpeechToVideoData
-  | SoraStoryboardData
-  | SoraCharacterData
   | MotionTransferData
   | VideoUpscaleData
   | ExtendVideoData
@@ -2436,8 +2384,6 @@ export type SceneNodeType =
   | "manual-edit"
   | "lip-sync"
   | "speech-to-video"
-  | "sora-storyboard"
-  | "sora-character"
   | "motion-transfer"
   | "video-upscale"
   | "extend-video"
@@ -2817,8 +2763,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "minimax", label: "MiniMax" },
           { value: "runway-kie", label: "Runway (KIE)" },
           { value: "seedance", label: "Seedance" },
-          { value: "sora2", label: "Sora 2" },
-          { value: "sora2-pro", label: "Sora 2 Pro" },
           { value: "veo3", label: "VEO 3.1 (Quality)" },
           { value: "veo3.1", label: "VEO 3.1 (Fast)" },
           { value: "wan-i2v", label: "Wan 2.6" },
@@ -2860,8 +2804,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "hailuo-standard", label: "MiniMax Standard" },
           { value: "runway-kie", label: "Runway (KIE)" },
           { value: "seedance", label: "Seedance 1.5" },
-          { value: "sora2", label: "Sora 2" },
-          { value: "sora2-pro", label: "Sora 2 Pro" },
           { value: "veo3", label: "VEO 3.1 (Quality)" },
           { value: "veo3.1", label: "VEO 3.1 (Fast)" },
           { value: "wan", label: "Wan 2.6" },
@@ -3544,43 +3486,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as SpeechToVideoData,
-  },
-  // Sora 2 Pro Storyboard (multi-shot video)
-  {
-    type: "sora-storyboard",
-    label: "Storyboard",
-    category: "ai",
-    creditCost: 47,
-    inputs: ["image"],
-    outputs: ["video"],
-    defaultData: {
-      label: "Storyboard",
-      shots: [{ scene: "", duration: 5 }],
-      nFrames: "10",
-      aspectRatio: "landscape",
-      fieldMappings: {},
-      executionStatus: "idle",
-      generatedResults: [],
-      activeResultIndex: 0,
-    } as SoraStoryboardData,
-  },
-  // Sora Character (consistent character generation)
-  {
-    type: "sora-character",
-    label: "Extract Character",
-    category: "ai",
-    creditCost: 5,
-    inputs: ["video"],
-    outputs: ["characterId"],
-    defaultData: {
-      label: "Extract Character",
-      mode: "video",
-      characterPrompt: "",
-      fieldMappings: {},
-      executionStatus: "idle",
-      generatedResults: [],
-      activeResultIndex: 0,
-    } as SoraCharacterData,
   },
   // Motion Transfer (Kling 2.6 Motion Control)
   {

@@ -245,10 +245,6 @@ describe("getPrimaryOutput", () => {
     expect(getPrimaryOutput({ alignment }, "forced-alignment")).toBe(JSON.stringify(alignment))
   })
 
-  it("returns characterId for sora-character", () => {
-    expect(getPrimaryOutput({ characterId: "char-1" }, "sora-character")).toBe("char-1")
-  })
-
   it("routes sub-workflow by handle", () => {
     const output: NodeOutput = { _outputResults: { port1: "val1", port2: "val2" } }
     expect(getPrimaryOutput(output, "sub-workflow", "out_port1")).toBe("val1")
@@ -337,11 +333,6 @@ describe("extractSavedNodeOutput", () => {
     const result = extractSavedNodeOutput(n)
     expect(result?.text).toBe("a")
     expect(result?.splitResults).toEqual(["a", "b"])
-  })
-
-  it("extracts sora-character savedCharacterId", () => {
-    const n = node("1", "sora-character", { savedCharacterId: "char-123" })
-    expect(extractSavedNodeOutput(n)?.characterId).toBe("char-123")
   })
 
   it("extracts adjust-volume with video lastInputType", () => {

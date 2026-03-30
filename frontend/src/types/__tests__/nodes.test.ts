@@ -357,9 +357,4 @@ describe("NODE_DEFINITIONS — new node types", () => {
     expect(def!.creditCost).toBe(4)
   })
 
-  it("has sora-storyboard with creditCost 47", () => {
-    const def = defMap.get("sora-storyboard")
-    expect(def).toBeDefined()
-    expect(def!.creditCost).toBe(47)
-  })
 })

@@ -169,12 +169,6 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
-  "sora2-pro": 38,               // standard 5s fallback
-  // Sora2-Pro duration-tiered pricing (standard vs high quality mode)
-  "sora2-pro:5s": 38,            // 150 KIE cr, $0.75 (standard n_frames=10 ~5s)
-  "sora2-pro:10s": 68,           // 270 KIE cr, $1.35 (standard n_frames=15 ~10s)
-  "sora2-pro:5s:high": 83,       // 330 KIE cr, $1.65 (high quality n_frames=10 ~5s)
-  "sora2-pro:10s:high": 158,     // 630 KIE cr, $3.15 (high quality n_frames=15 ~10s)
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
@@ -198,10 +192,6 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Hailuo Standard duration-tiered pricing
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
-  "sora2": 10,                   // 30 KIE cr, $0.15 (5s fallback)
-  // Sora2 duration-tiered pricing
-  "sora2:5s": 8,                 // 30 KIE cr, $0.15
-  "sora2:10s": 9,                // 35 KIE cr, $0.175
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
@@ -210,8 +200,6 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   "runway-kie": 4,               // 12 KIE cr, $0.06 (5s, 720p)
-  // ── Sora Watermark Removal ──
-  "sora-watermark-remove": 4,    // 10 KIE cr, $0.05
   // ── Video Extend ──
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
@@ -307,12 +295,6 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "infinitalk": 42,              // fallback (720p default)
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
-  // ── Sora 2 Pro Storyboard ──
-  "sora-storyboard": 47,          // 150 KIE cr, $0.75 (10 frames)
-  "sora-storyboard:15": 85,       // 270 KIE cr, $1.35 (15/25 frames)
-  "sora-storyboard:25": 85,       // 270 KIE cr, $1.35 (25 frames, same cost as 15)
-  // ── Sora Character ──
-  "sora-character": 5,            // Character generation/processing
   // ── Speech-to-Video ──
   "speech-to-video": 4,           // 12 KIE cr, $0.06 (480p)
   "speech-to-video:580p": 6,      // 18 KIE cr, $0.09
@@ -324,7 +306,6 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Replicate disabled
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
-  // "sora": 20,                    // Replicate, ~$0.30 typical
   // ── LLM (standard tier = base entry, economy = 0.5x min 1, premium = 3x) ──
   "prompt-helper": 2,            // standard
   "prompt-helper:economy": 1,

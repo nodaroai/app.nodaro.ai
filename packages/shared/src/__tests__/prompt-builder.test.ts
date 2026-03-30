@@ -7,11 +7,10 @@ import {
   buildImagePrompt,
   expandImagePositionRefs,
   buildScenePrompt,
-  buildEnrichedScenePrompt,
   SCENE_PROMPT_MAX_LENGTH,
 } from "../prompt-builder.js"
 import type { CharacterDef, SceneData } from "../types.js"
-import type { BuildImagePromptConfig, EnrichableScene } from "../prompt-builder.js"
+import type { BuildImagePromptConfig } from "../prompt-builder.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1090,123 +1089,3 @@ describe("buildScenePrompt", () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// buildEnrichedScenePrompt
-// ---------------------------------------------------------------------------
-describe("buildEnrichedScenePrompt", () => {
-  it("returns just visualDescription when no extras", () => {
-    const scene: EnrichableScene = { visualDescription: "A beautiful sunset" }
-    expect(buildEnrichedScenePrompt(scene)).toBe("A beautiful sunset")
-  })
-
-  it("appends cinematography with shotType and cameraAngle", () => {
-    const scene: EnrichableScene = {
-      visualDescription: "A warrior stands",
-      cinematography: { shotType: "close-up", cameraAngle: "low angle" },
-    }
-    const result = buildEnrichedScenePrompt(scene)
-    expect(result).toBe("A warrior stands. Camera: close-up low angle")
-  })
-
-  it("appends cinematography with only shotType", () => {
-    const scene: EnrichableScene = {
-      visualDescription: "Scene",
-      cinematography: { shotType: "wide shot" },
-    }
-    expect(buildEnrichedScenePrompt(scene)).toBe("Scene. Camera: wide shot")
-  })
-
-  it("appends cinematography with only cameraAngle", () => {
-    const scene: EnrichableScene = {
-      visualDescription: "Scene",
-      cinematography: { cameraAngle: "eye level" },
-    }
-    expect(buildEnrichedScenePrompt(scene)).toBe("Scene. Camera: eye level")
-  })
-
-  it("appends camera movement when present", () => {
-    const scene: EnrichableScene = {
-      visualDescription: "Scene",
-      cinematography: { shotType: "wide", cameraMovement: "dolly zoom" },
-    }
-    expect(buildEnrichedScenePrompt(scene)).toBe("Scene. Camera: wide with dolly zoom")
-  })
-
-  it("does not append Camera when cinematography has no shotType or cameraAngle", () => {
-    const scene: EnrichableScene = {
-      visualDescription: "Scene",
-      cinematography: { cameraMovement: "dolly" },
-    }
-    // No shotType or cameraAngle, so the if condition fails
-    expect(buildEnrichedScenePrompt(scene)).toBe("Scene")
-  })
-
-  it("appends location name", () => {
-    const scene: EnrichableScene = {
-      visualDescription: "A battle",
-      location: { name: "Ancient Forest" },
-    }
-    expect(buildEnrichedScenePrompt(scene)).toBe("A battle. Setting: Ancient Forest")
-  })
-
-  it("appends location name with timeOfDay", () => {
-    const scene: EnrichableScene = {
-      visualDescription: "A battle",
-      location: { name: "Ancient Forest", timeOfDay: "dusk" },
-    }
-    expect(buildEnrichedScenePrompt(scene)).toBe("A battle. Setting: Ancient Forest, dusk")
-  })
-
-  it("does not append Setting when location has no name", () => {
-    const scene: EnrichableScene = {
-      visualDescription: "A battle",
-      location: { timeOfDay: "dusk" },
-    }
-    expect(buildEnrichedScenePrompt(scene)).toBe("A battle")
-  })
-
-  it("appends mood from array", () => {
-    const scene: EnrichableScene = {
-      visualDescription: "A scene",
-      mood: ["tense", "dark"],
-    }
-    expect(buildEnrichedScenePrompt(scene)).toBe("A scene. Mood: tense, dark")
-  })
-
-  it("appends mood from string", () => {
-    const scene: EnrichableScene = {
-      visualDescription: "A scene",
-      mood: "mysterious",
-    }
-    expect(buildEnrichedScenePrompt(scene)).toBe("A scene. Mood: mysterious")
-  })
-
-  it("does not append Mood for empty array", () => {
-    const scene: EnrichableScene = {
-      visualDescription: "A scene",
-      mood: [],
-    }
-    expect(buildEnrichedScenePrompt(scene)).toBe("A scene")
-  })
-
-  it("does not append Mood for empty string", () => {
-    const scene: EnrichableScene = {
-      visualDescription: "A scene",
-      mood: "",
-    }
-    expect(buildEnrichedScenePrompt(scene)).toBe("A scene")
-  })
-
-  it("combines all enrichments", () => {
-    const scene: EnrichableScene = {
-      visualDescription: "A warrior",
-      cinematography: { shotType: "close-up", cameraAngle: "low", cameraMovement: "tracking" },
-      location: { name: "Castle", timeOfDay: "dawn" },
-      mood: ["epic", "tense"],
-    }
-    const result = buildEnrichedScenePrompt(scene)
-    expect(result).toBe(
-      "A warrior. Camera: close-up low with tracking. Setting: Castle, dawn. Mood: epic, tense",
-    )
-  })
-})

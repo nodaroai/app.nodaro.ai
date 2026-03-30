@@ -24,7 +24,6 @@ import {
   KIE_AUDIO_ISOLATION_MODELS,
   KIE_STT_MODELS,
   KIE_DIALOGUE_MODELS,
-  KIE_CHARACTER_MODELS,
 } from "./models.js"
 
 const kieInfo: ProviderInfo = {
@@ -62,7 +61,6 @@ const kieInfo: ProviderInfo = {
     "audio-isolation": Object.keys(KIE_AUDIO_ISOLATION_MODELS),
     "transcription": Object.keys(KIE_STT_MODELS),
     "dialogue": Object.keys(KIE_DIALOGUE_MODELS),
-    "character": Object.keys(KIE_CHARACTER_MODELS),
   },
 }
 

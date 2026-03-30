@@ -21,7 +21,6 @@ export type ProviderCapability =
   | "audio-isolation" // audio -> isolated voice audio
   | "transcription" // audio -> text
   | "dialogue" // multi-speaker text -> dialogue audio
-  | "character" // video/task -> reusable character ID
 
 // Progress callback for long-running tasks
 export type ProgressCallback = (progress: number) => Promise<void>
@@ -41,14 +40,12 @@ export interface ProviderOptions {
   // Per-model video params
   resolution?: string      // Video resolution (e.g. "480p", "720p", "1080p", "768P", "1080P")
   grokMode?: string        // Grok I2V mode: "fun" | "normal" | "spicy"
-  videoSize?: string       // Sora2 Pro size: "standard" | "high"
   seed?: number            // Seed for deterministic generation (Wan Turbo, Bytedance)
   cameraFixed?: boolean    // Camera fixed / fixed_lens (Bytedance, Seedance)
   generateAudio?: boolean  // Generate audio track (Seedance)
   acceleration?: boolean   // Wan Turbo acceleration
   enablePromptExpansion?: boolean // Wan Turbo prompt expansion
   promptOptimizer?: boolean // Hailuo prompt optimizer
-  characterIdList?: string[] // Sora 2 / Sora 2 Pro character IDs (max 5)
   referenceImageUrls?: string[] // Reference images for generation (e.g., VEO 3 reference-to-video)
   generationType?: string // Generation type (e.g., "TEXT_2_VIDEO", "FIRST_AND_LAST_FRAMES_2_VIDEO", "REFERENCE_2_VIDEO")
   // V2V-specific

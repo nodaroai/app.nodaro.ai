@@ -31,7 +31,6 @@ import type {
   VideoUpscaleData,
   ExtendVideoData,
   SpeechToVideoData,
-  SoraStoryboardData,
   GeneratedScript,
   GeneratedScriptResult,
 } from "@/types/nodes"
@@ -45,10 +44,9 @@ import { getConnectedProviderModel } from "./helpers"
 import { ConnectedMediaList, getSourceThumbnail } from "./connected-media-list"
 import type { ConfigProps } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
-import { buildEnrichedScenePrompt, type EnrichableScene } from "@nodaro-shared/prompt-builder"
 
 export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, onUpdateNode, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ImageToVideoData>) {
-  useEffect(() => { prefetchModelCredits([...VIDEO_I2V_MODELS.map((m) => m.value), "sora-watermark-remove"]) }, [])
+  useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
   const baseDurations = KIE_VIDEO_DURATIONS[data.provider || "minimax"] || null
@@ -389,38 +387,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         </>
       )}
 
-      {data.provider === "sora2-pro" && (
-        <div>
-          <Label className="text-xs">Quality</Label>
-          <Select
-            value={data.videoSize || "standard"}
-            onValueChange={(v) => onUpdate({ videoSize: v as "standard" | "high" })}
-          >
-            <SelectTrigger aria-label="Quality"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="standard">Standard (720p)</SelectItem>
-              <SelectItem value="high">High (1080p)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
-      {(data.provider === "sora2" || data.provider === "sora2-pro") && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-2 px-1">
-            <input
-              type="checkbox"
-              id="i2vRemoveWatermark"
-              checked={data.removeWatermark || false}
-              onChange={(e) => onUpdate({ removeWatermark: e.target.checked })}
-              className="rounded border-muted-foreground/40"
-            />
-            <label htmlFor="i2vRemoveWatermark" className="text-xs">{`Remove Watermark (+${getCachedCredits("sora-watermark-remove") ?? 4} CR)`}</label>
-          </div>
-          <p className="text-[10px] text-muted-foreground px-1">Runs a post-processing step to remove the Sora watermark.</p>
-        </div>
-      )}
-
       {data.provider === "seedance" && (
         <>
           <div>
@@ -710,7 +676,7 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
-const MOTION_VIDEO_NODE_TYPES = new Set(["image-to-video", "text-to-video", "video-to-video", "upload-video", "motion-transfer", "extend-video", "speech-to-video", "sora-storyboard"])
+const MOTION_VIDEO_NODE_TYPES = new Set(["image-to-video", "text-to-video", "video-to-video", "upload-video", "motion-transfer", "extend-video", "speech-to-video"])
 
 export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<MotionTransferData>) {
   const provider = data.provider || "kling"
@@ -893,7 +859,7 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
 }
 
 export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToVideoData>) {
-  useEffect(() => { prefetchModelCredits([...VIDEO_T2V_MODELS.map((m) => m.value), "sora-watermark-remove"]) }, [])
+  useEffect(() => { prefetchModelCredits(VIDEO_T2V_MODELS.map((m) => m.value)) }, [])
   const category: ProviderCategory = "video"
   const models = getModels(category, data.provider)
   const connectedModel = getConnectedProviderModel(fieldMappings, sources, nodes)
@@ -1021,22 +987,6 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             onChange={(e) => onUpdate({ cfgScale: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
           />
           <p className="text-[10px] text-muted-foreground mt-1">0 = creative, 1 = strict prompt adherence</p>
-        </div>
-      )}
-
-      {(data.provider === "sora2" || data.provider === "sora2-pro") && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-2 px-1">
-            <input
-              type="checkbox"
-              id="t2vRemoveWatermark"
-              checked={data.removeWatermark || false}
-              onChange={(e) => onUpdate({ removeWatermark: e.target.checked })}
-              className="rounded border-muted-foreground/40"
-            />
-            <label htmlFor="t2vRemoveWatermark" className="text-xs">{`Remove Watermark (+${getCachedCredits("sora-watermark-remove") ?? 4} CR)`}</label>
-          </div>
-          <p className="text-[10px] text-muted-foreground px-1">Runs a post-processing step to remove the Sora watermark.</p>
         </div>
       )}
 
@@ -1282,159 +1232,6 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
 
       <p className="text-xs text-muted-foreground px-1">
         Generates a talking video from an image and audio using Wan 2.2 Speech-to-Video. Connect a portrait image, speech audio, and prompt.
-      </p>
-    </div>
-  )
-}
-
-
-export function SoraStoryboardConfig({ data, onUpdate, sources }: ConfigProps<SoraStoryboardData>) {
-  useEffect(() => { prefetchModelCredits(["sora-storyboard", "sora-storyboard:15", "sora-storyboard:25"]) }, [])
-  const shots = data.shots ?? [{ scene: "", duration: 5 }]
-
-  // Find connected generate-script source for "Fill from Script" button
-  const scriptSource = sources.find((s) => s.type === "generate-script")
-  const connectedScript = useMemo(() => {
-    if (!scriptSource?.nodeData) return undefined
-    const sd = scriptSource.nodeData as Record<string, unknown>
-    const results = sd.generatedResults as GeneratedScriptResult[] | undefined
-    const activeIndex = (sd.activeResultIndex as number | undefined) ?? 0
-    return results?.[activeIndex]?.script ?? (sd.generatedScript as GeneratedScript | undefined)
-  }, [scriptSource?.nodeData])
-
-  const fillFromScript = useCallback(() => {
-    if (!connectedScript?.scenes?.length) return
-    const newShots = connectedScript.scenes.slice(0, 10).map((scene) => ({
-      scene: buildEnrichedScenePrompt(scene as EnrichableScene),
-      duration: Math.max(1, Math.min(10, scene.durationHint ?? 5)),
-    }))
-    onUpdate({ shots: newShots })
-    toast.success(`Filled ${newShots.length} shots from script`)
-  }, [connectedScript, onUpdate])
-
-  return (
-    <div className="flex flex-col gap-3">
-      {/* Connected Reference Images */}
-      <ConnectedMediaList
-        sources={sources}
-        mediaOrder={data.imageOrder ?? []}
-        onUpdateOrder={(order) => onUpdate({ imageOrder: order })}
-        mediaType="image"
-        emptyMessage="Connect image nodes for reference images"
-      />
-
-      {/* Fill from Script */}
-      {connectedScript && connectedScript.scenes.length > 0 && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full h-8 text-xs gap-1.5"
-          onClick={fillFromScript}
-        >
-          <Wand2 className="w-3.5 h-3.5" />
-          Fill {Math.min(connectedScript.scenes.length, 10)} Shots from Script
-        </Button>
-      )}
-
-      {/* Frames / Duration */}
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Duration (n_frames)</Label>
-        <Select
-          value={data.nFrames || "10"}
-          onValueChange={(v) => onUpdate({ nFrames: v as "10" | "15" | "25" })}
-        >
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="10">{`10 frames (~5s) - ${getCachedCredits("sora-storyboard") ?? 47} credits`}</SelectItem>
-            <SelectItem value="15">{`15 frames (~10s) - ${getCachedCredits("sora-storyboard:15") ?? 85} credits`}</SelectItem>
-            <SelectItem value="25">{`25 frames (~15s) - ${getCachedCredits("sora-storyboard:25") ?? 85} credits`}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Aspect Ratio */}
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Aspect Ratio</Label>
-        <AspectRatioSelector
-          options={[
-            { value: "landscape", label: "Landscape (16:9)" },
-            { value: "portrait", label: "Portrait (9:16)" },
-          ]}
-          value={data.aspectRatio || "landscape"}
-          onValueChange={(v) => onUpdate({ aspectRatio: v as "portrait" | "landscape" })}
-        />
-      </div>
-
-      {/* Shots Editor */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-xs text-muted-foreground">Shots ({shots.length}/10)</Label>
-          {shots.length < 10 && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-6 text-xs px-2"
-              onClick={() => {
-                onUpdate({ shots: [...shots, { scene: "", duration: 5 }] })
-              }}
-            >
-              <Plus className="w-3 h-3 mr-1" />
-              Add Shot
-            </Button>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-3">
-          {shots.map((shot, i) => (
-            <div key={i} className="flex flex-col gap-1.5 p-2 rounded-lg border border-muted-foreground/10 bg-muted/5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-medium text-muted-foreground">Shot {i + 1}</span>
-                {shots.length > 1 && (
-                  <button
-                    type="button"
-                    className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted-foreground/10 text-muted-foreground/60 hover:text-red-400 transition-colors"
-                    onClick={() => {
-                      const newShots = shots.filter((_, idx) => idx !== i)
-                      onUpdate({ shots: newShots })
-                    }}
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-              <Textarea
-                placeholder="Describe the scene..."
-                value={shot.scene}
-                onChange={(e) => {
-                  const newShots = [...shots]
-                  newShots[i] = { ...shot, scene: e.target.value }
-                  onUpdate({ shots: newShots })
-                }}
-                className="min-h-[60px] text-sm"
-                rows={2}
-              />
-              <div className="flex items-center gap-2">
-                <Label className="text-[10px] text-muted-foreground whitespace-nowrap">Duration (s)</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={shot.duration || ""}
-                  onChange={(e) => {
-                    const newShots = [...shots]
-                    newShots[i] = { ...shot, duration: e.target.value === "" ? 0 : Number(e.target.value) }
-                    onUpdate({ shots: newShots })
-                  }}
-                  className="w-16 h-7 text-xs"
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <p className="text-xs text-muted-foreground px-1">
-        Generates a multi-shot video from scene descriptions using Sora 2 Pro Storyboard. Each shot has its own scene description and duration. Optionally connect reference images.
       </p>
     </div>
   )

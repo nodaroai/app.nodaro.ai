@@ -25,7 +25,6 @@ export interface KieModelConfig {
   imageParam?: string     // Parameter name for input image (default: "image", some use "input_urls")
   extraParams?: Record<string, unknown>  // Default extra parameters
   allowedDurations?: number[]  // Video models: allowed duration values in seconds
-  usesNFrames?: boolean        // Sora uses n_frames (10, 15) instead of duration
   supportsEndFrame?: boolean   // Video models: supports start + end frame (2 images -> video)
   endFrameParam?: string       // Parameter name for end frame (e.g., "tail_image_url", "end_image_url")
 }
@@ -422,20 +421,6 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     supportsEndFrame: false,  // Grok only accepts 1 image
   },
 
-  // Sora 2 Pro - VERIFIED: docs.kie.ai/market/sora2/sora-2-pro-image-to-video
-  // size: "standard" (720p) or "high" (1080p)
-  // NOTE: remove_watermark causes KIE 500 — use sora-2-watermark-remove post-processing instead
-  "sora2-pro": {
-    model: "sora-2-pro-image-to-video",
-    credits: 150,
-    cost: 0.75,  // 150 KIE credits * $0.005 (Pro Standard 10s)
-    imageParam: "image_urls",  // array format (maxItems: 1, no end frame support)
-    extraParams: { aspect_ratio: "landscape", n_frames: "10", size: "standard" },
-    allowedDurations: [5, 10],  // Sora Pro n_frames: 10 (~5s), 15 (~10s)
-    usesNFrames: true,  // Uses n_frames parameter instead of duration
-    supportsEndFrame: false,  // Sora2 Pro only accepts 1 image
-  },
-
   // Seedance 1.5 Pro - docs.kie.ai/market/bytedance/seedance-1.5-pro
   // Uses input_urls array (0-2 images for start/end frame)
   "seedance": {
@@ -504,20 +489,6 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [6, 10],
     supportsEndFrame: true,
     endFrameParam: "end_image_url",
-  },
-
-  // Sora 2 (non-Pro) I2V - docs.kie.ai/market/sora2/sora-2-image-to-video
-  // NOTE: remove_watermark causes KIE 500 — use sora-2-watermark-remove post-processing instead
-  "sora2": {
-    model: "sora-2-image-to-video",
-    credits: 30,
-    cost: 0.15,  // 30 KIE credits * $0.005 (Standard 10s)
-    // NOTE: Standard 15s=35, stable 10s=35, stable 15s=40
-    imageParam: "image_urls",  // Array format
-    extraParams: { aspect_ratio: "landscape", n_frames: "10" },
-    allowedDurations: [5, 10],
-    usesNFrames: true,
-    supportsEndFrame: false,
   },
 
   // Bytedance V1 Lite I2V - docs.kie.ai/market/bytedance/v1-lite-image-to-video
@@ -639,17 +610,6 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [6, 10],  // Grok supports 6 or 10 second videos
   },
 
-  // Sora 2 Pro
-  // NOTE: remove_watermark causes KIE 500 — use sora-2-watermark-remove post-processing instead
-  "sora2-pro": {
-    model: "sora-2-pro-text-to-video",
-    credits: 150,
-    cost: 0.75,  // 150 KIE credits * $0.005 (Pro Standard 10s)
-    extraParams: { aspect_ratio: "landscape", n_frames: "10", size: "standard" },
-    allowedDurations: [5, 10],  // Sora Pro n_frames: 10 (~5s), 15 (~10s)
-    usesNFrames: true,  // Uses n_frames parameter instead of duration
-  },
-
   // Kling 3.0 - uses kling3-client.ts (unified createTask endpoint)
   // Per-second pricing: 20-40 cr/sec depending on audio + resolution
   "kling-3.0": {
@@ -677,17 +637,6 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     // NOTE: 720p=70, 10s-720p=140, 10s-1080p=209.5, 15s-720p=210, 15s-1080p=315
     extraParams: { resolution: "1080p" },
     allowedDurations: [5, 10, 15],
-  },
-
-  // Sora 2 (non-Pro) T2V - docs.kie.ai/market/sora2/sora-2-text-to-video
-  // NOTE: remove_watermark causes KIE 500 — use sora-2-watermark-remove post-processing instead
-  "sora2": {
-    model: "sora-2-text-to-video",
-    credits: 30,
-    cost: 0.15,  // 30 KIE credits * $0.005 (Standard 10s)
-    extraParams: { aspect_ratio: "landscape", n_frames: "10" },
-    allowedDurations: [5, 10],
-    usesNFrames: true,
   },
 
   // Hailuo Standard (02) T2V - docs.kie.ai/market/hailuo/02-text-to-video-standard
@@ -984,41 +933,6 @@ export const KIE_SPEECH_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
 }
 
 // =============================================================================
-// SORA 2 PRO STORYBOARD MODELS (Multi-shot video from scene descriptions)
-// =============================================================================
-export const KIE_STORYBOARD_MODELS: Record<string, KieModelConfig> = {
-  // Sora 2 Pro Storyboard — multi-shot video from scene descriptions
-  // See: docs.kie.ai/market/sora-2-pro-storyboard/index.md
-  "sora-storyboard": {
-    model: "sora-2-pro-storyboard",
-    credits: 150,
-    cost: 0.75,  // 150 KIE credits * $0.005 (10 frames default)
-    // NOTE: 15/25 frames = 270 KIE credits ($1.35)
-    // NOTE: remove_watermark causes KIE 500 — use sora-2-watermark-remove post-processing instead
-    extraParams: { aspect_ratio: "landscape", n_frames: "10" },
-  },
-}
-
-// =============================================================================
-// SORA 2 CHARACTER MODELS (Extract reusable characters from video or Sora task)
-// =============================================================================
-export const KIE_CHARACTER_MODELS: Record<string, KieModelConfig> = {
-  // Sora 2 Characters — extract character from video file
-  // See: docs.kie.ai/market/sora2/sora-2-characters.md
-  "sora-character": {
-    model: "sora-2-characters",
-    credits: 20,
-    cost: 0.10,  // 20 KIE credits * $0.005
-  },
-  // Sora 2 Characters Pro — extract character from a prior Sora task (by task ID + timestamps)
-  "sora-character-pro": {
-    model: "sora-2-characters-pro",
-    credits: 20,
-    cost: 0.10,  // 20 KIE credits * $0.005
-  },
-}
-
-// =============================================================================
 // SPECIAL MODELS
 // =============================================================================
 export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
@@ -1029,21 +943,13 @@ export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
     cost: 0.84,  // 12 cr/sec * ~14s (720p)
   },
 
-  // Sora 2 Watermark Removal
-  // Uses the generated task's kieTaskId — NOT a standalone model
-  "sora-watermark-remove": {
-    model: "sora-2-watermark-remove",
-    credits: 10,
-    ***REDACTED-OSS-SCRUB***
-    extraParams: {},
-  },
 }
 
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
 
-export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "speech-to-video" | "storyboard" | "character" | "music" | "tts" | "sound-effect" | "audio-isolation" | "stt" | "dialogue" | "special"
+export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "speech-to-video" | "music" | "tts" | "sound-effect" | "audio-isolation" | "stt" | "dialogue" | "special"
 
 /**
  * Get KIE.ai model config for a given category and provider
@@ -1070,10 +976,6 @@ export function getKieModelConfig(
       return KIE_LIP_SYNC_MODELS[provider] ?? null
     case "speech-to-video":
       return KIE_SPEECH_TO_VIDEO_MODELS[provider] ?? null
-    case "storyboard":
-      return KIE_STORYBOARD_MODELS[provider] ?? null
-    case "character":
-      return KIE_CHARACTER_MODELS[provider] ?? null
     case "music":
       return KIE_MUSIC_MODELS[provider] ?? null
     case "tts":
@@ -1124,26 +1026,6 @@ export function getAllowedDurations(
 ): number[] {
   const cfg = getKieModelConfig(category, provider)
   return cfg?.allowedDurations ?? [5]  // Default to 5 seconds if not specified
-}
-
-/**
- * Check if a video model uses n_frames instead of duration
- * (Sora models use n_frames: 10 or 15)
- */
-export function usesNFrames(
-  category: "video" | "text-to-video",
-  provider: string
-): boolean {
-  const cfg = getKieModelConfig(category, provider)
-  return cfg?.usesNFrames ?? false
-}
-
-/**
- * Convert duration in seconds to n_frames for Sora models
- */
-export function durationToNFrames(durationSeconds: number): string {
-  // Sora: n_frames 10 = ~5 seconds, n_frames 15 = ~10 seconds
-  return durationSeconds <= 5 ? "10" : "15"
 }
 
 /**

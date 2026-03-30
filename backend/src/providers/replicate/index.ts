@@ -43,7 +43,6 @@ const replicateInfo: ProviderInfo = {
       "kling",
       "runway",
       "pika",
-      "sora",
     ],
     "text-to-video": [
       "minimax",
@@ -51,7 +50,6 @@ const replicateInfo: ProviderInfo = {
       "kling",
       "runway",
       "pika",
-      "sora",
     ],
     "video-to-video": [],
     "motion-transfer": [],
@@ -63,7 +61,6 @@ const replicateInfo: ProviderInfo = {
     "audio-isolation": [],
     "transcription": [],
     "dialogue": [],
-    "character": [],
   },
 }
 

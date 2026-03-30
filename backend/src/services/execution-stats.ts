@@ -120,7 +120,6 @@ export function buildStatsKey(nodeType: string, inputData: InputData): StatsKey 
     case "video-to-video":
     case "motion-transfer":
     case "speech-to-video":
-    case "sora-storyboard":
     case "extend-video": {
       const provider = str(inputData.provider) || str(inputData.model)
       if (!provider) return null
@@ -323,21 +322,6 @@ export function buildStatsKey(nodeType: string, inputData: InputData): StatsKey 
     }
 
     // -----------------------------------------------------------------------
-    // Character / Sora character nodes
-    // -----------------------------------------------------------------------
-    case "sora-character": {
-      const model = str(inputData.mode) === "pro"
-        ? "sora-2-characters-pro"
-        : "sora-2-characters"
-      return {
-        model_identifier: model,
-        aspect_ratio: "",
-        quality: "",
-        duration_seconds: 0,
-      }
-    }
-
-    // -----------------------------------------------------------------------
     // Social media publishing
     // -----------------------------------------------------------------------
     case "social-media-post": {
@@ -478,7 +462,7 @@ type StatRow = {
 export function getNodeCategory(model: string): string {
   // Video generation models
   if (
-    /^(minimax|veo3|veo3\.1|kling|kling-turbo|kling-3\.0|kling-master|grok-i2v|sora2|sora2-pro|seedance|wan-i2v|wan-turbo|hailuo|bytedance|runway|pika|luma|extend-video)/.test(model)
+    /^(minimax|veo3|veo3\.1|kling|kling-turbo|kling-3\.0|kling-master|grok-i2v|seedance|wan-i2v|wan-turbo|hailuo|bytedance|runway|pika|luma|extend-video)/.test(model)
   ) {
     return "video"
   }

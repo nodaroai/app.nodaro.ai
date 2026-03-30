@@ -100,7 +100,6 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "text-to-video",
   "lip-sync",
   "speech-to-video",
-  "sora-storyboard",
   "motion-transfer",
   "video-upscale",
   "extend-video",
@@ -147,7 +146,6 @@ export interface FrontendResolvedInputs {
   endFrameUrl?: string;
   maskUrl?: string;
   kieTaskId?: string;
-  characterIdList?: string[];
   componentInputMap?: Record<string, string>;
   systemPrompt?: string;
 }
@@ -536,15 +534,6 @@ export function resolveNodeInputs(
       inputs.maskUrl = output;
       continue;
     }
-    if (srcEdge.targetHandle === "characters") {
-      // Aggregate character IDs from sora-character nodes into characterIdList
-      const srcData = src.data as Record<string, unknown>;
-      const characterId = (srcData.generatedCharacterId as string | undefined);
-      if (characterId) {
-        inputs.characterIdList = [...(inputs.characterIdList ?? []), characterId];
-      }
-      continue;
-    }
     if (srcEdge.targetHandle === "references") {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
       continue;
@@ -697,7 +686,7 @@ export function resolveNodeInputs(
       const loopCol = loopCols.find((c) => c.handleId === (srcEdge.sourceHandle ?? ""));
       const colType = loopCol?.type ?? "text";
       if (colType === "image-url") {
-        if (node.type === "generate-image" || node.type === "edit-image" || node.type === "image-to-image" || node.type === "sora-storyboard") {
+        if (node.type === "generate-image" || node.type === "edit-image" || node.type === "image-to-image") {
           inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
         } else {
           inputs.imageUrl = output;
@@ -720,7 +709,7 @@ export function resolveNodeInputs(
         inputs.prompt = output;
       }
     } else if (src.type === "upload-image") {
-      if (node.type === "generate-image" || node.type === "sora-storyboard") {
+      if (node.type === "generate-image") {
         inputs.referenceImageUrls = [
           ...(inputs.referenceImageUrls ?? []),
           output,
@@ -736,11 +725,6 @@ export function resolveNodeInputs(
     ) {
       if (node.type === "lip-sync" || node.type === "speech-to-video") {
         inputs.imageUrl = output;
-      } else if (node.type === "sora-storyboard") {
-        inputs.referenceImageUrls = [
-          ...(inputs.referenceImageUrls ?? []),
-          output,
-        ];
       } else {
         inputs.referenceImageUrls = [
           ...(inputs.referenceImageUrls ?? []),
@@ -855,8 +839,8 @@ export function resolveNodeInputs(
       } else {
         inputs.videoUrl = output;
       }
-      // Pass through kieTaskId for VEO/Runway extend, upscale, and sora-character nodes (matches backend)
-      if (node.type === "extend-video" || node.type === "video-upscale" || node.type === "sora-character") {
+      // Pass through kieTaskId for VEO/Runway extend and upscale nodes (matches backend)
+      if (node.type === "extend-video" || node.type === "video-upscale") {
         const srcData = src.data as Record<string, unknown>;
         if (srcData.kieTaskId) {
           inputs.kieTaskId = srcData.kieTaskId as string;
@@ -1073,7 +1057,7 @@ export function resolveNodeInputs(
       const scenes = (script?.scenes as Array<Record<string, unknown>>) ?? [];
 
       if (handle === "images" && scenes.length > 0) {
-        // Pass generated image URLs as referenceImageUrls (for sora-storyboard, etc.)
+        // Pass generated image URLs as referenceImageUrls
         const imageUrls: string[] = [];
         for (const s of scenes) {
           const genImages = s.generatedImages as Array<{ url: string }> | undefined;
@@ -1126,10 +1110,6 @@ export function resolveNodeInputs(
         inputs.prompt = output;
       }
 
-      // Always pass scriptData for sora-storyboard regardless of handle
-      if (node.type === "sora-storyboard" && script) {
-        inputs.scriptData = script;
-      }
     } else if (src.type === "webhook-trigger") {
       // Route by param type using sourceHandle (matches backend)
       const srcData = src.data as Record<string, unknown>;

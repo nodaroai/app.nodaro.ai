@@ -166,7 +166,7 @@ export interface KieRecordInfoResponse {
     costTime?: number
     completeTime?: string
     createTime?: string
-    progress?: number // 0-100, available for sora2 models
+    progress?: number // 0-100
   }
 }
 
@@ -359,7 +359,7 @@ export async function runKieTask(
       continue
     }
 
-    // Log progress for sora2 models (0-100) and call callback if provided
+    // Log progress (0-100) and call callback if provided
     const progress = detailData.data.progress
     if (DEBUG) {
       console.log(`[KIE.ai] Task ${taskId} state: ${state}${progress !== undefined ? ` (progress: ${progress}%)` : ""} (attempt ${attempts})`)

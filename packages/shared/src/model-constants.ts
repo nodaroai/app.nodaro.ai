@@ -119,8 +119,6 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "hailuo-2.3-pro",
   "hailuo-2.3",
   "hailuo-standard",
-  "sora2-pro",
-  "sora2",
   "wan-i2v",
   "wan-turbo",
   "bytedance-lite",
@@ -144,10 +142,8 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "kling-turbo",
   "kling-3.0",
   "grok",
-  "sora2-pro",
   "seedance",
   "wan",
-  "sora2",
   "hailuo-standard",
   "bytedance-lite",
   "bytedance-pro",
@@ -331,8 +327,6 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   "hailuo-2.3-pro",
   "hailuo-2.3",
   "hailuo-standard",
-  "sora2-pro",
-  "sora2",
   "seedance",
 ])
 
@@ -349,8 +343,7 @@ export const AUDIO_ADDON_PROVIDERS = new Set([
  * Video models where a quality/mode parameter (e.g., videoSize "high") incurs higher cost.
  * When provider is in this set and mode is "high", ":high" is appended to the identifier.
  */
-export const MODE_ADDON_PROVIDERS = new Set([
-  "sora2-pro",
+export const MODE_ADDON_PROVIDERS = new Set<string>([
 ])
 
 /**
@@ -368,8 +361,6 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   "hailuo-2.3-pro": "duration",
   "hailuo-2.3": "duration",
   "hailuo-standard": "duration",
-  "sora2-pro": "duration+mode",
-  "sora2": "duration",
   "seedance": "duration",
 }
 
@@ -416,14 +407,6 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
   ],
   "hailuo-standard": [
     { maxSeconds: 6, suffix: "6s" },
-    { maxSeconds: 10, suffix: "10s" },
-  ],
-  "sora2-pro": [
-    { maxSeconds: 5, suffix: "5s" },
-    { maxSeconds: 10, suffix: "10s" },
-  ],
-  "sora2": [
-    { maxSeconds: 5, suffix: "5s" },
     { maxSeconds: 10, suffix: "10s" },
   ],
   "seedance": [

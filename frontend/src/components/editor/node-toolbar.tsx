@@ -66,8 +66,6 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "text-to-video", label: "Text to Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "lip-sync", label: "Lip Sync", icon: <Users className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "speech-to-video", label: "Speech to Video", icon: <AudioLines className="h-4 w-4" />, category: "AI", group: "Video" },
-  { type: "sora-storyboard", label: "Storyboard", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Video" },
-  { type: "sora-character", label: "Extract Character", icon: <UserRound className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "motion-transfer", label: "Motion Transfer", icon: <Waypoints className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "extend-video", label: "Extend Video", icon: <FastForward className="h-4 w-4" />, category: "AI", group: "Video" },
   // AI — Audio & Speech

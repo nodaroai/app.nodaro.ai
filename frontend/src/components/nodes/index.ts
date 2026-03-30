@@ -75,8 +75,6 @@ import { TranscodeVideoNode } from "./transcode-video-node";
 import { ManualEditNode } from "./manual-edit-node";
 import { LipSyncNode } from "./lip-sync-node";
 import { SpeechToVideoNode } from "./speech-to-video-node";
-import { SoraStoryboardNode } from "./sora-storyboard-node";
-import { SoraCharacterNode } from "./sora-character-node";
 import { MotionTransferNode } from "./motion-transfer-node";
 import { VideoUpscaleNode } from "./video-upscale-node";
 import { ExtendVideoNode } from "./extend-video-node";
@@ -152,8 +150,6 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "suno-upload-extend": SunoUploadExtendNode,
   "lip-sync": LipSyncNode,
   "speech-to-video": SpeechToVideoNode,
-  "sora-storyboard": SoraStoryboardNode,
-  "sora-character": SoraCharacterNode,
   "motion-transfer": MotionTransferNode,
   transcribe: TranscribeNode,
   "image-to-text": ImageToTextNode,

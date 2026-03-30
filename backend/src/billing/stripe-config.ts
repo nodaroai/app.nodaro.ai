@@ -88,7 +88,7 @@ export const RETENTION_DAYS = {
 
 export const FREE_TIER_RESTRICTIONS = {
   dailyCreditCap: 30,
-  blockedModels: ["veo3", "veo3.1", "sora2-pro"],
+  blockedModels: ["veo3", "veo3.1"],
   watermark: true,
 } as const
 

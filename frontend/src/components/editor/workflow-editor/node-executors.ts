@@ -160,8 +160,6 @@ export function runVideoGeneration(
   videoSize?: string,
   seed?: number,
   cameraFixed?: boolean,
-  removeWatermark?: boolean,
-  characterIdList?: string[],
   referenceImageUrls?: string[],
   generationType?: string,
 ): Promise<string> {
@@ -189,8 +187,6 @@ export function runVideoGeneration(
         videoSize,
         seed,
         cameraFixed,
-        removeWatermark,
-        characterIdList,
         referenceImageUrls,
         generationType,
         userId: ctx.userId,
@@ -251,14 +247,12 @@ export function runTextToVideoGeneration(
       type: "image" | "video";
       urls: string[];
     }>;
-    removeWatermark?: boolean;
     seed?: number;
   },
-  characterIdList?: string[],
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
-    () => textToVideo(prompt, provider, ctx.userId, { ...kling3Options, characterIdList }),
+    () => textToVideo(prompt, provider, ctx.userId, kling3Options),
     "generatedVideoUrl",
     "Text-to-video generation",
     ctx,
