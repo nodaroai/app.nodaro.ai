@@ -932,13 +932,13 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                             {isMedia && val ? (
                               col.type === "image-url" ? (
                                 <img src={val} alt="" className="w-12 h-12 rounded object-cover" />
+                              ) : col.type === "video-url" ? (
+                                <video src={val} crossOrigin="anonymous" className="w-16 h-12 rounded object-cover" muted playsInline />
                               ) : (
-                                <span className="text-xs text-muted-foreground italic">
-                                  {col.type === "video-url" ? "Video file" : "Audio file"}
-                                </span>
+                                <audio src={val} controls className="h-8 w-full max-w-[160px]" style={{ minWidth: 0 }} />
                               )
                             ) : isConnected ? (
-                              <span className="text-muted-foreground/50 italic">{val || "Waiting..."}</span>
+                              <span className="text-muted-foreground/70">{val || <span className="italic text-muted-foreground/50">Waiting...</span>}</span>
                             ) : (
                               <span className={val ? "" : "text-muted-foreground/40"}>{val || "—"}</span>
                             )}
