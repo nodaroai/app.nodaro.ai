@@ -87,18 +87,13 @@ function detectLoopColumnType(
     const srcCol = srcColumns.find((c) => c.handleId === sourceHandle)
     if (srcCol?.type) return srcCol.type as LoopColumn["type"]
   }
-  // Teleport-receive: follow chain to the SEND node's upstream to detect actual type
-  if (sourceNode.type === "teleport-receive" && allNodes && allEdges) {
-    const recvChannel = (sourceNode.data as TeleportReceiveData).channel
-    const sendNode = allNodes.find(
-      (n) => n.type === "teleport-send" && (n.data as TeleportSendData).channel === recvChannel,
-    )
-    if (sendNode) {
-      const sendInEdge = allEdges.find((e) => e.target === sendNode.id)
-      if (sendInEdge) {
-        const upstream = allNodes.find((n) => n.id === sendInEdge.source)
-        if (upstream) return detectLoopColumnType(upstream, sendInEdge.sourceHandle, allNodes, allEdges)
-      }
+  // Teleport nodes: follow upstream edges to detect actual source type
+  // Matches resolveTeleportOrigin pattern in node-input-resolver.ts
+  if ((sourceNode.type === "teleport-send" || sourceNode.type === "teleport-receive") && allNodes && allEdges) {
+    const inEdge = allEdges.find((e) => e.target === sourceNode.id)
+    if (inEdge) {
+      const upstream = allNodes.find((n) => n.id === inEdge.source)
+      if (upstream) return detectLoopColumnType(upstream, inEdge.sourceHandle, allNodes, allEdges)
     }
   }
   const def = NODE_DEF_MAP.get(sourceNode.type ?? "")
