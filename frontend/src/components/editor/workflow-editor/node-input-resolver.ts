@@ -11,9 +11,24 @@ import type {
   LoopNodeData,
 } from "@/types/nodes";
 import { loopColInputHandle } from "@/types/nodes";
-import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
+import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
 import { applyRange, resolveIndex } from "@nodaro-shared/edge-range";
 import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
+
+/** Follow teleport chain to find the original non-teleport source node. */
+function resolveTeleportOrigin(node: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode {
+  let current = node
+  const visited = new Set<string>()
+  while ((current.type === "teleport-send" || current.type === "teleport-receive") && !visited.has(current.id)) {
+    visited.add(current.id)
+    const inEdge = edges.find((e) => e.target === current.id)
+    if (!inEdge) break
+    const upstream = nodes.find((n) => n.id === inEdge.source)
+    if (!upstream) break
+    current = upstream
+  }
+  return current
+}
 
 /** Resolve raw values for a loop column: per-column connected edge -> legacy "in" edge -> manual rows. */
 export function resolveLoopColumnValues(
@@ -650,15 +665,31 @@ export function resolveNodeInputs(
         inputs.prompt = output
       }
     } else if (src.type === "teleport-send" || src.type === "teleport-receive") {
-      // Teleporter passthrough — detect media type from URL
-      if (IMAGE_URL_RE.test(output)) {
-        inputs.imageUrl = output
-      } else if (VIDEO_URL_RE.test(output)) {
-        inputs.videoUrl = output
-      } else if (AUDIO_URL_RE.test(output)) {
-        inputs.audioUrl = output
+      // Follow chain to original source and route by its type
+      const origin = resolveTeleportOrigin(src, nodes, edges)
+      if (origin.type && origin.type !== src.type) {
+        // Re-route as if connected directly to the origin node
+        const originType = origin.type
+        if (IMAGE_SOURCE_TYPES.has(originType)) {
+          inputs.imageUrl = output
+        } else if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(originType)) {
+          inputs.videoUrl = output
+        } else if (AUDIO_SOURCE_TYPES.has(originType)) {
+          inputs.audioUrl = output
+        } else {
+          inputs.prompt = output
+        }
       } else {
-        inputs.prompt = output
+        // Fallback: detect from URL pattern
+        if (IMAGE_URL_RE.test(output)) {
+          inputs.imageUrl = output
+        } else if (VIDEO_URL_RE.test(output)) {
+          inputs.videoUrl = output
+        } else if (AUDIO_URL_RE.test(output)) {
+          inputs.audioUrl = output
+        } else {
+          inputs.prompt = output
+        }
       }
     } else if (src.type === "router") {
       // Router passthrough — detect media type from URL
