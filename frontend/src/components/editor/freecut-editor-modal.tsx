@@ -55,19 +55,22 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, assets, onExpo
   const sendAssetsToFreeCut = useCallback(
     async (iframe: HTMLIFrameElement, assetsToSend: NonNullable<typeof assets>) => {
       if (!assetsToSend.length) return
-      const files = await Promise.all(
-        assetsToSend.map(async (asset) => {
+      const files: Array<{ name: string; type: string; size: number; buffer: ArrayBuffer }> = []
+      for (let i = 0; i < assetsToSend.length; i++) {
+        const asset = assetsToSend[i]
+        try {
           const buffer = await fetch(asset.url).then(r => r.arrayBuffer())
           const ext = asset.type === "video" ? "mp4" : asset.type === "audio" ? "mp3" : "png"
           const mime = asset.type === "video" ? "video/mp4" : asset.type === "audio" ? "audio/mpeg" : "image/png"
-          return {
-            name: `${asset.label ?? asset.nodeId}.${ext}`,
-            type: mime,
-            size: buffer.byteLength,
-            buffer,
-          }
-        }),
-      )
+          // Use nodeId in name to avoid duplicates when multiple nodes share the same label
+          const baseName = asset.label ?? asset.nodeId
+          const name = assetsToSend.length > 1 ? `${baseName}_${i + 1}.${ext}` : `${baseName}.${ext}`
+          files.push({ name, type: mime, size: buffer.byteLength, buffer })
+        } catch {
+          // Skip assets that fail to fetch (CORS, network, etc.)
+        }
+      }
+      if (files.length === 0) return
       const buffers = files.map(f => f.buffer)
       iframe.contentWindow!.postMessage(
         { type: "NODARO_IMPORT_FILES", payload: { files } },
@@ -113,11 +116,10 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, assets, onExpo
                 FREECUT_ORIGIN,
               )
             }).finally(() => {
-              // Auto-import remaining connected assets to FreeCut's asset library
               if (assets && assets.length > 0) {
                 const remaining = assets.filter(a => a.url !== videoUrl)
                 if (remaining.length > 0) {
-                  sendAssetsToFreeCut(iframe, remaining)
+                  sendAssetsToFreeCut(iframe, remaining).catch(() => {})
                 }
               }
             })
