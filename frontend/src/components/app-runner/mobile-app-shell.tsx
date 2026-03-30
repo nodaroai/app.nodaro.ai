@@ -6,7 +6,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
-import { Plus, Inbox, Play, PenLine, Loader2 } from "lucide-react"
+import { Plus, Inbox, Play, PenLine, Loader2, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
@@ -933,6 +933,16 @@ export function MobileAppShell({
         ) : activeTab === "outputs" ? (
           // Outputs tab
           <div className="space-y-4 p-4">
+            {isRunning && (
+              <button
+                type="button"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors"
+                onClick={cancel}
+              >
+                <Square className="h-3.5 w-3.5 fill-current" />
+                Stop
+              </button>
+            )}
             {presExecutionStatus === "idle" && !isRunning ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 {allInputsFilled ? (
