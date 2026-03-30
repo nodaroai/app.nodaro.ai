@@ -111,13 +111,29 @@ export async function mergeVideoAudio(options: MergeVideoAudioOptions): Promise<
 
     const filterComplex = buildAudioFilter(tracks, voiceoverVolume, bgVol, keepOriginalAudio)
 
+    // Detect if video needs re-encoding (VP8/VP9 cannot be muxed into MP4)
+    const { execSync } = await import("node:child_process")
+    let needsReencode = false
+    try {
+      const probeOut = execSync(
+        `ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`,
+        { encoding: "utf-8" }
+      ).trim().toLowerCase()
+      needsReencode = probeOut === "vp8" || probeOut === "vp9"
+      console.log(`[mergeVideoAudio] Video codec: ${probeOut}, needsReencode: ${needsReencode}`)
+    } catch {
+      console.log("[mergeVideoAudio] Could not probe codec, defaulting to copy")
+    }
+
     const doMerge = async (filter: string) => {
       await runFfmpeg([
         ...inputArgs,
         "-filter_complex", filter,
         "-map", "0:v",
         "-map", "[aout]",
-        "-c:v", "copy",
+        ...(needsReencode
+          ? ["-c:v", "libx264", "-preset", "fast", "-crf", "18"]
+          : ["-c:v", "copy"]),
         "-c:a", "aac",
         outputPath,
       ])

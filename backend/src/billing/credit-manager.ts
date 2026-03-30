@@ -13,6 +13,7 @@ export const CREDIT_COSTS: Record<string, number> = {
   "trim-audio": 1,
   "split-media": 2,
   "mix-audio": 2,
+  "combine-audio": 1,
   "adjust-volume": 1,
   "trim-video": 1,
   "extract-frame": 1,

@@ -449,6 +449,7 @@ const AUDIO_RESULT_TYPES = new Set([
   "audio-isolation",
   "trim-audio",
   "mix-audio",
+  "combine-audio",
 ])
 
 /** Entity node types that store sourceImageUrl / generatedResults */

@@ -52,6 +52,7 @@ import {
   adjustVolumeApi,
   addCaptionsApi,
   mixAudioApi,
+  combineAudioApi,
   generateImage,
   getJobStatus,
   generateAIWriterStream,
@@ -125,6 +126,7 @@ import type {
   AdjustVolumeData,
   AddCaptionsData,
   MixAudioData,
+  CombineAudioData,
   CharacterNodeData,
   FaceNodeData,
   ObjectNodeData,
@@ -2988,6 +2990,41 @@ export function executeNode(
       () => mixAudioApi(audioUrls, volumes, ctx.userId),
       "generatedAudioUrl",
       "Mix Audio",
+      ctx,
+    );
+  }
+
+  if (node.type === "combine-audio") {
+    const combineData = node.data as CombineAudioData;
+    let sourceEntries = inputs.audioUrlsWithSourceIds ?? [];
+
+    // Apply segmentOrder to reorder audio inputs
+    if (combineData.segmentOrder?.length && sourceEntries.length > 1) {
+      sourceEntries = applyMediaOrder(
+        sourceEntries.map((e) => ({ id: e.nodeId, ...e })),
+        combineData.segmentOrder,
+      ).map((e) => ({ nodeId: e.nodeId, url: e.url }));
+    }
+
+    const segments = sourceEntries.map((e) => {
+      const settings = combineData.segmentSettings?.[e.nodeId] ?? {};
+      return {
+        url: e.url,
+        ...(settings.startTime != null ? { startTime: settings.startTime } : {}),
+        ...(settings.endTime != null ? { endTime: settings.endTime } : {}),
+      };
+    });
+    if (segments.length === 0) {
+      toast.error(
+        `Node "${combineData.label}": need at least 1 audio input`,
+      );
+      return Promise.reject(new Error("Need at least 1 audio segment"));
+    }
+    return runProcessingNode(
+      node.id,
+      () => combineAudioApi({ segments, userId: ctx.userId }),
+      "generatedAudioUrl",
+      "Combine Audio",
       ctx,
     );
   }

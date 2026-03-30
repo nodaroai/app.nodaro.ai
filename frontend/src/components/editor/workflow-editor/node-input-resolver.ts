@@ -91,7 +91,7 @@ export function resolveLoopColumnValues(
 const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"]);
 
 /** Node types that accept multiple audio inputs (accumulate to audioUrls array) */
-const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio"]);
+const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "combine-audio"]);
 
 /** VIDEO_OUTPUT_NODE_TYPES — used for kieTaskId passthrough */
 const VIDEO_OUTPUT_NODE_TYPES = new Set([
@@ -444,7 +444,7 @@ export function resolveNodeInputs(
           }
           continue;
         }
-        if (node.type === "mix-audio") {
+        if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
           for (const item of srcListResults) {
             if (item) {
               inputs.audioUrls = [...(inputs.audioUrls ?? []), item];
@@ -1007,6 +1007,7 @@ export function resolveNodeInputs(
       src.type === "suno-upload-extend" ||
       src.type === "trim-audio" ||
       src.type === "mix-audio" ||
+      src.type === "combine-audio" ||
       src.type === "voice-changer" ||
       src.type === "dubbing" ||
       src.type === "voice-remix" ||
@@ -1209,7 +1210,7 @@ export function resolveNodeInputs(
             ...(inputs.audioSources ?? []),
             { url: output, sourceNodeId: src.id },
           ];
-        } else if (node.type === "mix-audio") {
+        } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
           inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
           inputs.audioUrlsWithSourceIds = [
             ...(inputs.audioUrlsWithSourceIds ?? []),

@@ -14,6 +14,7 @@ import { resizeVideo } from "../../providers/video/resize-video.js"
 import { adjustVolume } from "../../providers/video/adjust-volume.js"
 import { addCaptions } from "../../providers/video/add-captions.js"
 import { mixAudio } from "../../providers/video/mix-audio.js"
+import { combineAudio } from "../../providers/video/combine-audio.js"
 import { speedRamp } from "../../providers/video/speed-ramp.js"
 import { loopVideo } from "../../providers/video/loop-video.js"
 import { fadeVideo } from "../../providers/video/fade-video.js"
@@ -218,6 +219,14 @@ const handleAddCaptions: HandlerFn = async function handleAddCaptions(job, ctx) 
   await completeFfmpegVideoJob(outputPath, ctx)
 }
 
+const handleCombineAudio: HandlerFn = async function handleCombineAudio(job, ctx) {
+  const { segments } = job.data as { segments: Array<{ url: string; startTime?: number; endTime?: number }> }
+  console.log(`[worker] combine-audio ${ctx.jobId}: ${segments.length} segments`)
+  const outputPath = await combineAudio({ segments })
+  await job.updateProgress(80)
+  await completeFfmpegAudioJob(outputPath, ctx)
+}
+
 const handleMixAudio: HandlerFn = async function handleMixAudio(job, ctx) {
   const { audioUrls, trackVolumes } = job.data as { jobId: string; audioUrls: string[]; trackVolumes?: number[] }
   console.log(`[worker] mix-audio ${ctx.jobId}: ${audioUrls.length} tracks`)
@@ -348,6 +357,7 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "adjust-volume": handleAdjustVolume,
   "add-captions": handleAddCaptions,
   "mix-audio": handleMixAudio,
+  "combine-audio": handleCombineAudio,
   "transcode-video": handleTranscodeVideo,
   "social-media-format": handleSocialMediaFormat,
   "split-media": handleSplitMedia,

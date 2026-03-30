@@ -1336,6 +1336,26 @@ export async function mixAudioApi(audioUrls: string[], trackVolumes?: number[], 
   return res.json()
 }
 
+export async function combineAudioApi(params: {
+  segments: Array<{ url: string; startTime?: number; endTime?: number }>
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { segments: params.segments }
+  if (params.userId) {
+    body.userId = params.userId
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/combine-audio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start combine audio")
+  }
+  return res.json()
+}
+
 export function getImageProxyUrl(url: string): string {
   return `${API_BASE_URL}/v1/image-proxy?url=${encodeURIComponent(url)}`
 }

@@ -1510,6 +1510,34 @@ export function buildPayload(
       })
     }
 
+    case "combine-audio": {
+      let combineAudioUrls: string[] = resolvedInputs.audioUrls ?? (Array.isArray(data.audioUrls) ? data.audioUrls as string[] : [])
+      const segmentOrder = data.segmentOrder as string[] | undefined
+      if (segmentOrder?.length && resolvedInputs.audioUrlsWithSourceIds?.length) {
+        const ordered: string[] = []
+        for (const nodeId of segmentOrder) {
+          const entry = resolvedInputs.audioUrlsWithSourceIds.find((e) => e.nodeId === nodeId)
+          if (entry) ordered.push(entry.url)
+        }
+        if (ordered.length >= 1) combineAudioUrls = ordered
+      }
+      const segmentSettings = (data.segmentSettings ?? {}) as Record<string, { startTime?: number; endTime?: number }>
+      const sourceEntries: Array<{ nodeId: string; url: string }> = resolvedInputs.audioUrlsWithSourceIds ?? combineAudioUrls.map((url) => ({ nodeId: "", url }))
+      const segments = sourceEntries.map((entry) => {
+        const settings = segmentSettings[entry.nodeId] ?? {}
+        return {
+          url: entry.url,
+          ...(settings.startTime != null ? { startTime: settings.startTime } : {}),
+          ...(settings.endTime != null ? { endTime: settings.endTime } : {}),
+        }
+      })
+      return ffmpegResult("combine-audio", {
+        jobId,
+        segments,
+        usageLogId,
+      })
+    }
+
     case "adjust-volume": {
       const avInputUrl = resolvedInputs.audioUrl || resolvedInputs.videoUrl || data.audioUrl || data.videoUrl
       const avVideoUrl = resolvedInputs.videoUrl || data.videoUrl

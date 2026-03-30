@@ -1497,6 +1497,21 @@ export type MixAudioData = {
   activeResultIndex?: number
 }
 
+export type CombineAudioData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  segmentOrder?: string[]
+  segmentSettings?: Record<string, { startTime?: number; endTime?: number; volume?: number }>
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+}
+
 export type AdjustVolumeData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -2338,6 +2353,7 @@ export type SceneNodeData =
   | TrimAudioData
   | SplitMediaData
   | MixAudioData
+  | CombineAudioData
   | AdjustVolumeData
   | TrimVideoData
   | ExtractFrameData
@@ -2445,6 +2461,7 @@ export type SceneNodeType =
   | "trim-audio"
   | "split-media"
   | "mix-audio"
+  | "combine-audio"
   | "adjust-volume"
   | "trim-video"
   | "extract-frame"
@@ -3310,6 +3327,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Mix Audio", trackCount: 2, trackVolumes: {}, fieldMappings: {} },
+  },
+  {
+    type: "combine-audio",
+    label: "Combine Audio",
+    category: "processing",
+    creditCost: 1,
+    inputs: ["in"],
+    outputs: ["audio"],
+    defaultData: { label: "Combine Audio", segmentOrder: [], segmentSettings: {}, fieldMappings: {} },
   },
   {
     type: "adjust-volume",
