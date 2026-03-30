@@ -1031,7 +1031,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           <FreeCutEditorModal
             videoUrl={freecutVideoUrl}
             freecutProjectUrl={freecutProjectUrl}
-            assets={freecutAssets}
             onExportComplete={handleFreeCutExport}
             onClose={handleFreeCutClose}
             onImportRequest={handleImportRequest}
