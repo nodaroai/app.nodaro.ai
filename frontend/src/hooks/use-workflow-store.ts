@@ -583,11 +583,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       ...(type === "sticky-note" ? { zIndex: -1 } : {}),
     }
 
-    if (type === "teleport-send") {
-      const { channel, channelColor } = getNextChannel(get().nodes)
-      newNode.data = { ...newNode.data, channel, channelColor, label: channel }
-    }
-    if (type === "teleport-receive") {
+    if (type === "teleport-send" || type === "teleport-receive") {
       const { channel, channelColor } = getNextChannel(get().nodes)
       newNode.data = { ...newNode.data, channel, channelColor, label: channel }
     }

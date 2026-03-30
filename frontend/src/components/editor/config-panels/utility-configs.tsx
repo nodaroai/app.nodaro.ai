@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select"
 import {
   isTeleportDefaultLabel,
+  TELEPORTER_PAN_EVENT,
   type CombineTextNodeData,
   type SaveToStorageData,
   type WebhookOutputData,
@@ -520,7 +521,7 @@ export function TeleporterConfig({ data, onUpdate, nodeType }: { data: TeleportS
                 type="button"
                 className="w-full text-left text-xs px-2 py-1 rounded hover:bg-accent/10 text-muted-foreground hover:text-foreground transition-colors"
                 onClick={() => {
-                  const event = new CustomEvent("teleporter-pan-to", { detail: { nodeId: p.id } })
+                  const event = new CustomEvent(TELEPORTER_PAN_EVENT, { detail: { nodeId: p.id } })
                   window.dispatchEvent(event)
                 }}
               >

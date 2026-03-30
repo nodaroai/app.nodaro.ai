@@ -4,12 +4,12 @@ import { memo } from "react"
 import { Handle, Position, type NodeProps } from "@xyflow/react"
 import { Send, Download, ArrowRight, ArrowLeft } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { isTeleportDefaultLabel, type TeleportSendData, type TeleportReceiveData } from "@/types/nodes"
+import { isTeleportDefaultLabel, TELEPORTER_PAN_EVENT, type TeleportSendData, type TeleportReceiveData } from "@/types/nodes"
+import { isImageUrl, isVideoUrl } from "@/lib/media-type"
 
 type TeleporterNodeData = TeleportSendData | TeleportReceiveData
 
-const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|bmp)(\?|$)/i
-const VIDEO_RE = /\.(mp4|mov|webm|avi|mkv)(\?|$)/i
+const HIDDEN_HANDLE_STYLE = { opacity: 0, pointerEvents: "none" as const, width: 1, height: 1 }
 
 function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { variant: "send" | "receive" }) {
   const nodeData = data as TeleporterNodeData
@@ -33,8 +33,8 @@ function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { varian
   })
 
   const result = nodeData.result ?? ""
-  const isImage = typeof result === "string" && IMAGE_RE.test(result)
-  const isVideo = typeof result === "string" && VIDEO_RE.test(result)
+  const isImage = typeof result === "string" && isImageUrl(result)
+  const isVideo = typeof result === "string" && isVideoUrl(result)
   const hasThumb = isImage || isVideo
 
   const hasCustomName = !isTeleportDefaultLabel(nodeData.label, nodeData.channel)
@@ -44,7 +44,7 @@ function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { varian
     e.stopPropagation()
     e.preventDefault()
     if (!firstPartnerId) return
-    window.dispatchEvent(new CustomEvent("teleporter-pan-to", { detail: { nodeId: firstPartnerId } }))
+    window.dispatchEvent(new CustomEvent(TELEPORTER_PAN_EVENT, { detail: { nodeId: firstPartnerId } }))
   }
 
   const jumpButton = firstPartnerId ? (
@@ -99,7 +99,7 @@ function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { varian
         id="in"
         style={variant === "send"
           ? { background: nodeData.channelColor, border: "2px solid var(--card)" }
-          : { opacity: 0, pointerEvents: "none", width: 1, height: 1 }
+          : HIDDEN_HANDLE_STYLE
         }
       />
 
@@ -109,7 +109,7 @@ function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { varian
         id="out"
         style={variant === "receive"
           ? { background: nodeData.channelColor, border: "2px solid var(--card)" }
-          : { opacity: 0, pointerEvents: "none", width: 1, height: 1 }
+          : HIDDEN_HANDLE_STYLE
         }
       />
 

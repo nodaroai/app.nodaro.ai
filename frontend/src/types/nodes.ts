@@ -2078,6 +2078,8 @@ export type TeleportReceiveData = {
   result?: string
 }
 
+export const TELEPORTER_PAN_EVENT = "teleporter-pan-to"
+
 export function isTeleportDefaultLabel(label: string, channel: string): boolean {
   return label === channel || label === `Send ${channel}` || label === `Recv ${channel}`
 }
