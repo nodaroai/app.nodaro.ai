@@ -218,9 +218,6 @@ describe("EXECUTABLE_TYPES — new nodes", () => {
     expect(EXECUTABLE_TYPES.has("speech-to-video")).toBe(true)
   })
 
-  it("contains sora-storyboard", () => {
-    expect(EXECUTABLE_TYPES.has("sora-storyboard")).toBe(true)
-  })
 })
 
 // ---------------------------------------------------------------------------
@@ -260,9 +257,6 @@ describe("NODE_CREDIT_COSTS — new nodes", () => {
     expect(NODE_CREDIT_COSTS["speech-to-video"]).toBe(4)
   })
 
-  it("has sora-storyboard at 47 credits", () => {
-    expect(NODE_CREDIT_COSTS["sora-storyboard"]).toBe(47)
-  })
 })
 
 // ---------------------------------------------------------------------------

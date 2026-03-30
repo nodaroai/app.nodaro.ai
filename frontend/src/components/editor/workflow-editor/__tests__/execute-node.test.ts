@@ -123,7 +123,6 @@ vi.mock("@/lib/api", () => ({
   downloadYouTubeAudio: vi.fn(),
   lipSyncApi: vi.fn(),
   speechToVideoApi: vi.fn(),
-  soraStoryboardApi: vi.fn(),
   motionTransferApi: vi.fn(),
   videoUpscaleApi: vi.fn(),
   mergeVideoAudioApi: vi.fn(),
@@ -604,8 +603,6 @@ describe("image-to-video", () => {
       undefined,
       undefined,
       undefined,
-      undefined,
-      undefined,
     )
   })
 })
@@ -677,7 +674,6 @@ describe("text-to-video", () => {
       expect.anything(),
       undefined,
       expect.objectContaining({ duration: undefined, aspectRatio: undefined }),
-      undefined,
     )
   })
 })

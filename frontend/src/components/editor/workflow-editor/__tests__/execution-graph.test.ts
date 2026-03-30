@@ -438,23 +438,6 @@ describe("extractNodeOutput", () => {
     expect(extractNodeOutput(node)).toBe("http://fallback-speech.mp4")
   })
 
-  it("returns video url from sora-storyboard with generatedResults", () => {
-    const node = makeNode("1", "sora-storyboard", {
-      generatedResults: [
-        { url: "http://storyboard.mp4", timestamp: "t1", jobId: "j1" },
-      ],
-      activeResultIndex: 0,
-    })
-    expect(extractNodeOutput(node)).toBe("http://storyboard.mp4")
-  })
-
-  it("falls back to generatedVideoUrl for sora-storyboard with no results", () => {
-    const node = makeNode("1", "sora-storyboard", {
-      generatedVideoUrl: "http://fallback-storyboard.mp4",
-    })
-    expect(extractNodeOutput(node)).toBe("http://fallback-storyboard.mp4")
-  })
-
   // --- New nodes: audio output ---
 
   it("returns audio url from suno-mashup with generatedResults", () => {

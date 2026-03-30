@@ -76,14 +76,13 @@ function getNodeTypeDisplayName(type: string): string {
 const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "edit-image", "image-to-image",
   "image-to-video", "video-to-video", "text-to-video", "text-to-speech",
-  "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video", "sora-storyboard",
+  "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
   "video-upscale", "extend-video", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
   "ai-writer",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "image-to-text", "qa-check", "transcribe",
-  "sora-character",
   "render-video",
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post",
 ])
