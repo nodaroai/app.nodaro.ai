@@ -49,7 +49,7 @@ export function resolveLoopColumnValues(
         const edgeData = colInEdge.data as Record<string, unknown> | undefined;
         const useAll = !!edgeData?.useAllResults;
         const allOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll);
-        if (allOutputs && allOutputs.length > 0) return allOutputs.map((v) => v.trim());
+        if (allOutputs && allOutputs.length > 1) return allOutputs.map((v) => v.trim());
         const upstreamOutput = extractNodeOutput(
           upstreamNode as WorkflowNode,
           colInEdge.sourceHandle ?? undefined,
@@ -71,7 +71,7 @@ export function resolveLoopColumnValues(
       const edgeData = loopInEdges[0].data as Record<string, unknown> | undefined;
       const useAll = !!edgeData?.useAllResults;
       const allOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll);
-      if (allOutputs && allOutputs.length > 0) return allOutputs.map((v) => v.trim());
+      if (allOutputs && allOutputs.length > 1) return allOutputs.map((v) => v.trim());
       const upstreamOutput = extractNodeOutput(upstreamNode as WorkflowNode);
       if (upstreamOutput) {
         return splitByLoopDelimiter(upstreamOutput, loopData.columns).map((v) => v.trim());

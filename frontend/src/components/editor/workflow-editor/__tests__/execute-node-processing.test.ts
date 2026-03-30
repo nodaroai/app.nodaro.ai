@@ -334,6 +334,21 @@ describe("lip-sync", () => {
       "kling-avatar",
       "720p",
       "u1",
+      {
+        videoUrl: undefined,
+        guidanceScale: undefined,
+        inferenceSteps: undefined,
+        seed: undefined,
+        pads: undefined,
+        smooth: undefined,
+        fps: undefined,
+        resizeFactor: undefined,
+        enhancer: undefined,
+        preprocess: undefined,
+        still: undefined,
+        poseStyle: undefined,
+        expressionScale: undefined,
+      },
     )
   })
 })

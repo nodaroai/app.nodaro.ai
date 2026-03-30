@@ -176,6 +176,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
 
   // Hidden nodes -- seeded from settings
   const [hiddenNodeIds, setHiddenNodeIds] = useState<Set<string>>(new Set())
+  // Hidden individual results (keys: "nodeId:index") for per-result hiding in list mode
+  const [hiddenResultKeys, setHiddenResultKeys] = useState<Set<string>>(new Set())
   const [isRevealingHidden, setIsRevealingHidden] = useState(false)
 
   // Editor state (fullscreen mode only -- tab mode delegates to workflow store)
@@ -503,6 +505,25 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     onHiddenNodesChange?.(arr)
     if (next.size === 0) setIsRevealingHidden(false)
   }, [hiddenNodeIds, isFullscreen, onHiddenNodesChange, updatePresentationSettings])
+
+  // Per-result hide/unhide for individual list results
+  const handleHideResult = useCallback((key: string) => {
+    setHiddenResultKeys((prev) => {
+      if (prev.has(key)) return prev
+      const next = new Set(prev)
+      next.add(key)
+      return next
+    })
+  }, [])
+
+  const handleUnhideResult = useCallback((key: string) => {
+    setHiddenResultKeys((prev) => {
+      if (!prev.has(key)) return prev
+      const next = new Set(prev)
+      next.delete(key)
+      return next
+    })
+  }, [])
 
   const handleToggleReveal = useCallback(() => {
     setIsRevealingHidden((prev) => !prev)
@@ -1125,24 +1146,43 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     }
 
     // Individual mode with listResults: render multiple OutputCard instances
+    // Each result gets its own hide/unhide action keyed by "nodeId:index"
     if (listResults && listResults.length > 1 && displayMode === "individual") {
+      const visibleResults = listResults
+        .map((resultUrl, i) => ({ resultUrl, i }))
+        .filter(({ resultUrl, i }) => {
+          if (!resultUrl) return false
+          const key = `${node.id}:${i}`
+          return isRevealingHidden || !hiddenResultKeys.has(key)
+        })
+      if (visibleResults.length === 0) return null
       return (
         <div className="flex flex-col gap-2">
-          {listResults.filter(Boolean).map((resultUrl, i) => (
-            <OutputCard
-              key={`${node.id}-${i}`}
-              nodeId={node.id}
-              label={`${getCardTitle(node)} #${i + 1}`}
-              outputType={outputType}
-              status={status}
-              url={outputType !== "text" ? resultUrl : undefined}
-              text={outputType === "text" ? resultUrl : undefined}
-              onOpenMedia={handleOpenMedia}
-              elementSize={elementSize}
-              fieldBadges={i === 0 ? fieldBadges : undefined}
-              actions={nodeActions}
-            />
-          ))}
+          {visibleResults.map(({ resultUrl, i }) => {
+            const key = `${node.id}:${i}`
+            const isResultHidden = hiddenResultKeys.has(key)
+            const resultActions: OutputCardActions = {
+              onEdit: handleEditNode,
+              onHide: isResultHidden ? undefined : () => handleHideResult(key),
+              onUnhide: isResultHidden ? () => handleUnhideResult(key) : undefined,
+              isRevealed: isResultHidden && isRevealingHidden,
+            }
+            return (
+              <OutputCard
+                key={`${node.id}-${i}`}
+                nodeId={node.id}
+                label={`${getCardTitle(node)} #${i + 1}`}
+                outputType={outputType}
+                status={status}
+                url={outputType !== "text" ? resultUrl : undefined}
+                text={outputType === "text" ? resultUrl : undefined}
+                onOpenMedia={handleOpenMedia}
+                elementSize={elementSize}
+                fieldBadges={i === 0 ? fieldBadges : undefined}
+                actions={resultActions}
+              />
+            )
+          })}
         </div>
       )
     }
@@ -1163,7 +1203,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         actions={nodeActions}
       />
     )
-  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta, fieldBadgesByNode, hiddenNodeIds, isRevealingHidden, handleHideNode, handleUnhideNode, handleEditNode])
+  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta, fieldBadgesByNode, hiddenNodeIds, hiddenResultKeys, isRevealingHidden, handleHideNode, handleUnhideNode, handleHideResult, handleUnhideResult, handleEditNode])
 
   // Render a single PresentationItem — dispatches by type for input side
   const renderInputItem = useCallback(
@@ -1269,6 +1309,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         case "node": {
           const node = nodeMap.get(item.nodeId)
           if (!node) return null
+          if (!isRevealingHidden && hiddenNodeIds.has(node.id)) return null
           return renderOutputCard(node)
         }
         case "field": {
@@ -1279,6 +1320,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         case "output": {
           const node = nodeMap.get(item.nodeId)
           if (!node) return null
+          if (!isRevealingHidden && hiddenNodeIds.has(node.id)) return null
           return renderOutputCard(node)
         }
         case "richtext": {
@@ -1335,7 +1377,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           return null
       }
     },
-    [nodeMap, renderOutputCard, findFieldDef, isFullscreen, presInputValues, isEditing, settings, updatePresentationSettings],
+    [nodeMap, renderOutputCard, findFieldDef, isFullscreen, presInputValues, isEditing, settings, updatePresentationSettings, hiddenNodeIds, isRevealingHidden],
   )
 
   // Add a group item to the specified side
@@ -1486,14 +1528,14 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           </div>
         </div>
 
-        {/* App runner: action buttons — scrollable row on mobile, centered on desktop */}
+        {/* App runner: action buttons — desktop only in header, mobile uses fixed bottom bar */}
         {isAppRunner && (
-          <div className="flex items-center gap-2 pb-2 md:pb-0 md:absolute md:left-1/2 md:-translate-x-1/2 overflow-x-auto scrollbar-none -mx-3 px-3 md:mx-0 md:px-0 md:overflow-x-visible">
+          <div className="hidden md:flex items-center gap-2 md:absolute md:left-1/2 md:-translate-x-1/2">
             {user && (
               <button
                 type="button"
                 onClick={onNewRun}
-                className={`shrink-0 whitespace-nowrap h-10 md:h-8 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all duration-200 touch-manipulation ${
+                className={`shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all duration-200 ${
                   newRunLabel === "Retry" || newRunLabel === "Clear"
                     ? "text-foreground bg-muted hover:bg-muted/80 border border-border"
                     : "text-white bg-[#ff0073] hover:bg-[#ff0073]/90"
@@ -1510,11 +1552,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               <button
                 type="button"
                 onClick={onCancel}
-                className="shrink-0 whitespace-nowrap h-10 md:h-8 px-4 rounded-full text-sm font-medium text-white bg-red-600 hover:bg-red-700 flex items-center gap-2 transition-all duration-200 touch-manipulation"
+                className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-white bg-red-600 hover:bg-red-700 flex items-center gap-2 transition-all duration-200"
                 disabled={!onCancel}
               >
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="hidden sm:inline">Stop</span>
+                Stop
               </button>
             ) : (
               inputsReadOnly !== true && (
@@ -1522,10 +1564,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   <button
                     type="button"
                     onClick={() => setShowGetCreditsModal(true)}
-                    className="shrink-0 whitespace-nowrap h-10 md:h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 touch-manipulation"
+                    className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200"
                   >
                     <Sparkles className="h-4 w-4" />
-                    <span className="hidden sm:inline">{userCredits?.tier === "free" ? "Get Free Credits" : "Get Credits"}</span>
+                    {userCredits?.tier === "free" ? "Get Free Credits" : "Get Credits"}
                   </button>
                 ) : (
                   <>
@@ -1535,13 +1577,13 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                     <button
                       type="button"
                       onClick={handleRunClick}
-                      className="shrink-0 whitespace-nowrap h-10 md:h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+                      className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={!!user && !allInputsFilled}
                     >
                       {!user ? (
-                        <><LogIn className="h-4 w-4" /><span className="hidden sm:inline">Sign in to Run</span></>
+                        <><LogIn className="h-4 w-4" />Sign in to Run</>
                       ) : (
-                        <><Play className="h-4 w-4" />Run<span className="hidden sm:inline">{costLabel}</span></>
+                        <><Play className="h-4 w-4" />Run{costLabel}</>
                       )}
                     </button>
                   </>
@@ -1552,16 +1594,16 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             {/* Remix: create editable copy (only when app creator enabled it) */}
             {appSupportsRemix && (
               <>
-                <div className="w-px h-5 bg-border hidden md:block shrink-0" />
+                <div className="w-px h-5 bg-border shrink-0" />
                 <button
                   type="button"
                   onClick={handleRemix}
                   disabled={isRemixing}
                   title="Remix this app"
-                  className="shrink-0 whitespace-nowrap h-10 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 disabled:opacity-50 touch-manipulation"
+                  className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 disabled:opacity-50"
                 >
                   {isRemixing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                  <span className="hidden md:inline">Remix</span>
+                  Remix
                 </button>
               </>
             )}
@@ -1571,10 +1613,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               type="button"
               onClick={() => window.open("/apps", "_blank")}
               title="Explore more apps"
-              className="shrink-0 whitespace-nowrap h-10 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 touch-manipulation"
+              className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200"
             >
               <LayoutGrid className="h-4 w-4" />
-              <span className="hidden md:inline">More Apps</span>
+              More Apps
             </button>
           </div>
         )}
@@ -1751,10 +1793,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       </div>
 
       {/* Hidden nodes pill */}
-      {hiddenNodeIds.size > 0 && (
+      {(hiddenNodeIds.size > 0 || hiddenResultKeys.size > 0) && (
         <div className="flex justify-center mb-3">
           <HiddenNodesPill
-            count={hiddenNodeIds.size}
+            count={hiddenNodeIds.size + hiddenResultKeys.size}
             isRevealing={isRevealingHidden}
             onToggleReveal={handleToggleReveal}
           />
@@ -1850,6 +1892,87 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             />
           )}
         </Suspense>
+      )}
+
+      {/* Mobile fixed bottom action bar for app runner — stays above keyboard */}
+      {isAppRunner && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center gap-2 px-3 py-2 bg-card/95 backdrop-blur-lg border-t border-border" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
+          {user && (
+            <button
+              type="button"
+              onClick={onNewRun}
+              className={`shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all duration-200 touch-manipulation ${
+                newRunLabel === "Retry" || newRunLabel === "Clear"
+                  ? "text-foreground bg-muted hover:bg-muted/80 border border-border"
+                  : "text-white bg-[#ff0073] hover:bg-[#ff0073]/90"
+              }`}
+            >
+              {newRunLabel === "Retry" || newRunLabel === "Clear"
+                ? <RotateCcw className="h-4 w-4" />
+                : <Plus className="h-4 w-4" />}
+              {newRunLabel ?? "New Run"}
+            </button>
+          )}
+
+          {isRunning ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium text-white bg-red-600 hover:bg-red-700 flex items-center gap-2 transition-all duration-200 touch-manipulation"
+              disabled={!onCancel}
+            >
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Stop
+            </button>
+          ) : (
+            inputsReadOnly !== true && (
+              needsMoreCredits ? (
+                <button
+                  type="button"
+                  onClick={() => setShowGetCreditsModal(true)}
+                  className="shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 touch-manipulation"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {userCredits?.tier === "free" ? "Get Free Credits" : "Get Credits"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleRunClick}
+                  className="shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+                  disabled={!!user && !allInputsFilled}
+                >
+                  {!user ? (
+                    <><LogIn className="h-4 w-4" />Sign in to Run</>
+                  ) : (
+                    <><Play className="h-4 w-4" />Run{costLabel}</>
+                  )}
+                </button>
+              )
+            )
+          )}
+
+          {appSupportsRemix && (
+            <button
+              type="button"
+              onClick={handleRemix}
+              disabled={isRemixing}
+              title="Remix this app"
+              className="shrink-0 whitespace-nowrap h-10 px-3 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 disabled:opacity-50 touch-manipulation"
+            >
+              {isRemixing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => window.open("/apps", "_blank")}
+            title="Explore more apps"
+            className="shrink-0 whitespace-nowrap h-10 px-3 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 touch-manipulation"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+        </div>
       )}
     </div>
   )
