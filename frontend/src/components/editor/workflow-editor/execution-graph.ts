@@ -661,6 +661,7 @@ export function collectMediaAssets(
   type: "image" | "video" | "audio";
   url: string;
   label?: string;
+  thumbnailUrl?: string;
 }> {
   const assetMap = new Map<
     string,
@@ -669,6 +670,7 @@ export function collectMediaAssets(
       type: "image" | "video" | "audio";
       url: string;
       label?: string;
+      thumbnailUrl?: string;
     }
   >();
   const incomingEdges = allEdges.filter((e) => e.target === node.id);
@@ -678,15 +680,24 @@ export function collectMediaAssets(
     const output = extractNodeOutput(sourceNode);
     if (!output) continue;
     const srcType = sourceNode.type ?? "";
-    const label = (sourceNode.data as Record<string, unknown>).label as
-      | string
-      | undefined;
+    const srcData = sourceNode.data as Record<string, unknown>;
+    const label = srcData.label as string | undefined;
+    // Extract thumbnail: for images use the output URL itself, for videos check generatedResults or thumbnailUrl
+    let thumbnailUrl: string | undefined;
+    if (IMAGE_SOURCE_TYPES.has(srcType)) {
+      thumbnailUrl = output;
+    } else {
+      const results = (srcData.generatedResults as Array<{ url?: string; thumbnailUrl?: string }> | undefined) ?? [];
+      const activeIdx = (srcData.activeResultIndex as number | undefined) ?? 0;
+      thumbnailUrl = results[activeIdx]?.thumbnailUrl ?? (srcData.thumbnailUrl as string | undefined);
+    }
     if (IMAGE_SOURCE_TYPES.has(srcType)) {
       assetMap.set(sourceNode.id, {
         id: sourceNode.id,
         type: "image",
         url: output,
         label,
+        thumbnailUrl,
       });
     } else if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(srcType)) {
       assetMap.set(sourceNode.id, {
@@ -694,6 +705,7 @@ export function collectMediaAssets(
         type: "video",
         url: output,
         label,
+        thumbnailUrl,
       });
     } else if (AUDIO_SOURCE_TYPES.has(srcType)) {
       assetMap.set(sourceNode.id, {

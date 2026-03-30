@@ -125,7 +125,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (!manualEditNode) return undefined;
     const collected = collectMediaAssets(manualEditNode, storeEdges, storeNodes);
     if (collected.length === 0) return undefined;
-    return collected.map(a => ({ nodeId: a.id, url: a.url, type: a.type, label: a.label }));
+    return collected.map(a => ({ nodeId: a.id, url: a.url, type: a.type, label: a.label, thumbnailUrl: a.thumbnailUrl }));
   }, [manualEditNode, storeEdges, storeNodes]);
 
   const meData = manualEditNode?.data as ManualEditData | undefined;
