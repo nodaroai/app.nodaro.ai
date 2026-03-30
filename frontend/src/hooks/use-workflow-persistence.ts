@@ -597,10 +597,12 @@ export function useWorkflowPersistence(projectId?: string) {
         // 2. Most recent completed → apply results to nodes missing outputs
         let activeBackendExecution: ActiveBackendExecution | undefined
         try {
-          // First check for an active execution
+          // First check for an active execution (editor-triggered only — exclude
+          // app-runner and component executions which share the same workflow_id)
           const { data: activeExecs } = await listWorkflowExecutions(id, {
             limit: 1,
             status: "pending,running,stopping",
+            source: "editor",
           })
           if (activeExecs.length > 0) {
             const execId = activeExecs[0].id
@@ -624,9 +626,11 @@ export function useWorkflowPersistence(projectId?: string) {
             // No active execution — check the most recent completed one.
             // This handles the case where the execution ran while the
             // frontend was closed, so results were never applied to nodes.
+            // Use source=editor to exclude app-runner/component executions.
             const { data: completedExecs } = await listWorkflowExecutions(id, {
               limit: 1,
               status: "completed",
+              source: "editor",
             })
             if (completedExecs.length > 0) {
               const exec = await getWorkflowExecution(completedExecs[0].id)

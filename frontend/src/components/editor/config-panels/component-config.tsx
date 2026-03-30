@@ -213,6 +213,23 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
                 // Prefer options (value+label) over raw allowedValues
                 const opts: Array<{ value: string; label: string }> = setting.options
                   ?? (setting.allowedValues ?? []).map((v) => ({ value: String(v), label: String(v) }))
+
+                // Auto-detect aspect-ratio fields published with "select" type
+                // (pre-fix metadata). Render as AspectRatioSelector instead.
+                if (setting.field === "aspectRatio") {
+                  return (
+                    <div key={key}>
+                      <Label className="text-[10px] text-muted-foreground">{setting.label}</Label>
+                      <AspectRatioSelector
+                        options={opts}
+                        value={String(value ?? "")}
+                        onValueChange={(v) => handleSettingChange(setting, v)}
+                        className="mt-1"
+                      />
+                    </div>
+                  )
+                }
+
                 // Ensure the current value is in the options list (may be absent if
                 // the option set changed after the component was published).
                 const strVal = String(value ?? "")

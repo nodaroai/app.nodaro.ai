@@ -3298,7 +3298,7 @@ export interface WorkflowExecution {
   id: string
   workflowId: string
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'stopping'
-  triggerType: 'manual' | 'webhook' | 'schedule' | 'single-node'
+  triggerType: 'manual' | 'webhook' | 'schedule' | 'single-node' | 'app_run'
   triggerData?: Record<string, unknown>
   nodeStates?: Record<string, unknown>
   totalNodes: number
@@ -3499,12 +3499,13 @@ export async function streamWorkflowExecution(
 /** List executions for a workflow. */
 export function listWorkflowExecutions(
   workflowId: string,
-  opts?: { limit?: number; cursor?: string; status?: string },
+  opts?: { limit?: number; cursor?: string; status?: string; source?: "editor" | "all" },
 ): Promise<{ data: WorkflowExecution[]; nextCursor?: string }> {
   const params = new URLSearchParams()
   if (opts?.limit) params.set("limit", String(opts.limit))
   if (opts?.cursor) params.set("cursor", opts.cursor)
   if (opts?.status) params.set("status", opts.status)
+  if (opts?.source) params.set("source", opts.source)
 
   return apiRequest(
     `/v1/workflows/${encodeURIComponent(workflowId)}/executions?${params}`,

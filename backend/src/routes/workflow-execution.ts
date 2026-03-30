@@ -29,6 +29,8 @@ const listExecutionsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   cursor: z.string().uuid().optional(),
   status: z.string().optional(),
+  /** "editor" excludes app_run / component / webhook / schedule executions */
+  source: z.enum(["editor", "all"]).optional(),
 })
 
 const globalExecutionsQuery = z.object({
@@ -401,7 +403,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
-    const { limit, cursor, status } = queryParsed.data
+    const { limit, cursor, status, source } = queryParsed.data
     const { id: workflowId } = paramsParsed.data
 
     // Resolve cursor timestamp (shared across both sources)
@@ -441,6 +443,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       execQuery = execQuery.eq("status", statusFilter[0])
     } else if (statusFilter.length > 1) {
       execQuery = execQuery.in("status", statusFilter)
+    }
+
+    // source=editor: only return editor-triggered executions (exclude app_run, component, webhook, schedule)
+    if (source === "editor") {
+      execQuery = execQuery.eq("trigger_type", "manual").or("is_component_execution.is.null,is_component_execution.eq.false")
     }
 
     if (cursorTimestamp) {

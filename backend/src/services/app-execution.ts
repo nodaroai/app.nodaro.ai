@@ -69,7 +69,7 @@ export async function executeAppRun(
       workflow_id: workflowId,
       user_id: userId,
       status: "pending",
-      trigger_type: "manual",
+      trigger_type: "app_run",
       ...(isComponentExecution ? { is_component_execution: true } : {}),
     })
     .select("id")
@@ -101,7 +101,7 @@ export async function executeAppRun(
     executionId: execution.id,
     workflowId,
     userId,
-    triggerType: "manual",
+    triggerType: "app_run",
     inputOverrides,
     appVersionId,
     nodeIds,
