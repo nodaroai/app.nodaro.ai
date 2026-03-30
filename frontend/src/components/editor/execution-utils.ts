@@ -13,6 +13,7 @@ export const TRIGGER_LABELS: Record<string, string> = {
   webhook: "Webhook",
   schedule: "Schedule",
   "single-node": "Single Node",
+  app_run: "App Run",
 }
 
 export function formatRelativeTime(dateString: string): string {
