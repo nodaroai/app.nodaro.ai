@@ -122,6 +122,7 @@ export function MobileAppShell({
     () => orderNodesByIds(outputNodes, settings.outputOrder),
     [outputNodes, settings.outputOrder],
   )
+  const inputNodeIdSet = useMemo(() => new Set(inputNodes.map((n) => n.id)), [inputNodes])
 
   const nodeMap = useMemo(() => new Map(presNodes.map((n) => [n.id, n])), [presNodes])
 
@@ -346,18 +347,21 @@ export function MobileAppShell({
       const state = presNodeStates[nodeId]
       if (state?.output) {
         const output = state.output as Record<string, unknown>
-        const url = (output.imageUrl ?? output.videoUrl ?? output.audioUrl) as string | undefined
+        const url = (output.url ?? output.imageUrl ?? output.videoUrl ?? output.audioUrl ?? output.resultUrl) as string | undefined
         const text = output.text as string | undefined
         if (url || text) return { url, text }
       }
-      const inputUrl = presInputValues[nodeId]?.url as string | undefined
-      if (inputUrl) return { url: inputUrl, text: undefined }
+      // Check input values — only for input nodes
+      if (inputNodeIdSet.has(nodeId)) {
+        const inputUrl = presInputValues[nodeId]?.url as string | undefined
+        if (inputUrl) return { url: inputUrl, text: undefined }
+      }
       if (suppressOutputFallback) return { url: undefined, text: undefined }
       const node = nodeMap.get(nodeId)
       if (!node) return { url: undefined, text: undefined }
       return getNodeResultWithInputFallback(node)
     },
-    [presNodeStates, presInputValues, nodeMap, suppressOutputFallback],
+    [presNodeStates, presInputValues, nodeMap, suppressOutputFallback, inputNodeIdSet],
   )
 
   const getCardTitle = useCallback(
