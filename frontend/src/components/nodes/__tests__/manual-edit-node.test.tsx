@@ -36,12 +36,23 @@ vi.mock("@/hooks/use-workflow-store", () => ({
     runSingleNode: () => {},
     videoAutoplay: false,
     nodes: [],
+    edges: [],
   }),
 }))
 
 vi.mock("@/hooks/use-model-credits", () => ({ useModelCredits: () => 0 }))
+vi.mock("@/hooks/use-full-resolution", () => ({ useFullResolution: () => false }))
 vi.mock("@/components/editor/media-preview-modal", () => ({ MediaPreviewModal: () => null }))
 vi.mock("@/components/ui/delete-confirmation-dialog", () => ({ DeleteConfirmationDialog: () => null }))
+vi.mock("@/components/ui/cached-image", () => ({ CachedImage: (props: any) => <img {...props} /> }))
+vi.mock("@/lib/utils", () => ({ computeDeleteResultUpdates: () => ({}), cn: (...args: any[]) => args.filter(Boolean).join(" ") }))
+
+vi.mock("./editable-node-label", () => ({
+  EditableNodeLabel: () => <div data-testid="editable-label" />,
+}))
+vi.mock("./handle-icon", () => ({
+  HandleIcon: () => null,
+}))
 
 function renderNode(overrides: Record<string, unknown> = {}) {
   const defaultProps = {

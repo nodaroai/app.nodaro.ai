@@ -289,13 +289,14 @@ beforeEach(() => {
 describe("manual-edit bridge", () => {
   it("resolveManualEdit resolves a pending manual-edit promise", async () => {
     mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
-    const promise = executeNode(makeNode("manual-edit", {}), makeCtx())
+    const promise = executeNode(makeNode("manual-edit", { mode: "wait" }), makeCtx())
     expect(mockUpdateNodeData).toHaveBeenCalledWith(
       "n1",
-      expect.objectContaining({
-        executionStatus: "awaiting-user",
-        inputVideoUrl: "http://vid.mp4",
-      }),
+      expect.objectContaining({ inputVideoUrl: "http://vid.mp4" }),
+    )
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({ executionStatus: "awaiting-user" }),
     )
     resolveManualEdit("n1")
     await promise
@@ -303,7 +304,7 @@ describe("manual-edit bridge", () => {
 
   it("rejectManualEdit rejects a pending manual-edit promise", async () => {
     mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
-    const promise = executeNode(makeNode("manual-edit", {}), makeCtx())
+    const promise = executeNode(makeNode("manual-edit", { mode: "wait" }), makeCtx())
     promise.catch(() => {})
     rejectManualEdit("n1", new Error("cancelled"))
     await expect(promise).rejects.toThrow("cancelled")
@@ -312,11 +313,11 @@ describe("manual-edit bridge", () => {
   it("rejectAllManualEdits rejects all pending manual edits", async () => {
     mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
     const p1 = executeNode(
-      { ...makeNode("manual-edit", {}), id: "a1" },
+      { ...makeNode("manual-edit", { mode: "wait" }), id: "a1" },
       makeCtx(),
     )
     const p2 = executeNode(
-      { ...makeNode("manual-edit", {}), id: "a2" },
+      { ...makeNode("manual-edit", { mode: "wait" }), id: "a2" },
       makeCtx(),
     )
     p1.catch(() => {})
