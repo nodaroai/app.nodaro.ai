@@ -288,29 +288,17 @@ export function MobileAppShell({
     }
   }, [appRunnerInsufficientCredits])
 
-  // ---- Keyboard focus detection (hide tab bar + sticky action) ----
+  // ---- Virtual keyboard detection (hide tab bar + sticky action when keyboard is open) ----
   useEffect(() => {
-    const container = contentRef.current
-    if (!container) return
-    let focusOutTimer: ReturnType<typeof setTimeout> | null = null
-    const handleFocusIn = (e: FocusEvent) => {
-      const target = e.target as HTMLElement
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-        if (focusOutTimer) { clearTimeout(focusOutTimer); focusOutTimer = null }
-        setIsInputFocused(true)
-      }
+    const vv = window.visualViewport
+    if (!vv) return
+    // Threshold: if visual viewport is significantly smaller than window height, keyboard is open
+    const handleResize = () => {
+      const keyboardOpen = vv.height < window.innerHeight * 0.75
+      setIsInputFocused(keyboardOpen)
     }
-    const handleFocusOut = () => {
-      // Delay to prevent flicker when tabbing between inputs
-      focusOutTimer = setTimeout(() => setIsInputFocused(false), 100)
-    }
-    container.addEventListener("focusin", handleFocusIn)
-    container.addEventListener("focusout", handleFocusOut)
-    return () => {
-      if (focusOutTimer) clearTimeout(focusOutTimer)
-      container.removeEventListener("focusin", handleFocusIn)
-      container.removeEventListener("focusout", handleFocusOut)
-    }
+    vv.addEventListener("resize", handleResize)
+    return () => vv.removeEventListener("resize", handleResize)
   }, [])
 
   // ---- Scroll position save/restore ----
