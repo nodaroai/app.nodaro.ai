@@ -8,29 +8,30 @@
 import { replicate, extractUrl, extractCost } from "./client.js"
 
 interface LipSyncModelConfig {
-  model: string
+  // Community models require version-based predictions (not model-based)
+  version: string
   faceParam: string
   audioParam: string
 }
 
 const LIP_SYNC_MODEL_CONFIGS: Record<string, LipSyncModelConfig> = {
   latentsync: {
-    model: "bytedance/latentsync",
+    version: "637ce1919f807ca20da3a448ddc2743535d2853649574cd52a933120e9b9e293",
     faceParam: "video",
     audioParam: "audio",
   },
   wav2lip: {
-    model: "devxpy/cog-wav2lip",
+    version: "8d65e3f4f4298520e079198b493c25adfc43c058ffec924f2aefc8010ed25eef",
     faceParam: "face",
     audioParam: "audio",
   },
   "video-retalking": {
-    model: "chenxwh/video-retalking",
+    version: "db5a650c807b007dc5f9e5abe27c53e1b62880d1f94d218d27ce7fa802711d67",
     faceParam: "face",
     audioParam: "input_audio",
   },
   sadtalker: {
-    model: "cjwbw/sadtalker",
+    version: "a519cc0cfebaaeade068b23899165a11ec76aaa1d2b313d40d214f204ec957a3",
     faceParam: "source_image",
     audioParam: "driven_audio",
   },
@@ -65,7 +66,7 @@ export async function replicateLipSync(
     throw new Error(`Unsupported Replicate lip-sync provider: ${provider}`)
   }
 
-  console.log(`[Replicate:lipSync] Provider: ${provider}, Model: ${cfg.model}`)
+  console.log(`[Replicate:lipSync] Provider: ${provider}, Version: ${cfg.version.slice(0, 12)}...`)
   console.log(`[Replicate:lipSync] Face: ${faceUrl}, Audio: ${audioUrl}`)
 
   const input: Record<string, unknown> = {
@@ -97,10 +98,10 @@ export async function replicateLipSync(
     if (params.expressionScale !== undefined) input.expression_scale = params.expressionScale
   }
 
-  console.log(`[Replicate:lipSync] Request:`, JSON.stringify({ model: cfg.model, input }, null, 2))
+  console.log(`[Replicate:lipSync] Request:`, JSON.stringify({ version: cfg.version.slice(0, 12), input }, null, 2))
 
   const prediction = await replicate.predictions.create({
-    model: cfg.model as `${string}/${string}`,
+    version: cfg.version,
     input,
   })
   const completed = await replicate.wait(prediction)
