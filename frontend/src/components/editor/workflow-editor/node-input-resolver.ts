@@ -424,7 +424,7 @@ export function resolveNodeInputs(
   const inputs: FrontendResolvedInputs = {};
 
   for (const srcEdge of incomingEdges) {
-    const src = nodes.find((n) => n.id === srcEdge.source);
+    let src = nodes.find((n) => n.id === srcEdge.source);
     if (!src) continue;
 
     // Check for item:N/last/all output mode on nodes with fan-out list results
@@ -603,7 +603,7 @@ export function resolveNodeInputs(
 
     // Split media output — route selected chunk by outputChunkIndex
     if (src.type === "split-media") {
-      const liveNode = useWorkflowStore.getState().nodes.find(n => n.id === src.id);
+      const liveNode = useWorkflowStore.getState().nodes.find(n => n.id === src!.id);
       const srcData = (liveNode?.data ?? src.data) as Record<string, unknown>;
       const chunkIndex = (srcData.outputChunkIndex as number | undefined) ?? 0;
       const audioUrls = (srcData.generatedAudioUrls as string[] | undefined) ?? [];
@@ -665,31 +665,58 @@ export function resolveNodeInputs(
         inputs.prompt = output
       }
     } else if (src.type === "teleport-send" || src.type === "teleport-receive") {
-      // Follow chain to original source and route by its type
+      // Follow chain to original source and re-route as if directly connected
       const origin = resolveTeleportOrigin(src, nodes, edges)
       if (origin.type && origin.type !== src.type) {
-        // Re-route as if connected directly to the origin node
-        const originType = origin.type
-        if (IMAGE_SOURCE_TYPES.has(originType)) {
-          inputs.imageUrl = output
-        } else if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(originType)) {
-          inputs.videoUrl = output
-        } else if (AUDIO_SOURCE_TYPES.has(originType)) {
-          inputs.audioUrl = output
+        // Substitute origin as the source so existing routing logic handles it
+        src = origin
+        // Fall through — the next iteration won't happen, but we need to
+        // re-enter the routing switch. Use goto-equivalent: re-check src.type below.
+      }
+      // Route by origin type (or fallback to URL detection)
+      if (IMAGE_SOURCE_TYPES.has(src.type ?? "")) {
+        const nt = node.type as string
+        if (nt === "generate-image" || nt === "edit-image" || nt === "image-to-image" || nt === "modify-image") {
+          inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "image")
         } else {
-          inputs.prompt = output
+          inputs.imageUrl = output
         }
+      } else if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(src.type ?? "")) {
+        if (node.type === "combine-videos") {
+          inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
+          inputs.videoUrlsWithSourceIds = [
+            ...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []),
+            { nodeId: src.id, url: output },
+          ]
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "video")
+        } else {
+          inputs.videoUrl = output
+        }
+      } else if (AUDIO_SOURCE_TYPES.has(src.type ?? "")) {
+        if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
+          inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
+          inputs.audioUrlsWithSourceIds = [
+            ...(inputs.audioUrlsWithSourceIds ?? []),
+            { nodeId: src.id, url: output },
+          ]
+        } else if (node.type === "merge-video-audio") {
+          inputs.audioSources = [...(inputs.audioSources ?? []), { url: output, sourceNodeId: src.id }]
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "audio")
+        } else {
+          inputs.audioUrl = output
+        }
+      } else if (IMAGE_URL_RE.test(output)) {
+        inputs.imageUrl = output
+      } else if (VIDEO_URL_RE.test(output)) {
+        inputs.videoUrl = output
+      } else if (AUDIO_URL_RE.test(output)) {
+        inputs.audioUrl = output
       } else {
-        // Fallback: detect from URL pattern
-        if (IMAGE_URL_RE.test(output)) {
-          inputs.imageUrl = output
-        } else if (VIDEO_URL_RE.test(output)) {
-          inputs.videoUrl = output
-        } else if (AUDIO_URL_RE.test(output)) {
-          inputs.audioUrl = output
-        } else {
-          inputs.prompt = output
-        }
+        inputs.prompt = output
       }
     } else if (src.type === "router") {
       // Router passthrough — detect media type from URL
@@ -1241,9 +1268,9 @@ export function resolveNodeInputs(
       inputs.prompt = output;
     } else if (src.type === "sub-workflow" || src.type === "sub-workflow-input") {
       // Route sub-workflow output by the sourceHandle to the correct media type
-      const srcData = src.data as Record<string, unknown>;
+      const srcData = src!.data as Record<string, unknown>;
       const routeSnapshot = srcData.routeSnapshot as { outputPorts?: Array<{ id: string; mediaType: string }> } | undefined;
-      const subEdge = incomingEdges.find((e) => e.source === src.id);
+      const subEdge = incomingEdges.find((e) => e.source === src!.id);
       const sourceHandle = subEdge?.sourceHandle as string | undefined;
 
       // Determine media type from the output port (sourceHandle = "out_<portId>")
