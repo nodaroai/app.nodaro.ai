@@ -6,7 +6,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
-import { Plus, Inbox, Play } from "lucide-react"
+import { Plus, Inbox, Play, PenLine } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
@@ -928,10 +928,17 @@ export function MobileAppShell({
         ) : activeTab === "outputs" ? (
           // Outputs tab
           <div className="space-y-4 p-4">
-            {orderedOutputNodes.length === 0 && !useOutputItemsRendering && !isRunning ? (
+            {presExecutionStatus === "idle" && !isRunning ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                <Inbox className="h-8 w-8 mb-3 opacity-40" />
-                <p className="text-sm">Run the app to see results here</p>
+                <PenLine className="h-8 w-8 mb-3 opacity-40" />
+                <p className="text-sm">{allInputsFilled ? "Press Run to generate results" : "Fill in the inputs first"}</p>
+                <button
+                  type="button"
+                  className="mt-3 text-xs text-primary hover:underline"
+                  onClick={() => setActiveTab("inputs")}
+                >
+                  Go to Inputs
+                </button>
               </div>
             ) : useOutputItemsRendering ? (
               outputItems!.map((item) => {
