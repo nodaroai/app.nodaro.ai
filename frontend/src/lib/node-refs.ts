@@ -100,6 +100,13 @@ function getEdgeOutputMode(
 function extractListItems(node: WorkflowNode): string[] {
   const data = node.data as Record<string, unknown>
   if (node.type === "list") {
+    // New format: columns + rows (same as loop)
+    const listCols = (data as LoopNodeData).columns
+    if (listCols) {
+      const rows = (data as LoopNodeData).rows
+      return (rows ?? []).map((r) => r[0]?.trim() ?? "").filter(Boolean)
+    }
+    // Legacy format: items string
     return ((data.items as string) || "")
       .split("\n")
       .map((l: string) => l.trim())

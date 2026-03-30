@@ -299,7 +299,7 @@ function getBaseFanOut(
     }
 
     // Direct fan-out from loop node
-    if (sourceNode.type === "loop") {
+    if (sourceNode.type === "loop" || sourceNode.type === "list") {
       const rows = (sourceNode.data as Record<string, unknown>).rows as
         | string[][]
         | undefined;
@@ -333,7 +333,7 @@ function getBaseFanOut(
           if (!gpHasRange) { if (items.length > 1) return items.length; }
           else { const filtered = applyRange(items, gpRangeFrom, gpRangeTo, gpRangeStep); if (filtered.length > 1) return filtered.length; }
         }
-        if (listNode.type === "loop") {
+        if (listNode.type === "loop" || listNode.type === "list") {
           const rows = (listNode.data as Record<string, unknown>).rows as
             | string[][]
             | undefined;

@@ -52,7 +52,7 @@ export function resolveLoopColumnValues(
       const upstreamNode = nodes.find((n) => n.id === colInEdge.source);
       if (upstreamNode) {
         // Upstream is also a loop — recursively resolve its column values
-        if (upstreamNode.type === "loop") {
+        if (upstreamNode.type === "loop" || upstreamNode.type === "list") {
           const upstreamVals = resolveLoopColumnValues(
             { id: upstreamNode.id, data: upstreamNode.data as Record<string, unknown> },
             colInEdge.sourceHandle ?? undefined,
@@ -204,11 +204,16 @@ export function extractNodeOutputAsList(
     return splitResults.length > 0 ? splitResults : undefined;
   }
   if (node.type === "list") {
+    // New format: columns + rows (same as loop)
+    const cols = data.columns as Array<{ handleId: string }> | undefined;
+    if (cols) {
+      const rows = (data.rows as string[][] | undefined) ?? [];
+      const values = rows.map((r) => r[0]?.trim()).filter((v) => v && v.length > 0);
+      return values.length > 0 ? values : undefined;
+    }
+    // Legacy format: items string
     const items = (data.items as string | undefined) || "";
-    const lines = items
-      .split("\n")
-      .filter((l: string) => l.trim().length > 0)
-      .map((l: string) => l.trim());
+    const lines = items.split("\n").filter((l: string) => l.trim().length > 0).map((l: string) => l.trim());
     return lines.length > 0 ? lines : undefined;
   }
   if (useAllResults) {
@@ -286,7 +291,7 @@ export function getListInputForNode(
       }
     }
 
-    if (sourceNode.type === "loop") {
+    if (sourceNode.type === "loop" || sourceNode.type === "list") {
       const edgeData = edge.data as Record<string, unknown> | undefined;
       const loopEdgeMode = edgeData?.outputMode as string | undefined;
       // Only fan-out for "each" mode (default for loop) — item/last/all produce single values
@@ -496,7 +501,7 @@ export function resolveNodeInputs(
         output = srcListResults[listIterationIndex % srcListResults.length];
       }
     }
-    if (!output && src.type === "loop") {
+    if (!output && (src.type === "loop" || src.type === "list")) {
       const raw = resolveLoopColumnValues(src, srcEdge.sourceHandle ?? undefined, edges, nodes);
       const edgeData = srcEdge.data as Record<string, unknown> | undefined;
       const ranged = applyRange(

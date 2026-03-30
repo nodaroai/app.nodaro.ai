@@ -26,7 +26,7 @@ import { executeNodeForList } from "./list-execution";
 
 function warnUnderMinRows(nodes: WorkflowNode[]): void {
   const underMin = nodes.filter((n) => {
-    if (n.type !== "loop") return false
+    if (n.type !== "loop" && n.type !== "list") return false
     const data = n.data as Record<string, unknown>
     const minRows = (data.minRows as number) ?? 0
     if (minRows === 0) return false

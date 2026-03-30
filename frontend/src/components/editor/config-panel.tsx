@@ -298,7 +298,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
 }) {
   switch (nodeType) {
     case "text-prompt": return <TextPromptConfig {...configProps} />
-    case "list": return <ListConfig {...configProps} />
+    case "list": return <LoopConfig {...configProps} nodeId={selectedNodeId} singleColumn />
     case "loop": return <LoopConfig {...configProps} nodeId={selectedNodeId} />
     case "upload-image": return <UploadImageConfig {...configProps} />
     case "upload-video": return <UploadVideoConfig {...configProps} />

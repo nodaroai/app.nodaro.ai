@@ -748,7 +748,7 @@ export function executeNode(
       );
       if (startEdge) {
         const startNode = nodes.find((n) => n.id === startEdge.source);
-        if (startNode && startNode.type !== "loop") {
+        if (startNode && startNode.type !== "loop" && startNode.type !== "list") {
           startFrameUrl = extractNodeOutput(startNode, startEdge.sourceHandle ?? undefined);
         }
         // Loop nodes: already resolved via resolveNodeInputs → inputs.startFrameUrl
