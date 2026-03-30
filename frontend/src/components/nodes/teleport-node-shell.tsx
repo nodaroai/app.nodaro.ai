@@ -2,25 +2,77 @@
 
 import { memo } from "react"
 import { Handle, Position, type NodeProps } from "@xyflow/react"
-import { Send, Download } from "lucide-react"
+import { Send, Download, ArrowRight, ArrowLeft } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import type { TeleportSendData, TeleportReceiveData } from "@/types/nodes"
+import { isTeleportDefaultLabel, type TeleportSendData, type TeleportReceiveData } from "@/types/nodes"
 
 type TeleporterNodeData = TeleportSendData | TeleportReceiveData
+
+const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|bmp)(\?|$)/i
+const VIDEO_RE = /\.(mp4|mov|webm|avi|mkv)(\?|$)/i
 
 function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { variant: "send" | "receive" }) {
   const nodeData = data as TeleporterNodeData
   const partnerType = variant === "send" ? "teleport-receive" : "teleport-send"
   const Icon = variant === "send" ? Send : Download
-  const label = variant === "send" ? "SEND" : "RECV"
+  const typeLabel = variant === "send" ? "SEND" : "RECV"
+  const JumpIcon = variant === "send" ? ArrowRight : ArrowLeft
 
-  // Derive highlight directly from store — no useState/useEffect, no full-store subscription
   const isHighlighted = useWorkflowStore((s) => {
     if (!s.selectedNodeId || s.selectedNodeId === id) return false
     const sel = s.nodes.find((n) => n.id === s.selectedNodeId)
     return sel?.type === partnerType &&
       (sel.data as TeleporterNodeData).channel === nodeData.channel
   })
+
+  const firstPartnerId = useWorkflowStore((s) => {
+    const partner = s.nodes.find(
+      (n) => n.type === partnerType && (n.data as TeleporterNodeData).channel === nodeData.channel
+    )
+    return partner?.id ?? null
+  })
+
+  const result = nodeData.result ?? ""
+  const isImage = typeof result === "string" && IMAGE_RE.test(result)
+  const isVideo = typeof result === "string" && VIDEO_RE.test(result)
+  const hasThumb = isImage || isVideo
+
+  const hasCustomName = !isTeleportDefaultLabel(nodeData.label, nodeData.channel)
+  const badgeText = hasCustomName ? `${nodeData.channel} \u00b7 ${nodeData.label}` : nodeData.channel
+
+  const handleJump = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    if (!firstPartnerId) return
+    window.dispatchEvent(new CustomEvent("teleporter-pan-to", { detail: { nodeId: firstPartnerId } }))
+  }
+
+  const jumpButton = firstPartnerId ? (
+    <button
+      type="button"
+      className="flex items-center justify-center w-5 h-5 rounded-full hover:bg-white/10 transition-colors"
+      style={{ color: nodeData.channelColor }}
+      onClick={handleJump}
+      onMouseDown={(e) => { e.stopPropagation(); e.preventDefault() }}
+      title="Jump to partner"
+      aria-label="Jump to partner"
+    >
+      <JumpIcon className="w-3 h-3" />
+    </button>
+  ) : null
+
+  const thumbnail = hasThumb ? (
+    <div
+      className="w-6 h-6 rounded-md overflow-hidden shrink-0 border"
+      style={{ borderColor: nodeData.channelColor + "40" }}
+    >
+      {isImage ? (
+        <img src={result} alt="" className="w-full h-full object-cover" loading="lazy" />
+      ) : (
+        <video src={result} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+      )}
+    </div>
+  ) : null
 
   return (
     <div
@@ -61,17 +113,20 @@ function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { varian
         }
       />
 
-      <div className="flex items-center gap-2 py-1">
+      <div className="flex items-center gap-1.5 py-1">
+        {variant === "receive" && jumpButton}
+        {thumbnail}
         <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: nodeData.channelColor }} />
         <span className="text-xs font-semibold truncate" style={{ color: nodeData.channelColor }}>
-          {label}
+          {typeLabel}
         </span>
         <span
-          className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+          className="text-[10px] font-medium px-1.5 py-0.5 rounded-full truncate max-w-[140px]"
           style={{ backgroundColor: nodeData.channelColor + "20", color: nodeData.channelColor }}
         >
-          {nodeData.channel}
+          {badgeText}
         </span>
+        {variant === "send" && jumpButton}
       </div>
     </div>
   )

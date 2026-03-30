@@ -2078,6 +2078,10 @@ export type TeleportReceiveData = {
   result?: string
 }
 
+export function isTeleportDefaultLabel(label: string, channel: string): boolean {
+  return label === channel || label === `Send ${channel}` || label === `Recv ${channel}`
+}
+
 // --- Router Node Data ---
 
 export type RouterNodeData = {
@@ -3989,7 +3993,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: {
-      label: "Send",
+      label: "A",
       channel: "A",
       channelColor: "#f59e0b",
     } as TeleportSendData,
@@ -4003,7 +4007,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: {
-      label: "Receive",
+      label: "A",
       channel: "A",
       channelColor: "#f59e0b",
     } as TeleportReceiveData,

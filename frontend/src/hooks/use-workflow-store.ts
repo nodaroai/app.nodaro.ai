@@ -585,11 +585,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
     if (type === "teleport-send") {
       const { channel, channelColor } = getNextChannel(get().nodes)
-      newNode.data = { ...newNode.data, channel, channelColor, label: `Send ${channel}` }
+      newNode.data = { ...newNode.data, channel, channelColor, label: channel }
     }
     if (type === "teleport-receive") {
       const { channel, channelColor } = getNextChannel(get().nodes)
-      newNode.data = { ...newNode.data, channel, channelColor, label: `Recv ${channel}` }
+      newNode.data = { ...newNode.data, channel, channelColor, label: channel }
     }
 
     set((state) => ({
@@ -1195,7 +1195,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           x: (sourceNode.position?.x ?? 0) + (sourceNode.measured?.width ?? 200) + 30,
           y: sourceNode.position?.y ?? 0,
         },
-        data: { label: `Send ${channel}`, channel, channelColor } as TeleportSendData,
+        data: { label: channel, channel, channelColor } as TeleportSendData,
       }
 
       const recvNode: WorkflowNode = {
@@ -1205,7 +1205,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           x: (targetNode.position?.x ?? 0) - 180,
           y: targetNode.position?.y ?? 0,
         },
-        data: { label: `Recv ${channel}`, channel, channelColor } as TeleportReceiveData,
+        data: { label: channel, channel, channelColor } as TeleportReceiveData,
       }
 
       const newEdges = state.edges

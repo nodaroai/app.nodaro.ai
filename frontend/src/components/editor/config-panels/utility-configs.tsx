@@ -14,16 +14,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type {
-  CombineTextNodeData,
-  SaveToStorageData,
-  WebhookOutputData,
-  WebhookParam,
-  SplitTextData,
-  PreviewNodeData,
-  PreviewItem,
-  TeleportSendData,
-  TeleportReceiveData,
+import {
+  isTeleportDefaultLabel,
+  type CombineTextNodeData,
+  type SaveToStorageData,
+  type WebhookOutputData,
+  type WebhookParam,
+  type SplitTextData,
+  type PreviewNodeData,
+  type PreviewItem,
+  type TeleportSendData,
+  type TeleportReceiveData,
 } from "@/types/nodes"
 import { isMediaUrl } from "@/lib/media-type"
 import { downloadFile } from "@/components/presentation/output-cards/shared"
@@ -489,15 +490,17 @@ export function TeleporterConfig({ data, onUpdate, nodeType }: { data: TeleportS
       )}
 
       <div className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground">Label</label>
+        <label className="text-xs font-medium text-muted-foreground">Channel Name</label>
         <input
           type="text"
           className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background"
-          value={data.label}
+          value={isTeleportDefaultLabel(data.label, data.channel) ? "" : data.label}
+          placeholder="Name this channel..."
           onChange={(e) => {
-            onUpdate({ label: e.target.value })
+            const newLabel = e.target.value || data.channel
+            onUpdate({ label: newLabel })
             for (const partner of partners) {
-              updateNodeData(partner.id, { label: e.target.value })
+              updateNodeData(partner.id, { label: newLabel })
             }
           }}
         />

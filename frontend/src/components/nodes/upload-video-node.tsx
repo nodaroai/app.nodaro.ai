@@ -220,7 +220,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="text-[11px] font-medium">{results.length}</span>
               </button>
             )}
-            {thumbnailUrl ? (
+            {thumbnailUrl && !videoAutoplay ? (
               <CachedImage
                 src={thumbnailUrl}
                 alt="Video thumbnail"
