@@ -930,15 +930,32 @@ export function MobileAppShell({
           <div className="space-y-4 p-4">
             {presExecutionStatus === "idle" && !isRunning ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                <PenLine className="h-8 w-8 mb-3 opacity-40" />
-                <p className="text-sm">{allInputsFilled ? "Press Run to generate results" : "Fill in the inputs first"}</p>
-                <button
-                  type="button"
-                  className="mt-3 text-xs text-primary hover:underline"
-                  onClick={() => setActiveTab("inputs")}
-                >
-                  Go to Inputs
-                </button>
+                {allInputsFilled ? (
+                  <>
+                    <Play className="h-8 w-8 mb-3 opacity-40" />
+                    <p className="text-sm">Inputs are ready</p>
+                    <button
+                      type="button"
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                      onClick={handleRunClick}
+                    >
+                      <Play className="h-3.5 w-3.5" />
+                      Run{costLabel}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <PenLine className="h-8 w-8 mb-3 opacity-40" />
+                    <p className="text-sm">Fill in the inputs first</p>
+                    <button
+                      type="button"
+                      className="mt-3 text-xs text-primary hover:underline"
+                      onClick={() => setActiveTab("inputs")}
+                    >
+                      Go to Inputs
+                    </button>
+                  </>
+                )}
               </div>
             ) : useOutputItemsRendering ? (
               outputItems!.map((item) => {
