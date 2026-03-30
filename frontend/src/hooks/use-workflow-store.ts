@@ -270,7 +270,20 @@ interface WorkflowState {
   readonly replaceEdgeWithTeleporter: (edgeId: string) => void
 }
 
-function getNextChannel(nodes: WorkflowNode[]): { channel: string; channelColor: string } {
+function getNextChannel(nodes: WorkflowNode[], forType?: string): { channel: string; channelColor: string } {
+  // For receive nodes: find first send that has no matching receive
+  if (forType === "teleport-receive") {
+    const recvChannels = new Set(
+      nodes.filter((n) => n.type === "teleport-receive").map((n) => (n.data as Record<string, unknown>).channel as string)
+    )
+    const unmatchedSend = nodes.find(
+      (n) => n.type === "teleport-send" && !recvChannels.has((n.data as Record<string, unknown>).channel as string)
+    )
+    if (unmatchedSend) {
+      const d = unmatchedSend.data as Record<string, unknown>
+      return { channel: d.channel as string, channelColor: d.channelColor as string }
+    }
+  }
   const usedChannels = new Set(
     nodes
       .filter((n) => n.type === "teleport-send")
@@ -584,7 +597,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }
 
     if (type === "teleport-send" || type === "teleport-receive") {
-      const { channel, channelColor } = getNextChannel(get().nodes)
+      const { channel, channelColor } = getNextChannel(get().nodes, type)
       newNode.data = { ...newNode.data, channel, channelColor, label: channel }
     }
 
@@ -593,6 +606,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       newNodeIds: new Set([...state.newNodeIds, id]),
       isDirty: true,
     }))
+
+    if (type === "teleport-send" || type === "teleport-receive") {
+      get().syncTeleporterEdges((newNode.data as Record<string, unknown>).channel as string)
+    }
 
     return id
   },
