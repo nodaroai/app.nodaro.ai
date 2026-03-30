@@ -55,28 +55,27 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, assets, onExpo
   const sendAssetsToFreeCut = useCallback(
     async (iframe: HTMLIFrameElement, assetsToSend: NonNullable<typeof assets>) => {
       if (!assetsToSend.length) return
-      const files: Array<{ name: string; type: string; size: number; buffer: ArrayBuffer }> = []
+      // Send each asset as a separate message with a short delay
+      // to give FreeCut time to process each one
       for (let i = 0; i < assetsToSend.length; i++) {
         const asset = assetsToSend[i]
         try {
+          if (i > 0) await new Promise(r => setTimeout(r, 500))
           const buffer = await fetch(asset.url).then(r => r.arrayBuffer())
           const ext = asset.type === "video" ? "mp4" : asset.type === "audio" ? "mp3" : "png"
           const mime = asset.type === "video" ? "video/mp4" : asset.type === "audio" ? "audio/mpeg" : "image/png"
-          // Use nodeId in name to avoid duplicates when multiple nodes share the same label
           const baseName = asset.label ?? asset.nodeId
           const name = assetsToSend.length > 1 ? `${baseName}_${i + 1}.${ext}` : `${baseName}.${ext}`
-          files.push({ name, type: mime, size: buffer.byteLength, buffer })
+          const file = { name, type: mime, size: buffer.byteLength, buffer }
+          iframe.contentWindow!.postMessage(
+            { type: "NODARO_IMPORT_FILES", payload: { files: [file] } },
+            FREECUT_ORIGIN,
+            [buffer],
+          )
         } catch {
-          // Skip assets that fail to fetch (CORS, network, etc.)
+          // Skip assets that fail to fetch
         }
       }
-      if (files.length === 0) return
-      const buffers = files.map(f => f.buffer)
-      iframe.contentWindow!.postMessage(
-        { type: "NODARO_IMPORT_FILES", payload: { files } },
-        FREECUT_ORIGIN,
-        buffers,
-      )
     },
     [],
   )
@@ -119,7 +118,10 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, assets, onExpo
               if (assets && assets.length > 0) {
                 const remaining = assets.filter(a => a.url !== videoUrl)
                 if (remaining.length > 0) {
-                  sendAssetsToFreeCut(iframe, remaining).catch(() => {})
+                  // Delay to let FreeCut finish processing the primary video
+                  setTimeout(() => {
+                    sendAssetsToFreeCut(iframe, remaining).catch(() => {})
+                  }, 1000)
                 }
               }
             })
