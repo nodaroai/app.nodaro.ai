@@ -207,7 +207,6 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "text-to-video" ||
     type === "lip-sync" ||
     type === "speech-to-video" ||
-    type === "sora-storyboard" ||
     type === "motion-transfer" ||
     type === "video-upscale" ||
     type === "extend-video" ||
@@ -221,9 +220,6 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       results[activeIndex]?.url ??
       (data.generatedVideoUrl as string | undefined)
     );
-  }
-  if (type === "sora-character") {
-    return (data.generatedCharacterId as string | undefined) || undefined;
   }
   // Suno-separate: support stem routing via sourceHandle (matches backend)
   if (type === "suno-separate") {
@@ -589,7 +585,6 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "combine-videos",
   "lip-sync",
   "speech-to-video",
-  "sora-storyboard",
   "motion-transfer",
   "video-upscale",
   "extend-video",

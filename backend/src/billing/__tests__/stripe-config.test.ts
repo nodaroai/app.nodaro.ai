@@ -119,9 +119,8 @@ describe("stripe-config", () => {
       expect(FREE_TIER_RESTRICTIONS.dailyCreditCap).toBe(30)
     })
 
-    it("blockedModels includes veo3 and sora2-pro", () => {
+    it("blockedModels includes veo3", () => {
       expect(FREE_TIER_RESTRICTIONS.blockedModels).toContain("veo3")
-      expect(FREE_TIER_RESTRICTIONS.blockedModels).toContain("sora2-pro")
     })
   })
 

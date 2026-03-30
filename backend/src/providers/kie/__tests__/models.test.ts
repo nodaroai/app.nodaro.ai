@@ -5,15 +5,11 @@ import {
   isKieSupported,
   getKieCost,
   getAllowedDurations,
-  usesNFrames,
-  durationToNFrames,
   supportsEndFrame,
   getEndFrameParam,
   KIE_IMAGE_MODELS,
   KIE_MOTION_TRANSFER_MODELS,
   KIE_SPEECH_TO_VIDEO_MODELS,
-  KIE_STORYBOARD_MODELS,
-  KIE_SPECIAL_MODELS,
 } from "../models.js"
 
 describe("getKieModelConfig", () => {
@@ -87,24 +83,6 @@ describe("getAllowedDurations", () => {
   })
 })
 
-describe("usesNFrames", () => {
-  it("returns true for sora2-pro and false for kling", () => {
-    expect(usesNFrames("video", "sora2-pro")).toBe(true)
-    expect(usesNFrames("text-to-video", "sora2-pro")).toBe(true)
-    expect(usesNFrames("video", "kling")).toBe(false)
-    expect(usesNFrames("text-to-video", "kling")).toBe(false)
-  })
-})
-
-describe("durationToNFrames", () => {
-  it('returns "10" for 5s and "15" for 10s', () => {
-    expect(durationToNFrames(5)).toBe("10")
-    expect(durationToNFrames(10)).toBe("15")
-    // Edge case: durations shorter than 5s should also map to "10"
-    expect(durationToNFrames(3)).toBe("10")
-  })
-})
-
 describe("supportsEndFrame", () => {
   it("returns true for minimax and veo3, false for kling and grok-i2v", () => {
     expect(supportsEndFrame("video", "minimax")).toBe(true)
@@ -166,28 +144,3 @@ describe("KIE_SPEECH_TO_VIDEO_MODELS — wan-s2v", () => {
   })
 })
 
-describe("KIE_STORYBOARD_MODELS — sora-storyboard", () => {
-  it("exists with correct model ID", () => {
-    const config = KIE_STORYBOARD_MODELS["sora-storyboard"]
-    expect(config).toBeDefined()
-    expect(config.model).toBe("sora-2-pro-storyboard")
-  })
-
-  it("is accessible via getKieModelConfig", () => {
-    const config = getKieModelConfig("storyboard", "sora-storyboard")
-    expect(config).not.toBeNull()
-    expect(config!.model).toBe("sora-2-pro-storyboard")
-  })
-})
-
-describe("KIE_SPECIAL_MODELS — sora-watermark-remove", () => {
-  it("exists in the special models map", () => {
-    const config = KIE_SPECIAL_MODELS["sora-watermark-remove"]
-    expect(config).toBeDefined()
-  })
-
-  it("is accessible via getKieModelConfig", () => {
-    const config = getKieModelConfig("special", "sora-watermark-remove")
-    expect(config).not.toBeNull()
-  })
-})

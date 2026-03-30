@@ -3,7 +3,7 @@
 import { memo, useState, useMemo, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, Images, Volume2, Maximize2, Download, Settings, LayoutGrid, Expand, Users, Link, Scissors } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, Images, Volume2, Maximize2, Download, Settings, LayoutGrid, Expand, Link, Scissors } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -23,9 +23,9 @@ import { PROVIDERS_WITH_REFERENCES } from "../editor/config-panels/model-options
 // Fallback credit costs per video provider (shown until API responds)
 const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
   minimax: 18, veo3: 79, "veo3.1": 19, kling: 28, "kling-turbo": 14,
-  "kling-3.0": 63, "grok-i2v": 7, "sora2-pro": 38, seedance: 7,
+  "kling-3.0": 63, "grok-i2v": 7, seedance: 7,
   "wan-i2v": 22, "wan-turbo": 13, "hailuo-2.3-pro": 20, "hailuo-2.3": 10,
-  "hailuo-standard": 10, sora2: 10, "bytedance-lite": 6, "bytedance-pro": 18,
+  "hailuo-standard": 10, "bytedance-lite": 6, "bytedance-pro": 18,
   "bytedance-pro-fast": 9, "kling-master": 50, "runway-kie": 4,
 }
 
@@ -127,8 +127,6 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const isKling3 = nodeData.provider === "kling-3.0"
   const isKling3MultiShot = isKling3 && nodeData.multiShot
   const showEndFrame = supportsEndFrame && !isKling3MultiShot
-  const isSora = provider === "sora2" || provider === "sora2-pro"
-  const charactersConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "characters").length
   const supportsReferences = PROVIDERS_WITH_REFERENCES.includes(provider)
   const isVeo = provider === "veo3" || provider === "veo3.1"
   const isVeoRefMode = isVeo && nodeData.veoMode === "reference"
@@ -141,7 +139,6 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const startFrameTop = 445 * 0.157
   const endFrameTop = 445 * 0.36
   const audioTop = 445 * 0.53
-  const charactersTop = showReferences ? 445 * 0.85 : 445 * 0.70
 
   useEffect(() => { if (activeUrl) setShowConfig(false) }, [activeUrl])
   useEffect(() => { setVideoDimensions(null) }, [activeUrl])
@@ -216,11 +213,10 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     ...((showEndFrame && showStartFrame) ? [{ id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${endFrameTop}px`, left: '-29px' }, hideHandle: true }] : []),
     { id: "audio", type: "target" as const, position: Position.Left, customStyle: { top: `${audioTop}px`, left: '-29px' }, hideHandle: true },
     ...(showReferences ? [{ id: "references", type: "target" as const, position: Position.Left, customStyle: { top: `${referencesTop}px`, left: '-29px' }, hideHandle: true }] : []),
-    ...(isSora ? [{ id: "characters", type: "target" as const, position: Position.Left, customStyle: { top: `${charactersTop}px`, left: '-29px' }, hideHandle: true }] : []),
     { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: `${videoTop}px`, right: '-29px' }, hideHandle: true },
-  ], [startFrameTop, endFrameTop, audioTop, referencesTop, charactersTop, videoTop, activeUrl, showConfig, showEndFrame, showStartFrame, showReferences, isSora])
+  ], [startFrameTop, endFrameTop, audioTop, referencesTop, videoTop, activeUrl, showConfig, showEndFrame, showStartFrame, showReferences])
 
-  const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo || (isSora && charactersConnectionCount > 0) || (showReferences && referencesConnectionCount > 0)
+  const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo || (showReferences && referencesConnectionCount > 0)
 
   return (
     <div className="relative group/node" style={{ width: (activeUrl && !showConfig) ? (videoDimensions?.width ?? 245) : 245, height: (activeUrl && !showConfig) ? (videoDimensions?.height ?? 445) : 445, minHeight: 200, overflow: 'visible', position: 'relative' }}>
@@ -682,18 +678,6 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">+</div>
         {referencesConnectionCount >= 1 && (
           <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">{referencesConnectionCount}</div>
-        )}
-      </div>
-    )}
-
-    {/* characters handle icon (Sora only) */}
-    {isSora && (
-      <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-        style={{ top: `${charactersTop - 14}px`, left: '-29px' }}>
-        <Users className="w-3.5 h-3.5 text-white" />
-        <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">+</div>
-        {charactersConnectionCount >= 1 && (
-          <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">{charactersConnectionCount}</div>
         )}
       </div>
     )}

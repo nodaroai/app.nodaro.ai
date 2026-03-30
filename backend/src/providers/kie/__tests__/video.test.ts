@@ -340,19 +340,6 @@ describe("KieVideoProvider.textToVideo", () => {
     expect(input.aspect_ratio).toBe("9:16")
   })
 
-  it("converts duration to n_frames for sora2-pro", async () => {
-    await provider.textToVideo("test", "sora2-pro", 10)
-    const input = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
-    expect(input.n_frames).toBe("15")
-    expect(input.duration).toBeUndefined()
-  })
-
-  it("converts 5s duration to n_frames=10 for sora2-pro", async () => {
-    await provider.textToVideo("test", "sora2-pro", 5)
-    const input = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
-    expect(input.n_frames).toBe("10")
-  })
-
   it("calls kling3Generate for kling-3.0 (no imageUrls)", async () => {
     const result = await provider.textToVideo("cinematic", "kling-3.0")
     expect(mocks.mockKling3Generate).toHaveBeenCalledWith(

@@ -61,13 +61,13 @@ const T2V_CREDIT_OVERRIDES: Record<string, string> = {
 
 /**
  * Compute composite model identifier for video models with duration/audio-based pricing.
- * Examples: "kling-3.0:5s", "kling-3.0:10s:audio", "sora2-pro:5s:high"
+ * Examples: "kling-3.0:5s", "kling-3.0:10s:audio"
  *
  * @param provider - Video model key (e.g., "kling-3.0")
  * @param duration - Video duration in seconds
  * @param sound - Whether audio/sound is enabled
  * @param nodeType - Node type for T2V-specific cost overrides
- * @param mode - Quality variant that affects pricing (e.g., videoSize "high" for sora2-pro)
+ * @param mode - Quality variant that affects pricing
  */
 export function buildVideoCreditModelIdentifier(
   provider: string,
@@ -108,7 +108,7 @@ export function buildVideoCreditModelIdentifier(
     identifier += ":audio"
   }
 
-  // Append mode suffix for providers with quality-tiered pricing (e.g., sora2-pro)
+  // Append mode suffix for providers with quality-tiered pricing
   // "high" comes from I2V videoSize field, "pro" comes from T2V mode field
   if (MODE_ADDON_PROVIDERS.has(effectiveProvider) && (mode === "high" || mode === "pro")) {
     identifier += ":high"

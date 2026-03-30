@@ -6,7 +6,7 @@ export const REPEATABLE_NODE_TYPES = new Set([
   "text-to-speech", "generate-music", "text-to-audio", "text-to-dialogue",
   "ai-writer", "generate-script",
   "suno-generate", "suno-cover", "suno-extend", "suno-lyrics",
-  "lip-sync", "speech-to-video", "sora-storyboard",
+  "lip-sync", "speech-to-video",
   "motion-transfer", "extend-video",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "voice-changer", "dubbing", "voice-remix", "voice-design",

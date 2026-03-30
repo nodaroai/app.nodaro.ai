@@ -58,8 +58,6 @@ import {
   VideoUpscaleConfig,
   ExtendVideoConfig,
   SpeechToVideoConfig,
-  SoraStoryboardConfig,
-  SoraCharacterConfig,
   TextToVideoConfig,
   TextToSpeechConfig,
   TextToAudioConfig,
@@ -140,7 +138,7 @@ import {
   ResultsGallery,
 } from "./config-panels"
 
-const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "sora-storyboard"])
+const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video"])
 const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
 
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
@@ -211,8 +209,6 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "manual-edit": "Manual Edit",
   "extend-video": "Extend Video",
   "speech-to-video": "Speech to Video",
-  "sora-storyboard": "Storyboard",
-  "sora-character": "Extract Character",
   "video-upscale": "Upscale Video",
   "combine-text": "Combine Text",
   "split-text": "Split Text",
@@ -250,14 +246,13 @@ export function getNodeTypeDisplayName(type: string): string {
 export const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "edit-image", "image-to-image",
   "image-to-video", "video-to-video", "text-to-video", "text-to-speech",
-  "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video", "sora-storyboard",
+  "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
   "video-upscale", "extend-video", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
   "ai-writer", "llm-chat",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "image-to-text", "qa-check", "transcribe",
-  "sora-character",
   "render-video",
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post",
   "component",
@@ -361,8 +356,6 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "suno-upload-extend": return <SunoUploadExtendConfig {...configProps} />
     case "lip-sync": return <LipSyncConfig {...configProps} />
     case "speech-to-video": return <SpeechToVideoConfig {...configProps} />
-    case "sora-storyboard": return <SoraStoryboardConfig {...configProps} />
-    case "sora-character": return <SoraCharacterConfig {...configProps} />
     case "motion-transfer": return <MotionTransferConfig {...configProps} />
     case "transcribe": return <TranscribeConfig {...configProps} />
     case "image-to-text": return <ImageToTextConfig {...configProps} />

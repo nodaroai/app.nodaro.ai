@@ -307,14 +307,6 @@ describe("CreditsService", () => {
       expect(result.watermark).toBe(true)
     })
 
-    it("returns not allowed for free-tier blocked models (sora2-pro)", async () => {
-      mockTable("model_pricing", null, { code: "PGRST116" })
-
-      const result = await CreditsService.checkCreditsWithProfile(userId, freeProfile, "sora2-pro")
-      expect(result.allowed).toBe(false)
-      expect(result.error).toContain("paid subscription")
-    })
-
     it("returns not allowed when balance is insufficient", async () => {
       mockTable("model_pricing", {
         credit_cost: 200,
@@ -487,14 +479,6 @@ describe("CreditsService", () => {
       expect(result.required).toBe(13)
     })
 
-    it("falls back to static cost for sora-watermark-remove (4 credits)", async () => {
-      mockTable("model_pricing", null, { code: "PGRST116" })
-      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
-      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "sora-watermark-remove")
-      expect(result.allowed).toBe(true)
-      expect(result.required).toBe(4)
-    })
-
     it("falls back to static cost for suno-mashup (4 credits)", async () => {
       mockTable("model_pricing", null, { code: "PGRST116" })
       mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
@@ -573,30 +557,6 @@ describe("CreditsService", () => {
       const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "speech-to-video:720p")
       expect(result.allowed).toBe(true)
       expect(result.required).toBe(8)
-    })
-
-    it("falls back to static cost for sora-storyboard (47 credits)", async () => {
-      mockTable("model_pricing", null, { code: "PGRST116" })
-      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
-      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "sora-storyboard")
-      expect(result.allowed).toBe(true)
-      expect(result.required).toBe(47)
-    })
-
-    it("falls back to static cost for sora-storyboard:15 (85 credits)", async () => {
-      mockTable("model_pricing", null, { code: "PGRST116" })
-      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
-      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "sora-storyboard:15")
-      expect(result.allowed).toBe(true)
-      expect(result.required).toBe(85)
-    })
-
-    it("falls back to static cost for sora-storyboard:25 (85 credits)", async () => {
-      mockTable("model_pricing", null, { code: "PGRST116" })
-      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
-      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "sora-storyboard:25")
-      expect(result.allowed).toBe(true)
-      expect(result.required).toBe(85)
     })
 
     it("uses subscription_tier when tier is missing", async () => {
@@ -906,12 +866,6 @@ describe("CreditsService", () => {
       expect(CreditsService.estimateWorkflowCredits([
         { type: "motion-transfer", data: { provider: "wan-animate-move", resolution: "480p" } },
       ])).toBe(26)
-    })
-
-    it("resolves I2V sora2-pro:5s:high", () => {
-      expect(CreditsService.estimateWorkflowCredits([
-        { type: "image-to-video", data: { provider: "sora2-pro", duration: 5, videoSize: "high" } },
-      ])).toBe(83)
     })
 
     it("resolves I2V seedance:12s", () => {

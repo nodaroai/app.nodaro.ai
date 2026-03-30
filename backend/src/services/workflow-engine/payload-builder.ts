@@ -7,7 +7,7 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from 
 
 // Shared logic from packages/shared — single source of truth
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "../../../../packages/shared/src/ancestor-refs.js"
-import { buildImagePrompt, buildScenePrompt, buildEnrichedScenePrompt, type EnrichableScene } from "../../../../packages/shared/src/prompt-builder.js"
+import { buildImagePrompt, buildScenePrompt } from "../../../../packages/shared/src/prompt-builder.js"
 import { resolveTemplate, applyTemplate } from "../../../../packages/shared/src/prompt-templates.js"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
@@ -616,7 +616,6 @@ export function buildPayload(
           grokMode: data.grokMode,
           videoSize: data.videoSize,
           removeWatermark: data.removeWatermark,
-          characterIdList: resolvedInputs.characterIdList,
           referenceImageUrls: resolvedInputs.referenceImageUrls,
           generationType: data.veoMode === "reference" ? "REFERENCE_2_VIDEO" : undefined,
           usageLogId,
@@ -721,60 +720,6 @@ export function buildPayload(
           inferenceSteps: data.inferenceSteps,
           guidanceScale: data.guidanceScale,
           shift: data.shift,
-          usageLogId,
-        },
-      }
-    }
-
-    case "sora-storyboard": {
-      const sbNFrames = (data.nFrames as string) ?? "10"
-      const sbModelId = sbNFrames === "10" ? "sora-storyboard" : "sora-storyboard:15"
-      // Collect image URLs from resolved inputs if available
-      const sbImageUrls: string[] = []
-      if (resolvedInputs.imageUrl) sbImageUrls.push(resolvedInputs.imageUrl)
-      if (resolvedInputs.referenceImageUrls) sbImageUrls.push(...resolvedInputs.referenceImageUrls)
-
-      // Auto-fill shots from connected generate-script if shots are empty
-      let sbShots = data.shots as Array<{ scene: string; duration: number }> | undefined
-      if (resolvedInputs.scriptData && (!sbShots || !sbShots.some((s: { scene: string }) => s.scene?.trim()?.length > 0))) {
-        const script = resolvedInputs.scriptData as { scenes?: Array<{ visualDescription?: string; durationHint?: number }> }
-        if (script.scenes && script.scenes.length > 0) {
-          sbShots = script.scenes.slice(0, 10).map((scene) => ({
-            scene: buildEnrichedScenePrompt(scene as EnrichableScene),
-            duration: Math.max(1, Math.min(10, scene.durationHint ?? 5)),
-          }))
-        }
-      }
-
-      return {
-        jobName: "sora-storyboard",
-        queueName: "video-generation",
-        modelIdentifier: sbModelId,
-        payload: {
-          jobId,
-          shots: sbShots ?? data.shots,
-          nFrames: sbNFrames,
-          imageUrls: sbImageUrls.length > 0 ? sbImageUrls.slice(0, 5) : (data.imageUrls ?? undefined),
-          aspectRatio: data.aspectRatio ?? "landscape",
-          usageLogId,
-        },
-      }
-    }
-
-    case "sora-character": {
-      return {
-        jobName: "sora-character",
-        queueName: "video-generation",
-        modelIdentifier: "sora-character",
-        payload: {
-          jobId,
-          mode: data.mode,
-          characterPrompt: data.characterPrompt,
-          characterName: data.characterName,
-          timestamps: data.timestamps,
-          safetyInstruction: data.safetyInstruction,
-          videoUrl: resolvedInputs.videoUrl || (data.videoUrl as string | undefined),
-          kieTaskId: resolvedInputs.kieTaskId || (data.kieTaskId as string | undefined),
           usageLogId,
         },
       }

@@ -37,10 +37,6 @@ export const PROVIDERS_CONFIG: Record<ProviderCategory, Record<string, ProviderI
       label: "Runway",
       models: ["gen-3-alpha", "gen-3-alpha-turbo"],
     },
-    sora: {
-      label: "Sora",
-      models: ["sora-1.0"],
-    },
     veo3: {
       label: "VEO 3.1",
       models: ["veo-3", "veo-3-fast"],

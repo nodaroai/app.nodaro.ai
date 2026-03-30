@@ -7,7 +7,7 @@ import {
   KIE_VIDEO_TO_VIDEO_MODELS, KIE_MOTION_TRANSFER_MODELS, KIE_VIDEO_UPSCALE_MODELS,
   KIE_LIP_SYNC_MODELS, KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS,
   KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS, KIE_DIALOGUE_MODELS,
-  KIE_SPEECH_TO_VIDEO_MODELS, KIE_STORYBOARD_MODELS, KIE_SPECIAL_MODELS,
+  KIE_SPEECH_TO_VIDEO_MODELS, KIE_SPECIAL_MODELS,
 } from "../providers/kie/models.js"
 import type { KieModelConfig } from "../providers/kie/models.js"
 import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
@@ -76,7 +76,6 @@ function buildModelMap(): Map<string, ModelMapping[]> {
   addModels(KIE_STT_MODELS, "stt")
   addModels(KIE_DIALOGUE_MODELS, "dialogue")
   addModels(KIE_SPEECH_TO_VIDEO_MODELS, "s2v")
-  addModels(KIE_STORYBOARD_MODELS, "storyboard")
   addModels(KIE_SPECIAL_MODELS, "special")
 
   // Suno model-specific endpoints return chirp-* codenames instead of suno/v4 etc.

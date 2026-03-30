@@ -243,30 +243,12 @@ describe("buildVideoCreditModelIdentifier", () => {
     })
 
     it("non-audio provider + sound=true does not append :audio", () => {
-      expect(buildVideoCreditModelIdentifier("sora2", 5, true)).toBe("sora2:5s")
+      expect(buildVideoCreditModelIdentifier("minimax", 5, true)).toBe("minimax")
     })
   })
 
   // --- Mode addon ---
   describe("mode addon", () => {
-    it('sora2-pro + mode="high" appends :high', () => {
-      expect(buildVideoCreditModelIdentifier("sora2-pro", 5, false, undefined, "high")).toBe(
-        "sora2-pro:5s:high",
-      )
-    })
-
-    it('sora2-pro + mode="pro" appends :high', () => {
-      expect(buildVideoCreditModelIdentifier("sora2-pro", 5, false, undefined, "pro")).toBe(
-        "sora2-pro:5s:high",
-      )
-    })
-
-    it('sora2-pro + mode="standard" does not append :high', () => {
-      expect(buildVideoCreditModelIdentifier("sora2-pro", 5, false, undefined, "standard")).toBe(
-        "sora2-pro:5s",
-      )
-    })
-
     it("non-mode provider ignores mode param", () => {
       expect(buildVideoCreditModelIdentifier("kling-3.0", 5, false, undefined, "high")).toBe(
         "kling-3.0:5s",
@@ -397,10 +379,6 @@ describe("buildVideoCreditModelIdentifier", () => {
       expect(buildVideoCreditModelIdentifier("wan-i2v", 15)).toBe("wan-i2v:15s")
     })
 
-    it("sora2 5s", () => {
-      expect(buildVideoCreditModelIdentifier("sora2", 5)).toBe("sora2:5s")
-    })
-
     it("grok-i2v 6s", () => {
       expect(buildVideoCreditModelIdentifier("grok-i2v", 6)).toBe("grok-i2v:6s")
     })
@@ -420,11 +398,6 @@ describe("buildVideoCreditModelIdentifier", () => {
       expect(buildVideoCreditModelIdentifier("kling", 10, true)).toBe("kling:10s:audio")
     })
 
-    it("sora2-pro 10s with mode=high", () => {
-      expect(buildVideoCreditModelIdentifier("sora2-pro", 10, false, undefined, "high")).toBe(
-        "sora2-pro:10s:high",
-      )
-    })
   })
 })
 

@@ -31,7 +31,7 @@ type Category = "image" | "video" | "audio" | "processing" | "other"
 
 const CATEGORY_PATTERNS: ReadonlyArray<readonly [Category, ReadonlyArray<string>]> = [
   ["image", ["nano", "flux", "grok", "gpt-image", "recraft"]],
-  ["video", ["veo", "kling", "minimax", "wan", "sora", "grok-i2v", "runway", "pika"]],
+  ["video", ["veo", "kling", "minimax", "wan", "grok-i2v", "runway", "pika"]],
   ["audio", ["suno", "elevenlabs", "infinitalk", "tango", "musicgen", "audioldm", "bark"]],
   ["processing", ["ffmpeg", "topaz"]],
 ]

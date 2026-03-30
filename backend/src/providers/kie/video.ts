@@ -33,9 +33,7 @@ import {
   KIE_VIDEO_UPSCALE_MODELS,
   KIE_LIP_SYNC_MODELS,
   KIE_SPEECH_TO_VIDEO_MODELS,
-  KIE_STORYBOARD_MODELS,
   KIE_CREDIT_USD,
-  durationToNFrames,
 } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
@@ -44,17 +42,7 @@ import { join } from "node:path"
 import { readFile } from "node:fs/promises"
 import sharp from "sharp"
 
-// Sora models use named aspect ratio values instead of ratio strings
-const SORA_ASPECT_RATIO_MAP: Record<string, string> = {
-  "16:9": "landscape",
-  "9:16": "portrait",
-  "1:1": "square",
-}
-
-function mapAspectRatio(provider: string, aspectRatio: string): string {
-  if (provider.startsWith("sora")) {
-    return SORA_ASPECT_RATIO_MAP[aspectRatio] ?? aspectRatio
-  }
+function mapAspectRatio(_provider: string, aspectRatio: string): string {
   return aspectRatio
 }
 
@@ -398,9 +386,6 @@ export class KieVideoProvider
     )
     console.log(`[KIE.ai] Model config:`)
     console.log(
-      `  - usesNFrames: ${modelConfig.usesNFrames ?? false}`
-    )
-    console.log(
       `  - allowedDurations: ${JSON.stringify(modelConfig.allowedDurations)}`
     )
     console.log(
@@ -513,7 +498,7 @@ export class KieVideoProvider
     )
 
     if (imageParamName === "image_urls" || imageParamName === "input_urls") {
-      // Array format for kling, grok, sora, seedance, wan-i2v
+      // Array format for kling, grok, seedance, wan-i2v
       input[imageParamName] = [effectiveImageUrl]
     } else {
       // Single URL format for hailuo, kling-turbo, bytedance, wan-turbo, kling-master
@@ -532,14 +517,7 @@ export class KieVideoProvider
       if (snapped !== duration) {
         console.log(`[KIE.ai] Duration ${duration}s not allowed, snapped to ${snapped}s (allowed: ${JSON.stringify(modelConfig.allowedDurations)})`)
       }
-      if (modelConfig.usesNFrames) {
-        input.n_frames = durationToNFrames(snapped)
-        console.log(
-          `[KIE.ai] Converting duration ${snapped}s to n_frames: ${input.n_frames}`
-        )
-      } else {
-        input.duration = String(snapped)
-      }
+      input.duration = String(snapped)
     }
 
     // Handle end frame for models that support it
@@ -581,16 +559,6 @@ export class KieVideoProvider
     // Grok I2V mode (fun/normal/spicy)
     if (options?.grokMode && provider === "grok-i2v") {
       input.mode = options.grokMode
-    }
-
-    // Sora2 Pro size (standard/high)
-    if (options?.videoSize && provider === "sora2-pro") {
-      input.size = options.videoSize
-    }
-
-    // Sora2 / Sora2 Pro character IDs
-    if (options?.characterIdList?.length && (provider === "sora2" || provider === "sora2-pro")) {
-      input.character_id_list = options.characterIdList
     }
 
     // Seed for deterministic generation (Wan Turbo, Bytedance Lite/Pro)
@@ -766,14 +734,7 @@ export class KieVideoProvider
       if (snapped !== duration) {
         console.log(`[KIE.ai] Duration ${duration}s not allowed, snapped to ${snapped}s (allowed: ${JSON.stringify(modelConfig.allowedDurations)})`)
       }
-      if (modelConfig.usesNFrames) {
-        input.n_frames = durationToNFrames(snapped)
-        console.log(
-          `[KIE.ai] Converting duration ${snapped}s to n_frames: ${input.n_frames}`
-        )
-      } else {
-        input.duration = String(snapped)
-      }
+      input.duration = String(snapped)
     }
 
     // Override aspect ratio if provided
@@ -791,11 +752,6 @@ export class KieVideoProvider
     }
     if (options?.cfgScale !== undefined) {
       input.cfg_scale = options.cfgScale
-    }
-
-    // Sora2 / Sora2 Pro character IDs
-    if (options?.characterIdList?.length && (provider === "sora2" || provider === "sora2-pro")) {
-      input.character_id_list = options.characterIdList
     }
 
     console.log(
@@ -1368,93 +1324,5 @@ export class KieVideoProvider
     )
 
     return { url: videoUrl, cost: modelConfig.cost }
-  }
-
-  async soraStoryboard(
-    shots: Array<{ scene: string; duration: number }>,
-    nFrames?: string,
-    imageUrls?: string[],
-    aspectRatio?: string,
-    onProgress?: (progress: number) => Promise<void>,
-    characterIdList?: string[]
-  ): Promise<ProviderResult> {
-    const modelConfig = KIE_STORYBOARD_MODELS["sora-storyboard"]
-    if (!modelConfig) {
-      throw createSanitizedError(
-        "Sora Storyboard model not configured",
-        "Sora Storyboard generation"
-      )
-    }
-
-    const effectiveNFrames = nFrames ?? "10"
-
-    console.log(
-      `[KIE.ai] ========== SORA STORYBOARD REQUEST ==========`
-    )
-    console.log(`[KIE.ai] Model: ${modelConfig.model}`)
-    console.log(`[KIE.ai] Shots: ${shots.length}`)
-    console.log(`[KIE.ai] n_frames: ${effectiveNFrames}`)
-    console.log(`[KIE.ai] Aspect ratio: ${aspectRatio ?? "landscape"}`)
-    console.log(`[KIE.ai] Image URLs: ${imageUrls?.length ?? 0}`)
-    console.log(
-      `[KIE.ai] ==============================================`
-    )
-
-    // KIE API requires total shot duration ≤ n_frames value
-    const nFramesNum = Number(effectiveNFrames)
-    const totalDuration = shots.reduce((sum, s) => sum + s.duration, 0)
-    const scale = totalDuration > nFramesNum ? nFramesNum / totalDuration : 1
-
-    const input: Record<string, unknown> = {
-      ...(modelConfig.extraParams ?? {}),
-      shots: shots.map((s) => ({
-        Scene: s.scene,
-        duration: Math.round(s.duration * scale * 10) / 10,
-      })),
-      n_frames: effectiveNFrames,
-    }
-
-    if (aspectRatio) {
-      input.aspect_ratio = mapAspectRatio("sora-storyboard", aspectRatio)
-    }
-
-    if (imageUrls && imageUrls.length > 0) {
-      // KIE API accepts exactly 1 image for storyboard — send only the first
-      input.image_urls = [imageUrls[0]]
-    }
-
-    if (characterIdList && characterIdList.length > 0) {
-      input.character_id_list = characterIdList
-    }
-
-    // Cost varies by n_frames: 10 = 150 KIE credits ($0.75), 15/25 = 270 KIE credits ($1.35)
-    const effectiveCost = effectiveNFrames === "10" ? modelConfig.cost : 1.35
-
-    console.log(
-      `[KIE.ai] Final input:`,
-      JSON.stringify(input, null, 2)
-    )
-
-    const { resultJson } = await runKieTask(
-      modelConfig.model,
-      input,
-      MAX_POLL_ATTEMPTS_VIDEO,
-      onProgress
-    )
-
-    const videoUrl =
-      resultJson.resultUrls?.[0] ?? resultJson.videoUrl
-    if (!videoUrl) {
-      throw createSanitizedError(
-        "Sora Storyboard task succeeded but no URL found",
-        "Sora Storyboard generation"
-      )
-    }
-
-    console.log(
-      `[KIE.ai] Sora Storyboard completed: ${videoUrl} (cost: $${effectiveCost.toFixed(4)})`
-    )
-
-    return { url: videoUrl, cost: effectiveCost }
   }
 }

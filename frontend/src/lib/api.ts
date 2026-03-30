@@ -819,11 +819,9 @@ export interface GenerateVideoOptions {
   elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>  // Kling 3.0 elements
   resolution?: string      // Video resolution (various providers)
   grokMode?: string        // Grok I2V mode: fun/normal/spicy
-  videoSize?: string       // Sora2 Pro size: standard/high
+  videoSize?: string       // Video size/quality setting
   seed?: number            // Seed (Wan Turbo, Bytedance)
   cameraFixed?: boolean    // Camera fixed (Bytedance, Seedance)
-  removeWatermark?: boolean // Sora2/Sora2-Pro watermark removal post-processing
-  characterIdList?: string[] // Sora character IDs from connected sora-character nodes
   referenceImageUrls?: string[]  // Grok I2V (up to 6) / VEO reference mode (up to 3)
   generationType?: string        // VEO: REFERENCE_2_VIDEO
   userId?: string
@@ -865,8 +863,6 @@ export async function generateVideo(
       videoSize: opts.videoSize,
       seed: opts.seed,
       cameraFixed: opts.cameraFixed,
-      removeWatermark: opts.removeWatermark,
-      characterIdList: opts.characterIdList,
       referenceImageUrls: opts.referenceImageUrls,
       generationType: opts.generationType,
     }
@@ -926,9 +922,7 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   multiShot?: boolean
   shots?: Array<{ prompt: string; duration: number }>
   elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
-  removeWatermark?: boolean
   seed?: number
-  characterIdList?: string[]
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt, provider, ...options }
   if (userId) {
@@ -2001,66 +1995,6 @@ export async function imageToTextApi(
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to describe image")
-  }
-  return res.json()
-}
-
-export async function soraStoryboardApi(opts: {
-  shots: Array<{ scene: string; duration: number }>
-  nFrames?: string
-  imageUrls?: string[]
-  aspectRatio?: string
-  characterIdList?: string[]
-  userId?: string
-}): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = {
-    shots: opts.shots,
-  }
-  if (opts.nFrames) body.nFrames = opts.nFrames
-  if (opts.imageUrls && opts.imageUrls.length > 0) body.imageUrls = opts.imageUrls
-  if (opts.aspectRatio) body.aspectRatio = opts.aspectRatio
-  if (opts.characterIdList && opts.characterIdList.length > 0) body.characterIdList = opts.characterIdList
-  if (opts.userId) body.userId = opts.userId
-  const res = await fetch(`${API_BASE_URL}/v1/sora-storyboard`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start Storyboard generation")
-  }
-  return res.json()
-}
-
-export async function extractSoraCharacter(params: {
-  mode: "video" | "sora-task"
-  characterPrompt: string
-  characterName?: string
-  timestamps?: string
-  safetyInstruction?: string
-  videoUrl?: string
-  kieTaskId?: string
-  userId?: string
-}): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = {
-    mode: params.mode,
-    characterPrompt: params.characterPrompt,
-  }
-  if (params.characterName) body.characterName = params.characterName
-  if (params.timestamps) body.timestamps = params.timestamps
-  if (params.safetyInstruction) body.safetyInstruction = params.safetyInstruction
-  if (params.videoUrl) body.videoUrl = params.videoUrl
-  if (params.kieTaskId) body.kieTaskId = params.kieTaskId
-  if (params.userId) body.userId = params.userId
-  const res = await fetch(`${API_BASE_URL}/v1/sora-character`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start character extraction")
   }
   return res.json()
 }

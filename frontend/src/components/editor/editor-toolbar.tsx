@@ -192,20 +192,12 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         case "video-to-video":
         case "text-to-video":
         case "extend-video":
-        case "sora-storyboard":
           // Clear generated video results, keep settings
           data.generatedResults = []
           data.generatedVideoUrl = undefined
           data.activeResultIndex = 0
           data.executionStatus = undefined
           data.connectedImageOrder = undefined
-          break
-
-        case "sora-character":
-          data.generatedResults = []
-          data.generatedCharacterId = undefined
-          data.executionStatus = "idle"
-          data.errorMessage = undefined
           break
 
         case "generate-script":

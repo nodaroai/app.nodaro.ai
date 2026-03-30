@@ -69,7 +69,7 @@ export type DBCategory = "image" | "video" | "audio" | "processing" | "other"
 
 const CATEGORY_PATTERNS: ReadonlyArray<readonly [DBCategory, ReadonlyArray<string>]> = [
   ["image", ["nano", "flux", "grok", "gpt-image", "recraft", "ideogram", "midjourney", "imagen", "seedream", "qwen", "z-image", "topaz-image"]],
-  ["video", ["veo", "kling", "minimax", "wan", "sora", "grok-i2v", "runway", "pika", "hailuo", "topaz-video", "motion-transfer", "speech-to-video", "bytedance", "seedance"]],
+  ["video", ["veo", "kling", "minimax", "wan", "grok-i2v", "runway", "pika", "hailuo", "topaz-video", "motion-transfer", "speech-to-video", "bytedance", "seedance"]],
   ["audio", ["suno", "elevenlabs", "infinitalk", "tango", "musicgen", "audioldm", "bark"]],
   ["processing", ["ffmpeg", "topaz"]],
 ]
@@ -162,8 +162,6 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "kling-master":      { provider: "KIE.ai",    providerCostUsd: 0.800, markupPct: 25 },  // 160 KIE cr (Master 5s)
   "seedance":          { provider: "KIE.ai",    providerCostUsd: 0.165, markupPct: 25 },  // avg 33 KIE cr (4s=14, 8s=28, 12s=60)
   "grok-i2v":          { provider: "KIE.ai",    providerCostUsd: 0.100, markupPct: 25 },  // 20 KIE cr (6s 720p)
-  "sora2-pro":         { provider: "KIE.ai",    providerCostUsd: 0.750, markupPct: 25 },  // 150 KIE cr (Pro Standard 10s)
-  "sora2":             { provider: "KIE.ai",    providerCostUsd: 0.150, markupPct: 25 },  // 30 KIE cr (Standard 10s)
   "wan-i2v":           { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },  // 70 KIE cr (wan 2.6, 5s, 720p)
   "wan-turbo":         { provider: "KIE.ai",    providerCostUsd: 0.200, markupPct: 25 },  // 40 KIE cr (wan 2.2, 5s, 480p)
   "hailuo-2.3-pro":    { provider: "KIE.ai",    providerCostUsd: 0.400, markupPct: 25 },  // 80 KIE cr (10s actual from audit)
@@ -185,7 +183,6 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "motion-transfer":   { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 6 cr/sec × 10s (kling 2.6 720p)
   "kling-motion":      { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // alias for motion-transfer
   "kling-3.0-motion":  { provider: "KIE.ai",    providerCostUsd: 0.600, markupPct: 25 },  // 12 cr/sec × 10s (kling 3.0 720p)
-  "sora-watermark-remove": { provider: "KIE.ai", providerCostUsd: 0.050, markupPct: 25 }, // 10 KIE cr
   // ── Lip Sync ──
   "kling-avatar":      { provider: "KIE.ai",    providerCostUsd: 0.560, markupPct: 25 },  // 8 KIE cr/sec × ~14s (Standard 720p)
   "kling-avatar-pro":  { provider: "KIE.ai",    providerCostUsd: 1.120, markupPct: 25 },  // 16 KIE cr/sec × ~14s (Pro 1080p)
@@ -218,7 +215,6 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   // ── Processing ──
   "topaz":             { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },  // variable
   "speech-to-video":   { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr (480p)
-  "sora-storyboard":   { provider: "KIE.ai",    providerCostUsd: 0.750, markupPct: 25 },  // 150 KIE cr (Pro 10s)
   "ffmpeg":            { provider: "Self",      providerCostUsd: 0,     markupPct: 0  },
   "render-video":      { provider: "Self",      providerCostUsd: 0,     markupPct: 0  },
   "video-composer":    { provider: "Anthropic", providerCostUsd: 0.010, markupPct: 25 },

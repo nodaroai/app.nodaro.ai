@@ -47,8 +47,6 @@ export interface NodeOutput {
   reason?: string
   /** QA-check: quality score 0.0-1.0 */
   score?: number
-  /** Sora-character: generated character ID for use in subsequent Sora tasks */
-  characterId?: string
   /** Router: list of active route IDs */
   activeRoutes?: string[]
   /** Router: route ID -> output value (undefined for inactive routes) */
@@ -166,7 +164,6 @@ export interface ResolvedInputs {
   kieTaskId?: string
   caption?: string
   systemPrompt?: string
-  characterIdList?: string[]
   componentInputMap?: Record<string, string>
 }
 

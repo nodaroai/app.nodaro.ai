@@ -297,20 +297,6 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Video",
   },
   {
-    type: "sora-storyboard",
-    label: "Storyboard",
-    icon: <Clapperboard className="h-4 w-4" />,
-    category: "AI",
-    group: "Video",
-  },
-  {
-    type: "sora-character",
-    label: "Extract Character",
-    icon: <UserRound className="h-4 w-4" />,
-    category: "AI",
-    group: "Video",
-  },
-  {
     type: "motion-transfer",
     label: "Motion Transfer",
     icon: <Waypoints className="h-4 w-4" />,
