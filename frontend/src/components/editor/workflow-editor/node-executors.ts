@@ -3,6 +3,9 @@ import {
   generateImage,
   editImage,
   imageToImage,
+  modifyImage,
+  upscaleImage,
+  removeBackground,
   generateVideo,
   videoToVideo,
   textToVideo,
@@ -126,6 +129,71 @@ export function runImageToImage(
     () => imageToImage(imageUrl, prompt, provider, ctx.userId, referenceImageUrls, options),
     "generatedImageUrl",
     "Image transformation",
+    ctx,
+  );
+}
+
+// --- Modify image (delegates to edit-image or image-to-image) ---
+
+export function runModifyImage(
+  nodeId: string,
+  imageUrl: string,
+  prompt: string,
+  ctx: ExecutionContext,
+  provider?: string,
+  referenceImageUrls?: string[],
+  options?: {
+    strength?: number
+    aspectRatio?: string
+    resolution?: string
+    quality?: string
+    negativePrompt?: string
+    seed?: number
+    renderingSpeed?: string
+    guidanceScale?: number
+    maskUrl?: string
+    style?: string
+  },
+): Promise<string> {
+  return pollJobWithNodeUpdate(
+    nodeId,
+    () => modifyImage(imageUrl, prompt, provider, ctx.userId, referenceImageUrls, options),
+    "generatedImageUrl",
+    "Image modification",
+    ctx,
+  );
+}
+
+// --- Upscale image ---
+
+export function runUpscaleImage(
+  nodeId: string,
+  imageUrl: string,
+  ctx: ExecutionContext,
+  provider?: string,
+  options?: { upscaleFactor?: string; targetResolution?: string },
+): Promise<string> {
+  return pollJobWithNodeUpdate(
+    nodeId,
+    () => upscaleImage(imageUrl, provider, options),
+    "generatedImageUrl",
+    "Image upscale",
+    ctx,
+  );
+}
+
+// --- Remove background ---
+
+export function runRemoveBackground(
+  nodeId: string,
+  imageUrl: string,
+  ctx: ExecutionContext,
+): Promise<string> {
+  return pollJobWithNodeUpdate(
+    nodeId,
+    () => removeBackground(imageUrl),
+    "generatedImageUrl",
+    "Background removal",
     ctx,
   );
 }

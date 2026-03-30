@@ -328,7 +328,7 @@ export function buildPayload(
       const chainRefs = resolvedInputs.referenceImageUrls
         ?? (resolvedInputs.imageUrl ? [resolvedInputs.imageUrl] : undefined)
       if (chainRefs) {
-        const imageSourceTypes = new Set(["upload-image", "generate-image", "edit-image", "image-to-image"])
+        const imageSourceTypes = new Set(["upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background"])
         const wiredSourceIds = (buildCtx?.edges ?? [])
           .filter((e) => e.target === node.id)
           .map((e) => (buildCtx?.nodes ?? []).find((n) => n.id === e.source))
@@ -567,6 +567,187 @@ export function buildPayload(
           renderingSpeed: data.renderingSpeed,
           guidanceScale: data.guidanceScale,
           maskUrl: resolvedInputs.maskUrl || (data.maskUrl as string | undefined),
+          usageLogId,
+        },
+      }
+    }
+
+    case "modify-image": {
+      const provider = (data.provider as string) ?? "nano-banana"
+      if (provider === "nano-banana-edit") {
+        // Same logic as edit-image case for nano-banana-edit
+
+        // Apply connectedMediaOrder to determine main image vs references
+        let mainImageUrl = resolvedInputs.imageUrl || data.imageUrl
+        let editRefUrls: string[] | undefined
+        const connectedOrder = data.connectedMediaOrder as string[] | undefined
+        if (connectedOrder?.length && resolvedInputs.referenceImageUrls?.length) {
+          const allNodes = buildCtx?.nodes ?? []
+          const allEdges = buildCtx?.edges ?? []
+          const states = buildCtx?.nodeStates ?? {}
+          const sourceNodeIds = allEdges
+            .filter((e) => e.target === node.id)
+            .map((e) => e.source)
+          const sourceNodes = sourceNodeIds
+            .map((id) => allNodes.find((n) => n.id === id))
+            .filter((n): n is SimpleNode => !!n)
+          const ordered = applyOrder(sourceNodes, connectedOrder)
+          const orderedUrls = ordered
+            .map((n) => getNodeImageUrl(n, states))
+            .filter((u): u is string => !!u)
+          if (orderedUrls.length > 0) {
+            mainImageUrl = orderedUrls[0]
+            editRefUrls = orderedUrls.slice(1)
+          }
+        }
+
+        let editPrompt = (resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)) as string | undefined
+        if (editPrompt) {
+          const charIds = (data.characterDefinitionIds as string[]) ?? []
+          const charDefs = (buildCtx?.settings?.characterDefinitions ?? []).filter(
+            (c: { id: string }) => charIds.includes(c.id),
+          )
+          if (charDefs.length > 0) {
+            const descriptions = charDefs
+              .map((c: { name: string; description?: string }) =>
+                c.description ? `${c.name}: ${c.description}` : c.name,
+              )
+              .join("; ")
+            editPrompt = `${editPrompt}\n\nContext: ${descriptions}`
+          }
+        }
+
+        return {
+          jobName: "edit-image",
+          queueName: "video-generation",
+          modelIdentifier: buildCreditModelIdentifier(provider),
+          payload: {
+            jobId,
+            imageUrl: mainImageUrl,
+            prompt: editPrompt,
+            provider,
+            aspectRatio: data.aspectRatio,
+            negativePrompt: data.negativePrompt,
+            style: data.style,
+            seed: data.seed,
+            referenceImageUrls: editRefUrls,
+            usageLogId,
+          },
+        }
+      } else {
+        // All other providers route through image-to-image
+        const settings = buildCtx?.settings
+
+        // Apply connectedMediaOrder to determine main image vs references
+        let i2iMainImage = resolvedInputs.imageUrl || data.imageUrl
+        let i2iChainRefs = resolvedInputs.referenceImageUrls ?? []
+        const i2iOrder = data.connectedMediaOrder as string[] | undefined
+        if (i2iOrder?.length && i2iChainRefs.length > 0) {
+          const allNodes = buildCtx?.nodes ?? []
+          const allEdges = buildCtx?.edges ?? []
+          const states = buildCtx?.nodeStates ?? {}
+          const srcIds = allEdges.filter((e) => e.target === node.id).map((e) => e.source)
+          const srcNodes = srcIds
+            .map((id) => allNodes.find((n) => n.id === id))
+            .filter((n): n is SimpleNode => !!n)
+          const ordered = applyOrder(srcNodes, i2iOrder)
+          const orderedUrls = ordered
+            .map((n) => getNodeImageUrl(n, states))
+            .filter((u): u is string => !!u)
+          if (orderedUrls.length > 0) {
+            i2iMainImage = orderedUrls[0]
+            i2iChainRefs = orderedUrls.slice(1)
+          }
+        }
+
+        // Collect reference images from character assets
+        const charIds = (data.characterDefinitionIds as string[]) ?? []
+        const charDefs = (settings?.characterDefinitions ?? []).filter(
+          (c) => charIds.includes(c.id),
+        )
+        const charRefUrls = charDefs
+          .filter((c) => c.type === "reference" && c.referenceImageUrl)
+          .map((c) => c.referenceImageUrl as string)
+        const nodeRefUrl = data.referenceImageUrl as string | undefined
+        const directRefs = [
+          ...(nodeRefUrl ? [nodeRefUrl] : []),
+          ...i2iChainRefs,
+          ...charRefUrls,
+        ]
+
+        const rawPrompt = resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
+          || resolveRefs(data.prompt as string | undefined, refMap)
+          || ""
+
+        const i2iResult = buildImagePrompt({
+          prompt: rawPrompt,
+          provider,
+          style: typeof data.style === "string" ? data.style : undefined,
+          negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+          characterDefs: charDefs as CharacterDef[],
+          userTemplates: settings?.userPromptTemplates,
+          flowTemplates: settings?.flowPromptTemplates,
+          referenceImageUrls: directRefs,
+          ancestorRefs: [],
+        })
+
+        return {
+          jobName: "image-to-image",
+          queueName: "video-generation",
+          modelIdentifier: buildCreditModelIdentifier(
+            provider,
+            data.quality as string | undefined,
+            data.resolution as string | undefined,
+            data.renderingSpeed as string | undefined,
+          ),
+          payload: {
+            jobId,
+            imageUrl: i2iMainImage,
+            prompt: i2iResult.prompt,
+            referenceImageUrls: i2iResult.referenceImageUrls,
+            provider,
+            strength: data.strength,
+            aspectRatio: data.aspectRatio,
+            resolution: data.resolution,
+            quality: data.quality,
+            negativePrompt: i2iResult.nativeNegativePrompt,
+            seed: data.seed,
+            renderingSpeed: data.renderingSpeed,
+            guidanceScale: data.guidanceScale,
+            maskUrl: resolvedInputs.maskUrl || (data.maskUrl as string | undefined),
+            usageLogId,
+          },
+        }
+      }
+    }
+
+    case "upscale-image": {
+      const provider = (data.provider as string) ?? "recraft-upscale"
+      const targetResolution = data.targetResolution as string | undefined
+      return {
+        jobName: "edit-image",
+        queueName: "video-generation",
+        modelIdentifier: buildCreditModelIdentifier(provider, undefined, undefined, undefined, targetResolution),
+        payload: {
+          jobId,
+          imageUrl: resolvedInputs.imageUrl,
+          provider,
+          upscaleFactor: data.upscaleFactor,
+          targetResolution,
+          usageLogId,
+        },
+      }
+    }
+
+    case "remove-background": {
+      return {
+        jobName: "edit-image",
+        queueName: "video-generation",
+        modelIdentifier: "recraft-remove-bg",
+        payload: {
+          jobId,
+          imageUrl: resolvedInputs.imageUrl,
+          provider: "recraft-remove-bg",
           usageLogId,
         },
       }

@@ -897,7 +897,8 @@ function routeOutput(
     if (
       targetType === "generate-image" ||
       targetType === "edit-image" ||
-      targetType === "image-to-image"
+      targetType === "image-to-image" ||
+      targetType === "modify-image"
     ) {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else {
@@ -906,12 +907,13 @@ function routeOutput(
     return
   }
 
-  // --- Edit/I2I image → reference for image nodes, imageUrl for others ---
-  if (srcType === "edit-image" || srcType === "image-to-image") {
+  // --- Edit/I2I/Modify/Upscale/RemoveBG image → reference for image nodes, imageUrl for others ---
+  if (srcType === "edit-image" || srcType === "image-to-image" || srcType === "modify-image" || srcType === "upscale-image" || srcType === "remove-background") {
     if (
       targetType === "generate-image" ||
       targetType === "edit-image" ||
-      targetType === "image-to-image"
+      targetType === "image-to-image" ||
+      targetType === "modify-image"
     ) {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else {
@@ -1073,7 +1075,7 @@ function routeOutput(
     }
 
     if (mediaType === "image") {
-      if (targetType === "generate-image" || targetType === "edit-image" || targetType === "image-to-image") {
+      if (targetType === "generate-image" || targetType === "edit-image" || targetType === "image-to-image" || targetType === "modify-image") {
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
       } else {
         inputs.imageUrl = output
@@ -1125,6 +1127,7 @@ function routeOutput(
       routeVideoOutput(inputs, output, targetType, src.id)
     } else if (
       srcType === "generate-image" || srcType === "edit-image" || srcType === "image-to-image" ||
+      srcType === "modify-image" || srcType === "upscale-image" || srcType === "remove-background" ||
       srcType === "upload-image" || ENTITY_NODE_TYPES.has(srcType)
     ) {
       inputs.imageUrl = output

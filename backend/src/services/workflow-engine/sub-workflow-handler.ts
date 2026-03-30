@@ -77,7 +77,17 @@ export async function executeSubWorkflow(
     throw new Error(`Referenced workflow ${referencedWorkflowId} not found`)
   }
 
-  let subNodes: SimpleNode[] = (workflow.nodes as SimpleNode[]) ?? []
+  // Migrate legacy image node types before processing
+  let subNodes: SimpleNode[] = ((workflow.nodes as SimpleNode[]) ?? []).map(node => {
+    if (node.type === "edit-image") {
+      const provider = (node.data as Record<string, unknown> | undefined)?.provider as string | undefined
+      if (provider === "nano-banana-edit") return { ...node, type: "modify-image" }
+      if (provider === "recraft-remove-bg") return { ...node, type: "remove-background" }
+      return { ...node, type: "upscale-image" }
+    }
+    if (node.type === "image-to-image") return { ...node, type: "modify-image" }
+    return node
+  })
   let subEdges: SimpleEdge[] = (workflow.edges as SimpleEdge[]) ?? []
 
   // Filter to reachable nodes for the selected route (if route filtering is configured)

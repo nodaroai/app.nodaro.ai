@@ -70,6 +70,9 @@ import type {
   GenerateImageData,
   EditImageData,
   ImageToImageData,
+  ModifyImageData,
+  UpscaleImageData,
+  RemoveBackgroundData,
   ImageToVideoData,
   VideoToVideoData,
   TextToVideoData,
@@ -159,6 +162,9 @@ import {
   runImageGeneration,
   runEditImage,
   runImageToImage,
+  runModifyImage,
+  runUpscaleImage,
+  runRemoveBackground,
   runVideoGeneration,
   runVideoToVideoGeneration,
   runTextToVideoGeneration,
@@ -349,7 +355,7 @@ export function executeNode(
       (inputs.imageUrl ? [inputs.imageUrl] : undefined);
     if (chainRefs) {
       const incomingEdges = edges.filter((e) => e.target === node.id);
-      const imageSourceTypes = new Set(["upload-image", "generate-image", "edit-image", "image-to-image"]);
+      const imageSourceTypes = new Set(["upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background"]);
       const wiredSourceIds = incomingEdges
         .map((e) => nodes.find((n) => n.id === e.source))
         .filter((n) => n && imageSourceTypes.has(n.type!))
@@ -430,7 +436,7 @@ export function executeNode(
     );
   }
 
-  if (node.type === "edit-image") {
+  if ((node.type as string) === "edit-image") {
     const editData = node.data as EditImageData;
 
     // Apply connectedMediaOrder to determine main image vs references
@@ -492,7 +498,7 @@ export function executeNode(
     });
   }
 
-  if (node.type === "image-to-image") {
+  if ((node.type as string) === "image-to-image") {
     const i2iData = node.data as ImageToImageData;
 
     // Apply connectedMediaOrder to determine main image vs references
@@ -592,6 +598,141 @@ export function executeNode(
         maskUrl,
       },
     );
+  }
+
+  if (node.type === "modify-image") {
+    const modData = node.data as ModifyImageData;
+
+    // Apply connectedMediaOrder to determine main image vs references
+    let orderedImageUrls: string[] = inputs.referenceImageUrls ?? [];
+    if (modData.connectedMediaOrder?.length && orderedImageUrls.length > 1) {
+      const imageSourceNodes = edges
+        .filter((e) => e.target === node.id)
+        .map((e) => nodes.find((n) => n.id === e.source))
+        .filter(Boolean) as WorkflowNode[];
+      const idToUrl = new Map<string, string>();
+      for (const src of imageSourceNodes) {
+        const url = extractNodeOutput(src);
+        if (url) idToUrl.set(src.id, url);
+      }
+      const reordered = applyMediaOrder(
+        imageSourceNodes.map((n) => ({ id: n.id })),
+        modData.connectedMediaOrder,
+      );
+      orderedImageUrls = reordered
+        .map((e) => idToUrl.get(e.id))
+        .filter((u): u is string => !!u);
+    }
+
+    const imageUrl =
+      overrideMediaUrl ?? orderedImageUrls[0] ?? inputs.imageUrl;
+    if (!imageUrl) {
+      toast.error(
+        `Node "${modData.label}": no input image found`,
+      );
+      return Promise.reject(new Error("No input image"));
+    }
+    const rawPrompt = modData.prompt;
+    if (!rawPrompt) {
+      toast.error(
+        `Node "${modData.label}": transformation prompt is required`,
+      );
+      return Promise.reject(new Error("Transformation prompt is required"));
+    }
+    const provider = modData.provider || "nano-banana";
+
+    // Collect reference images from connected nodes + character assets
+    const chainRefs = orderedImageUrls.filter((url) => url !== imageUrl);
+    const charIds = modData.characterDefinitionIds ?? [];
+    const allCharDefs = useWorkflowStore.getState().characterDefinitions;
+    const charDefs = allCharDefs.filter((c) => charIds.includes(c.id));
+    const charRefUrls = charDefs
+      .filter((c) => c.type === "reference" && c.referenceImageUrl)
+      .map((c) => c.referenceImageUrl as string);
+    const nodeRefUrl = modData.referenceImageUrl;
+    const directRefs = [
+      ...(nodeRefUrl ? [nodeRefUrl] : []),
+      ...chainRefs,
+      ...charRefUrls,
+    ];
+
+    // Build prompt with style + character descriptions
+    const result = buildImagePrompt({
+      prompt: rawPrompt,
+      provider,
+      style: modData.style,
+      negativePrompt: modData.negativePrompt,
+      characterDefs: charDefs as CharacterDef[],
+      userTemplates: useWorkflowStore.getState().userPromptTemplates,
+      flowTemplates: useWorkflowStore.getState().flowPromptTemplates,
+      referenceImageUrls: directRefs,
+      ancestorRefs: [],
+    });
+
+    // Resolve mask from handle or painted mask
+    let maskUrl: string | undefined;
+    const maskEdge = edges.find(
+      (e) => e.target === node.id && e.targetHandle === "mask",
+    );
+    if (maskEdge) {
+      const maskNode = nodes.find((n) => n.id === maskEdge.source);
+      if (maskNode) maskUrl = extractNodeOutput(maskNode);
+    }
+    if (!maskUrl) maskUrl = modData.maskUrl;
+
+    return runModifyImage(
+      node.id,
+      imageUrl,
+      result.prompt,
+      ctx,
+      provider,
+      result.referenceImageUrls?.length ? result.referenceImageUrls : undefined,
+      {
+        strength: modData.strength,
+        aspectRatio: modData.aspectRatio,
+        resolution: modData.resolution,
+        quality: modData.quality,
+        negativePrompt: result.nativeNegativePrompt,
+        seed: modData.seed,
+        renderingSpeed: modData.renderingSpeed,
+        guidanceScale: modData.guidanceScale,
+        maskUrl,
+        style: modData.style,
+      },
+    );
+  }
+
+  if (node.type === "upscale-image") {
+    const upData = node.data as UpscaleImageData;
+    const imageUrl = overrideMediaUrl ?? inputs.imageUrl;
+    if (!imageUrl) {
+      toast.error(
+        `Node "${upData.label}": no input image found`,
+      );
+      return Promise.reject(new Error("No input image"));
+    }
+    return runUpscaleImage(
+      node.id,
+      imageUrl,
+      ctx,
+      upData.provider || undefined,
+      {
+        upscaleFactor: upData.upscaleFactor,
+        targetResolution: upData.targetResolution,
+      },
+    );
+  }
+
+  if (node.type === "remove-background") {
+    const rbData = node.data as RemoveBackgroundData;
+    const imageUrl = overrideMediaUrl ?? inputs.imageUrl;
+    if (!imageUrl) {
+      toast.error(
+        `Node "${rbData.label}": no input image found`,
+      );
+      return Promise.reject(new Error("No input image"));
+    }
+    return runRemoveBackground(node.id, imageUrl, ctx);
   }
 
   if (node.type === "image-to-video") {
@@ -1967,6 +2108,9 @@ export function executeNode(
         "upload-image",
         "edit-image",
         "image-to-image",
+        "modify-image",
+        "upscale-image",
+        "remove-background",
         "character",
         "object",
         "location",

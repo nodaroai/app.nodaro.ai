@@ -116,8 +116,9 @@ describe("NODE_DEFINITIONS essential types", () => {
     const expected = [
       "generate-script",
       "generate-image",
-      "edit-image",
-      "image-to-image",
+      "modify-image",
+      "upscale-image",
+      "remove-background",
       "image-to-video",
       "video-to-video",
       "text-to-video",

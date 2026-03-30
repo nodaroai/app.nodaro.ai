@@ -72,6 +72,8 @@ import {
   GitBranch,
   Puzzle,
   MessageSquare,
+  ZoomIn,
+  Eraser,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -240,16 +242,23 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Image",
   },
   {
-    type: "edit-image",
-    label: "Edit Image",
-    icon: <Wand2 className="h-4 w-4" />,
+    type: "modify-image",
+    label: "Modify Image",
+    icon: <Layers className="h-4 w-4" />,
     category: "AI",
     group: "Image",
   },
   {
-    type: "image-to-image",
-    label: "Image to Image",
-    icon: <Layers className="h-4 w-4" />,
+    type: "upscale-image",
+    label: "Upscale Image",
+    icon: <ZoomIn className="h-4 w-4" />,
+    category: "AI",
+    group: "Image",
+  },
+  {
+    type: "remove-background",
+    label: "Remove Background",
+    icon: <Eraser className="h-4 w-4" />,
     category: "AI",
     group: "Image",
   },

@@ -1,12 +1,14 @@
 import type { Node, Edge } from "@xyflow/react"
 import type {
   ImageI2IProvider, ImageGenProvider, ImageEditProvider,
+  ModifyImageProvider, UpscaleImageProvider,
   ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider,
   VideoUpscaleProvider, ExtendVideoProvider, TtsProvider,
   TextToAudioProvider, MusicProvider, TranscribeProvider,
   LipSyncProvider, ScriptProvider, AiWriterProvider, QaCheckProvider,
   SunoModel, VoiceDesignModel,
 } from "@nodaro-shared/model-constants"
+import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro-shared/model-constants"
 import type { ExposableField, ExposableOutput } from "@nodaro-shared/presentation-types"
 import type { ComponentMetadata } from "@nodaro-shared/component-types"
 import { IMAGE_STYLE_PRESETS } from "@/components/editor/config-panels/model-options"
@@ -571,6 +573,64 @@ export type ImageToImageData = {
   maskUrl?: string
   characterDefinitionIds?: readonly string[]
   connectedMediaOrder?: readonly string[]
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedImageUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+// Modify Image providers (I2I + nano-banana-edit)
+export type ModifyImageData = {
+  [key: string]: unknown
+  label: string
+  prompt: string
+  provider: ModifyImageProvider
+  style?: string
+  strength?: number
+  aspectRatio?: string
+  resolution?: string
+  quality?: string
+  negativePrompt?: string
+  seed?: number
+  renderingSpeed?: string
+  guidanceScale?: number
+  referenceImageUrl?: string
+  maskUrl?: string
+  characterDefinitionIds?: readonly string[]
+  connectedMediaOrder?: readonly string[]
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedImageUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+export type UpscaleImageData = {
+  [key: string]: unknown
+  label: string
+  provider: UpscaleImageProvider
+  upscaleFactor?: string
+  targetResolution?: "2K" | "4K" | "8K"
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedImageUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+export type RemoveBackgroundData = {
+  [key: string]: unknown
+  label: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -2238,8 +2298,9 @@ export type SceneNodeData =
   | CameraMotionData
   | GenerateScriptData
   | GenerateImageData
-  | EditImageData
-  | ImageToImageData
+  | ModifyImageData
+  | UpscaleImageData
+  | RemoveBackgroundData
   | ImageToVideoData
   | VideoToVideoData
   | TextToVideoData
@@ -2344,8 +2405,9 @@ export type SceneNodeType =
   | "camera-motion"
   | "generate-script"
   | "generate-image"
-  | "edit-image"
-  | "image-to-image"
+  | "modify-image"
+  | "upscale-image"
+  | "remove-background"
   | "image-to-video"
   | "video-to-video"
   | "text-to-video"
@@ -2699,20 +2761,41 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     ],
   },
   {
-    type: "edit-image",
-    label: "Edit Image",
+    type: "modify-image",
+    label: "Modify Image",
     category: "ai",
-    creditCost: 3,
+    creditCost: 2,
     inputs: ["image"],
     outputs: ["out"],
-    defaultData: { label: "Edit Image", prompt: "", provider: "recraft-upscale", fieldMappings: {} },
-    exposableOutputs: [{ key: "result", label: "Result", outputType: "image" as const }],
+    width: 260,
+    defaultData: {
+      label: "Modify Image",
+      prompt: "",
+      provider: "nano-banana" as ModifyImageProvider,
+      fieldMappings: {},
+    },
+    exposableOutputs: [{ key: "out", label: "Modified Image", outputType: "image" as const }],
+    exposableFields: [
+      { key: "provider", label: "Model", type: "select" as const, options: MODIFY_IMAGE_PROVIDERS.map(p => ({ value: p, label: p })) },
+    ],
+  },
+  {
+    type: "upscale-image",
+    label: "Upscale Image",
+    category: "ai",
+    creditCost: 1,
+    inputs: ["image"],
+    outputs: ["out"],
+    width: 220,
+    defaultData: {
+      label: "Upscale Image",
+      provider: "recraft-upscale" as UpscaleImageProvider,
+      fieldMappings: {},
+    },
+    exposableOutputs: [{ key: "out", label: "Upscaled Image", outputType: "image" as const }],
     exposableFields: [
       {
-        key: "provider", label: "Model", type: "select" as const,
-        options: [
-          { value: "nano-banana-edit", label: "Nano Banana Edit" },
-          { value: "recraft-remove-bg", label: "Recraft Remove BG" },
+        key: "provider", label: "Model", type: "select" as const, options: [
           { value: "recraft-upscale", label: "Recraft Upscale" },
           { value: "topaz-image-upscale", label: "Topaz Upscale" },
         ],
@@ -2720,36 +2803,18 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     ],
   },
   {
-    type: "image-to-image",
-    label: "Image to Image",
+    type: "remove-background",
+    label: "Remove Background",
     category: "ai",
-    creditCost: 5,
+    creditCost: 1,
     inputs: ["image"],
     outputs: ["out"],
-    defaultData: { label: "Image to Image", prompt: "", provider: "nano-banana", fieldMappings: {} },
-    exposableOutputs: [{ key: "result", label: "Result", outputType: "image" as const }],
-    exposableFields: [
-      {
-        key: "provider", label: "Model", type: "select" as const,
-        options: [
-          { value: "flux-i2i", label: "Flux-2" },
-          { value: "flux-pro-i2i", label: "Flux-2 Pro" },
-          { value: "flux-kontext", label: "Flux Kontext" },
-          { value: "flux-kontext-max", label: "Flux Kontext Max" },
-          { value: "gpt-image-i2i", label: "GPT Image" },
-          { value: "grok-i2i", label: "Grok" },
-          { value: "ideogram-edit", label: "Ideogram Edit" },
-          { value: "ideogram-reframe", label: "Ideogram Reframe" },
-          { value: "ideogram-remix", label: "Ideogram Remix" },
-          { value: "nano-banana", label: "Nano Banana" },
-          { value: "nano-banana-pro", label: "Nano Banana Pro" },
-          { value: "qwen-i2i", label: "Qwen" },
-          { value: "qwen-edit", label: "Qwen Edit" },
-          { value: "seedream-5-lite-i2i", label: "Seedream 5 Lite" },
-          { value: "seedream-edit", label: "Seedream Edit" },
-        ],
-      },
-    ],
+    width: 220,
+    defaultData: {
+      label: "Remove Background",
+      fieldMappings: {},
+    },
+    exposableOutputs: [{ key: "out", label: "Image (No BG)", outputType: "image" as const }],
   },
   {
     type: "image-to-video",

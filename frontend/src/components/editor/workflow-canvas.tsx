@@ -36,7 +36,7 @@ const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-mod
 import type { ComponentSelection } from "./component-marketplace-modal"
 import { SelectionActionBar } from "./selection-action-bar"
 import { FocusModeNav } from "./focus-mode-nav"
-import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useWorkflowStore, migrateImageNodes } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useUndoRedoActions } from "@/hooks/use-undo-redo"
 import { useIsMobile } from "@/hooks/use-is-mobile"
@@ -1022,7 +1022,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           try { parsed = JSON.parse(text) } catch { return }
           if (!parsed.__nodaro_clipboard || !Array.isArray(parsed.nodes) || parsed.nodes.length === 0) return
 
-          const nodesToPaste = parsed.nodes
+          const nodesToPaste = migrateImageNodes(parsed.nodes)
           const edgesToPaste = parsed.edges ?? []
           const clipboardName = parsed.name || "Workflow"
 
