@@ -529,7 +529,18 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     return values.length > 0 ? values[0] : undefined;
   }
   if (type === "teleport-send" || type === "teleport-receive") {
-    return (data.result as string | undefined)
+    const result = data.result as string | undefined
+    if (result) return result
+    // Follow the teleport chain when result isn't populated (single-node runs)
+    const { nodes, edges } = useWorkflowStore.getState()
+    const inEdges = edges.filter((e) => e.target === node.id)
+    for (const edge of inEdges) {
+      const src = nodes.find((n) => n.id === edge.source)
+      if (!src) continue
+      const upstream = extractNodeOutput(src, edge.sourceHandle ?? undefined)
+      if (upstream) return upstream
+    }
+    return undefined
   }
   if (type === "router") {
     if (!sourceHandle) return (data.result as string | undefined)
