@@ -106,7 +106,13 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, assets, onExpo
           sentVideoRef.current = true
           const iframe = iframeRef.current
           if (iframe?.contentWindow) {
-            sendVideoToFreeCut(iframe, true).then(() => {
+            sendVideoToFreeCut(iframe, true).catch(() => {
+              // Fallback: send URL only (buffer fetch failed)
+              iframe.contentWindow!.postMessage(
+                { type: "NODARO_LOAD_VIDEO", payload: { videoUrl } },
+                FREECUT_ORIGIN,
+              )
+            }).finally(() => {
               // Auto-import remaining connected assets to FreeCut's asset library
               if (assets && assets.length > 0) {
                 const remaining = assets.filter(a => a.url !== videoUrl)
@@ -114,12 +120,6 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, assets, onExpo
                   sendAssetsToFreeCut(iframe, remaining)
                 }
               }
-            }).catch(() => {
-              // Fallback: send URL only
-              iframe.contentWindow!.postMessage(
-                { type: "NODARO_LOAD_VIDEO", payload: { videoUrl } },
-                FREECUT_ORIGIN,
-              )
             })
           }
         }
