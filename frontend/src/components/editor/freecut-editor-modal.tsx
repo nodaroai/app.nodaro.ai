@@ -7,16 +7,23 @@ import { X, Loader2, Check, FilePlus } from "lucide-react"
 const FREECUT_URL = import.meta.env.VITE_FREECUT_URL || "http://localhost:5174"
 const FREECUT_ORIGIN = new URL(FREECUT_URL).origin
 
+interface AdditionalAsset {
+  readonly url: string
+  readonly type: "video" | "image" | "audio"
+  readonly label?: string
+}
+
 interface FreeCutEditorModalProps {
   readonly videoUrl: string
   readonly freecutProjectUrl?: string
+  readonly additionalAssets?: AdditionalAsset[]
   readonly onExportComplete: (videoBlob: Blob, projectJson?: unknown) => Promise<void>
   readonly onClose: () => void
   readonly onImportRequest?: (accept: string, multiple: boolean) => void
   readonly sendImportFilesRef?: React.MutableRefObject<((files: Array<{ name: string; type: string; size: number; buffer: ArrayBuffer }>) => void) | null>
 }
 
-export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, onExportComplete, onClose, onImportRequest, sendImportFilesRef }: FreeCutEditorModalProps) {
+export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAssets, onExportComplete, onClose, onImportRequest, sendImportFilesRef }: FreeCutEditorModalProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [iframeLoaded, setIframeLoaded] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "done">("idle")
@@ -41,14 +48,32 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, onExportComple
         console.warn("[FreeCut] No project to restore", { includeProject, freecutProjectUrl })
       }
 
-      console.warn("[FreeCut] Sending to iframe", { hasBuffer: !!videoBuffer, hasProjectJson: !!projectJson })
+      // Fetch additional connected assets (for manual-edit multi-input)
+      let additionalFiles: Array<{ name: string; type: string; size: number; buffer: ArrayBuffer }> | undefined
+      if (additionalAssets && additionalAssets.length > 0) {
+        try {
+          additionalFiles = await Promise.all(
+            additionalAssets.map(async (asset) => {
+              const ext = asset.type === "video" ? "mp4" : asset.type === "audio" ? "mp3" : "png"
+              const mime = asset.type === "video" ? "video/mp4" : asset.type === "audio" ? "audio/mpeg" : "image/png"
+              const buffer = await fetch(asset.url).then((r) => r.arrayBuffer())
+              return { name: `${asset.label ?? "asset"}.${ext}`, type: mime, size: buffer.byteLength, buffer }
+            }),
+          )
+        } catch {
+          console.warn("[FreeCut] Failed to fetch some additional assets")
+        }
+      }
+
+      const transferables = [videoBuffer, ...(additionalFiles?.map((f) => f.buffer) ?? [])]
+      console.warn("[FreeCut] Sending to iframe", { hasBuffer: !!videoBuffer, hasProjectJson: !!projectJson, additionalFiles: additionalFiles?.length ?? 0 })
       iframe.contentWindow!.postMessage(
-        { type: "NODARO_LOAD_VIDEO", payload: { videoUrl, videoBuffer, projectJson } },
+        { type: "NODARO_LOAD_VIDEO", payload: { videoUrl, videoBuffer, projectJson, additionalFiles } },
         FREECUT_ORIGIN,
-        [videoBuffer],
+        transferables,
       )
     },
-    [videoUrl, freecutProjectUrl],
+    [videoUrl, freecutProjectUrl, additionalAssets],
   )
 
   const sendImportFiles = useCallback(
