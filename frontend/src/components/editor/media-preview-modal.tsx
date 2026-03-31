@@ -48,6 +48,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
   const videoRef = useRef<HTMLVideoElement>(null)
   const initialState = initialVideoPlayState ?? "loop"
   const [isPlaying, setIsPlaying] = useState(initialState === "loop")
+  const [activeState, setActiveState] = useState<"loop" | "paused" | "stopped">(initialState)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -64,6 +65,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
     if (!isOpen || type !== "video") return
     const state = initialVideoPlayState ?? "loop"
     setIsPlaying(state === "loop")
+    setActiveState(state)
     setControlsVisible(true)
   }, [isOpen, type, initialVideoPlayState])
 
@@ -125,9 +127,11 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
     if (!video) return
     if (video.paused) {
       video.play().catch(() => {})
+      setActiveState("loop")
       onVideoStateChange?.({ playState: "loop", currentTime: video.currentTime })
     } else {
       video.pause()
+      setActiveState("paused")
       onVideoStateChange?.({ playState: "paused", currentTime: video.currentTime })
     }
   }, [onVideoStateChange])
@@ -137,6 +141,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
     if (!video) return
     video.currentTime = 0
     video.play().catch(() => {})
+    setActiveState("loop")
     onVideoStateChange?.({ playState: "loop", currentTime: 0 })
   }, [onVideoStateChange])
 
@@ -150,9 +155,10 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
   }, [])
 
   // Node state controls — also drive the fullscreen video for immediate feedback
-  const setNodeState = useCallback((playState: "loop" | "paused" | "stopped") => {
+  const setNodeState = useCallback((playState: "loop" | "stopped") => {
     const video = videoRef.current
     const time = video?.currentTime ?? 0
+    setActiveState(playState)
     onVideoStateChange?.({ playState, currentTime: time })
     if (video) {
       if (playState === "stopped") {
@@ -323,12 +329,16 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
 
                 {/* Right: node state controls — Loop and Stop only (play/pause is on the left) */}
                 {onVideoStateChange && (
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
                       aria-label="Set node to loop"
                       title="Loop on node"
-                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+                      className={`w-8 h-8 flex items-center justify-center rounded-full border border-dashed transition-colors ${
+                        activeState === "loop"
+                          ? "border-[#38BDF8] text-[#38BDF8]"
+                          : "border-white/50 text-white/50 hover:text-white hover:border-white/70"
+                      }`}
                       onClick={() => setNodeState("loop")}
                     >
                       <Repeat className="w-4 h-4" />
@@ -337,7 +347,11 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
                       type="button"
                       aria-label="Stop node (show first frame)"
                       title="Stop — show first frame on node"
-                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+                      className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${
+                        activeState === "stopped"
+                          ? "border-[#38BDF8] bg-[#38BDF8]/20 text-[#38BDF8]"
+                          : "border-transparent text-white/50 hover:text-white hover:bg-white/10"
+                      }`}
                       onClick={() => setNodeState("stopped")}
                     >
                       <Square className="w-3.5 h-3.5" />
