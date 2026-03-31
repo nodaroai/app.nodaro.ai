@@ -214,7 +214,7 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
     </BaseNode>
     <HandleIcon icon={<Clapperboard />} color="steel" side="left" top="calc(100% - 20px)" />
     <HandleIcon icon={<Film />} color="steel" top="20px" />
-    {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} results={results} initialIndex={activeIndex} onVideoStateChange={handleVideoStateChange} />}
+    {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} results={results} initialIndex={activeIndex} onVideoStateChange={handleVideoStateChange} initialVideoPlayState={nodeData.videoPlayState} initialPausedAtTime={nodeData.pausedAtTime} />}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>
   )

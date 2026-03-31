@@ -26,6 +26,10 @@ interface MediaPreviewModalProps {
   readonly onNext?: () => void
   /** Called when user changes video playback state from fullscreen controls */
   readonly onVideoStateChange?: (state: { playState: "loop" | "paused" | "stopped"; currentTime: number }) => void
+  /** Initial video play state from the node (respects paused/stopped state) */
+  readonly initialVideoPlayState?: "loop" | "paused" | "stopped"
+  /** Initial seek time when opening in paused state */
+  readonly initialPausedAtTime?: number
 }
 
 function formatTime(seconds: number): string {
@@ -34,7 +38,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
-export function MediaPreviewModal({ isOpen, onClose, type, url, results, initialIndex, onIndexChange, currentIndex, totalCount, onPrev, onNext, onVideoStateChange }: MediaPreviewModalProps) {
+export function MediaPreviewModal({ isOpen, onClose, type, url, results, initialIndex, onIndexChange, currentIndex, totalCount, onPrev, onNext, onVideoStateChange, initialVideoPlayState, initialPausedAtTime }: MediaPreviewModalProps) {
   // Internal navigation state when results array is provided
   const validResults = results?.filter((r) => r.url) ?? []
   const hasInternalNav = validResults.length > 1
@@ -42,7 +46,8 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
 
   // Video state
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [isPlaying, setIsPlaying] = useState(true)
+  const initialState = initialVideoPlayState ?? "loop"
+  const [isPlaying, setIsPlaying] = useState(initialState === "loop")
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -54,14 +59,30 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
     if (isOpen) setViewIndex(initialIndex ?? 0)
   }, [isOpen, initialIndex])
 
-  // Reset video state when modal opens
+  // Respect node play state when modal opens
   useEffect(() => {
-    if (isOpen && type === "video") {
-      setIsPlaying(true)
-      setCurrentTime(0)
-      setControlsVisible(true)
+    if (!isOpen || type !== "video") return
+    const state = initialVideoPlayState ?? "loop"
+    setIsPlaying(state === "loop")
+    setControlsVisible(true)
+  }, [isOpen, type, initialVideoPlayState])
+
+  // Apply initial state to the video element after it loads
+  useEffect(() => {
+    if (!isOpen || type !== "video") return
+    const video = videoRef.current
+    if (!video) return
+    const state = initialVideoPlayState ?? "loop"
+    if (state === "loop") {
+      video.play().catch(() => {})
+    } else if (state === "paused") {
+      video.pause()
+      if (initialPausedAtTime !== undefined) video.currentTime = initialPausedAtTime
+    } else {
+      video.pause()
+      video.currentTime = 0
     }
-  }, [isOpen, type])
+  }, [isOpen, type, initialVideoPlayState, initialPausedAtTime])
 
   // Auto-hide controls after 2s of no mouse movement
   const resetHideTimer = useCallback(() => {
@@ -102,16 +123,22 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
   const togglePlay = useCallback(() => {
     const video = videoRef.current
     if (!video) return
-    if (video.paused) { video.play().catch(() => {}) }
-    else { video.pause() }
-  }, [])
+    if (video.paused) {
+      video.play().catch(() => {})
+      onVideoStateChange?.({ playState: "loop", currentTime: video.currentTime })
+    } else {
+      video.pause()
+      onVideoStateChange?.({ playState: "paused", currentTime: video.currentTime })
+    }
+  }, [onVideoStateChange])
 
   const restart = useCallback(() => {
     const video = videoRef.current
     if (!video) return
     video.currentTime = 0
     video.play().catch(() => {})
-  }, [])
+    onVideoStateChange?.({ playState: "loop", currentTime: 0 })
+  }, [onVideoStateChange])
 
   const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const video = videoRef.current
@@ -128,9 +155,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
     const time = video?.currentTime ?? 0
     onVideoStateChange?.({ playState, currentTime: time })
     if (video) {
-      if (playState === "paused") {
-        video.pause()
-      } else if (playState === "stopped") {
+      if (playState === "stopped") {
         video.pause()
         video.currentTime = 0
       } else {
@@ -172,6 +197,8 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
   }, [effectivePrev, effectiveNext])
 
   if (!isOpen || !effectiveUrl) return null
+
+  const shouldAutoPlay = (initialVideoPlayState ?? "loop") === "loop"
 
   return createPortal(
     <div
@@ -241,7 +268,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
               key={effectiveUrl}
               src={effectiveUrl}
               className="max-w-full max-h-[80vh] rounded-lg"
-              autoPlay
+              autoPlay={shouldAutoPlay}
               muted
               loop
               playsInline
@@ -294,7 +321,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
                   </span>
                 </div>
 
-                {/* Right: node state controls */}
+                {/* Right: node state controls — Loop and Stop only (play/pause is on the left) */}
                 {onVideoStateChange && (
                   <div className="flex items-center gap-1">
                     <button
@@ -308,17 +335,8 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
                     </button>
                     <button
                       type="button"
-                      aria-label="Pause node at this frame"
-                      title="Freeze this frame on node"
-                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors"
-                      onClick={() => setNodeState("paused")}
-                    >
-                      <Pause className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Stop node (show thumbnail)"
-                      title="Show thumbnail on node"
+                      aria-label="Stop node (show first frame)"
+                      title="Stop — show first frame on node"
                       className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors"
                       onClick={() => setNodeState("stopped")}
                     >

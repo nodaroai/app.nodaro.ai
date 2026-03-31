@@ -403,6 +403,8 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
         type="video"
         url={videoUrl}
         onVideoStateChange={handleVideoStateChange}
+        initialVideoPlayState={nodeData.videoPlayState}
+        initialPausedAtTime={nodeData.pausedAtTime}
       />
     )}
 
