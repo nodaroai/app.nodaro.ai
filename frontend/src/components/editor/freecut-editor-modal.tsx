@@ -65,12 +65,11 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
         }
       }
 
-      const transferables = [videoBuffer, ...(additionalFiles?.map((f) => f.buffer) ?? [])]
-      console.warn("[FreeCut] Sending to iframe", { hasBuffer: !!videoBuffer, hasProjectJson: !!projectJson, additionalFiles: additionalFiles?.length ?? 0 })
+      console.warn("[FreeCut] Sending to iframe", { hasBuffer: !!videoBuffer, hasProjectJson: !!projectJson, additionalFiles: additionalFiles?.map((f) => ({ name: f.name, size: f.size })) ?? [] })
       iframe.contentWindow!.postMessage(
         { type: "NODARO_LOAD_VIDEO", payload: { videoUrl, videoBuffer, projectJson, additionalFiles } },
         FREECUT_ORIGIN,
-        transferables,
+        [videoBuffer],
       )
     },
     [videoUrl, freecutProjectUrl, additionalAssets],
