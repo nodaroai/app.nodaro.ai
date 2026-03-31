@@ -316,6 +316,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
             const baseWidth = 490
             const baseHeight = Math.round(baseWidth / ratio)
             setVideoDimensions({ width: baseWidth, height: Math.max(180, Math.min(600, baseHeight)) })
+            if (shouldPlay) video.play().catch(() => {})
           }} />
         {/* Version badge */}
         {results.length > 1 && (
@@ -580,6 +581,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 onLoadedMetadata={(e) => {
                   const v = e.currentTarget
                   if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
+                  if (shouldPlay) v.play().catch(() => {})
                 }}
               />
 
