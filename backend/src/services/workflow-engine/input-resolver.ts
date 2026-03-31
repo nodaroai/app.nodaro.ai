@@ -55,8 +55,23 @@ export function resolveNodeInputs(
   const inputs: ResolvedInputs = {}
 
   for (const edge of incomingEdges) {
-    const sourceNode = allNodes.find((n) => n.id === edge.source)
+    let sourceNode = allNodes.find((n) => n.id === edge.source)
     if (!sourceNode) continue
+
+    // Teleport transparency: resolve through the chain to the original source
+    if (sourceNode.type === "teleport-send" || sourceNode.type === "teleport-receive") {
+      let current = sourceNode
+      const visited = new Set<string>()
+      while ((current.type === "teleport-send" || current.type === "teleport-receive") && !visited.has(current.id)) {
+        visited.add(current.id)
+        const inEdge = edges.find((e) => e.target === current.id)
+        if (!inEdge) break
+        const upstream = allNodes.find((n) => n.id === inEdge.source)
+        if (!upstream) break
+        current = upstream
+      }
+      sourceNode = current
+    }
 
     // Get output from node state or source node data
     let output: string | undefined
@@ -805,21 +820,6 @@ function routeOutput(
     } else if (handle === "locations") {
       const locs = deduplicateLocations(scenes)
       if (locs.length > 0) inputs.scriptLocations = locs
-    } else {
-      inputs.prompt = output
-    }
-    return
-  }
-
-  // --- Teleporter passthrough — detect media type from the resolved output value ---
-  if (srcType === "teleport-send" || srcType === "teleport-receive") {
-    if (!output) return
-    if (IMAGE_URL_RE.test(output)) {
-      inputs.imageUrl = output
-    } else if (VIDEO_URL_RE.test(output)) {
-      routeVideoOutput(inputs, output, targetType, src.id)
-    } else if (AUDIO_URL_RE.test(output)) {
-      routeAudioOutput(inputs, output, targetType, src.id)
     } else {
       inputs.prompt = output
     }
