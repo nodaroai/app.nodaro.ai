@@ -394,6 +394,8 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
         results={results}
         initialIndex={activeIndex}
         onVideoStateChange={handleVideoStateChange}
+        initialVideoPlayState={nodeData.videoPlayState}
+        initialPausedAtTime={nodeData.pausedAtTime}
       />
     )}
 
