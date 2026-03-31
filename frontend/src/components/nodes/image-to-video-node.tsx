@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useMemo, useEffect, Suspense } from "react"
+import { memo, useState, useMemo, useEffect, useRef, useCallback, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, Images, Volume2, Maximize2, Download, Settings, LayoutGrid, Expand, Link, Scissors } from "lucide-react"
@@ -78,6 +78,9 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ImageToVideoData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const playState = nodeData.videoPlayState ?? "loop"
+  const shouldPlay = videoAutoplay && playState === "loop"
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -116,6 +119,25 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       return () => { cancelled = true }
     }
   }, [activeThumbnail, activeUrl])
+
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v || !activeUrl) return
+    if (playState === "paused") {
+      v.pause()
+      if (nodeData.pausedAtTime !== undefined) v.currentTime = nodeData.pausedAtTime
+    } else if (playState === "stopped") {
+      v.pause()
+      v.currentTime = 0
+    } else if (shouldPlay) {
+      v.play().catch(() => {})
+    }
+  }, [playState, shouldPlay, activeUrl, nodeData.pausedAtTime])
+
+  const handleVideoStateChange = useCallback((state: { playState: "loop" | "paused" | "stopped"; currentTime: number }) => {
+    updateNodeData(id, { videoPlayState: state.playState, pausedAtTime: state.currentTime })
+  }, [id, updateNodeData])
+
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
   const isNodeRunning = nodeData.executionStatus === "running"
@@ -285,7 +307,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     >
       {activeUrl && !showConfig && !isKling3 ? (
       <div className="relative w-full h-full group/video">
-        <video src={activeUrl} crossOrigin="anonymous" autoPlay={videoAutoplay} loop={videoAutoplay} muted playsInline
+        <video ref={videoRef} src={activeUrl} crossOrigin="anonymous" autoPlay={shouldPlay} loop={shouldPlay} muted playsInline
           poster={activeThumbnail}
           className="w-full h-full object-cover rounded-xl"
           onLoadedMetadata={(e) => {
@@ -554,7 +576,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
               <video src={activeUrl} crossOrigin="anonymous"
                 className="w-full h-full object-cover"
                 poster={activeThumbnail}
-                autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline
+                autoPlay={shouldPlay} muted loop={shouldPlay} playsInline
                 onLoadedMetadata={(e) => {
                   const v = e.currentTarget
                   if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
@@ -697,6 +719,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         url={activeUrl}
         results={results}
         initialIndex={activeIndex}
+        onVideoStateChange={handleVideoStateChange}
       />
     )}
 

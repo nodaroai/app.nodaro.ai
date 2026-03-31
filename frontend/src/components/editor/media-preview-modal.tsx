@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
-import { X, ChevronLeft, ChevronRight } from "lucide-react"
+import { X, ChevronLeft, ChevronRight, Play, Pause, RotateCcw, Repeat, Square } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 
 interface MediaPreviewModalProps {
@@ -24,18 +24,55 @@ interface MediaPreviewModalProps {
   readonly onPrev?: () => void
   /** Navigate to next item (undefined = at end) — used when results not provided */
   readonly onNext?: () => void
+  /** Called when user changes video playback state from fullscreen controls */
+  readonly onVideoStateChange?: (state: { playState: "loop" | "paused" | "stopped"; currentTime: number }) => void
 }
 
-export function MediaPreviewModal({ isOpen, onClose, type, url, results, initialIndex, onIndexChange, currentIndex, totalCount, onPrev, onNext }: MediaPreviewModalProps) {
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${s.toString().padStart(2, "0")}`
+}
+
+export function MediaPreviewModal({ isOpen, onClose, type, url, results, initialIndex, onIndexChange, currentIndex, totalCount, onPrev, onNext, onVideoStateChange }: MediaPreviewModalProps) {
   // Internal navigation state when results array is provided
   const validResults = results?.filter((r) => r.url) ?? []
   const hasInternalNav = validResults.length > 1
   const [viewIndex, setViewIndex] = useState(initialIndex ?? 0)
 
+  // Video state
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [isPlaying, setIsPlaying] = useState(true)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [controlsVisible, setControlsVisible] = useState(true)
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const progressBarRef = useRef<HTMLDivElement>(null)
+
   // Reset viewIndex when modal opens or initialIndex changes
   useEffect(() => {
     if (isOpen) setViewIndex(initialIndex ?? 0)
   }, [isOpen, initialIndex])
+
+  // Reset video state when modal opens
+  useEffect(() => {
+    if (isOpen && type === "video") {
+      setIsPlaying(true)
+      setCurrentTime(0)
+      setControlsVisible(true)
+    }
+  }, [isOpen, type])
+
+  // Auto-hide controls after 2s of no mouse movement
+  const resetHideTimer = useCallback(() => {
+    setControlsVisible(true)
+    clearTimeout(hideTimerRef.current)
+    hideTimerRef.current = setTimeout(() => setControlsVisible(false), 2000)
+  }, [])
+
+  useEffect(() => {
+    return () => clearTimeout(hideTimerRef.current)
+  }, [])
 
   const goInternalPrev = useCallback(() => {
     setViewIndex((prev) => {
@@ -61,11 +98,47 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
   const effectiveNext = hasInternalNav ? (viewIndex < validResults.length - 1 ? goInternalNext : undefined) : onNext
   const hasNav = effectiveIndex !== undefined && effectiveTotal !== undefined
 
+  // Video controls
+  const togglePlay = useCallback(() => {
+    const video = videoRef.current
+    if (!video) return
+    if (video.paused) { video.play().catch(() => {}) }
+    else { video.pause() }
+  }, [])
+
+  const restart = useCallback(() => {
+    const video = videoRef.current
+    if (!video) return
+    video.currentTime = 0
+    video.play().catch(() => {})
+  }, [])
+
+  const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const video = videoRef.current
+    const bar = progressBarRef.current
+    if (!video || !bar) return
+    const rect = bar.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    video.currentTime = ratio * video.duration
+  }, [])
+
+  // Node state controls
+  const setNodeState = useCallback((playState: "loop" | "paused" | "stopped") => {
+    const video = videoRef.current
+    const time = video?.currentTime ?? 0
+    onVideoStateChange?.({ playState, currentTime: time })
+  }, [onVideoStateChange])
+
+  const handleClose = useCallback(() => {
+    onClose()
+  }, [onClose])
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === "Escape") { e.stopImmediatePropagation(); onClose() }
+    if (e.key === "Escape") { e.stopImmediatePropagation(); handleClose() }
     if (e.key === "ArrowLeft" && effectivePrev) { e.stopImmediatePropagation(); effectivePrev() }
     if (e.key === "ArrowRight" && effectiveNext) { e.stopImmediatePropagation(); effectiveNext() }
-  }, [onClose, effectivePrev, effectiveNext])
+    if (e.key === " " && type === "video") { e.preventDefault(); e.stopImmediatePropagation(); togglePlay() }
+  }, [handleClose, effectivePrev, effectiveNext, type, togglePlay])
 
   useEffect(() => {
     if (!isOpen) return
@@ -93,9 +166,10 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
   return createPortal(
     <div
       className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center"
-      onClick={onClose}
+      onClick={handleClose}
       onTouchStart={hasNav ? handleTouchStart : undefined}
       onTouchEnd={hasNav ? handleTouchEnd : undefined}
+      onMouseMove={type === "video" ? resetHideTimer : undefined}
     >
       <div
         role="dialog"
@@ -107,8 +181,8 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
         <button
           type="button"
           aria-label="Close preview"
-          className="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors"
-          onClick={onClose}
+          className="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors z-20"
+          onClick={handleClose}
         >
           <X className="w-7 h-7" />
         </button>
@@ -151,15 +225,100 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
             className="max-w-full max-h-[90vh] rounded-lg object-contain"
           />
         ) : type === "video" ? (
-          <video
-            key={effectiveUrl}
-            src={effectiveUrl}
-            className="max-w-full max-h-[80vh] rounded-lg"
-            controls
-            autoPlay
-            muted
-            playsInline
-          />
+          <div className="relative max-w-full max-h-[80vh] flex items-center justify-center">
+            <video
+              ref={videoRef}
+              key={effectiveUrl}
+              src={effectiveUrl}
+              className="max-w-full max-h-[80vh] rounded-lg"
+              autoPlay
+              muted
+              loop
+              playsInline
+              onClick={togglePlay}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+              onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+            />
+
+            {/* Custom control bar */}
+            <div
+              className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg px-4 pt-8 pb-3 transition-opacity duration-300 ${controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+            >
+              {/* Progress bar */}
+              <div
+                ref={progressBarRef}
+                className="w-full h-1.5 bg-white/20 rounded-full cursor-pointer mb-3 group/progress"
+                onClick={handleSeek}
+              >
+                <div
+                  className="h-full bg-[#ff0073] rounded-full relative"
+                  style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : "0%" }}
+                >
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-sm opacity-0 group-hover/progress:opacity-100 transition-opacity" />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                {/* Left: playback controls */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label={isPlaying ? "Pause" : "Play"}
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition-colors"
+                    onClick={togglePlay}
+                  >
+                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Restart"
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition-colors"
+                    onClick={restart}
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                  <span className="text-white/60 text-xs tabular-nums ml-1">
+                    {formatTime(currentTime)} / {formatTime(duration)}
+                  </span>
+                </div>
+
+                {/* Right: node state controls */}
+                {onVideoStateChange && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      aria-label="Set node to loop"
+                      title="Loop on node"
+                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+                      onClick={() => setNodeState("loop")}
+                    >
+                      <Repeat className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Pause node at this frame"
+                      title="Freeze this frame on node"
+                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+                      onClick={() => setNodeState("paused")}
+                    >
+                      <Pause className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Stop node (show thumbnail)"
+                      title="Show thumbnail on node"
+                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+                      onClick={() => setNodeState("stopped")}
+                    >
+                      <Square className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         ) : (
           <audio key={effectiveUrl} src={effectiveUrl} controls autoPlay className="w-full" />
         )}

@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useEffect } from "react"
+import { memo, useState, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Link, Settings, Scissors } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
@@ -10,7 +10,6 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -24,6 +23,9 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const playState = nodeData.videoPlayState ?? "loop"
+  const shouldPlay = videoAutoplay && playState === "loop"
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
@@ -37,7 +39,6 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const v2vProvider = (nodeData.provider as string | undefined) ?? "wan"
   const credits = useModelCredits(v2vProvider, v2vProvider === "luma-modify" ? 32 : 25)
-  const useFull = useFullResolution(id)
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
   useEffect(() => {
     const url = activeThumbnail || activeUrl
@@ -52,6 +53,25 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
       return () => { cancelled = true }
     }
   }, [activeThumbnail, activeUrl])
+
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v || !activeUrl) return
+    if (playState === "paused") {
+      v.pause()
+      if (nodeData.pausedAtTime !== undefined) v.currentTime = nodeData.pausedAtTime
+    } else if (playState === "stopped") {
+      v.pause()
+      v.currentTime = 0
+    } else if (shouldPlay) {
+      v.play().catch(() => {})
+    }
+  }, [playState, shouldPlay, activeUrl, nodeData.pausedAtTime])
+
+  const handleVideoStateChange = useCallback((state: { playState: "loop" | "paused" | "stopped"; currentTime: number }) => {
+    updateNodeData(id, { videoPlayState: state.playState, pausedAtTime: state.currentTime })
+  }, [id, updateNodeData])
+
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
   const isNodeRunning = nodeData.executionStatus === "running"
@@ -136,31 +156,22 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
         {/* Video / thumbnail */}
         {activeUrl && status !== "running" && (
           <>
-            {activeThumbnail ? (
-              <CachedImage
-                src={activeThumbnail}
-                alt="Video preview"
-                className="w-full h-full object-cover rounded-xl cursor-pointer"
-                onClick={() => selectNode(id)}
-                thumbnail={!useFull}
-                thumbnailWidth={320}
-              />
-            ) : (
-              <video
-                src={activeUrl}
-                crossOrigin="anonymous"
-                className="w-full h-full object-cover rounded-xl cursor-pointer"
-                onClick={() => selectNode(id)}
-                onLoadedMetadata={(e) => {
-                  const v = e.currentTarget
-                  if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
-                }}
-                autoPlay={videoAutoplay}
-                muted
-                loop={videoAutoplay}
-                playsInline
-              />
-            )}
+            <video
+              ref={videoRef}
+              src={activeUrl}
+              crossOrigin="anonymous"
+              poster={activeThumbnail || undefined}
+              className="w-full h-full object-cover rounded-xl cursor-pointer"
+              onClick={() => selectNode(id)}
+              onLoadedMetadata={(e) => {
+                const v = e.currentTarget
+                if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
+              }}
+              autoPlay={shouldPlay}
+              muted
+              loop={shouldPlay}
+              playsInline
+            />
           </>
         )}
 
@@ -311,6 +322,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
         url={activeUrl}
         results={results}
         initialIndex={activeIndex}
+        onVideoStateChange={handleVideoStateChange}
       />
     )}
     </div>

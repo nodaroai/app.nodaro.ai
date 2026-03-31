@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useMemo, useState } from "react"
+import { memo, useMemo, useState, useRef, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Scissors, Loader2, AlertCircle, X, Clapperboard, Film } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -10,7 +10,6 @@ import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useFullResolution } from "@/hooks/use-full-resolution"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { computeDeleteResultUpdates } from "@/lib/utils"
@@ -37,9 +36,11 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as ManualEditData | undefined
   const nodeData = currentNodeData ?? (data as ManualEditData)
   const credits = useModelCredits("ffmpeg", 1)
-  const useFull = useFullResolution(id)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const playState = nodeData.videoPlayState ?? "loop"
+  const shouldPlay = videoAutoplay && playState === "loop"
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -52,6 +53,24 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
   const [videoError, setVideoError] = useState(false)
   const edges = useWorkflowStore((s) => s.edges)
   const allNodes = useWorkflowStore((s) => s.nodes)
+
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v || !activeUrl) return
+    if (playState === "paused") {
+      v.pause()
+      if (nodeData.pausedAtTime !== undefined) v.currentTime = nodeData.pausedAtTime
+    } else if (playState === "stopped") {
+      v.pause()
+      v.currentTime = 0
+    } else if (shouldPlay) {
+      v.play().catch(() => {})
+    }
+  }, [playState, shouldPlay, activeUrl, nodeData.pausedAtTime])
+
+  const handleVideoStateChange = useCallback((state: { playState: "loop" | "paused" | "stopped"; currentTime: number }) => {
+    updateNodeData(id, { videoPlayState: state.playState, pausedAtTime: state.currentTime })
+  }, [id, updateNodeData])
 
   const connectedAssets = useMemo(() => {
     const inEdges = edges.filter((e) => e.target === id)
@@ -108,27 +127,19 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
         )}
         {status !== "running" && status !== "awaiting-user" && activeUrl && !videoError && (
           <div className="relative group">
-            {activeThumbnail ? (
-              <CachedImage
-                src={activeThumbnail}
-                alt="Video preview"
-                className="w-full h-28 object-cover rounded-md"
-                thumbnail={!useFull}
-                thumbnailWidth={320}
-              />
-            ) : (
-              <video
-                src={activeUrl}
-                crossOrigin="anonymous"
-                className="w-full h-28 object-cover rounded-md bg-black"
-                autoPlay={videoAutoplay}
-                muted
-                loop={videoAutoplay}
-                playsInline
-                onError={() => setVideoError(true)}
-                onLoadedData={() => setVideoError(false)}
-              />
-            )}
+            <video
+              ref={videoRef}
+              src={activeUrl}
+              crossOrigin="anonymous"
+              poster={activeThumbnail || undefined}
+              className="w-full h-28 object-cover rounded-md bg-black"
+              autoPlay={shouldPlay}
+              muted
+              loop={shouldPlay}
+              playsInline
+              onError={() => setVideoError(true)}
+              onLoadedData={() => setVideoError(false)}
+            />
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">Edited</div>
             <button type="button" onClick={handleOpenEditor} className="absolute bottom-1 left-1 px-2 py-0.5 text-[10px] font-medium rounded bg-[#ff0073] text-white opacity-0 group-hover:opacity-100 transition-opacity">Re-edit</button>
             {results.length > 0 && (
@@ -203,7 +214,7 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
     </BaseNode>
     <HandleIcon icon={<Clapperboard />} color="steel" side="left" top="calc(100% - 20px)" />
     <HandleIcon icon={<Film />} color="steel" top="20px" />
-    {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} results={results} initialIndex={activeIndex} />}
+    {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} results={results} initialIndex={activeIndex} onVideoStateChange={handleVideoStateChange} />}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>
   )

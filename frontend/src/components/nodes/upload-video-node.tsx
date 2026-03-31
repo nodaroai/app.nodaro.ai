@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useEffect, useRef, useState } from "react"
+import { memo, useEffect, useRef, useState, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Video, Upload, Link, Loader2, AlertCircle, X, Play, Expand, Download, Scissors, LayoutGrid } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -30,6 +30,9 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const uploadVideoRef = useRef<HTMLVideoElement>(null)
+  const playState = nodeData.videoPlayState ?? "loop"
+  const shouldPlay = videoAutoplay && playState === "loop"
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const { isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
   const mediaEditor = useMediaEditor({
@@ -91,6 +94,24 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
     }
     return () => { cancelled = true }
   }, [videoUrl, thumbnailUrl])
+
+  useEffect(() => {
+    const v = uploadVideoRef.current
+    if (!v || !videoUrl) return
+    if (playState === "paused") {
+      v.pause()
+      if (nodeData.pausedAtTime !== undefined) v.currentTime = nodeData.pausedAtTime
+    } else if (playState === "stopped") {
+      v.pause()
+      v.currentTime = 0
+    } else if (shouldPlay) {
+      v.play().catch(() => {})
+    }
+  }, [playState, shouldPlay, videoUrl, nodeData.pausedAtTime])
+
+  const handleVideoStateChange = useCallback((state: { playState: "loop" | "paused" | "stopped"; currentTime: number }) => {
+    updateNodeData(id, { videoPlayState: state.playState, pausedAtTime: state.currentTime })
+  }, [id, updateNodeData])
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -220,26 +241,18 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="text-[11px] font-medium">{results.length}</span>
               </button>
             )}
-            {thumbnailUrl && !videoAutoplay ? (
-              <CachedImage
-                src={thumbnailUrl}
-                alt="Video thumbnail"
-                className="w-full h-full object-cover rounded-xl"
-                thumbnail
-                thumbnailWidth={320}
-              />
-            ) : (
-              <video
-                src={videoUrl}
-                crossOrigin="anonymous"
-                autoPlay={videoAutoplay}
-                loop={videoAutoplay}
-                muted
-                playsInline
-                className="w-full h-full object-cover rounded-xl"
-              />
-            )}
-            {!videoAutoplay && (
+            <video
+              ref={uploadVideoRef}
+              src={videoUrl}
+              crossOrigin="anonymous"
+              poster={thumbnailUrl || undefined}
+              autoPlay={shouldPlay}
+              loop={shouldPlay}
+              muted
+              playsInline
+              className="w-full h-full object-cover rounded-xl"
+            />
+            {!shouldPlay && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
                   <Play className="w-5 h-5 text-white ml-0.5" />
@@ -389,6 +402,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
         onClose={() => setPreviewOpen(false)}
         type="video"
         url={videoUrl}
+        onVideoStateChange={handleVideoStateChange}
       />
     )}
 

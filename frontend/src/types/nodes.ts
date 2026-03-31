@@ -161,6 +161,8 @@ export type UploadVideoData = {
   }
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
 }
 
 export type UploadAudioData = {
@@ -683,6 +685,8 @@ export type ImageToVideoData = {
   kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
   connectedImageOrder?: readonly string[]
   veoMode?: "frame-to-frame" | "reference"  // VEO 3/3.1: toggle between start+end frame and reference mode
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
 }
 
 export type TextToSpeechData = {
@@ -730,6 +734,8 @@ export type TextToVideoData = {
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
   kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
 }
 
 export type VideoToVideoData = {
@@ -756,6 +762,8 @@ export type VideoToVideoData = {
   // Progress tracking fields
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
 }
 
 export type LipSyncData = {
@@ -790,6 +798,8 @@ export type LipSyncData = {
   still?: boolean
   poseStyle?: number
   expressionScale?: number
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
 }
 
 export type SpeechToVideoData = {
@@ -812,6 +822,8 @@ export type SpeechToVideoData = {
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
 }
 
 // Motion Transfer: Apply motion from video to image character
@@ -833,6 +845,8 @@ export type MotionTransferData = {
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
 }
 
 // Video Upscale: Upscale video resolution using Topaz or VEO
@@ -870,6 +884,8 @@ export type ExtendVideoData = {
   currentJobId?: string
   currentJobProgress?: number
   kieTaskId?: string              // KIE task ID from upstream video node (required)
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
 }
 
 export type QACheckData = {
@@ -1769,6 +1785,8 @@ export type ManualEditData = {
   inputVideoUrl?: string
   inputAssets?: Array<{ nodeId: string; url: string; type: "video" | "image" | "audio"; label?: string }>
   isEditorOpen?: boolean
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
 }
 
 // --- Output Node Data ---
