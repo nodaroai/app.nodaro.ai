@@ -150,9 +150,21 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return assets.length > 0 ? assets : undefined;
   }, [isFreeCutOpen, storeNodes]);
 
+  // For manual-edit nodes: collect assets from directly connected upstream nodes
+  const manualEditConnectedAssets = useMemo(() => {
+    if (!manualEditNode || !allWorkflowAssets) return undefined;
+    const connectedNodeIds = new Set(
+      storeEdges.filter((e) => e.target === manualEditNode.id).map((e) => e.source),
+    );
+    return allWorkflowAssets.filter((a) => connectedNodeIds.has(a.nodeId));
+  }, [manualEditNode, allWorkflowAssets, storeEdges]);
+
   const freecutVideoUrl = manualEditNode
-    ? (allWorkflowAssets?.find(a => a.type === "video")?.url ?? meData?.inputVideoUrl ?? "")
+    ? (manualEditConnectedAssets?.find(a => a.type === "video")?.url ?? meData?.inputVideoUrl ?? "")
     : (freecutEdit?.videoUrl ?? "");
+  const freecutAdditionalAssets = manualEditNode
+    ? manualEditConnectedAssets?.filter((a) => a.url !== freecutVideoUrl)
+    : undefined;
   const freecutProjectUrl = manualEditNode
     ? (meData?.generatedResults?.[meData?.activeResultIndex ?? 0]?.freecutProjectUrl)
     : freecutEdit?.freecutProjectUrl;
@@ -1050,6 +1062,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           <FreeCutEditorModal
             videoUrl={freecutVideoUrl}
             freecutProjectUrl={freecutProjectUrl}
+            additionalAssets={freecutAdditionalAssets}
             onExportComplete={handleFreeCutExport}
             onClose={handleFreeCutClose}
             onImportRequest={handleImportRequest}
