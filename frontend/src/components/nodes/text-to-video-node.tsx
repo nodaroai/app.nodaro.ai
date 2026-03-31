@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useEffect } from "react"
+import { memo, useState, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Type, Settings, Link, Scissors } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
@@ -10,7 +10,6 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -47,7 +46,9 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const provider = nodeData.provider ?? "minimax"
   const credits = useModelCredits(provider, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
-  const useFull = useFullResolution(id)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const playState = nodeData.videoPlayState ?? "loop"
+  const shouldPlay = videoAutoplay && playState === "loop"
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
   useEffect(() => {
     const url = activeThumbnail || activeUrl
@@ -62,6 +63,26 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
       return () => { cancelled = true }
     }
   }, [activeThumbnail, activeUrl])
+
+  // Per-node playback state: seek + pause/play
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v || !activeUrl) return
+    if (playState === "paused") {
+      v.pause()
+      if (nodeData.pausedAtTime !== undefined) v.currentTime = nodeData.pausedAtTime
+    } else if (playState === "stopped") {
+      v.pause()
+      v.currentTime = 0
+    } else if (shouldPlay) {
+      v.play().catch(() => {})
+    }
+  }, [playState, shouldPlay, activeUrl, nodeData.pausedAtTime])
+
+  const handleVideoStateChange = useCallback((state: { playState: "loop" | "paused" | "stopped"; currentTime: number }) => {
+    updateNodeData(id, { videoPlayState: state.playState, pausedAtTime: state.currentTime })
+  }, [id, updateNodeData])
+
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
   const isNodeRunning = nodeData.executionStatus === "running"
@@ -146,29 +167,21 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
         {/* Video / thumbnail */}
         {activeUrl && status !== "running" && (
           <>
-            {activeThumbnail ? (
-              <CachedImage
-                src={activeThumbnail}
-                alt="Video preview"
-                className="w-full h-full object-cover rounded-xl"
-                thumbnail={!useFull}
-                thumbnailWidth={320}
-              />
-            ) : (
-              <video
-                src={activeUrl}
-                crossOrigin="anonymous"
-                className="w-full h-full object-cover rounded-xl"
-                autoPlay={videoAutoplay}
-                muted
-                loop={videoAutoplay}
-                playsInline
-                onLoadedMetadata={(e) => {
-                  const v = e.currentTarget
-                  if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
-                }}
-              />
-            )}
+            <video
+              ref={videoRef}
+              src={activeUrl}
+              crossOrigin="anonymous"
+              poster={activeThumbnail || undefined}
+              className="w-full h-full object-cover rounded-xl"
+              autoPlay={shouldPlay}
+              muted
+              loop={shouldPlay}
+              playsInline
+              onLoadedMetadata={(e) => {
+                const v = e.currentTarget
+                if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
+              }}
+            />
           </>
         )}
 
@@ -318,6 +331,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
         url={activeUrl}
         results={results}
         initialIndex={activeIndex}
+        onVideoStateChange={handleVideoStateChange}
       />
     )}
     </div>

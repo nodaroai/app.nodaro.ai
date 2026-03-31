@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useEffect } from "react"
+import { memo, useState, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Waypoints, Loader2, AlertCircle, X, Clapperboard, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
@@ -10,7 +10,6 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -22,6 +21,9 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as MotionTransferData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const playState = nodeData.videoPlayState ?? "loop"
+  const shouldPlay = videoAutoplay && playState === "loop"
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -40,7 +42,6 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const resolution = nodeData.resolution || "720p"
   const modelId = buildMotionCreditModelIdentifier(provider, resolution, nodeData.videoDuration)
   const credits = useModelCredits(modelId, 38)
-  const useFull = useFullResolution(id)
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
   useEffect(() => {
     const url = activeThumbnail || activeUrl
@@ -55,6 +56,24 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
       return () => { cancelled = true }
     }
   }, [activeThumbnail, activeUrl])
+
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v || !activeUrl) return
+    if (playState === "paused") {
+      v.pause()
+      if (nodeData.pausedAtTime !== undefined) v.currentTime = nodeData.pausedAtTime
+    } else if (playState === "stopped") {
+      v.pause()
+      v.currentTime = 0
+    } else if (shouldPlay) {
+      v.play().catch(() => {})
+    }
+  }, [playState, shouldPlay, activeUrl, nodeData.pausedAtTime])
+
+  const handleVideoStateChange = useCallback((state: { playState: "loop" | "paused" | "stopped"; currentTime: number }) => {
+    updateNodeData(id, { videoPlayState: state.playState, pausedAtTime: state.currentTime })
+  }, [id, updateNodeData])
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
@@ -132,29 +151,21 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
         {/* Video / thumbnail */}
         {activeUrl && status !== "running" && (
           <>
-            {activeThumbnail ? (
-              <CachedImage
-                src={activeThumbnail}
-                alt="Video preview"
-                className="w-full h-full object-cover rounded-xl"
-                thumbnail={!useFull}
-                thumbnailWidth={320}
-              />
-            ) : (
-              <video
-                src={activeUrl}
-                crossOrigin="anonymous"
-                className="w-full h-full object-cover rounded-xl"
-                onLoadedMetadata={(e) => {
-                  const v = e.currentTarget
-                  if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
-                }}
-                autoPlay={videoAutoplay}
-                muted
-                loop={videoAutoplay}
-                playsInline
-              />
-            )}
+            <video
+              ref={videoRef}
+              src={activeUrl}
+              crossOrigin="anonymous"
+              poster={activeThumbnail || undefined}
+              className="w-full h-full object-cover rounded-xl"
+              onLoadedMetadata={(e) => {
+                const v = e.currentTarget
+                if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
+              }}
+              autoPlay={shouldPlay}
+              muted
+              loop={shouldPlay}
+              playsInline
+            />
           </>
         )}
 
@@ -311,6 +322,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
         url={activeUrl}
         results={results}
         initialIndex={activeIndex}
+        onVideoStateChange={handleVideoStateChange}
       />
     )}
     </div>

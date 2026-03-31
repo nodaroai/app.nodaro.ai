@@ -462,9 +462,24 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     if (savedViewport) {
       requestAnimationFrame(() => setViewport(savedViewport, { duration: 0 }))
     } else {
-      requestAnimationFrame(() => fitView({ maxZoom: 1, padding: 0.2 }))
+      requestAnimationFrame(() => fitView({ maxZoom: 1, minZoom: 0.5, padding: 0.2 }))
     }
   }, [nodes.length, savedViewport, setViewport, fitView])
+
+  // Imperatively play/pause all canvas videos when toggle changes
+  const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  useEffect(() => {
+    const container = document.querySelector('.react-flow')
+    if (!container) return
+    const videos = container.querySelectorAll<HTMLVideoElement>('video')
+    if (!videoAutoplay) {
+      // Pause all videos immediately
+      videos.forEach((v) => v.pause())
+    } else {
+      // Play all — per-node useEffect handles paused/stopped nodes individually
+      videos.forEach((v) => v.play().catch(() => {}))
+    }
+  }, [videoAutoplay])
 
   // Mobile: auto-focus the first non-sticky node after workflow loads
   const autoFocusedRef = useRef(false)

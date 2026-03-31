@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useMemo, useEffect } from "react"
+import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { MessageSquare, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, LayoutGrid, Expand, Download, Type, Link, Settings, Scissors } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -11,7 +11,6 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
 import { NodeJobProgress } from "./node-job-progress"
-import { useFullResolution } from "@/hooks/use-full-resolution"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { SpeechToVideoData, GeneratedResult } from "@/types/nodes"
@@ -60,6 +59,9 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SpeechToVideoData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const playState = nodeData.videoPlayState ?? "loop"
+  const shouldPlay = videoAutoplay && playState === "loop"
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -67,7 +69,6 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const edges = useWorkflowStore((s) => s.edges)
   const nodes = useWorkflowStore((s) => s.nodes)
 
-  const useFull = useFullResolution(id)
   const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -91,6 +92,24 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
       return () => { cancelled = true }
     }
   }, [activeThumbnail, activeUrl])
+
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v || !activeUrl) return
+    if (playState === "paused") {
+      v.pause()
+      if (nodeData.pausedAtTime !== undefined) v.currentTime = nodeData.pausedAtTime
+    } else if (playState === "stopped") {
+      v.pause()
+      v.currentTime = 0
+    } else if (shouldPlay) {
+      v.play().catch(() => {})
+    }
+  }, [playState, shouldPlay, activeUrl, nodeData.pausedAtTime])
+
+  const handleVideoStateChange = useCallback((state: { playState: "loop" | "paused" | "stopped"; currentTime: number }) => {
+    updateNodeData(id, { videoPlayState: state.playState, pausedAtTime: state.currentTime })
+  }, [id, updateNodeData])
 
   const resolution = nodeData.resolution ?? "480p"
   const creditModelId = resolution === "720p" ? "speech-to-video:720p" : resolution === "580p" ? "speech-to-video:580p" : "speech-to-video"
@@ -224,15 +243,10 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
       {/* When result exists, show video fullscreen in node */}
       {status !== "running" && activeUrl ? (
       <div className="relative w-full h-full group/video">
-        {activeThumbnail ? (
-          <CachedImage src={activeThumbnail} alt="Video preview"
-            className="w-full h-full object-cover rounded-xl"
-            thumbnail={!useFull} thumbnailWidth={320} />
-        ) : (
-          <video src={activeUrl} crossOrigin="anonymous" className="w-full h-full object-cover rounded-xl"
-            onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight) }}
-            autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline />
-        )}
+        <video ref={videoRef} src={activeUrl} crossOrigin="anonymous" poster={activeThumbnail || undefined}
+          className="w-full h-full object-cover rounded-xl"
+          onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight) }}
+          autoPlay={shouldPlay} muted loop={shouldPlay} playsInline />
 
         {/* Version badge - top left */}
         {results.length > 1 && (
@@ -379,6 +393,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
         url={activeUrl}
         results={results}
         initialIndex={activeIndex}
+        onVideoStateChange={handleVideoStateChange}
       />
     )}
 
