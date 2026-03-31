@@ -152,12 +152,40 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // For manual-edit nodes: collect assets from directly connected upstream nodes
   const manualEditConnectedAssets = useMemo(() => {
-    if (!manualEditNode || !allWorkflowAssets) return undefined;
-    const connectedNodeIds = new Set(
-      storeEdges.filter((e) => e.target === manualEditNode.id).map((e) => e.source),
-    );
-    return allWorkflowAssets.filter((a) => connectedNodeIds.has(a.nodeId));
-  }, [manualEditNode, allWorkflowAssets, storeEdges]);
+    if (!manualEditNode) return undefined;
+    const VIDEO_TYPES = new Set([
+      "image-to-video", "text-to-video", "video-to-video", "upload-video",
+      "speech-to-video", "lip-sync", "render-video", "combine-videos",
+      "merge-video-audio", "resize-video", "trim-video", "speed-ramp",
+      "loop-video", "fade-video", "extend-video", "motion-transfer",
+      "video-upscale", "suno-music-video", "manual-edit",
+    ]);
+    const IMAGE_TYPES = new Set([
+      "generate-image", "upload-image", "image-to-image", "edit-image",
+      "scene", "character", "object", "location", "face", "extract-frame",
+    ]);
+    const AUDIO_TYPES = new Set([
+      "text-to-speech", "generate-music", "text-to-audio", "upload-audio",
+      "reference-audio", "trim-audio", "adjust-volume", "mix-audio",
+      "audio-isolation", "suno-generate", "suno-cover",
+    ]);
+    const assets: Array<{ nodeId: string; url: string; type: "video" | "image" | "audio"; label?: string }> = [];
+    const inEdges = storeEdges.filter((e) => e.target === manualEditNode.id);
+    for (const edge of inEdges) {
+      const src = storeNodes.find((n) => n.id === edge.source);
+      if (!src?.type) continue;
+      const url = extractNodeOutput(src);
+      if (!url) continue;
+      const srcData = src.data as Record<string, unknown>;
+      const label = (srcData.label as string) ?? src.type;
+      let type: "video" | "image" | "audio" | undefined;
+      if (VIDEO_TYPES.has(src.type)) type = "video";
+      else if (IMAGE_TYPES.has(src.type)) type = "image";
+      else if (AUDIO_TYPES.has(src.type)) type = "audio";
+      if (type) assets.push({ nodeId: src.id, url, type, label });
+    }
+    return assets.length > 0 ? assets : undefined;
+  }, [manualEditNode, storeNodes, storeEdges]);
 
   const freecutVideoUrl = manualEditNode
     ? (manualEditConnectedAssets?.find(a => a.type === "video")?.url ?? meData?.inputVideoUrl ?? "")
