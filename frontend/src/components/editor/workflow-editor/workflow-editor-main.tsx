@@ -187,11 +187,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return assets.length > 0 ? assets : undefined;
   }, [manualEditNode, storeNodes, storeEdges]);
 
+  const freecutPrimaryAsset = manualEditNode
+    ? manualEditConnectedAssets?.find(a => a.type === "video")
+    : undefined;
   const freecutVideoUrl = manualEditNode
-    ? (manualEditConnectedAssets?.find(a => a.type === "video")?.url ?? meData?.inputVideoUrl ?? "")
+    ? (freecutPrimaryAsset?.url ?? meData?.inputVideoUrl ?? "")
     : (freecutEdit?.videoUrl ?? "");
   const freecutAdditionalAssets = manualEditNode
-    ? manualEditConnectedAssets?.filter((a) => a.url !== freecutVideoUrl)
+    ? manualEditConnectedAssets?.filter((a) => a.nodeId !== freecutPrimaryAsset?.nodeId)
     : undefined;
   const freecutProjectUrl = manualEditNode
     ? (meData?.generatedResults?.[meData?.activeResultIndex ?? 0]?.freecutProjectUrl)
