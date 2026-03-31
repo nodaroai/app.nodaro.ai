@@ -122,11 +122,21 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
     video.currentTime = ratio * video.duration
   }, [])
 
-  // Node state controls
+  // Node state controls — also drive the fullscreen video for immediate feedback
   const setNodeState = useCallback((playState: "loop" | "paused" | "stopped") => {
     const video = videoRef.current
     const time = video?.currentTime ?? 0
     onVideoStateChange?.({ playState, currentTime: time })
+    if (video) {
+      if (playState === "paused") {
+        video.pause()
+      } else if (playState === "stopped") {
+        video.pause()
+        video.currentTime = 0
+      } else {
+        video.play().catch(() => {})
+      }
+    }
   }, [onVideoStateChange])
 
   const handleClose = useCallback(() => {

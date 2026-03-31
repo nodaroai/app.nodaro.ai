@@ -427,7 +427,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [focusMode, setFocusMode] = useState(false)
   const focusAnimatingRef = useRef(false)
 
-  // Center viewport on selected node (both mobile and desktop)
+  // Center viewport on selected node and zoom to fit 60% of visible area
   useEffect(() => {
     if (!selectedNodeId) {
       setFocusMode(false)
@@ -438,14 +438,30 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
     const nodeW = node.measured?.width ?? 200
     const nodeH = node.measured?.height ?? 100
+    const nodeCenterX = node.position.x + nodeW / 2
+    const nodeCenterY = node.position.y + nodeH / 2
+
+    // Account for config panel (384px on desktop) eating into visible area
+    const panelW = isMobile ? 0 : 384
+    const visibleW = window.innerWidth - panelW
+    const visibleH = window.innerHeight
     // On mobile, shift up to keep node visible above the bottom sheet
-    const sheetOffset = isMobile ? window.innerHeight * 0.15 : 0
+    const sheetOffset = isMobile ? visibleH * 0.15 : 0
+    // Zoom so node fills 60% of the visible area
+    const targetFraction = 0.6
+    const zoomToFit = Math.min(
+      (visibleW * targetFraction) / nodeW,
+      (visibleH * targetFraction) / nodeH,
+    )
+    const zoomClamped = Math.max(0.5, Math.min(2.5, zoomToFit))
+    // Offset center-x so node appears in the middle of the visible area (not behind panel)
+    const panelOffsetX = panelW / (2 * zoomClamped)
 
     focusAnimatingRef.current = true
     setCenter(
-      node.position.x + nodeW / 2,
-      node.position.y + nodeH / 2 - sheetOffset,
-      { zoom: 1, duration: 300 },
+      nodeCenterX + panelOffsetX,
+      nodeCenterY - sheetOffset,
+      { zoom: zoomClamped, duration: 300 },
     )
     if (isMobile) setFocusMode(true)
     // Allow the animation to finish before listening for user moves

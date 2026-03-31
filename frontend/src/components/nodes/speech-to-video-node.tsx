@@ -245,7 +245,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
       <div className="relative w-full h-full group/video">
         <video ref={videoRef} src={activeUrl} crossOrigin="anonymous" poster={activeThumbnail || undefined}
           className="w-full h-full object-cover rounded-xl"
-          onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight) }}
+          onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight); if (shouldPlay) v.play().catch(() => {}) }}
           autoPlay={shouldPlay} muted loop={shouldPlay} playsInline />
 
         {/* Version badge - top left */}

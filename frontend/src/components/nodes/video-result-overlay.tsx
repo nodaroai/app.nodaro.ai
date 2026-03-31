@@ -55,6 +55,7 @@ function VideoResultOverlayComponent({
           const baseWidth = 280
           const baseHeight = Math.round(baseWidth / ratio)
           onDimensionsChange({ width: baseWidth, height: Math.max(120, Math.min(360, baseHeight)) })
+          if (videoAutoplay) video.play().catch(() => {})
         }}
       />
       {hasResults && (

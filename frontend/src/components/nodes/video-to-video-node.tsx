@@ -166,6 +166,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
               onLoadedMetadata={(e) => {
                 const v = e.currentTarget
                 if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
+                if (shouldPlay) v.play().catch(() => {})
               }}
               autoPlay={shouldPlay}
               muted
