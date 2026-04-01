@@ -210,12 +210,22 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       ...(userProfile?.prompt_templates ? { userPromptTemplates: userProfile.prompt_templates } : {}),
     }
 
-    // Apply presentation mode input overrides to source node data
+    // Apply presentation mode input overrides to source node data.
+    // CRITICAL: also clear stale generatedResults/generatedImageUrl from the
+    // workflow snapshot so that extractSourceNodeOutput / extractSavedNodeOutput
+    // never prefer a stale snapshot result over the user's fresh input.
     if (inputOverrides) {
       for (const node of nodes) {
         const overrides = inputOverrides[node.id]
         if (overrides) {
-          node.data = { ...node.data, ...overrides }
+          const cleaned = { ...node.data, ...overrides }
+          delete cleaned.generatedResults
+          delete cleaned.activeResultIndex
+          delete cleaned.generatedImageUrl
+          delete cleaned.generatedVideoUrl
+          delete cleaned.generatedAudioUrl
+          delete cleaned.generatedText
+          node.data = cleaned
         }
       }
     }
