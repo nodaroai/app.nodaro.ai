@@ -67,8 +67,11 @@ export function extractSourceNodeOutput(
     }
 
     case "upload-image": {
-      const activeUrl = getActiveResultUrl(data)
-      const url = activeUrl ?? (data.url as string | undefined)?.trim()
+      // User-provided URL (data.url) takes priority over stale generatedResults.
+      // In app-runner / presentation mode, inputOverrides set data.url to the
+      // user's uploaded image — generatedResults is a stale workflow snapshot.
+      const directUrl = (data.url as string | undefined)?.trim()
+      const url = directUrl || getActiveResultUrl(data)
       return url ? { imageUrl: url } : undefined
     }
 
@@ -469,9 +472,15 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   const data = node.data
   const type = node.type
 
-  // Image-generating nodes → imageUrl from generatedResults or generatedImageUrl
+  // Image-generating nodes → imageUrl from generatedResults or generatedImageUrl.
+  // upload-image: prefer data.url (user input) over stale generatedResults,
+  // same rationale as extractSourceNodeOutput — user input must win.
   if (IMAGE_RESULT_TYPES.has(type)) {
+    const directUrl = type === "upload-image"
+      ? (data.url as string | undefined)?.trim()
+      : undefined
     const url =
+      directUrl ??
       getActiveResultUrl(data) ??
       (data.generatedImageUrl as string | undefined) ??
       (data.url as string | undefined)
