@@ -1988,8 +1988,10 @@ export type LLMChatData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedText?: string
-  generatedResults?: Array<{ text: string; jobId?: string; timestamp?: string }>
+  generatedResults?: Array<{ text: string; jobId?: string; timestamp?: string; systemPrompt?: string; userPrompt?: string; listValue?: string; runId?: string }>
   activeResultIndex?: number
+  lastSystemPrompt?: string
+  lastUserPrompt?: string
 }
 
 // --- AI Writer Node Data ---

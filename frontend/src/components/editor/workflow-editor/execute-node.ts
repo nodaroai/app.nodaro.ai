@@ -296,6 +296,7 @@ export function executeNode(
   overridePrompt?: string,
   overrideMediaUrl?: string,
   listIterationIndex?: number,
+  runId?: string,
 ): Promise<string> {
   const { nodes, edges } = useWorkflowStore.getState();
   const inputs = resolveNodeInputs(node, nodes, edges, listIterationIndex);
@@ -2034,11 +2035,8 @@ export function executeNode(
         ? inputs.systemPrompt
         : chatData.systemPrompt;
 
-    const userInput =
-      overridePrompt ||
-      (typeof inputs.prompt === "string" && inputs.prompt.trim()
-        ? inputs.prompt
-        : chatData.userInput);
+    const listValue = overridePrompt || (typeof inputs.prompt === "string" && inputs.prompt.trim() ? inputs.prompt : undefined)
+    const userInput = listValue || chatData.userInput;
 
     if (!userInput?.trim()) {
       toast.error(`Node "${chatData.label}": no user prompt provided`);
@@ -2050,6 +2048,11 @@ export function executeNode(
       errorMessage: undefined,
       generatedText: "",
       activeResultIndex: -1,
+    });
+
+    updateNodeData(node.id, {
+      lastSystemPrompt: systemPrompt || "",
+      lastUserPrompt: userInput,
     });
 
     return llmChatStream({
@@ -2079,12 +2082,18 @@ export function executeNode(
           text: result.generatedText,
           jobId: result.jobId,
           timestamp: new Date().toISOString(),
+          systemPrompt: systemPrompt || "",
+          userPrompt: userInput,
+          listValue: listValue || undefined,
+          runId: runId ?? "manual",
         };
         updateNodeData(node.id, {
           executionStatus: "completed",
           generatedText: result.generatedText,
           generatedResults: [newResult, ...existingResults].slice(0, 10),
           activeResultIndex: 0,
+          lastSystemPrompt: systemPrompt || "",
+          lastUserPrompt: userInput,
         });
         guardedToast.success("LLM Chat completed");
         return result.generatedText ?? "";

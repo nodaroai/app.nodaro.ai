@@ -102,6 +102,7 @@ describe("executeNodeForList", () => {
       "my prompt",
       undefined,
       0,
+      expect.any(String),
     )
   })
 
@@ -121,6 +122,7 @@ describe("executeNodeForList", () => {
       undefined,
       "https://example.com/img.png",
       0,
+      expect.any(String),
     )
   })
 
@@ -141,6 +143,7 @@ describe("executeNodeForList", () => {
       undefined,
       "video.mp4",
       0,
+      expect.any(String),
     )
   })
 
