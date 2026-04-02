@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
-import { X, ChevronLeft, ChevronRight, Play, Pause, RotateCcw, Repeat, Square } from "lucide-react"
+import { X, ChevronLeft, ChevronRight, Play, Pause, RotateCcw, Repeat, Square, Volume2, VolumeX } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 
 interface MediaPreviewModalProps {
@@ -51,6 +51,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
   const [activeState, setActiveState] = useState<"loop" | "paused" | "stopped">(initialState)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [isMuted, setIsMuted] = useState(true)
   const [controlsVisible, setControlsVisible] = useState(true)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const progressBarRef = useRef<HTMLDivElement>(null)
@@ -85,6 +86,12 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
       video.currentTime = 0
     }
   }, [isOpen, type, initialVideoPlayState, initialPausedAtTime])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    video.muted = isMuted
+  }, [isMuted])
 
   // Auto-hide controls after 2s of no mouse movement
   const resetHideTimer = useCallback(() => {
@@ -275,7 +282,6 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
               src={effectiveUrl}
               className="max-w-full max-h-[80vh] rounded-lg"
               autoPlay={shouldAutoPlay}
-              muted
               loop
               playsInline
               onClick={togglePlay}
@@ -321,6 +327,14 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
                     onClick={restart}
                   >
                     <RotateCcw className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={isMuted ? "Unmute" : "Mute"}
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition-colors"
+                    onClick={() => setIsMuted((m) => !m)}
+                  >
+                    {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                   </button>
                   <span className="text-white/60 text-xs tabular-nums ml-1">
                     {formatTime(currentTime)} / {formatTime(duration)}
