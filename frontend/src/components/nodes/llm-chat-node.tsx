@@ -70,7 +70,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
               <div className="w-full rounded-md bg-muted/20 p-3 flex-1 flex flex-col">
                 <div className="overflow-y-auto flex-1 pr-1" style={{ maxHeight: '200px' }}>
                   <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">
-                    {activeText.length > 80 ? `${activeText.slice(0, 80)}...` : activeText}
+                    {activeText}
                   </p>
                 </div>
               </div>

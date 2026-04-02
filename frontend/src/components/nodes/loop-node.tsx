@@ -1,8 +1,9 @@
 "use client"
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { ArrowUpRight, Download, Expand, Film, GripVertical, Image, Info, Link, List, Loader2, Music, Plus, Repeat, Table2, Type, Upload, X } from "lucide-react"
+import { ArrowUpRight, Copy, Download, Expand, Film, GripVertical, Image, Info, Link, List, Loader2, Music, Plus, Repeat, Table2, Type, Upload, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -184,6 +185,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
   const thumbSize = nodeData.thumbnailSize ?? "md"
   const sizeConfig = THUMB_SIZE_CONFIG[thumbSize]
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  const [expandedCell, setExpandedCell] = useState<string | null>(null)
 
   const { upload, storageExceeded, clearStorageExceeded } = useFileUpload()
   const [isDragOver, setIsDragOver] = useState(false)
@@ -717,8 +719,30 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                             )
                           }
                           return (
-                            <div key={col.id} className="text-xs text-foreground/80 py-1 break-words line-clamp-3" title={cell}>
-                              {cell || <span className="text-muted-foreground/30">{"\u2014"}</span>}
+                            <div key={col.id} className="relative group/cell">
+                              <div className="text-xs text-foreground/80 py-1 break-words overflow-y-auto pr-12" style={{ maxHeight: '120px' }} title={cell}>
+                                {cell || <span className="text-muted-foreground/30">{"\u2014"}</span>}
+                              </div>
+                              {cell && (
+                                <div className="absolute top-1 right-0 flex gap-1 opacity-0 group-hover/cell:opacity-100 transition-opacity">
+                                  <button
+                                    type="button"
+                                    aria-label="Expand text"
+                                    className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
+                                    onClick={(e) => { e.stopPropagation(); setExpandedCell(cell) }}
+                                  >
+                                    <Expand className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label="Copy text"
+                                    className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
+                                    onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "Copied") }}
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           )
                         })}
@@ -811,25 +835,39 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             </div>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">
-                {statusText}
-              </p>
-              {columns.length > 0 && (
-                <div className="flex gap-1 flex-wrap mt-1">
-                  {columns.map((col) => {
-                    const colColor = LOOP_COLUMN_TYPE_META[col.type ?? "text"]?.color ?? "#38BDF8"
-                    return (
-                      <span key={col.id} className="text-[9px] px-1.5 py-0.5 rounded font-semibold inline-flex items-center gap-0.5"
-                        style={{
-                          background: `${colColor}20`,
-                          color: colColor,
-                        }}>
-                        {col.name}
-                        {col.connectedSourceId && <Link className="w-2.5 h-2.5 opacity-60" />}
-                      </span>
-                    )
-                  })}
+              {/* Show text preview for single-column text lists */}
+              {colCount === 1 && columns[0]?.type === "text" && rows.length > 0 && !hasUpstreamInput ? (
+                <div className="flex flex-col gap-0.5 overflow-y-auto" style={{ maxHeight: '160px' }}>
+                  {rows.map((row, i) => (
+                    <div key={i} className="flex items-start gap-1.5">
+                      <span className="text-[9px] text-muted-foreground/40 tabular-nums mt-0.5 shrink-0 w-3 text-right">{i + 1}</span>
+                      <span className="text-[11px] text-foreground/75 truncate flex-1">{row[0] || "—"}</span>
+                    </div>
+                  ))}
                 </div>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    {statusText}
+                  </p>
+                  {columns.length > 0 && (
+                    <div className="flex gap-1 flex-wrap mt-1">
+                      {columns.map((col) => {
+                        const colColor = LOOP_COLUMN_TYPE_META[col.type ?? "text"]?.color ?? "#38BDF8"
+                        return (
+                          <span key={col.id} className="text-[9px] px-1.5 py-0.5 rounded font-semibold inline-flex items-center gap-0.5"
+                            style={{
+                              background: `${colColor}20`,
+                              color: colColor,
+                            }}>
+                            {col.name}
+                            {col.connectedSourceId && <Link className="w-2.5 h-2.5 opacity-60" />}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
@@ -863,6 +901,42 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
         quotaBytes={storageExceeded.quotaBytes}
         tier={storageExceeded.tier}
       />
+      {expandedCell !== null && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setExpandedCell(null)}
+        >
+          <div
+            className="relative bg-background border border-border rounded-xl shadow-2xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Text</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => copyToClipboard(expandedCell, "Copied")}
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  onClick={() => setExpandedCell(null)}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{expandedCell}</p>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
       {previewIndex !== null && (
         <MediaPreviewModal
           isOpen={previewIndex !== null}
