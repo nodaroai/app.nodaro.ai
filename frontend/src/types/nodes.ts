@@ -666,7 +666,7 @@ export type ImageToVideoData = {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
-  aspectRatio?: "16:9" | "9:16" | "1:1" | "21:9" | "Auto"
+  aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "21:9" | "adaptive" | "Auto"
   multiShot?: boolean
   resolution?: string
   grokMode?: "fun" | "normal" | "spicy"
@@ -675,6 +675,9 @@ export type ImageToVideoData = {
   cameraFixed?: boolean
   shots?: Array<{ prompt: string; duration: number }>
   elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
+  // Seedance 2.0 fields (reference arrays resolved from edges at runtime, not stored on data)
+  webSearch?: boolean
+  nsfwChecker?: boolean
   // Multi-input selection fields
   selectedStartFrameNodeId?: string  // ID of node selected for start frame
   selectedEndFrameNodeId?: string    // ID of node selected for end frame (optional)
@@ -721,7 +724,7 @@ export type TextToVideoData = {
   provider: TextToVideoProvider
   model: string
   duration: number
-  aspectRatio: "16:9" | "9:16" | "1:1"
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "21:9" | "adaptive"
   negativePrompt: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -730,6 +733,11 @@ export type TextToVideoData = {
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
   seed?: number                      // VEO 3.1: reproducible generation (10000-99999)
+  // Seedance 2.0 fields (reference arrays resolved from edges at runtime, not stored on data)
+  resolution?: string
+  generateAudio?: boolean
+  webSearch?: boolean
+  nsfwChecker?: boolean
   // Progress tracking fields
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)

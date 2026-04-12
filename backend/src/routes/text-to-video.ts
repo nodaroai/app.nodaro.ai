@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
-import { TEXT_TO_VIDEO_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
+import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS } from "../../../packages/shared/src/model-constants.js"
 import { buildVideoCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 const textToVideoBody = z.object({
@@ -16,16 +17,37 @@ const textToVideoBody = z.object({
   sound: z.boolean().optional(),
   negativePrompt: z.string().max(2500).optional(),
   cfgScale: z.number().min(0).max(1).optional(),
-  aspectRatio: z.enum(["16:9", "9:16", "1:1"]).optional(),
+  aspectRatio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"]).optional(),
   multiShot: z.boolean().optional(),
   shots: shotsSchema.optional(),
   elements: elementsSchema.optional(),
   seed: z.number().int().min(10000).max(99999).optional(),
+  resolution: z.string().optional(),
+  generateAudio: z.boolean().optional(),
+  referenceImageUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.images).optional(),
+  referenceVideoUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.videos).optional(),
+  referenceAudioUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.audio).optional(),
+  webSearch: z.boolean().optional(),
+  nsfwChecker: z.boolean().optional(),
   userId: z.string().uuid().optional(),
 })
 
 export async function textToVideoRoutes(app: FastifyInstance) {
-  app.post("/v1/text-to-video", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return buildVideoCreditModelIdentifier((body?.provider as string) ?? "minimax", body?.duration as number | string | undefined, body?.sound as boolean | undefined, "text-to-video", body?.mode as string | undefined) }) }, async (req, reply) => {
+  app.post("/v1/text-to-video", {
+    preHandler: creditGuard((req) => {
+      const body = req.body as Record<string, unknown>
+      const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
+      return buildVideoCreditModelIdentifier(
+        (body?.provider as string) ?? "minimax",
+        body?.duration as number | string | undefined,
+        body?.sound as boolean | undefined,
+        "text-to-video",
+        body?.mode as string | undefined,
+        body?.resolution as string | undefined,
+        hasVideoRef,
+      )
+    }),
+  }, async (req, reply) => {
     const parsed = textToVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -36,7 +58,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed } = parsed.data
+    const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -45,8 +67,16 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    // Determine model identifier for credit check (supports variable pricing by duration/audio)
-    const modelIdentifier = buildVideoCreditModelIdentifier(provider ?? "minimax", duration, sound, "text-to-video", mode)
+    // Determine model identifier for credit check (supports variable pricing by duration/audio/resolution/video-ref)
+    const modelIdentifier = buildVideoCreditModelIdentifier(
+      provider ?? "minimax",
+      duration,
+      sound,
+      "text-to-video",
+      mode,
+      resolution,
+      (referenceVideoUrls?.length ?? 0) > 0,
+    )
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -55,7 +85,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, type: "text-to-video" },
+        input_data: { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, type: "text-to-video" },
       })
       .select("id")
       .single()
@@ -85,6 +115,13 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       shots,
       elements,
       seed,
+      resolution,
+      generateAudio,
+      referenceImageUrls,
+      referenceVideoUrls,
+      referenceAudioUrls,
+      webSearch,
+      nsfwChecker,
       usageLogId,
     })
 

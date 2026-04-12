@@ -34,7 +34,8 @@ import type {
   GeneratedScript,
   GeneratedScriptResult,
 } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS } from "./model-options"
+import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS } from "./model-options"
+import { isSeedance2Provider } from "@nodaro-shared/model-constants"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
@@ -436,6 +437,66 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               className="rounded border-muted-foreground/40"
             />
             <label htmlFor="seedanceAudio" className="text-xs">Generate Audio</label>
+          </div>
+        </>
+      )}
+
+      {isSeedance2Provider(data.provider) && (
+        <>
+          <div>
+            <Label className="text-xs">Resolution</Label>
+            <Select
+              value={data.resolution || "720p"}
+              onValueChange={(v) => onUpdate({ resolution: v })}
+            >
+              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="480p">480p</SelectItem>
+                <SelectItem value="720p">720p</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <AspectRatioSelector
+              options={SEEDANCE_2_VIDEO_RATIOS}
+              value={data.aspectRatio || "16:9"}
+              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
+            />
+          </MappableField>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="seedance2Audio"
+              checked={data.generateAudio ?? true}
+              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="seedance2Audio" className="text-xs">Generate Audio (default on)</label>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="seedance2WebSearch"
+              checked={data.webSearch || false}
+              onChange={(e) => onUpdate({ webSearch: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="seedance2WebSearch" className="text-xs">Enable Web Search</label>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="seedance2Nsfw"
+              checked={data.nsfwChecker || false}
+              onChange={(e) => onUpdate({ nsfwChecker: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="seedance2Nsfw" className="text-xs">NSFW Content Filter</label>
+          </div>
+          <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-[11px] leading-snug text-amber-200/90">
+            <strong className="font-semibold">Tip:</strong> reference videos/audio enable multimodal mode and
+            cannot combine with start/end frame inputs. Connect either frames OR multimodal references,
+            not both.
           </div>
         </>
       )}
@@ -994,9 +1055,61 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </div>
       )}
 
+      {isSeedance2Provider(data.provider) && (
+        <>
+          <div>
+            <Label className="text-xs">Resolution</Label>
+            <Select
+              value={(data.resolution as string) || "720p"}
+              onValueChange={(v) => onUpdate({ resolution: v })}
+            >
+              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="480p">480p</SelectItem>
+                <SelectItem value="720p">720p</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="seedance2T2VAudio"
+              checked={(data.generateAudio as boolean | undefined) ?? true}
+              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="seedance2T2VAudio" className="text-xs">Generate Audio (default on)</label>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="seedance2T2VWebSearch"
+              checked={(data.webSearch as boolean | undefined) || false}
+              onChange={(e) => onUpdate({ webSearch: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="seedance2T2VWebSearch" className="text-xs">Enable Web Search</label>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="seedance2T2VNsfw"
+              checked={(data.nsfwChecker as boolean | undefined) || false}
+              onChange={(e) => onUpdate({ nsfwChecker: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="seedance2T2VNsfw" className="text-xs">NSFW Content Filter</label>
+          </div>
+        </>
+      )}
+
       <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <AspectRatioSelector
-          options={VIDEO_RATIOS}
+          options={
+            isSeedance2Provider(data.provider)
+              ? SEEDANCE_2_VIDEO_RATIOS
+              : VIDEO_RATIOS
+          }
           value={data.aspectRatio}
           onValueChange={(v) => onUpdate({ aspectRatio: v as TextToVideoData["aspectRatio"] })}
         />

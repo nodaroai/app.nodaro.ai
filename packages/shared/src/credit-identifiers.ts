@@ -10,6 +10,7 @@ import {
   DURATION_PRICED_PROVIDERS,
   AUDIO_ADDON_PROVIDERS,
   MODE_ADDON_PROVIDERS,
+  RESOLUTION_VIDEO_REF_PRICING,
   VIDEO_DURATION_TIERS,
   MOTION_DURATION_TIERS,
 } from "./model-constants.js"
@@ -61,13 +62,15 @@ const T2V_CREDIT_OVERRIDES: Record<string, string> = {
 
 /**
  * Compute composite model identifier for video models with duration/audio-based pricing.
- * Examples: "kling-3.0:5s", "kling-3.0:10s:audio"
+ * Examples: "kling-3.0:5s", "kling-3.0:10s:audio", "seedance-2:8s:720p-ref"
  *
  * @param provider - Video model key (e.g., "kling-3.0")
  * @param duration - Video duration in seconds
  * @param sound - Whether audio/sound is enabled
  * @param nodeType - Node type for T2V-specific cost overrides
  * @param mode - Quality variant that affects pricing
+ * @param resolution - Output resolution (used by Seedance 2 for 480p/720p pricing)
+ * @param hasVideoRef - Whether a reference video is connected (Seedance 2 uses a lower per-second rate when true)
  */
 export function buildVideoCreditModelIdentifier(
   provider: string,
@@ -75,6 +78,8 @@ export function buildVideoCreditModelIdentifier(
   sound?: boolean,
   nodeType?: "image-to-video" | "text-to-video",
   mode?: string,
+  resolution?: string,
+  hasVideoRef?: boolean,
 ): string {
   // T2V overrides: some providers have different base costs for text-to-video
   let effectiveProvider = provider
@@ -112,6 +117,13 @@ export function buildVideoCreditModelIdentifier(
   // "high" comes from I2V videoSize field, "pro" comes from T2V mode field
   if (MODE_ADDON_PROVIDERS.has(effectiveProvider) && (mode === "high" || mode === "pro")) {
     identifier += ":high"
+  }
+
+  // Seedance 2.0 family: per-second billing with resolution + video-ref dimensions
+  if (RESOLUTION_VIDEO_REF_PRICING.has(effectiveProvider)) {
+    const res = resolution === "720p" ? "720p" : "480p"
+    identifier += `:${res}`
+    if (hasVideoRef) identifier += "-ref"
   }
 
   return identifier

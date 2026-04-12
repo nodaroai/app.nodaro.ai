@@ -18,16 +18,8 @@ import { useFullResolution } from "@/hooks/use-full-resolution"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
-import { PROVIDERS_WITH_REFERENCES } from "../editor/config-panels/model-options"
-
-// Fallback credit costs per video provider (shown until API responds)
-const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
-  minimax: 18, veo3: 79, "veo3.1": 19, kling: 28, "kling-turbo": 14,
-  "kling-3.0": 63, "grok-i2v": 7, seedance: 7,
-  "wan-i2v": 22, "wan-turbo": 13, "hailuo-2.3-pro": 20, "hailuo-2.3": 10,
-  "hailuo-standard": 10, "bytedance-lite": 6, "bytedance-pro": 18,
-  "bytedance-pro-fast": 9, "kling-master": 50, "runway-kie": 4,
-}
+import { PROVIDERS_WITH_REFERENCES, VIDEO_PROVIDER_FALLBACKS } from "../editor/config-panels/model-options"
+import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS } from "@nodaro-shared/model-constants"
 
 // Providers that support End Frame (second image for video ending)
 const END_FRAME_SUPPORTED_PROVIDERS = [
@@ -229,16 +221,24 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
   }
 
-  // Build dynamic handles
+  const isSeedance2 = isSeedance2Provider(provider)
+  const refVideosTop = 445 * 0.82
+  const refAudioTop = 445 * 0.92
+
   const handles = useMemo(() => [
     ...(showStartFrame ? [{ id: "startFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${startFrameTop}px`, left: '-29px' }, hideHandle: true }] : []),
     ...((showEndFrame && showStartFrame) ? [{ id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${endFrameTop}px`, left: '-29px' }, hideHandle: true }] : []),
     { id: "audio", type: "target" as const, position: Position.Left, customStyle: { top: `${audioTop}px`, left: '-29px' }, hideHandle: true },
     ...(showReferences ? [{ id: "references", type: "target" as const, position: Position.Left, customStyle: { top: `${referencesTop}px`, left: '-29px' }, hideHandle: true }] : []),
+    ...(isSeedance2 ? [
+      { id: "reference-videos", type: "target" as const, position: Position.Left, top: `${refVideosTop}px`, customStyle: { top: `${refVideosTop}px`, left: '-29px' }, hideHandle: true, label: `Ref videos ×${SEEDANCE_2_REF_LIMITS.videos}` },
+      { id: "reference-audio", type: "target" as const, position: Position.Left, top: `${refAudioTop}px`, customStyle: { top: `${refAudioTop}px`, left: '-29px' }, hideHandle: true, label: `Ref audio ×${SEEDANCE_2_REF_LIMITS.audio}` },
+    ] : []),
     { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: `${videoTop}px`, right: '-29px' }, hideHandle: true },
-  ], [startFrameTop, endFrameTop, audioTop, referencesTop, videoTop, activeUrl, showConfig, showEndFrame, showStartFrame, showReferences])
+  ], [startFrameTop, endFrameTop, audioTop, referencesTop, refVideosTop, refAudioTop, videoTop, activeUrl, showConfig, showEndFrame, showStartFrame, showReferences, isSeedance2])
 
-  const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo || (showReferences && referencesConnectionCount > 0)
+  const hasSeedance2Ref = isSeedance2 && edges.some((e) => e.target === id && (e.targetHandle === "reference-videos" || e.targetHandle === "reference-audio"))
+  const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo || (showReferences && referencesConnectionCount > 0) || hasSeedance2Ref
 
   return (
     <div className="relative group/node" style={{ width: (activeUrl && !showConfig) ? (videoDimensions?.width ?? 245) : 245, height: (activeUrl && !showConfig) ? (videoDimensions?.height ?? 445) : 445, minHeight: 200, overflow: 'visible', position: 'relative' }}>

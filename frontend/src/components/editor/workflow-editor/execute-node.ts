@@ -62,7 +62,7 @@ import {
   saveToStorageApi,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
-import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS } from "@nodaro-shared/model-constants";
+import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider } from "@nodaro-shared/model-constants";
 import { getAIWriterTemplate } from "@/lib/ai-writer-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import type {
@@ -825,6 +825,8 @@ export function executeNode(
     const i2vCfgScale = (i2vData as Record<string, unknown>).cfgScale as
       | number
       | undefined;
+    const referenceVideoUrls = inputs.referenceVideoUrls as string[] | undefined
+    const referenceAudioUrls = inputs.referenceAudioUrls as string[] | undefined
     return runVideoGeneration(
       node.id,
       startFrameUrl ?? "",
@@ -850,6 +852,12 @@ export function executeNode(
       i2vData.cameraFixed,
       referenceImageUrls?.length ? referenceImageUrls : undefined,
       i2vData.veoMode === "reference" ? "REFERENCE_2_VIDEO" : undefined,
+      {
+        referenceVideoUrls: referenceVideoUrls?.length ? referenceVideoUrls : undefined,
+        referenceAudioUrls: referenceAudioUrls?.length ? referenceAudioUrls : undefined,
+        webSearch: i2vData.webSearch,
+        nsfwChecker: i2vData.nsfwChecker,
+      },
     );
   }
 
@@ -903,6 +911,21 @@ export function executeNode(
       t2vProvider === "kling" ||
       t2vProvider === "kling-turbo" ||
       t2vProvider === "kling-3.0";
+    const isSeedance2T2V = isSeedance2Provider(t2vProvider)
+    const t2vRefImages = inputs.referenceImageUrls as string[] | undefined
+    const t2vRefVideos = inputs.referenceVideoUrls as string[] | undefined
+    const t2vRefAudios = inputs.referenceAudioUrls as string[] | undefined
+    const seedance2Extras = isSeedance2T2V
+      ? {
+          resolution: (t2vRaw.resolution as string | undefined) ?? "720p",
+          generateAudio: (t2vRaw.generateAudio as boolean | undefined) ?? true,
+          referenceImageUrls: t2vRefImages?.length ? t2vRefImages : undefined,
+          referenceVideoUrls: t2vRefVideos?.length ? t2vRefVideos : undefined,
+          referenceAudioUrls: t2vRefAudios?.length ? t2vRefAudios : undefined,
+          webSearch: (t2vRaw.webSearch as boolean | undefined) ?? false,
+          nsfwChecker: t2vRaw.nsfwChecker as boolean | undefined,
+        }
+      : {};
     const t2vOptions = isKlingVariant
       ? {
           duration: t2vData.duration,
@@ -929,6 +952,7 @@ export function executeNode(
           aspectRatio: t2vData.aspectRatio as string | undefined,
           negativePrompt: t2vData.negativePrompt || undefined,
           seed: t2vRaw.seed as number | undefined,
+          ...seedance2Extras,
         };
     return runTextToVideoGeneration(
       node.id,

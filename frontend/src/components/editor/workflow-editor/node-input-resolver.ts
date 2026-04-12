@@ -108,6 +108,13 @@ const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"]);
 /** Node types that accept multiple audio inputs (accumulate to audioUrls array) */
 const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "combine-audio"]);
 
+const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVideoUrls" | "referenceAudioUrls"> = {
+  "references": "referenceImageUrls",
+  "reference-images": "referenceImageUrls",
+  "reference-videos": "referenceVideoUrls",
+  "reference-audio": "referenceAudioUrls",
+};
+
 /** VIDEO_OUTPUT_NODE_TYPES — used for kieTaskId passthrough */
 const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "image-to-video",
@@ -150,6 +157,8 @@ export interface FrontendResolvedInputs {
     sourceType?: "audio" | "video";
   }[];
   referenceImageUrls?: string[];
+  referenceVideoUrls?: string[];
+  referenceAudioUrls?: string[];
   scriptData?: unknown;
   dialogueLines?: Array<{ speaker: string; text: string; emotion?: string }>;
   scriptCharacters?: Array<{ name: string; description: string; mood?: string; action?: string; position?: string }>;
@@ -573,8 +582,9 @@ export function resolveNodeInputs(
       inputs.maskUrl = output;
       continue;
     }
-    if (srcEdge.targetHandle === "references") {
-      inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
+    const refHandleKey = REFERENCE_HANDLE_MAP[srcEdge.targetHandle ?? ""];
+    if (refHandleKey) {
+      inputs[refHandleKey] = [...((inputs[refHandleKey] as string[] | undefined) ?? []), output];
       continue;
     }
     if (srcEdge.targetHandle === "system-prompt") {

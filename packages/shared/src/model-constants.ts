@@ -130,6 +130,8 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "kling-3.0",
   "kling-master",
   "seedance",
+  "seedance-2",
+  "seedance-2-fast",
   "hailuo-2.3-pro",
   "hailuo-2.3",
   "hailuo-standard",
@@ -157,6 +159,8 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "kling-3.0",
   "grok",
   "seedance",
+  "seedance-2",
+  "seedance-2-fast",
   "wan",
   "hailuo-standard",
   "bytedance-lite",
@@ -365,7 +369,36 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   "hailuo-2.3",
   "hailuo-standard",
   "seedance",
+  "seedance-2",
+  "seedance-2-fast",
 ])
+
+/**
+ * Seedance 2.0 family — shared across UI gating, payload building, and pricing.
+ * Expanded whenever a new Seedance 2.x variant ships.
+ */
+export const SEEDANCE_2_PROVIDERS = new Set<string>([
+  "seedance-2",
+  "seedance-2-fast",
+])
+
+export function isSeedance2Provider(provider: string | undefined): boolean {
+  return !!provider && SEEDANCE_2_PROVIDERS.has(provider)
+}
+
+/** KIE.ai limits for Seedance 2.0 multimodal reference arrays. */
+export const SEEDANCE_2_REF_LIMITS = {
+  images: 9,
+  videos: 3,
+  audio: 3,
+} as const
+
+/**
+ * Video models where credit cost depends on resolution AND whether a video
+ * reference is connected. Identifier suffix: `:{resolution}[-ref]`.
+ * Seedance 2.0 family uses per-second billing split 480p/720p × with-ref/no-ref.
+ */
+export const RESOLUTION_VIDEO_REF_PRICING = SEEDANCE_2_PROVIDERS
 
 /**
  * Video models where enabling audio/sound incurs an additional cost.
@@ -388,7 +421,7 @@ export const MODE_ADDON_PROVIDERS = new Set<string>([
  * "duration" = cost varies by video length
  * "duration+audio" = cost varies by length AND audio on/off
  */
-export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio" | "duration+mode"> = {
+export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio" | "duration+mode" | "duration+resolution+ref"> = {
   "kling-3.0": "duration+audio",
   "kling": "duration+audio",
   "kling-turbo": "duration",
@@ -399,6 +432,8 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   "hailuo-2.3": "duration",
   "hailuo-standard": "duration",
   "seedance": "duration",
+  "seedance-2": "duration+resolution+ref",
+  "seedance-2-fast": "duration+resolution+ref",
 }
 
 /**
@@ -450,6 +485,18 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
     { maxSeconds: 4, suffix: "4s" },
     { maxSeconds: 8, suffix: "8s" },
     { maxSeconds: 12, suffix: "12s" },
+  ],
+  "seedance-2": [
+    { maxSeconds: 4, suffix: "4s" },
+    { maxSeconds: 8, suffix: "8s" },
+    { maxSeconds: 12, suffix: "12s" },
+    { maxSeconds: 15, suffix: "15s" },
+  ],
+  "seedance-2-fast": [
+    { maxSeconds: 4, suffix: "4s" },
+    { maxSeconds: 8, suffix: "8s" },
+    { maxSeconds: 12, suffix: "12s" },
+    { maxSeconds: 15, suffix: "15s" },
   ],
 }
 

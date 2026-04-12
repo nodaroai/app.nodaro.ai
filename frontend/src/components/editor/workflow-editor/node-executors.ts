@@ -230,6 +230,12 @@ export function runVideoGeneration(
   cameraFixed?: boolean,
   referenceImageUrls?: string[],
   generationType?: string,
+  extras?: {
+    referenceVideoUrls?: string[];
+    referenceAudioUrls?: string[];
+    webSearch?: boolean;
+    nsfwChecker?: boolean;
+  },
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
@@ -256,6 +262,10 @@ export function runVideoGeneration(
         seed,
         cameraFixed,
         referenceImageUrls,
+        referenceVideoUrls: extras?.referenceVideoUrls,
+        referenceAudioUrls: extras?.referenceAudioUrls,
+        webSearch: extras?.webSearch,
+        nsfwChecker: extras?.nsfwChecker,
         generationType,
         userId: ctx.userId,
       }),
@@ -316,6 +326,13 @@ export function runTextToVideoGeneration(
       urls: string[];
     }>;
     seed?: number;
+    resolution?: string;
+    generateAudio?: boolean;
+    referenceImageUrls?: string[];
+    referenceVideoUrls?: string[];
+    referenceAudioUrls?: string[];
+    webSearch?: boolean;
+    nsfwChecker?: boolean;
   },
 ): Promise<string> {
   return pollJobWithNodeUpdate(

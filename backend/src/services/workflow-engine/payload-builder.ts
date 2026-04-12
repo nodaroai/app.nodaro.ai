@@ -756,6 +756,7 @@ export function buildPayload(
     // --- Video generation ---
     case "image-to-video": {
       const provider = (data.provider as string) ?? "kling"
+      const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
       return {
         jobName: "image-to-video",
         queueName: "video-generation",
@@ -763,8 +764,10 @@ export function buildPayload(
           provider,
           data.duration as number | string | undefined,
           (data.sound ?? data.kling3Sound) as boolean | undefined,
-          undefined,
+          "image-to-video",
           (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
+          data.resolution as string | undefined,
+          hasVideoRef,
         ),
         payload: {
           jobId,
@@ -798,6 +801,10 @@ export function buildPayload(
           videoSize: data.videoSize,
           removeWatermark: data.removeWatermark,
           referenceImageUrls: resolvedInputs.referenceImageUrls,
+          referenceVideoUrls: resolvedInputs.referenceVideoUrls,
+          referenceAudioUrls: resolvedInputs.referenceAudioUrls,
+          webSearch: data.webSearch,
+          nsfwChecker: data.nsfwChecker,
           generationType: data.veoMode === "reference" ? "REFERENCE_2_VIDEO" : undefined,
           usageLogId,
         },
@@ -806,6 +813,7 @@ export function buildPayload(
 
     case "text-to-video": {
       const provider = (data.provider as string) ?? "kling"
+      const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
       return {
         jobName: "text-to-video",
         queueName: "video-generation",
@@ -815,6 +823,8 @@ export function buildPayload(
           (data.sound ?? data.kling3Sound) as boolean | undefined,
           "text-to-video",
           (data.mode ?? data.kling3Mode ?? data.videoSize) as string | undefined,
+          data.resolution as string | undefined,
+          hasVideoRef,
         ),
         payload: {
           jobId,
@@ -831,6 +841,13 @@ export function buildPayload(
           elements: data.elements,
           removeWatermark: data.removeWatermark,
           seed: data.seed,
+          resolution: data.resolution,
+          generateAudio: data.generateAudio,
+          referenceImageUrls: resolvedInputs.referenceImageUrls,
+          referenceVideoUrls: resolvedInputs.referenceVideoUrls,
+          referenceAudioUrls: resolvedInputs.referenceAudioUrls,
+          webSearch: data.webSearch,
+          nsfwChecker: data.nsfwChecker,
           usageLogId,
         },
       }

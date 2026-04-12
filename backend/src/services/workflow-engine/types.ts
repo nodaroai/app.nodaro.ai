@@ -150,6 +150,8 @@ export interface ResolvedInputs {
     sourceType?: "audio" | "video"
   }>
   referenceImageUrls?: string[]
+  referenceVideoUrls?: string[]
+  referenceAudioUrls?: string[]
   scriptData?: unknown
   dialogueLines?: Array<{ speaker: string; text: string; emotion?: string }>
   scriptCharacters?: Array<{ name: string; description: string; mood?: string; action?: string; position?: string }>

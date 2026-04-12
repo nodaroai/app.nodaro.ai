@@ -161,6 +161,8 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "kling-3.0":         { provider: "KIE.ai",    providerCostUsd: 1.000, markupPct: 25 },  // 40 cr/sec × 5s = 200 KIE cr (audio, 1080P)
   "kling-master":      { provider: "KIE.ai",    providerCostUsd: 0.800, markupPct: 25 },  // 160 KIE cr (Master 5s)
   "seedance":          { provider: "KIE.ai",    providerCostUsd: 0.165, markupPct: 25 },  // avg 33 KIE cr (4s=14, 8s=28, 12s=60)
+  "seedance-2":        { provider: "KIE.ai",    providerCostUsd: 0.410, markupPct: 25 },  // 82 KIE cr avg (8s, 720p, no ref; per-sec)
+  "seedance-2-fast":   { provider: "KIE.ai",    providerCostUsd: 0.330, markupPct: 25 },  // 66 KIE cr avg (8s, 720p, no ref; per-sec)
   "grok-i2v":          { provider: "KIE.ai",    providerCostUsd: 0.100, markupPct: 25 },  // 20 KIE cr (6s 720p)
   "wan-i2v":           { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },  // 70 KIE cr (wan 2.6, 5s, 720p)
   "wan-turbo":         { provider: "KIE.ai",    providerCostUsd: 0.200, markupPct: 25 },  // 40 KIE cr (wan 2.2, 5s, 480p)

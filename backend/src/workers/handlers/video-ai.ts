@@ -27,7 +27,7 @@ import {
 } from "../shared.js"
 
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, generationType } = job.data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType } = job.data as {
     jobId: string
     imageUrl: string
     endFrameUrl?: string
@@ -51,6 +51,10 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     seed?: number
     cameraFixed?: boolean
     referenceImageUrls?: string[]
+    referenceVideoUrls?: string[]
+    referenceAudioUrls?: string[]
+    webSearch?: boolean
+    nsfwChecker?: boolean
     generationType?: string
   }
   console.log(`[worker] image-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
@@ -69,7 +73,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
   }
 
-  const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, generationType })
+  const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType })
 
   await job.updateProgress(40)
 
@@ -176,7 +180,7 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 }
 
 const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
-  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList } = job.data as {
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker } = job.data as {
     jobId: string
     prompt: string
     provider?: string
@@ -192,6 +196,13 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     removeWatermark?: boolean
     seed?: number
     characterIdList?: string[]
+    resolution?: string
+    generateAudio?: boolean
+    referenceImageUrls?: string[]
+    referenceVideoUrls?: string[]
+    referenceAudioUrls?: string[]
+    webSearch?: boolean
+    nsfwChecker?: boolean
   }
   console.log(`[worker] text-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${removeWatermark ? " [remove watermark]" : ""}`)
 
@@ -203,7 +214,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     ...(el.type === "image" ? { element_input_urls: el.urls } : { element_input_video_urls: el.urls }),
   }))
 
-  const result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed })
+  const result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker })
 
   await job.updateProgress(50)
 
