@@ -6,6 +6,12 @@
  * to support edge-level range, step, and item selection.
  */
 
+/** Selector tab on an edge — "range" (from/to/step) or "list" (expression). */
+export type SelectorMode = "range" | "list"
+
+/** Per-edge output mode controlling how upstream results reach downstream. */
+export type OutputMode = "last" | "each" | "all" | "item"
+
 /**
  * Resolves a 1-based index expression to a 0-based array index.
  *
@@ -117,7 +123,7 @@ export function buildRangeLabel(
   rangeTo?: string,
   rangeStep?: number,
   itemIndex?: string,
-  selectorMode?: "range" | "list",
+  selectorMode?: SelectorMode,
   listExpression?: string,
 ): string | undefined {
   if (mode === "last") return undefined
@@ -159,47 +165,8 @@ function truncateLabel(s: string, maxLen: number): string {
 export function parseListExpression(
   expr: string,
 ): { ok: true } | { ok: false; error: string } {
-  const trimmed = expr.trim()
-  if (trimmed === "") return { ok: true }
-
-  const terms = trimmed.split(",")
-  for (const rawTerm of terms) {
-    const term = rawTerm.trim()
-    if (term === "") return { ok: false, error: "Empty item between commas" }
-
-    const rangeIdx = term.indexOf("..")
-    if (rangeIdx !== -1) {
-      const left = term.slice(0, rangeIdx).trim()
-      const rightWithStep = term.slice(rangeIdx + 2).trim()
-
-      if (left === "" || rightWithStep === "") {
-        return { ok: false, error: `Range missing endpoint: ${term}` }
-      }
-
-      const colonIdx = rightWithStep.indexOf(":")
-      const right = colonIdx === -1 ? rightWithStep : rightWithStep.slice(0, colonIdx).trim()
-      const stepStr = colonIdx === -1 ? null : rightWithStep.slice(colonIdx + 1).trim()
-
-      if (right === "") {
-        return { ok: false, error: `Range missing endpoint: ${term}` }
-      }
-
-      if (!isValidIndexToken(left)) return { ok: false, error: `Invalid index: ${left}` }
-      if (!isValidIndexToken(right)) return { ok: false, error: `Invalid index: ${right}` }
-
-      if (stepStr !== null) {
-        if (!/^-?\d+$/.test(stepStr)) {
-          return { ok: false, error: "Step must be an integer" }
-        }
-      }
-      continue
-    }
-
-    if (!isValidIndexToken(term)) {
-      return { ok: false, error: `Invalid index: ${term}` }
-    }
-  }
-  return { ok: true }
+  const result = parseListTerms(expr.trim())
+  return result.ok ? { ok: true } : { ok: false, error: result.error }
 }
 
 /** Internal: validates a single index token ("1", "last", "last-3"). */
@@ -226,58 +193,24 @@ function isValidIndexToken(token: string): boolean {
  */
 export function resolveListExpression(expr: string, listLength: number): number[] {
   if (listLength <= 0) return []
-  const trimmed = expr.trim()
-  if (trimmed === "") return indexRange(0, listLength - 1, 1)
-
-  const result: number[] = []
-  const terms = trimmed.split(",")
-  for (const rawTerm of terms) {
-    const term = rawTerm.trim()
-    if (term === "") {
-      console.warn("[edge-range] empty token in list expression:", expr)
-      return indexRange(0, listLength - 1, 1)
-    }
-
-    const rangeIdx = term.indexOf("..")
-    if (rangeIdx === -1) {
-      if (!isValidIndexToken(term)) {
-        console.warn("[edge-range] invalid index token:", term)
-        return indexRange(0, listLength - 1, 1)
-      }
-      result.push(resolveIndex(term, listLength))
-      continue
-    }
-
-    const left = term.slice(0, rangeIdx).trim()
-    const rightWithStep = term.slice(rangeIdx + 2).trim()
-    const colonIdx = rightWithStep.indexOf(":")
-    const right = colonIdx === -1 ? rightWithStep : rightWithStep.slice(0, colonIdx).trim()
-    const stepStr = colonIdx === -1 ? null : rightWithStep.slice(colonIdx + 1).trim()
-
-    if (left === "" || right === "") {
-      console.warn("[edge-range] range missing endpoint:", term)
-      return indexRange(0, listLength - 1, 1)
-    }
-    if (!isValidIndexToken(left) || !isValidIndexToken(right)) {
-      console.warn("[edge-range] invalid range endpoint:", term)
-      return indexRange(0, listLength - 1, 1)
-    }
-
-    let step = 1
-    if (stepStr !== null) {
-      if (!/^-?\d+$/.test(stepStr)) {
-        console.warn("[edge-range] non-integer step:", stepStr)
-        return indexRange(0, listLength - 1, 1)
-      }
-      const parsed = parseInt(stepStr, 10)
-      step = parsed === 0 ? 1 : parsed
-    }
-
-    const from = resolveIndex(left, listLength)
-    const to = resolveIndex(right, listLength)
-    for (const idx of indexRange(from, to, step)) result.push(idx)
+  const result = parseListTerms(expr.trim())
+  if (!result.ok) {
+    console.warn("[edge-range] invalid list expression:", expr, "—", result.error)
+    return indexRange(0, listLength - 1, 1)
   }
-  return result
+  if (result.terms.length === 0) return indexRange(0, listLength - 1, 1)
+
+  const out: number[] = []
+  for (const term of result.terms) {
+    if (term.kind === "index") {
+      out.push(resolveIndex(term.token, listLength))
+    } else {
+      const from = resolveIndex(term.from, listLength)
+      const to = resolveIndex(term.to, listLength)
+      for (const idx of indexRange(from, to, term.step)) out.push(idx)
+    }
+  }
+  return out
 }
 
 /** Internal: inclusive index range with step. Returns [] if direction mismatches. */
@@ -298,38 +231,38 @@ function indexRange(from: number, to: number, step: number): number[] {
  * edgeData.selectorMode. Returns a new string[] containing the selected
  * subset of items.
  *
- * NOTE: this is a drop-in replacement for applyRange only for `each`-mode
- * callsites. Callers in `all` mode must scrub `rangeStep` from edgeData
- * before calling (construct `effectiveEdgeData` per the resolver
- * integration notes) to preserve the pre-existing "step ignored in all"
- * behavior.
+ * When `mode === "all"`, `rangeStep` is ignored (the "all" UI doesn't surface
+ * a step control, so we skip any stale value left from a prior "each"
+ * configuration). In list-selector mode the step is embedded in the
+ * expression itself, so `mode` has no effect.
  */
 export function selectListItems(
   items: string[],
   edgeData:
     | {
-        selectorMode?: "range" | "list"
+        selectorMode?: SelectorMode
         listExpression?: string
         rangeFrom?: string
         rangeTo?: string
         rangeStep?: number
-        useAllResults?: boolean
       }
     | undefined,
+  mode?: OutputMode,
 ): string[] {
   if (items.length === 0) return []
   if (edgeData?.selectorMode === "list") {
     const indices = resolveListExpression(edgeData.listExpression ?? "", items.length)
     return indices.map((i) => items[i])
   }
-  return applyRange(items, edgeData?.rangeFrom, edgeData?.rangeTo, edgeData?.rangeStep)
+  const step = mode === "all" ? undefined : edgeData?.rangeStep
+  return applyRange(items, edgeData?.rangeFrom, edgeData?.rangeTo, step)
 }
 
 export function describeEdgeBehavior(
   edgeData:
     | {
         outputMode?: string
-        selectorMode?: "range" | "list"
+        selectorMode?: SelectorMode
         listExpression?: string
         rangeFrom?: string
         rangeTo?: string
@@ -367,8 +300,8 @@ function buildEachSentence(
 ): string {
   if (isDefaultConfig(edgeData)) return "Runs the downstream node once per item."
   if (edgeData?.selectorMode === "list") {
-    const terms = parseListTerms((edgeData.listExpression ?? "").trim())
-    if (terms === null) return "Runs the downstream node once per item."
+    const result = parseListTerms((edgeData.listExpression ?? "").trim())
+    if (!result.ok) return "Runs the downstream node once per item."
   }
   const phrase = buildSelectionPhrase(edgeData)
   if (phrase.kind === "empty-result") {
@@ -385,8 +318,8 @@ function buildAllSentence(
 ): string {
   if (isDefaultConfig(edgeData)) return "Passes all items together as a list."
   if (edgeData?.selectorMode === "list") {
-    const terms = parseListTerms((edgeData.listExpression ?? "").trim())
-    if (terms === null) return "Passes all items together as a list."
+    const result = parseListTerms((edgeData.listExpression ?? "").trim())
+    if (!result.ok) return "Passes all items together as a list."
   }
   const phrase = buildSelectionPhrase(edgeData)
   if (phrase.kind === "empty-result") {
@@ -555,43 +488,61 @@ type ListTerm =
   | { kind: "index"; token: string }
   | { kind: "range"; from: string; to: string; step: number }
 
-function parseListTerms(expr: string): ListTerm[] | null {
-  if (expr === "") return []
+type ParseResult =
+  | { ok: true; terms: ListTerm[] }
+  | { ok: false; error: string }
+
+/**
+ * Core list-expression parser. Returns structured terms on success or a
+ * specific error message on failure. Empty input → zero terms (not an error).
+ * Error messages are surfaced unchanged in the edge-config tooltip, so they
+ * must stay stable:
+ *   - "Empty item between commas"
+ *   - "Invalid index: <token>"
+ *   - "Range missing endpoint: <term>"
+ *   - "Step must be an integer"
+ */
+function parseListTerms(expr: string): ParseResult {
+  if (expr === "") return { ok: true, terms: [] }
   const terms: ListTerm[] = []
   const raw = expr.split(",")
   for (const rawTerm of raw) {
     const term = rawTerm.trim()
-    if (term === "") return null
+    if (term === "") return { ok: false, error: "Empty item between commas" }
     const rangeIdx = term.indexOf("..")
     if (rangeIdx === -1) {
-      if (!isValidIndexToken(term)) return null
+      if (!isValidIndexToken(term)) return { ok: false, error: `Invalid index: ${term}` }
       terms.push({ kind: "index", token: term })
       continue
     }
     const left = term.slice(0, rangeIdx).trim()
     const rightWithStep = term.slice(rangeIdx + 2).trim()
+    if (left === "" || rightWithStep === "") {
+      return { ok: false, error: `Range missing endpoint: ${term}` }
+    }
     const colonIdx = rightWithStep.indexOf(":")
     const right = colonIdx === -1 ? rightWithStep : rightWithStep.slice(0, colonIdx).trim()
     const stepStr = colonIdx === -1 ? null : rightWithStep.slice(colonIdx + 1).trim()
-    if (left === "" || right === "") return null
-    if (!isValidIndexToken(left) || !isValidIndexToken(right)) return null
+    if (right === "") return { ok: false, error: `Range missing endpoint: ${term}` }
+    if (!isValidIndexToken(left)) return { ok: false, error: `Invalid index: ${left}` }
+    if (!isValidIndexToken(right)) return { ok: false, error: `Invalid index: ${right}` }
     let step = 1
     if (stepStr !== null) {
-      if (!/^-?\d+$/.test(stepStr)) return null
+      if (!/^-?\d+$/.test(stepStr)) return { ok: false, error: "Step must be an integer" }
       const parsed = parseInt(stepStr, 10)
       step = parsed === 0 ? 1 : parsed
     }
     terms.push({ kind: "range", from: left, to: right, step })
   }
-  return terms
+  return { ok: true, terms }
 }
 
 function buildListSelectionPhrase(expr: string): SelectionPhrase {
-  const terms = parseListTerms(expr)
-  if (terms === null) return { kind: "empty-result" }
-  if (terms.length === 0) return { kind: "items", text: "items" } // unreachable via callers; default-config catches empty
+  const result = parseListTerms(expr)
+  if (!result.ok) return { kind: "empty-result" }
+  if (result.terms.length === 0) return { kind: "items", text: "items" } // unreachable via callers; default-config catches empty
 
-  const normalized = terms.map<ListTerm>((t) => {
+  const normalized = result.terms.map<ListTerm>((t) => {
     if (t.kind === "range") {
       const cmp = compareTokens(t.from, t.to)
       if (cmp === 0) return { kind: "index", token: t.from }

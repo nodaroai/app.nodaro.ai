@@ -12,8 +12,17 @@ import type {
 } from "@/types/nodes";
 import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
-import { applyRange, resolveIndex, selectListItems } from "@nodaro-shared/edge-range";
+import { resolveIndex, selectListItems, type SelectorMode } from "@nodaro-shared/edge-range";
 import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
+
+/** Subset of edge data used by selectListItems. Casts in this file target this shape. */
+type SelectorEdgeData = {
+  selectorMode?: SelectorMode;
+  listExpression?: string;
+  rangeFrom?: string;
+  rangeTo?: string;
+  rangeStep?: number;
+};
 
 /** Follow teleport chain to find the original non-teleport source node. */
 function resolveTeleportOrigin(node: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode {
@@ -308,7 +317,7 @@ export function getListInputForNode(
         continue;
       }
       const raw = resolveLoopColumnValues(sourceNode, edge.sourceHandle ?? undefined, edges, nodes);
-      const items = selectListItems(raw, edgeData as Parameters<typeof selectListItems>[1]);
+      const items = selectListItems(raw, edgeData as SelectorEdgeData | undefined);
       if (items.length > 1) {
         if (items.length > maxLen) { maxLen = items.length; longestItems = items; }
       }
@@ -441,8 +450,6 @@ export function resolveNodeInputs(
       src = resolveTeleportOrigin(src, nodes, edges)
     }
 
-    // Check for item:N/last/all output mode on nodes with fan-out list results
-    // or accumulated generatedResults from multiple manual runs
     const edgeMode = (srcEdge.data as Record<string, unknown> | undefined)
       ?.outputMode as string | undefined;
     const edgeUseAll = (srcEdge.data as Record<string, unknown> | undefined)
@@ -467,8 +474,7 @@ export function resolveNodeInputs(
         output = srcListResults[srcListResults.length - 1];
       } else if (edgeMode === "all") {
         const edgeData = srcEdge.data as Record<string, unknown> | undefined;
-        const effectiveEdgeData = { ...(edgeData ?? {}), rangeStep: undefined };
-        const filteredSrc = selectListItems(srcListResults, effectiveEdgeData as Parameters<typeof selectListItems>[1]);
+        const filteredSrc = selectListItems(srcListResults, edgeData as SelectorEdgeData | undefined, "all");
         // For array-accumulating targets, spread items individually
         if (node.type === "combine-videos") {
           for (const item of filteredSrc) {
@@ -511,7 +517,7 @@ export function resolveNodeInputs(
     if (!output && (src.type === "loop" || src.type === "list")) {
       const raw = resolveLoopColumnValues(src, srcEdge.sourceHandle ?? undefined, edges, nodes);
       const edgeData = srcEdge.data as Record<string, unknown> | undefined;
-      const ranged = selectListItems(raw, edgeData as Parameters<typeof selectListItems>[1]);
+      const ranged = selectListItems(raw, edgeData as SelectorEdgeData | undefined);
       if (ranged.length > 0) {
         const loopEdgeMode = edgeData?.outputMode as string | undefined;
         let picked: string | undefined;
@@ -538,7 +544,7 @@ export function resolveNodeInputs(
         const effectiveMode = edgeMode ?? (DEFAULT_EACH_TYPES.has(src.type ?? "") ? "each" : "last");
         if (effectiveMode === "each") {
           const edgeData = srcEdge.data as Record<string, unknown> | undefined;
-          const filtered = selectListItems(srcListResults, edgeData as Parameters<typeof selectListItems>[1]);
+          const filtered = selectListItems(srcListResults, edgeData as SelectorEdgeData | undefined);
           output = filtered.length > 0 ? filtered[listIterationIndex % filtered.length] : undefined;
         }
       }

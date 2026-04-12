@@ -15,8 +15,17 @@ import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
-import { applyRange, resolveIndex, selectListItems } from "../../../../packages/shared/src/edge-range.js"
+import { resolveIndex, selectListItems, type SelectorMode } from "../../../../packages/shared/src/edge-range.js"
 import { splitByLoopDelimiter } from "../../../../packages/shared/src/loop-delimiter.js"
+
+/** Subset of edge data used by selectListItems. Casts in this file target this shape. */
+type SelectorEdgeData = {
+  selectorMode?: SelectorMode
+  listExpression?: string
+  rangeFrom?: string
+  rangeTo?: string
+  rangeStep?: number
+}
 
 /**
  * Resolve a node's primary output from execution state or source node data.
@@ -77,8 +86,6 @@ export function resolveNodeInputs(
     let output: string | undefined
     const state = nodeStates[sourceNode.id]
 
-    // Check for item/item:N/last/all output mode on nodes with fan-out list results
-    // or accumulated generatedResults from multiple manual runs
     const edgeData = edge.data as Record<string, unknown> | undefined
     const edgeOutputMode = edgeData?.outputMode as string | undefined
     const effectiveListResults = state?.output?.listResults
@@ -96,17 +103,10 @@ export function resolveNodeInputs(
       } else if (edgeOutputMode === "last") {
         output = effectiveListResults[effectiveListResults.length - 1]
       } else if (edgeOutputMode === "all") {
-        // Apply range filtering before joining for "all" mode.
-        // Scrub rangeStep: the "all" mode UI does not surface a step control,
-        // and selectListItems would otherwise apply a stale value left over
-        // from a prior "each" configuration. See edge-list-selector spec.
-        const effectiveEdgeData =
-          edgeOutputMode === "all"
-            ? { ...(edgeData ?? {}), rangeStep: undefined }
-            : edgeData
         const filtered = selectListItems(
           effectiveListResults,
-          effectiveEdgeData as Parameters<typeof selectListItems>[1],
+          edgeData as SelectorEdgeData | undefined,
+          "all",
         )
         // For array-accumulating targets, route each item individually
         if (ARRAY_ACCUMULATING_TYPES.has(targetNode.type)) {
@@ -128,7 +128,7 @@ export function resolveNodeInputs(
       if (effectiveMode === "each") {
         const filtered = selectListItems(
           effectiveListResults,
-          edgeData as Parameters<typeof selectListItems>[1],
+          edgeData as SelectorEdgeData | undefined,
         )
         output = filtered[listIterationIndex]
       }
@@ -155,7 +155,7 @@ export function resolveNodeInputs(
                 if (listIterationIndex != null) {
                   const filtered = selectListItems(
                     lines,
-                    edgeData as Parameters<typeof selectListItems>[1],
+                    edgeData as SelectorEdgeData | undefined,
                   )
                   output = filtered[listIterationIndex]
                 } else {
@@ -177,7 +177,7 @@ export function resolveNodeInputs(
                   if (listIterationIndex != null) {
                     const filtered = selectListItems(
                       lines,
-                      edgeData as Parameters<typeof selectListItems>[1],
+                      edgeData as SelectorEdgeData | undefined,
                     )
                     output = filtered[listIterationIndex]
                   } else {
@@ -195,7 +195,7 @@ export function resolveNodeInputs(
               const items = (rows ?? []).map((row) => row[colIndex]?.trim()).filter(Boolean) as string[]
               const filtered = selectListItems(
                 items,
-                edgeData as Parameters<typeof selectListItems>[1],
+                edgeData as SelectorEdgeData | undefined,
               )
               output = filtered[listIterationIndex]
             } else {
@@ -308,7 +308,7 @@ export function getListInputForNode(
 
     // Read range config from the edge
     const edgeData = edge.data as Record<string, unknown> | undefined
-    const selectorArg = edgeData as Parameters<typeof selectListItems>[1]
+    const selectorArg = edgeData as SelectorEdgeData | undefined
 
     // 1. Loop node — column routing via sourceHandle
     if (sourceNode.type === "loop") {
@@ -453,7 +453,7 @@ export function getListInputForNode(
       // Apply range/list selection from the upstream edge
       const filtered = selectListItems(
         listItems,
-        gpData as Parameters<typeof selectListItems>[1],
+        gpData as SelectorEdgeData | undefined,
       )
       if (filtered.length <= 1) continue
 

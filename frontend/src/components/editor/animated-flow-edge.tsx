@@ -1,11 +1,11 @@
 "use client"
 
-import { memo, useState, useCallback, useRef, useEffect } from "react"
+import { memo, useState, useCallback, useMemo, useRef, useEffect } from "react"
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, useStore, type Edge, type EdgeProps } from "@xyflow/react"
 import { X, ChevronDown } from "lucide-react"
 import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { parseListExpression, describeEdgeBehavior } from "@nodaro-shared/edge-range"
+import { parseListExpression, describeEdgeBehavior, type SelectorMode } from "@nodaro-shared/edge-range"
 import type { CSSProperties } from "react"
 
 type AnimatedFlowEdgeData = {
@@ -21,7 +21,7 @@ type AnimatedFlowEdgeData = {
   rangeStep?: number        // only for "each" — default 1, supports negative
   itemIndex?: string        // for "item" mode: "3", "last", "last-1"
   useAllResults?: boolean   // Include all accumulated results across runs (default false)
-  selectorMode?: "range" | "list"  // Selector tab: "range" (default) or "list"
+  selectorMode?: SelectorMode  // Selector tab: "range" (default) or "list"
   listExpression?: string   // List-mode expression: comma-separated indices/ranges, e.g. "1,3,5..last-1"
 }
 
@@ -110,7 +110,7 @@ function AnimatedFlowEdgeComponent({
     updateEdgeData(id, { useAllResults: checked })
   }, [id, updateEdgeData])
 
-  const handleSelectorModeChange = (mode: "range" | "list") => { updateEdgeData(id, { selectorMode: mode }) }
+  const handleSelectorModeChange = (mode: SelectorMode) => { updateEdgeData(id, { selectorMode: mode }) }
   const handleListExpressionChange = (value: string) => { updateEdgeData(id, { listExpression: value }) }
 
   // Use step routing for backward connections (target left of source)
@@ -129,7 +129,14 @@ function AnimatedFlowEdgeComponent({
   const normalizedMode = currentMode.startsWith("item:") ? "item" : currentMode
 
   const listExpression = edgeData?.listExpression ?? ""
-  const selectorMode: "range" | "list" = edgeData?.selectorMode ?? "range"
+  const selectorMode: SelectorMode = edgeData?.selectorMode ?? "range"
+
+  // edgeData is a stable reference in React Flow unless the user edits
+  // config, so memoing by it avoids recomputing the tooltip on every render.
+  const tooltipText = useMemo(
+    () => describeEdgeBehavior(edgeData),
+    [edgeData],
+  )
 
   // Unique filter IDs per edge to avoid conflicts
   const pinkGlowFilterId = `glow-pink-${id}`
@@ -272,7 +279,7 @@ function AnimatedFlowEdgeComponent({
                           boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
                         }}
                       >
-                        {describeEdgeBehavior(edgeData as Parameters<typeof describeEdgeBehavior>[0])}
+                        {tooltipText}
                       </TooltipPrimitive.Content>
                     </TooltipPrimitive.Portal>
                   </TooltipPrimitive.Root>

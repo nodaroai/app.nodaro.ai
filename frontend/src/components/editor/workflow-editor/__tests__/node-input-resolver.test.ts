@@ -427,20 +427,17 @@ describe("all-mode parity — selectListItems applies filtering", () => {
   it("range filters the source list", () => {
     const items = ["a", "b", "c", "d", "e"]
     const edgeData = { rangeFrom: "2", rangeTo: "last-1" }
-    const effectiveEdgeData = { ...edgeData, rangeStep: undefined }
-    expect(selectListItems(items, effectiveEdgeData)).toEqual(["b", "c", "d"])
+    expect(selectListItems(items, edgeData, "all")).toEqual(["b", "c", "d"])
   })
 
   it("list filters via list expression", () => {
     const items = ["a", "b", "c", "d", "e"]
     const edgeData = { selectorMode: "list" as const, listExpression: "1, last" }
-    const effectiveEdgeData = { ...edgeData, rangeStep: undefined }
-    expect(selectListItems(items, effectiveEdgeData)).toEqual(["a", "e"])
+    expect(selectListItems(items, edgeData, "all")).toEqual(["a", "e"])
   })
 
   it("default config passes full list", () => {
     const items = ["a", "b", "c"]
-    const effectiveEdgeData = { rangeStep: undefined }
-    expect(selectListItems(items, effectiveEdgeData)).toEqual(items)
+    expect(selectListItems(items, {}, "all")).toEqual(items)
   })
 })
