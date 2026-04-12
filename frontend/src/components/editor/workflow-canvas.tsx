@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useMemo, useRef, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { buildRangeLabel as buildRangeLabelShared } from "@nodaro-shared/edge-range"
+import { buildRangeLabel as buildRangeLabelShared, type SelectorMode } from "@nodaro-shared/edge-range"
 import {
   ReactFlow,
   MiniMap,
@@ -167,7 +167,15 @@ function getEdgeRangeLabel(edge: WorkflowEdge): string | undefined {
     const legacyIdx = parseInt(mode.split(":")[1], 10)
     if (!isNaN(legacyIdx)) itemIndex = String(legacyIdx + 1)
   }
-  const rangeLabel = buildRangeLabelShared(normalizedMode, d.rangeFrom as string | undefined, d.rangeTo as string | undefined, d.rangeStep as number | undefined, itemIndex)
+  const rangeLabel = buildRangeLabelShared(
+    normalizedMode,
+    d.rangeFrom as string | undefined,
+    d.rangeTo as string | undefined,
+    d.rangeStep as number | undefined,
+    itemIndex,
+    d.selectorMode as SelectorMode | undefined,
+    d.listExpression as string | undefined,
+  )
   if (useAllResults) {
     return rangeLabel ? `all runs ${rangeLabel}` : "all runs"
   }

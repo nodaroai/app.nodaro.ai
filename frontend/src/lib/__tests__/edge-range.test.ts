@@ -158,3 +158,29 @@ describe("buildRangeLabel", () => {
     expect(buildRangeLabel("each", "1", "last", 1)).toBeUndefined()
   })
 })
+
+import {
+  resolveListExpression,
+  parseListExpression,
+  selectListItems,
+  describeEdgeBehavior,
+} from "@nodaro-shared/edge-range"
+
+describe("frontend re-export smoke test", () => {
+  it("resolveListExpression is callable", () => {
+    expect(resolveListExpression("1, 2", 5)).toEqual([0, 1])
+  })
+  it("parseListExpression is callable", () => {
+    expect(parseListExpression("1, 2")).toEqual({ ok: true })
+  })
+  it("selectListItems is callable", () => {
+    expect(
+      selectListItems(["a", "b", "c"], { selectorMode: "list", listExpression: "1, 3" }),
+    ).toEqual(["a", "c"])
+  })
+  it("describeEdgeBehavior is callable", () => {
+    expect(describeEdgeBehavior({ outputMode: "last" })).toBe(
+      "Passes only the most recent result.",
+    )
+  })
+})

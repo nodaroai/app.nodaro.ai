@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
+import { selectListItems } from "@nodaro-shared/edge-range"
 
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: {
@@ -419,5 +420,24 @@ describe("resolveNodeInputs", () => {
 
     const inputs = resolveNodeInputs(target, [styleBoost, target], edges)
     expect(inputs.prompt).toBe("boosted style text")
+  })
+})
+
+describe("all-mode parity — selectListItems applies filtering", () => {
+  it("range filters the source list", () => {
+    const items = ["a", "b", "c", "d", "e"]
+    const edgeData = { rangeFrom: "2", rangeTo: "last-1" }
+    expect(selectListItems(items, edgeData, "all")).toEqual(["b", "c", "d"])
+  })
+
+  it("list filters via list expression", () => {
+    const items = ["a", "b", "c", "d", "e"]
+    const edgeData = { selectorMode: "list" as const, listExpression: "1, last" }
+    expect(selectListItems(items, edgeData, "all")).toEqual(["a", "e"])
+  })
+
+  it("default config passes full list", () => {
+    const items = ["a", "b", "c"]
+    expect(selectListItems(items, {}, "all")).toEqual(items)
   })
 })

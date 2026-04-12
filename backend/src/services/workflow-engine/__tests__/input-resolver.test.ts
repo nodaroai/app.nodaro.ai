@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { resolveNodeInputs, getListInputForNode } from "../input-resolver.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"
+import { selectListItems } from "../../../../../packages/shared/src/edge-range.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -457,5 +458,27 @@ describe("getListInputForNode", () => {
     const target = node("t", "generate-image")
     const result = getListInputForNode(target, [], {}, [target])
     expect(result).toBeUndefined()
+  })
+})
+
+describe("selectListItems integration — List tab", () => {
+  it("malformed list expression falls back to all items", () => {
+    const items = ["a", "b", "c"]
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    expect(
+      selectListItems(items, {
+        selectorMode: "list",
+        listExpression: "1..garbage",
+      }),
+    ).toEqual(items)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it("all mode scrubs stale rangeStep", () => {
+    const items = ["a", "b", "c", "d", "e"]
+    expect(
+      selectListItems(items, { rangeStep: -1, rangeFrom: "1", rangeTo: "last" }, "all"),
+    ).toEqual(items)
   })
 })

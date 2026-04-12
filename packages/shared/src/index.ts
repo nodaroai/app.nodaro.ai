@@ -81,7 +81,12 @@ export {
   applyRange,
   buildRangeLabel,
   migrateEdgeOutputMode,
+  resolveListExpression,
+  parseListExpression,
+  selectListItems,
+  describeEdgeBehavior,
 } from "./edge-range.js"
+export type { SelectorMode, OutputMode } from "./edge-range.js"
 
 export { REPEATABLE_NODE_TYPES, REPEAT_PLACEHOLDER, getEffectiveRepeatCount, expandItemsWithRepeat } from "./repeat-types.js"
 

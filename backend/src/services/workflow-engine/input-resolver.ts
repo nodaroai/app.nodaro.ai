@@ -15,8 +15,17 @@ import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
-import { applyRange, resolveIndex } from "../../../../packages/shared/src/edge-range.js"
+import { resolveIndex, selectListItems, type SelectorMode } from "../../../../packages/shared/src/edge-range.js"
 import { splitByLoopDelimiter } from "../../../../packages/shared/src/loop-delimiter.js"
+
+/** Subset of edge data used by selectListItems. Casts in this file target this shape. */
+type SelectorEdgeData = {
+  selectorMode?: SelectorMode
+  listExpression?: string
+  rangeFrom?: string
+  rangeTo?: string
+  rangeStep?: number
+}
 
 /**
  * Resolve a node's primary output from execution state or source node data.
@@ -77,8 +86,6 @@ export function resolveNodeInputs(
     let output: string | undefined
     const state = nodeStates[sourceNode.id]
 
-    // Check for item/item:N/last/all output mode on nodes with fan-out list results
-    // or accumulated generatedResults from multiple manual runs
     const edgeData = edge.data as Record<string, unknown> | undefined
     const edgeOutputMode = edgeData?.outputMode as string | undefined
     const effectiveListResults = state?.output?.listResults
@@ -96,10 +103,11 @@ export function resolveNodeInputs(
       } else if (edgeOutputMode === "last") {
         output = effectiveListResults[effectiveListResults.length - 1]
       } else if (edgeOutputMode === "all") {
-        // Apply range filtering before joining for "all" mode
-        const rangeFrom = edgeData?.rangeFrom as string | undefined
-        const rangeTo = edgeData?.rangeTo as string | undefined
-        const filtered = applyRange(effectiveListResults, rangeFrom, rangeTo)
+        const filtered = selectListItems(
+          effectiveListResults,
+          edgeData as SelectorEdgeData | undefined,
+          "all",
+        )
         // For array-accumulating targets, route each item individually
         if (ARRAY_ACCUMULATING_TYPES.has(targetNode.type)) {
           for (const item of filtered) {
@@ -118,10 +126,10 @@ export function resolveNodeInputs(
     if (!output && listIterationIndex != null && effectiveListResults && effectiveListResults.length > 0) {
       const effectiveMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type) ? "each" : "last")
       if (effectiveMode === "each") {
-        const rangeFrom = edgeData?.rangeFrom as string | undefined
-        const rangeTo = edgeData?.rangeTo as string | undefined
-        const rangeStep = edgeData?.rangeStep as number | undefined
-        const filtered = applyRange(effectiveListResults, rangeFrom, rangeTo, rangeStep)
+        const filtered = selectListItems(
+          effectiveListResults,
+          edgeData as SelectorEdgeData | undefined,
+        )
         output = filtered[listIterationIndex]
       }
     }
@@ -145,10 +153,10 @@ export function resolveNodeInputs(
               if (upstreamText) {
                 const lines = splitByLoopDelimiter(upstreamText, columns)
                 if (listIterationIndex != null) {
-                  const rf = edgeData?.rangeFrom as string | undefined
-                  const rt = edgeData?.rangeTo as string | undefined
-                  const rs = edgeData?.rangeStep as number | undefined
-                  const filtered = applyRange(lines, rf, rt, rs)
+                  const filtered = selectListItems(
+                    lines,
+                    edgeData as SelectorEdgeData | undefined,
+                  )
                   output = filtered[listIterationIndex]
                 } else {
                   output = lines[0]
@@ -167,10 +175,10 @@ export function resolveNodeInputs(
                 if (upstreamText) {
                   const lines = splitByLoopDelimiter(upstreamText, columns)
                   if (listIterationIndex != null) {
-                    const rf = edgeData?.rangeFrom as string | undefined
-                    const rt = edgeData?.rangeTo as string | undefined
-                    const rs = edgeData?.rangeStep as number | undefined
-                    const filtered = applyRange(lines, rf, rt, rs)
+                    const filtered = selectListItems(
+                      lines,
+                      edgeData as SelectorEdgeData | undefined,
+                    )
                     output = filtered[listIterationIndex]
                   } else {
                     output = lines[0]
@@ -185,10 +193,10 @@ export function resolveNodeInputs(
             const rows = sourceNode.data.rows as string[][] | undefined
             if (listIterationIndex != null) {
               const items = (rows ?? []).map((row) => row[colIndex]?.trim()).filter(Boolean) as string[]
-              const rf = edgeData?.rangeFrom as string | undefined
-              const rt = edgeData?.rangeTo as string | undefined
-              const rs = edgeData?.rangeStep as number | undefined
-              const filtered = applyRange(items, rf, rt, rs)
+              const filtered = selectListItems(
+                items,
+                edgeData as SelectorEdgeData | undefined,
+              )
               output = filtered[listIterationIndex]
             } else {
               output = rows?.[0]?.[colIndex]?.trim()
@@ -300,9 +308,7 @@ export function getListInputForNode(
 
     // Read range config from the edge
     const edgeData = edge.data as Record<string, unknown> | undefined
-    const rangeFrom = edgeData?.rangeFrom as string | undefined
-    const rangeTo = edgeData?.rangeTo as string | undefined
-    const rangeStep = edgeData?.rangeStep as number | undefined
+    const selectorArg = edgeData as SelectorEdgeData | undefined
 
     // 1. Loop node — column routing via sourceHandle
     if (sourceNode.type === "loop") {
@@ -325,7 +331,7 @@ export function getListInputForNode(
             const upstreamText = getNodeOutput(upstreamNode, colInEdge.sourceHandle, nodeStates, triggerData)
             if (upstreamText) {
               const items = splitByLoopDelimiter(upstreamText, columns)
-              const filtered = applyRange(items, rangeFrom, rangeTo, rangeStep)
+              const filtered = selectListItems(items, selectorArg)
               if (filtered.length > 1) return filtered
             }
           }
@@ -343,7 +349,7 @@ export function getListInputForNode(
           const upstreamText = getNodeOutput(upstreamNode, upstreamEdge.sourceHandle, nodeStates, triggerData)
           if (upstreamText) {
             const items = splitByLoopDelimiter(upstreamText, columns)
-            const filtered = applyRange(items, rangeFrom, rangeTo, rangeStep)
+            const filtered = selectListItems(items, selectorArg)
             if (filtered.length > 1) return filtered
           }
         }
@@ -354,7 +360,7 @@ export function getListInputForNode(
           const items = rows
             .map((row) => row[colIndex]?.trim())
             .filter(Boolean) as string[]
-          const filtered = applyRange(items, rangeFrom, rangeTo, rangeStep)
+          const filtered = selectListItems(items, selectorArg)
           if (filtered.length > 1) return filtered
         }
       }
@@ -367,7 +373,7 @@ export function getListInputForNode(
       const scenesList = (script?.scenes as Array<Record<string, unknown>>) ?? []
       if (scenesList.length > 1) {
         const items = scenesList.map((s) => (s.imagePrompt as string) ?? "")
-        return applyRange(items, rangeFrom, rangeTo, rangeStep)
+        return selectListItems(items, selectorArg)
       }
     }
 
@@ -381,7 +387,7 @@ export function getListInputForNode(
     if (sourceNode.type === "list") {
       const items = extractSourceNodeOutputAsList(sourceNode, triggerData)
       if (items && items.length > 1) {
-        const filtered = applyRange(items, rangeFrom, rangeTo, rangeStep)
+        const filtered = selectListItems(items, selectorArg)
         if (filtered.length > 1) return filtered
       }
       continue
@@ -391,7 +397,7 @@ export function getListInputForNode(
     if (sourceNode.type === "split-text") {
       const state = nodeStates[sourceNode.id]
       if (state?.output?.splitResults && state.output.splitResults.length > 1) {
-        const filtered = applyRange(state.output.splitResults, rangeFrom, rangeTo, rangeStep)
+        const filtered = selectListItems(state.output.splitResults, selectorArg)
         if (filtered.length > 1) return filtered
       }
       continue
@@ -400,7 +406,7 @@ export function getListInputForNode(
     // 4. Any node with listResults from a prior fan-out execution
     const state = nodeStates[sourceNode.id]
     if (state?.output?.listResults && state.output.listResults.length > 1) {
-      const filtered = applyRange(state.output.listResults, rangeFrom, rangeTo, rangeStep)
+      const filtered = selectListItems(state.output.listResults, selectorArg)
       if (filtered.length > 1) return filtered
     }
 
@@ -409,7 +415,7 @@ export function getListInputForNode(
       sourceNode.data as Record<string, unknown>,
     )
     if (savedResults) {
-      const filtered = applyRange(savedResults, rangeFrom, rangeTo, rangeStep)
+      const filtered = selectListItems(savedResults, selectorArg)
       if (filtered.length > 1) return filtered
     }
   }
@@ -431,9 +437,6 @@ export function getListInputForNode(
 
       // Read range config from the upstream edge
       const gpData = srcEdge.data as Record<string, unknown> | undefined
-      const gpRangeFrom = gpData?.rangeFrom as string | undefined
-      const gpRangeTo = gpData?.rangeTo as string | undefined
-      const gpRangeStep = gpData?.rangeStep as number | undefined
 
       // Get list items
       let listItems: string[] | undefined
@@ -447,8 +450,11 @@ export function getListInputForNode(
       }
       if (!listItems || listItems.length <= 1) continue
 
-      // Apply range from the upstream edge
-      const filtered = applyRange(listItems, gpRangeFrom, gpRangeTo, gpRangeStep)
+      // Apply range/list selection from the upstream edge
+      const filtered = selectListItems(
+        listItems,
+        gpData as SelectorEdgeData | undefined,
+      )
       if (filtered.length <= 1) continue
 
       // Build ref map for the text-prompt to resolve nested refs
