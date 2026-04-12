@@ -150,7 +150,7 @@ export function LLMChatConfig({ data, onUpdate }: ConfigProps<LLMChatData>) {
               </div>
             )}
           </div>
-          <div className="bg-[#F8FAFC] dark:bg-[#121212] rounded-lg p-3 max-h-60 overflow-y-auto">
+          <div className="bg-[#F8FAFC] dark:bg-[#121212] rounded-lg p-3 overflow-y-auto resize-y" style={{ minHeight: '120px', maxHeight: '600px' }}>
             <p className="text-sm whitespace-pre-wrap">{data.generatedText}</p>
           </div>
         </div>

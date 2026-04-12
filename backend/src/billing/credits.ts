@@ -174,6 +174,51 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
+  // ── Seedance 2.0 — per-second billing, resolution × video-ref dimensions ──
+  // Base fallback (8s/480p/no-ref)
+  "seedance-2": 38,
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  // ── Seedance 2.0 Fast — same matrix, lower rates ──
+  "seedance-2-fast": 31,
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  // 480p with video ref (8 KIE cr/s)
+  "seedance-2-fast:4s:480p-ref": 8,    // 32 KIE cr, $0.16
+  "seedance-2-fast:8s:480p-ref": 16,   // 64 KIE cr, $0.32
+  "seedance-2-fast:12s:480p-ref": 24,  // 96 KIE cr, $0.48
+  "seedance-2-fast:15s:480p-ref": 30,  // 120 KIE cr, $0.60
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   "wan-i2v": 22,                 // 70 KIE cr, $0.35 (5s 720p fallback)
   // Wan I2V duration-tiered pricing (720p default)
   ***REDACTED-OSS-SCRUB***

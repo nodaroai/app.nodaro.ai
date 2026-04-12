@@ -23,6 +23,7 @@ export async function executeNodeForList(
     : 12;
 
   const { updateNodeData } = useWorkflowStore.getState();
+  const runId = crypto.randomUUID();
 
   updateNodeData(node.id, {
     executionStatus: "running",
@@ -32,6 +33,7 @@ export async function executeNodeForList(
     __listCompleted: 0,
     __listResults: [],
     __listInputs: [...items],
+    __currentRunId: runId,
   });
 
   let completedCount = 0;
@@ -63,6 +65,7 @@ export async function executeNodeForList(
       isRepeat ? undefined : isUrl ? undefined : item,
       isRepeat ? undefined : isUrl ? item : undefined,
       i,
+      runId,
     );
 
     completedCount++;

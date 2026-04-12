@@ -15,15 +15,8 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { TextToVideoData } from "@/types/nodes"
-
-// Fallback credit costs per video provider (shown until API responds)
-const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
-  minimax: 18, veo3: 79, "veo3.1": 19, kling: 28, "kling-turbo": 14,
-  "kling-3.0": 63, "grok-i2v": 7, seedance: 7,
-  "wan-i2v": 22, "wan-turbo": 13, "hailuo-2.3-pro": 20, "hailuo-2.3": 10,
-  "hailuo-standard": 10, "bytedance-lite": 6, "bytedance-pro": 18,
-  "bytedance-pro-fast": 9, "kling-master": 50, "runway-kie": 4,
-}
+import { VIDEO_PROVIDER_FALLBACKS } from "../editor/config-panels/model-options"
+import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS } from "@nodaro-shared/model-constants"
 
 function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as TextToVideoData
@@ -160,6 +153,11 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
+        ...(isSeedance2Provider(provider) ? [
+          { id: "reference-images", type: "target" as const, position: Position.Left, top: 'calc(100% - 160px)', customStyle: { top: 'calc(100% - 160px)', left: '-29px' }, hideHandle: true, label: `Ref images ×${SEEDANCE_2_REF_LIMITS.images}` },
+          { id: "reference-videos", type: "target" as const, position: Position.Left, top: 'calc(100% - 120px)', customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, hideHandle: true, label: `Ref videos ×${SEEDANCE_2_REF_LIMITS.videos}` },
+          { id: "reference-audio",  type: "target" as const, position: Position.Left, top: 'calc(100% - 85px)',  customStyle: { top: 'calc(100% - 85px)',  left: '-29px' }, hideHandle: true, label: `Ref audio ×${SEEDANCE_2_REF_LIMITS.audio}` },
+        ] : []),
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >

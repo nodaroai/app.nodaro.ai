@@ -71,7 +71,9 @@ export const VIDEO_I2V_MODELS = [
   { value: "kling-turbo", label: "Kling Turbo", desc: "Fast generation, end frame support" },
   { value: "minimax", label: "MiniMax", desc: "Fast, reliable 5s clips" },
   { value: "runway-kie", label: "Runway (KIE)", desc: "Runway Gen-3, 5-10s, 720p/1080p" },
-  { value: "seedance", label: "Seedance", desc: "Bytedance, 4-12s, audio generation" },
+  { value: "seedance", label: "Seedance 1.5", desc: "Bytedance, 4-12s, audio generation" },
+  { value: "seedance-2", label: "Seedance 2.0", desc: "Bytedance, 4-15s, multimodal references" },
+  { value: "seedance-2-fast", label: "Seedance 2.0 Fast", desc: "Bytedance Fast, 4-15s, multimodal references" },
   { value: "veo3", label: "VEO 3.1 (Quality)", desc: "Top quality, 8s with audio" },
   { value: "veo3.1", label: "VEO 3.1 (Fast)", desc: "Fast VEO, 8s with audio" },
   { value: "wan-i2v", label: "Wan 2.6", desc: "Wan I2V, 5-15s, resolution options" },
@@ -89,6 +91,8 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "hailuo-standard", label: "MiniMax Standard", desc: "Budget Hailuo, 6-10s" },
   { value: "runway-kie", label: "Runway (KIE)", desc: "Runway Gen-3, 5-10s, 720p/1080p" },
   { value: "seedance", label: "Seedance 1.5", desc: "Bytedance, 4-12s with audio option" },
+  { value: "seedance-2", label: "Seedance 2.0", desc: "Bytedance, 4-15s, multimodal references" },
+  { value: "seedance-2-fast", label: "Seedance 2.0 Fast", desc: "Bytedance Fast, 4-15s, multimodal references" },
   { value: "veo3", label: "VEO 3.1 (Quality)", desc: "Top quality, 8s with audio" },
   { value: "veo3.1", label: "VEO 3.1 (Fast)", desc: "Fast VEO, 8s with audio" },
   { value: "wan", label: "Wan 2.6", desc: "High quality, 5-15s, 1080p" },
@@ -355,6 +359,8 @@ export const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
   "kling-master": [5, 10],
   "grok-i2v": [6, 10],
   "seedance": [4, 8, 12],
+  "seedance-2": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "seedance-2-fast": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   "wan-i2v": [5, 10, 15],
   "wan-turbo": [5],
   "hailuo-2.3-pro": [6, 10],
@@ -407,6 +413,8 @@ export const PROVIDERS_WITH_END_FRAME: string[] = [
   "hailuo-standard",
   "bytedance-lite",
   "seedance",
+  "seedance-2",
+  "seedance-2-fast",
   // Replicate disabled
   // "runway",
   // "pika",
@@ -417,7 +425,30 @@ export const PROVIDERS_WITH_REFERENCES: string[] = [
   "grok-i2v",
   "veo3",
   "veo3.1",
+  "seedance-2",
+  "seedance-2-fast",
 ]
+
+/** Fallback credit cost per video provider — shown in node badge until `useModelCredits` resolves. */
+export const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
+  minimax: 18, veo3: 79, "veo3.1": 19, kling: 28, "kling-turbo": 14,
+  "kling-3.0": 63, "grok-i2v": 7, seedance: 7,
+  "seedance-2": 82, "seedance-2-fast": 66,
+  "wan-i2v": 22, "wan-turbo": 13, "hailuo-2.3-pro": 20, "hailuo-2.3": 10,
+  "hailuo-standard": 10, "bytedance-lite": 6, "bytedance-pro": 18,
+  "bytedance-pro-fast": 9, "kling-master": 50, "runway-kie": 4,
+}
+
+/** Aspect ratio options supported by Seedance 2.0 (includes 4:3, 3:4, 21:9, adaptive). */
+export const SEEDANCE_2_VIDEO_RATIOS = [
+  { value: "16:9", label: "16:9 (Landscape)" },
+  { value: "9:16", label: "9:16 (Portrait)" },
+  { value: "1:1", label: "1:1 (Square)" },
+  { value: "4:3", label: "4:3" },
+  { value: "3:4", label: "3:4" },
+  { value: "21:9", label: "21:9 (Ultra-wide)" },
+  { value: "adaptive", label: "Adaptive" },
+] as const
 
 // KIE.ai allowed durations per text-to-video provider
 export const KIE_T2V_DURATIONS: Record<string, number[]> = {
@@ -429,6 +460,8 @@ export const KIE_T2V_DURATIONS: Record<string, number[]> = {
   "grok": [6, 10],
   "kling-3.0": KLING3_DURATIONS,
   "seedance": [4, 8, 12],
+  "seedance-2": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "seedance-2-fast": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   "wan": [5, 10, 15],
   "hailuo-standard": [6, 10],
   "bytedance-lite": [5, 10],

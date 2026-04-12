@@ -433,6 +433,46 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     supportsEndFrame: true,  // End frame via input_urls array (handled in video.ts)
   },
 
+  // Seedance 2.0 — docs.kie.ai/market/bytedance/seedance-2
+  // Per-second pricing: 480p no-ref 19 cr/s, 480p ref 11.5 cr/s, 720p no-ref 41 cr/s, 720p ref 25 cr/s
+  "seedance-2": {
+    model: "bytedance/seedance-2",
+    credits: 82,
+    ***REDACTED-OSS-SCRUB***
+    imageParam: "first_frame_url",
+    extraParams: {
+      resolution: "720p",
+      aspect_ratio: "16:9",
+      duration: 8,
+      generate_audio: true,
+      web_search: false,
+      nsfw_checker: false,
+    },
+    allowedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    supportsEndFrame: true,
+    endFrameParam: "last_frame_url",
+  },
+
+  // Seedance 2.0 Fast — docs.kie.ai/market/bytedance/seedance-2-fast
+  // Per-second pricing: 480p no-ref 15.5 cr/s, 480p ref 8 cr/s, 720p no-ref 33 cr/s, 720p ref 20 cr/s
+  "seedance-2-fast": {
+    model: "bytedance/seedance-2-fast",
+    credits: 66,
+    ***REDACTED-OSS-SCRUB***
+    imageParam: "first_frame_url",
+    extraParams: {
+      resolution: "720p",
+      aspect_ratio: "16:9",
+      duration: 8,
+      generate_audio: true,
+      web_search: false,
+      nsfw_checker: false,
+    },
+    allowedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    supportsEndFrame: true,
+    endFrameParam: "last_frame_url",
+  },
+
   // Wan 2.6 I2V - docs.kie.ai/market/wan/2-6-image-to-video
   "wan-i2v": {
     model: "wan/2-6-image-to-video",
@@ -627,6 +667,38 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     ***REDACTED-OSS-SCRUB***
     extraParams: { resolution: "720p", fixed_lens: false, generate_audio: false },
     allowedDurations: [4, 8, 12],
+  },
+
+  // Seedance 2.0 T2V — docs.kie.ai/market/bytedance/seedance-2
+  "seedance-2": {
+    model: "bytedance/seedance-2",
+    credits: 82,
+    cost: 0.41,
+    extraParams: {
+      resolution: "720p",
+      aspect_ratio: "16:9",
+      duration: 8,
+      generate_audio: true,
+      web_search: false,
+      nsfw_checker: false,
+    },
+    allowedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  },
+
+  // Seedance 2.0 Fast T2V - docs.kie.ai/market/bytedance/seedance-2-fast
+  "seedance-2-fast": {
+    model: "bytedance/seedance-2-fast",
+    credits: 66,
+    cost: 0.33,
+    extraParams: {
+      resolution: "720p",
+      aspect_ratio: "16:9",
+      duration: 8,
+      generate_audio: true,
+      web_search: false,
+      nsfw_checker: false,
+    },
+    allowedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 
   // Wan 2.6 T2V - docs.kie.ai/market/wan/2-6-text-to-video

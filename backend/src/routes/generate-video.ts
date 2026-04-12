@@ -6,7 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
-import { IMAGE_TO_VIDEO_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
+import { IMAGE_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider } from "../../../packages/shared/src/model-constants.js"
 import { buildVideoCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 const generateVideoBody = z.object({
@@ -22,7 +22,7 @@ const generateVideoBody = z.object({
   negativePrompt: z.string().max(2500).optional(),
   motionPrompt: z.string().max(2500).optional(),
   cfgScale: z.number().min(0).max(1).optional(),
-  aspectRatio: z.enum(["16:9", "9:16", "1:1", "21:9", "Auto"]).optional(),
+  aspectRatio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive", "Auto"]).optional(),
   multiShot: z.boolean().optional(),
   shots: shotsSchema.optional(),
   elements: elementsSchema.optional(),
@@ -31,13 +31,31 @@ const generateVideoBody = z.object({
   videoSize: z.enum(["standard", "high"]).optional(),
   seed: z.number().int().min(-1).max(2147483647).optional(),
   cameraFixed: z.boolean().optional(),
-  referenceImageUrls: z.array(safeUrlSchema).max(6).optional(),
+  referenceImageUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.images).optional(),
+  referenceVideoUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.videos).optional(),
+  referenceAudioUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.audio).optional(),
+  webSearch: z.boolean().optional(),
+  nsfwChecker: z.boolean().optional(),
   generationType: z.enum(["TEXT_2_VIDEO", "FIRST_AND_LAST_FRAMES_2_VIDEO", "REFERENCE_2_VIDEO"]).optional(),
   userId: z.string().uuid().optional(),
 })
 
 export async function generateVideoRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-video", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return buildVideoCreditModelIdentifier((body?.provider as string) ?? "minimax", body?.duration as number | string | undefined, body?.sound as boolean | undefined, undefined, body?.videoSize as string | undefined) }) }, async (req, reply) => {
+  app.post("/v1/generate-video", {
+    preHandler: creditGuard((req) => {
+      const body = req.body as Record<string, unknown>
+      const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
+      return buildVideoCreditModelIdentifier(
+        (body?.provider as string) ?? "minimax",
+        body?.duration as number | string | undefined,
+        body?.sound as boolean | undefined,
+        "image-to-video",
+        body?.videoSize as string | undefined,
+        body?.resolution as string | undefined,
+        hasVideoRef,
+      )
+    }),
+  }, async (req, reply) => {
     const parsed = generateVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -48,7 +66,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, generationType } = parsed.data
+    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -57,15 +75,25 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    // imageUrl is required for all modes except VEO REFERENCE_2_VIDEO
-    if (!imageUrl && generationType !== "REFERENCE_2_VIDEO") {
+    const hasMultimodalRef = isSeedance2Provider(provider) && ((referenceVideoUrls?.length ?? 0) > 0 || (referenceAudioUrls?.length ?? 0) > 0)
+
+    // imageUrl is required for all modes except VEO REFERENCE_2_VIDEO or Seedance 2 multimodal ref
+    if (!imageUrl && generationType !== "REFERENCE_2_VIDEO" && !hasMultimodalRef) {
       return reply.status(400).send({
         error: { code: "validation_error", message: "imageUrl is required" },
       })
     }
 
-    // Determine model identifier for credit check (supports variable pricing by duration/audio)
-    const modelIdentifier = buildVideoCreditModelIdentifier(provider ?? "minimax", duration, sound, undefined, videoSize)
+    // Determine model identifier for credit check (supports variable pricing by duration/audio/resolution/video-ref)
+    const modelIdentifier = buildVideoCreditModelIdentifier(
+      provider ?? "minimax",
+      duration,
+      sound,
+      "image-to-video",
+      videoSize,
+      resolution,
+      (referenceVideoUrls?.length ?? 0) > 0,
+    )
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -74,7 +102,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, generationType, type: "image-to-video" },
+        input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, type: "image-to-video" },
       })
       .select("id")
       .single()
@@ -114,6 +142,10 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       seed,
       cameraFixed,
       referenceImageUrls,
+      referenceVideoUrls,
+      referenceAudioUrls,
+      webSearch,
+      nsfwChecker,
       generationType,
       usageLogId,
     })

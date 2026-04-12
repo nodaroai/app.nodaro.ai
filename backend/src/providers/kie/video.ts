@@ -16,6 +16,7 @@ import type {
   ProviderResult,
   ProviderOptions,
 } from "../provider.interface.js"
+import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider } from "../../../../packages/shared/src/model-constants.js"
 import {
   createSanitizedError,
   runKieTask,
@@ -44,6 +45,30 @@ import sharp from "sharp"
 
 function mapAspectRatio(_provider: string, aspectRatio: string): string {
   return aspectRatio
+}
+
+/**
+ * Merge Seedance 2.0 options into the KIE payload (I2V + T2V).
+ * Returns whether multimodal reference mode is active (video/audio refs present),
+ * which is mutually exclusive with first/last frame mode per KIE's schema.
+ */
+function applySeedance2Params(
+  input: Record<string, unknown>,
+  options: ProviderOptions | undefined,
+): { hasMultimodalRef: boolean } {
+  const refImages = (options?.referenceImageUrls ?? []).slice(0, SEEDANCE_2_REF_LIMITS.images)
+  const refVideos = (options?.referenceVideoUrls ?? []).slice(0, SEEDANCE_2_REF_LIMITS.videos)
+  const refAudios = (options?.referenceAudioUrls ?? []).slice(0, SEEDANCE_2_REF_LIMITS.audio)
+  if (refImages.length > 0) input.reference_image_urls = refImages
+  if (refVideos.length > 0) input.reference_video_urls = refVideos
+  if (refAudios.length > 0) input.reference_audio_urls = refAudios
+  input.web_search = options?.webSearch ?? false
+  if (options?.nsfwChecker !== undefined) input.nsfw_checker = options.nsfwChecker
+  if (options?.generateAudio !== undefined) input.generate_audio = options.generateAudio
+  if (options?.aspectRatio) input.aspect_ratio = options.aspectRatio
+  if (options?.resolution) input.resolution = options.resolution
+  if (input.duration !== undefined) input.duration = Number(input.duration)
+  return { hasMultimodalRef: refVideos.length > 0 || refAudios.length > 0 }
 }
 
 // Max audio duration (seconds) per lip-sync model
@@ -520,11 +545,11 @@ export class KieVideoProvider
       input.duration = String(snapped)
     }
 
-    // Handle end frame for models that support it
     if (endFrameUrl) {
       if (provider === "seedance") {
-        // Seedance uses input_urls array: [startFrame, endFrame]
         input.input_urls = [effectiveImageUrl, endFrameUrl]
+      } else if (isSeedance2Provider(provider)) {
+        input.last_frame_url = endFrameUrl
       } else if (provider === "kling-turbo") {
         input.tail_image_url = endFrameUrl
       } else if (provider === "minimax" || provider === "hailuo-standard" || provider === "bytedance-lite") {
@@ -575,14 +600,23 @@ export class KieVideoProvider
       }
     }
 
-    // Seedance generate_audio
-    if (options?.generateAudio !== undefined && provider === "seedance") {
-      input.generate_audio = options.generateAudio
+    if (provider === "seedance") {
+      if (options?.generateAudio !== undefined) input.generate_audio = options.generateAudio
+      if (options?.aspectRatio) input.aspect_ratio = options.aspectRatio
     }
 
-    // Seedance aspect_ratio override
-    if (options?.aspectRatio && provider === "seedance") {
-      input.aspect_ratio = options.aspectRatio
+    if (isSeedance2Provider(provider)) {
+      const { hasMultimodalRef } = applySeedance2Params(input, options)
+      if (hasMultimodalRef) {
+        if (endFrameUrl) {
+          throw createSanitizedError(
+            "Seedance 2.0: reference videos/audio cannot be combined with start+end frame. Disconnect one mode before running.",
+            "Video generation",
+          )
+        }
+        delete input.first_frame_url
+        delete input.last_frame_url
+      }
     }
 
     // Wan Turbo specific params
@@ -752,6 +786,14 @@ export class KieVideoProvider
     }
     if (options?.cfgScale !== undefined) {
       input.cfg_scale = options.cfgScale
+    }
+
+    if (options?.resolution && !isSeedance2Provider(provider)) {
+      input.resolution = options.resolution
+    }
+
+    if (isSeedance2Provider(provider)) {
+      applySeedance2Params(input, options)
     }
 
     console.log(

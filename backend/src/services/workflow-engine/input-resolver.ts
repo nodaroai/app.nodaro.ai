@@ -554,6 +554,13 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
 /** Target node types that accumulate inputs into arrays (videoUrls, audioUrls). */
 const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combine-audio"])
 
+const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVideoUrls" | "referenceAudioUrls"> = {
+  "references": "referenceImageUrls",
+  "reference-images": "referenceImageUrls",
+  "reference-videos": "referenceVideoUrls",
+  "reference-audio": "referenceAudioUrls",
+}
+
 const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "location"])
 
 const VIDEO_OUTPUT_NODE_TYPES = new Set([
@@ -707,9 +714,9 @@ function routeOutput(
     inputs.maskUrl = output
     return
   }
-  if (edge.targetHandle === "references") {
-    // Accumulate reference images from upstream image-producing nodes
-    inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+  const refHandleKey = REFERENCE_HANDLE_MAP[edge.targetHandle ?? ""]
+  if (refHandleKey) {
+    inputs[refHandleKey] = [...((inputs[refHandleKey] as string[] | undefined) ?? []), output]
     return
   }
   if (edge.targetHandle === "system-prompt") {

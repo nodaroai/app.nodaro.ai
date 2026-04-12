@@ -875,7 +875,11 @@ export interface GenerateVideoOptions {
   videoSize?: string       // Video size/quality setting
   seed?: number            // Seed (Wan Turbo, Bytedance)
   cameraFixed?: boolean    // Camera fixed (Bytedance, Seedance)
-  referenceImageUrls?: string[]  // Grok I2V (up to 6) / VEO reference mode (up to 3)
+  referenceImageUrls?: string[]  // Grok I2V (up to 6) / VEO reference mode (up to 3) / Seedance 2 (up to 9)
+  referenceVideoUrls?: string[]  // Seedance 2 (up to 3 reference videos)
+  referenceAudioUrls?: string[]  // Seedance 2 (up to 3 reference audio files)
+  webSearch?: boolean            // Seedance 2 (required field)
+  nsfwChecker?: boolean          // Seedance 2 (optional content filter toggle)
   generationType?: string        // VEO: REFERENCE_2_VIDEO
   userId?: string
 }
@@ -917,6 +921,10 @@ export async function generateVideo(
       seed: opts.seed,
       cameraFixed: opts.cameraFixed,
       referenceImageUrls: opts.referenceImageUrls,
+      referenceVideoUrls: opts.referenceVideoUrls,
+      referenceAudioUrls: opts.referenceAudioUrls,
+      webSearch: opts.webSearch,
+      nsfwChecker: opts.nsfwChecker,
       generationType: opts.generationType,
     }
     if (opts.userId) {
@@ -976,6 +984,14 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   shots?: Array<{ prompt: string; duration: number }>
   elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
   seed?: number
+  // Seedance 2.0 options
+  resolution?: string
+  generateAudio?: boolean
+  referenceImageUrls?: string[]
+  referenceVideoUrls?: string[]
+  referenceAudioUrls?: string[]
+  webSearch?: boolean
+  nsfwChecker?: boolean
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt, provider, ...options }
   if (userId) {

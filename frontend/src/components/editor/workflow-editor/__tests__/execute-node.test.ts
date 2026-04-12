@@ -604,6 +604,12 @@ describe("image-to-video", () => {
       undefined,
       undefined,
       undefined,
+      {
+        referenceVideoUrls: undefined,
+        referenceAudioUrls: undefined,
+        webSearch: undefined,
+        nsfwChecker: undefined,
+      },
     )
   })
 })
