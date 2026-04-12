@@ -12,7 +12,7 @@ import type {
 } from "@/types/nodes";
 import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
-import { applyRange, resolveIndex } from "@nodaro-shared/edge-range";
+import { applyRange, resolveIndex, selectListItems } from "@nodaro-shared/edge-range";
 import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
 
 /** Follow teleport chain to find the original non-teleport source node. */
@@ -308,12 +308,7 @@ export function getListInputForNode(
         continue;
       }
       const raw = resolveLoopColumnValues(sourceNode, edge.sourceHandle ?? undefined, edges, nodes);
-      const items = applyRange(
-        raw,
-        edgeData?.rangeFrom as string | undefined,
-        edgeData?.rangeTo as string | undefined,
-        edgeData?.rangeStep as number | undefined,
-      );
+      const items = selectListItems(raw, edgeData as Parameters<typeof selectListItems>[1]);
       if (items.length > 1) {
         if (items.length > maxLen) { maxLen = items.length; longestItems = items; }
       }
@@ -471,9 +466,12 @@ export function resolveNodeInputs(
       } else if (edgeMode === "last") {
         output = srcListResults[srcListResults.length - 1];
       } else if (edgeMode === "all") {
+        const edgeData = srcEdge.data as Record<string, unknown> | undefined;
+        const effectiveEdgeData = { ...(edgeData ?? {}), rangeStep: undefined };
+        const filteredSrc = selectListItems(srcListResults, effectiveEdgeData as Parameters<typeof selectListItems>[1]);
         // For array-accumulating targets, spread items individually
         if (node.type === "combine-videos") {
-          for (const item of srcListResults) {
+          for (const item of filteredSrc) {
             if (item) {
               inputs.videoUrls = [...(inputs.videoUrls ?? []), item];
               inputs.videoUrlsWithSourceIds = [
@@ -485,7 +483,7 @@ export function resolveNodeInputs(
           continue;
         }
         if (node.type === "manual-edit") {
-          for (const item of srcListResults) {
+          for (const item of filteredSrc) {
             if (item) {
               appendManualEditAsset(inputs, src.id, item, "video");
             }
@@ -493,7 +491,7 @@ export function resolveNodeInputs(
           continue;
         }
         if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
-          for (const item of srcListResults) {
+          for (const item of filteredSrc) {
             if (item) {
               inputs.audioUrls = [...(inputs.audioUrls ?? []), item];
               inputs.audioUrlsWithSourceIds = [
@@ -504,7 +502,7 @@ export function resolveNodeInputs(
           }
           continue;
         }
-        output = srcListResults.join(", ");
+        output = filteredSrc.join(", ");
       } else if (edgeMode === "each" && listIterationIndex !== undefined) {
         // During list fan-out, index into the i-th result — wrap with modulo for shorter sources
         output = srcListResults[listIterationIndex % srcListResults.length];
@@ -513,12 +511,7 @@ export function resolveNodeInputs(
     if (!output && (src.type === "loop" || src.type === "list")) {
       const raw = resolveLoopColumnValues(src, srcEdge.sourceHandle ?? undefined, edges, nodes);
       const edgeData = srcEdge.data as Record<string, unknown> | undefined;
-      const ranged = applyRange(
-        raw,
-        edgeData?.rangeFrom as string | undefined,
-        edgeData?.rangeTo as string | undefined,
-        edgeData?.rangeStep as number | undefined,
-      );
+      const ranged = selectListItems(raw, edgeData as Parameters<typeof selectListItems>[1]);
       if (ranged.length > 0) {
         const loopEdgeMode = edgeData?.outputMode as string | undefined;
         let picked: string | undefined;
@@ -545,10 +538,7 @@ export function resolveNodeInputs(
         const effectiveMode = edgeMode ?? (DEFAULT_EACH_TYPES.has(src.type ?? "") ? "each" : "last");
         if (effectiveMode === "each") {
           const edgeData = srcEdge.data as Record<string, unknown> | undefined;
-          const rf = edgeData?.rangeFrom as string | undefined;
-          const rt = edgeData?.rangeTo as string | undefined;
-          const rs = edgeData?.rangeStep as number | undefined;
-          const filtered = applyRange(srcListResults, rf, rt, rs);
+          const filtered = selectListItems(srcListResults, edgeData as Parameters<typeof selectListItems>[1]);
           output = filtered.length > 0 ? filtered[listIterationIndex % filtered.length] : undefined;
         }
       }

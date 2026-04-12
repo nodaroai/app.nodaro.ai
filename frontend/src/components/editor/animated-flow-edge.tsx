@@ -3,7 +3,9 @@
 import { memo, useState, useCallback, useRef, useEffect } from "react"
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, useStore, type Edge, type EdgeProps } from "@xyflow/react"
 import { X, ChevronDown } from "lucide-react"
+import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { parseListExpression, describeEdgeBehavior } from "@nodaro-shared/edge-range"
 import type { CSSProperties } from "react"
 
 type AnimatedFlowEdgeData = {
@@ -19,15 +21,17 @@ type AnimatedFlowEdgeData = {
   rangeStep?: number        // only for "each" — default 1, supports negative
   itemIndex?: string        // for "item" mode: "3", "last", "last-1"
   useAllResults?: boolean   // Include all accumulated results across runs (default false)
+  selectorMode?: "range" | "list"  // Selector tab: "range" (default) or "list"
+  listExpression?: string   // List-mode expression: comma-separated indices/ranges, e.g. "1,3,5..last-1"
 }
 
 type AnimatedFlowEdgeProps = EdgeProps<Edge<AnimatedFlowEdgeData>>
 
 const MODE_OPTIONS = [
-  { value: "last", label: "Last", desc: "Only the most recent output" },
-  { value: "each", label: "Each", desc: "Iterate over outputs in range" },
-  { value: "all", label: "All", desc: "Pass all outputs at once" },
-  { value: "item", label: "Item", desc: "Pick a single output by index" },
+  { value: "last", label: "Latest", desc: "Only the most recent result" },
+  { value: "each", label: "Each", desc: "Run downstream once per item" },
+  { value: "all", label: "All", desc: "Pass all items together as a list" },
+  { value: "item", label: "Item", desc: "Pick one specific item" },
 ] as const
 
 function AnimatedFlowEdgeComponent({
@@ -106,6 +110,9 @@ function AnimatedFlowEdgeComponent({
     updateEdgeData(id, { useAllResults: checked })
   }, [id, updateEdgeData])
 
+  const handleSelectorModeChange = (mode: "range" | "list") => { updateEdgeData(id, { selectorMode: mode }) }
+  const handleListExpressionChange = (value: string) => { updateEdgeData(id, { listExpression: value }) }
+
   // Use step routing for backward connections (target left of source)
   // to avoid edges cutting through nodes
   const pathParams = { sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition }
@@ -120,6 +127,9 @@ function AnimatedFlowEdgeComponent({
 
   // Normalize mode — handle legacy "item:N" format
   const normalizedMode = currentMode.startsWith("item:") ? "item" : currentMode
+
+  const listExpression = edgeData?.listExpression ?? ""
+  const selectorMode: "range" | "list" = edgeData?.selectorMode ?? "range"
 
   // Unique filter IDs per edge to avoid conflicts
   const pinkGlowFilterId = `glow-pink-${id}`
@@ -210,39 +220,63 @@ function AnimatedFlowEdgeComponent({
 
               {/* Label badge — only render when there's label content */}
               {hasLabel && (
-                <span
-                  className="text-[9px] font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm leading-none flex items-center"
-                  style={edgeData?.edgeLabelColor ? {
-                    backgroundColor: `${edgeData.edgeLabelColor}18`,
-                    color: edgeData.edgeLabelColor,
-                    borderColor: `${edgeData.edgeLabelColor}30`,
-                  } : {
-                    backgroundColor: 'rgba(255,255,255,0.7)',
-                    color: '#6b7280',
-                    borderColor: 'rgba(229,231,235,0.5)',
-                  }}
-                >
-                  {edgeData?.edgeLabel && <span>{edgeData.edgeLabel}</span>}
-                  {edgeData?.edgeModeLabel && (
-                    <>
-                      {edgeData.edgeLabel && <span style={{ margin: "0 3px", opacity: 0.5 }}>{"\u00B7"}</span>}
-                      <span style={{ color: "#a78bfa" }}>{edgeData.edgeModeLabel}</span>
-                    </>
-                  )}
-                  {edgeData?.edgeRangeLabel && (
-                    <span style={{
-                      background: "#3a2a5a",
-                      color: "#c4b5fd",
-                      borderRadius: 3,
-                      padding: "0 4px",
-                      fontFamily: "monospace",
-                      fontSize: "0.75em",
-                      marginLeft: 4,
-                    }}>
-                      {edgeData.edgeRangeLabel}
-                    </span>
-                  )}
-                </span>
+                <TooltipPrimitive.Provider delayDuration={2000}>
+                  <TooltipPrimitive.Root>
+                    <TooltipPrimitive.Trigger asChild>
+                      <span
+                        className="text-[9px] font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm leading-none flex items-center"
+                        style={edgeData?.edgeLabelColor ? {
+                          backgroundColor: `${edgeData.edgeLabelColor}18`,
+                          color: edgeData.edgeLabelColor,
+                          borderColor: `${edgeData.edgeLabelColor}30`,
+                        } : {
+                          backgroundColor: 'rgba(255,255,255,0.7)',
+                          color: '#6b7280',
+                          borderColor: 'rgba(229,231,235,0.5)',
+                        }}
+                      >
+                        {edgeData?.edgeLabel && <span>{edgeData.edgeLabel}</span>}
+                        {edgeData?.edgeModeLabel && (
+                          <>
+                            {edgeData.edgeLabel && <span style={{ margin: "0 3px", opacity: 0.5 }}>{"\u00B7"}</span>}
+                            <span style={{ color: "#a78bfa" }}>{edgeData.edgeModeLabel}</span>
+                          </>
+                        )}
+                        {edgeData?.edgeRangeLabel && (
+                          <span style={{
+                            background: "#3a2a5a",
+                            color: "#c4b5fd",
+                            borderRadius: 3,
+                            padding: "0 4px",
+                            fontFamily: "monospace",
+                            fontSize: "0.75em",
+                            marginLeft: 4,
+                          }}>
+                            {edgeData.edgeRangeLabel}
+                          </span>
+                        )}
+                      </span>
+                    </TooltipPrimitive.Trigger>
+                    <TooltipPrimitive.Portal>
+                      <TooltipPrimitive.Content
+                        side="top"
+                        sideOffset={6}
+                        style={{
+                          background: "#1e1e3a",
+                          color: "#e2e8f0",
+                          padding: "6px 10px",
+                          fontSize: 11,
+                          borderRadius: 6,
+                          border: "1px solid #555",
+                          maxWidth: 260,
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
+                        }}
+                      >
+                        {describeEdgeBehavior(edgeData as Parameters<typeof describeEdgeBehavior>[0])}
+                      </TooltipPrimitive.Content>
+                    </TooltipPrimitive.Portal>
+                  </TooltipPrimitive.Root>
+                </TooltipPrimitive.Provider>
               )}
 
               {/* Mode chevron button — visible only when edge is selected */}
@@ -294,6 +328,17 @@ function AnimatedFlowEdgeComponent({
                 }}
                 onMouseDown={(e) => e.stopPropagation()}
               >
+                <div
+                  style={{
+                    padding: "8px 14px 6px",
+                    color: "#64748b",
+                    fontSize: 11,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Output
+                </div>
                 {/* Mode radio buttons */}
                 <div style={{ padding: "8px 0" }}>
                   {MODE_OPTIONS.map((opt) => (
@@ -331,8 +376,16 @@ function AnimatedFlowEdgeComponent({
                           }} />
                         )}
                       </span>
-                      <span style={{ fontWeight: normalizedMode === opt.value ? 600 : 400 }}>
-                        {opt.label}
+                      <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        <span
+                          style={{
+                            fontWeight: normalizedMode === opt.value ? 600 : 400,
+                            fontSize: 11,
+                          }}
+                        >
+                          {opt.label}
+                        </span>
+                        <span style={{ color: "#64748b", fontSize: 10 }}>{opt.desc}</span>
                       </span>
                     </button>
                   ))}
@@ -378,26 +431,59 @@ function AnimatedFlowEdgeComponent({
                     </span>
                   )}
 
-                  {normalizedMode === "each" && (
-                    <RangeConfig
-                      rangeFrom={edgeData?.rangeFrom}
-                      rangeTo={edgeData?.rangeTo}
-                      rangeStep={edgeData?.rangeStep}
-                      showStep
-                      onFromChange={(v) => handleRangeChange("rangeFrom", v)}
-                      onToChange={(v) => handleRangeChange("rangeTo", v)}
-                      onStepChange={handleStepChange}
-                    />
-                  )}
+                  {(normalizedMode === "each" || normalizedMode === "all") && (
+                    <>
+                      <div style={{ display: "flex", gap: 4, padding: "6px 14px 10px" }}>
+                        {(["range", "list"] as const).map((tab) => (
+                          <button
+                            key={tab}
+                            type="button"
+                            onClick={() => handleSelectorModeChange(tab)}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            style={{
+                              flex: 1,
+                              padding: "4px 8px",
+                              fontSize: 10,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.06em",
+                              borderRadius: 4,
+                              border: "1px solid #444",
+                              background: selectorMode === tab ? "rgba(167, 139, 250, 0.15)" : "transparent",
+                              color: selectorMode === tab ? "#e2e8f0" : "#94a3b8",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {tab === "range" ? "Range" : "List"}
+                          </button>
+                        ))}
+                      </div>
 
-                  {normalizedMode === "all" && (
-                    <RangeConfig
-                      rangeFrom={edgeData?.rangeFrom}
-                      rangeTo={edgeData?.rangeTo}
-                      showStep={false}
-                      onFromChange={(v) => handleRangeChange("rangeFrom", v)}
-                      onToChange={(v) => handleRangeChange("rangeTo", v)}
-                    />
+                      {selectorMode === "range" && normalizedMode === "each" && (
+                        <RangeConfig
+                          rangeFrom={edgeData?.rangeFrom}
+                          rangeTo={edgeData?.rangeTo}
+                          rangeStep={edgeData?.rangeStep}
+                          showStep
+                          onFromChange={(v) => handleRangeChange("rangeFrom", v)}
+                          onToChange={(v) => handleRangeChange("rangeTo", v)}
+                          onStepChange={handleStepChange}
+                        />
+                      )}
+
+                      {selectorMode === "range" && normalizedMode === "all" && (
+                        <RangeConfig
+                          rangeFrom={edgeData?.rangeFrom}
+                          rangeTo={edgeData?.rangeTo}
+                          showStep={false}
+                          onFromChange={(v) => handleRangeChange("rangeFrom", v)}
+                          onToChange={(v) => handleRangeChange("rangeTo", v)}
+                        />
+                      )}
+
+                      {selectorMode === "list" && (
+                        <ListConfig value={listExpression} onChange={handleListExpressionChange} />
+                      )}
+                    </>
                   )}
 
                   {normalizedMode === "item" && (
@@ -487,6 +573,43 @@ function ItemConfig({
   return (
     <div className="flex items-center gap-2">
       <FieldInput label="INDEX" value={itemIndex ?? ""} placeholder="1" onChange={onChange} width={70} />
+    </div>
+  )
+}
+
+function ListConfig({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  const validation = parseListExpression(value)
+  const isInvalid = !validation.ok
+  return (
+    <div style={{ padding: "0 14px 10px" }}>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onMouseDown={(e) => e.stopPropagation()}
+        placeholder="1, 2, last"
+        title={isInvalid ? (validation as { error: string }).error : undefined}
+        style={{
+          width: "100%",
+          padding: "4px 8px",
+          fontFamily: "monospace",
+          fontSize: 11,
+          background: "#0f0f26",
+          color: "#e2e8f0",
+          border: `1px solid ${isInvalid ? "#ef4444" : "#444"}`,
+          borderRadius: 4,
+          outline: "none",
+        }}
+      />
+      <div style={{ color: "#64748b", fontSize: 9.5, marginTop: 4 }}>
+        Examples: <code>1, 2, last</code> · <code>1..5</code> · <code>1..10:2</code> · <code>1..last-1</code>
+      </div>
     </div>
   )
 }

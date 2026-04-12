@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { resolveNodeInputs, getListInputForNode } from "../input-resolver.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"
+import { selectListItems } from "../../../../../packages/shared/src/edge-range.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -457,5 +458,56 @@ describe("getListInputForNode", () => {
     const target = node("t", "generate-image")
     const result = getListInputForNode(target, [], {}, [target])
     expect(result).toBeUndefined()
+  })
+})
+
+describe("selectListItems integration — List tab", () => {
+  it("list expression fans out over selected items in order", () => {
+    const items = ["a", "b", "c", "d", "e"]
+    expect(
+      selectListItems(items, {
+        selectorMode: "list",
+        listExpression: "1, 3, last",
+      }),
+    ).toEqual(["a", "c", "e"])
+  })
+
+  it("range-mode with stepped pattern unchanged", () => {
+    const items = ["a", "b", "c", "d", "e"]
+    expect(
+      selectListItems(items, {
+        selectorMode: "range",
+        rangeFrom: "1",
+        rangeTo: "5",
+        rangeStep: 2,
+      }),
+    ).toEqual(["a", "c", "e"])
+  })
+
+  it("missing selectorMode falls through to range path", () => {
+    const items = ["a", "b", "c"]
+    expect(
+      selectListItems(items, { rangeFrom: "1", rangeTo: "2" }),
+    ).toEqual(["a", "b"])
+  })
+
+  it("malformed list expression falls back to all items", () => {
+    const items = ["a", "b", "c"]
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    expect(
+      selectListItems(items, {
+        selectorMode: "list",
+        listExpression: "1..garbage",
+      }),
+    ).toEqual(items)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it("all mode scrubs stale rangeStep", () => {
+    const items = ["a", "b", "c", "d", "e"]
+    const edgeData = { rangeStep: -1, rangeFrom: "1", rangeTo: "last" }
+    const effectiveEdgeData = { ...edgeData, rangeStep: undefined }
+    expect(selectListItems(items, effectiveEdgeData)).toEqual(items)
   })
 })

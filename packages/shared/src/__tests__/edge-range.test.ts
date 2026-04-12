@@ -1,9 +1,13 @@
+import { vi } from "vitest"
 import {
   resolveIndex,
   applyRange,
   migrateEdgeOutputMode,
   buildRangeLabel,
 } from "../edge-range.js"
+import { parseListExpression } from "../edge-range"
+import { resolveListExpression } from "../edge-range"
+import { selectListItems } from "../edge-range"
 
 // ---------------------------------------------------------------------------
 // resolveIndex
@@ -199,5 +203,623 @@ describe("buildRangeLabel", () => {
 
   it('builds label for mode "all" with from and to', () => {
     expect(buildRangeLabel("all", "2", "4")).toBe("2..4")
+  })
+})
+
+describe("buildRangeLabel — List mode support", () => {
+  it("returns raw list expression when non-empty (under 18 chars)", () => {
+    expect(
+      buildRangeLabel("each", undefined, undefined, undefined, undefined, "list", "1, 2, last"),
+    ).toBe("1, 2, last")
+    expect(
+      buildRangeLabel("all", undefined, undefined, undefined, undefined, "list", "1, 3..5, last"),
+    ).toBe("1, 3..5, last")
+  })
+
+  it("truncates long list expressions to 18 chars with ellipsis", () => {
+    const result = buildRangeLabel(
+      "each",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "list",
+      "1, 3..5, 7, 9..11, last",
+    )
+    expect(result).toMatch(/…$/)
+    expect(result!.length).toBeLessThanOrEqual(19)
+  })
+
+  it("returns undefined when list mode with empty expression", () => {
+    expect(
+      buildRangeLabel("each", undefined, undefined, undefined, undefined, "list", ""),
+    ).toBeUndefined()
+    expect(
+      buildRangeLabel("each", undefined, undefined, undefined, undefined, "list", "   "),
+    ).toBeUndefined()
+  })
+
+  it("does NOT fall through to range logic when list mode with empty expression", () => {
+    expect(
+      buildRangeLabel("each", "2", "last-1", 2, undefined, "list", ""),
+    ).toBeUndefined()
+  })
+
+  it("preserves existing range-label behavior when selectorMode is range", () => {
+    expect(
+      buildRangeLabel("each", "2", "last-1", 2, undefined, "range", undefined),
+    ).toBe("2..last-1 +2")
+  })
+
+  it("ignores selectorMode in item mode", () => {
+    expect(
+      buildRangeLabel("item", undefined, undefined, undefined, "3", "list", "1, 2"),
+    ).toBe("3")
+  })
+
+  it("preserves existing range-label behavior when selectorMode is absent", () => {
+    expect(buildRangeLabel("each", "2", "last-1", 2, undefined)).toBe("2..last-1 +2")
+    expect(buildRangeLabel("each", "2", "last-1")).toBe("2..last-1")
+  })
+})
+
+describe("parseListExpression", () => {
+  it("accepts valid expressions", () => {
+    expect(parseListExpression("1")).toEqual({ ok: true })
+    expect(parseListExpression("1, 2, last")).toEqual({ ok: true })
+    expect(parseListExpression("1..5")).toEqual({ ok: true })
+    expect(parseListExpression("1..10:2")).toEqual({ ok: true })
+    expect(parseListExpression("1..5:0")).toEqual({ ok: true })
+    expect(parseListExpression("1, 3..5, last")).toEqual({ ok: true })
+    expect(parseListExpression("")).toEqual({ ok: true })
+    expect(parseListExpression("   ")).toEqual({ ok: true })
+    expect(parseListExpression("last..1:-1")).toEqual({ ok: true })
+  })
+
+  it("rejects empty tokens between commas", () => {
+    expect(parseListExpression("1,,2")).toEqual({
+      ok: false,
+      error: "Empty item between commas",
+    })
+  })
+
+  it("rejects range with missing endpoint", () => {
+    expect(parseListExpression("..5")).toEqual({
+      ok: false,
+      error: "Range missing endpoint: ..5",
+    })
+    expect(parseListExpression("1..")).toEqual({
+      ok: false,
+      error: "Range missing endpoint: 1..",
+    })
+  })
+
+  it("rejects non-integer step", () => {
+    expect(parseListExpression("1..5:1.5")).toEqual({
+      ok: false,
+      error: "Step must be an integer",
+    })
+  })
+
+  it("rejects invalid index tokens", () => {
+    expect(parseListExpression("garbage")).toEqual({
+      ok: false,
+      error: "Invalid index: garbage",
+    })
+  })
+})
+
+describe("resolveListExpression", () => {
+  it("resolves single-index terms", () => {
+    expect(resolveListExpression("1, 2, 3", 5)).toEqual([0, 1, 2])
+    expect(resolveListExpression("1, 2, last", 5)).toEqual([0, 1, 4])
+    expect(resolveListExpression("last, 1, last-1", 5)).toEqual([4, 0, 3])
+  })
+
+  it("resolves range terms", () => {
+    expect(resolveListExpression("1..5", 10)).toEqual([0, 1, 2, 3, 4])
+    expect(resolveListExpression("1..last", 3)).toEqual([0, 1, 2])
+    expect(resolveListExpression("1..last-1", 5)).toEqual([0, 1, 2, 3])
+  })
+
+  it("resolves range with step", () => {
+    expect(resolveListExpression("1..10:2", 10)).toEqual([0, 2, 4, 6, 8])
+    expect(resolveListExpression("last..1:-1", 3)).toEqual([2, 1, 0])
+    expect(resolveListExpression("1..5:0", 10)).toEqual([0, 1, 2, 3, 4])
+  })
+
+  it("returns empty for direction-mismatched range", () => {
+    expect(resolveListExpression("1..10:-1", 10)).toEqual([])
+  })
+
+  it("mixes list and range terms", () => {
+    expect(resolveListExpression("1, 3..5, last", 10)).toEqual([0, 2, 3, 4, 9])
+  })
+
+  it("treats empty/whitespace expression as all items", () => {
+    expect(resolveListExpression("", 5)).toEqual([0, 1, 2, 3, 4])
+    expect(resolveListExpression("   ", 5)).toEqual([0, 1, 2, 3, 4])
+  })
+
+  it("falls back to all items on malformed input", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    expect(resolveListExpression("1,,2", 5)).toEqual([0, 1, 2, 3, 4])
+    expect(resolveListExpression("1, ,2", 5)).toEqual([0, 1, 2, 3, 4])
+    expect(resolveListExpression("1..garbage", 5)).toEqual([0, 1, 2, 3, 4])
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it("preserves duplicates and user order", () => {
+    expect(resolveListExpression("1, 1, 2", 5)).toEqual([0, 0, 1])
+  })
+
+  it("clamps out-of-bounds indices", () => {
+    expect(resolveListExpression("100, 200", 5)).toEqual([4, 4])
+  })
+
+  it("returns [] for empty list", () => {
+    expect(resolveListExpression("1, 2", 0)).toEqual([])
+  })
+})
+
+describe("selectListItems", () => {
+  const items = ["a", "b", "c", "d", "e"]
+
+  it("dispatches to resolveListExpression when selectorMode is list", () => {
+    expect(
+      selectListItems(items, { selectorMode: "list", listExpression: "1, last" }),
+    ).toEqual(["a", "e"])
+    expect(
+      selectListItems(items, { selectorMode: "list", listExpression: "1..3" }),
+    ).toEqual(["a", "b", "c"])
+  })
+
+  it("dispatches to applyRange when selectorMode is range", () => {
+    expect(
+      selectListItems(items, { selectorMode: "range", rangeFrom: "2", rangeTo: "4" }),
+    ).toEqual(["b", "c", "d"])
+  })
+
+  it("falls back to applyRange when selectorMode is absent", () => {
+    expect(selectListItems(items, { rangeFrom: "2", rangeTo: "4" })).toEqual(["b", "c", "d"])
+    expect(selectListItems(items, {})).toEqual(items)
+    expect(selectListItems(items, undefined)).toEqual(items)
+  })
+
+  it("ignores listExpression when selectorMode is not list", () => {
+    expect(
+      selectListItems(items, { selectorMode: "range", listExpression: "1, 2" }),
+    ).toEqual(items)
+    expect(
+      selectListItems(items, { listExpression: "1, 2" }),
+    ).toEqual(items)
+  })
+
+  it("returns [] for empty input list", () => {
+    expect(
+      selectListItems([], { selectorMode: "list", listExpression: "1, 2" }),
+    ).toEqual([])
+  })
+})
+
+import { describeEdgeBehavior } from "../edge-range"
+
+describe("describeEdgeBehavior — basic modes", () => {
+  it("last mode", () => {
+    expect(describeEdgeBehavior({ outputMode: "last" })).toBe(
+      "Passes only the most recent result.",
+    )
+  })
+
+  it("each default config", () => {
+    expect(describeEdgeBehavior({ outputMode: "each" })).toBe(
+      "Runs the downstream node once per item.",
+    )
+  })
+
+  it("all default config", () => {
+    expect(describeEdgeBehavior({ outputMode: "all" })).toBe(
+      "Passes all items together as a list.",
+    )
+  })
+
+  it("default config treats empty-string range fields as defaults", () => {
+    expect(
+      describeEdgeBehavior({ outputMode: "each", rangeFrom: "", rangeTo: "" }),
+    ).toBe("Runs the downstream node once per item.")
+    expect(
+      describeEdgeBehavior({ outputMode: "each", rangeFrom: " ", rangeTo: "last" }),
+    ).toBe("Runs the downstream node once per item.")
+  })
+
+  it("default config treats step 0 as default", () => {
+    expect(describeEdgeBehavior({ outputMode: "each", rangeStep: 0 })).toBe(
+      "Runs the downstream node once per item.",
+    )
+  })
+})
+
+describe("describeEdgeBehavior — item mode", () => {
+  it("item 1 → the first item", () => {
+    expect(describeEdgeBehavior({ outputMode: "item", itemIndex: "1" })).toBe(
+      "Passes only the first item.",
+    )
+  })
+  it("item N (N>=2) → item N", () => {
+    expect(describeEdgeBehavior({ outputMode: "item", itemIndex: "3" })).toBe(
+      "Passes only item 3.",
+    )
+  })
+  it("last", () => {
+    expect(describeEdgeBehavior({ outputMode: "item", itemIndex: "last" })).toBe(
+      "Passes only the last item.",
+    )
+  })
+  it("last-0 equivalent to last", () => {
+    expect(describeEdgeBehavior({ outputMode: "item", itemIndex: "last-0" })).toBe(
+      "Passes only the last item.",
+    )
+  })
+  it("last-1", () => {
+    expect(describeEdgeBehavior({ outputMode: "item", itemIndex: "last-1" })).toBe(
+      "Passes only the second-to-last item.",
+    )
+  })
+  it("last-4 uses ordinal fallback", () => {
+    expect(describeEdgeBehavior({ outputMode: "item", itemIndex: "last-4" })).toBe(
+      "Passes only the 5th-from-last item.",
+    )
+  })
+  it("canonicalizes empty/missing itemIndex to 1", () => {
+    expect(describeEdgeBehavior({ outputMode: "item", itemIndex: "" })).toBe(
+      "Passes only the first item.",
+    )
+    expect(describeEdgeBehavior({ outputMode: "item" })).toBe(
+      "Passes only the first item.",
+    )
+  })
+  it("canonicalizes malformed itemIndex to 1", () => {
+    expect(describeEdgeBehavior({ outputMode: "item", itemIndex: "garbage" })).toBe(
+      "Passes only the first item.",
+    )
+    expect(describeEdgeBehavior({ outputMode: "item", itemIndex: "0" })).toBe(
+      "Passes only the first item.",
+    )
+    expect(describeEdgeBehavior({ outputMode: "item", itemIndex: "\t3\n" })).toBe(
+      "Passes only item 3.",
+    )
+  })
+})
+
+describe("describeEdgeBehavior — Range tab SELECTION_PHRASE", () => {
+  it("each with simple range", () => {
+    expect(
+      describeEdgeBehavior({ outputMode: "each", rangeFrom: "2", rangeTo: "last-1" }),
+    ).toBe("Fans out over items 2 through the second-to-last.")
+  })
+
+  it("all with simple range", () => {
+    expect(
+      describeEdgeBehavior({ outputMode: "all", rangeFrom: "2", rangeTo: "last-1" }),
+    ).toBe("Passes items 2 through the second-to-last as a list.")
+  })
+
+  it("each full-list reverse", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        rangeFrom: "last",
+        rangeTo: "1",
+        rangeStep: -1,
+      }),
+    ).toBe("Fans out over all items in reverse order.")
+  })
+
+  it("each positive step > 1", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        rangeFrom: "1",
+        rangeTo: "10",
+        rangeStep: 2,
+      }),
+    ).toBe("Fans out over items 1 through 10 (every 2nd item).")
+  })
+
+  it("each step 3 and step 21 ordinals", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        rangeFrom: "1",
+        rangeTo: "10",
+        rangeStep: 3,
+      }),
+    ).toBe("Fans out over items 1 through 10 (every 3rd item).")
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        rangeFrom: "1",
+        rangeTo: "21",
+        rangeStep: 21,
+      }),
+    ).toBe("Fans out over items 1 through 21 (every 21st item).")
+  })
+
+  it("empty-result concrete", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        rangeFrom: "5",
+        rangeTo: "2",
+        rangeStep: 1,
+      }),
+    ).toBe("Selects no items — downstream node will not run.")
+    expect(
+      describeEdgeBehavior({
+        outputMode: "all",
+        rangeFrom: "5",
+        rangeTo: "2",
+        rangeStep: 1,
+      }),
+    ).toBe("Selects no items — downstream node will receive an empty list.")
+  })
+
+  it("empty-result both relative", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        rangeFrom: "last",
+        rangeTo: "last-3",
+        rangeStep: 1,
+      }),
+    ).toBe("Selects no items — downstream node will not run.")
+  })
+
+  it("empty-result negative step with from < to", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        rangeFrom: "1",
+        rangeTo: "5",
+        rangeStep: -1,
+      }),
+    ).toBe("Selects no items — downstream node will not run.")
+  })
+
+  it("mixed-kind skips empty-result detection (falls through)", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        rangeFrom: "last-5",
+        rangeTo: "3",
+        rangeStep: 1,
+      }),
+    ).toBe("Fans out over items the 6th-from-last through 3.")
+  })
+
+  it("A==B collapse concrete", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        rangeFrom: "3",
+        rangeTo: "3",
+      }),
+    ).toBe("Runs the downstream node only on item 3.")
+  })
+
+  it("A==B collapse relative via last/last-0 alias", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        rangeFrom: "last",
+        rangeTo: "last-0",
+      }),
+    ).toBe("Runs the downstream node only on the last item.")
+  })
+})
+
+describe("describeEdgeBehavior — List tab SELECTION_PHRASE", () => {
+  it("3-term list", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        selectorMode: "list",
+        listExpression: "1, 3, last",
+      }),
+    ).toBe("Fans out over items 1, 3, and the last one.")
+  })
+
+  it("all mode 3-term list with inner range", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "all",
+        selectorMode: "list",
+        listExpression: "1, 3..5, last",
+      }),
+    ).toBe("Passes items 1, 3 through 5, and the last one as a list.")
+  })
+
+  it("2-term list (no Oxford comma)", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        selectorMode: "list",
+        listExpression: "1, last",
+      }),
+    ).toBe("Fans out over items 1 and the last one.")
+    expect(
+      describeEdgeBehavior({
+        outputMode: "all",
+        selectorMode: "list",
+        listExpression: "1, last",
+      }),
+    ).toBe("Passes items 1 and the last one as a list.")
+  })
+
+  it("single-range-term list", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        selectorMode: "list",
+        listExpression: "1..5",
+      }),
+    ).toBe("Fans out over items 1 through 5.")
+  })
+
+  it("single-index term triggers special case", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        selectorMode: "list",
+        listExpression: "last",
+      }),
+    ).toBe("Runs the downstream node only on the last item.")
+    expect(
+      describeEdgeBehavior({
+        outputMode: "all",
+        selectorMode: "list",
+        listExpression: "3",
+      }),
+    ).toBe("Passes only item 3 as a list.")
+  })
+
+  it("collapsed range term A..A only triggers single-index special case", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "all",
+        selectorMode: "list",
+        listExpression: "3..3",
+      }),
+    ).toBe("Passes only item 3 as a list.")
+    expect(
+      describeEdgeBehavior({
+        outputMode: "all",
+        selectorMode: "list",
+        listExpression: "last..last-0",
+      }),
+    ).toBe("Passes only the last item as a list.")
+  })
+
+  it("empty/whitespace listExpression → default config", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        selectorMode: "list",
+        listExpression: "",
+      }),
+    ).toBe("Runs the downstream node once per item.")
+    expect(
+      describeEdgeBehavior({
+        outputMode: "all",
+        selectorMode: "list",
+        listExpression: "   ",
+      }),
+    ).toBe("Passes all items together as a list.")
+  })
+
+  it("malformed listExpression → fallback to mode default", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        selectorMode: "list",
+        listExpression: "garbage",
+      }),
+    ).toBe("Runs the downstream node once per item.")
+    expect(
+      describeEdgeBehavior({
+        outputMode: "all",
+        selectorMode: "list",
+        listExpression: "garbage",
+      }),
+    ).toBe("Passes all items together as a list.")
+  })
+
+  it("List tab range term with step > 1", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        selectorMode: "list",
+        listExpression: "1..10:2",
+      }),
+    ).toBe("Fans out over items 1 through 10 (every 2nd).")
+  })
+
+  it("List tab empty-result range term rendered as-typed", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        selectorMode: "list",
+        listExpression: "5..2",
+      }),
+    ).toBe("Fans out over items 5 through 2.")
+  })
+})
+
+describe("describeEdgeBehavior — useAllResults suffix", () => {
+  it("item mode with useAllResults", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "item",
+        itemIndex: "last",
+        useAllResults: true,
+      }),
+    ).toBe("Passes only the last item (across all accumulated results).")
+  })
+
+  it("each default with useAllResults", () => {
+    expect(
+      describeEdgeBehavior({ outputMode: "each", useAllResults: true }),
+    ).toBe("Runs the downstream node once per item (across all accumulated results).")
+  })
+
+  it("each list with useAllResults", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        selectorMode: "list",
+        listExpression: "1, 3, last",
+        useAllResults: true,
+      }),
+    ).toBe("Fans out over items 1, 3, and the last one (across all accumulated results).")
+  })
+
+  it("each single-index list with useAllResults", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        selectorMode: "list",
+        listExpression: "last",
+        useAllResults: true,
+      }),
+    ).toBe("Runs the downstream node only on the last item (across all accumulated results).")
+  })
+
+  it("each range-collapsed with useAllResults", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        rangeFrom: "3",
+        rangeTo: "3",
+        useAllResults: true,
+      }),
+    ).toBe("Runs the downstream node only on item 3 (across all accumulated results).")
+  })
+
+  it("all range with useAllResults", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "all",
+        rangeFrom: "2",
+        rangeTo: "last-1",
+        useAllResults: true,
+      }),
+    ).toBe("Passes items 2 through the second-to-last as a list (across all accumulated results).")
+  })
+
+  it("last mode ignores useAllResults", () => {
+    expect(
+      describeEdgeBehavior({ outputMode: "last", useAllResults: true }),
+    ).toBe("Passes only the most recent result.")
   })
 })
