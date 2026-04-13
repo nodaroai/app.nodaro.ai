@@ -1,3 +1,6 @@
+import { createElement, type ReactNode } from "react"
+import { ImageIcon, Video, AudioLines, FileText } from "lucide-react"
+
 export const APP_CATEGORIES = [
   { value: "image-generation", label: "Image Generation" },
   { value: "video-production", label: "Video Production" },
@@ -26,6 +29,14 @@ export const OUTPUT_TYPE_COLORS: Record<string, string> = {
   video: "bg-purple-500/10 text-purple-500 border-purple-500/20",
   audio: "bg-amber-500/10 text-amber-500 border-amber-500/20",
   text: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+}
+
+/** Lucide icons for each output/handle media type (small, `w-3 h-3`). */
+export const OUTPUT_TYPE_ICON: Record<string, ReactNode> = {
+  image: createElement(ImageIcon, { className: "w-3 h-3" }),
+  video: createElement(Video, { className: "w-3 h-3" }),
+  audio: createElement(AudioLines, { className: "w-3 h-3" }),
+  text: createElement(FileText, { className: "w-3 h-3" }),
 }
 
 /** Color coding for category badges */
