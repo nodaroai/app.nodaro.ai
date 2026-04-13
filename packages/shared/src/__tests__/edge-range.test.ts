@@ -204,6 +204,14 @@ describe("buildRangeLabel", () => {
   it('builds label for mode "all" with from and to', () => {
     expect(buildRangeLabel("all", "2", "4")).toBe("2..4")
   })
+
+  it('includes step suffix for mode "all" with step 2', () => {
+    expect(buildRangeLabel("all", undefined, undefined, 2)).toBe("1..last +2")
+  })
+
+  it('includes negative step suffix for mode "all" with step -1', () => {
+    expect(buildRangeLabel("all", "last", "1", -1)).toBe("last..1 -1")
+  })
 })
 
 describe("buildRangeLabel — List mode support", () => {

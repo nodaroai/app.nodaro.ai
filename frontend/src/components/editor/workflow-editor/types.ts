@@ -2,7 +2,7 @@ import type { WorkflowNode, WorkflowEdge } from "@/types/nodes";
 import { StorageExceededError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers";
-import { applyRange, parseListExpression, resolveListExpression } from "@nodaro-shared/edge-range";
+import { isDefaultSelectorConfig, parseListExpression, resolveListExpression, selectListItems, type SelectorFields } from "@nodaro-shared/edge-range";
 import { getEffectiveRepeatCount } from "@nodaro-shared/repeat-types";
 
 /** Sentinel error thrown when a polling callback detects that the active
@@ -273,14 +273,10 @@ function getBaseFanOut(
     if (mode !== "each") continue;
 
     const edgeData = edge.data as Record<string, unknown> | undefined;
-    const rangeFrom = edgeData?.rangeFrom as string | undefined;
-    const rangeTo = edgeData?.rangeTo as string | undefined;
-    const rangeStep = edgeData?.rangeStep as number | undefined;
-    const hasRange = !!(rangeFrom || rangeTo || rangeStep != null);
+    const selector = edgeData as SelectorFields | undefined;
 
-    // useAllResults: estimate from generatedResults count, narrowed by runsExpression if set
     const edgeUseAll = !!edgeData?.useAllResults;
-    if (edgeUseAll && mode === "each") {
+    if (edgeUseAll) {
       const srcData = sourceNode.data as Record<string, unknown>;
       const genResults = srcData.generatedResults as Array<unknown> | undefined;
       if (genResults && genResults.length > 0) {
@@ -289,30 +285,28 @@ function getBaseFanOut(
           ? resolveListExpression(runsExpr, genResults.length).length
           : genResults.length;
         if (filteredCount > 1) {
-          if (!hasRange) return filteredCount;
           const strs = Array.from({ length: filteredCount }, (_, i) => String(i + 1));
-          return applyRange(strs, rangeFrom, rangeTo, rangeStep).length || filteredCount;
+          const n = fanOutCount(strs, selector);
+          if (n > 0) return n;
         }
       }
     }
 
-    // Direct fan-out from list node
     if (sourceNode.type === "list") {
       const items = ((sourceNode.data as Record<string, unknown>).items as string || "")
         .split("\n").map((s) => s.trim()).filter(Boolean);
-      if (!hasRange) { if (items.length > 1) return items.length; }
-      else { const filtered = applyRange(items, rangeFrom, rangeTo, rangeStep); if (filtered.length > 1) return filtered.length; }
+      const n = fanOutCount(items, selector);
+      if (n > 0) return n;
     }
 
-    // Direct fan-out from loop node
     if (sourceNode.type === "loop" || sourceNode.type === "list") {
       const rows = (sourceNode.data as Record<string, unknown>).rows as
         | string[][]
         | undefined;
       if (rows && rows.length > 1) {
-        if (!hasRange) return rows.length;
         const rowStrs = rows.map((_, i) => String(i + 1));
-        return applyRange(rowStrs, rangeFrom, rangeTo, rangeStep).length;
+        const n = fanOutCount(rowStrs, selector);
+        if (n > 0) return n;
       }
     }
 
@@ -326,27 +320,22 @@ function getBaseFanOut(
           ?.outputMode as string | undefined;
         if ((gpMode ?? "each") !== "each") continue;
 
-        // Use range from the upstream edge (srcEdge) for transitive fan-out
-        const gpData = srcEdge.data as Record<string, unknown> | undefined;
-        const gpRangeFrom = gpData?.rangeFrom as string | undefined;
-        const gpRangeTo = gpData?.rangeTo as string | undefined;
-        const gpRangeStep = gpData?.rangeStep as number | undefined;
-        const gpHasRange = !!(gpRangeFrom || gpRangeTo || gpRangeStep != null);
+        const gpSelector = srcEdge.data as SelectorFields | undefined;
 
         if (listNode.type === "list") {
           const items = ((listNode.data as Record<string, unknown>).items as string || "")
             .split("\n").map((s) => s.trim()).filter(Boolean);
-          if (!gpHasRange) { if (items.length > 1) return items.length; }
-          else { const filtered = applyRange(items, gpRangeFrom, gpRangeTo, gpRangeStep); if (filtered.length > 1) return filtered.length; }
+          const n = fanOutCount(items, gpSelector);
+          if (n > 0) return n;
         }
         if (listNode.type === "loop" || listNode.type === "list") {
           const rows = (listNode.data as Record<string, unknown>).rows as
             | string[][]
             | undefined;
           if (rows && rows.length > 1) {
-            if (!gpHasRange) return rows.length;
             const rowStrs = rows.map((_, i) => String(i + 1));
-            return applyRange(rowStrs, gpRangeFrom, gpRangeTo, gpRangeStep).length;
+            const n = fanOutCount(rowStrs, gpSelector);
+            if (n > 0) return n;
           }
         }
       }
@@ -354,6 +343,12 @@ function getBaseFanOut(
   }
 
   return 1;
+}
+
+/** Fan-out count for a list with an optional selector: returns 0 when ≤1 item after filtering. */
+function fanOutCount(items: string[], selector: SelectorFields | undefined): number {
+  const count = isDefaultSelectorConfig(selector) ? items.length : selectListItems(items, selector).length;
+  return count > 1 ? count : 0;
 }
 
 export interface ExecutionContext {
