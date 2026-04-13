@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
-import { TextPromptConfig } from "../input-configs"
+import { TextPromptConfig, LoopConfig } from "../input-configs"
 
 vi.mock("@/components/ui/label", () => ({
   Label: ({ children, ...props }: any) => <label {...props}>{children}</label>,
@@ -51,6 +51,71 @@ vi.mock("@/lib/api", () => ({
   subscribeToDownloadProgress: vi.fn(),
 }))
 
+// Zustand store mock — LoopConfig subscribes to `edges` and `nodes` selectors.
+vi.mock("@/hooks/use-workflow-store", () => ({
+  useWorkflowStore: (selector: any) =>
+    selector({
+      edges: [],
+      nodes: [],
+    }),
+}))
+
+// Any of these may be imported transitively from input-configs.
+vi.mock("@/components/editor/workflow-editor/node-input-resolver", () => ({
+  resolveEdgeValuesForTableColumn: () => null,
+}))
+
+vi.mock("@/components/credits/StorageExceededModal", () => ({
+  StorageExceededModal: () => null,
+}))
+
+vi.mock("@/hooks/use-file-upload", () => ({
+  useFileUpload: () => ({
+    upload: vi.fn(),
+    isUploading: false,
+    uploadError: null,
+    clearError: vi.fn(),
+    storageExceeded: { exceeded: false, usedBytes: 0, quotaBytes: 0, tier: "" },
+    clearStorageExceeded: vi.fn(),
+  }),
+}))
+
+vi.mock("sonner", () => ({
+  toast: { warning: vi.fn(), success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}))
+
+vi.mock("@dnd-kit/core", () => ({
+  DndContext: ({ children }: any) => <div>{children}</div>,
+  closestCenter: vi.fn(),
+  KeyboardSensor: vi.fn(),
+  PointerSensor: vi.fn(),
+  useSensor: vi.fn(),
+  useSensors: vi.fn(() => []),
+}))
+
+vi.mock("@dnd-kit/sortable", () => ({
+  SortableContext: ({ children }: any) => <div>{children}</div>,
+  sortableKeyboardCoordinates: vi.fn(),
+  verticalListSortingStrategy: vi.fn(),
+  useSortable: () => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: vi.fn(),
+    transform: null,
+    transition: "",
+    isDragging: false,
+  }),
+  arrayMove: (arr: any[]) => arr,
+}))
+
+vi.mock("@dnd-kit/utilities", () => ({
+  CSS: { Transform: { toString: () => "" } },
+}))
+
+vi.mock("./prompt-helper-button", () => ({
+  PromptHelperButton: () => null,
+}))
+
 vi.mock("lucide-react", () => ({
   X: () => <span data-testid="x-icon" />,
   Plus: () => <span data-testid="plus-icon" />,
@@ -59,6 +124,12 @@ vi.mock("lucide-react", () => ({
   Download: () => <span data-testid="download-icon" />,
   AlertCircle: () => <span data-testid="alert-icon" />,
   Sparkles: () => <span data-testid="sparkles-icon" />,
+  Upload: () => <span data-testid="upload-icon" />,
+  Film: () => <span data-testid="film-icon" />,
+  Music: () => <span data-testid="music-icon" />,
+  Link: () => <span data-testid="link-icon" />,
+  GripVertical: () => <span data-testid="grip-icon" />,
+  Scissors: () => <span data-testid="scissors-icon" />,
 }))
 
 function createDefaultProps(overrides: Record<string, unknown> = {}) {
@@ -120,5 +191,42 @@ describe("TextPromptConfig", () => {
     render(<TextPromptConfig {...createDefaultProps()} />)
     const label = screen.getByText("Prompt Text")
     expect(label).toBeInTheDocument()
+  })
+})
+
+describe("LoopConfig — Split button", () => {
+  it("calls onUpdate with split rows when Split button is clicked", () => {
+    const onUpdate = vi.fn()
+    const columnId = "col-1"
+    const data = {
+      label: "List",
+      columns: [
+        {
+          id: columnId,
+          name: "Items",
+          handleId: `col_${columnId}`,
+          type: "text" as const,
+          splitDelimiter: ",",
+        },
+      ],
+      rows: [["apple,banana,cherry"]],
+    }
+
+    render(
+      <LoopConfig
+        data={data as any}
+        onUpdate={onUpdate}
+        nodeId="n1"
+        singleColumn
+      />,
+    )
+
+    // "Split" button rendered by DelimiterSelect (only present when delimiter is truthy)
+    const splitButton = screen.getByRole("button", { name: /split/i })
+    fireEvent.click(splitButton)
+
+    expect(onUpdate).toHaveBeenCalledWith({
+      rows: [["apple"], ["banana"], ["cherry"]],
+    })
   })
 })
