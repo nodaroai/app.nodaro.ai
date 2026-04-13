@@ -498,8 +498,8 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     }
     const sourceHandle = col.handleId
     const tile = mode !== "list"
-    const wrapper = `relative group/img rounded-lg overflow-hidden ${tile ? "aspect-square" : ""}`
-    const imgClass = `w-full ${tile ? "h-full object-cover" : "h-auto"} rounded-lg`
+    const wrapper = "relative group/img rounded-lg overflow-hidden"
+    const imgClass = `w-full h-auto rounded-lg ${tile ? "object-cover aspect-square" : ""}`
     const badgeClass = tile
       ? "absolute top-1 left-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 text-white text-[9px] font-medium tabular-nums opacity-0 group-hover/img:opacity-100 transition-opacity"
       : "absolute top-2 left-2 min-w-[20px] h-[20px] flex items-center justify-center rounded-full bg-black/50 text-white text-[10px] font-medium tabular-nums opacity-0 group-hover/img:opacity-100 transition-opacity"
@@ -550,8 +550,8 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     }
     const sourceHandle = col.handleId
     const tile = mode !== "list"
-    const wrapper = `relative group/vid rounded-lg overflow-hidden ${tile ? "aspect-square" : ""}`
-    const videoClass = `w-full ${tile ? "h-full object-cover" : "h-auto"} rounded-lg`
+    const wrapper = "relative group/vid rounded-lg overflow-hidden"
+    const videoClass = `w-full h-auto rounded-lg ${tile ? "object-cover aspect-square" : ""}`
     const badgeClass = tile
       ? "absolute top-1 left-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 text-white text-[9px] font-medium tabular-nums opacity-0 group-hover/vid:opacity-100 transition-opacity"
       : "absolute top-2 left-2 min-w-[20px] h-[20px] flex items-center justify-center rounded-full bg-black/50 text-white text-[10px] font-medium tabular-nums opacity-0 group-hover/vid:opacity-100 transition-opacity"
