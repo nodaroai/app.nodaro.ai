@@ -30,10 +30,7 @@ import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { copyToClipboard } from "@/lib/utils"
-import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
-import { extractNodeOutputAsList, resolveLoopColumnValues } from "@/components/editor/workflow-editor/node-input-resolver"
-import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter"
-import { applyRange, resolveIndex } from "@nodaro-shared/edge-range"
+import { resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-editor/node-input-resolver"
 
 const HANDLE_COLOR_MAP: Record<string, "pink" | "indigo" | "green" | "cyan"> = {
   "image-url": "pink",
@@ -208,73 +205,9 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     [edges, id, targetHandleIds],
   )
 
-  /** Resolve rows from connected upstream nodes — respects edge outputMode & useAllResults. */
+  /** Resolve rows from connected upstream nodes — respects edge outputMode, selector, and useAllResults. */
   const connectedRows = useMemo<string[][] | null>(() => {
     if (columns.length === 0) return null
-
-    function resolveEdgeValues(
-      edge: { source: string; sourceHandle?: string | null; data?: unknown },
-      upstream: WorkflowNode,
-    ): string[] | null {
-      const ed = edge.data as Record<string, unknown> | undefined
-      const edgeMode = ed?.outputMode as string | undefined
-      // Table columns exist to collect items — default to "each" (show all results)
-      const outputMode = edgeMode ?? "each"
-      const useAll = !!ed?.useAllResults
-      const runsExpr = ed?.runsExpression as string | undefined
-
-      // Resolve all outputs — loop nodes need special handling
-      const allOutputs = (upstream.type === "loop" || upstream.type === "list")
-        ? resolveLoopColumnValues(
-            { id: upstream.id, data: upstream.data as Record<string, unknown> },
-            edge.sourceHandle ?? undefined,
-            edges as Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
-            nodes as Array<{ id: string; type?: string; data: Record<string, unknown> }>,
-          )
-        : (extractNodeOutputAsList(upstream, useAll, runsExpr) ?? [])
-
-      // item mode — single item by index
-      if (outputMode === "item") {
-        const itemIndex = ed?.itemIndex as string | undefined
-        if (allOutputs.length > 0) {
-          const idx = resolveIndex(itemIndex ?? "1", allOutputs.length)
-          return [allOutputs[idx] ?? allOutputs[0]]
-        }
-        const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
-        return single ? [single] : null
-      }
-      // legacy item:N (0-based)
-      if (outputMode.startsWith("item:")) {
-        const idx = parseInt(outputMode.split(":")[1], 10)
-        if (allOutputs.length > 0) return [allOutputs[idx] ?? allOutputs[0]]
-        const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
-        return single ? [single] : null
-      }
-      // last — single last item
-      if (outputMode === "last") {
-        if (allOutputs.length > 0) return [allOutputs[allOutputs.length - 1]]
-        const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
-        return single ? [single] : null
-      }
-      // each / all — full list with optional range
-      if (outputMode === "each" || outputMode === "all") {
-        if (allOutputs.length > 0) {
-          return applyRange(
-            allOutputs,
-            ed?.rangeFrom as string | undefined,
-            ed?.rangeTo as string | undefined,
-            ed?.rangeStep as number | undefined,
-          )
-        }
-        const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
-        if (!single) return null
-        return splitByLoopDelimiter(single, columns)
-      }
-      // default — single value
-      const single = extractNodeOutput(upstream, edge.sourceHandle ?? undefined)
-      if (!single) return null
-      return splitByLoopDelimiter(single, columns)
-    }
 
     const colValues: (string[] | null)[] = columns.map((col) => {
       const colInEdges = edges.filter(
@@ -285,7 +218,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
       for (const edge of colInEdges) {
         const upstream = nodes.find((n) => n.id === edge.source)
         if (!upstream) continue
-        const vals = resolveEdgeValues(edge, upstream as WorkflowNode)
+        const vals = resolveEdgeValuesForTableColumn(edge, upstream, edges, nodes, columns)
         if (vals) allValues.push(...vals)
       }
       return allValues.length > 0 ? allValues : null
@@ -296,7 +229,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     if (legacyEdge) {
       const upstream = nodes.find((n) => n.id === legacyEdge.source)
       if (upstream) {
-        legacyValues = resolveEdgeValues(legacyEdge, upstream as WorkflowNode)
+        legacyValues = resolveEdgeValuesForTableColumn(legacyEdge, upstream, edges, nodes, columns)
       }
     }
 
