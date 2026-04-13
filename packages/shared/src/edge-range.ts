@@ -12,6 +12,15 @@ export type SelectorMode = "range" | "list"
 /** Per-edge output mode controlling how upstream results reach downstream. */
 export type OutputMode = "last" | "each" | "all" | "item"
 
+/** Edge-data fields consumed by selectListItems / isDefaultSelectorConfig. */
+export type SelectorFields = {
+  selectorMode?: SelectorMode
+  listExpression?: string
+  rangeFrom?: string
+  rangeTo?: string
+  rangeStep?: number
+}
+
 /**
  * Resolves a 1-based index expression to a 0-based array index.
  *
@@ -166,7 +175,7 @@ function buildItemLabel(
   if (isDefaultRange && isDefaultStep) return undefined
 
   let label = `${from}..${to}`
-  if (mode === "each" && !isDefaultStep) {
+  if ((mode === "each" || mode === "all") && !isDefaultStep) {
     label += step > 0 ? ` +${step}` : ` ${step}`
   }
   return label
@@ -251,33 +260,33 @@ function indexRange(from: number, to: number, step: number): number[] {
 /**
  * Dispatches to either applyRange() or resolveListExpression() based on
  * edgeData.selectorMode. Returns a new string[] containing the selected
- * subset of items.
- *
- * When `mode === "all"`, `rangeStep` is ignored (the "all" UI doesn't surface
- * a step control, so we skip any stale value left from a prior "each"
- * configuration). In list-selector mode the step is embedded in the
- * expression itself, so `mode` has no effect.
+ * subset of items — or `items` unchanged when the edge has no filter.
  */
 export function selectListItems(
   items: string[],
-  edgeData:
-    | {
-        selectorMode?: SelectorMode
-        listExpression?: string
-        rangeFrom?: string
-        rangeTo?: string
-        rangeStep?: number
-      }
-    | undefined,
-  mode?: OutputMode,
+  edgeData: SelectorFields | undefined,
 ): string[] {
   if (items.length === 0) return []
+  if (isDefaultSelectorConfig(edgeData)) return items
   if (edgeData?.selectorMode === "list") {
     const indices = resolveListExpression(edgeData.listExpression ?? "", items.length)
     return indices.map((i) => items[i])
   }
-  const step = mode === "all" ? undefined : edgeData?.rangeStep
-  return applyRange(items, edgeData?.rangeFrom, edgeData?.rangeTo, step)
+  return applyRange(items, edgeData?.rangeFrom, edgeData?.rangeTo, edgeData?.rangeStep)
+}
+
+/**
+ * Returns true when edge data carries no active filter — empty/whitespace list
+ * expression in list mode, or defaults (1..last, step 1) in range mode.
+ * Callers can skip filtering entirely when this returns true.
+ */
+export function isDefaultSelectorConfig(edgeData: SelectorFields | undefined): boolean {
+  if (!edgeData) return true
+  if (edgeData.selectorMode === "list") {
+    return ((edgeData.listExpression ?? "").trim()) === ""
+  }
+  const { from, to, step } = canonicalRange(edgeData)
+  return from === "1" && to === "last" && step === 1
 }
 
 export function describeEdgeBehavior(
@@ -321,7 +330,7 @@ function buildItemSentence(
 function buildEachSentence(
   edgeData: Parameters<typeof describeEdgeBehavior>[0],
 ): string {
-  if (isDefaultConfig(edgeData)) return "Runs the downstream node once per item."
+  if (isDefaultSelectorConfig(edgeData)) return "Runs the downstream node once per item."
   if (edgeData?.selectorMode === "list") {
     const result = parseListTerms((edgeData.listExpression ?? "").trim())
     if (!result.ok) return "Runs the downstream node once per item."
@@ -339,7 +348,7 @@ function buildEachSentence(
 function buildAllSentence(
   edgeData: Parameters<typeof describeEdgeBehavior>[0],
 ): string {
-  if (isDefaultConfig(edgeData)) return "Passes all items together as a list."
+  if (isDefaultSelectorConfig(edgeData)) return "Passes all items together as a list."
   if (edgeData?.selectorMode === "list") {
     const result = parseListTerms((edgeData.listExpression ?? "").trim())
     if (!result.ok) return "Passes all items together as a list."
@@ -430,15 +439,6 @@ function canonicalRange(
   return { from, to, step }
 }
 
-function isDefaultConfig(
-  edgeData: Parameters<typeof describeEdgeBehavior>[0],
-): boolean {
-  if (edgeData?.selectorMode === "list") {
-    return ((edgeData.listExpression ?? "").trim()) === ""
-  }
-  const { from, to, step } = canonicalRange(edgeData)
-  return from === "1" && to === "last" && step === 1
-}
 
 function itemModeForm(canonical: string): string {
   if (canonical === "1") return "the first item"

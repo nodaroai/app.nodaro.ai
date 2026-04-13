@@ -12,7 +12,7 @@ vi.mock("@/lib/prompt-builder", () => ({
   buildScenePrompt: vi.fn(() => "mock scene prompt"),
 }))
 
-import { resolveNodeInputs } from "../node-input-resolver"
+import { resolveNodeInputs, resolveLoopColumnValues } from "../node-input-resolver"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -423,21 +423,158 @@ describe("resolveNodeInputs", () => {
   })
 })
 
-describe("all-mode parity — selectListItems applies filtering", () => {
+describe("selectListItems filtering", () => {
   it("range filters the source list", () => {
     const items = ["a", "b", "c", "d", "e"]
     const edgeData = { rangeFrom: "2", rangeTo: "last-1" }
-    expect(selectListItems(items, edgeData, "all")).toEqual(["b", "c", "d"])
+    expect(selectListItems(items, edgeData)).toEqual(["b", "c", "d"])
   })
 
   it("list filters via list expression", () => {
     const items = ["a", "b", "c", "d", "e"]
     const edgeData = { selectorMode: "list" as const, listExpression: "1, last" }
-    expect(selectListItems(items, edgeData, "all")).toEqual(["a", "e"])
+    expect(selectListItems(items, edgeData)).toEqual(["a", "e"])
   })
 
   it("default config passes full list", () => {
     const items = ["a", "b", "c"]
-    expect(selectListItems(items, {}, "all")).toEqual(items)
+    expect(selectListItems(items, {})).toEqual(items)
+  })
+
+  it("step is honored", () => {
+    const items = ["a", "b", "c", "d", "e"]
+    expect(selectListItems(items, { rangeStep: 2 })).toEqual(["a", "c", "e"])
+    expect(selectListItems(items, { rangeFrom: "last", rangeTo: "1", rangeStep: -1 }))
+      .toEqual(["e", "d", "c", "b", "a"])
+  })
+})
+
+describe("each-mode per-iteration resolution — list/range filter applied", () => {
+  it("list mode filters per-iteration items from non-loop source", () => {
+    const imgNode = makeNode("img1", "generate-image", {
+      generatedResults: [
+        { url: "http://img/1.png" },
+        { url: "http://img/2.png" },
+        { url: "http://img/3.png" },
+        { url: "http://img/4.png" },
+        { url: "http://img/5.png" },
+      ],
+    })
+    const target = makeNode("t1", "generate-image")
+    const edge = {
+      id: "img1->t1",
+      source: "img1",
+      target: "t1",
+      data: {
+        outputMode: "each",
+        useAllResults: true,
+        selectorMode: "list",
+        listExpression: "1, 3",
+      },
+    }
+
+    const iter0 = resolveNodeInputs(target, [imgNode, target], [edge] as any, 0)
+    const iter1 = resolveNodeInputs(target, [imgNode, target], [edge] as any, 1)
+
+    expect(iter0.referenceImageUrls).toContain("http://img/1.png")
+    expect(iter1.referenceImageUrls).toContain("http://img/3.png")
+  })
+
+  it("range mode with step filters per-iteration items from non-loop source", () => {
+    const imgNode = makeNode("img1", "generate-image", {
+      generatedResults: [
+        { url: "http://img/1.png" },
+        { url: "http://img/2.png" },
+        { url: "http://img/3.png" },
+        { url: "http://img/4.png" },
+        { url: "http://img/5.png" },
+      ],
+    })
+    const target = makeNode("t1", "generate-image")
+    const edge = {
+      id: "img1->t1",
+      source: "img1",
+      target: "t1",
+      data: {
+        outputMode: "each",
+        useAllResults: true,
+        rangeStep: 2,
+      },
+    }
+
+    const iter0 = resolveNodeInputs(target, [imgNode, target], [edge] as any, 0)
+    const iter1 = resolveNodeInputs(target, [imgNode, target], [edge] as any, 1)
+    const iter2 = resolveNodeInputs(target, [imgNode, target], [edge] as any, 2)
+
+    expect(iter0.referenceImageUrls).toContain("http://img/1.png")
+    expect(iter1.referenceImageUrls).toContain("http://img/3.png")
+    expect(iter2.referenceImageUrls).toContain("http://img/5.png")
+  })
+})
+
+describe("resolveLoopColumnValues — upstream edge filter applies", () => {
+  it("range filter on upstream edge limits items flowing into loop column", () => {
+    const imgNode = makeNode("img1", "generate-image", {
+      generatedResults: [
+        { url: "u1" }, { url: "u2" }, { url: "u3" }, { url: "u4" },
+        { url: "u5" }, { url: "u6" }, { url: "u7" }, { url: "u8" },
+        { url: "u9" }, { url: "u10" }, { url: "u11" }, { url: "u12" },
+      ],
+    })
+    const loopNode = makeNode("loop1", "loop", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "image-url" }],
+      rows: [],
+    })
+    const edges = [{
+      id: "img1->loop1",
+      source: "img1",
+      target: "loop1",
+      targetHandle: "col_c1_in",
+      sourceHandle: null,
+      data: { outputMode: "all", useAllResults: true, rangeFrom: "1", rangeTo: "3" },
+    }]
+
+    const values = resolveLoopColumnValues(
+      { id: "loop1", data: loopNode.data },
+      "col_c1",
+      edges as any,
+      [imgNode, loopNode] as any,
+    )
+
+    expect(values).toEqual(["u1", "u2", "u3"])
+  })
+
+  it("list-expression filter on upstream edge limits items flowing into loop column", () => {
+    const imgNode = makeNode("img1", "generate-image", {
+      generatedResults: [
+        { url: "u1" }, { url: "u2" }, { url: "u3" }, { url: "u4" }, { url: "u5" },
+      ],
+    })
+    const loopNode = makeNode("loop1", "loop", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "image-url" }],
+      rows: [],
+    })
+    const edges = [{
+      id: "img1->loop1",
+      source: "img1",
+      target: "loop1",
+      targetHandle: "col_c1_in",
+      sourceHandle: null,
+      data: {
+        outputMode: "all",
+        useAllResults: true,
+        selectorMode: "list",
+        listExpression: "1, 3, last",
+      },
+    }]
+
+    const values = resolveLoopColumnValues(
+      { id: "loop1", data: loopNode.data },
+      "col_c1",
+      edges as any,
+      [imgNode, loopNode] as any,
+    )
+
+    expect(values).toEqual(["u1", "u3", "u5"])
   })
 })

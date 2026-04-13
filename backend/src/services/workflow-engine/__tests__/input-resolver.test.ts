@@ -475,10 +475,13 @@ describe("selectListItems integration — List tab", () => {
     warn.mockRestore()
   })
 
-  it("all mode scrubs stale rangeStep", () => {
+  it("honors rangeStep", () => {
     const items = ["a", "b", "c", "d", "e"]
     expect(
-      selectListItems(items, { rangeStep: -1, rangeFrom: "1", rangeTo: "last" }, "all"),
-    ).toEqual(items)
+      selectListItems(items, { rangeStep: 2 }),
+    ).toEqual(["a", "c", "e"])
+    expect(
+      selectListItems(items, { rangeFrom: "last", rangeTo: "1", rangeStep: -1 }),
+    ).toEqual(["e", "d", "c", "b", "a"])
   })
 })

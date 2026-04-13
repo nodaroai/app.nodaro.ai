@@ -15,17 +15,8 @@ import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
-import { resolveIndex, selectListItems, type SelectorMode } from "../../../../packages/shared/src/edge-range.js"
+import { resolveIndex, selectListItems, type SelectorFields } from "../../../../packages/shared/src/edge-range.js"
 import { splitByLoopDelimiter } from "../../../../packages/shared/src/loop-delimiter.js"
-
-/** Subset of edge data used by selectListItems. Casts in this file target this shape. */
-type SelectorEdgeData = {
-  selectorMode?: SelectorMode
-  listExpression?: string
-  rangeFrom?: string
-  rangeTo?: string
-  rangeStep?: number
-}
 
 /**
  * Resolve a node's primary output from execution state or source node data.
@@ -105,8 +96,7 @@ export function resolveNodeInputs(
       } else if (edgeOutputMode === "all") {
         const filtered = selectListItems(
           effectiveListResults,
-          edgeData as SelectorEdgeData | undefined,
-          "all",
+          edgeData as SelectorFields | undefined,
         )
         // For array-accumulating targets, route each item individually
         if (ARRAY_ACCUMULATING_TYPES.has(targetNode.type)) {
@@ -117,8 +107,13 @@ export function resolveNodeInputs(
         }
         output = filtered.join(", ")
       } else if (edgeOutputMode === "each" && listIterationIndex !== undefined) {
-        // During list fan-out, index into the i-th result from each "each" source
-        output = effectiveListResults[listIterationIndex] ?? effectiveListResults[effectiveListResults.length - 1]
+        const filtered = selectListItems(
+          effectiveListResults,
+          edgeData as SelectorFields | undefined,
+        )
+        if (filtered.length > 0) {
+          output = filtered[listIterationIndex] ?? filtered[filtered.length - 1]
+        }
       }
     }
 
@@ -128,7 +123,7 @@ export function resolveNodeInputs(
       if (effectiveMode === "each") {
         const filtered = selectListItems(
           effectiveListResults,
-          edgeData as SelectorEdgeData | undefined,
+          edgeData as SelectorFields | undefined,
         )
         output = filtered[listIterationIndex]
       }
@@ -155,7 +150,7 @@ export function resolveNodeInputs(
                 if (listIterationIndex != null) {
                   const filtered = selectListItems(
                     lines,
-                    edgeData as SelectorEdgeData | undefined,
+                    edgeData as SelectorFields | undefined,
                   )
                   output = filtered[listIterationIndex]
                 } else {
@@ -177,7 +172,7 @@ export function resolveNodeInputs(
                   if (listIterationIndex != null) {
                     const filtered = selectListItems(
                       lines,
-                      edgeData as SelectorEdgeData | undefined,
+                      edgeData as SelectorFields | undefined,
                     )
                     output = filtered[listIterationIndex]
                   } else {
@@ -195,7 +190,7 @@ export function resolveNodeInputs(
               const items = (rows ?? []).map((row) => row[colIndex]?.trim()).filter(Boolean) as string[]
               const filtered = selectListItems(
                 items,
-                edgeData as SelectorEdgeData | undefined,
+                edgeData as SelectorFields | undefined,
               )
               output = filtered[listIterationIndex]
             } else {
@@ -308,7 +303,7 @@ export function getListInputForNode(
 
     // Read range config from the edge
     const edgeData = edge.data as Record<string, unknown> | undefined
-    const selectorArg = edgeData as SelectorEdgeData | undefined
+    const selectorArg = edgeData as SelectorFields | undefined
 
     // 1. Loop node — column routing via sourceHandle
     if (sourceNode.type === "loop") {
@@ -453,7 +448,7 @@ export function getListInputForNode(
       // Apply range/list selection from the upstream edge
       const filtered = selectListItems(
         listItems,
-        gpData as SelectorEdgeData | undefined,
+        gpData as SelectorFields | undefined,
       )
       if (filtered.length <= 1) continue
 

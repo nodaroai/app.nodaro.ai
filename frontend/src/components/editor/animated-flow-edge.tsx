@@ -485,25 +485,14 @@ function AnimatedFlowEdgeComponent({
                         ))}
                       </div>
 
-                      {selectorMode === "range" && normalizedMode === "each" && (
+                      {selectorMode === "range" && (normalizedMode === "each" || normalizedMode === "all") && (
                         <RangeConfig
                           rangeFrom={edgeData?.rangeFrom}
                           rangeTo={edgeData?.rangeTo}
                           rangeStep={edgeData?.rangeStep}
-                          showStep
                           onFromChange={(v) => handleRangeChange("rangeFrom", v)}
                           onToChange={(v) => handleRangeChange("rangeTo", v)}
                           onStepChange={handleStepChange}
-                        />
-                      )}
-
-                      {selectorMode === "range" && normalizedMode === "all" && (
-                        <RangeConfig
-                          rangeFrom={edgeData?.rangeFrom}
-                          rangeTo={edgeData?.rangeTo}
-                          showStep={false}
-                          onFromChange={(v) => handleRangeChange("rangeFrom", v)}
-                          onToChange={(v) => handleRangeChange("rangeTo", v)}
                         />
                       )}
 
@@ -529,7 +518,7 @@ function AnimatedFlowEdgeComponent({
                 </div>
 
                 {/* Negative step hint */}
-                {normalizedMode === "each" && edgeData?.rangeStep != null && edgeData.rangeStep < 0 && (
+                {(normalizedMode === "each" || normalizedMode === "all") && edgeData?.rangeStep != null && edgeData.rangeStep < 0 && (
                   <>
                     <div style={{ height: 1, background: "#555" }} />
                     <div style={{ padding: "8px 14px" }}>
@@ -548,12 +537,10 @@ function AnimatedFlowEdgeComponent({
   )
 }
 
-/** Range config fields (FROM, TO, optional STEP) */
 function RangeConfig({
   rangeFrom,
   rangeTo,
   rangeStep,
-  showStep,
   onFromChange,
   onToChange,
   onStepChange,
@@ -561,10 +548,9 @@ function RangeConfig({
   rangeFrom?: string
   rangeTo?: string
   rangeStep?: number
-  showStep: boolean
   onFromChange: (value: string) => void
   onToChange: (value: string) => void
-  onStepChange?: (value: string) => void
+  onStepChange: (value: string) => void
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -572,18 +558,14 @@ function RangeConfig({
         <FieldInput label="FROM" value={rangeFrom ?? ""} placeholder="1" onChange={onFromChange} />
         <span style={{ color: "#64748b", fontSize: 10, marginTop: 14 }}>&rarr;</span>
         <FieldInput label="TO" value={rangeTo ?? ""} placeholder="last" onChange={onToChange} />
-        {showStep && onStepChange && (
-          <>
-            <span style={{ color: "#64748b", fontSize: 10, marginTop: 14 }}>+</span>
-            <FieldInput
-              label="STEP"
-              value={rangeStep != null ? String(rangeStep) : ""}
-              placeholder="1"
-              onChange={onStepChange}
-              width={40}
-            />
-          </>
-        )}
+        <span style={{ color: "#64748b", fontSize: 10, marginTop: 14 }}>+</span>
+        <FieldInput
+          label="STEP"
+          value={rangeStep != null ? String(rangeStep) : ""}
+          placeholder="1"
+          onChange={onStepChange}
+          width={40}
+        />
       </div>
     </div>
   )

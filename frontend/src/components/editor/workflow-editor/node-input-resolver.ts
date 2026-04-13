@@ -12,17 +12,8 @@ import type {
 } from "@/types/nodes";
 import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
-import { resolveIndex, selectListItems, parseListExpression, resolveListExpression, type SelectorMode } from "@nodaro-shared/edge-range";
+import { resolveIndex, selectListItems, parseListExpression, resolveListExpression, type SelectorFields } from "@nodaro-shared/edge-range";
 import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
-
-/** Subset of edge data used by selectListItems. Casts in this file target this shape. */
-type SelectorEdgeData = {
-  selectorMode?: SelectorMode;
-  listExpression?: string;
-  rangeFrom?: string;
-  rangeTo?: string;
-  rangeStep?: number;
-};
 
 /** Follow teleport chain to find the original non-teleport source node. */
 function resolveTeleportOrigin(node: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode {
@@ -73,8 +64,11 @@ export function resolveLoopColumnValues(
         const edgeData = colInEdge.data as Record<string, unknown> | undefined;
         const useAll = !!edgeData?.useAllResults;
         const runsExpr = edgeData?.runsExpression as string | undefined;
-        const allOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll, runsExpr);
-        if (allOutputs && allOutputs.length > 1) return allOutputs.map((v) => v.trim());
+        const rawOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll, runsExpr);
+        if (rawOutputs && rawOutputs.length > 1) {
+          const filtered = selectListItems(rawOutputs, edgeData as SelectorFields | undefined);
+          if (filtered.length > 0) return filtered.map((v) => v.trim());
+        }
         const upstreamOutput = extractNodeOutput(
           upstreamNode as WorkflowNode,
           colInEdge.sourceHandle ?? undefined,
@@ -96,8 +90,11 @@ export function resolveLoopColumnValues(
       const edgeData = loopInEdges[0].data as Record<string, unknown> | undefined;
       const useAll = !!edgeData?.useAllResults;
       const runsExpr = edgeData?.runsExpression as string | undefined;
-      const allOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll, runsExpr);
-      if (allOutputs && allOutputs.length > 1) return allOutputs.map((v) => v.trim());
+      const rawOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll, runsExpr);
+      if (rawOutputs && rawOutputs.length > 1) {
+        const filtered = selectListItems(rawOutputs, edgeData as SelectorFields | undefined);
+        if (filtered.length > 0) return filtered.map((v) => v.trim());
+      }
       const upstreamOutput = extractNodeOutput(upstreamNode as WorkflowNode);
       if (upstreamOutput) {
         return splitByLoopDelimiter(upstreamOutput, loopData.columns).map((v) => v.trim());
@@ -336,7 +333,7 @@ export function getListInputForNode(
         continue;
       }
       const raw = resolveLoopColumnValues(sourceNode, edge.sourceHandle ?? undefined, edges, nodes);
-      const items = selectListItems(raw, edgeData as SelectorEdgeData | undefined);
+      const items = selectListItems(raw, edgeData as SelectorFields | undefined);
       if (items.length > 1) {
         if (items.length > maxLen) { maxLen = items.length; longestItems = items; }
       }
@@ -351,8 +348,10 @@ export function getListInputForNode(
     const edgeData = edge.data as Record<string, unknown> | undefined;
     const edgeUseAll = !!edgeData?.useAllResults;
     const edgeRunsExpr = edgeData?.runsExpression as string | undefined;
-    const listOutput = extractNodeOutputAsList(sourceNode, edgeUseAll, edgeRunsExpr);
-    if (listOutput && listOutput.length > 1) {
+    const rawList = extractNodeOutputAsList(sourceNode, edgeUseAll, edgeRunsExpr);
+    if (!rawList || rawList.length < 1) continue;
+    const listOutput = selectListItems(rawList, edgeData as SelectorFields | undefined);
+    if (listOutput.length > 1) {
       if (listOutput.length > maxLen) { maxLen = listOutput.length; longestItems = listOutput; }
     }
   }
@@ -378,8 +377,11 @@ export function getListInputForNode(
         ?.outputMode as string | undefined;
       if ((gpEdgeMode ?? "each") !== "each") continue;
 
-      const listItems = extractNodeOutputAsList(listNode);
-      if (!listItems || listItems.length <= 1) continue;
+      const rawItems = extractNodeOutputAsList(listNode);
+      if (!rawItems || rawItems.length < 1) continue;
+      const gpEdgeData = srcEdge.data as Record<string, unknown> | undefined;
+      const listItems = selectListItems(rawItems, gpEdgeData as SelectorFields | undefined);
+      if (listItems.length <= 1) continue;
 
       const refMap = buildNodeRefMap(sourceNode.id, nodes, edges);
       const listData = listNode.data as Record<string, unknown>;
@@ -501,7 +503,7 @@ export function resolveNodeInputs(
         output = srcListResults[srcListResults.length - 1];
       } else if (edgeMode === "all") {
         const edgeData = srcEdge.data as Record<string, unknown> | undefined;
-        const filteredSrc = selectListItems(srcListResults, edgeData as SelectorEdgeData | undefined, "all");
+        const filteredSrc = selectListItems(srcListResults, edgeData as SelectorFields | undefined);
         // For array-accumulating targets, spread items individually
         if (node.type === "combine-videos") {
           for (const item of filteredSrc) {
@@ -537,14 +539,17 @@ export function resolveNodeInputs(
         }
         output = filteredSrc.join(", ");
       } else if (edgeMode === "each" && listIterationIndex !== undefined) {
-        // During list fan-out, index into the i-th result — wrap with modulo for shorter sources
-        output = srcListResults[listIterationIndex % srcListResults.length];
+        const edgeData = srcEdge.data as Record<string, unknown> | undefined;
+        const filteredSrc = selectListItems(srcListResults, edgeData as SelectorFields | undefined);
+        if (filteredSrc.length > 0) {
+          output = filteredSrc[listIterationIndex % filteredSrc.length];
+        }
       }
     }
     if (!output && (src.type === "loop" || src.type === "list")) {
       const raw = resolveLoopColumnValues(src, srcEdge.sourceHandle ?? undefined, edges, nodes);
       const edgeData = srcEdge.data as Record<string, unknown> | undefined;
-      const ranged = selectListItems(raw, edgeData as SelectorEdgeData | undefined);
+      const ranged = selectListItems(raw, edgeData as SelectorFields | undefined);
       if (ranged.length > 0) {
         const loopEdgeMode = edgeData?.outputMode as string | undefined;
         let picked: string | undefined;
@@ -571,7 +576,7 @@ export function resolveNodeInputs(
         const effectiveMode = edgeMode ?? (DEFAULT_EACH_TYPES.has(src.type ?? "") ? "each" : "last");
         if (effectiveMode === "each") {
           const edgeData = srcEdge.data as Record<string, unknown> | undefined;
-          const filtered = selectListItems(srcListResults, edgeData as SelectorEdgeData | undefined);
+          const filtered = selectListItems(srcListResults, edgeData as SelectorFields | undefined);
           output = filtered.length > 0 ? filtered[listIterationIndex % filtered.length] : undefined;
         }
       }
