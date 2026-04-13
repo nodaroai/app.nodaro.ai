@@ -1027,4 +1027,17 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
   )
 }
 
-export const LoopNode = memo(LoopNodeComponent)
+// Explicit comparator: re-render whenever `data` reference changes.
+// React Flow v12's default shallow memo can miss updates produced by
+// Zustand mutations (e.g. the config-panel "Split" action replaces
+// `rows` via a new `data` reference — without this comparator the
+// upstream node's preview and Data tab stayed stale while downstream
+// consumers saw the new rows).
+export const LoopNode = memo(
+  LoopNodeComponent,
+  (prev, next) =>
+    prev.id === next.id &&
+    prev.type === next.type &&
+    prev.selected === next.selected &&
+    prev.data === next.data,
+)
