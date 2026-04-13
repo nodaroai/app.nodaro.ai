@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 
 import type {
+  LoopColumn,
   ScriptScene,
   ScriptSceneCharacter,
   ScriptSceneDialogue,
@@ -10,6 +11,7 @@ import {
   getSceneMoodDisplay,
   mapScriptSceneToNodeData,
   NODE_DEFINITIONS,
+  resolveViewMode,
 } from "../nodes.js"
 
 function makeScene(overrides: Partial<ScriptScene> = {}): ScriptScene {
@@ -357,4 +359,39 @@ describe("NODE_DEFINITIONS — new node types", () => {
     expect(def!.creditCost).toBe(4)
   })
 
+})
+
+// ---------------------------------------------------------------------------
+// resolveViewMode
+// ---------------------------------------------------------------------------
+
+describe("resolveViewMode", () => {
+  const col = (type: LoopColumn["type"]): LoopColumn => ({
+    id: "x", name: "x", handleId: "col_x", type,
+  })
+
+  it("returns explicit viewMode when set", () => {
+    expect(resolveViewMode({ viewMode: "packed", columns: [] })).toBe("packed")
+    expect(resolveViewMode({ viewMode: "list", columns: [col("image-url")] })).toBe("list")
+  })
+
+  it("falls back to gallery when all columns are image-url", () => {
+    expect(resolveViewMode({ columns: [col("image-url")] })).toBe("gallery")
+    expect(resolveViewMode({ columns: [col("image-url"), col("image-url")] })).toBe("gallery")
+  })
+
+  it("falls back to list when columns are mixed", () => {
+    expect(resolveViewMode({ columns: [col("image-url"), col("text")] })).toBe("list")
+  })
+
+  it("falls back to list when no columns or all text", () => {
+    expect(resolveViewMode({ columns: [] })).toBe("list")
+    expect(resolveViewMode({})).toBe("list")
+    expect(resolveViewMode({ columns: [col("text")] })).toBe("list")
+  })
+
+  it("treats missing column type as text (defaults to list)", () => {
+    const colNoType = { id: "x", name: "x", handleId: "col_x" } as unknown as LoopColumn
+    expect(resolveViewMode({ columns: [colNoType] })).toBe("list")
+  })
 })

@@ -62,6 +62,7 @@ export type ListNodeData = {
   showData?: boolean
   thumbnailSize?: "sm" | "md" | "lg"
   galleryCols?: number
+  viewMode?: "list" | "gallery" | "packed"
 }
 
 export interface LoopColumn {
@@ -80,6 +81,23 @@ export const LOOP_COLUMN_TYPE_META: Record<LoopColumn["type"], { label: string; 
   "image-url": { label: "Image", shortLabel: "IMG", color: "#F472B6" },
   "video-url": { label: "Video", shortLabel: "VID", color: "#818CF8" },
   "audio-url": { label: "Audio", shortLabel: "AUD", color: "#22c55e" },
+}
+
+/**
+ * Resolve a loop/list node's effective view mode.
+ *
+ * Returns the explicit `viewMode` when set; otherwise falls back to "gallery"
+ * when every column is image-url, else "list".
+ */
+export function resolveViewMode(data: {
+  viewMode?: "list" | "gallery" | "packed"
+  columns?: ReadonlyArray<LoopColumn>
+}): "list" | "gallery" | "packed" {
+  if (data.viewMode) return data.viewMode
+  const cols = data.columns ?? []
+  return cols.length > 0 && cols.every(c => (c.type ?? "text") === "image-url")
+    ? "gallery"
+    : "list"
 }
 
 /** Stable handle ID for the loop node's "quick-add column" target. */
@@ -116,6 +134,7 @@ export type LoopNodeData = {
   defaultRows?: number
   thumbnailSize?: "sm" | "md" | "lg"
   galleryCols?: number
+  viewMode?: "list" | "gallery" | "packed"
 }
 
 export type UploadImageData = {

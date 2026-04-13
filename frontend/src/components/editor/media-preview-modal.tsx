@@ -8,10 +8,10 @@ import { CachedImage } from "@/components/ui/cached-image"
 interface MediaPreviewModalProps {
   readonly isOpen: boolean
   readonly onClose: () => void
-  readonly type: "image" | "video" | "audio"
+  readonly type: "image" | "video" | "audio" | "text"
   readonly url: string
   /** All results for internal prev/next navigation (overrides currentIndex/totalCount/onPrev/onNext) */
-  readonly results?: ReadonlyArray<{ url?: string }>
+  readonly results?: ReadonlyArray<{ url?: string; text?: string; type?: "image" | "video" | "audio" | "text" }>
   /** Starting index into results (default 0) */
   readonly initialIndex?: number
   /** Called when internal navigation changes the viewed index */
@@ -40,9 +40,15 @@ function formatTime(seconds: number): string {
 
 export function MediaPreviewModal({ isOpen, onClose, type, url, results, initialIndex, onIndexChange, currentIndex, totalCount, onPrev, onNext, onVideoStateChange, initialVideoPlayState, initialPausedAtTime }: MediaPreviewModalProps) {
   // Internal navigation state when results array is provided
-  const validResults = results?.filter((r) => r.url) ?? []
+  const validResults = results?.filter((r) => r.url || r.text) ?? []
   const hasInternalNav = validResults.length > 1
   const [viewIndex, setViewIndex] = useState(initialIndex ?? 0)
+
+  // Per-item derivations — declared early so video-state effects can depend on effectiveType
+  const effectiveType: "image" | "video" | "audio" | "text" =
+    hasInternalNav ? (validResults[viewIndex]?.type ?? type) : type
+  const effectiveText = hasInternalNav ? validResults[viewIndex]?.text : undefined
+  const effectiveUrl  = hasInternalNav ? (validResults[viewIndex]?.url ?? url) : url
 
   // Video state
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -63,16 +69,16 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
 
   // Respect node play state when modal opens
   useEffect(() => {
-    if (!isOpen || type !== "video") return
+    if (!isOpen || effectiveType !== "video") return
     const state = initialVideoPlayState ?? "loop"
     setIsPlaying(state === "loop")
     setActiveState(state)
     setControlsVisible(true)
-  }, [isOpen, type, initialVideoPlayState])
+  }, [isOpen, effectiveType, initialVideoPlayState])
 
   // Apply initial state to the video element after it loads
   useEffect(() => {
-    if (!isOpen || type !== "video") return
+    if (!isOpen || effectiveType !== "video") return
     const video = videoRef.current
     if (!video) return
     const state = initialVideoPlayState ?? "loop"
@@ -85,7 +91,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
       video.pause()
       video.currentTime = 0
     }
-  }, [isOpen, type, initialVideoPlayState, initialPausedAtTime])
+  }, [isOpen, effectiveType, initialVideoPlayState, initialPausedAtTime])
 
   useEffect(() => {
     const video = videoRef.current
@@ -121,7 +127,6 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
   }, [validResults.length, onIndexChange])
 
   // Determine which navigation to use
-  const effectiveUrl = hasInternalNav ? (validResults[viewIndex]?.url ?? url) : url
   const effectiveIndex = hasInternalNav ? viewIndex : currentIndex
   const effectiveTotal = hasInternalNav ? validResults.length : totalCount
   const effectivePrev = hasInternalNav ? (viewIndex > 0 ? goInternalPrev : undefined) : onPrev
@@ -185,8 +190,8 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
     if (e.key === "Escape") { e.stopImmediatePropagation(); handleClose() }
     if (e.key === "ArrowLeft" && effectivePrev) { e.stopImmediatePropagation(); effectivePrev() }
     if (e.key === "ArrowRight" && effectiveNext) { e.stopImmediatePropagation(); effectiveNext() }
-    if (e.key === " " && type === "video") { e.preventDefault(); e.stopImmediatePropagation(); togglePlay() }
-  }, [handleClose, effectivePrev, effectiveNext, type, togglePlay])
+    if (e.key === " " && effectiveType === "video") { e.preventDefault(); e.stopImmediatePropagation(); togglePlay() }
+  }, [handleClose, effectivePrev, effectiveNext, effectiveType, togglePlay])
 
   useEffect(() => {
     if (!isOpen) return
@@ -209,9 +214,10 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
     if (dx > 0 && effectivePrev) effectivePrev()
   }, [effectivePrev, effectiveNext])
 
-  if (!isOpen || !effectiveUrl) return null
+  const hasContent = effectiveUrl || effectiveText
+  if (!isOpen || !hasContent) return null
 
-  const shouldAutoPlay = (initialVideoPlayState ?? "loop") === "loop"
+  const shouldAutoPlay = (initialVideoPlayState ?? "loop") === "loop" && effectiveType === "video"
 
   return createPortal(
     <div
@@ -219,7 +225,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
       onClick={handleClose}
       onTouchStart={hasNav ? handleTouchStart : undefined}
       onTouchEnd={hasNav ? handleTouchEnd : undefined}
-      onMouseMove={type === "video" ? resetHideTimer : undefined}
+      onMouseMove={effectiveType === "video" ? resetHideTimer : undefined}
     >
       <div
         role="dialog"
@@ -268,13 +274,16 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
           </button>
         )}
 
-        {type === "image" ? (
-          <CachedImage
-            src={effectiveUrl}
-            alt="Preview"
-            className="max-w-full max-h-[90vh] rounded-lg object-contain"
-          />
-        ) : type === "video" ? (
+        {effectiveType === "text" ? (
+          <div
+            className="bg-card border border-border rounded-lg p-6 max-w-2xl max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+              {effectiveText}
+            </p>
+          </div>
+        ) : effectiveType === "video" ? (
           <div className="relative max-w-full max-h-[80vh] flex items-center justify-center">
             <video
               ref={videoRef}
@@ -375,8 +384,11 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
               </div>
             </div>
           </div>
-        ) : (
+        ) : effectiveType === "audio" ? (
           <audio key={effectiveUrl} src={effectiveUrl} controls autoPlay className="w-full" />
+        ) : (
+          /* effectiveType === "image" — final else, no implicit fallback */
+          <CachedImage src={effectiveUrl} alt="Preview" className="max-w-full max-h-[90vh] rounded-lg object-contain" />
         )}
       </div>
     </div>,
