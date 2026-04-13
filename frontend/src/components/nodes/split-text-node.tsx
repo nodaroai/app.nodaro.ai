@@ -9,6 +9,13 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { SplitTextData } from "@/types/nodes"
+import { SEPARATOR_DISPLAY } from "@nodaro-shared/text-separators"
+
+function resolveSeparatorLabel(separator: string | undefined, customSeparator: string | undefined): string {
+  const raw = separator || "newline"
+  const resolved = raw === "custom" ? customSeparator ?? "" : SEPARATOR_DISPLAY[raw] ?? raw
+  return resolved === "\n" ? "\\n" : resolved.length > 8 ? `${resolved.slice(0, 6)}...` : resolved
+}
 
 function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SplitTextData
@@ -17,8 +24,7 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
   const status = nodeData.executionStatus ?? "idle"
 
   const partCount = nodeData.splitResults?.length ?? 0
-  const separator = nodeData.separator || "===NEXT==="
-  const separatorLabel = separator === "\n" ? "\\n" : separator.length > 8 ? `${separator.slice(0, 6)}...` : separator
+  const separatorLabel = resolveSeparatorLabel(nodeData.separator, nodeData.customSeparator)
 
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>

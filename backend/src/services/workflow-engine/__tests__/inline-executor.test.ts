@@ -156,12 +156,12 @@ describe("executeCombineText", () => {
 // ---------------------------------------------------------------------------
 
 describe("executeSplitText", () => {
-  it("splits by default delimiter (===NEXT===)", () => {
+  it("splits by default delimiter (newline preset)", () => {
     const target = node("split", "split-text", {})
     const allNodes = [node("a", "text-prompt"), target]
     const edges = [edge("a", "split")]
     const states: Record<string, NodeExecutionState> = {
-      a: { status: "completed", output: { text: "part1===NEXT===part2===NEXT===part3" } },
+      a: { status: "completed", output: { text: "part1\npart2\npart3" } },
     }
 
     const result = executeSplitText(target, {}, edges, allNodes, states)
@@ -170,7 +170,43 @@ describe("executeSplitText", () => {
     expect(result.listResults).toEqual(["part1", "part2", "part3"])
   })
 
-  it("splits by custom delimiter", () => {
+  it("splits by literal delimiter (back-compat with legacy ===NEXT===)", () => {
+    const target = node("split", "split-text", { separator: "===NEXT===" })
+    const allNodes = [node("a", "text-prompt"), target]
+    const edges = [edge("a", "split")]
+    const states: Record<string, NodeExecutionState> = {
+      a: { status: "completed", output: { text: "part1===NEXT===part2===NEXT===part3" } },
+    }
+
+    const result = executeSplitText(target, {}, edges, allNodes, states)
+    expect(result.splitResults).toEqual(["part1", "part2", "part3"])
+  })
+
+  it("splits by stars preset", () => {
+    const target = node("split", "split-text", { separator: "stars" })
+    const allNodes = [node("a", "text-prompt"), target]
+    const edges = [edge("a", "split")]
+    const states: Record<string, NodeExecutionState> = {
+      a: { status: "completed", output: { text: "alpha***beta***gamma" } },
+    }
+
+    const result = executeSplitText(target, {}, edges, allNodes, states)
+    expect(result.splitResults).toEqual(["alpha", "beta", "gamma"])
+  })
+
+  it("splits by custom delimiter via customSeparator field", () => {
+    const target = node("split", "split-text", { separator: "custom", customSeparator: "---" })
+    const allNodes = [node("a", "text-prompt"), target]
+    const edges = [edge("a", "split")]
+    const states: Record<string, NodeExecutionState> = {
+      a: { status: "completed", output: { text: "alpha---beta---gamma" } },
+    }
+
+    const result = executeSplitText(target, {}, edges, allNodes, states)
+    expect(result.splitResults).toEqual(["alpha", "beta", "gamma"])
+  })
+
+  it("splits by literal delimiter when separator is not a known enum", () => {
     const target = node("split", "split-text", { separator: "---" })
     const allNodes = [node("a", "text-prompt"), target]
     const edges = [edge("a", "split")]

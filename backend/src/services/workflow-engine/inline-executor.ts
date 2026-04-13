@@ -4,19 +4,10 @@
  */
 
 import { ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-constants.js"
+import { resolveSeparator } from "../../../../packages/shared/src/text-separators.js"
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeOutput, NodeExecutionState } from "./types.js"
 import { getPrimaryOutput, extractSourceNodeOutput } from "./output-extractor.js"
 import { isSourceNode, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES } from "./execution-graph.js"
-
-/**
- * Map separator enum values to actual separator strings (matches frontend logic).
- */
-const SEPARATOR_MAP: Record<string, string> = {
-  newline: "\n",
-  "double-newline": "\n\n",
-  comma: ", ",
-  space: " ",
-}
 
 /**
  * Collect text outputs from all upstream nodes connected to a target node.
@@ -71,20 +62,12 @@ export function executeCombineText(
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
 ): NodeOutput {
-  const rawSeparator = (node.data.separator as string) ?? "newline"
-  // Map enum values to actual strings; if "custom", use customSeparator; otherwise
-  // check if it's a known enum or already a literal separator string
-  let separator: string
-  if (rawSeparator === "custom") {
-    separator = (node.data.customSeparator as string) ?? ""
-  } else if (rawSeparator in SEPARATOR_MAP) {
-    separator = SEPARATOR_MAP[rawSeparator]
-  } else {
-    separator = rawSeparator
-  }
+  const separator = resolveSeparator(
+    node.data.separator as string | undefined,
+    node.data.customSeparator as string | undefined,
+    { combineSpacing: true },
+  )
 
-  // Use includeListResults: true to match frontend behavior — frontend combine-text
-  // expands __listResults from fan-out nodes into individual text parts before joining
   const texts = collectUpstreamTexts(node.id, edges, allNodes, nodeStates, true)
   // Trim each text part before combining (matches frontend logic)
   const trimmedTexts = texts.map((t) => t.trim()).filter((t) => t.length > 0)
@@ -94,8 +77,7 @@ export function executeCombineText(
 
 /**
  * Execute split-text node: splits text by delimiter.
- * Matches frontend defaults: delimiter defaults to "===NEXT===",
- * trimWhitespace and removeEmpty flags are respected.
+ * Default delimiter is "newline"; trimWhitespace and removeEmpty flags are respected.
  */
 export function executeSplitText(
   node: SimpleNode,
@@ -107,13 +89,15 @@ export function executeSplitText(
   const upstreamTexts = collectUpstreamTexts(node.id, edges, allNodes, nodeStates, false)
   const inputText = upstreamTexts.join("")
 
-  // Fall back to resolved prompt or node data
   const text = inputText || resolvedInputs.prompt || (node.data.text as string) || ""
-  const delimiter = (node.data.separator as string) || (node.data.delimiter as string) || "===NEXT==="
+  const delimiter = resolveSeparator(
+    (node.data.separator as string | undefined) ?? (node.data.delimiter as string | undefined),
+    node.data.customSeparator as string | undefined,
+  )
   const trimWhitespace = (node.data.trimWhitespace as boolean) !== false
   const removeEmpty = (node.data.removeEmpty as boolean) !== false
 
-  let splitResults = text.split(delimiter)
+  let splitResults = delimiter ? text.split(delimiter) : [text]
 
   if (trimWhitespace) {
     splitResults = splitResults.map((s) => s.trim())

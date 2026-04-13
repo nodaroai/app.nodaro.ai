@@ -182,6 +182,7 @@ import {
 } from "./asset-executors";
 import { buildImagePrompt } from "@nodaro-shared/prompt-builder";
 import type { CharacterDef } from "@nodaro-shared/types";
+import { resolveSeparator } from "@nodaro-shared/text-separators";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 
 // ---------------------------------------------------------------------------
@@ -3698,15 +3699,9 @@ export function executeNode(
       updateNodeData,
     } = useWorkflowStore.getState();
     const combineData = node.data as CombineTextNodeData;
-
-    const separatorMap: Record<string, string> = {
-      newline: "\n",
-      "double-newline": "\n\n",
-      comma: ", ",
-      space: " ",
-      custom: combineData.customSeparator ?? "",
-    };
-    const sep = separatorMap[combineData.separator] ?? "\n";
+    const sep = resolveSeparator(combineData.separator, combineData.customSeparator, {
+      combineSpacing: true,
+    });
 
     const incomingEdges = currentEdges.filter((e) => e.target === node.id);
     const textParts: string[] = [];
@@ -3756,7 +3751,7 @@ export function executeNode(
       updateNodeData,
     } = useWorkflowStore.getState();
     const splitData = node.data as SplitTextData;
-    const separator = splitData.separator || "===NEXT===";
+    const separator = resolveSeparator(splitData.separator, splitData.customSeparator);
 
     const incomingEdges = currentEdges.filter((e) => e.target === node.id);
     let inputText = "";
@@ -3781,7 +3776,7 @@ export function executeNode(
       return Promise.resolve("");
     }
 
-    let parts = inputText.split(separator);
+    let parts = separator ? inputText.split(separator) : [inputText];
 
     if (splitData.trimWhitespace !== false) {
       parts = parts.map((p) => p.trim());
