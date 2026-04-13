@@ -30,6 +30,65 @@ function resolveTeleportOrigin(node: WorkflowNode, nodes: WorkflowNode[], edges:
   return current
 }
 
+type EdgeLike = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: unknown };
+type NodeLike = { id: string; type?: string; data: Record<string, unknown> };
+type SplitColumns = ReadonlyArray<{ id: string; handleId: string; type?: string; splitDelimiter?: string }> | undefined;
+
+/**
+ * Resolve values flowing through `edge` for a loop/list table UI cell. Honors
+ * the edge's outputMode AND selector (range/list). Returns a single-item array
+ * for item/last modes, a filtered list for each/all, or a delimiter split when
+ * upstream is a single text. Used by loop-node and table config panels so they
+ * stay in sync with runtime resolution.
+ */
+export function resolveEdgeValuesForTableColumn(
+  edge: EdgeLike,
+  upstream: NodeLike,
+  edges: ReadonlyArray<EdgeLike>,
+  nodes: ReadonlyArray<NodeLike>,
+  columns: SplitColumns,
+): string[] | null {
+  const ed = edge.data as Record<string, unknown> | undefined;
+  const selector = ed as SelectorFields | undefined;
+  const outputMode = (ed?.outputMode as string | undefined) ?? "each";
+  const useAll = !!ed?.useAllResults;
+  const runsExpr = ed?.runsExpression as string | undefined;
+
+  const allOutputs = (upstream.type === "loop" || upstream.type === "list")
+    ? resolveLoopColumnValues(upstream, edge.sourceHandle ?? undefined, edges, nodes)
+    : (extractNodeOutputAsList(upstream as WorkflowNode, useAll, runsExpr) ?? []);
+
+  if (outputMode === "item") {
+    const itemIndex = ed?.itemIndex as string | undefined;
+    if (allOutputs.length > 0) {
+      const idx = resolveIndex(itemIndex ?? "1", allOutputs.length);
+      return [allOutputs[idx] ?? allOutputs[0]];
+    }
+    const single = extractNodeOutput(upstream as WorkflowNode, edge.sourceHandle ?? undefined);
+    return single ? [single] : null;
+  }
+  if (outputMode.startsWith("item:")) {
+    const idx = parseInt(outputMode.split(":")[1], 10);
+    if (allOutputs.length > 0) return [allOutputs[idx] ?? allOutputs[0]];
+    const single = extractNodeOutput(upstream as WorkflowNode, edge.sourceHandle ?? undefined);
+    return single ? [single] : null;
+  }
+  if (outputMode === "last") {
+    if (allOutputs.length > 0) return [allOutputs[allOutputs.length - 1]];
+    const single = extractNodeOutput(upstream as WorkflowNode, edge.sourceHandle ?? undefined);
+    return single ? [single] : null;
+  }
+  if (outputMode === "each" || outputMode === "all") {
+    if (allOutputs.length > 0) return selectListItems(allOutputs, selector);
+    const single = extractNodeOutput(upstream as WorkflowNode, edge.sourceHandle ?? undefined);
+    if (!single) return null;
+    return splitByLoopDelimiter(single, columns);
+  }
+  const single = extractNodeOutput(upstream as WorkflowNode, edge.sourceHandle ?? undefined);
+  if (!single) return null;
+  return splitByLoopDelimiter(single, columns);
+}
+
 /**
  * Resolve a list of values flowing through `edge` from `upstreamNode`, applying
  * the edge's selector filter. Recurses into upstream loop/list so chained
