@@ -814,19 +814,38 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                   )}
 
                   {resolvedViewMode === "gallery" && (
-                    <div
-                      className="grid gap-1.5 max-h-[400px] overflow-y-auto pr-1"
-                      style={{ gridTemplateColumns: `repeat(${galleryCols}, 1fr)` }}
-                    >
-                      {(() => { let imgIdx = 0; let cellIdx = 0; return displayRows.flatMap((row, rowIdx) =>
+                    <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${galleryCols}, 1fr)` }}>
+                      {(() => { let imgIdx = 0; return displayRows.flatMap((row, rowIdx) =>
                         columns.map((col, colIdx) => {
                           const cell = row[colIdx] ?? ""
                           if (!cell) return null
-                          const t = col.type ?? "text"
-                          const myImgIdx = t === "image-url" ? imgIdx++ : -1
-                          const myCellIdx = cellIdx++
-                          return renderCell(cell, rowIdx, col, myImgIdx, myCellIdx, "gallery")
-                        })
+                          if ((col.type ?? "text") !== "image-url") return null
+                          const idx = imgIdx++
+                          const sourceHandle = col.handleId
+                          return (
+                            <div key={`${rowIdx}-${col.id}`} className="relative group/img rounded-lg overflow-hidden">
+                              <CachedImage src={cell} alt="" className="w-full h-auto rounded-lg object-cover aspect-square" />
+                              <span className="absolute top-1 left-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 text-white text-[9px] font-medium tabular-nums opacity-0 group-hover/img:opacity-100 transition-opacity">{idx + 1}</span>
+                              <div className="nodrag nopan absolute inset-x-0 bottom-0 flex justify-center gap-1 py-1 opacity-0 group-hover/img:opacity-100 transition-opacity bg-gradient-to-t from-black/50 to-transparent">
+                                <button type="button" className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); setPreviewIndex(idx) }} title="Expand"><Expand className="w-3 h-3" /></button>
+                                <button type="button" className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = `/v1/image-proxy?url=${encodeURIComponent(cell)}&download=1`; a.download = "image.png"; a.click() }} title="Download"><Download className="w-3 h-3" /></button>
+                                <button type="button" className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "URL copied") }} title="Copy URL"><Link className="w-3 h-3" /></button>
+                              </div>
+                              <div
+                                className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-[#ff0073]/80 text-white cursor-grab active:cursor-grabbing opacity-0 group-hover/img:opacity-100 transition-opacity"
+                                title={`Drag out as item ${idx + 1}`}
+                                draggable
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData("application/nodaro-image", cell)
+                                  e.dataTransfer.setData("application/nodaro-edge-context", JSON.stringify({ sourceNodeId: id, sourceHandle, itemIndex: idx + 1 }))
+                                  e.dataTransfer.effectAllowed = "copy"
+                                }}
+                              >
+                                <ArrowUpRight className="w-3 h-3" />
+                              </div>
+                            </div>
+                          )
+                        }),
                       ) })()}
                     </div>
                   )}
