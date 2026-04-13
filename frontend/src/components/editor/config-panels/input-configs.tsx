@@ -328,6 +328,7 @@ const DELIMITER_PRESETS = [
   { label: "Pipe", value: "|" },
   { label: "Semicolon", value: ";" },
   { label: "Newline", value: "\n" },
+  { label: "Three Stars", value: "***" },
 ] as const
 
 const DELIMITER_OPTIONS = [
@@ -336,6 +337,7 @@ const DELIMITER_OPTIONS = [
   { label: "Pipe", value: "|" },
   { label: "Semicolon", value: ";" },
   { label: "Newline", value: "\n" },
+  { label: "Three Stars (***)", value: "***" },
   { label: "Custom", value: "__custom__" },
 ] as const
 
@@ -354,20 +356,25 @@ function DelimiterSelect({
   const isPreset = DELIMITER_PRESETS.some((p) => p.value === current)
   const isCustom = !!current && !isPreset
   const [customValue, setCustomValue] = useState(isCustom ? current : "")
+  // Track "user is editing custom" separately from "delimiter has a custom value",
+  // so the custom input renders immediately when the user picks Custom, before they type.
+  const [customMode, setCustomMode] = useState(isCustom)
 
-  const selectValue = !current
-    ? "__none__"
-    : isCustom
-      ? "__custom__"
+  const selectValue = customMode
+    ? "__custom__"
+    : !current
+      ? "__none__"
       : current
 
   function handleChange(value: string) {
     if (value === "__none__") {
+      setCustomMode(false)
       onDelimiterChange(colIndex, undefined)
     } else if (value === "__custom__") {
+      setCustomMode(true)
       if (customValue) onDelimiterChange(colIndex, customValue)
-      else onDelimiterChange(colIndex, undefined)
     } else {
+      setCustomMode(false)
       onDelimiterChange(colIndex, value)
     }
   }
