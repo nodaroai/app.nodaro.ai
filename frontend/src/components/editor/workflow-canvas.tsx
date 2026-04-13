@@ -1258,7 +1258,13 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   }, [setCenter])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes("application/nodaro-image")) {
+    const types = e.dataTransfer.types
+    if (
+      types.includes("application/nodaro-image") ||
+      types.includes("application/nodaro-video") ||
+      types.includes("application/nodaro-audio") ||
+      types.includes("application/nodaro-text")
+    ) {
       e.preventDefault()
       e.dataTransfer.dropEffect = "copy"
     }
@@ -1267,12 +1273,15 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       const imageUrl = e.dataTransfer.getData("application/nodaro-image")
-      if (!imageUrl) return
+      const videoUrl = e.dataTransfer.getData("application/nodaro-video")
+      const audioUrl = e.dataTransfer.getData("application/nodaro-audio")
+      const textVal  = e.dataTransfer.getData("application/nodaro-text")
+      if (!imageUrl && !videoUrl && !audioUrl && !textVal) return
       e.preventDefault()
 
       const edgeCtxStr = e.dataTransfer.getData("application/nodaro-edge-context")
       if (edgeCtxStr) {
-        // Dragged from table node — open node picker + auto-connect with item:N
+        // Dragged from a list/table cell — open node picker + auto-connect with item:N
         try {
           const { sourceNodeId, sourceHandle, itemIndex } = JSON.parse(edgeCtxStr)
           pendingEdgeDataRef.current = { outputMode: "item", itemIndex: String(itemIndex) }
@@ -1288,18 +1297,22 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Plain image drag (from character/object/location pages) — create generate-image node
-      const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-      addNode("generate-image", position, {
-        generatedResults: [{
-          url: imageUrl,
-          timestamp: new Date().toISOString(),
-          jobId: `imported-${Date.now()}`,
-        }],
-        activeResultIndex: 0,
-        executionStatus: "completed",
-        generatedImageUrl: imageUrl,
-      })
+      // Plain image drag (from character/object/location pages) — create generate-image node.
+      // Only image keeps this fallback; video/audio/text drags only originate from list/table cells
+      // (which always set edge-context) so they have no plain-drag path.
+      if (imageUrl) {
+        const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
+        addNode("generate-image", position, {
+          generatedResults: [{
+            url: imageUrl,
+            timestamp: new Date().toISOString(),
+            jobId: `imported-${Date.now()}`,
+          }],
+          activeResultIndex: 0,
+          executionStatus: "completed",
+          generatedImageUrl: imageUrl,
+        })
+      }
     },
     [screenToFlowPosition, addNode],
   )
