@@ -40,6 +40,7 @@ import type { DownloadProgressEvent } from "@/lib/api"
 import {
   LOOP_COLUMN_TYPE_META,
   loopColInputHandle,
+  resolveViewMode,
   type TextPromptData,
   type ListNodeData,
   type LoopNodeData,
@@ -825,7 +826,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
             />
           </div>
           <div className="flex items-center gap-2 mt-2">
-            <label className="text-xs text-muted-foreground">Gallery items per row</label>
+            <label className="text-xs text-muted-foreground">Items per row</label>
             <input
               type="number"
               min={1}
@@ -834,6 +835,18 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
               onChange={(e) => onUpdate({ galleryCols: Math.max(1, Math.min(6, parseInt(e.target.value, 10) || 3)) })}
               className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
             />
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <label className="text-xs text-muted-foreground">View mode</label>
+            <select
+              value={resolveViewMode(data)}
+              onChange={(e) => onUpdate({ viewMode: e.target.value as "list" | "gallery" | "packed" })}
+              className="bg-background border border-border rounded px-2 py-1 text-xs"
+            >
+              <option value="list">List (rows)</option>
+              <option value="gallery">Gallery (grid)</option>
+              <option value="packed">Packed (fit all)</option>
+            </select>
           </div>
         </>
       )}
