@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react"
 import { createPortal } from "react-dom"
-import { Puzzle, Search, X, Loader2, ImageIcon, Video, AudioLines, FileText, Star, Coins, ExternalLink, Pencil, ToggleLeft, ToggleRight } from "lucide-react"
+import { Puzzle, Search, X, Loader2, FileText, Star, Coins, ExternalLink, Pencil, ToggleLeft, ToggleRight } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -19,8 +19,9 @@ import { getMyApps, updateApp, deactivateApp, getMonetizationDefaults } from "@/
 import type { AppBrowseCard, PublishedApp } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { calculateMonetizedCost } from "@nodaro-shared/monetization"
-import { OUTPUT_TYPE_COLORS, APP_CATEGORIES, OUTPUT_TYPES } from "@/lib/app-categories"
+import { OUTPUT_TYPE_COLORS, APP_CATEGORIES, OUTPUT_TYPES, OUTPUT_TYPE_ICON } from "@/lib/app-categories"
 import { AppMarketplaceCard, AppMarketplaceCardSkeleton } from "@/components/apps/app-marketplace-card"
+import { ComponentPreviewModal } from "./component-preview-modal"
 import {
   useAppBrowseInfinite,
   useAppFavorites,
@@ -147,13 +148,6 @@ const OUTPUT_TYPE_FILTERS: { key: string | undefined; label: string }[] = [
   { key: "text", label: "Text" },
 ]
 
-const OUTPUT_TYPE_ICON: Record<string, React.ReactNode> = {
-  image: <ImageIcon className="w-3 h-3" />,
-  video: <Video className="w-3 h-3" />,
-  audio: <AudioLines className="w-3 h-3" />,
-  text: <FileText className="w-3 h-3" />,
-}
-
 // ---------------------------------------------------------------------------
 // Compact list item (popup variant)
 // ---------------------------------------------------------------------------
@@ -193,7 +187,7 @@ function ComponentListItem({
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-[#1E293B] dark:text-white truncate">{card.name}</div>
-        <div className="text-[10px] text-[#94A3B8] truncate">{card.creatorDisplayName || "Community"}</div>
+        <div className="text-[10px] text-[#94A3B8] truncate">{card.description || card.creatorDisplayName || "Community"}</div>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
         {outputTypes.slice(0, 2).map((t) => (
@@ -222,6 +216,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
   const [sortBy, setSortBy] = useState<SortValue>("popular")
   const [outputTypeFilter, setOutputTypeFilter] = useState<string | undefined>(undefined)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
+  const [previewCard, setPreviewCard] = useState<AppBrowseCard | null>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const popupRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -236,13 +231,13 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
   }, [open])
 
   useEffect(() => {
-    if (!open) return
+    if (!open || previewCard) return
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onOpenChange(false)
     }
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [open, onOpenChange])
+  }, [open, previewCard, onOpenChange])
 
   // Click outside (popup variant only)
   useEffect(() => {
@@ -411,6 +406,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
       setDebouncedSearch("")
       setSortBy("popular")
       setOutputTypeFilter(undefined)
+      setPreviewCard(null)
     }
   }, [open])
 
@@ -636,6 +632,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                   app={card}
                   isFavorited={favSet.has(card.id)}
                   onToggleFavorite={handleToggleFavorite}
+                  onPreview={setPreviewCard}
                   onSelect={onCardSelect}
                 />
               ))}
@@ -652,6 +649,14 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
             <div ref={sentinelRef} className="h-1" />
           )}
         </div>
+
+        <ComponentPreviewModal
+          card={previewCard}
+          isFavorited={previewCard ? favSet.has(previewCard.id) : false}
+          onToggleFavorite={handleToggleFavorite}
+          onAdd={(card) => onCardSelect(card)}
+          onClose={() => setPreviewCard(null)}
+        />
       </div>,
       document.body,
     )
