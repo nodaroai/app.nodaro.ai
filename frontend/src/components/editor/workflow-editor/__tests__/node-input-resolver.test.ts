@@ -544,6 +544,82 @@ describe("resolveLoopColumnValues — upstream edge filter applies", () => {
     expect(values).toEqual(["u1", "u2", "u3"])
   })
 
+  it("chained filters compose via legacy 'in' handle: source → list₁(all 3..6) → list₂(all 1..2)", () => {
+    const imgNode = makeNode("img1", "generate-image", {
+      generatedResults: Array.from({ length: 12 }, (_, i) => ({ url: `u${i + 1}` })),
+    })
+    const list1 = makeNode("list1", "list", { items: "" })
+    const list2 = makeNode("list2", "list", { items: "" })
+    const edges = [
+      {
+        id: "img1->list1",
+        source: "img1",
+        target: "list1",
+        sourceHandle: null,
+        targetHandle: "in",
+        data: { outputMode: "all", useAllResults: true, rangeFrom: "3", rangeTo: "6" },
+      },
+      {
+        id: "list1->list2",
+        source: "list1",
+        target: "list2",
+        sourceHandle: "list",
+        targetHandle: "in",
+        data: { outputMode: "all", rangeFrom: "1", rangeTo: "2" },
+      },
+    ]
+
+    const values = resolveLoopColumnValues(
+      { id: "list2", data: list2.data },
+      undefined,
+      edges as any,
+      [imgNode, list1, list2] as any,
+    )
+
+    expect(values).toEqual(["u3", "u4"])
+  })
+
+  it("chained filters compose: source → list₁(all 3..6) → list₂(all 1..2) yields 2 items", () => {
+    const imgNode = makeNode("img1", "generate-image", {
+      generatedResults: Array.from({ length: 12 }, (_, i) => ({ url: `u${i + 1}` })),
+    })
+    const list1 = makeNode("list1", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "image-url" }],
+      rows: [],
+    })
+    const list2 = makeNode("list2", "list", {
+      columns: [{ id: "c2", handleId: "col_c2", type: "image-url" }],
+      rows: [],
+    })
+    const edges = [
+      {
+        id: "img1->list1",
+        source: "img1",
+        target: "list1",
+        sourceHandle: null,
+        targetHandle: "col_c1_in",
+        data: { outputMode: "all", useAllResults: true, rangeFrom: "3", rangeTo: "6" },
+      },
+      {
+        id: "list1->list2",
+        source: "list1",
+        target: "list2",
+        sourceHandle: "col_c1",
+        targetHandle: "col_c2_in",
+        data: { outputMode: "all", rangeFrom: "1", rangeTo: "2" },
+      },
+    ]
+
+    const values = resolveLoopColumnValues(
+      { id: "list2", data: list2.data },
+      "col_c2",
+      edges as any,
+      [imgNode, list1, list2] as any,
+    )
+
+    expect(values).toEqual(["u3", "u4"])
+  })
+
   it("list-expression filter on upstream edge limits items flowing into loop column", () => {
     const imgNode = makeNode("img1", "generate-image", {
       generatedResults: [
