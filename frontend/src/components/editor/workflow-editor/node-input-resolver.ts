@@ -30,6 +30,48 @@ function resolveTeleportOrigin(node: WorkflowNode, nodes: WorkflowNode[], edges:
   return current
 }
 
+/**
+ * Resolve a list of values flowing through `edge` from `upstreamNode`, applying
+ * the edge's selector filter. Recurses into upstream loop/list so chained
+ * filters compose. Falls back to delimiter-split when upstream has no list.
+ */
+function resolveUpstreamWithEdgeFilter(
+  upstreamNode: WorkflowNode,
+  edge: { sourceHandle?: string | null; data?: unknown },
+  edges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: unknown }>,
+  nodes: ReadonlyArray<{ id: string; type?: string; data: Record<string, unknown> }>,
+  splitColumns: ReadonlyArray<{ id: string; handleId: string; type?: string; splitDelimiter?: string }> | undefined,
+): string[] | undefined {
+  const edgeData = edge.data as Record<string, unknown> | undefined;
+  const selector = edgeData as SelectorFields | undefined;
+
+  let upstreamVals: string[] | undefined;
+  if (upstreamNode.type === "loop" || upstreamNode.type === "list") {
+    upstreamVals = resolveLoopColumnValues(
+      { id: upstreamNode.id, data: upstreamNode.data as Record<string, unknown> },
+      edge.sourceHandle ?? undefined,
+      edges,
+      nodes,
+    );
+  } else {
+    const useAll = !!edgeData?.useAllResults;
+    const runsExpr = edgeData?.runsExpression as string | undefined;
+    const raw = extractNodeOutputAsList(upstreamNode, useAll, runsExpr);
+    if (raw && raw.length > 1) upstreamVals = raw;
+  }
+
+  if (upstreamVals && upstreamVals.length > 0) {
+    const filtered = selectListItems(upstreamVals, selector);
+    if (filtered.length > 0) return filtered.map((v) => v.trim());
+  }
+
+  const upstreamOutput = extractNodeOutput(upstreamNode, edge.sourceHandle ?? undefined);
+  if (upstreamOutput) {
+    return splitByLoopDelimiter(upstreamOutput, splitColumns).map((v) => v.trim());
+  }
+  return undefined;
+}
+
 /** Resolve raw values for a loop column: per-column connected edge -> legacy "in" edge -> manual rows. */
 export function resolveLoopColumnValues(
   loopNode: { id: string; data: Record<string, unknown> },
@@ -51,31 +93,14 @@ export function resolveLoopColumnValues(
     if (colInEdge) {
       const upstreamNode = nodes.find((n) => n.id === colInEdge.source);
       if (upstreamNode) {
-        // Upstream is also a loop — recursively resolve its column values
-        if (upstreamNode.type === "loop" || upstreamNode.type === "list") {
-          const upstreamVals = resolveLoopColumnValues(
-            { id: upstreamNode.id, data: upstreamNode.data as Record<string, unknown> },
-            colInEdge.sourceHandle ?? undefined,
-            edges,
-            nodes,
-          );
-          if (upstreamVals.length > 0) return upstreamVals;
-        }
-        const edgeData = colInEdge.data as Record<string, unknown> | undefined;
-        const useAll = !!edgeData?.useAllResults;
-        const runsExpr = edgeData?.runsExpression as string | undefined;
-        const rawOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll, runsExpr);
-        if (rawOutputs && rawOutputs.length > 1) {
-          const filtered = selectListItems(rawOutputs, edgeData as SelectorFields | undefined);
-          if (filtered.length > 0) return filtered.map((v) => v.trim());
-        }
-        const upstreamOutput = extractNodeOutput(
+        const result = resolveUpstreamWithEdgeFilter(
           upstreamNode as WorkflowNode,
-          colInEdge.sourceHandle ?? undefined,
+          colInEdge,
+          edges,
+          nodes,
+          loopData.columns,
         );
-        if (upstreamOutput) {
-          return splitByLoopDelimiter(upstreamOutput, loopData.columns).map((v) => v.trim());
-        }
+        if (result) return result;
       }
     }
   }
@@ -87,18 +112,14 @@ export function resolveLoopColumnValues(
   if (loopInEdges.length > 0) {
     const upstreamNode = nodes.find((n) => n.id === loopInEdges[0].source);
     if (upstreamNode) {
-      const edgeData = loopInEdges[0].data as Record<string, unknown> | undefined;
-      const useAll = !!edgeData?.useAllResults;
-      const runsExpr = edgeData?.runsExpression as string | undefined;
-      const rawOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll, runsExpr);
-      if (rawOutputs && rawOutputs.length > 1) {
-        const filtered = selectListItems(rawOutputs, edgeData as SelectorFields | undefined);
-        if (filtered.length > 0) return filtered.map((v) => v.trim());
-      }
-      const upstreamOutput = extractNodeOutput(upstreamNode as WorkflowNode);
-      if (upstreamOutput) {
-        return splitByLoopDelimiter(upstreamOutput, loopData.columns).map((v) => v.trim());
-      }
+      const result = resolveUpstreamWithEdgeFilter(
+        upstreamNode as WorkflowNode,
+        loopInEdges[0],
+        edges,
+        nodes,
+        loopData.columns,
+      );
+      if (result) return result;
     }
   }
 
