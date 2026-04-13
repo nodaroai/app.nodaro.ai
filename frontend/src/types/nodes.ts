@@ -2031,7 +2031,7 @@ export type AIWriterNodeData = {
 export type CombineTextNodeData = {
   [key: string]: unknown
   label: string
-  separator: "newline" | "comma" | "space" | "double-newline" | "custom"
+  separator: "newline" | "comma" | "space" | "double-newline" | "stars" | "custom"
   customSeparator: string
   combinedText: string
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -2063,7 +2063,9 @@ export type PreviewNodeData = {
 export type SplitTextData = {
   [key: string]: unknown
   label: string
+  /** Enum preset ("newline" | "double-newline" | "comma" | "space" | "stars" | "custom") or a literal delimiter string for back-compat with older saved workflows. */
   separator: string
+  customSeparator?: string
   trimWhitespace: boolean
   removeEmpty: boolean
   splitResults?: string[]
@@ -3969,7 +3971,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     outputs: ["out"],
     defaultData: {
       label: "Split Text",
-      separator: "===NEXT===",
+      separator: "newline",
+      customSeparator: "",
       trimWhitespace: true,
       removeEmpty: true,
     } as SplitTextData,

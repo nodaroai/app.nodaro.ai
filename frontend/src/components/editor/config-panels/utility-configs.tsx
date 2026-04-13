@@ -37,8 +37,11 @@ const SEPARATOR_OPTIONS = [
   { value: "double-newline", label: "Double New Line (\\n\\n)" },
   { value: "comma", label: "Comma (,)" },
   { value: "space", label: "Space" },
+  { value: "stars", label: "Three Stars (***)" },
   { value: "custom", label: "Custom" },
 ] as const
+
+const SEPARATOR_PRESET_VALUES: readonly string[] = SEPARATOR_OPTIONS.map((o) => o.value)
 
 export function CombineTextConfig({ data, onUpdate }: { data: CombineTextNodeData; onUpdate: (patch: Partial<CombineTextNodeData>) => void }) {
   return (
@@ -195,15 +198,48 @@ export function WebhookOutputConfig({ data, onUpdate }: ConfigProps<WebhookOutpu
 }
 
 export function SplitTextConfig({ data, onUpdate }: { data: SplitTextData; onUpdate: (patch: Partial<SplitTextData>) => void }) {
+  // Legacy workflows may store a literal separator string (e.g. "===NEXT===") in `separator`.
+  // Surface those as "custom" in the dropdown and pre-fill the custom field.
+  const isPreset = SEPARATOR_PRESET_VALUES.includes(data.separator)
+  const selectValue = isPreset ? data.separator : "custom"
+  const customValue = isPreset ? (data.customSeparator ?? "") : data.separator
+
   return (
     <div className="flex flex-col gap-3">
       <div>
         <Label>Separator</Label>
-        <Input value={data.separator} onChange={(e) => onUpdate({ separator: e.target.value })} placeholder="Enter separator (e.g. * or ===NEXT===)" />
+        <Select
+          value={selectValue}
+          onValueChange={(v) => {
+            if (v === "custom") {
+              onUpdate({ separator: "custom", customSeparator: customValue })
+            } else {
+              onUpdate({ separator: v })
+            }
+          }}
+        >
+          <SelectTrigger aria-label="Separator"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {SEPARATOR_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <p className="text-[10px] text-muted-foreground mt-1">
           The delimiter used to split the input text into items
         </p>
       </div>
+
+      {selectValue === "custom" && (
+        <div>
+          <Label>Custom Separator</Label>
+          <Input
+            value={customValue}
+            onChange={(e) => onUpdate({ separator: "custom", customSeparator: e.target.value })}
+            placeholder="Enter separator (e.g. ===NEXT===)"
+          />
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <Label>Trim whitespace</Label>

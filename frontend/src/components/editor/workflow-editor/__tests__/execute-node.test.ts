@@ -988,19 +988,19 @@ describe("combine-text", () => {
 // ---------------------------------------------------------------------------
 
 describe("split-text", () => {
-  it("sets splitResults and __listResults", async () => {
+  it("sets splitResults and __listResults (legacy ===NEXT=== literal)", async () => {
     const sourceNode = {
       id: "src1",
       type: "ai-writer",
       data: { label: "W" },
     }
-    mockNodes = [makeNode("split-text", {}), sourceNode]
+    mockNodes = [makeNode("split-text", { separator: "===NEXT===" }), sourceNode]
     mockEdges = [{ id: "e1", source: "src1", target: "n1" }]
     mockResolveNodeInputs.mockReturnValue({})
     mockExtractNodeOutput.mockReturnValue(
       "part one===NEXT===part two===NEXT===part three",
     )
-    await executeNode(makeNode("split-text", {}), makeCtx())
+    await executeNode(makeNode("split-text", { separator: "===NEXT===" }), makeCtx())
     expect(mockUpdateNodeData).toHaveBeenCalledWith(
       "n1",
       expect.objectContaining({
@@ -1008,6 +1008,64 @@ describe("split-text", () => {
         __listResults: ["part one", "part two", "part three"],
         __listTotal: 3,
         executionStatus: "completed",
+      }),
+    )
+  })
+
+  it("splits by newline preset (default)", async () => {
+    const sourceNode = {
+      id: "src1",
+      type: "ai-writer",
+      data: { label: "W" },
+    }
+    mockNodes = [makeNode("split-text", { separator: "newline" }), sourceNode]
+    mockEdges = [{ id: "e1", source: "src1", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockExtractNodeOutput.mockReturnValue("line1\nline2\nline3")
+    await executeNode(makeNode("split-text", { separator: "newline" }), makeCtx())
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({
+        splitResults: ["line1", "line2", "line3"],
+        __listTotal: 3,
+        executionStatus: "completed",
+      }),
+    )
+  })
+
+  it("splits by stars preset", async () => {
+    const sourceNode = { id: "src1", type: "ai-writer", data: { label: "W" } }
+    mockNodes = [makeNode("split-text", { separator: "stars" }), sourceNode]
+    mockEdges = [{ id: "e1", source: "src1", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockExtractNodeOutput.mockReturnValue("a***b***c")
+    await executeNode(makeNode("split-text", { separator: "stars" }), makeCtx())
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({
+        splitResults: ["a", "b", "c"],
+        __listTotal: 3,
+      }),
+    )
+  })
+
+  it("splits by custom delimiter via customSeparator field", async () => {
+    const sourceNode = { id: "src1", type: "ai-writer", data: { label: "W" } }
+    mockNodes = [
+      makeNode("split-text", { separator: "custom", customSeparator: "###" }),
+      sourceNode,
+    ]
+    mockEdges = [{ id: "e1", source: "src1", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockExtractNodeOutput.mockReturnValue("a###b###c")
+    await executeNode(
+      makeNode("split-text", { separator: "custom", customSeparator: "###" }),
+      makeCtx(),
+    )
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({
+        splitResults: ["a", "b", "c"],
       }),
     )
   })
@@ -1032,13 +1090,13 @@ describe("split-text", () => {
       type: "ai-writer",
       data: { label: "W" },
     }
-    mockNodes = [makeNode("split-text", {}), sourceNode]
+    mockNodes = [makeNode("split-text", { separator: "===NEXT===" }), sourceNode]
     mockEdges = [{ id: "e1", source: "src1", target: "n1" }]
     mockResolveNodeInputs.mockReturnValue({})
     mockExtractNodeOutput.mockReturnValue(
       "  part one  ===NEXT===   ===NEXT===  part two  ",
     )
-    await executeNode(makeNode("split-text", {}), makeCtx())
+    await executeNode(makeNode("split-text", { separator: "===NEXT===" }), makeCtx())
     expect(mockUpdateNodeData).toHaveBeenCalledWith(
       "n1",
       expect.objectContaining({

@@ -97,3 +97,11 @@ export type { ExposableField, ExposableOutput, PresentationItem } from "./presen
 export { calculateMonetizationMarkup, calculateMonetizedCost } from "./monetization.js"
 
 export { splitByLoopDelimiter, spliceDelimitedRows } from "./loop-delimiter.js"
+
+export {
+  SEPARATOR_PRESETS,
+  SEPARATOR_DISPLAY,
+  resolveSeparator,
+  type SeparatorPreset,
+  type ResolveSeparatorOptions,
+} from "./text-separators.js"
