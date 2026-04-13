@@ -175,10 +175,9 @@ function getEdgeRangeLabel(edge: WorkflowEdge): string | undefined {
     itemIndex,
     d.selectorMode as SelectorMode | undefined,
     d.listExpression as string | undefined,
+    useAllResults,
+    d.runsExpression as string | undefined,
   )
-  if (useAllResults) {
-    return rangeLabel ? `all runs ${rangeLabel}` : "all runs"
-  }
   return rangeLabel
 }
 

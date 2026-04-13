@@ -12,7 +12,7 @@ import type {
 } from "@/types/nodes";
 import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
-import { resolveIndex, selectListItems, type SelectorMode } from "@nodaro-shared/edge-range";
+import { resolveIndex, selectListItems, parseListExpression, resolveListExpression, type SelectorMode } from "@nodaro-shared/edge-range";
 import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
 
 /** Subset of edge data used by selectListItems. Casts in this file target this shape. */
@@ -72,7 +72,8 @@ export function resolveLoopColumnValues(
         }
         const edgeData = colInEdge.data as Record<string, unknown> | undefined;
         const useAll = !!edgeData?.useAllResults;
-        const allOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll);
+        const runsExpr = edgeData?.runsExpression as string | undefined;
+        const allOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll, runsExpr);
         if (allOutputs && allOutputs.length > 1) return allOutputs.map((v) => v.trim());
         const upstreamOutput = extractNodeOutput(
           upstreamNode as WorkflowNode,
@@ -94,7 +95,8 @@ export function resolveLoopColumnValues(
     if (upstreamNode) {
       const edgeData = loopInEdges[0].data as Record<string, unknown> | undefined;
       const useAll = !!edgeData?.useAllResults;
-      const allOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll);
+      const runsExpr = edgeData?.runsExpression as string | undefined;
+      const allOutputs = extractNodeOutputAsList(upstreamNode as WorkflowNode, useAll, runsExpr);
       if (allOutputs && allOutputs.length > 1) return allOutputs.map((v) => v.trim());
       const upstreamOutput = extractNodeOutput(upstreamNode as WorkflowNode);
       if (upstreamOutput) {
@@ -215,6 +217,7 @@ const SUNO_TRACK_NODE_TYPES = new Set([
 export function extractNodeOutputAsList(
   node: WorkflowNode,
   useAllResults = false,
+  runsExpression?: string,
 ): string[] | undefined {
   const data = node.data as Record<string, unknown>;
   if (node.type === "split-text") {
@@ -237,7 +240,7 @@ export function extractNodeOutputAsList(
   if (useAllResults) {
     // Prefer generatedResults (full history), fall back to __listResults
     const allResults = extractAllGeneratedResults(data, true);
-    if (allResults) return allResults;
+    if (allResults) return applyRunsFilter(allResults, runsExpression);
   }
   const listResults = data.__listResults as string[] | undefined;
   if (listResults && listResults.length > 0) return listResults;
@@ -246,6 +249,22 @@ export function extractNodeOutputAsList(
   if (allResults) return allResults;
   const single = extractNodeOutput(node);
   return single ? [single] : undefined;
+}
+
+/**
+ * Filter accumulated runs by a list expression (e.g. "1, 3, last", "1..5").
+ * Empty/missing/malformed expression returns the input unchanged.
+ * Used only on the useAllResults path — narrows generatedResults to specific run indices.
+ */
+function applyRunsFilter(
+  list: string[],
+  runsExpression: string | undefined,
+): string[] {
+  const expr = runsExpression?.trim();
+  if (!expr) return list;
+  if (!parseListExpression(expr).ok) return list;
+  const indices = resolveListExpression(expr, list.length);
+  return indices.map((i) => list[i]).filter((v): v is string => typeof v === "string");
 }
 
 /**
@@ -329,8 +348,10 @@ export function getListInputForNode(
     const outputMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type ?? "") ? "each" : "last");
     if (outputMode !== "each") continue;
 
-    const edgeUseAll = !!(edge.data as Record<string, unknown> | undefined)?.useAllResults;
-    const listOutput = extractNodeOutputAsList(sourceNode, edgeUseAll);
+    const edgeData = edge.data as Record<string, unknown> | undefined;
+    const edgeUseAll = !!edgeData?.useAllResults;
+    const edgeRunsExpr = edgeData?.runsExpression as string | undefined;
+    const listOutput = extractNodeOutputAsList(sourceNode, edgeUseAll, edgeRunsExpr);
     if (listOutput && listOutput.length > 1) {
       if (listOutput.length > maxLen) { maxLen = listOutput.length; longestItems = listOutput; }
     }
@@ -454,11 +475,17 @@ export function resolveNodeInputs(
       ?.outputMode as string | undefined;
     const edgeUseAll = (srcEdge.data as Record<string, unknown> | undefined)
       ?.useAllResults as boolean | undefined;
+    const edgeRunsExpr = (srcEdge.data as Record<string, unknown> | undefined)
+      ?.runsExpression as string | undefined;
     const srcData = src.data as Record<string, unknown>;
     // split-media uses outputChunkIndex routing, skip __listResults
-    const srcListResults = src.type === "split-media" ? undefined : (edgeUseAll
+    const rawListResults = src.type === "split-media" ? undefined : (edgeUseAll
       ? (extractAllGeneratedResults(srcData, true) ?? (srcData.__listResults as string[] | undefined))
       : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData)));
+    // Apply runsExpression filter only on the useAllResults path
+    const srcListResults = edgeUseAll && rawListResults
+      ? applyRunsFilter(rawListResults, edgeRunsExpr)
+      : rawListResults;
     let output: string | undefined;
     if (edgeMode && srcListResults && srcListResults.length > 0) {
       if (edgeMode === "item") {

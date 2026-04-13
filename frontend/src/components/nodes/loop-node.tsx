@@ -221,6 +221,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
       // Table columns exist to collect items — default to "each" (show all results)
       const outputMode = edgeMode ?? "each"
       const useAll = !!ed?.useAllResults
+      const runsExpr = ed?.runsExpression as string | undefined
 
       // Resolve all outputs — loop nodes need special handling
       const allOutputs = (upstream.type === "loop" || upstream.type === "list")
@@ -230,7 +231,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             edges as Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
             nodes as Array<{ id: string; type?: string; data: Record<string, unknown> }>,
           )
-        : (extractNodeOutputAsList(upstream, useAll) ?? [])
+        : (extractNodeOutputAsList(upstream, useAll, runsExpr) ?? [])
 
       // item mode — single item by index
       if (outputMode === "item") {
