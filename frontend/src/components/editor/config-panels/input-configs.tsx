@@ -449,6 +449,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
       // Table columns exist to collect items — default to "each" (show all results)
       const outputMode = edgeMode ?? "each"
       const useAll = !!ed?.useAllResults
+      const runsExpr = ed?.runsExpression as string | undefined
 
       // Resolve all outputs — loop nodes need special handling
       const allOutputs = (upstream.type === "loop" || upstream.type === "list")
@@ -458,7 +459,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
             edges as Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
             allNodes as Array<{ id: string; type?: string; data: Record<string, unknown> }>,
           )
-        : (extractNodeOutputAsList(upstream, useAll) ?? [])
+        : (extractNodeOutputAsList(upstream, useAll, runsExpr) ?? [])
 
       if (outputMode === "item") {
         const itemIndex = ed?.itemIndex as string | undefined

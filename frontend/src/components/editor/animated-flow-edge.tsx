@@ -23,6 +23,7 @@ type AnimatedFlowEdgeData = {
   useAllResults?: boolean   // Include all accumulated results across runs (default false)
   selectorMode?: SelectorMode  // Selector tab: "range" (default) or "list"
   listExpression?: string   // List-mode expression: comma-separated indices/ranges, e.g. "1,3,5..last-1"
+  runsExpression?: string   // Runs-filter expression (only when useAllResults true): "1, 3, last"
 }
 
 type AnimatedFlowEdgeProps = EdgeProps<Edge<AnimatedFlowEdgeData>>
@@ -112,6 +113,7 @@ function AnimatedFlowEdgeComponent({
 
   const handleSelectorModeChange = (mode: SelectorMode) => { updateEdgeData(id, { selectorMode: mode }) }
   const handleListExpressionChange = (value: string) => { updateEdgeData(id, { listExpression: value }) }
+  const handleRunsExpressionChange = (value: string) => { updateEdgeData(id, { runsExpression: value }) }
 
   // Use step routing for backward connections (target left of source)
   // to avoid edges cutting through nodes
@@ -258,8 +260,16 @@ function AnimatedFlowEdgeComponent({
                             fontFamily: "monospace",
                             fontSize: "0.75em",
                             marginLeft: 4,
+                            display: "inline-flex",
+                            flexWrap: "wrap",
+                            maxWidth: 280,
+                            gap: 2,
                           }}>
-                            {edgeData.edgeRangeLabel}
+                            {edgeData.edgeRangeLabel.split(" → ").map((part, i, arr) => (
+                              <span key={i} style={{ whiteSpace: "nowrap" }}>
+                                {part}{i < arr.length - 1 ? " →" : ""}
+                              </span>
+                            ))}
                           </span>
                         )}
                       </span>
@@ -426,6 +436,16 @@ function AnimatedFlowEdgeComponent({
                   <span style={{ color: "#64748b", fontSize: 9.5, marginLeft: 22, display: "block", marginTop: 2 }}>
                     Use all accumulated results, not just the latest batch
                   </span>
+                  {edgeData?.useAllResults && (
+                    <div style={{ marginLeft: 22, marginTop: 6 }}>
+                      <ListConfig
+                        value={edgeData?.runsExpression ?? ""}
+                        onChange={handleRunsExpressionChange}
+                        placeholder="1, 2, last (which runs to include)"
+                        containerPadding="0"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ height: 1, background: "#555" }} />
@@ -587,20 +607,24 @@ function ItemConfig({
 function ListConfig({
   value,
   onChange,
+  placeholder = "1, 2, last",
+  containerPadding = "0 14px 10px",
 }: {
   value: string
   onChange: (v: string) => void
+  placeholder?: string
+  containerPadding?: string
 }) {
   const validation = parseListExpression(value)
   const isInvalid = !validation.ok
   return (
-    <div style={{ padding: "0 14px 10px" }}>
+    <div style={{ padding: containerPadding }}>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onMouseDown={(e) => e.stopPropagation()}
-        placeholder="1, 2, last"
+        placeholder={placeholder}
         title={isInvalid ? (validation as { error: string }).error : undefined}
         style={{
           width: "100%",

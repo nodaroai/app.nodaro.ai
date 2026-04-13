@@ -2,7 +2,7 @@ import type { WorkflowNode, WorkflowEdge } from "@/types/nodes";
 import { StorageExceededError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers";
-import { applyRange } from "@nodaro-shared/edge-range";
+import { applyRange, parseListExpression, resolveListExpression } from "@nodaro-shared/edge-range";
 import { getEffectiveRepeatCount } from "@nodaro-shared/repeat-types";
 
 /** Sentinel error thrown when a polling callback detects that the active
@@ -278,15 +278,21 @@ function getBaseFanOut(
     const rangeStep = edgeData?.rangeStep as number | undefined;
     const hasRange = !!(rangeFrom || rangeTo || rangeStep != null);
 
-    // useAllResults: estimate from generatedResults count
-    const edgeUseAll = !!(edge.data as Record<string, unknown> | undefined)?.useAllResults;
+    // useAllResults: estimate from generatedResults count, narrowed by runsExpression if set
+    const edgeUseAll = !!edgeData?.useAllResults;
     if (edgeUseAll && mode === "each") {
       const srcData = sourceNode.data as Record<string, unknown>;
       const genResults = srcData.generatedResults as Array<unknown> | undefined;
-      if (genResults && genResults.length > 1) {
-        if (!hasRange) return genResults.length;
-        const strs = genResults.map((_, i) => String(i + 1));
-        return applyRange(strs, rangeFrom, rangeTo, rangeStep).length || genResults.length;
+      if (genResults && genResults.length > 0) {
+        const runsExpr = (edgeData?.runsExpression as string | undefined)?.trim();
+        const filteredCount = (runsExpr && parseListExpression(runsExpr).ok)
+          ? resolveListExpression(runsExpr, genResults.length).length
+          : genResults.length;
+        if (filteredCount > 1) {
+          if (!hasRange) return filteredCount;
+          const strs = Array.from({ length: filteredCount }, (_, i) => String(i + 1));
+          return applyRange(strs, rangeFrom, rangeTo, rangeStep).length || filteredCount;
+        }
       }
     }
 

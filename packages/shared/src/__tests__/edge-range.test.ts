@@ -823,3 +823,179 @@ describe("describeEdgeBehavior — useAllResults suffix", () => {
     ).toBe("Passes only the most recent result.")
   })
 })
+
+describe("describeEdgeBehavior — runsExpression suffix", () => {
+  it("each mode + runsExpression list → swaps to 'across runs ...'", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        useAllResults: true,
+        runsExpression: "1, 3, last",
+      }),
+    ).toBe("Runs the downstream node once per item (across runs 1, 3, and the last one).")
+  })
+
+  it("each mode + runsExpression range", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        useAllResults: true,
+        runsExpression: "1..5",
+      }),
+    ).toBe("Runs the downstream node once per item (across runs 1 through 5).")
+  })
+
+  it("each mode + runsExpression single index 'last'", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        useAllResults: true,
+        runsExpression: "last",
+      }),
+    ).toBe("Runs the downstream node once per item (across runs the last one).")
+  })
+
+  it("item mode + runsExpression", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "item",
+        itemIndex: "last",
+        useAllResults: true,
+        runsExpression: "1, 3, last",
+      }),
+    ).toBe("Passes only the last item (across runs 1, 3, and the last one).")
+  })
+
+  it("each mode + list selector + runsExpression both active", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        selectorMode: "list",
+        listExpression: "2, 3",
+        useAllResults: true,
+        runsExpression: "1, last",
+      }),
+    ).toBe("Fans out over items 2 and 3 (across runs 1 and the last one).")
+  })
+
+  it("malformed runsExpression falls back to 'all accumulated results'", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        useAllResults: true,
+        runsExpression: "abc",
+      }),
+    ).toBe("Runs the downstream node once per item (across all accumulated results).")
+  })
+
+  it("empty runsExpression with useAllResults true → 'all accumulated results'", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        useAllResults: true,
+        runsExpression: "",
+      }),
+    ).toBe("Runs the downstream node once per item (across all accumulated results).")
+  })
+
+  it("whitespace-only runsExpression → 'all accumulated results'", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        useAllResults: true,
+        runsExpression: "   ",
+      }),
+    ).toBe("Runs the downstream node once per item (across all accumulated results).")
+  })
+
+  it("last mode + runsExpression → no suffix", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "last",
+        useAllResults: true,
+        runsExpression: "1, 3",
+      }),
+    ).toBe("Passes only the most recent result.")
+  })
+
+  it("useAllResults false + runsExpression → expression ignored, no suffix", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "each",
+        useAllResults: false,
+        runsExpression: "1, 3",
+      }),
+    ).toBe("Runs the downstream node once per item.")
+  })
+
+  it("all mode + range item filter + runsExpression range", () => {
+    expect(
+      describeEdgeBehavior({
+        outputMode: "all",
+        rangeFrom: "2",
+        rangeTo: "last-1",
+        useAllResults: true,
+        runsExpression: "1..3",
+      }),
+    ).toBe("Passes items 2 through the second-to-last as a list (across runs 1 through 3).")
+  })
+})
+
+describe("buildRangeLabel — useAllResults + runsExpression", () => {
+  it("useAllResults false, no runsExpression → returns item label only (existing behavior)", () => {
+    expect(
+      buildRangeLabel("each", "1", "last", 1, undefined, undefined, undefined, false, undefined),
+    ).toBeUndefined() // default range, no label
+    expect(
+      buildRangeLabel("each", "2", "last-1", undefined, undefined, undefined, undefined, false, undefined),
+    ).toBe("2..last-1")
+  })
+
+  it("useAllResults true, empty runsExpression, no item label → 'all runs'", () => {
+    expect(
+      buildRangeLabel("each", undefined, undefined, undefined, undefined, undefined, undefined, true, undefined),
+    ).toBe("all runs")
+    expect(
+      buildRangeLabel("each", undefined, undefined, undefined, undefined, undefined, undefined, true, ""),
+    ).toBe("all runs")
+  })
+
+  it("useAllResults true, runsExpression set, no item label → 'runs: <expr>'", () => {
+    expect(
+      buildRangeLabel("each", undefined, undefined, undefined, undefined, undefined, undefined, true, "1, 3"),
+    ).toBe("runs: 1, 3")
+  })
+
+  it("useAllResults true, empty runsExpression, item label set → 'all runs → items: <label>'", () => {
+    expect(
+      buildRangeLabel("each", "2", "last", undefined, undefined, undefined, undefined, true, undefined),
+    ).toBe("all runs → items: 2..last")
+  })
+
+  it("useAllResults true, runsExpression + item label → 'runs: <expr> → items: <label>'", () => {
+    expect(
+      buildRangeLabel("each", "2", "last", undefined, undefined, undefined, undefined, true, "1, 3"),
+    ).toBe("runs: 1, 3 → items: 2..last")
+  })
+
+  it("useAllResults true with list selector item label", () => {
+    expect(
+      buildRangeLabel("each", undefined, undefined, undefined, undefined, "list", "2, 3", true, "1, last"),
+    ).toBe("runs: 1, last → items: 2, 3")
+  })
+
+  it("useAllResults true with last mode (item label is undefined) → 'all runs' or 'runs: <expr>'", () => {
+    expect(
+      buildRangeLabel("last", undefined, undefined, undefined, undefined, undefined, undefined, true, undefined),
+    ).toBe("all runs")
+    expect(
+      buildRangeLabel("last", undefined, undefined, undefined, undefined, undefined, undefined, true, "1, 3"),
+    ).toBe("runs: 1, 3")
+  })
+
+  it("useAllResults false, runsExpression set → ignored (no label change)", () => {
+    expect(
+      buildRangeLabel("each", undefined, undefined, undefined, undefined, undefined, undefined, false, "1, 3"),
+    ).toBeUndefined()
+  })
+})
