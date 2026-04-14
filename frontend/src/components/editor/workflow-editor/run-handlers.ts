@@ -546,8 +546,20 @@ export function streamBackendExecution(
       onNodeStatesChanged: (nodeStates, _meta) => {
         syncNodeStatesToStore(nodeStates);
       },
-      onCompleted: () => {
+      onCompleted: async () => {
         if (finished) return;
+        // Defensive final fetch: SSE's in-memory nodeStates can lag behind the
+        // DB snapshot (race between the last node:updated event and the
+        // execution:completed event) and leave the UI stuck showing "running"
+        // on the last node. Pull the canonical state from the DB and re-sync
+        // before cleaning up so the user doesn't have to refresh.
+        try {
+          const exec = await getWorkflowExecution(executionId);
+          const finalStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>;
+          syncNodeStatesToStore(finalStates);
+        } catch {
+          // Non-critical — SSE already applied what it had.
+        }
         cleanup();
         toast.success("Backend execution completed");
       },
