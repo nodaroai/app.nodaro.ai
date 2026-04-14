@@ -102,7 +102,7 @@ export function resolveViewMode(data: {
 }
 
 /** Default maximum text lines per text cell in loop/list nodes (configurable via textMaxLines). */
-export const TEXT_CELL_DEFAULT_MAX_LINES = 7
+export const TEXT_CELL_DEFAULT_MAX_LINES = 4
 /** Line height in px for text-xs cells (Tailwind text-xs → line-height: 1rem = 16px). */
 export const TEXT_CELL_LINE_HEIGHT_PX = 16
 /** Total vertical padding (top+bottom) of the inner cell in px (py-2 = 0.5rem × 2 = 16px). */

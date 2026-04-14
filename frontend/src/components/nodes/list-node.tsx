@@ -9,6 +9,7 @@ import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { TEXT_CELL_DEFAULT_MAX_LINES, type ListNodeData, type WorkflowNode } from "@/types/nodes"
 import { extractNodeOutputAsList, resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-editor/node-input-resolver"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 const HANDLES = [
   { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
@@ -65,13 +66,19 @@ function ListNodeComponent({ id, data, selected }: NodeProps) {
                 {itemCount} item{itemCount !== 1 ? "s" : ""}
                 {isConnected && <span className="ml-1 opacity-70">(upstream)</span>}
               </p>
-              <ul className="text-xs flex-1 min-h-0 overflow-y-scroll space-y-0.5 scroll-visible-on-hover">
-                {items.map((item, i) => (
-                  <li key={i} title={item} className="overflow-hidden" style={{ maxHeight: `${textMaxLines * 16}px`, wordBreak: "break-word" }}>
-                    <span className="text-muted-foreground">{i + 1}.</span> {item}
-                  </li>
-                ))}
-              </ul>
+              <ScrollArea className="flex-1 min-h-0">
+                <ul className="text-xs space-y-0.5 pr-2">
+                  {items.map((item, i) => (
+                    <li key={i} title={item}>
+                      <ScrollArea style={{ height: `${textMaxLines * 16}px` }}>
+                        <div style={{ wordBreak: "break-word" }} className="pr-2">
+                          <span className="text-muted-foreground">{i + 1}.</span> {item}
+                        </div>
+                      </ScrollArea>
+                    </li>
+                  ))}
+                </ul>
+              </ScrollArea>
             </>
           )}
         </div>

@@ -25,6 +25,7 @@ import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { LOOP_COLUMN_TYPE_META, LOOP_COL_ADD_HANDLE, TEXT_CELL_CONTROLS_MIN_LINES, TEXT_CELL_DEFAULT_MAX_LINES, loopColBaseHandle, loopColInputHandle, resolveViewMode, textCellMaxHeightPx, type LoopNodeData, type LoopColumn, type WorkflowNode } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -650,16 +651,24 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     }
     const tile = mode !== "list"
     const wrapper = `relative group/cell rounded-lg border border-border/40 bg-muted/10 ${tile ? "aspect-square overflow-hidden" : ""}`
-    const innerClass = tile
-      ? "text-xs text-foreground/80 h-full overflow-y-auto px-2 pt-7 pb-7 break-words"
-      : "text-xs text-foreground/80 px-2 py-2 break-words overflow-y-auto"
-    const innerStyle = tile ? undefined : { maxHeight: `${textCellMaxHeightPx(textMaxLines)}px` }
+
+    const textContent = (
+      <div className="text-xs text-foreground/80 break-words" title={cell}>
+        {cell}
+      </div>
+    )
 
     return (
       <div key={`${rowIdx}-${col.id}`} className={wrapper}>
-        <div className={innerClass} style={innerStyle} title={cell}>
-          {cell}
-        </div>
+        {tile ? (
+          <ScrollArea className="h-full">
+            <div className="px-2 pt-7 pb-7">{textContent}</div>
+          </ScrollArea>
+        ) : (
+          <ScrollArea style={{ height: `${textCellMaxHeightPx(textMaxLines)}px` }}>
+            <div className="px-2 py-2 pr-3">{textContent}</div>
+          </ScrollArea>
+        )}
         {showCellControls && (
           <>
             <span className="absolute top-1 left-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 text-white text-[9px] font-medium tabular-nums opacity-0 group-hover/cell:opacity-100 transition-opacity">
@@ -804,19 +813,21 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
               {isConnectedData ? (
                 <>
                   {resolvedViewMode === "list" && (
-                    <div className="flex flex-col divide-y divide-border/30 flex-1 min-h-0 overflow-y-scroll pr-1 scroll-visible-on-hover">
-                      {(() => { let imgIdx = 0; let cellIdx = 0; return displayRows.map((row, rowIdx) => (
-                        <div key={rowIdx} className="min-w-0 pt-2 first:pt-0">
-                          {columns.map((col, colIdx) => {
-                            const cell = row[colIdx] ?? ""
-                            const t = col.type ?? "text"
-                            const myImgIdx = t === "image-url" && cell ? imgIdx++ : -1
-                            const myCellIdx = cell ? cellIdx++ : -1
-                            return renderCell(cell, rowIdx, col, myImgIdx, myCellIdx, "list")
-                          })}
-                        </div>
-                      )) })()}
-                    </div>
+                    <ScrollArea className="flex-1 min-h-0">
+                      <div className="flex flex-col divide-y divide-border/30 pr-2">
+                        {(() => { let imgIdx = 0; let cellIdx = 0; return displayRows.map((row, rowIdx) => (
+                          <div key={rowIdx} className="min-w-0 pt-2 first:pt-0">
+                            {columns.map((col, colIdx) => {
+                              const cell = row[colIdx] ?? ""
+                              const t = col.type ?? "text"
+                              const myImgIdx = t === "image-url" && cell ? imgIdx++ : -1
+                              const myCellIdx = cell ? cellIdx++ : -1
+                              return renderCell(cell, rowIdx, col, myImgIdx, myCellIdx, "list")
+                            })}
+                          </div>
+                        )) })()}
+                      </div>
+                    </ScrollArea>
                   )}
 
                   {resolvedViewMode === "gallery" && (
@@ -974,14 +985,16 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             <>
               {/* Text preview for single-column text lists (uses displayRows so upstream-connected rows show their filtered values). */}
               {colCount === 1 && columns[0]?.type === "text" && displayRowCount > 0 ? (
-                <div className="flex flex-col gap-0.5 flex-1 min-h-0 overflow-y-scroll scroll-visible-on-hover">
-                  {displayRows.map((row, i) => (
-                    <div key={i} className="flex items-start gap-1.5 overflow-hidden" style={{ maxHeight: `${textMaxLines * 16}px` }}>
-                      <span className="text-[9px] text-muted-foreground/40 tabular-nums mt-0.5 shrink-0 w-3 text-right">{i + 1}</span>
-                      <span className="text-[11px] text-foreground/75 flex-1" style={{ wordBreak: "break-word" }}>{row[0] || "—"}</span>
-                    </div>
-                  ))}
-                </div>
+                <ScrollArea className="flex-1 min-h-0">
+                  <div className="flex flex-col gap-0.5 pr-2">
+                    {displayRows.map((row, i) => (
+                      <div key={i} className="flex items-start gap-1.5 overflow-hidden" style={{ maxHeight: `${textMaxLines * 16}px` }}>
+                        <span className="text-[9px] text-muted-foreground/40 tabular-nums mt-0.5 shrink-0 w-3 text-right">{i + 1}</span>
+                        <span className="text-[11px] text-foreground/75 flex-1" style={{ wordBreak: "break-word" }}>{row[0] || "—"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
               ) : (
                 <>
                   <p className="text-sm text-muted-foreground">
