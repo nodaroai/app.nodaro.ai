@@ -57,6 +57,27 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       })
     }
 
+    // Instagram carousel has strict rules: 2-10 items, all same type, no mixing.
+    if (action === "post-carousel") {
+      if (platform !== "instagram") {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: `Carousel is only supported on Instagram right now` },
+        })
+      }
+      const items = mediaItems ?? []
+      if (items.length < 2 || items.length > 10) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: `Instagram carousel needs 2-10 items (got ${items.length})` },
+        })
+      }
+      const types = new Set(items.map((m) => m.type))
+      if (types.size > 1) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: `Instagram carousel can't mix photos and videos — pick one type` },
+        })
+      }
+    }
+
     // Get connection — by ID if provided, otherwise first match for platform
     let connQuery = supabase
       .from("social_connections")

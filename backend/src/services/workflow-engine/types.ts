@@ -155,6 +155,9 @@ export interface ResolvedInputs {
   referenceImageUrls?: string[]
   referenceVideoUrls?: string[]
   referenceAudioUrls?: string[]
+  /** Media items for multi-media social posts (Instagram carousel, etc.).
+   *  Accumulated by routeOutput when the target node's action expects N items. */
+  mediaItems?: Array<{ type: "photo" | "video"; url: string }>
   scriptData?: unknown
   dialogueLines?: Array<{ speaker: string; text: string; emotion?: string }>
   scriptCharacters?: Array<{ name: string; description: string; mood?: string; action?: string; position?: string }>

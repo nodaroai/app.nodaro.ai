@@ -104,6 +104,15 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
                   ? nodeData.caption.slice(0, 50) + (nodeData.caption.length > 50 ? "..." : "")
                   : `Post to ${PLATFORM_LABELS[platform]}`}
               </span>
+              {nodeData.action === "post-carousel" && (() => {
+                const total = Number((nodeData as Record<string, unknown>).__listTotal ?? 0)
+                if (total <= 0) return null
+                return (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground">
+                    {total} item{total === 1 ? "" : "s"}
+                  </span>
+                )
+              })()}
             </div>
           )}
         </div>

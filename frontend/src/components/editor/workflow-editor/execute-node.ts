@@ -3958,6 +3958,10 @@ export function executeNode(
       } else {
         action = "send-message";
       }
+    } else if (action === "post-carousel" && inputs.mediaItems?.length) {
+      // Instagram carousel — forward the accumulated items built by
+      // resolveNodeInputs. Publisher validates min/max count and same-type.
+      mediaItems = inputs.mediaItems;
     }
 
     updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });

@@ -301,6 +301,9 @@ export interface FrontendResolvedInputs {
   referenceImageUrls?: string[];
   referenceVideoUrls?: string[];
   referenceAudioUrls?: string[];
+  /** Multi-media payload for social carousel posts — accumulated by
+   *  resolveNodeInputs when target.data.action === "post-carousel". */
+  mediaItems?: Array<{ type: "photo" | "video"; url: string }>;
   scriptData?: unknown;
   dialogueLines?: Array<{ speaker: string; text: string; emotion?: string }>;
   scriptCharacters?: Array<{ name: string; description: string; mood?: string; action?: string; position?: string }>;
@@ -902,8 +905,12 @@ export function resolveNodeInputs(
       const loopCols = ((src.data as LoopNodeData).columns ?? []);
       const loopCol = loopCols.find((c) => c.handleId === (srcEdge.sourceHandle ?? ""));
       const colType = loopCol?.type ?? "text";
+      const targetAction = (node.data as Record<string, unknown> | undefined)?.action as string | undefined;
+      const isCarouselTarget = node.type === "instagram-post" && targetAction === "post-carousel";
       if (colType === "image-url") {
-        if (node.type === "generate-image" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
+        if (isCarouselTarget) {
+          inputs.mediaItems = [...(inputs.mediaItems ?? []), { type: "photo", url: output }];
+        } else if (node.type === "generate-image" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
           inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
         } else if (node.type === "manual-edit") {
           appendManualEditAsset(inputs, src.id, output, "image");
@@ -911,7 +918,9 @@ export function resolveNodeInputs(
           inputs.imageUrl = output;
         }
       } else if (colType === "video-url") {
-        if (node.type === "combine-videos") {
+        if (isCarouselTarget) {
+          inputs.mediaItems = [...(inputs.mediaItems ?? []), { type: "video", url: output }];
+        } else if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
           inputs.videoUrlsWithSourceIds = [...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []), { nodeId: src.id, url: output }];
         } else if (node.type === "manual-edit") {

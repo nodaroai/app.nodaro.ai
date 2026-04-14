@@ -350,6 +350,44 @@ describe("resolveNodeInputs", () => {
     expect(result.videoUrl).toBe("https://vid.mp4")
   })
 
+  it("accumulates mediaItems on instagram-post with action=post-carousel", () => {
+    const target = node("t", "instagram-post", { action: "post-carousel" })
+    const img1 = node("i1", "generate-image")
+    const img2 = node("i2", "generate-image")
+    const img3 = node("i3", "generate-image")
+    const allNodes = [img1, img2, img3, target]
+    const edges = [edge("i1", "t"), edge("i2", "t"), edge("i3", "t")]
+    const states: Record<string, NodeExecutionState> = {
+      i1: { status: "completed", output: { imageUrl: "https://img.com/1.png" } },
+      i2: { status: "completed", output: { imageUrl: "https://img.com/2.png" } },
+      i3: { status: "completed", output: { imageUrl: "https://img.com/3.png" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.mediaItems).toEqual([
+      { type: "photo", url: "https://img.com/1.png" },
+      { type: "photo", url: "https://img.com/2.png" },
+      { type: "photo", url: "https://img.com/3.png" },
+    ])
+  })
+
+  it("does NOT populate mediaItems on instagram-post with action=post-image (no regression)", () => {
+    const target = node("t", "instagram-post", { action: "post-image" })
+    const img1 = node("i1", "generate-image")
+    const img2 = node("i2", "generate-image")
+    const allNodes = [img1, img2, target]
+    const edges = [edge("i1", "t"), edge("i2", "t")]
+    const states: Record<string, NodeExecutionState> = {
+      i1: { status: "completed", output: { imageUrl: "https://img.com/1.png" } },
+      i2: { status: "completed", output: { imageUrl: "https://img.com/2.png" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.mediaItems).toBeUndefined()
+    // Still routes single imageUrl (last-wins) for backward compat.
+    expect(result.imageUrl).toBeTruthy()
+  })
+
   it("resolves fan-out listResults as prompt text", () => {
     const target = node("t", "generate-image")
     const src = node("s", "split-text")

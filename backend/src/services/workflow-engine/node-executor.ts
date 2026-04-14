@@ -446,6 +446,10 @@ function buildSyncHttpBody(
         } else {
           action = "send-message"
         }
+      } else if (action === "post-carousel" && resolvedInputs.mediaItems?.length) {
+        // Instagram carousel — forward the accumulated media items built by
+        // routeOutput. The publisher will validate min/max count and same-type.
+        mediaItems = resolvedInputs.mediaItems
       }
       return {
         platform: SOCIAL_NODE_TO_PLATFORM[node.type],
