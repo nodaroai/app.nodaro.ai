@@ -31,23 +31,40 @@ export function ListInputCard({
       const stored = inputValues[node.id]?.items
       if (Array.isArray(stored) && stored.length > 0) return stored as string[]
     } else {
-      const raw = node.data.items as string | undefined
+      // Modern format (columns+rows) wins — legacy items string is a fallback
+      // for older list nodes. Without the modern branch, modern lists in
+      // presentation input cards rendered as a single empty row.
+      const d = node.data as Record<string, unknown>
+      if (d.columns) {
+        const rows = (d.rows as string[][] | undefined) ?? []
+        const cells = rows.map((r) => r[0] ?? "").filter((v, i, arr) => v.trim() || i === arr.length - 1)
+        if (cells.length > 0) return cells
+      }
+      const raw = d.items as string | undefined
       if (raw && typeof raw === "string" && raw.trim()) {
         return raw.split("\n")
       }
     }
     return [""]
-  }, [isFullscreen, inputValues, node.id, node.data.items])
+  }, [isFullscreen, inputValues, node.id, node.data])
 
   const updateItems = useCallback(
     (newItems: string[]) => {
       if (isFullscreen) {
         onUpdateInput(node.id, "items", newItems)
       } else {
-        useWorkflowStore.getState().updateNodeData(node.id, { items: newItems.join("\n") })
+        // Write to whichever format the list is in — writing items on a
+        // modern list would create stale legacy data that gets ignored by
+        // readers but leaves the rows unchanged.
+        const d = node.data as Record<string, unknown>
+        if (d.columns) {
+          useWorkflowStore.getState().updateNodeData(node.id, { rows: newItems.map((v) => [v]) })
+        } else {
+          useWorkflowStore.getState().updateNodeData(node.id, { items: newItems.join("\n") })
+        }
       }
     },
-    [isFullscreen, node.id, onUpdateInput],
+    [isFullscreen, node.id, node.data, onUpdateInput],
   )
 
   const handleItemChange = useCallback(

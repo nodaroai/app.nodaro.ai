@@ -101,8 +101,18 @@ export function areAllInputsFilled(
       const url = (inputVals?.url as string) ?? (data.url as string) ?? ""
       if (!url) return false
     } else if (nodeType === "list") {
-      const items = (inputVals?.items as string[] | undefined)
-        ?? ((data.items as string) || "").split("\n").map((s: string) => s.trim()).filter(Boolean)
+      // Modern format (columns+rows) wins, legacy items string is fallback.
+      // Otherwise modern lists with populated rows were reported as "empty"
+      // and the run button stayed disabled.
+      let items: string[]
+      if (inputVals?.items) {
+        items = inputVals.items as string[]
+      } else if (data.columns) {
+        const rows = (data.rows as string[][] | undefined) ?? []
+        items = rows.map((r) => r[0]?.trim() ?? "").filter(Boolean)
+      } else {
+        items = ((data.items as string) || "").split("\n").map((s: string) => s.trim()).filter(Boolean)
+      }
       if (!Array.isArray(items) || items.length === 0 || items.every((s: string) => !String(s).trim())) return false
     } else if (nodeType === "loop") {
       const columns = (data.columns as Array<{ type?: string }>) ?? []

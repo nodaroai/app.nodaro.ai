@@ -73,12 +73,21 @@ export function makeSnapshotInputs(inputNodes: WorkflowNode[]): Record<string, R
     } else if (t === "upload-image" || t === "upload-video" || t === "upload-audio") {
       inputs[node.id] = { url: (node.data.url as string) ?? "" }
     } else if (t === "list") {
-      const raw = (node.data as Record<string, unknown>).items
-      let items: string[]
-      if (Array.isArray(raw)) {
-        items = raw.map(String).filter(Boolean)
+      const d = node.data as Record<string, unknown>
+      let items: string[] = []
+      // Modern format (columns+rows) wins — otherwise published apps with
+      // modern lists loaded with default empty values instead of their
+      // snapshot data.
+      if (d.columns) {
+        const rows = (d.rows as string[][] | undefined) ?? []
+        items = rows.map((r) => r[0]?.trim() ?? "").filter(Boolean)
       } else {
-        items = (String(raw || "")).split("\n").map((s: string) => s.trim()).filter(Boolean)
+        const raw = d.items
+        if (Array.isArray(raw)) {
+          items = raw.map(String).filter(Boolean)
+        } else {
+          items = (String(raw || "")).split("\n").map((s: string) => s.trim()).filter(Boolean)
+        }
       }
       inputs[node.id] = { items: items.length > 0 ? items : [""] }
     } else if (t === "loop") {
