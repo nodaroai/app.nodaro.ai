@@ -1,4 +1,6 @@
-import type { PublishRequest, PublishResult, PlatformPublisher } from "./index.js"
+import type { MediaItem, PublishRequest, PublishResult, PlatformPublisher } from "./index.js"
+
+const GRAPH_API = "https://graph.facebook.com/v25.0"
 
 export const instagramPublisher: PlatformPublisher = {
   async publish(accessToken: string, request: PublishRequest, metadata: Record<string, unknown>): Promise<PublishResult> {
@@ -8,93 +10,142 @@ export const instagramPublisher: PlatformPublisher = {
     const { action, caption, mediaUrl } = request
 
     if (action === "post-image" || action === "post-reel" || action === "post-story") {
-      // Step 1: Create media container
-      const containerParams: Record<string, string> = {
-        access_token: accessToken,
-      }
-
+      const containerParams: Record<string, unknown> = { access_token: accessToken }
       if (action === "post-image") {
         containerParams.image_url = mediaUrl!
         if (caption) containerParams.caption = caption
-      } else if (action === "post-reel" || action === "post-story") {
+      } else {
         containerParams.video_url = mediaUrl!
         containerParams.media_type = action === "post-reel" ? "REELS" : "STORIES"
         if (caption && action === "post-reel") containerParams.caption = caption
       }
 
-      const containerRes = await fetch(
-        `https://graph.facebook.com/v25.0/${igUserId}/media`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(containerParams),
-        },
-      )
-      if (!containerRes.ok) {
-        const err = await containerRes.text()
-        throw new Error(`Instagram container creation failed: ${err}`)
-      }
-      const container = await containerRes.json() as { id: string }
+      const containerId = await createContainer(igUserId, accessToken, containerParams, "container creation failed")
 
-      // Step 2: Wait for container to be ready (for video)
       if (action === "post-reel" || action === "post-story") {
-        await waitForContainer(accessToken, container.id)
+        await waitForContainer(accessToken, containerId)
       }
 
-      // Step 3: Publish
-      const publishRes = await fetch(
-        `https://graph.facebook.com/v25.0/${igUserId}/media_publish`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            creation_id: container.id,
-            access_token: accessToken,
-          }),
-        },
-      )
-      if (!publishRes.ok) {
-        const err = await publishRes.text()
-        throw new Error(`Instagram publish failed: ${err}`)
-      }
-      const result = await publishRes.json() as { id: string }
-
-      // Fetch shortcode for the post URL (media ID != shortcode)
-      let platformPostUrl: string | undefined
-      try {
-        const mediaRes = await fetch(
-          `https://graph.facebook.com/v25.0/${result.id}?fields=shortcode&access_token=${accessToken}`,
-        )
-        if (mediaRes.ok) {
-          const mediaData = await mediaRes.json() as { shortcode?: string }
-          if (mediaData.shortcode) {
-            platformPostUrl = `https://www.instagram.com/p/${mediaData.shortcode}/`
-          }
-        }
-      } catch {
-        // Non-critical — URL is just for UI convenience
-      }
-
+      const mediaId = await publishContainer(igUserId, accessToken, containerId, "publish failed")
       return {
         success: true,
-        platformPostId: result.id,
-        platformPostUrl,
+        platformPostId: mediaId,
+        platformPostUrl: await fetchInstagramPostUrl(accessToken, mediaId),
       }
     }
 
     if (action === "post-carousel") {
-      throw new Error("Carousel posts not yet implemented")
+      const { mediaItems } = request
+      if (!mediaItems || mediaItems.length < 2 || mediaItems.length > 10) {
+        throw new Error(`Carousel requires 2-10 items (got ${mediaItems?.length ?? 0})`)
+      }
+      const itemTypes = new Set(mediaItems.map((m) => m.type))
+      if (itemTypes.size > 1) {
+        throw new Error("Instagram carousel can't mix photos and videos")
+      }
+      const isVideoCarousel = mediaItems[0].type === "video"
+
+      const itemIds = await Promise.all(
+        mediaItems.map((item) => createCarouselItemContainer(igUserId, accessToken, item)),
+      )
+
+      if (isVideoCarousel) {
+        await Promise.all(itemIds.map((id) => waitForContainer(accessToken, id)))
+      }
+
+      const parentId = await createContainer(
+        igUserId,
+        accessToken,
+        {
+          access_token: accessToken,
+          media_type: "CAROUSEL",
+          children: itemIds,
+          ...(caption ? { caption } : {}),
+        },
+        "carousel container creation failed",
+      )
+
+      // Meta docs recommend waiting on the parent too, even for photo-only.
+      await waitForContainer(accessToken, parentId)
+
+      const mediaId = await publishContainer(igUserId, accessToken, parentId, "carousel publish failed")
+      return {
+        success: true,
+        platformPostId: mediaId,
+        platformPostUrl: await fetchInstagramPostUrl(accessToken, mediaId),
+      }
     }
 
     throw new Error(`Unsupported Instagram action: ${action}`)
   },
 }
 
+async function createContainer(
+  igUserId: string,
+  accessToken: string,
+  body: Record<string, unknown>,
+  errorLabel: string,
+): Promise<string> {
+  const res = await fetch(`${GRAPH_API}/${igUserId}/media`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`Instagram ${errorLabel}: ${await res.text()}`)
+  const data = await res.json() as { id: string }
+  return data.id
+}
+
+async function publishContainer(
+  igUserId: string,
+  accessToken: string,
+  containerId: string,
+  errorLabel: string,
+): Promise<string> {
+  const res = await fetch(`${GRAPH_API}/${igUserId}/media_publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ creation_id: containerId, access_token: accessToken }),
+  })
+  if (!res.ok) throw new Error(`Instagram ${errorLabel}: ${await res.text()}`)
+  const data = await res.json() as { id: string }
+  return data.id
+}
+
+async function createCarouselItemContainer(
+  igUserId: string,
+  accessToken: string,
+  item: MediaItem,
+): Promise<string> {
+  const body: Record<string, unknown> = {
+    access_token: accessToken,
+    is_carousel_item: true,
+  }
+  if (item.type === "photo") {
+    body.image_url = item.url
+  } else {
+    body.video_url = item.url
+    body.media_type = "VIDEO"
+  }
+  return createContainer(igUserId, accessToken, body, `carousel item container creation failed (${item.type})`)
+}
+
+async function fetchInstagramPostUrl(accessToken: string, mediaId: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(`${GRAPH_API}/${mediaId}?fields=shortcode&access_token=${accessToken}`)
+    if (!res.ok) return undefined
+    const data = await res.json() as { shortcode?: string }
+    return data.shortcode ? `https://www.instagram.com/p/${data.shortcode}/` : undefined
+  } catch {
+    return undefined
+  }
+}
+
 async function waitForContainer(accessToken: string, containerId: string, maxWaitMs = 120_000): Promise<void> {
   const start = Date.now()
   while (Date.now() - start < maxWaitMs) {
     const res = await fetch(
-      `https://graph.facebook.com/v25.0/${containerId}?fields=status_code&access_token=${accessToken}`,
+      `${GRAPH_API}/${containerId}?fields=status_code&access_token=${accessToken}`,
     )
     const data = await res.json() as { status_code: string }
     if (data.status_code === "FINISHED") return

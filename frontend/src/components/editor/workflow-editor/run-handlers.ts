@@ -866,11 +866,13 @@ function syncNodeStatesToStore(
       }
       patchMap.set(node.id, updates);
     } else if (state.status === "running") {
-      // Always update running nodes (may have progress changes)
+      // Always update running nodes (may have progress changes). Progress is
+      // propagated for ALL running nodes, not just components — the backend
+      // orchestrator now surfaces per-job progress via onJobProgress so
+      // Run-from-here runs can show the progress bar too.
       const runPatch: Record<string, unknown> = { executionStatus: "running" }
-      if (state.jobId && node.type === "component") {
-        // Component nodes: subWorkflowProgress from nodeState if available
-        runPatch.currentJobProgress = state.progress ?? undefined
+      if (typeof state.progress === "number") {
+        runPatch.currentJobProgress = state.progress
       }
       if (currentStatus !== "running" || runPatch.currentJobProgress !== undefined) {
         patchMap.set(node.id, runPatch)

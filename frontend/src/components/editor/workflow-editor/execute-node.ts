@@ -3958,6 +3958,8 @@ export function executeNode(
       } else {
         action = "send-message";
       }
+    } else if (action === "post-carousel" && inputs.mediaItems?.length) {
+      mediaItems = inputs.mediaItems;
     }
 
     updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });

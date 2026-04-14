@@ -53,6 +53,30 @@ const LIST_LIKE_SOURCE_TYPES = new Set(["list", "loop", "split-text"])
 // work while the UI steers new ones to "all".
 const LIST_LIKE_TARGET_TYPES = new Set(["list", "loop"])
 
+// Target node types that accept multiple items in a single invocation
+// (arrays/bundles). Only these can meaningfully receive Bundle mode — the
+// multiple items land in referenceImageUrls / videoUrls / audioUrls etc.
+// All other nodes collapse a Bundle to a single value, so offering it is
+// misleading; we hide it from the dropdown.
+const MULTI_INPUT_TARGET_TYPES = new Set([
+  // Image generators accept multiple reference images
+  "generate-image", "edit-image", "image-to-image", "modify-image",
+  // Audio mixers / combiners
+  "mix-audio", "combine-audio", "suno-mashup",
+  // Video combiners
+  "combine-videos",
+  // Manual edit / composite accept multiple inputs
+  "manual-edit", "composite",
+  // Text combiners
+  "combine-text",
+  // List/loop targets collect into a column
+  "list", "loop",
+  // Social posts — carousels/galleries/threads accept multiple media items.
+  // The single-post modes collapse to one; users switch via the node's
+  // action field, so it's safe to allow Bundle here.
+  "instagram-post", "tiktok-post", "facebook-post", "x-post", "linkedin-post",
+])
+
 function AnimatedFlowEdgeComponent({
   id,
   sourceX,
@@ -152,6 +176,7 @@ function AnimatedFlowEdgeComponent({
   // fallback is explicit and target-aware.
   const isListLikeSource = LIST_LIKE_SOURCE_TYPES.has(edgeData?.sourceNodeType ?? "")
   const isListLikeTarget = LIST_LIKE_TARGET_TYPES.has(edgeData?.targetNodeType ?? "")
+  const targetAcceptsMulti = MULTI_INPUT_TARGET_TYPES.has(edgeData?.targetNodeType ?? "")
   const defaultMode = isListLikeTarget ? "all" : isListLikeSource ? "each" : "last"
   // If an edge has a mode that's been hidden for this target/source combo
   // (e.g. legacy "each" on a list-target edge), fall back to the default so
@@ -160,6 +185,10 @@ function AnimatedFlowEdgeComponent({
   const modeOptions = MODE_OPTIONS.filter((opt) => {
     if (opt.value === "last" && isListLikeSource) return false
     if (opt.value === "each" && isListLikeTarget) return false
+    // Bundle only makes sense when the target accepts multiple items.
+    // Hide it elsewhere — otherwise users pick "all", the value gets
+    // collapsed to a joined string or dropped, and the result is unexpected.
+    if (opt.value === "all" && !targetAcceptsMulti) return false
     return true
   })
   const modeOptionValues = new Set<string>(modeOptions.map((o) => o.value))

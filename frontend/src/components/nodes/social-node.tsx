@@ -31,6 +31,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
   const icon = PLATFORM_ICONS[platform] || PLATFORM_ICONS.instagram
   const status = nodeData.executionStatus ?? "idle"
   const credits = useModelCredits("social-publish", 1)
+  const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
 
   return (
     <div className="relative max-w-[220px]">
@@ -104,6 +105,11 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
                   ? nodeData.caption.slice(0, 50) + (nodeData.caption.length > 50 ? "..." : "")
                   : `Post to ${PLATFORM_LABELS[platform]}`}
               </span>
+              {nodeData.action === "post-carousel" && listTotal && listTotal > 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground">
+                  {listTotal} item{listTotal === 1 ? "" : "s"}
+                </span>
+              )}
             </div>
           )}
         </div>

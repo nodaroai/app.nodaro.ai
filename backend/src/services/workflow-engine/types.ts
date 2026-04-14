@@ -2,6 +2,8 @@
  * Shared types for the backend workflow execution engine.
  */
 
+import type { MediaItem } from "../social/platforms/index.js"
+
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
 // ---------------------------------------------------------------------------
@@ -78,6 +80,9 @@ export interface NodeExecutionState {
   iterationTotal?: number
   /** Completed fan-out iterations so far */
   iterationCompleted?: number
+  /** Current job progress (0-100) — surfaced by pollJobToCompletion so the
+   *  UI can render a progress bar during backend runs. */
+  progress?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +157,9 @@ export interface ResolvedInputs {
   referenceImageUrls?: string[]
   referenceVideoUrls?: string[]
   referenceAudioUrls?: string[]
+  /** Media items for multi-media social posts (Instagram carousel, etc.).
+   *  Accumulated by routeOutput when the target node's action expects N items. */
+  mediaItems?: MediaItem[]
   scriptData?: unknown
   dialogueLines?: Array<{ speaker: string; text: string; emotion?: string }>
   scriptCharacters?: Array<{ name: string; description: string; mood?: string; action?: string; position?: string }>
@@ -188,6 +196,9 @@ export interface OrchestratorContext {
   /** Called when a worker-queued node creates its job — allows the orchestrator
    *  to surface the jobId on nodeStates before execution completes. */
   onJobCreated?: (nodeId: string, jobId: string) => void
+  /** Called as a worker-queued job's progress changes (0-100). Used to drive
+   *  per-node progress bars in the UI during backend orchestrator runs. */
+  onJobProgress?: (jobId: string, progress: number) => void
   /** Node IDs that have upload-* ancestors — their jobs should be force_private */
   uploadDescendantIds?: Set<string>
   /** Whether this execution is running a published app (affects free-tier app credit allowance) */

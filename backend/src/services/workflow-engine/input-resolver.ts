@@ -681,6 +681,19 @@ const SOCIAL_POST_NODE_TYPES = new Set([
   "linkedin-post", "x-post", "facebook-post", "telegram-post",
 ])
 
+const IMAGE_SOURCE_NODE_TYPES = new Set([
+  "generate-image", "edit-image", "image-to-image", "modify-image",
+  "upscale-image", "remove-background", "upload-image", "extract-frame",
+])
+
+function isVideoSourceType(srcType: string): boolean {
+  return VIDEO_OUTPUT_NODE_TYPES.has(srcType) || srcType === "upload-video" || srcType === "youtube-video"
+}
+
+function isImageSourceType(srcType: string): boolean {
+  return IMAGE_SOURCE_NODE_TYPES.has(srcType) || ENTITY_NODE_TYPES.has(srcType)
+}
+
 const SUNO_TRACK_NODE_TYPES = new Set([
   "suno-generate",
   "suno-cover",
@@ -788,6 +801,18 @@ function routeOutput(
     return
   }
 
+  // Carousel accumulation must run before srcType branches below, which
+  // overwrite imageUrl/videoUrl (last-wins) and would hide fanned-in items.
+  if (
+    SOCIAL_POST_NODE_TYPES.has(targetType) &&
+    (target.data.action as string | undefined) === "post-carousel"
+  ) {
+    const isVideo = isVideoSourceType(srcType)
+    if (isVideo || isImageSourceType(srcType)) {
+      inputs.mediaItems = [...(inputs.mediaItems ?? []), { type: isVideo ? "video" : "photo", url: output }]
+    }
+  }
+
   // --- Loop/list with typed column — route by column type ---
   // Modern list/loop nodes store columns with typed handles; the output should
   // land in the matching input slot (image → referenceImageUrls, etc.), not
@@ -798,8 +823,12 @@ function routeOutput(
     const columns = src.data.columns as Array<{ handleId: string; type?: string }>
     const col = columns.find((c) => c.handleId === edge.sourceHandle)
     const colType = col?.type ?? "text"
+    const targetAction = (target.data.action as string | undefined) ?? ""
+    const isCarouselTarget = SOCIAL_POST_NODE_TYPES.has(targetType) && targetAction === "post-carousel"
     if (colType === "image-url") {
-      if (targetType === "generate-image" || targetType === "edit-image" || targetType === "image-to-image" || targetType === "modify-image") {
+      if (isCarouselTarget) {
+        inputs.mediaItems = [...(inputs.mediaItems ?? []), { type: "photo", url: output }]
+      } else if (targetType === "generate-image" || targetType === "edit-image" || targetType === "image-to-image" || targetType === "modify-image") {
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
       } else {
         inputs.imageUrl = output
@@ -807,6 +836,9 @@ function routeOutput(
       return
     }
     if (colType === "video-url") {
+      if (isCarouselTarget) {
+        inputs.mediaItems = [...(inputs.mediaItems ?? []), { type: "video", url: output }]
+      }
       routeVideoOutput(inputs, output, targetType, src.id)
       return
     }
@@ -1236,14 +1268,12 @@ function routeOutput(
   }
 
   // --- Social post nodes: route by source type ---
+  // Note: carousel accumulation runs at the top of routeOutput; this block
+  // fills single-value fields used by post-image/reel/story/video actions.
   if (SOCIAL_POST_NODE_TYPES.has(targetType)) {
-    if (VIDEO_OUTPUT_NODE_TYPES.has(srcType) || srcType === "upload-video" || srcType === "youtube-video") {
+    if (isVideoSourceType(srcType)) {
       routeVideoOutput(inputs, output, targetType, src.id)
-    } else if (
-      srcType === "generate-image" || srcType === "edit-image" || srcType === "image-to-image" ||
-      srcType === "modify-image" || srcType === "upscale-image" || srcType === "remove-background" ||
-      srcType === "upload-image" || ENTITY_NODE_TYPES.has(srcType)
-    ) {
+    } else if (isImageSourceType(srcType) && srcType !== "extract-frame") {
       inputs.imageUrl = output
     } else if (AUDIO_OUTPUT_NODE_TYPES.has(srcType) || srcType === "upload-audio" || srcType === "reference-audio") {
       routeAudioOutput(inputs, output, targetType, src.id)
