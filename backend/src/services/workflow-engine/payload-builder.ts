@@ -185,6 +185,10 @@ function resolveListOutput(
   mode: string,
 ): string | undefined {
   if (items.length === 0) return undefined
+  // "last" here means the final item in a list-like source (list/loop/split-text),
+  // because lists have no user-selection concept. For generic sources, "last"
+  // ("Selected" in the UI) means the currently selected result via
+  // activeResultIndex — handled separately in input-resolver.ts.
   if (mode === "last") return items[items.length - 1]
   if (mode.startsWith("item:")) {
     const idx = parseInt(mode.split(":")[1], 10)

@@ -92,7 +92,12 @@ export function resolveNodeInputs(
         const idx = parseInt(edgeOutputMode.split(":")[1], 10)
         output = effectiveListResults[idx] ?? effectiveListResults[0]
       } else if (edgeOutputMode === "last") {
-        output = effectiveListResults[effectiveListResults.length - 1]
+        // "last" = "Selected" in the UI — leave output undefined so we fall
+        // through to getNodeOutput below, which reads state.output (this run's
+        // latest execution) or activeResultIndex (the result the user picked
+        // via the carousel on the frontend). This is DIFFERENT from the word
+        // "last" inside range/list expressions, where it means the final
+        // array index.
       } else if (edgeOutputMode === "all") {
         const filtered = selectListItems(
           effectiveListResults,
@@ -736,6 +741,10 @@ function routeOutput(
     if (outputMode === "all") {
       inputs.prompt = items.join(", ") || output
     } else if (outputMode === "last") {
+      // List sources have no user-selection concept, so "Selected" falls back
+      // to the final row. This overlaps with the other meaning of "last" — the
+      // final index in a range/list expression — but only because lists don't
+      // support the Selected semantic that generic nodes use.
       inputs.prompt = items[items.length - 1] || output
     } else if (outputMode.startsWith("item:")) {
       const idx = parseInt(outputMode.split(":")[1], 10)

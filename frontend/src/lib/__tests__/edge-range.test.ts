@@ -180,7 +180,7 @@ describe("frontend re-export smoke test", () => {
   })
   it("describeEdgeBehavior is callable", () => {
     expect(describeEdgeBehavior({ outputMode: "last" })).toBe(
-      "Passes only the most recent result.",
+      "Passes the currently selected result.",
     )
   })
 })

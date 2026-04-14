@@ -24,16 +24,26 @@ type AnimatedFlowEdgeData = {
   selectorMode?: SelectorMode  // Selector tab: "range" (default) or "list"
   listExpression?: string   // List-mode expression: comma-separated indices/ranges, e.g. "1,3,5..last-1"
   runsExpression?: string   // Runs-filter expression (only when useAllResults true): "1, 3, last"
+  sourceNodeType?: string   // Source node's type — used to hide modes that don't apply (e.g. Selected for list/loop)
 }
 
 type AnimatedFlowEdgeProps = EdgeProps<Edge<AnimatedFlowEdgeData>>
 
+// NOTE: outputMode "last" is semantically "the currently selected result"
+// (reads activeResultIndex from the source node). This is DIFFERENT from the
+// word "last" appearing inside range/list expressions (e.g. rangeTo: "last",
+// listExpression: "1, 3, last"), where "last" means "the final index in the
+// array." Same word, different meanings.
 const MODE_OPTIONS = [
-  { value: "last", label: "Latest", desc: "Only the most recent result" },
+  { value: "last", label: "Selected", desc: "The currently selected result" },
+  { value: "item", label: "Item", desc: "Pick one specific item" },
   { value: "each", label: "Each", desc: "Run downstream once per item" },
   { value: "all", label: "All", desc: "Pass all items together as a list" },
-  { value: "item", label: "Item", desc: "Pick one specific item" },
 ] as const
+
+// List/loop/split-text produce inherent items with no user-selection concept,
+// so "Selected" doesn't apply — those edges default to "Each" (fan-out).
+const LIST_LIKE_SOURCE_TYPES = new Set(["list", "loop", "split-text"])
 
 function AnimatedFlowEdgeComponent({
   id,
@@ -125,7 +135,16 @@ function AnimatedFlowEdgeComponent({
   const edgeData = data as AnimatedFlowEdgeData | undefined
   const isRunning = edgeData?.isRunning || false           // Pink: data flowing OUT from running node
   const isInputRunning = edgeData?.isInputRunning || false // Blue: data flowing IN to running node
-  const currentMode = edgeData?.outputMode ?? ""
+  // Default mode matches runtime: "each" for list/loop/split-text, "last"
+  // (Selected) for everything else. workflow-canvas.tsx already resolves
+  // list-like sources to "each" before sending the edge data in, but we
+  // re-derive the default here so the fallback is explicit.
+  const isListLikeSource = LIST_LIKE_SOURCE_TYPES.has(edgeData?.sourceNodeType ?? "")
+  const defaultMode = isListLikeSource ? "each" : "last"
+  const currentMode = edgeData?.outputMode ?? defaultMode
+  const modeOptions = isListLikeSource
+    ? MODE_OPTIONS.filter((opt) => opt.value !== "last")
+    : MODE_OPTIONS
 
   // Normalize mode — handle legacy "item:N" format
   const normalizedMode = currentMode.startsWith("item:") ? "item" : currentMode
@@ -340,7 +359,9 @@ function AnimatedFlowEdgeComponent({
                   borderRadius: 8,
                   padding: 0,
                   boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-                  minWidth: 180,
+                  // Fixed width so the menu doesn't resize between modes —
+                  // sized to comfortably fit the List tab with its example hint.
+                  width: 300,
                   overflow: "hidden",
                 }}
                 onMouseDown={(e) => e.stopPropagation()}
@@ -358,60 +379,147 @@ function AnimatedFlowEdgeComponent({
                 </div>
                 {/* Mode radio buttons */}
                 <div style={{ padding: "8px 0" }}>
-                  {MODE_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      className="flex items-center gap-2 w-full text-left cursor-pointer transition-colors"
-                      style={{
-                        padding: "6px 14px",
-                        background: normalizedMode === opt.value ? "rgba(167, 139, 250, 0.1)" : "transparent",
-                        border: "none",
-                        color: normalizedMode === opt.value ? "#e2e8f0" : "#94a3b8",
-                        fontSize: 11,
-                      }}
-                      onMouseOver={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.05)" }}
-                      onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.background = normalizedMode === opt.value ? "rgba(167, 139, 250, 0.1)" : "transparent" }}
-                      onClick={(e) => { e.stopPropagation(); handleModeSelect(opt.value) }}
-                    >
-                      {/* Radio circle */}
-                      <span style={{
-                        width: 14,
-                        height: 14,
-                        borderRadius: "50%",
-                        border: normalizedMode === opt.value ? "2px solid #a78bfa" : "2px solid #555",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}>
-                        {normalizedMode === opt.value && (
-                          <span style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: "50%",
-                            background: "#a78bfa",
-                          }} />
-                        )}
-                      </span>
-                      <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        <span
+                  {modeOptions.map((opt) => {
+                    const isActive = normalizedMode === opt.value
+                    const showInlineItemInput = opt.value === "item" && isActive
+                    const showInlineRangeConfig = (opt.value === "each" || opt.value === "all") && isActive
+                    return (
+                      <div key={opt.value}>
+                        <button
+                          className="flex items-center gap-2 w-full text-left cursor-pointer transition-colors"
                           style={{
-                            fontWeight: normalizedMode === opt.value ? 600 : 400,
+                            padding: "6px 14px",
+                            background: isActive ? "rgba(167, 139, 250, 0.1)" : "transparent",
+                            border: "none",
+                            color: isActive ? "#e2e8f0" : "#94a3b8",
                             fontSize: 11,
                           }}
+                          onMouseOver={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.05)" }}
+                          onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.background = isActive ? "rgba(167, 139, 250, 0.1)" : "transparent" }}
+                          onClick={(e) => { e.stopPropagation(); handleModeSelect(opt.value) }}
                         >
-                          {opt.label}
-                        </span>
-                        <span style={{ color: "#64748b", fontSize: 10 }}>{opt.desc}</span>
-                      </span>
-                    </button>
-                  ))}
+                          {/* Radio circle */}
+                          <span style={{
+                            width: 14,
+                            height: 14,
+                            borderRadius: "50%",
+                            border: isActive ? "2px solid #a78bfa" : "2px solid #555",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                          }}>
+                            {isActive && (
+                              <span style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: "50%",
+                                background: "#a78bfa",
+                              }} />
+                            )}
+                          </span>
+                          <span style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 }}>
+                            <span
+                              style={{
+                                fontWeight: isActive ? 600 : 400,
+                                fontSize: 11,
+                              }}
+                            >
+                              {opt.label}
+                            </span>
+                            <span style={{ color: "#64748b", fontSize: 10 }}>{opt.desc}</span>
+                          </span>
+                          {/* Reserved slot — always present so every row has
+                              the same width; only Item's active state fills it. */}
+                          <span
+                            onClick={showInlineItemInput ? (e) => e.stopPropagation() : undefined}
+                            onMouseDown={showInlineItemInput ? (e) => e.stopPropagation() : undefined}
+                            style={{ flexShrink: 0, width: 56, height: 22 }}
+                          >
+                            {showInlineItemInput && (
+                              <input
+                                type="text"
+                                value={edgeData?.itemIndex ?? ""}
+                                onChange={(e) => handleItemIndexChange(e.target.value)}
+                                placeholder="1"
+                                style={{
+                                  width: "100%",
+                                  padding: "3px 6px",
+                                  fontFamily: "monospace",
+                                  fontSize: 11,
+                                  background: "#0f0f26",
+                                  color: "#e2e8f0",
+                                  border: "1px solid #444",
+                                  borderRadius: 4,
+                                  outline: "none",
+                                  textAlign: "center",
+                                  boxSizing: "border-box",
+                                }}
+                              />
+                            )}
+                          </span>
+                        </button>
+                        {showInlineRangeConfig && (
+                          <div style={{ padding: "4px 14px 10px 36px" }}>
+                            <div style={{ display: "flex", gap: 16, paddingBottom: 8 }}>
+                              {(["range", "list"] as const).map((tab) => {
+                                const active = selectorMode === tab
+                                return (
+                                  <button
+                                    key={tab}
+                                    type="button"
+                                    onClick={() => handleSelectorModeChange(tab)}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    style={{
+                                      padding: "4px 2px",
+                                      fontSize: 11,
+                                      background: "transparent",
+                                      border: "none",
+                                      borderBottom: active ? "2px solid #a78bfa" : "2px solid transparent",
+                                      color: active ? "#e2e8f0" : "#94a3b8",
+                                      fontWeight: active ? 600 : 400,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    {tab === "range" ? "Range" : "List"}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                            {selectorMode === "range" && (
+                              <RangeConfig
+                                rangeFrom={edgeData?.rangeFrom}
+                                rangeTo={edgeData?.rangeTo}
+                                rangeStep={edgeData?.rangeStep}
+                                onFromChange={(v) => handleRangeChange("rangeFrom", v)}
+                                onToChange={(v) => handleRangeChange("rangeTo", v)}
+                                onStepChange={handleStepChange}
+                              />
+                            )}
+                            {selectorMode === "list" && (
+                              <ListConfig value={listExpression} onChange={handleListExpressionChange} containerPadding="0" />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
 
-                {/* Separator */}
-                <div style={{ height: 1, background: "#555", margin: "0" }} />
+                {/* Negative step hint */}
+                {(normalizedMode === "each" || normalizedMode === "all") && edgeData?.rangeStep != null && edgeData.rangeStep < 0 && (
+                  <>
+                    <div style={{ height: 1, background: "#555" }} />
+                    <div style={{ padding: "8px 14px" }}>
+                      <span style={{ color: "#f59e0b", fontSize: 9.5 }}>
+                        Negative step iterates backwards — set From &gt; To
+                      </span>
+                    </div>
+                  </>
+                )}
 
-                {/* Include previous runs toggle */}
+                {/* Include previous runs — always at the end */}
+                <div style={{ height: 1, background: "#555" }} />
                 <div style={{ padding: "8px 14px" }}>
                   <label
                     className="flex items-center gap-2 cursor-pointer"
@@ -447,87 +555,6 @@ function AnimatedFlowEdgeComponent({
                     </div>
                   )}
                 </div>
-
-                <div style={{ height: 1, background: "#555" }} />
-
-                {/* Conditional config section based on mode */}
-                <div style={{ padding: "10px 14px" }}>
-                  {normalizedMode === "last" && (
-                    <span style={{ color: "#64748b", fontSize: 10, fontStyle: "italic" }}>
-                      No configuration needed
-                    </span>
-                  )}
-
-                  {(normalizedMode === "each" || normalizedMode === "all") && (
-                    <>
-                      <div style={{ display: "flex", gap: 4, padding: "6px 14px 10px" }}>
-                        {(["range", "list"] as const).map((tab) => (
-                          <button
-                            key={tab}
-                            type="button"
-                            onClick={() => handleSelectorModeChange(tab)}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            style={{
-                              flex: 1,
-                              padding: "4px 8px",
-                              fontSize: 10,
-                              textTransform: "uppercase",
-                              letterSpacing: "0.06em",
-                              borderRadius: 4,
-                              border: "1px solid #444",
-                              background: selectorMode === tab ? "rgba(167, 139, 250, 0.15)" : "transparent",
-                              color: selectorMode === tab ? "#e2e8f0" : "#94a3b8",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {tab === "range" ? "Range" : "List"}
-                          </button>
-                        ))}
-                      </div>
-
-                      {selectorMode === "range" && (normalizedMode === "each" || normalizedMode === "all") && (
-                        <RangeConfig
-                          rangeFrom={edgeData?.rangeFrom}
-                          rangeTo={edgeData?.rangeTo}
-                          rangeStep={edgeData?.rangeStep}
-                          onFromChange={(v) => handleRangeChange("rangeFrom", v)}
-                          onToChange={(v) => handleRangeChange("rangeTo", v)}
-                          onStepChange={handleStepChange}
-                        />
-                      )}
-
-                      {selectorMode === "list" && (
-                        <ListConfig value={listExpression} onChange={handleListExpressionChange} />
-                      )}
-                    </>
-                  )}
-
-                  {normalizedMode === "item" && (
-                    <ItemConfig
-                      itemIndex={edgeData?.itemIndex}
-                      onChange={handleItemIndexChange}
-                    />
-                  )}
-
-                  {/* No mode selected yet — hint */}
-                  {!normalizedMode && (
-                    <span style={{ color: "#64748b", fontSize: 10, fontStyle: "italic" }}>
-                      Select a mode above
-                    </span>
-                  )}
-                </div>
-
-                {/* Negative step hint */}
-                {(normalizedMode === "each" || normalizedMode === "all") && edgeData?.rangeStep != null && edgeData.rangeStep < 0 && (
-                  <>
-                    <div style={{ height: 1, background: "#555" }} />
-                    <div style={{ padding: "8px 14px" }}>
-                      <span style={{ color: "#f59e0b", fontSize: 9.5 }}>
-                        Negative step iterates backwards — set From &gt; To
-                      </span>
-                    </div>
-                  </>
-                )}
               </div>
             )}
           </div>
@@ -567,21 +594,6 @@ function RangeConfig({
           width={40}
         />
       </div>
-    </div>
-  )
-}
-
-/** Single item index config */
-function ItemConfig({
-  itemIndex,
-  onChange,
-}: {
-  itemIndex?: string
-  onChange: (value: string) => void
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <FieldInput label="INDEX" value={itemIndex ?? ""} placeholder="1" onChange={onChange} width={70} />
     </div>
   )
 }
@@ -661,8 +673,8 @@ function FieldInput({
         onMouseDown={(e) => e.stopPropagation()}
         style={{
           width,
-          background: "#1e1e3a",
-          border: "1px solid #555",
+          background: "#0f0f26",
+          border: "1px solid #444",
           borderRadius: 4,
           color: "#e2e8f0",
           fontSize: 11,
@@ -671,7 +683,7 @@ function FieldInput({
           outline: "none",
         }}
         onFocus={(e) => { e.currentTarget.style.borderColor = "#a78bfa" }}
-        onBlur={(e) => { e.currentTarget.style.borderColor = "#555" }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = "#444" }}
       />
     </div>
   )
