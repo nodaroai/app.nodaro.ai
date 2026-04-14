@@ -40,12 +40,14 @@ import type { DownloadProgressEvent } from "@/lib/api"
 import {
   LOOP_COLUMN_TYPE_META,
   TEXT_CELL_DEFAULT_MAX_LINES,
+  TEXT_FONT_SIZE_DEFAULT,
   loopColInputHandle,
   resolveViewMode,
   type TextPromptData,
   type ListNodeData,
   type LoopNodeData,
   type LoopColumn,
+  type TextFontSize,
   type UploadImageData,
   type UploadVideoData,
   type UploadAudioData,
@@ -783,82 +785,104 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
           <p className="text-xs text-muted-foreground">
             {rows.length} row{rows.length !== 1 ? "s" : ""} &times; {columns.length} column{columns.length !== 1 ? "s" : ""}
           </p>
-          <div className="flex items-center gap-2 mt-3">
-            <label className="text-xs text-muted-foreground">Max items in app mode</label>
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={data.maxItems ?? 10}
-              onChange={(e) => onUpdate({ maxItems: parseInt(e.target.value, 10) || 10 })}
-              className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
-            />
+
+          {/* Node view settings — how the node renders in the editor and in presentation mode. */}
+          <div className="mt-5 pt-3 border-t border-border/50">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Node view</p>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground">View mode</label>
+              <select
+                value={resolveViewMode(data)}
+                onChange={(e) => onUpdate({ viewMode: e.target.value as "list" | "gallery" | "packed" })}
+                className="bg-background border border-border rounded px-2 py-1 text-xs"
+              >
+                <option value="list">List (rows)</option>
+                <option value="gallery">Gallery (grid)</option>
+                <option value="packed">Packed (fit all)</option>
+              </select>
+              {resolveViewMode(data) === "gallery" && (
+                <>
+                  <label className="text-xs text-muted-foreground ml-2">Items per row</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={6}
+                    value={data.galleryCols ?? 3}
+                    onChange={(e) => onUpdate({ galleryCols: Math.max(1, Math.min(6, parseInt(e.target.value, 10) || 3)) })}
+                    className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
+                  />
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <label className="text-xs text-muted-foreground" title="How many lines of text each text item shows before clamping. Hover controllers (expand/copy/drag) hide when below 3 to avoid overlap.">Text max lines</label>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={data.textMaxLines ?? TEXT_CELL_DEFAULT_MAX_LINES}
+                onChange={(e) => onUpdate({ textMaxLines: Math.max(1, Math.min(20, parseInt(e.target.value, 10) || TEXT_CELL_DEFAULT_MAX_LINES)) })}
+                className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
+              />
+              <label className="text-xs text-muted-foreground ml-2">Font size</label>
+              <select
+                value={data.textFontSize ?? TEXT_FONT_SIZE_DEFAULT}
+                onChange={(e) => onUpdate({ textFontSize: e.target.value as TextFontSize })}
+                className="bg-background border border-border rounded px-2 py-1 text-xs"
+              >
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+              </select>
+            </div>
           </div>
-          <div className="flex items-center gap-2 mt-2">
-            <label className="text-xs text-muted-foreground">Min rows to run</label>
-            <input
-              type="number"
-              min={0}
-              max={data.maxItems ?? 10}
-              value={data.minRows ?? 0}
-              onChange={(e) => {
-                const val = Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, data.maxItems ?? 10))
-                const updates: Partial<LoopNodeData> = { minRows: val }
-                if (val > (data.defaultRows ?? 1)) updates.defaultRows = val
-                onUpdate(updates)
-              }}
-              className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
-            />
-          </div>
-          <div className="flex items-center gap-2 mt-2">
-            <label className="text-xs text-muted-foreground">Default rows in app</label>
-            <input
-              type="number"
-              min={data.minRows ?? 0}
-              max={data.maxItems ?? 10}
-              value={data.defaultRows ?? 1}
-              onChange={(e) => {
-                const min = data.minRows ?? 0
-                const max = data.maxItems ?? 10
-                const val = Math.max(min, Math.min(parseInt(e.target.value, 10) || 1, max))
-                onUpdate({ defaultRows: val })
-              }}
-              className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
-            />
-          </div>
-          <div className="flex items-center gap-2 mt-2">
-            <label className="text-xs text-muted-foreground">Items per row</label>
-            <input
-              type="number"
-              min={1}
-              max={6}
-              value={data.galleryCols ?? 3}
-              onChange={(e) => onUpdate({ galleryCols: Math.max(1, Math.min(6, parseInt(e.target.value, 10) || 3)) })}
-              className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
-            />
-          </div>
-          <div className="flex items-center gap-2 mt-2">
-            <label className="text-xs text-muted-foreground">View mode</label>
-            <select
-              value={resolveViewMode(data)}
-              onChange={(e) => onUpdate({ viewMode: e.target.value as "list" | "gallery" | "packed" })}
-              className="bg-background border border-border rounded px-2 py-1 text-xs"
-            >
-              <option value="list">List (rows)</option>
-              <option value="gallery">Gallery (grid)</option>
-              <option value="packed">Packed (fit all)</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2 mt-2">
-            <label className="text-xs text-muted-foreground" title="How many lines of text each text item shows before clamping. Hover controllers (expand/copy/drag) hide when below 3 to avoid overlap.">Text max lines</label>
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={data.textMaxLines ?? TEXT_CELL_DEFAULT_MAX_LINES}
-              onChange={(e) => onUpdate({ textMaxLines: Math.max(1, Math.min(20, parseInt(e.target.value, 10) || TEXT_CELL_DEFAULT_MAX_LINES)) })}
-              className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
-            />
+
+          {/* Presentation / app-mode settings — only apply when this node is used as an input in a published app or presentation mode. */}
+          <div className="mt-5 pt-3 border-t border-border/50">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Presentation / App mode</p>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground" title="Hard cap on rows the end user can add in the app UI. Also bounds default and min.">Max items</label>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={data.maxItems ?? 10}
+                onChange={(e) => onUpdate({ maxItems: parseInt(e.target.value, 10) || 10 })}
+                className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
+              />
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <label className="text-xs text-muted-foreground" title="Run is disabled until the user provides at least this many rows. 0 = no minimum.">Min rows to run</label>
+              <input
+                type="number"
+                min={0}
+                max={data.maxItems ?? 10}
+                value={data.minRows ?? 0}
+                onChange={(e) => {
+                  const val = Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, data.maxItems ?? 10))
+                  const updates: Partial<LoopNodeData> = { minRows: val }
+                  if (val > (data.defaultRows ?? 1)) updates.defaultRows = val
+                  onUpdate(updates)
+                }}
+                className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
+              />
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <label className="text-xs text-muted-foreground" title="Number of empty rows pre-populated when the app first loads.">Default rows</label>
+              <input
+                type="number"
+                min={data.minRows ?? 0}
+                max={data.maxItems ?? 10}
+                value={data.defaultRows ?? 1}
+                onChange={(e) => {
+                  const min = data.minRows ?? 0
+                  const max = data.maxItems ?? 10
+                  const val = Math.max(min, Math.min(parseInt(e.target.value, 10) || 1, max))
+                  onUpdate({ defaultRows: val })
+                }}
+                className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
+              />
+            </div>
           </div>
         </>
       )}
