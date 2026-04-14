@@ -681,6 +681,19 @@ const SOCIAL_POST_NODE_TYPES = new Set([
   "linkedin-post", "x-post", "facebook-post", "telegram-post",
 ])
 
+const IMAGE_SOURCE_NODE_TYPES = new Set([
+  "generate-image", "edit-image", "image-to-image", "modify-image",
+  "upscale-image", "remove-background", "upload-image", "extract-frame",
+])
+
+function isVideoSourceType(srcType: string): boolean {
+  return VIDEO_OUTPUT_NODE_TYPES.has(srcType) || srcType === "upload-video" || srcType === "youtube-video"
+}
+
+function isImageSourceType(srcType: string): boolean {
+  return IMAGE_SOURCE_NODE_TYPES.has(srcType) || ENTITY_NODE_TYPES.has(srcType)
+}
+
 const SUNO_TRACK_NODE_TYPES = new Set([
   "suno-generate",
   "suno-cover",
@@ -788,24 +801,16 @@ function routeOutput(
     return
   }
 
-  // --- Instagram carousel: accumulate media items before srcType branches
-  //     override imageUrl/videoUrl. Happens for any image/video source.
+  // Carousel accumulation must run before srcType branches below, which
+  // overwrite imageUrl/videoUrl (last-wins) and would hide fanned-in items.
   if (
     SOCIAL_POST_NODE_TYPES.has(targetType) &&
     (target.data.action as string | undefined) === "post-carousel"
   ) {
-    const isVideoSource =
-      VIDEO_OUTPUT_NODE_TYPES.has(srcType) || srcType === "upload-video" || srcType === "youtube-video"
-    const isImageSource =
-      srcType === "generate-image" || srcType === "edit-image" || srcType === "image-to-image" ||
-      srcType === "modify-image" || srcType === "upscale-image" || srcType === "remove-background" ||
-      srcType === "upload-image" || ENTITY_NODE_TYPES.has(srcType) || srcType === "extract-frame"
-    if (isImageSource || isVideoSource) {
-      const itemType = isVideoSource ? ("video" as const) : ("photo" as const)
-      inputs.mediaItems = [...(inputs.mediaItems ?? []), { type: itemType, url: output }]
+    const isVideo = isVideoSourceType(srcType)
+    if (isVideo || isImageSourceType(srcType)) {
+      inputs.mediaItems = [...(inputs.mediaItems ?? []), { type: isVideo ? "video" : "photo", url: output }]
     }
-    // Fall through to existing routing so imageUrl/videoUrl still get set
-    // (harmless for carousel; buildPayload uses mediaItems when present).
   }
 
   // --- Loop/list with typed column — route by column type ---
@@ -1263,18 +1268,12 @@ function routeOutput(
   }
 
   // --- Social post nodes: route by source type ---
+  // Note: carousel accumulation runs at the top of routeOutput; this block
+  // fills single-value fields used by post-image/reel/story/video actions.
   if (SOCIAL_POST_NODE_TYPES.has(targetType)) {
-    // Carousel accumulation happens at the top of routeOutput, before srcType
-    // branches. Here we only populate the single-value fields that the
-    // non-carousel actions (post-image, post-reel, post-story, post-video)
-    // still use.
-    if (VIDEO_OUTPUT_NODE_TYPES.has(srcType) || srcType === "upload-video" || srcType === "youtube-video") {
+    if (isVideoSourceType(srcType)) {
       routeVideoOutput(inputs, output, targetType, src.id)
-    } else if (
-      srcType === "generate-image" || srcType === "edit-image" || srcType === "image-to-image" ||
-      srcType === "modify-image" || srcType === "upscale-image" || srcType === "remove-background" ||
-      srcType === "upload-image" || ENTITY_NODE_TYPES.has(srcType)
-    ) {
+    } else if (isImageSourceType(srcType) && srcType !== "extract-frame") {
       inputs.imageUrl = output
     } else if (AUDIO_OUTPUT_NODE_TYPES.has(srcType) || srcType === "upload-audio" || srcType === "reference-audio") {
       routeAudioOutput(inputs, output, targetType, src.id)

@@ -2,6 +2,8 @@
  * Shared types for the backend workflow execution engine.
  */
 
+import type { MediaItem } from "../social/platforms/index.js"
+
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
 // ---------------------------------------------------------------------------
@@ -157,7 +159,7 @@ export interface ResolvedInputs {
   referenceAudioUrls?: string[]
   /** Media items for multi-media social posts (Instagram carousel, etc.).
    *  Accumulated by routeOutput when the target node's action expects N items. */
-  mediaItems?: Array<{ type: "photo" | "video"; url: string }>
+  mediaItems?: MediaItem[]
   scriptData?: unknown
   dialogueLines?: Array<{ speaker: string; text: string; emotion?: string }>
   scriptCharacters?: Array<{ name: string; description: string; mood?: string; action?: string; position?: string }>
