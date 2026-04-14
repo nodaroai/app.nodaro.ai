@@ -787,18 +787,18 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
         handles={handles}
       >
         <div
-          className="p-3"
+          className="p-3 h-full flex flex-col"
           style={{ minHeight: colCount > 1 ? `${colCount * 22 + 8}px` : undefined }}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
         >
           {showData && colCount > 0 && displayRowCount > 0 ? (
-            <div className="relative">
+            <div className="relative flex-1 min-h-0 flex flex-col">
               {isConnectedData ? (
                 <>
                   {resolvedViewMode === "list" && (
-                    <div className="flex flex-col divide-y divide-border/30 max-h-[400px] overflow-y-auto pr-1">
+                    <div className="flex flex-col divide-y divide-border/30 flex-1 min-h-0 overflow-y-auto pr-1">
                       {(() => { let imgIdx = 0; let cellIdx = 0; return displayRows.map((row, rowIdx) => (
                         <div key={rowIdx} className="min-w-0 pt-2 first:pt-0">
                           {columns.map((col, colIdx) => {
@@ -968,7 +968,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             <>
               {/* Text preview for single-column text lists (uses displayRows so upstream-connected rows show their filtered values). */}
               {colCount === 1 && columns[0]?.type === "text" && displayRowCount > 0 ? (
-                <div className="flex flex-col gap-0.5 overflow-y-auto nowheel" style={{ maxHeight: '160px' }}>
+                <div className="flex flex-col gap-0.5 flex-1 min-h-0 overflow-y-auto nowheel">
                   {displayRows.map((row, i) => (
                     <div key={i} className="flex items-start gap-1.5">
                       <span className="text-[9px] text-muted-foreground/40 tabular-nums mt-0.5 shrink-0 w-3 text-right">{i + 1}</span>

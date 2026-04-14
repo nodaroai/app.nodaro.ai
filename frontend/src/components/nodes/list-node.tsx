@@ -55,24 +55,21 @@ function ListNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         handles={HANDLES}
       >
-        <div className="p-3">
+        <div className="p-3 h-full flex flex-col">
           {itemCount === 0 ? (
             <p className="text-sm text-muted-foreground">No items yet</p>
           ) : (
             <>
-              <p className="text-xs text-muted-foreground mb-1">
+              <p className="text-xs text-muted-foreground mb-1 shrink-0">
                 {itemCount} item{itemCount !== 1 ? "s" : ""}
                 {isConnected && <span className="ml-1 opacity-70">(upstream)</span>}
               </p>
-              <ul className="text-xs max-h-32 overflow-y-auto space-y-0.5 nowheel">
-                {items.slice(0, 20).map((item, i) => (
+              <ul className="text-xs flex-1 min-h-0 overflow-y-auto space-y-0.5 nowheel">
+                {items.map((item, i) => (
                   <li key={i} className="truncate" title={item}>
                     <span className="text-muted-foreground">{i + 1}.</span> {item}
                   </li>
                 ))}
-                {items.length > 20 && (
-                  <li className="text-xs text-muted-foreground italic">…and {items.length - 20} more</li>
-                )}
               </ul>
             </>
           )}
