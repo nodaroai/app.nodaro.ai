@@ -38,8 +38,8 @@ type AnimatedFlowEdgeProps = EdgeProps<Edge<AnimatedFlowEdgeData>>
 const MODE_OPTIONS = [
   { value: "last", label: "Selected", desc: "The selected result" },
   { value: "item", label: "Item", desc: "Pick one item" },
-  { value: "each", label: "Each", desc: "One by one" },
-  { value: "all", label: "Bundle", desc: "All at once" },
+  { value: "each", label: "Each", desc: "All items, one by one" },
+  { value: "all", label: "Bundle", desc: "All items at once" },
 ] as const
 
 // List/loop/split-text produce inherent items with no user-selection concept,
