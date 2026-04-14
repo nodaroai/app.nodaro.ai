@@ -643,7 +643,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         ...edge,
         type: 'default', // Explicitly set type to use our AnimatedFlowEdge
         animated: hasAnimation, // Only animate for execution, not for dragging
-        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode: getEdgeOutputMode(edge, sourceNode), sourceNodeType: sourceNode?.type },
+        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode: getEdgeOutputMode(edge, sourceNode), sourceNodeType: sourceNode?.type, targetNodeType: nodeMap.get(edge.target)?.type },
         style: shouldHighlight ? {
           ...edge.style,
           stroke: edgeColor,
