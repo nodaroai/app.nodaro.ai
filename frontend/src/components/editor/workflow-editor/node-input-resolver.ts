@@ -74,7 +74,10 @@ export function resolveEdgeValuesForTableColumn(
     return single ? [single] : null;
   }
   if (outputMode === "last") {
-    if (allOutputs.length > 0) return [allOutputs[allOutputs.length - 1]];
+    // outputMode "last" = "Selected" in the UI — the currently selected result
+    // (activeResultIndex), NOT the tail of the list. The word "last" also appears
+    // inside range/list expressions where it DOES mean the final array index —
+    // those are handled separately via resolveIndex/resolveListExpression.
     const single = extractNodeOutput(upstream as WorkflowNode, edge.sourceHandle ?? undefined);
     return single ? [single] : null;
   }
@@ -113,6 +116,43 @@ function resolveUpstreamWithEdgeFilter(
 ): string[] | undefined {
   const edgeData = edge.data as Record<string, unknown> | undefined;
   const selector = edgeData as SelectorFields | undefined;
+  const outputMode = edgeData?.outputMode as string | undefined;
+
+  // Single-value edge modes short-circuit before list expansion so chained
+  // list/loop columns don't silently fan back out. "last" = "Selected" (reads
+  // activeResultIndex), "item" = pick a specific index. The word "last" inside
+  // range/list expressions is handled separately by resolveIndex below.
+  if (outputMode === "last") {
+    const single = extractNodeOutput(upstreamNode, edge.sourceHandle ?? undefined);
+    return single ? [single.trim()] : undefined;
+  }
+  if (outputMode === "item" || outputMode?.startsWith("item:")) {
+    const raw = upstreamNode.type === "loop" || upstreamNode.type === "list"
+      ? resolveLoopColumnValues(
+          { id: upstreamNode.id, data: upstreamNode.data as Record<string, unknown> },
+          edge.sourceHandle ?? undefined,
+          edges,
+          nodes,
+        )
+      : (extractNodeOutputAsList(
+          upstreamNode,
+          !!edgeData?.useAllResults,
+          edgeData?.runsExpression as string | undefined,
+        ) ?? []);
+    if (raw.length === 0) {
+      const single = extractNodeOutput(upstreamNode, edge.sourceHandle ?? undefined);
+      return single ? [single.trim()] : undefined;
+    }
+    let idx = 0;
+    if (outputMode === "item") {
+      const itemIndex = edgeData?.itemIndex as string | undefined;
+      idx = resolveIndex(itemIndex ?? "1", raw.length);
+    } else {
+      idx = parseInt(outputMode.split(":")[1], 10);
+    }
+    const picked = raw[idx] ?? raw[0];
+    return picked ? [picked.trim()] : undefined;
+  }
 
   let upstreamVals: string[] | undefined;
   if (upstreamNode.type === "loop" || upstreamNode.type === "list") {
@@ -590,7 +630,11 @@ export function resolveNodeInputs(
         const idx = parseInt(edgeMode.split(":")[1], 10);
         output = srcListResults[idx] ?? srcListResults[0];
       } else if (edgeMode === "last") {
-        output = srcListResults[srcListResults.length - 1];
+        // "last" = "Selected" in the UI — leave output undefined so we fall
+        // through to extractNodeOutput below, which reads activeResultIndex
+        // (the result the user picked via the carousel). This is DIFFERENT
+        // from the word "last" inside range/list expressions, where it means
+        // the final array index.
       } else if (edgeMode === "all") {
         const edgeData = srcEdge.data as Record<string, unknown> | undefined;
         const filteredSrc = selectListItems(srcListResults, edgeData as SelectorFields | undefined);
@@ -829,6 +873,10 @@ export function resolveNodeInputs(
       if (outputMode === "all") {
         inputs.prompt = items.join(", ") || output;
       } else if (outputMode === "last") {
+        // List sources have no user-selection concept, so "Selected" falls back
+        // to the final row. This overlaps with the other meaning of "last" —
+        // the final index in a range/list expression — but only because lists
+        // don't support the Selected semantic that generic nodes use.
         inputs.prompt = items[items.length - 1] || output;
       } else if (outputMode === "item") {
         const itemIndex = (srcEdge.data as Record<string, unknown> | undefined)

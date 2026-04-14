@@ -24,7 +24,7 @@ That's what **Edge Modes** are for.
 
 | Mode | What it does | When you want it |
 |------|--------------|-------------------|
-| **Latest** | Sends only the newest result through | Most of the time — it's the default |
+| **Selected** | Sends the currently selected result (the one you picked with the carousel arrows) | Most of the time — it's the default |
 | **Each** | Runs the downstream node once per item (fan-out) | "Do this for every item in the list" |
 | **All** | Sends the whole list as one bundle | Downstream needs everything together (e.g., combine videos) |
 | **Item** | Picks one specific result by position | "Just give me the 2nd one" or "the last one" |
@@ -35,32 +35,35 @@ That's what **Edge Modes** are for.
 
 1. **Click the edge** (the line between two nodes) on the canvas
 2. A small dropdown menu appears
-3. Pick one of: **Latest · Each · All · Item**
+3. Pick one of: **Selected · Each · All · Item**
 4. The pill label on the edge updates to show what you chose
 
-If you don't see anything special on the edge, it's in **Latest** mode — the default.
+If you don't see anything special on the edge, it's in **Selected** mode — the default.
 
 ---
 
-## Mode 1: Latest
+## Mode 1: Selected
 
-**The default. Pass only the most recent result.**
+**The default. Pass the result you've currently selected.**
 
 ```
-┌─────────────┐                  ┌─────────────┐
-│  LLM node   │                  │  Image Gen  │
-│             │ ───── Latest ──► │             │
-│ (3 results) │                  │  runs once  │
-└─────────────┘                  └─────────────┘
+┌─────────────┐                    ┌─────────────┐
+│  Gen Image  │                    │  Img → Vid  │
+│             │ ───── Selected ──► │             │
+│ 3 results   │                    │  runs once  │
+│ ◀ ● ▶       │                    │             │
+└─────────────┘                    └─────────────┘
        │
-       │  Result 1: "cat"
-       │  Result 2: "dog"
-       │  Result 3: "bird"   ◄── only this one passes
+       │  Result 1: image A
+       │  Result 2: image B  ◄── you clicked this one, so this passes
+       │  Result 3: image C
 ```
 
-**What happens:** Whatever the source node produced most recently — that's what flows through. Everything older is ignored on this edge.
+**What happens:** The edge passes whichever result is currently *active* on the source node — the one shown in the carousel. After each run the newest result is auto-selected, so by default this means "the most recent." But if you arrow back to an earlier result, *that* one flows through instead.
 
-**Use it for:** Almost everything. Simple linear workflows where each node has one job and hands off one thing.
+**Use it for:** Almost everything. Simple linear workflows where each node has one job and hands off one thing — including the "generate 4 variations, pick my favorite, keep going" pattern without needing any special mode.
+
+> **Note:** The word *last* also appears inside range and list expressions like `1..last` or `last-1`. There, it means the final index in the array, not the selected result. Same word, different meaning.
 
 ---
 
@@ -278,7 +281,7 @@ Downstream processing
 
 ### Start simple, then add modes as you need them
 
-New workflows should start entirely in **Latest** mode. Only switch an edge to **Each / All / Item** once you actually have a list of things to deal with.
+New workflows should start entirely in **Selected** mode. Only switch an edge to **Each / All / Item** once you actually have a list of things to deal with.
 
 ### One mode change at a time
 
@@ -296,7 +299,7 @@ The pill label on the edge always tells you what's happening in shorthand. A qui
 
 | Pill label | Meaning |
 |------------|---------|
-| *(no pill)* | Latest mode, default behavior |
+| *(no pill)* | Selected mode, default behavior |
 | `2..last` | Range selector on Each/All |
 | `1, 3, 5..last` | List selector on Each/All |
 | `3` | Item mode, picking item 3 |
@@ -312,9 +315,9 @@ The pill label on the edge always tells you what's happening in shorthand. A qui
 
 If you always want "the first image" or "the last video" regardless of how many results exist, Item mode with `1` or `last` is more reliable than guessing indexes. It also survives re-runs that change the total count.
 
-### Latest vs. Include previous runs
+### Selected vs. Include previous runs
 
-- **Latest** = "only the freshest batch." Good for linear workflows where upstream runs once and hands off.
+- **Selected** = "the result you've currently picked." Good for linear workflows where upstream runs once (or a few times) and you choose which output to pass along.
 - **Include previous runs** = "use the entire history of this node." Good for aggregation, recaps, or combining work from multiple sessions.
 
 ---
@@ -326,16 +329,19 @@ If you always want "the first image" or "the last video" regardless of how many 
 │                    EDGE MODE CHEAT SHEET                 │
 ├──────────────────────────────────────────────────────────┤
 │                                                          │
-│  LATEST    one in  → one out     (default)               │
+│  SELECTED  one in  → one out     (default, active pick)  │
 │  EACH      many in → many runs   (fan-out)               │
 │  ALL       many in → one run     (bundle)                │
-│  ITEM      many in → one out     (pick one)              │
+│  ITEM      many in → one out     (pick by index)         │
 │                                                          │
 │  List / range syntax:                                    │
 │     1, 2, last         pick items 1, 2, and last         │
 │     1..5               items 1 through 5                 │
 │     1..last:2          every other item                  │
 │     last..1:-1         reverse order                     │
+│                                                          │
+│  Note: "last" inside a range/list expression means the   │
+│  final index — different from the Selected mode above.   │
 │                                                          │
 │  Include previous runs:                                  │
 │     off     →  latest batch only                         │

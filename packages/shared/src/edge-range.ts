@@ -313,7 +313,7 @@ function buildBaseSentence(
   edgeData: Parameters<typeof describeEdgeBehavior>[0],
   mode: string | undefined,
 ): string {
-  if (mode === "last") return "Passes only the most recent result."
+  if (mode === "last") return "Passes the currently selected result."
   if (mode === "item") return buildItemSentence(edgeData)
   if (mode === "each") return buildEachSentence(edgeData)
   if (mode === "all") return buildAllSentence(edgeData)
