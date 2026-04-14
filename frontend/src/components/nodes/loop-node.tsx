@@ -793,18 +793,18 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
         handles={handles}
       >
         <div
-          className="p-3 h-full flex flex-col"
+          className="p-3"
           style={{ minHeight: colCount > 1 ? `${colCount * 22 + 8}px` : undefined }}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
         >
           {showData && colCount > 0 && displayRowCount > 0 ? (
-            <div className="relative flex-1 min-h-0 flex flex-col">
+            <div className="relative">
               {isConnectedData ? (
                 <>
                   {resolvedViewMode === "list" && (
-                    <div className="flex flex-col divide-y divide-border/30 flex-1 min-h-0 max-h-[480px] overflow-y-auto pr-1 nowheel">
+                    <div className="flex flex-col divide-y divide-border/30 max-h-[480px] overflow-y-auto pr-1 nowheel">
                       {(() => { let imgIdx = 0; let cellIdx = 0; return displayRows.map((row, rowIdx) => (
                         <div key={rowIdx} className="min-w-0 pt-2 first:pt-0">
                           {columns.map((col, colIdx) => {
@@ -820,7 +820,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                   )}
 
                   {resolvedViewMode === "gallery" && (
-                    <div className="grid gap-1.5 flex-1 min-h-0 max-h-[480px] overflow-y-auto nowheel pr-1" style={{ gridTemplateColumns: `repeat(${galleryCols}, 1fr)` }}>
+                    <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${galleryCols}, 1fr)` }}>
                       {(() => { let imgIdx = 0; return displayRows.flatMap((row, rowIdx) =>
                         columns.map((col, colIdx) => {
                           const cell = row[colIdx] ?? ""
@@ -974,7 +974,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             <>
               {/* Text preview for single-column text lists (uses displayRows so upstream-connected rows show their filtered values). */}
               {colCount === 1 && columns[0]?.type === "text" && displayRowCount > 0 ? (
-                <div className="flex flex-col gap-0.5 flex-1 min-h-0 max-h-[480px] overflow-y-auto nowheel">
+                <div className="flex flex-col gap-0.5 max-h-[480px] overflow-y-auto nowheel">
                   {displayRows.map((row, i) => (
                     <div key={i} className="flex items-start gap-1.5">
                       <span className="text-[9px] text-muted-foreground/40 tabular-nums mt-0.5 shrink-0 w-3 text-right">{i + 1}</span>
