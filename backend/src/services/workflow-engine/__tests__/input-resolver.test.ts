@@ -363,6 +363,27 @@ describe("resolveNodeInputs", () => {
     // split-text is a TEXT_SOURCE_TYPE, so output routes to prompt
     expect(result.prompt).toBe("first")
   })
+
+  it("resolves per-iteration prompt from modern list (columns+rows) during fan-out", () => {
+    // Regression: Run-from-here on list → generate-image chain used to fail
+    // with "Generation failed" because resolveNodeInputs didn't honor list
+    // sources during fan-out — only loop sources got column routing.
+    const target = node("t", "generate-image")
+    const listNode = node("l", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["prompt a"], ["prompt b"], ["prompt c"]],
+    })
+    const allNodes = [listNode, target]
+    const edges = [edge("l", "t", "col_c1", null, { outputMode: "each" })]
+
+    const iter0 = resolveNodeInputs(target, edges, {}, allNodes, undefined, 0)
+    const iter1 = resolveNodeInputs(target, edges, {}, allNodes, undefined, 1)
+    const iter2 = resolveNodeInputs(target, edges, {}, allNodes, undefined, 2)
+
+    expect(iter0.prompt).toBe("prompt a")
+    expect(iter1.prompt).toBe("prompt b")
+    expect(iter2.prompt).toBe("prompt c")
+  })
 })
 
 // ---------------------------------------------------------------------------

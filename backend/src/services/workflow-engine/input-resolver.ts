@@ -135,8 +135,12 @@ export function resolveNodeInputs(
     }
 
     if (!output) {
-      // Loop node column routing: resolve correct column value by sourceHandle (matches frontend)
-      if (sourceNode.type === "loop" && edge.sourceHandle) {
+      // Loop/list column routing: resolve correct column value by sourceHandle
+      // (matches frontend). Modern list nodes store data the same way as loops
+      // (columns + rows), so handle them the same way — without this,
+      // Run-from-here on a list → generate-image chain couldn't resolve per-row
+      // prompts during fan-out and the generate-image call failed with no prompt.
+      if ((sourceNode.type === "loop" || sourceNode.type === "list") && edge.sourceHandle) {
         const columns = sourceNode.data.columns as Array<{ id: string; handleId: string; type?: string; splitDelimiter?: string; connectedSourceId?: string; connectedSourceHandle?: string }> | undefined
         const colIndex = (columns ?? []).findIndex((c) => c.handleId === edge.sourceHandle)
         if (colIndex >= 0) {
@@ -438,9 +442,11 @@ export function getListInputForNode(
       // Read range config from the upstream edge
       const gpData = srcEdge.data as Record<string, unknown> | undefined
 
-      // Get list items
+      // Get list items — list and loop both route through
+      // extractSourceNodeOutputAsList (which handles their columns+rows);
+      // split-text reads its splitResults from execution state.
       let listItems: string[] | undefined
-      if (listNode.type === "list") {
+      if (listNode.type === "list" || listNode.type === "loop") {
         listItems = extractSourceNodeOutputAsList(listNode, triggerData)
       } else if (listNode.type === "split-text") {
         const st = nodeStates[listNode.id]
@@ -763,10 +769,19 @@ function routeOutput(
   if (srcType === "list") {
     const edgeMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined
     const outputMode = edgeMode ?? "each" // list edges default to "each"
-    const items = ((src.data.items as string | undefined) || "")
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0)
+    // Prefer modern columns+rows format; fall back to legacy items string.
+    // Without the modern branch, a list in All mode joined only the legacy
+    // items string (empty for modern lists) and each/last/item hit their
+    // `|| output` fallback — producing a single item instead of the full list.
+    const cols = src.data.columns as Array<{ handleId: string }> | undefined
+    const items = cols
+      ? ((src.data.rows as string[][] | undefined) ?? [])
+          .map((r) => r[0]?.trim() ?? "")
+          .filter((v) => v.length > 0)
+      : ((src.data.items as string | undefined) || "")
+          .split("\n")
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0)
     if (outputMode === "all") {
       inputs.prompt = items.join(", ") || output
     } else if (outputMode === "last") {
