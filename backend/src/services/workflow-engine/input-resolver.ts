@@ -387,8 +387,30 @@ export function getListInputForNode(
     const outputMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type) ? "each" : "last")
     if (outputMode !== "each") continue
 
-    // 2. List node — parse items by newline
+    // 2. List node — modern columns+rows or legacy items string
     if (sourceNode.type === "list") {
+      // Modern format: if the edge sources a specific column, route by that
+      // column's rows (matches loop column routing). Without this, multi-column
+      // lists always fanned out over the first column regardless of which
+      // handle the edge came from.
+      const columns = sourceNode.data.columns as
+        | Array<{ handleId: string }>
+        | undefined
+      if (columns && edge.sourceHandle) {
+        const colIndex = columns.findIndex((c) => c.handleId === edge.sourceHandle)
+        if (colIndex >= 0) {
+          const rows = (sourceNode.data.rows as string[][] | undefined) ?? []
+          const items = rows
+            .map((row) => row[colIndex]?.trim())
+            .filter(Boolean) as string[]
+          if (items.length > 1) {
+            const filtered = selectListItems(items, selectorArg)
+            if (filtered.length > 1) return filtered
+          }
+        }
+      }
+      // Fallback: extract default items (first column for modern, items string
+      // for legacy).
       const items = extractSourceNodeOutputAsList(sourceNode, triggerData)
       if (items && items.length > 1) {
         const filtered = selectListItems(items, selectorArg)
