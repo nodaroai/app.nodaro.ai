@@ -730,6 +730,35 @@ function routeOutput(
     return
   }
 
+  // --- Loop/list with typed column — route by column type ---
+  // Modern list/loop nodes store columns with typed handles; the output should
+  // land in the matching input slot (image → referenceImageUrls, etc.), not
+  // always in `prompt`. Without this, list → generate-image (reference image)
+  // drops the wired URL and the downstream node falls back to collectAncestorRefs,
+  // which walks raw upstream and ignores edge filters.
+  if ((srcType === "list" || srcType === "loop") && Array.isArray(src.data.columns) && edge.sourceHandle) {
+    const columns = src.data.columns as Array<{ handleId: string; type?: string }>
+    const col = columns.find((c) => c.handleId === edge.sourceHandle)
+    const colType = col?.type ?? "text"
+    if (colType === "image-url") {
+      if (targetType === "generate-image" || targetType === "edit-image" || targetType === "image-to-image" || targetType === "modify-image") {
+        inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+      } else {
+        inputs.imageUrl = output
+      }
+      return
+    }
+    if (colType === "video-url") {
+      routeVideoOutput(inputs, output, targetType, src.id)
+      return
+    }
+    if (colType === "audio-url") {
+      routeAudioOutput(inputs, output, targetType, src.id)
+      return
+    }
+    // text column falls through to the list text-routing / prompt fallback below
+  }
+
   // --- List node output mode routing (reads mode from edge data) ---
   if (srcType === "list") {
     const edgeMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined

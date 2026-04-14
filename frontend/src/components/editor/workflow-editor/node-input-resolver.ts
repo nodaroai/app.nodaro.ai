@@ -866,8 +866,11 @@ export function resolveNodeInputs(
       }
     } else if (src.type === "text-prompt") {
       inputs.prompt = output;
-    } else if (src.type === "list") {
-      // Read output mode from the edge, not the node
+    } else if (src.type === "list" && !(src.data as Record<string, unknown>).columns) {
+      // Legacy list format — newline-separated items string, text-only routing.
+      // Modern list nodes with columns fall through to the column-typed branch
+      // below so image/video/audio columns route to the right input (e.g.
+      // list → generate-image reference image needs referenceImageUrls, not prompt).
       const edgeMode = (srcEdge?.data as Record<string, unknown> | undefined)?.outputMode as string | undefined;
       const outputMode = edgeMode ?? "each"; // list edges default to "each"
       const items = ((src.data as Record<string, unknown>).items as string || "")
@@ -894,7 +897,7 @@ export function resolveNodeInputs(
         // "each" mode — output first item; fan-out handled separately
         inputs.prompt = output;
       }
-    } else if (src.type === "loop") {
+    } else if (src.type === "loop" || src.type === "list") {
       // output already resolved per-iteration by loop handler above — route by column type
       const loopCols = ((src.data as LoopNodeData).columns ?? []);
       const loopCol = loopCols.find((c) => c.handleId === (srcEdge.sourceHandle ?? ""));
