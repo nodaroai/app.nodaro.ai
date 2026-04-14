@@ -65,7 +65,7 @@ function ListNodeComponent({ id, data, selected }: NodeProps) {
                 {itemCount} item{itemCount !== 1 ? "s" : ""}
                 {isConnected && <span className="ml-1 opacity-70">(upstream)</span>}
               </p>
-              <ul className="text-xs flex-1 min-h-0 overflow-y-auto space-y-0.5 nowheel">
+              <ul className="text-xs flex-1 min-h-0 max-h-[480px] overflow-y-auto space-y-0.5 nowheel">
                 {items.map((item, i) => (
                   <li key={i} title={item} style={{
                     display: "-webkit-box",
