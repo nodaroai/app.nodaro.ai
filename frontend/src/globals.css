@@ -612,6 +612,25 @@ html, body {
   display: none;
 }
 
+/* Scroll container that reveals a visible thumb on hover (used by list/loop nodes). */
+.scroll-visible-on-hover::-webkit-scrollbar-thumb {
+  background: transparent;
+  transition: background 0.15s;
+}
+.scroll-visible-on-hover:hover::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.55);
+}
+.scroll-visible-on-hover:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.75);
+}
+.scroll-visible-on-hover {
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.15s;
+}
+.scroll-visible-on-hover:hover {
+  scrollbar-color: rgba(128, 128, 128, 0.55) transparent;
+}
+
 /* Touch-optimized React Flow handles for mobile */
 @media (pointer: coarse) {
   .react-flow__handle {
