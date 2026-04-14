@@ -25,6 +25,7 @@ type AnimatedFlowEdgeData = {
   listExpression?: string   // List-mode expression: comma-separated indices/ranges, e.g. "1,3,5..last-1"
   runsExpression?: string   // Runs-filter expression (only when useAllResults true): "1, 3, last"
   sourceNodeType?: string   // Source node's type — used to hide modes that don't apply (e.g. Selected for list/loop)
+  targetNodeType?: string   // Target node's type — used to hide Each when feeding into list/loop columns
 }
 
 type AnimatedFlowEdgeProps = EdgeProps<Edge<AnimatedFlowEdgeData>>
@@ -44,6 +45,13 @@ const MODE_OPTIONS = [
 // List/loop/split-text produce inherent items with no user-selection concept,
 // so "Selected" doesn't apply — those edges default to "Each" (fan-out).
 const LIST_LIKE_SOURCE_TYPES = new Set(["list", "loop", "split-text"])
+
+// When feeding INTO a list/loop column, Each (fan-out) doesn't apply — the
+// target accumulates items into the column as a bundle. Hide Each, default
+// to All. At runtime, resolveEdgeValuesForTableColumn treats Each and All
+// identically for list-like targets, so pre-existing "each" edges still
+// work while the UI steers new ones to "all".
+const LIST_LIKE_TARGET_TYPES = new Set(["list", "loop"])
 
 function AnimatedFlowEdgeComponent({
   id,
@@ -135,16 +143,29 @@ function AnimatedFlowEdgeComponent({
   const edgeData = data as AnimatedFlowEdgeData | undefined
   const isRunning = edgeData?.isRunning || false           // Pink: data flowing OUT from running node
   const isInputRunning = edgeData?.isInputRunning || false // Blue: data flowing IN to running node
-  // Default mode matches runtime: "each" for list/loop/split-text, "last"
-  // (Selected) for everything else. workflow-canvas.tsx already resolves
-  // list-like sources to "each" before sending the edge data in, but we
-  // re-derive the default here so the fallback is explicit.
+  // Default mode matches runtime semantics:
+  //   - Target is list/loop column → "all" (bundle items into the column)
+  //   - Source is list/loop/split-text → "each" (fan-out downstream)
+  //   - Otherwise → "last" (Selected)
+  // workflow-canvas.tsx already resolves list-like-source edges to "each"
+  // before passing edge data in, but we re-derive defaults here so the
+  // fallback is explicit and target-aware.
   const isListLikeSource = LIST_LIKE_SOURCE_TYPES.has(edgeData?.sourceNodeType ?? "")
-  const defaultMode = isListLikeSource ? "each" : "last"
-  const currentMode = edgeData?.outputMode ?? defaultMode
-  const modeOptions = isListLikeSource
-    ? MODE_OPTIONS.filter((opt) => opt.value !== "last")
-    : MODE_OPTIONS
+  const isListLikeTarget = LIST_LIKE_TARGET_TYPES.has(edgeData?.targetNodeType ?? "")
+  const defaultMode = isListLikeTarget ? "all" : isListLikeSource ? "each" : "last"
+  // If an edge has a mode that's been hidden for this target/source combo
+  // (e.g. legacy "each" on a list-target edge), fall back to the default so
+  // the dropdown shows something highlighted.
+  const rawMode = edgeData?.outputMode
+  const modeOptions = MODE_OPTIONS.filter((opt) => {
+    if (opt.value === "last" && isListLikeSource) return false
+    if (opt.value === "each" && isListLikeTarget) return false
+    return true
+  })
+  const modeOptionValues = new Set<string>(modeOptions.map((o) => o.value))
+  const currentMode = rawMode && modeOptionValues.has(rawMode.startsWith("item:") ? "item" : rawMode)
+    ? rawMode
+    : defaultMode
 
   // Normalize mode — handle legacy "item:N" format
   const normalizedMode = currentMode.startsWith("item:") ? "item" : currentMode
