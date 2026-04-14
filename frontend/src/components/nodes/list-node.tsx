@@ -7,7 +7,7 @@ import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import type { ListNodeData, WorkflowNode } from "@/types/nodes"
+import { TEXT_CELL_DEFAULT_MAX_LINES, type ListNodeData, type WorkflowNode } from "@/types/nodes"
 import { extractNodeOutputAsList, resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-editor/node-input-resolver"
 
 const HANDLES = [
@@ -36,6 +36,7 @@ function ListNodeComponent({ id, data, selected }: NodeProps) {
   const items = connectedItems ?? staticItems
   const itemCount = items.length
   const isConnected = connectedItems !== null
+  const textMaxLines = Math.max(1, nodeData.textMaxLines ?? TEXT_CELL_DEFAULT_MAX_LINES)
 
   return (
     <div className="relative max-w-[220px]">
@@ -66,7 +67,13 @@ function ListNodeComponent({ id, data, selected }: NodeProps) {
               </p>
               <ul className="text-xs flex-1 min-h-0 overflow-y-auto space-y-0.5 nowheel">
                 {items.map((item, i) => (
-                  <li key={i} className="truncate" title={item}>
+                  <li key={i} title={item} style={{
+                    display: "-webkit-box",
+                    WebkitBoxOrient: "vertical",
+                    WebkitLineClamp: textMaxLines,
+                    overflow: "hidden",
+                    wordBreak: "break-word",
+                  }}>
                     <span className="text-muted-foreground">{i + 1}.</span> {item}
                   </li>
                 ))}

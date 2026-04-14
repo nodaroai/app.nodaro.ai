@@ -63,6 +63,7 @@ export type ListNodeData = {
   thumbnailSize?: "sm" | "md" | "lg"
   galleryCols?: number
   viewMode?: "list" | "gallery" | "packed"
+  textMaxLines?: number
 }
 
 export interface LoopColumn {
@@ -100,6 +101,13 @@ export function resolveViewMode(data: {
     : "list"
 }
 
+/** Default maximum text lines per text cell in loop/list nodes (configurable via textMaxLines). */
+export const TEXT_CELL_DEFAULT_MAX_LINES = 7
+/** Line height approximation for text-xs cells, used to compute maxHeight from textMaxLines. */
+export const TEXT_CELL_LINE_HEIGHT_PX = 17
+/** Below this threshold, hover controllers (expand/copy/drag) are hidden to avoid overlapping short cells. */
+export const TEXT_CELL_CONTROLS_MIN_LINES = 3
+
 /** Stable handle ID for the loop node's "quick-add column" target. */
 export const LOOP_COL_ADD_HANDLE = "col_add"
 
@@ -135,6 +143,7 @@ export type LoopNodeData = {
   thumbnailSize?: "sm" | "md" | "lg"
   galleryCols?: number
   viewMode?: "list" | "gallery" | "packed"
+  textMaxLines?: number
 }
 
 export type UploadImageData = {
