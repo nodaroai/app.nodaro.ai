@@ -51,6 +51,8 @@ export type TextPromptData = {
   height?: number
 }
 
+export type TextFontSize = "small" | "medium" | "large"
+
 export type ListNodeData = {
   [key: string]: unknown
   label: string
@@ -64,6 +66,7 @@ export type ListNodeData = {
   galleryCols?: number
   viewMode?: "list" | "gallery" | "packed"
   textMaxLines?: number
+  textFontSize?: TextFontSize
 }
 
 export interface LoopColumn {
@@ -102,7 +105,7 @@ export function resolveViewMode(data: {
 }
 
 /** Default maximum text lines per text cell in loop/list nodes (configurable via textMaxLines). */
-export const TEXT_CELL_DEFAULT_MAX_LINES = 4
+export const TEXT_CELL_DEFAULT_MAX_LINES = 3
 /** Line height in px for text-xs cells (Tailwind text-xs → line-height: 1rem = 16px). */
 export const TEXT_CELL_LINE_HEIGHT_PX = 16
 /** Total vertical padding (top+bottom) of the inner cell in px (py-2 = 0.5rem × 2 = 16px). */
@@ -110,9 +113,20 @@ export const TEXT_CELL_VERTICAL_PADDING_PX = 16
 /** Below this threshold, hover controllers (expand/copy/drag) are hidden to avoid overlapping short cells. */
 export const TEXT_CELL_CONTROLS_MIN_LINES = 3
 
-/** Compute the pixel maxHeight for a text cell inner div with N visible lines, including padding. */
-export function textCellMaxHeightPx(lines: number): number {
-  return lines * TEXT_CELL_LINE_HEIGHT_PX + TEXT_CELL_VERTICAL_PADDING_PX
+/** Line height in px matching each TEXT_FONT_SIZE_CLASS value:
+ *  - small:  text-[10px] leading-tight (1.25) → 12.5 → 13
+ *  - medium: text-xs → line-height 1rem = 16
+ *  - large:  text-sm → line-height 1.25rem = 20
+ */
+export const TEXT_FONT_LINE_HEIGHT_PX: Record<TextFontSize, number> = {
+  small: 13,
+  medium: 16,
+  large: 20,
+}
+
+/** Compute the pixel maxHeight for a text cell inner div with N visible lines at a given font size, including padding. */
+export function textCellMaxHeightPx(lines: number, fontSize: TextFontSize = TEXT_FONT_SIZE_DEFAULT): number {
+  return lines * TEXT_FONT_LINE_HEIGHT_PX[fontSize] + TEXT_CELL_VERTICAL_PADDING_PX
 }
 
 /** Stable handle ID for the loop node's "quick-add column" target. */
@@ -151,7 +165,17 @@ export type LoopNodeData = {
   galleryCols?: number
   viewMode?: "list" | "gallery" | "packed"
   textMaxLines?: number
+  textFontSize?: TextFontSize
 }
+
+/** Tailwind class for each text font size setting. */
+export const TEXT_FONT_SIZE_CLASS: Record<TextFontSize, string> = {
+  small: "text-[10px] leading-tight",
+  medium: "text-xs",
+  large: "text-sm",
+}
+
+export const TEXT_FONT_SIZE_DEFAULT: TextFontSize = "medium"
 
 export type UploadImageData = {
   [key: string]: unknown

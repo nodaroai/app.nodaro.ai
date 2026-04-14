@@ -42,19 +42,19 @@ interface BaseNodeProps {
 
 // Light mode: white bg with colored top accent line, Dark mode: category-colored borders
 const CATEGORY_STYLES: Record<string, string> = {
-  input: "bg-white border-[#E2E8F0] dark:border-[#38BDF8] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
-  parameter: "bg-white border-[#E2E8F0] dark:border-[#818CF8] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
-  ai: "bg-white border-[#E2E8F0] dark:border-[#333333] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
-  processing: "bg-white border-[#E2E8F0] dark:border-[#475569] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
-  output: "bg-white border-[#E2E8F0] dark:border-green-500 dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
-  scene: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
-  character: "bg-white border-[#E2E8F0] dark:border-[#F472B6] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
-  face: "bg-white border-[#E2E8F0] dark:border-[#FB923C] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
-  object: "bg-white border-[#E2E8F0] dark:border-[#34D399] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
-  location: "bg-white border-[#E2E8F0] dark:border-[#22D3EE] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
-  script: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
-  i2v: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
-  component: "bg-white border-[#E2E8F0] dark:border-[#A855F7] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  input: "bg-white border-[#E2E8F0] dark:border-[#333333] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
+  parameter: "bg-white border-[#E2E8F0] dark:border-[#818CF8] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
+  ai: "bg-white border-[#E2E8F0] dark:border-[#333333] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
+  processing: "bg-white border-[#E2E8F0] dark:border-[#475569] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
+  output: "bg-white border-[#E2E8F0] dark:border-green-500 dark:bg-[#101010]/90 dark:backdrop-blur-sm",
+  scene: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
+  character: "bg-white border-[#E2E8F0] dark:border-[#F472B6] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
+  face: "bg-white border-[#E2E8F0] dark:border-[#FB923C] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
+  object: "bg-white border-[#E2E8F0] dark:border-[#34D399] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
+  location: "bg-white border-[#E2E8F0] dark:border-[#22D3EE] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
+  script: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
+  i2v: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
+  component: "bg-white border-[#E2E8F0] dark:border-[#A855F7] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
 }
 
 // Light mode: light gray header with colored icon, Dark mode: colored headers

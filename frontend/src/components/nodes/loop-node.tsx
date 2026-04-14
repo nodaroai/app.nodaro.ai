@@ -23,7 +23,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { LOOP_COLUMN_TYPE_META, LOOP_COL_ADD_HANDLE, TEXT_CELL_CONTROLS_MIN_LINES, TEXT_CELL_DEFAULT_MAX_LINES, loopColBaseHandle, loopColInputHandle, resolveViewMode, textCellMaxHeightPx, type LoopNodeData, type LoopColumn, type WorkflowNode } from "@/types/nodes"
+import { LOOP_COLUMN_TYPE_META, LOOP_COL_ADD_HANDLE, TEXT_CELL_CONTROLS_MIN_LINES, TEXT_CELL_DEFAULT_MAX_LINES, TEXT_FONT_SIZE_CLASS, TEXT_FONT_SIZE_DEFAULT, loopColBaseHandle, loopColInputHandle, resolveViewMode, type LoopNodeData, type LoopColumn, type WorkflowNode } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useFileUpload } from "@/hooks/use-file-upload"
@@ -225,6 +225,8 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
   const sizeConfig = THUMB_SIZE_CONFIG[thumbSize]
   const textMaxLines = Math.max(1, nodeData.textMaxLines ?? TEXT_CELL_DEFAULT_MAX_LINES)
   const showCellControls = textMaxLines >= TEXT_CELL_CONTROLS_MIN_LINES
+  const textFontSize = nodeData.textFontSize ?? TEXT_FONT_SIZE_DEFAULT
+  const textFontClass = TEXT_FONT_SIZE_CLASS[textFontSize]
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
 
   const { upload, storageExceeded, clearStorageExceeded } = useFileUpload()
@@ -632,31 +634,36 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     }
     const tile = mode !== "list"
     const packed = mode === "packed"
-    const innerSize = packed ? "w-full aspect-[5/3]" : ""
-    const innerClass = packed
-      ? "relative rounded-lg border border-border/40 bg-muted/10 w-full h-full overflow-hidden"
-      : tile
-      ? "relative rounded-lg border border-border/40 bg-muted/10 aspect-square overflow-hidden"
-      : "relative rounded-lg border border-border/40 bg-muted/10"
+    // Text cells size to content (line-clamped to textMaxLines) in all modes so the
+    // textMaxLines setting actually drives cell height — no fixed aspect ratio.
+    const innerClass = "relative rounded-lg border border-border/40 bg-muted/10 overflow-hidden"
+
+    // Browser-enforced line clamping — exactly textMaxLines visible regardless of font-size
+    // line-height math. Users open the fullscreen preview (Expand) to see content beyond.
+    const clampStyle: React.CSSProperties = {
+      display: "-webkit-box",
+      WebkitBoxOrient: "vertical",
+      WebkitLineClamp: textMaxLines,
+      overflow: "hidden",
+      wordBreak: "break-word",
+    }
 
     const textContent = (
-      <div className={`${packed ? "text-[10px] leading-tight" : "text-xs"} text-foreground/80 break-words`}>
+      <div className={`${textFontClass} text-foreground/80`} style={clampStyle}>
         {cell}
       </div>
     )
 
-    // Inner scrollbar disabled — content clips via overflow-hidden.
-    // Users open the fullscreen preview (Expand button) to see content beyond the cap.
     const cellContainer = packed ? (
-      <div className="h-full overflow-hidden px-1.5 py-1">{textContent}</div>
+      <div className="px-1.5 py-1">{textContent}</div>
     ) : tile ? (
-      <div className="h-full overflow-hidden px-2 py-2">{textContent}</div>
+      <div className="px-2 py-2">{textContent}</div>
     ) : (
-      <div className="overflow-hidden px-2 py-2 pr-3" style={{ maxHeight: `${textCellMaxHeightPx(textMaxLines)}px` }}>{textContent}</div>
+      <div className="px-2 py-2 pr-3">{textContent}</div>
     )
 
     return (
-      <div key={`${rowIdx}-${col.id}`} className={`relative group/cell ${innerSize}`}>
+      <div key={`${rowIdx}-${col.id}`} className="relative group/cell self-start">
         <div className={innerClass}>
           {cellContainer}
           {showCellControls && (
@@ -798,7 +805,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
         handles={handles}
       >
         <div
-          className="p-3 h-full flex flex-col"
+          className="p-1 h-full flex flex-col"
           style={{ minHeight: colCount > 1 ? `${colCount * 22 + 8}px` : undefined }}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
@@ -953,9 +960,15 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                 <ScrollArea className="flex-1 min-h-0">
                   <div className="flex flex-col gap-0.5 pt-2 pl-2 pr-4">
                     {displayRows.map((row, i) => (
-                      <div key={i} className="flex items-start gap-1.5 overflow-hidden" style={{ maxHeight: `${textMaxLines * 16}px` }}>
+                      <div key={i} className="flex items-start gap-1.5">
                         <span className="text-[9px] text-muted-foreground/40 tabular-nums mt-0.5 shrink-0 w-3 text-right">{i + 1}</span>
-                        <span className="text-[11px] text-foreground/75 flex-1" style={{ wordBreak: "break-word" }}>{row[0] || "—"}</span>
+                        <span className={`${textFontClass} text-foreground/75 flex-1`} style={{
+                          display: "-webkit-box",
+                          WebkitBoxOrient: "vertical",
+                          WebkitLineClamp: textMaxLines,
+                          overflow: "hidden",
+                          wordBreak: "break-word",
+                        }}>{row[0] || "—"}</span>
                       </div>
                     ))}
                   </div>
