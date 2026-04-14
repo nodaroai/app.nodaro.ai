@@ -774,4 +774,33 @@ describe("resolveEdgeValuesForTableColumn (UI display helper)", () => {
     // loop1[1..4] → UI edge filter 1..2 → [u3, u4]
     expect(vals).toEqual(["u3", "u4"])
   })
+
+  it("split-text upstream is treated as already-structured — items are NOT re-split by target's delimiter", () => {
+    // Regression: split-text's custom-delimiter output (e.g. 13 pieces split
+    // by "---") used to be re-chopped by the target list's column delimiter
+    // (default newline), producing wrong item counts downstream.
+    const splitNode = makeNode("split1", "split-text", {
+      splitResults: ["piece one\nhas newline", "piece two", "piece three"],
+    })
+    const edge = {
+      source: "split1",
+      target: "list1",
+      sourceHandle: null,
+      targetHandle: "col_c1_in",
+      data: { outputMode: "each" },
+    }
+    const columns = [{ id: "c1", handleId: "col_c1", type: "text" as const }]
+    const vals = resolveEdgeValuesForTableColumn(
+      edge as any,
+      splitNode as any,
+      [edge] as any,
+      [splitNode] as any,
+      columns,
+    )
+    expect(vals).toEqual([
+      "piece one\nhas newline",
+      "piece two",
+      "piece three",
+    ])
+  })
 })

@@ -82,11 +82,15 @@ export function resolveEdgeValuesForTableColumn(
     return single ? [single] : null;
   }
   if (outputMode === "each" || outputMode === "all") {
-    // For non-loop/list upstream, expand each raw item through the target's
-    // delimiter so delimited multi-line text (e.g., AI output with slide
-    // separators) becomes individual rows. Loop/list upstreams are already
-    // structured, so leave them as-is.
-    const items = (upstream.type === "loop" || upstream.type === "list")
+    // Loop/list/split-text upstreams have already produced their own structured
+    // items (rows, split pieces) — never re-split those by the target's
+    // delimiter, or split-text's 13 custom-delimited items would get re-chopped
+    // by newlines into whatever the target's column expects.
+    // Other sources: expand each raw item through the target's delimiter so
+    // delimited multi-line text (e.g., AI output with slide separators) becomes
+    // individual rows.
+    const isAlreadyStructured = upstream.type === "loop" || upstream.type === "list" || upstream.type === "split-text"
+    const items = isAlreadyStructured
       ? allOutputs
       : (allOutputs.length > 0
           ? allOutputs.flatMap((item) => splitByLoopDelimiter(item, columns))
