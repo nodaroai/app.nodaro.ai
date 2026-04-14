@@ -136,74 +136,28 @@ export function resolveNodeInputs(
 
     if (!output) {
       // Loop/list column routing: resolve correct column value by sourceHandle
-      // (matches frontend). Modern list nodes store data the same way as loops
-      // (columns + rows), so handle them the same way — without this,
-      // Run-from-here on a list → generate-image chain couldn't resolve per-row
-      // prompts during fan-out and the generate-image call failed with no prompt.
-      if ((sourceNode.type === "loop" || sourceNode.type === "list") && edge.sourceHandle) {
-        const columns = sourceNode.data.columns as Array<{ id: string; handleId: string; type?: string; splitDelimiter?: string; connectedSourceId?: string; connectedSourceHandle?: string }> | undefined
-        const colIndex = (columns ?? []).findIndex((c) => c.handleId === edge.sourceHandle)
-        if (colIndex >= 0) {
-          const col = columns![colIndex]
-
-          // Per-column connected source: find edge targeting this column's input handle
-          const colInEdge = edges.find(
-            (e) => e.target === sourceNode.id && e.targetHandle === `${col.handleId}_in`,
-          )
-          if (colInEdge) {
-            const upstreamNode = allNodes.find((n) => n.id === colInEdge.source)
-            if (upstreamNode) {
-              const upstreamText = getNodeOutput(upstreamNode, colInEdge.sourceHandle, nodeStates, triggerData)
-              if (upstreamText) {
-                const lines = splitByLoopDelimiter(upstreamText, columns)
-                if (listIterationIndex != null) {
-                  const filtered = selectListItems(
-                    lines,
-                    edgeData as SelectorFields | undefined,
-                  )
-                  output = filtered[listIterationIndex]
-                } else {
-                  output = lines[0]
-                }
-              }
-            }
-          }
-
-          // Fallback: check global "in" handle (connected mode)
-          if (!output) {
-            const loopInEdges = edges.filter((e) => e.target === sourceNode.id && e.targetHandle === "in")
-            if (loopInEdges.length > 0) {
-              const upstreamNode = allNodes.find((n) => n.id === loopInEdges[0].source)
-              if (upstreamNode) {
-                const upstreamText = getNodeOutput(upstreamNode, loopInEdges[0].sourceHandle, nodeStates, triggerData)
-                if (upstreamText) {
-                  const lines = splitByLoopDelimiter(upstreamText, columns)
-                  if (listIterationIndex != null) {
-                    const filtered = selectListItems(
-                      lines,
-                      edgeData as SelectorFields | undefined,
-                    )
-                    output = filtered[listIterationIndex]
-                  } else {
-                    output = lines[0]
-                  }
-                }
-              }
-            }
-          }
-
-          // Fallback: manual mode — get correct column value for current iteration
-          if (!output) {
-            const rows = sourceNode.data.rows as string[][] | undefined
+      // (matches frontend). Uses resolveListLoopColumnItems which recursively
+      // follows connected-mode chains (list → list → image-source), applying
+      // each intermediate edge's filter. Without recursion, chains of two or
+      // more connected-mode lists couldn't propagate items through the
+      // orchestrator — the downstream gen-image fell back to collectAncestorRefs
+      // and bypassed every filter in between.
+      if (sourceNode.type === "loop" || sourceNode.type === "list") {
+        const items = resolveListLoopColumnItems(
+          sourceNode,
+          edge.sourceHandle,
+          edges,
+          allNodes,
+          nodeStates,
+          triggerData,
+        )
+        if (items && items.length > 0) {
+          const filtered = selectListItems(items, edgeData as SelectorFields | undefined)
+          if (filtered.length > 0) {
             if (listIterationIndex != null) {
-              const items = (rows ?? []).map((row) => row[colIndex]?.trim()).filter(Boolean) as string[]
-              const filtered = selectListItems(
-                items,
-                edgeData as SelectorFields | undefined,
-              )
-              output = filtered[listIterationIndex]
+              output = filtered[listIterationIndex % filtered.length]
             } else {
-              output = rows?.[0]?.[colIndex]?.trim()
+              output = filtered[0]
             }
           }
         }
@@ -291,6 +245,97 @@ function getSavedNodeOutput(node: SimpleNode): string | undefined {
 
 /** Node types whose edges default to "each" output mode (fan-out). */
 const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"])
+
+/**
+ * Resolve the list of values flowing out of a list/loop column, recursively
+ * following connected-mode chains and applying each edge's selector filter.
+ *
+ * Without this, chained connected-mode lists (e.g. gen-image → list1 → list2 →
+ * gen-image2) couldn't propagate their items through the backend orchestrator,
+ * because getNodeOutput on an intermediate list returned a single string with
+ * no awareness of upstream accumulated results.
+ *
+ * Mirrors the frontend's resolveLoopColumnValues + resolveUpstreamWithEdgeFilter.
+ */
+function resolveListLoopColumnItems(
+  sourceNode: SimpleNode,
+  sourceHandle: string | null | undefined,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+  triggerData: Record<string, unknown> | undefined,
+  visited: Set<string> = new Set(),
+): string[] | undefined {
+  if (visited.has(sourceNode.id)) return undefined
+  visited.add(sourceNode.id)
+
+  const columns = sourceNode.data.columns as
+    | Array<{ id: string; handleId: string; type?: string; splitDelimiter?: string; connectedSourceId?: string; connectedSourceHandle?: string }>
+    | undefined
+  if (!columns || !sourceHandle) {
+    // No typed column routing — fall back to legacy extraction.
+    return extractSourceNodeOutputAsList(sourceNode, triggerData)
+  }
+  const colIndex = columns.findIndex((c) => c.handleId === sourceHandle)
+  if (colIndex < 0) return extractSourceNodeOutputAsList(sourceNode, triggerData)
+  const col = columns[colIndex]
+
+  // Per-column connected source: resolve upstream's items, applying this edge's filter.
+  const colInEdge = edges.find(
+    (e) => e.target === sourceNode.id && e.targetHandle === `${col.handleId}_in`,
+  )
+  if (colInEdge) {
+    const upstreamNode = allNodes.find((n) => n.id === colInEdge.source)
+    if (upstreamNode) {
+      const edgeSelector = colInEdge.data as SelectorFields | undefined
+      let upstreamVals: string[] | undefined
+
+      if (upstreamNode.type === "list" || upstreamNode.type === "loop") {
+        // Recurse into chained lists/loops.
+        upstreamVals = resolveListLoopColumnItems(
+          upstreamNode,
+          colInEdge.sourceHandle,
+          edges,
+          allNodes,
+          nodeStates,
+          triggerData,
+          visited,
+        )
+      } else {
+        // Non-list upstream: prefer completed state's listResults (fan-out
+        // output), fall back to the node's accumulated generatedResults.
+        const state = nodeStates[upstreamNode.id]
+        if (state?.output?.listResults && state.output.listResults.length > 0) {
+          upstreamVals = state.output.listResults.filter((v): v is string => typeof v === "string" && v.length > 0)
+        } else {
+          const fromData = extractAllGeneratedResults(upstreamNode.data as Record<string, unknown>)
+          if (fromData && fromData.length > 0) upstreamVals = fromData
+        }
+      }
+
+      if (upstreamVals && upstreamVals.length > 1) {
+        const filtered = selectListItems(upstreamVals, edgeSelector)
+        if (filtered.length > 0) return filtered
+      }
+
+      // Single-output upstream (or no multi-item accumulation): split the
+      // primary text output by this column's delimiter (default newline).
+      const upstreamText = getNodeOutput(upstreamNode, colInEdge.sourceHandle, nodeStates, triggerData)
+      if (upstreamText) {
+        const lines = splitByLoopDelimiter(upstreamText, columns)
+        if (lines.length > 0) return lines
+      }
+    }
+  }
+
+  // Manual mode: extract column values directly from rows.
+  const rows = (sourceNode.data.rows as string[][] | undefined) ?? []
+  const items = rows.map((row) => row[colIndex]?.trim()).filter(Boolean) as string[]
+  if (items.length > 0) return items
+
+  // Legacy items-string fallback.
+  return extractSourceNodeOutputAsList(sourceNode, triggerData)
+}
 
 /**
  * Check if a node receives list input from any upstream source.
@@ -387,54 +432,16 @@ export function getListInputForNode(
     const outputMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type) ? "each" : "last")
     if (outputMode !== "each") continue
 
-    // 2. List node — modern columns+rows or legacy items string
+    // 2. List node — use the recursive resolver for connected-mode chains.
     if (sourceNode.type === "list") {
-      // Modern format with a typed column: route by that column. This must
-      // also honor **connected mode** — a column whose rows are populated by
-      // splitting an upstream node's text via the column's splitDelimiter.
-      // (Mirrors the loop branch above and the frontend's
-      // resolveLoopColumnValues.) Without this, a list connected to an
-      // upstream text source with a splitDelimiter would fan out over the
-      // empty placeholder row instead of the upstream-split items.
-      const columns = sourceNode.data.columns as
-        | Array<{ id: string; handleId: string; type?: string; splitDelimiter?: string; connectedSourceId?: string; connectedSourceHandle?: string }>
-        | undefined
-      if (columns && edge.sourceHandle) {
-        const colIndex = columns.findIndex((c) => c.handleId === edge.sourceHandle)
-        if (colIndex >= 0) {
-          const col = columns[colIndex]
-
-          // Per-column connected source: find edge targeting this column's
-          // input handle and split the upstream text by the column's delimiter.
-          const colInEdge = edges.find(
-            (e) => e.target === sourceNode.id && e.targetHandle === `${col.handleId}_in`,
-          )
-          if (colInEdge) {
-            const upstreamNode = allNodes.find((n) => n.id === colInEdge.source)
-            if (upstreamNode) {
-              const upstreamText = getNodeOutput(upstreamNode, colInEdge.sourceHandle, nodeStates, triggerData)
-              if (upstreamText) {
-                const lines = splitByLoopDelimiter(upstreamText, columns)
-                const filtered = selectListItems(lines, selectorArg)
-                if (filtered.length > 1) return filtered
-              }
-            }
-          }
-
-          // Manual mode: extract column values from rows
-          const rows = (sourceNode.data.rows as string[][] | undefined) ?? []
-          const items = rows
-            .map((row) => row[colIndex]?.trim())
-            .filter(Boolean) as string[]
-          if (items.length > 1) {
-            const filtered = selectListItems(items, selectorArg)
-            if (filtered.length > 1) return filtered
-          }
-        }
-      }
-      // Fallback: extract default items (first column for modern, items string
-      // for legacy).
-      const items = extractSourceNodeOutputAsList(sourceNode, triggerData)
+      const items = resolveListLoopColumnItems(
+        sourceNode,
+        edge.sourceHandle,
+        edges,
+        allNodes,
+        nodeStates,
+        triggerData,
+      )
       if (items && items.length > 1) {
         const filtered = selectListItems(items, selectorArg)
         if (filtered.length > 1) return filtered

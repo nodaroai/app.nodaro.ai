@@ -448,6 +448,42 @@ describe("getListInputForNode", () => {
     expect(result).toEqual(["prompt a", "prompt b", "prompt c"])
   })
 
+  it("resolves chained connected-mode lists (gen-image → list → list → gen-image)", () => {
+    // User scenario: gen-image1 (4 results) → list1 (filter 2) → list2 (filter 1) → gen-image2.
+    // Before: resolver couldn't walk the chain — getNodeOutput on list1 returned
+    // nothing, fallback collectAncestorRefs grabbed gen-image1's first URL directly,
+    // bypassing every filter. Now the recursive resolver traverses list1 → list2
+    // and applies each edge's filter.
+    const gen1 = node("g1", "generate-image", {})
+    const list1 = node("l1", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "image-url", connectedSourceId: "g1", connectedSourceHandle: "image" }],
+      rows: [[""]],
+    })
+    const list2 = node("l2", "list", {
+      columns: [{ id: "c2", handleId: "col_c2", type: "image-url", connectedSourceId: "l1", connectedSourceHandle: "col_c1" }],
+      rows: [[""]],
+    })
+    const target = node("g2", "generate-image")
+    const allNodes = [gen1, list1, list2, target]
+    const edges = [
+      edge("g1", "l1", "image", "col_c1_in"),
+      edge("l1", "l2", "col_c1", "col_c2_in", { outputMode: "all", rangeFrom: "1", rangeTo: "2" }),
+      edge("l2", "g2", "col_c2", null, { outputMode: "each", rangeFrom: "2", rangeTo: "2" }),
+    ]
+    const states: Record<string, NodeExecutionState> = {
+      g1: { status: "completed", output: { listResults: ["u1", "u2", "u3", "u4"] } },
+    }
+
+    // list2's items after chain: gen1[1..2] = [u1, u2] → list2 filter 2..2 = [u2]
+    const result = getListInputForNode(target, edges, states, allNodes)
+    expect(result).toBeUndefined() // length 1, no fan-out
+
+    // resolveNodeInputs in single-execution mode should resolve gen-image2's
+    // input to u2 (the single filtered item), not to u1 (ancestor fallback).
+    const inputs = resolveNodeInputs(target, edges, states, allNodes)
+    expect(inputs.imageUrl ?? inputs.referenceImageUrls?.[0]).toBe("u2")
+  })
+
   it("fan-outs over list in connected mode (upstream split by delimiter)", () => {
     // Regression: the user's list node had columns+rows but rows was just
     // [[""]] — a placeholder. The actual items come from splitting the
