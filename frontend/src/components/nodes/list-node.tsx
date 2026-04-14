@@ -27,8 +27,9 @@ function ListNodeComponent({ id, data, selected }: NodeProps) {
     if (!inEdge) return null
     const upstream = nodes.find((n) => n.id === inEdge.source)
     if (!upstream) return null
-    return resolveEdgeValuesForTableColumn(inEdge, upstream, edges, nodes, undefined)
-  }, [id, edges, nodes])
+    // Pass the list-node's own columns so splitByLoopDelimiter uses the configured splitDelimiter.
+    return resolveEdgeValuesForTableColumn(inEdge, upstream, edges, nodes, nodeData.columns)
+  }, [id, edges, nodes, nodeData.columns])
 
   const staticItems = useMemo(
     () => extractNodeOutputAsList({ id, type: "list", data: nodeData } as WorkflowNode) ?? [],

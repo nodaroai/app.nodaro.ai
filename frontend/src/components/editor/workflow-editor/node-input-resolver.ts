@@ -79,10 +79,20 @@ export function resolveEdgeValuesForTableColumn(
     return single ? [single] : null;
   }
   if (outputMode === "each" || outputMode === "all") {
-    if (allOutputs.length > 0) return selectListItems(allOutputs, selector);
-    const single = extractNodeOutput(upstream as WorkflowNode, edge.sourceHandle ?? undefined);
-    if (!single) return null;
-    return splitByLoopDelimiter(single, columns);
+    // For non-loop/list upstream, expand each raw item through the target's
+    // delimiter so delimited multi-line text (e.g., AI output with slide
+    // separators) becomes individual rows. Loop/list upstreams are already
+    // structured, so leave them as-is.
+    const items = (upstream.type === "loop" || upstream.type === "list")
+      ? allOutputs
+      : (allOutputs.length > 0
+          ? allOutputs.flatMap((item) => splitByLoopDelimiter(item, columns))
+          : ((): string[] => {
+              const single = extractNodeOutput(upstream as WorkflowNode, edge.sourceHandle ?? undefined);
+              return single ? splitByLoopDelimiter(single, columns) : [];
+            })());
+    if (items.length > 0) return selectListItems(items, selector);
+    return null;
   }
   const single = extractNodeOutput(upstream as WorkflowNode, edge.sourceHandle ?? undefined);
   if (!single) return null;
