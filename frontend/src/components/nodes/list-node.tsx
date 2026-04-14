@@ -56,24 +56,18 @@ function ListNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         handles={HANDLES}
       >
-        <div className="p-3">
+        <div className="p-3 h-full flex flex-col">
           {itemCount === 0 ? (
             <p className="text-sm text-muted-foreground">No items yet</p>
           ) : (
             <>
-              <p className="text-xs text-muted-foreground mb-1">
+              <p className="text-xs text-muted-foreground mb-1 shrink-0">
                 {itemCount} item{itemCount !== 1 ? "s" : ""}
                 {isConnected && <span className="ml-1 opacity-70">(upstream)</span>}
               </p>
-              <ul className="text-xs max-h-[480px] overflow-y-auto space-y-0.5 nowheel">
+              <ul className="text-xs flex-1 min-h-0 overflow-y-auto space-y-0.5 nowheel">
                 {items.map((item, i) => (
-                  <li key={i} title={item} style={{
-                    display: "-webkit-box",
-                    WebkitBoxOrient: "vertical",
-                    WebkitLineClamp: textMaxLines,
-                    overflow: "hidden",
-                    wordBreak: "break-word",
-                  }}>
+                  <li key={i} title={item} className="overflow-hidden" style={{ maxHeight: `${textMaxLines * 16}px`, wordBreak: "break-word" }}>
                     <span className="text-muted-foreground">{i + 1}.</span> {item}
                   </li>
                 ))}
