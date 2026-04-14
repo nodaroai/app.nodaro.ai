@@ -370,7 +370,7 @@ describe("resolveNodeInputs", () => {
 // ---------------------------------------------------------------------------
 
 describe("getListInputForNode", () => {
-  it("returns list items for upstream list node", () => {
+  it("returns list items for upstream list node (legacy items string)", () => {
     const target = node("t", "generate-image")
     const listNode = node("l", "list", { items: "a\nb\nc" })
     const allNodes = [listNode, target]
@@ -379,6 +379,23 @@ describe("getListInputForNode", () => {
 
     const result = getListInputForNode(target, edges, states, allNodes)
     expect(result).toEqual(["a", "b", "c"])
+  })
+
+  it("returns list items for upstream list node (modern columns + rows format)", () => {
+    // Regression: the orchestrator used to only handle the legacy `items`
+    // string format, so Run-from-here couldn't fan out over list nodes
+    // built in the modern UI (which store data as columns + rows).
+    const target = node("t", "generate-image")
+    const listNode = node("l", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["prompt a"], ["prompt b"], ["prompt c"]],
+    })
+    const allNodes = [listNode, target]
+    const edges = [edge("l", "t")]
+    const states: Record<string, NodeExecutionState> = {}
+
+    const result = getListInputForNode(target, edges, states, allNodes)
+    expect(result).toEqual(["prompt a", "prompt b", "prompt c"])
   })
 
   it("returns undefined for single-item list", () => {
