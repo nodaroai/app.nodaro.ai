@@ -384,6 +384,35 @@ describe("resolveNodeInputs", () => {
     expect(iter1.prompt).toBe("prompt b")
     expect(iter2.prompt).toBe("prompt c")
   })
+
+  it("resolves per-iteration prompt with range filter (each + rangeFrom/rangeTo)", () => {
+    // User scenario: list (5 items) → generate-image with "each 1..4"
+    // Each iteration should see the N-th filtered item, not the N-th raw row.
+    // If the range filter isn't applied per-iteration, iter 3 would try to
+    // read row[3] ("p4") which happens to be the 4th selected item anyway…
+    // But let's test with a range that shifts: "2..5" → iter 0 should be p2.
+    const target = node("t", "generate-image")
+    const listNode = node("l", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["p1"], ["p2"], ["p3"], ["p4"], ["p5"]],
+    })
+    const allNodes = [listNode, target]
+    const edges = [edge("l", "t", "col_c1", null, {
+      outputMode: "each",
+      rangeFrom: "2",
+      rangeTo: "5",
+    })]
+
+    const iter0 = resolveNodeInputs(target, edges, {}, allNodes, undefined, 0)
+    const iter1 = resolveNodeInputs(target, edges, {}, allNodes, undefined, 1)
+    const iter2 = resolveNodeInputs(target, edges, {}, allNodes, undefined, 2)
+    const iter3 = resolveNodeInputs(target, edges, {}, allNodes, undefined, 3)
+
+    expect(iter0.prompt).toBe("p2")
+    expect(iter1.prompt).toBe("p3")
+    expect(iter2.prompt).toBe("p4")
+    expect(iter3.prompt).toBe("p5")
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -417,6 +446,26 @@ describe("getListInputForNode", () => {
 
     const result = getListInputForNode(target, edges, states, allNodes)
     expect(result).toEqual(["prompt a", "prompt b", "prompt c"])
+  })
+
+  it("applies range filter on modern list with each + rangeFrom/rangeTo", () => {
+    // User scenario: list (5 items) → generate-image with "each 1..4"
+    // Run from here returned only 1 result instead of 4.
+    const target = node("t", "generate-image")
+    const listNode = node("l", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["p1"], ["p2"], ["p3"], ["p4"], ["p5"]],
+    })
+    const allNodes = [listNode, target]
+    const edges = [edge("l", "t", "col_c1", null, {
+      outputMode: "each",
+      rangeFrom: "1",
+      rangeTo: "4",
+    })]
+    const states: Record<string, NodeExecutionState> = {}
+
+    const result = getListInputForNode(target, edges, states, allNodes)
+    expect(result).toEqual(["p1", "p2", "p3", "p4"])
   })
 
   it("returns undefined for single-item list", () => {
