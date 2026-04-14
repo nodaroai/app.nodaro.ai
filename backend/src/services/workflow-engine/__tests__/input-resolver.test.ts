@@ -363,6 +363,56 @@ describe("resolveNodeInputs", () => {
     // split-text is a TEXT_SOURCE_TYPE, so output routes to prompt
     expect(result.prompt).toBe("first")
   })
+
+  it("resolves per-iteration prompt from modern list (columns+rows) during fan-out", () => {
+    // Regression: Run-from-here on list → generate-image chain used to fail
+    // with "Generation failed" because resolveNodeInputs didn't honor list
+    // sources during fan-out — only loop sources got column routing.
+    const target = node("t", "generate-image")
+    const listNode = node("l", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["prompt a"], ["prompt b"], ["prompt c"]],
+    })
+    const allNodes = [listNode, target]
+    const edges = [edge("l", "t", "col_c1", null, { outputMode: "each" })]
+
+    const iter0 = resolveNodeInputs(target, edges, {}, allNodes, undefined, 0)
+    const iter1 = resolveNodeInputs(target, edges, {}, allNodes, undefined, 1)
+    const iter2 = resolveNodeInputs(target, edges, {}, allNodes, undefined, 2)
+
+    expect(iter0.prompt).toBe("prompt a")
+    expect(iter1.prompt).toBe("prompt b")
+    expect(iter2.prompt).toBe("prompt c")
+  })
+
+  it("resolves per-iteration prompt with range filter (each + rangeFrom/rangeTo)", () => {
+    // User scenario: list (5 items) → generate-image with "each 1..4"
+    // Each iteration should see the N-th filtered item, not the N-th raw row.
+    // If the range filter isn't applied per-iteration, iter 3 would try to
+    // read row[3] ("p4") which happens to be the 4th selected item anyway…
+    // But let's test with a range that shifts: "2..5" → iter 0 should be p2.
+    const target = node("t", "generate-image")
+    const listNode = node("l", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["p1"], ["p2"], ["p3"], ["p4"], ["p5"]],
+    })
+    const allNodes = [listNode, target]
+    const edges = [edge("l", "t", "col_c1", null, {
+      outputMode: "each",
+      rangeFrom: "2",
+      rangeTo: "5",
+    })]
+
+    const iter0 = resolveNodeInputs(target, edges, {}, allNodes, undefined, 0)
+    const iter1 = resolveNodeInputs(target, edges, {}, allNodes, undefined, 1)
+    const iter2 = resolveNodeInputs(target, edges, {}, allNodes, undefined, 2)
+    const iter3 = resolveNodeInputs(target, edges, {}, allNodes, undefined, 3)
+
+    expect(iter0.prompt).toBe("p2")
+    expect(iter1.prompt).toBe("p3")
+    expect(iter2.prompt).toBe("p4")
+    expect(iter3.prompt).toBe("p5")
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -370,7 +420,7 @@ describe("resolveNodeInputs", () => {
 // ---------------------------------------------------------------------------
 
 describe("getListInputForNode", () => {
-  it("returns list items for upstream list node", () => {
+  it("returns list items for upstream list node (legacy items string)", () => {
     const target = node("t", "generate-image")
     const listNode = node("l", "list", { items: "a\nb\nc" })
     const allNodes = [listNode, target]
@@ -379,6 +429,110 @@ describe("getListInputForNode", () => {
 
     const result = getListInputForNode(target, edges, states, allNodes)
     expect(result).toEqual(["a", "b", "c"])
+  })
+
+  it("returns list items for upstream list node (modern columns + rows format)", () => {
+    // Regression: the orchestrator used to only handle the legacy `items`
+    // string format, so Run-from-here couldn't fan out over list nodes
+    // built in the modern UI (which store data as columns + rows).
+    const target = node("t", "generate-image")
+    const listNode = node("l", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["prompt a"], ["prompt b"], ["prompt c"]],
+    })
+    const allNodes = [listNode, target]
+    const edges = [edge("l", "t")]
+    const states: Record<string, NodeExecutionState> = {}
+
+    const result = getListInputForNode(target, edges, states, allNodes)
+    expect(result).toEqual(["prompt a", "prompt b", "prompt c"])
+  })
+
+  it("resolves chained connected-mode lists (gen-image → list → list → gen-image)", () => {
+    // User scenario: gen-image1 (4 results) → list1 (filter 2) → list2 (filter 1) → gen-image2.
+    // Before: resolver couldn't walk the chain — getNodeOutput on list1 returned
+    // nothing, fallback collectAncestorRefs grabbed gen-image1's first URL directly,
+    // bypassing every filter. Now the recursive resolver traverses list1 → list2
+    // and applies each edge's filter.
+    const gen1 = node("g1", "generate-image", {})
+    const list1 = node("l1", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "image-url", connectedSourceId: "g1", connectedSourceHandle: "image" }],
+      rows: [[""]],
+    })
+    const list2 = node("l2", "list", {
+      columns: [{ id: "c2", handleId: "col_c2", type: "image-url", connectedSourceId: "l1", connectedSourceHandle: "col_c1" }],
+      rows: [[""]],
+    })
+    const target = node("g2", "generate-image")
+    const allNodes = [gen1, list1, list2, target]
+    const edges = [
+      edge("g1", "l1", "image", "col_c1_in"),
+      edge("l1", "l2", "col_c1", "col_c2_in", { outputMode: "all", rangeFrom: "1", rangeTo: "2" }),
+      edge("l2", "g2", "col_c2", null, { outputMode: "each", rangeFrom: "2", rangeTo: "2" }),
+    ]
+    const states: Record<string, NodeExecutionState> = {
+      g1: { status: "completed", output: { listResults: ["u1", "u2", "u3", "u4"] } },
+    }
+
+    // list2's items after chain: gen1[1..2] = [u1, u2] → list2 filter 2..2 = [u2]
+    const result = getListInputForNode(target, edges, states, allNodes)
+    expect(result).toBeUndefined() // length 1, no fan-out
+
+    // resolveNodeInputs in single-execution mode should resolve gen-image2's
+    // input to u2 (the single filtered item), not to u1 (ancestor fallback).
+    const inputs = resolveNodeInputs(target, edges, states, allNodes)
+    expect(inputs.imageUrl ?? inputs.referenceImageUrls?.[0]).toBe("u2")
+  })
+
+  it("fan-outs over list in connected mode (upstream split by delimiter)", () => {
+    // Regression: the user's list node had columns+rows but rows was just
+    // [[""]] — a placeholder. The actual items come from splitting the
+    // upstream node's text by the column's splitDelimiter. Backend used to
+    // only read node.data.rows and miss the connected source entirely.
+    const aiWriter = node("w", "ai-writer", {})
+    const listNode = node("l", "list", {
+      columns: [{
+        id: "c1",
+        handleId: "col_c1",
+        type: "text",
+        splitDelimiter: "***",
+        connectedSourceId: "w",
+        connectedSourceHandle: "text",
+      }],
+      rows: [[""]],
+    })
+    const target = node("t", "generate-image")
+    const allNodes = [aiWriter, listNode, target]
+    const edges = [
+      edge("w", "l", "text", "col_c1_in"),
+      edge("l", "t", "col_c1", null, { outputMode: "each" }),
+    ]
+    const states: Record<string, NodeExecutionState> = {
+      w: { status: "completed", output: { text: "alpha\n***\nbeta\n***\ngamma" } },
+    }
+
+    const result = getListInputForNode(target, edges, states, allNodes)
+    expect(result).toEqual(["alpha", "beta", "gamma"])
+  })
+
+  it("applies range filter on modern list with each + rangeFrom/rangeTo", () => {
+    // User scenario: list (5 items) → generate-image with "each 1..4"
+    // Run from here returned only 1 result instead of 4.
+    const target = node("t", "generate-image")
+    const listNode = node("l", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["p1"], ["p2"], ["p3"], ["p4"], ["p5"]],
+    })
+    const allNodes = [listNode, target]
+    const edges = [edge("l", "t", "col_c1", null, {
+      outputMode: "each",
+      rangeFrom: "1",
+      rangeTo: "4",
+    })]
+    const states: Record<string, NodeExecutionState> = {}
+
+    const result = getListInputForNode(target, edges, states, allNodes)
+    expect(result).toEqual(["p1", "p2", "p3", "p4"])
   })
 
   it("returns undefined for single-item list", () => {

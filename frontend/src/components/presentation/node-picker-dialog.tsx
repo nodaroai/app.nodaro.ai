@@ -497,9 +497,16 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
                     const maxItems = Math.min((data.maxItems as number) ?? 10, DEFAULT_SYSTEM_MAX_FANOUT)
                     let meta = ""
                     if (node.type === "list") {
-                      const items = typeof data.items === "string" && data.items.trim()
-                        ? data.items.split("\n").filter(Boolean).length
-                        : 0
+                      // Modern format (columns+rows) wins over legacy items string —
+                      // otherwise modern lists always displayed "0 items".
+                      const columns = data.columns as Array<unknown> | undefined
+                      let items = 0
+                      if (columns) {
+                        const rows = (data.rows as string[][] | undefined) ?? []
+                        items = rows.filter((r) => r[0]?.trim()).length
+                      } else if (typeof data.items === "string" && data.items.trim()) {
+                        items = data.items.split("\n").filter(Boolean).length
+                      }
                       meta = `${items} item${items !== 1 ? "s" : ""} \u00b7 max ${maxItems}`
                     } else if (node.type === "loop") {
                       const columns = (data.columns as LoopColumn[]) ?? []

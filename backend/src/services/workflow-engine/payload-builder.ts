@@ -162,6 +162,15 @@ function extractListItems(
 ): string[] {
   const data = node.data
   if (node.type === "list") {
+    // Modern format: columns + rows (same as loop). Without this, node refs
+    // like {List Name} resolving to list items only saw the legacy items
+    // string; modern lists returned an empty array.
+    const cols = data.columns as Array<{ handleId: string }> | undefined
+    if (cols) {
+      const rows = data.rows as string[][] | undefined
+      return (rows ?? []).map((r) => r[0]?.trim() ?? "").filter(Boolean)
+    }
+    // Legacy format: newline-separated items string
     return ((data.items as string | undefined) || "")
       .split("\n")
       .map((l) => l.trim())

@@ -65,13 +65,28 @@ describe("extractSourceNodeOutput", () => {
     expect(result).toEqual({ audioUrl: "https://ref.mp3" })
   })
 
-  it("extracts first item from list node", () => {
+  it("extracts first item from list node (legacy items string)", () => {
     const result = extractSourceNodeOutput(node("1", "list", { items: "cat\ndog\nbird" }))
     expect(result).toEqual({ text: "cat" })
   })
 
-  it("returns undefined for empty list", () => {
+  it("extracts first row from list node (modern columns+rows)", () => {
+    const result = extractSourceNodeOutput(node("1", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["cat"], ["dog"], ["bird"]],
+    }))
+    expect(result).toEqual({ text: "cat" })
+  })
+
+  it("returns undefined for empty list (legacy)", () => {
     expect(extractSourceNodeOutput(node("1", "list", { items: "" }))).toBeUndefined()
+  })
+
+  it("returns undefined for empty list (modern, no rows)", () => {
+    expect(extractSourceNodeOutput(node("1", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [],
+    }))).toBeUndefined()
   })
 
   it("trims and filters empty lines in list", () => {
@@ -148,12 +163,27 @@ describe("extractSourceNodeOutput", () => {
 // ---------------------------------------------------------------------------
 
 describe("extractSourceNodeOutputAsList", () => {
-  it("returns list items when > 1", () => {
+  it("returns list items when > 1 (legacy items string)", () => {
     const result = extractSourceNodeOutputAsList(node("1", "list", { items: "a\nb\nc" }))
     expect(result).toEqual(["a", "b", "c"])
   })
 
-  it("returns undefined for single item list", () => {
+  it("returns list items when > 1 (modern columns+rows)", () => {
+    const result = extractSourceNodeOutputAsList(node("1", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["prompt a"], ["prompt b"], ["prompt c"]],
+    }))
+    expect(result).toEqual(["prompt a", "prompt b", "prompt c"])
+  })
+
+  it("returns undefined for single-row modern list (no fan-out)", () => {
+    expect(extractSourceNodeOutputAsList(node("1", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["only one"]],
+    }))).toBeUndefined()
+  })
+
+  it("returns undefined for single item list (legacy)", () => {
     expect(extractSourceNodeOutputAsList(node("1", "list", { items: "only one" }))).toBeUndefined()
   })
 

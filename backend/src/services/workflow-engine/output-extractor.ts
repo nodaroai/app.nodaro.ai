@@ -100,6 +100,16 @@ export function extractSourceNodeOutput(
     }
 
     case "list": {
+      // Modern format: columns + rows (same as loop). Without this the backend
+      // saw modern lists as empty sources, so the first-item fallback used by
+      // routeOutput couldn't resolve a default value.
+      const cols = data.columns as Array<{ handleId: string }> | undefined
+      if (cols) {
+        const rows = (data.rows as string[][] | undefined) ?? []
+        const first = rows[0]?.[0]?.trim()
+        return first ? { text: first } : undefined
+      }
+      // Legacy format: newline-separated items string
       const items = (data.items as string | undefined) || ""
       const lines = items
         .split("\n")
@@ -190,6 +200,17 @@ export function extractSourceNodeOutputAsList(
 
   switch (type) {
     case "list": {
+      // Modern format: columns + rows (matches frontend extractNodeOutputAsList)
+      // Without this the backend orchestrator (Run from here) couldn't fan out
+      // over list nodes built in the modern UI, since the default column is
+      // just a single-column grid — its data lives in rows, not `items`.
+      const cols = data.columns as Array<{ handleId: string }> | undefined
+      if (cols) {
+        const rows = (data.rows as string[][] | undefined) ?? []
+        const values = rows.map((r) => r[0]?.trim()).filter((v): v is string => !!v && v.length > 0)
+        return values.length > 1 ? values : undefined
+      }
+      // Legacy format: newline-separated items string
       const items = (data.items as string | undefined) || ""
       const lines = items
         .split("\n")
