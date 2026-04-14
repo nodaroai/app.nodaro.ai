@@ -636,6 +636,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
               <p className="text-xs mt-1">Add a column to get started</p>
             </div>
           ) : (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
@@ -704,9 +705,8 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
                     ))}
                   </tr>
                 </thead>
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                  <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
-                    <tbody>
+                <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
+                  <tbody>
                       {rows.map((row, ri) => (
                         <SortableRow key={rowIds[ri]} id={rowIds[ri]}>
                           {({ attributes, listeners }) => (
@@ -766,9 +766,8 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
                           )}
                         </SortableRow>
                       ))}
-                    </tbody>
-                  </SortableContext>
-                </DndContext>
+                  </tbody>
+                </SortableContext>
               </table>
 
               <button
@@ -780,6 +779,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
                 Add Row
               </button>
             </div>
+            </DndContext>
           )}
 
           <p className="text-xs text-muted-foreground">
