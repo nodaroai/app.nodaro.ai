@@ -23,8 +23,9 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { LOOP_COLUMN_TYPE_META, LOOP_COL_ADD_HANDLE, loopColBaseHandle, loopColInputHandle, resolveViewMode, type LoopNodeData, type LoopColumn, type WorkflowNode } from "@/types/nodes"
+import { LOOP_COLUMN_TYPE_META, LOOP_COL_ADD_HANDLE, TEXT_CELL_CONTROLS_MIN_LINES, TEXT_CELL_DEFAULT_MAX_LINES, loopColBaseHandle, loopColInputHandle, resolveViewMode, textCellMaxHeightPx, type LoopNodeData, type LoopColumn, type WorkflowNode } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -217,6 +218,8 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
 
   const thumbSize = nodeData.thumbnailSize ?? "md"
   const sizeConfig = THUMB_SIZE_CONFIG[thumbSize]
+  const textMaxLines = Math.max(1, nodeData.textMaxLines ?? TEXT_CELL_DEFAULT_MAX_LINES)
+  const showCellControls = textMaxLines >= TEXT_CELL_CONTROLS_MIN_LINES
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
 
   const { upload, storageExceeded, clearStorageExceeded } = useFileUpload()
@@ -648,49 +651,61 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     }
     const tile = mode !== "list"
     const wrapper = `relative group/cell rounded-lg border border-border/40 bg-muted/10 ${tile ? "aspect-square overflow-hidden" : ""}`
-    const innerClass = tile
-      ? "text-xs text-foreground/80 h-full overflow-y-auto px-2 pt-7 pb-7 break-words"
-      : "text-xs text-foreground/80 px-2 py-2 break-words overflow-y-auto"
-    const innerStyle = tile ? undefined : { maxHeight: '120px' }
+
+    const textContent = (
+      <div className="text-xs text-foreground/80 break-words" title={cell}>
+        {cell}
+      </div>
+    )
 
     return (
       <div key={`${rowIdx}-${col.id}`} className={wrapper}>
-        <div className={innerClass} style={innerStyle} title={cell}>
-          {cell}
-        </div>
-        <span className="absolute top-1 left-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 text-white text-[9px] font-medium tabular-nums opacity-0 group-hover/cell:opacity-100 transition-opacity">
-          {rowIdx + 1}
-        </span>
-        <div
-          className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-[#ff0073]/80 text-white cursor-grab active:cursor-grabbing opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm"
-          title={`Drag out as item ${rowIdx + 1}`}
-          draggable
-          onDragStart={(e) => {
-            e.dataTransfer.setData("application/nodaro-text", cell)
-            e.dataTransfer.setData("application/nodaro-edge-context", JSON.stringify({ sourceNodeId: id, sourceHandle: col.handleId, itemIndex: rowIdx + 1 }))
-            e.dataTransfer.effectAllowed = "copy"
-          }}
-        >
-          <ArrowUpRight className="w-3 h-3" />
-        </div>
-        <div className="nodrag nopan absolute bottom-1 right-1 flex gap-1 opacity-0 group-hover/cell:opacity-100 transition-opacity">
-          <button
-            type="button"
-            aria-label="Expand text"
-            className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
-            onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}
-          >
-            <Expand className="w-3 h-3" />
-          </button>
-          <button
-            type="button"
-            aria-label="Copy text"
-            className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
-            onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "Copied") }}
-          >
-            <Copy className="w-3 h-3" />
-          </button>
-        </div>
+        {tile ? (
+          <ScrollArea className="h-full">
+            <div className="px-2 pt-7 pb-7">{textContent}</div>
+          </ScrollArea>
+        ) : (
+          <ScrollArea style={{ height: `${textCellMaxHeightPx(textMaxLines)}px` }}>
+            <div className="px-2 py-2 pr-3">{textContent}</div>
+          </ScrollArea>
+        )}
+        {showCellControls && (
+          <>
+            <span className="absolute top-1 left-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 text-white text-[9px] font-medium tabular-nums opacity-0 group-hover/cell:opacity-100 transition-opacity">
+              {rowIdx + 1}
+            </span>
+            <div
+              className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-[#ff0073]/80 text-white cursor-grab active:cursor-grabbing opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm"
+              title={`Drag out as item ${rowIdx + 1}`}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("application/nodaro-text", cell)
+                e.dataTransfer.setData("application/nodaro-edge-context", JSON.stringify({ sourceNodeId: id, sourceHandle: col.handleId, itemIndex: rowIdx + 1 }))
+                e.dataTransfer.effectAllowed = "copy"
+              }}
+            >
+              <ArrowUpRight className="w-3 h-3" />
+            </div>
+            <div className="nodrag nopan absolute bottom-1 right-1 flex gap-1 opacity-0 group-hover/cell:opacity-100 transition-opacity">
+              <button
+                type="button"
+                aria-label="Expand text"
+                className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
+                onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}
+              >
+                <Expand className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                aria-label="Copy text"
+                className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
+                onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "Copied") }}
+              >
+                <Copy className="w-3 h-3" />
+              </button>
+            </div>
+          </>
+        )}
       </div>
     )
   }
@@ -787,30 +802,32 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
         handles={handles}
       >
         <div
-          className="p-3"
+          className="p-3 h-full flex flex-col"
           style={{ minHeight: colCount > 1 ? `${colCount * 22 + 8}px` : undefined }}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
         >
           {showData && colCount > 0 && displayRowCount > 0 ? (
-            <div className="relative">
+            <div className="relative flex-1 min-h-0 flex flex-col">
               {isConnectedData ? (
                 <>
                   {resolvedViewMode === "list" && (
-                    <div className="flex flex-col divide-y divide-border/30 max-h-[400px] overflow-y-auto pr-1">
-                      {(() => { let imgIdx = 0; let cellIdx = 0; return displayRows.map((row, rowIdx) => (
-                        <div key={rowIdx} className="min-w-0 pt-2 first:pt-0">
-                          {columns.map((col, colIdx) => {
-                            const cell = row[colIdx] ?? ""
-                            const t = col.type ?? "text"
-                            const myImgIdx = t === "image-url" && cell ? imgIdx++ : -1
-                            const myCellIdx = cell ? cellIdx++ : -1
-                            return renderCell(cell, rowIdx, col, myImgIdx, myCellIdx, "list")
-                          })}
-                        </div>
-                      )) })()}
-                    </div>
+                    <ScrollArea className="flex-1 min-h-0">
+                      <div className="flex flex-col divide-y divide-border/30 pr-2">
+                        {(() => { let imgIdx = 0; let cellIdx = 0; return displayRows.map((row, rowIdx) => (
+                          <div key={rowIdx} className="min-w-0 pt-2 first:pt-0">
+                            {columns.map((col, colIdx) => {
+                              const cell = row[colIdx] ?? ""
+                              const t = col.type ?? "text"
+                              const myImgIdx = t === "image-url" && cell ? imgIdx++ : -1
+                              const myCellIdx = cell ? cellIdx++ : -1
+                              return renderCell(cell, rowIdx, col, myImgIdx, myCellIdx, "list")
+                            })}
+                          </div>
+                        )) })()}
+                      </div>
+                    </ScrollArea>
                   )}
 
                   {resolvedViewMode === "gallery" && (
@@ -968,14 +985,16 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             <>
               {/* Text preview for single-column text lists (uses displayRows so upstream-connected rows show their filtered values). */}
               {colCount === 1 && columns[0]?.type === "text" && displayRowCount > 0 ? (
-                <div className="flex flex-col gap-0.5 overflow-y-auto nowheel" style={{ maxHeight: '160px' }}>
-                  {displayRows.map((row, i) => (
-                    <div key={i} className="flex items-start gap-1.5">
-                      <span className="text-[9px] text-muted-foreground/40 tabular-nums mt-0.5 shrink-0 w-3 text-right">{i + 1}</span>
-                      <span className="text-[11px] text-foreground/75 truncate flex-1">{row[0] || "—"}</span>
-                    </div>
-                  ))}
-                </div>
+                <ScrollArea className="flex-1 min-h-0">
+                  <div className="flex flex-col gap-0.5 pr-2">
+                    {displayRows.map((row, i) => (
+                      <div key={i} className="flex items-start gap-1.5 overflow-hidden" style={{ maxHeight: `${textMaxLines * 16}px` }}>
+                        <span className="text-[9px] text-muted-foreground/40 tabular-nums mt-0.5 shrink-0 w-3 text-right">{i + 1}</span>
+                        <span className="text-[11px] text-foreground/75 flex-1" style={{ wordBreak: "break-word" }}>{row[0] || "—"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
               ) : (
                 <>
                   <p className="text-sm text-muted-foreground">

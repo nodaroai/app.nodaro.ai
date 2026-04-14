@@ -7,8 +7,9 @@ import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import type { ListNodeData, WorkflowNode } from "@/types/nodes"
+import { TEXT_CELL_DEFAULT_MAX_LINES, type ListNodeData, type WorkflowNode } from "@/types/nodes"
 import { extractNodeOutputAsList, resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-editor/node-input-resolver"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 const HANDLES = [
   { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
@@ -36,6 +37,7 @@ function ListNodeComponent({ id, data, selected }: NodeProps) {
   const items = connectedItems ?? staticItems
   const itemCount = items.length
   const isConnected = connectedItems !== null
+  const textMaxLines = Math.max(1, nodeData.textMaxLines ?? TEXT_CELL_DEFAULT_MAX_LINES)
 
   return (
     <div className="relative max-w-[220px]">
@@ -55,25 +57,28 @@ function ListNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         handles={HANDLES}
       >
-        <div className="p-3">
+        <div className="p-3 h-full flex flex-col">
           {itemCount === 0 ? (
             <p className="text-sm text-muted-foreground">No items yet</p>
           ) : (
             <>
-              <p className="text-xs text-muted-foreground mb-1">
+              <p className="text-xs text-muted-foreground mb-1 shrink-0">
                 {itemCount} item{itemCount !== 1 ? "s" : ""}
                 {isConnected && <span className="ml-1 opacity-70">(upstream)</span>}
               </p>
-              <ul className="text-xs max-h-32 overflow-y-auto space-y-0.5 nowheel">
-                {items.slice(0, 20).map((item, i) => (
-                  <li key={i} className="truncate" title={item}>
-                    <span className="text-muted-foreground">{i + 1}.</span> {item}
-                  </li>
-                ))}
-                {items.length > 20 && (
-                  <li className="text-xs text-muted-foreground italic">…and {items.length - 20} more</li>
-                )}
-              </ul>
+              <ScrollArea className="flex-1 min-h-0">
+                <ul className="text-xs space-y-0.5 pr-2">
+                  {items.map((item, i) => (
+                    <li key={i} title={item}>
+                      <ScrollArea style={{ height: `${textMaxLines * 16}px` }}>
+                        <div style={{ wordBreak: "break-word" }} className="pr-2">
+                          <span className="text-muted-foreground">{i + 1}.</span> {item}
+                        </div>
+                      </ScrollArea>
+                    </li>
+                  ))}
+                </ul>
+              </ScrollArea>
             </>
           )}
         </div>

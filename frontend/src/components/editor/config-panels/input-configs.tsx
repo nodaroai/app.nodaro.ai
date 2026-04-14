@@ -39,6 +39,7 @@ import { uploadAudio, fetchYouTubeOEmbed, extractYouTubeAudioApi, getJobStatus, 
 import type { DownloadProgressEvent } from "@/lib/api"
 import {
   LOOP_COLUMN_TYPE_META,
+  TEXT_CELL_DEFAULT_MAX_LINES,
   loopColInputHandle,
   resolveViewMode,
   type TextPromptData,
@@ -847,6 +848,17 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
               <option value="gallery">Gallery (grid)</option>
               <option value="packed">Packed (fit all)</option>
             </select>
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <label className="text-xs text-muted-foreground" title="How many lines of text each text item shows before clamping. Hover controllers (expand/copy/drag) hide when below 3 to avoid overlap.">Text max lines</label>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={data.textMaxLines ?? TEXT_CELL_DEFAULT_MAX_LINES}
+              onChange={(e) => onUpdate({ textMaxLines: Math.max(1, Math.min(20, parseInt(e.target.value, 10) || TEXT_CELL_DEFAULT_MAX_LINES)) })}
+              className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
+            />
           </div>
         </>
       )}
