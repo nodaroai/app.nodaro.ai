@@ -359,7 +359,9 @@ function AnimatedFlowEdgeComponent({
                   borderRadius: 8,
                   padding: 0,
                   boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-                  minWidth: 180,
+                  // Fixed width so the menu doesn't resize between modes —
+                  // sized to comfortably fit the List tab with its example hint.
+                  width: 300,
                   overflow: "hidden",
                 }}
                 onMouseDown={(e) => e.stopPropagation()}
@@ -459,29 +461,30 @@ function AnimatedFlowEdgeComponent({
                         </button>
                         {showInlineRangeConfig && (
                           <div style={{ padding: "4px 14px 10px 36px" }}>
-                            <div style={{ display: "flex", gap: 4, paddingBottom: 8 }}>
-                              {(["range", "list"] as const).map((tab) => (
-                                <button
-                                  key={tab}
-                                  type="button"
-                                  onClick={() => handleSelectorModeChange(tab)}
-                                  onMouseDown={(e) => e.stopPropagation()}
-                                  style={{
-                                    flex: 1,
-                                    padding: "4px 8px",
-                                    fontSize: 10,
-                                    textTransform: "uppercase",
-                                    letterSpacing: "0.06em",
-                                    borderRadius: 4,
-                                    border: "1px solid #444",
-                                    background: selectorMode === tab ? "rgba(167, 139, 250, 0.15)" : "transparent",
-                                    color: selectorMode === tab ? "#e2e8f0" : "#94a3b8",
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  {tab === "range" ? "Range" : "List"}
-                                </button>
-                              ))}
+                            <div style={{ display: "flex", gap: 16, paddingBottom: 8 }}>
+                              {(["range", "list"] as const).map((tab) => {
+                                const active = selectorMode === tab
+                                return (
+                                  <button
+                                    key={tab}
+                                    type="button"
+                                    onClick={() => handleSelectorModeChange(tab)}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    style={{
+                                      padding: "4px 2px",
+                                      fontSize: 11,
+                                      background: "transparent",
+                                      border: "none",
+                                      borderBottom: active ? "2px solid #a78bfa" : "2px solid transparent",
+                                      color: active ? "#e2e8f0" : "#94a3b8",
+                                      fontWeight: active ? 600 : 400,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    {tab === "range" ? "Range" : "List"}
+                                  </button>
+                                )
+                              })}
                             </div>
                             {selectorMode === "range" && (
                               <RangeConfig
