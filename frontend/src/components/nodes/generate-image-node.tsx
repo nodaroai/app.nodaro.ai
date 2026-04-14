@@ -151,9 +151,10 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       imageAspectRatio={imgAspectRatio}
     >
       <div className="relative w-full h-full group">
-        {/* Running state */}
+        {/* Running state — fills the node instead of forcing 180px, so the
+            loader stays visible when the user resizes the node smaller. */}
         {status === "running" && (
-          <div className="flex flex-col items-center justify-center gap-2 bg-muted/30 rounded-xl h-[180px]">
+          <div className="flex flex-col items-center justify-center gap-2 bg-muted/30 rounded-xl w-full h-full min-h-[80px]">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
