@@ -36,10 +36,10 @@ type AnimatedFlowEdgeProps = EdgeProps<Edge<AnimatedFlowEdgeData>>
 // listExpression: "1, 3, last"), where "last" means "the final index in the
 // array." Same word, different meanings.
 const MODE_OPTIONS = [
-  { value: "last", label: "Selected", desc: "The currently selected result" },
-  { value: "item", label: "Item", desc: "Pick one specific item" },
-  { value: "each", label: "Each", desc: "Run downstream once per item" },
-  { value: "all", label: "All", desc: "Pass all items together as a list" },
+  { value: "last", label: "Selected", desc: "The selected result" },
+  { value: "item", label: "Item", desc: "Pick one item" },
+  { value: "each", label: "Each", desc: "All items, one by one" },
+  { value: "all", label: "Bundle", desc: "All items at once" },
 ] as const
 
 // List/loop/split-text produce inherent items with no user-selection concept,

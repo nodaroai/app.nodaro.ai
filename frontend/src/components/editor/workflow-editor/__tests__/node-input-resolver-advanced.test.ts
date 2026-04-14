@@ -1029,6 +1029,47 @@ describe("resolveNodeInputs — list edge output mode routing", () => {
     const inputs = resolveNodeInputs(target, [listNode, target], edges)
     expect(inputs.prompt).toBe("apple")
   })
+
+  it("routes list's image-url column to referenceImageUrls on generate-image (regression: was landing in prompt)", () => {
+    // List with a typed image-url column feeding generate-image as reference.
+    // Before the fix, the list branch used text-only routing (inputs.prompt),
+    // which starved inputs.referenceImageUrls. Downstream execute-node.ts
+    // then fell back to collectAncestorRefs, which walks raw upstream and
+    // ignores edge filters — so the gen-image pulled an unfiltered image
+    // from the original source instead of the filtered list value.
+    const imgNode = makeNode("img1", "generate-image", {
+      generatedResults: [{ url: "http://img/a.png" }, { url: "http://img/b.png" }],
+      generatedImageUrl: "http://img/a.png",
+    })
+    const listNode = makeNode("l1", "list", {
+      columns: [{ id: "c1", handleId: "col_c1", type: "image-url" }],
+      rows: [],
+    })
+    const target = makeNode("gen2", "generate-image")
+    const edges = [
+      {
+        id: "img1->l1",
+        source: "img1",
+        target: "l1",
+        sourceHandle: "image",
+        targetHandle: "col_c1_in",
+        data: { outputMode: "all" },
+      },
+      {
+        id: "l1->gen2",
+        source: "l1",
+        target: "gen2",
+        sourceHandle: "col_c1",
+        targetHandle: "in",
+        data: { outputMode: "each" },
+      },
+    ]
+
+    const inputs = resolveNodeInputs(target, [imgNode, listNode, target], edges as any)
+    expect(inputs.referenceImageUrls).toBeDefined()
+    expect(inputs.referenceImageUrls?.length).toBeGreaterThan(0)
+    expect(inputs.prompt).toBeUndefined()
+  })
 })
 
 // ---------------------------------------------------------------------------

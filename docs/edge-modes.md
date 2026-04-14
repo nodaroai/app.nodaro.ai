@@ -24,10 +24,10 @@ That's what **Edge Modes** are for.
 
 | Mode | What it does | When you want it |
 |------|--------------|-------------------|
-| **Selected** | Sends the currently selected result (the one you picked with the carousel arrows) | Most of the time — it's the default |
-| **Each** | Runs the downstream node once per item (fan-out) | "Do this for every item in the list" |
-| **All** | Sends the whole list as one bundle | Downstream needs everything together (e.g., combine videos) |
+| **Selected** | The selected result (whichever one you picked with the carousel arrows) | Most of the time — it's the default |
 | **Item** | Picks one specific result by position | "Just give me the 2nd one" or "the last one" |
+| **Each** | One by one — runs the next node once per item | "Do this for every item in the list" |
+| **Bundle** | All at once — passes the whole list in one go | Downstream needs everything together (e.g., combine videos) |
 
 ---
 
@@ -35,7 +35,7 @@ That's what **Edge Modes** are for.
 
 1. **Click the edge** (the line between two nodes) on the canvas
 2. A small dropdown menu appears
-3. Pick one of: **Selected · Each · All · Item**
+3. Pick one of: **Selected · Item · Each · Bundle**
 4. The pill label on the edge updates to show what you chose
 
 If you don't see anything special on the edge, it's in **Selected** mode — the default.
@@ -95,19 +95,19 @@ If you don't see anything special on the edge, it's in **Selected** mode — the
 
 ---
 
-## Mode 3: All (Bundle)
+## Mode 3: Bundle (All at once)
 
-**Send the whole list as one package.**
+**Pass the whole list through in one go.**
 
 ```
-┌─────────────┐                  ┌─────────────────┐
-│ Generate    │                  │ Combine Videos  │
-│ Images      │ ────── All ────► │                 │
-│ (3 images)  │                  │  runs once,     │
-└─────────────┘                  │  gets all 3     │
-       │                         └─────────────────┘
+┌─────────────┐                   ┌─────────────────┐
+│ Generate    │                   │ Combine Videos  │
+│ Images      │ ────── Bundle ──► │                 │
+│ (3 images)  │                   │  runs once,     │
+└─────────────┘                   │  gets all 3     │
+       │                          └─────────────────┘
        │
-       │  [img1, img2, img3]  ──► delivered as one bundle
+       │  [img1, img2, img3]  ──► delivered all at once
 ```
 
 **What happens:** The downstream node runs **once**, but it receives the full list as its input. The node itself then decides how to use the whole bundle.
@@ -119,7 +119,7 @@ If you don't see anything special on the edge, it's in **Selected** mode — the
 - **After Effects / Motion Graphics** — feed a set of clips into a composite scene
 - Any node whose input is "a list of things to process together"
 
-> **Rule of thumb:** If the next node's icon suggests *merging* or *composing*, use **All**. If it suggests *transforming one thing*, use **Each**.
+> **Rule of thumb:** If the next node's icon suggests *merging* or *composing*, use **Bundle**. If it suggests *transforming one thing*, use **Each**.
 
 ---
 
@@ -149,9 +149,9 @@ If you don't see anything special on the edge, it's in **Selected** mode — the
 
 ---
 
-## Selecting a Range or List (Each / All)
+## Selecting a Range or List (Each / Bundle)
 
-When the edge is in **Each** or **All** mode, the dropdown menu adds a **Range** tab and a **List** tab. These let you narrow down which items actually pass through.
+When the edge is in **Each** or **Bundle** mode, the dropdown menu adds a **Range** tab and a **List** tab. These let you narrow down which items actually pass through.
 
 ### Range Tab
 
@@ -281,7 +281,7 @@ Downstream processing
 
 ### Start simple, then add modes as you need them
 
-New workflows should start entirely in **Selected** mode. Only switch an edge to **Each / All / Item** once you actually have a list of things to deal with.
+New workflows should start entirely in **Selected** mode. Only switch an edge to **Item / Each / Bundle** once you actually have a list of things to deal with.
 
 ### One mode change at a time
 
@@ -290,7 +290,7 @@ When an edge isn't behaving how you expect, change *one* setting, click Run, and
 ### Match the mode to the downstream node's job
 
 - Is the downstream node a **transformer** (one in, one out)? Use **Each** when the upstream has multiple items.
-- Is it a **combiner** (many in, one out)? Use **All**.
+- Is it a **combiner** (many in, one out)? Use **Bundle**.
 - Do you want **just one** specific result? Use **Item**.
 
 ### Watch the edge pill
@@ -330,9 +330,9 @@ If you always want "the first image" or "the last video" regardless of how many 
 ├──────────────────────────────────────────────────────────┤
 │                                                          │
 │  SELECTED  one in  → one out     (default, active pick)  │
-│  EACH      many in → many runs   (fan-out)               │
-│  ALL       many in → one run     (bundle)                │
 │  ITEM      many in → one out     (pick by index)         │
+│  EACH      many in → many runs   (one by one)            │
+│  BUNDLE    many in → one run     (all at once)           │
 │                                                          │
 │  List / range syntax:                                    │
 │     1, 2, last         pick items 1, 2, and last         │

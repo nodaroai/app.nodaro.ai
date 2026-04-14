@@ -150,6 +150,8 @@ function getOutputModeLabel(edge: WorkflowEdge, sourceNode: { type?: string } | 
   if (!effectiveMode || effectiveMode === "last") return undefined
   // Normalize legacy "item:N" to "item"
   if (effectiveMode.startsWith("item:")) return "item"
+  // "all" renders as "bundle" in the UI — value stays "all" for backward compat
+  if (effectiveMode === "all") return "bundle"
   return effectiveMode
 }
 
