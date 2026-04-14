@@ -313,11 +313,11 @@ function buildBaseSentence(
   edgeData: Parameters<typeof describeEdgeBehavior>[0],
   mode: string | undefined,
 ): string {
-  if (mode === "last") return "Passes the currently selected result."
+  if (mode === "last") return "Passes the selected result."
   if (mode === "item") return buildItemSentence(edgeData)
   if (mode === "each") return buildEachSentence(edgeData)
   if (mode === "all") return buildAllSentence(edgeData)
-  return "Passes all items together as a list."
+  return "Passes all items at once."
 }
 
 function buildItemSentence(
@@ -330,37 +330,37 @@ function buildItemSentence(
 function buildEachSentence(
   edgeData: Parameters<typeof describeEdgeBehavior>[0],
 ): string {
-  if (isDefaultSelectorConfig(edgeData)) return "Runs the downstream node once per item."
+  if (isDefaultSelectorConfig(edgeData)) return "Runs the next node one by one, per item."
   if (edgeData?.selectorMode === "list") {
     const result = parseListTerms((edgeData.listExpression ?? "").trim())
-    if (!result.ok) return "Runs the downstream node once per item."
+    if (!result.ok) return "Runs the next node one by one, per item."
   }
   const phrase = buildSelectionPhrase(edgeData)
   if (phrase.kind === "empty-result") {
-    return "Selects no items — downstream node will not run."
+    return "Nothing selected — the next node won't run."
   }
   if (phrase.kind === "single-index") {
-    return `Runs the downstream node only on ${phrase.itemModeForm}.`
+    return `Runs the next node only on ${phrase.itemModeForm}.`
   }
-  return `Fans out over ${phrase.text}.`
+  return `Runs the next node once for ${phrase.text}.`
 }
 
 function buildAllSentence(
   edgeData: Parameters<typeof describeEdgeBehavior>[0],
 ): string {
-  if (isDefaultSelectorConfig(edgeData)) return "Passes all items together as a list."
+  if (isDefaultSelectorConfig(edgeData)) return "Passes all items at once."
   if (edgeData?.selectorMode === "list") {
     const result = parseListTerms((edgeData.listExpression ?? "").trim())
-    if (!result.ok) return "Passes all items together as a list."
+    if (!result.ok) return "Passes all items at once."
   }
   const phrase = buildSelectionPhrase(edgeData)
   if (phrase.kind === "empty-result") {
-    return "Selects no items — downstream node will receive an empty list."
+    return "Nothing selected — the next node will get an empty bundle."
   }
   if (phrase.kind === "single-index") {
-    return `Passes only ${phrase.itemModeForm} as a list.`
+    return `Passes only ${phrase.itemModeForm}.`
   }
-  return `Passes ${phrase.text} as a list.`
+  return `Passes ${phrase.text} at once.`
 }
 
 function applyUseAllResultsSuffix(
