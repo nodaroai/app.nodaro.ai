@@ -69,12 +69,12 @@ function ListNodeComponent({ id, data, selected }: NodeProps) {
               <ScrollArea className="flex-1 min-h-0">
                 <ul className="text-xs space-y-0.5 pr-2">
                   {items.map((item, i) => (
-                    <li key={i} title={item}>
-                      <ScrollArea style={{ height: `${textMaxLines * 16}px` }}>
-                        <div style={{ wordBreak: "break-word" }} className="pr-2">
-                          <span className="text-muted-foreground">{i + 1}.</span> {item}
-                        </div>
-                      </ScrollArea>
+                    <li key={i}>
+                      {/* Inner scrollbar disabled — content clips at textMaxLines via maxHeight + overflow-hidden.
+                          To re-enable: replace the <div> below with <ScrollArea style={{ height: `${textMaxLines * 16}px` }}>...</ScrollArea>. */}
+                      <div className="overflow-hidden" style={{ maxHeight: `${textMaxLines * 16}px`, wordBreak: "break-word" }}>
+                        <span className="text-muted-foreground">{i + 1}.</span> {item}
+                      </div>
                     </li>
                   ))}
                 </ul>

@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { ArrowUpRight, Copy, Download, Expand, Film, GripVertical, Image, Info, Link, List, Loader2, Music, Plus, Repeat, Table2, Type, Upload, X } from "lucide-react"
+import { Copy, Download, Expand, Film, GripVertical, Image, Info, Link, List, Loader2, Music, Plus, Repeat, Table2, Type, Upload, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -522,22 +522,17 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
       <div key={`${rowIdx}-${col.id}`} className={wrapper}>
         <CachedImage src={cell} alt="" className={imgClass} />
         <span className={badgeClass}>{idx + 1}</span>
+        <button
+          type="button"
+          aria-label="Expand image"
+          className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/img:opacity-100 transition-opacity shadow-sm"
+          onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}
+        >
+          <Expand className="w-3 h-3" />
+        </button>
         <div className={actionRowClass}>
-          <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }} title="Expand"><Expand className={actionIconClass} /></button>
           <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = `/v1/image-proxy?url=${encodeURIComponent(cell)}&download=1`; a.download = "image.png"; a.click() }} title="Download"><Download className={actionIconClass} /></button>
           <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "URL copied") }} title="Copy URL"><Link className={actionIconClass} /></button>
-        </div>
-        <div
-          className={dragClass}
-          title={`Drag out as item ${idx + 1}`}
-          draggable
-          onDragStart={(e) => {
-            e.dataTransfer.setData("application/nodaro-image", cell)
-            e.dataTransfer.setData("application/nodaro-edge-context", JSON.stringify({ sourceNodeId: id, sourceHandle, itemIndex: idx + 1 }))
-            e.dataTransfer.effectAllowed = "copy"
-          }}
-        >
-          <ArrowUpRight className={arrowClass} />
         </div>
       </div>
     )
@@ -574,22 +569,17 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
       <div key={`${rowIdx}-${col.id}`} className={wrapper}>
         <video src={cell} crossOrigin="anonymous" className={videoClass} autoPlay loop muted playsInline />
         <span className={badgeClass}>{rowIdx + 1}</span>
+        <button
+          type="button"
+          aria-label="Expand video"
+          className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/vid:opacity-100 transition-opacity shadow-sm"
+          onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}
+        >
+          <Expand className="w-3 h-3" />
+        </button>
         <div className={actionRowClass}>
-          <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }} title="Expand"><Expand className={actionIconClass} /></button>
           <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = cell; a.download = "video.mp4"; a.click() }} title="Download"><Download className={actionIconClass} /></button>
           <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "URL copied") }} title="Copy URL"><Link className={actionIconClass} /></button>
-        </div>
-        <div
-          className={dragClass}
-          title={`Drag out as item ${rowIdx + 1}`}
-          draggable
-          onDragStart={(e) => {
-            e.dataTransfer.setData("application/nodaro-video", cell)
-            e.dataTransfer.setData("application/nodaro-edge-context", JSON.stringify({ sourceNodeId: id, sourceHandle, itemIndex: rowIdx + 1 }))
-            e.dataTransfer.effectAllowed = "copy"
-          }}
-        >
-          <ArrowUpRight className={arrowClass} />
         </div>
       </div>
     )
@@ -617,23 +607,11 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
           type="button"
           title={`Expand item ${rowIdx + 1}`}
           aria-label="Expand audio"
-          className="nodrag nopan absolute top-1 right-6 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm"
+          className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm"
           onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}
         >
           <Expand className="w-3 h-3" />
         </button>
-        <div
-          className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-[#ff0073]/80 text-white cursor-grab active:cursor-grabbing opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm"
-          title={`Drag out as item ${rowIdx + 1}`}
-          draggable
-          onDragStart={(e) => {
-            e.dataTransfer.setData("application/nodaro-audio", cell)
-            e.dataTransfer.setData("application/nodaro-edge-context", JSON.stringify({ sourceNodeId: id, sourceHandle: col.handleId, itemIndex: rowIdx + 1 }))
-            e.dataTransfer.effectAllowed = "copy"
-          }}
-        >
-          <ArrowUpRight className="w-3 h-3" />
-        </div>
         <div className="nodrag nopan">
           <audio src={cell} controls className="w-full h-8 rounded" style={{ minWidth: 0 }} />
         </div>
@@ -653,57 +631,44 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     const wrapper = `relative group/cell rounded-lg border border-border/40 bg-muted/10 ${tile ? "aspect-square overflow-hidden" : ""}`
 
     const textContent = (
-      <div className="text-xs text-foreground/80 break-words" title={cell}>
+      <div className="text-xs text-foreground/80 break-words">
         {cell}
       </div>
     )
 
+    // Inner scrollbar disabled — content clips at textMaxLines cap via maxHeight + overflow-hidden.
+    // Users open the fullscreen preview (Expand button, top-right) to see content beyond the cap.
+    // To re-enable inner scrollbar: wrap `cellContainer` content in <ScrollArea style={{ height: ... }}>.
+    const cellContainer = tile ? (
+      <div className="h-full overflow-hidden px-2 pt-7 pb-7">{textContent}</div>
+    ) : (
+      <div className="overflow-hidden px-2 py-2 pr-3" style={{ maxHeight: `${textCellMaxHeightPx(textMaxLines)}px` }}>{textContent}</div>
+    )
+
     return (
       <div key={`${rowIdx}-${col.id}`} className={wrapper}>
-        {tile ? (
-          <ScrollArea className="h-full">
-            <div className="px-2 pt-7 pb-7">{textContent}</div>
-          </ScrollArea>
-        ) : (
-          <ScrollArea style={{ height: `${textCellMaxHeightPx(textMaxLines)}px` }}>
-            <div className="px-2 py-2 pr-3">{textContent}</div>
-          </ScrollArea>
-        )}
+        {cellContainer}
         {showCellControls && (
           <>
             <span className="absolute top-1 left-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 text-white text-[9px] font-medium tabular-nums opacity-0 group-hover/cell:opacity-100 transition-opacity">
               {rowIdx + 1}
             </span>
-            <div
-              className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-[#ff0073]/80 text-white cursor-grab active:cursor-grabbing opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm"
-              title={`Drag out as item ${rowIdx + 1}`}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData("application/nodaro-text", cell)
-                e.dataTransfer.setData("application/nodaro-edge-context", JSON.stringify({ sourceNodeId: id, sourceHandle: col.handleId, itemIndex: rowIdx + 1 }))
-                e.dataTransfer.effectAllowed = "copy"
-              }}
+            <button
+              type="button"
+              aria-label="Expand text"
+              className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm"
+              onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}
             >
-              <ArrowUpRight className="w-3 h-3" />
-            </div>
-            <div className="nodrag nopan absolute bottom-1 right-1 flex gap-1 opacity-0 group-hover/cell:opacity-100 transition-opacity">
-              <button
-                type="button"
-                aria-label="Expand text"
-                className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
-                onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}
-              >
-                <Expand className="w-3 h-3" />
-              </button>
-              <button
-                type="button"
-                aria-label="Copy text"
-                className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
-                onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "Copied") }}
-              >
-                <Copy className="w-3 h-3" />
-              </button>
-            </div>
+              <Expand className="w-3 h-3" />
+            </button>
+            <button
+              type="button"
+              aria-label="Copy text"
+              className="nodrag nopan absolute top-6 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm"
+              onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "Copied") }}
+            >
+              <Copy className="w-3 h-3" />
+            </button>
           </>
         )}
       </div>
@@ -843,22 +808,17 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                             <div key={`${rowIdx}-${col.id}`} className="relative group/img rounded-lg overflow-hidden">
                               <CachedImage src={cell} alt="" className="w-full h-auto rounded-lg object-cover aspect-square" />
                               <span className="absolute top-1 left-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 text-white text-[9px] font-medium tabular-nums opacity-0 group-hover/img:opacity-100 transition-opacity">{idx + 1}</span>
+                              <button
+                                type="button"
+                                aria-label="Expand image"
+                                className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/img:opacity-100 transition-opacity shadow-sm"
+                                onClick={(e) => { e.stopPropagation(); setPreviewIndex(idx) }}
+                              >
+                                <Expand className="w-3 h-3" />
+                              </button>
                               <div className="nodrag nopan absolute inset-x-0 bottom-0 flex justify-center gap-1 py-1 opacity-0 group-hover/img:opacity-100 transition-opacity bg-gradient-to-t from-black/50 to-transparent">
-                                <button type="button" className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); setPreviewIndex(idx) }} title="Expand"><Expand className="w-3 h-3" /></button>
                                 <button type="button" className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = `/v1/image-proxy?url=${encodeURIComponent(cell)}&download=1`; a.download = "image.png"; a.click() }} title="Download"><Download className="w-3 h-3" /></button>
                                 <button type="button" className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "URL copied") }} title="Copy URL"><Link className="w-3 h-3" /></button>
-                              </div>
-                              <div
-                                className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-[#ff0073]/80 text-white cursor-grab active:cursor-grabbing opacity-0 group-hover/img:opacity-100 transition-opacity"
-                                title={`Drag out as item ${idx + 1}`}
-                                draggable
-                                onDragStart={(e) => {
-                                  e.dataTransfer.setData("application/nodaro-image", cell)
-                                  e.dataTransfer.setData("application/nodaro-edge-context", JSON.stringify({ sourceNodeId: id, sourceHandle, itemIndex: idx + 1 }))
-                                  e.dataTransfer.effectAllowed = "copy"
-                                }}
-                              >
-                                <ArrowUpRight className="w-3 h-3" />
                               </div>
                             </div>
                           )
