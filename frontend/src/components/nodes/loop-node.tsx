@@ -966,10 +966,10 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             </div>
           ) : (
             <>
-              {/* Show text preview for single-column text lists */}
-              {colCount === 1 && columns[0]?.type === "text" && rows.length > 0 && !hasUpstreamInput ? (
-                <div className="flex flex-col gap-0.5 overflow-y-auto" style={{ maxHeight: '160px' }}>
-                  {rows.map((row, i) => (
+              {/* Text preview for single-column text lists (uses displayRows so upstream-connected rows show their filtered values). */}
+              {colCount === 1 && columns[0]?.type === "text" && displayRowCount > 0 ? (
+                <div className="flex flex-col gap-0.5 overflow-y-auto nowheel" style={{ maxHeight: '160px' }}>
+                  {displayRows.map((row, i) => (
                     <div key={i} className="flex items-start gap-1.5">
                       <span className="text-[9px] text-muted-foreground/40 tabular-nums mt-0.5 shrink-0 w-3 text-right">{i + 1}</span>
                       <span className="text-[11px] text-foreground/75 truncate flex-1">{row[0] || "—"}</span>
