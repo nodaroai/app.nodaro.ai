@@ -389,16 +389,39 @@ export function getListInputForNode(
 
     // 2. List node — modern columns+rows or legacy items string
     if (sourceNode.type === "list") {
-      // Modern format: if the edge sources a specific column, route by that
-      // column's rows (matches loop column routing). Without this, multi-column
-      // lists always fanned out over the first column regardless of which
-      // handle the edge came from.
+      // Modern format with a typed column: route by that column. This must
+      // also honor **connected mode** — a column whose rows are populated by
+      // splitting an upstream node's text via the column's splitDelimiter.
+      // (Mirrors the loop branch above and the frontend's
+      // resolveLoopColumnValues.) Without this, a list connected to an
+      // upstream text source with a splitDelimiter would fan out over the
+      // empty placeholder row instead of the upstream-split items.
       const columns = sourceNode.data.columns as
-        | Array<{ handleId: string }>
+        | Array<{ id: string; handleId: string; type?: string; splitDelimiter?: string; connectedSourceId?: string; connectedSourceHandle?: string }>
         | undefined
       if (columns && edge.sourceHandle) {
         const colIndex = columns.findIndex((c) => c.handleId === edge.sourceHandle)
         if (colIndex >= 0) {
+          const col = columns[colIndex]
+
+          // Per-column connected source: find edge targeting this column's
+          // input handle and split the upstream text by the column's delimiter.
+          const colInEdge = edges.find(
+            (e) => e.target === sourceNode.id && e.targetHandle === `${col.handleId}_in`,
+          )
+          if (colInEdge) {
+            const upstreamNode = allNodes.find((n) => n.id === colInEdge.source)
+            if (upstreamNode) {
+              const upstreamText = getNodeOutput(upstreamNode, colInEdge.sourceHandle, nodeStates, triggerData)
+              if (upstreamText) {
+                const lines = splitByLoopDelimiter(upstreamText, columns)
+                const filtered = selectListItems(lines, selectorArg)
+                if (filtered.length > 1) return filtered
+              }
+            }
+          }
+
+          // Manual mode: extract column values from rows
           const rows = (sourceNode.data.rows as string[][] | undefined) ?? []
           const items = rows
             .map((row) => row[colIndex]?.trim())

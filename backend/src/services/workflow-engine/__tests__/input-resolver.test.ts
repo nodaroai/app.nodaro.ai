@@ -448,6 +448,37 @@ describe("getListInputForNode", () => {
     expect(result).toEqual(["prompt a", "prompt b", "prompt c"])
   })
 
+  it("fan-outs over list in connected mode (upstream split by delimiter)", () => {
+    // Regression: the user's list node had columns+rows but rows was just
+    // [[""]] — a placeholder. The actual items come from splitting the
+    // upstream node's text by the column's splitDelimiter. Backend used to
+    // only read node.data.rows and miss the connected source entirely.
+    const aiWriter = node("w", "ai-writer", {})
+    const listNode = node("l", "list", {
+      columns: [{
+        id: "c1",
+        handleId: "col_c1",
+        type: "text",
+        splitDelimiter: "***",
+        connectedSourceId: "w",
+        connectedSourceHandle: "text",
+      }],
+      rows: [[""]],
+    })
+    const target = node("t", "generate-image")
+    const allNodes = [aiWriter, listNode, target]
+    const edges = [
+      edge("w", "l", "text", "col_c1_in"),
+      edge("l", "t", "col_c1", null, { outputMode: "each" }),
+    ]
+    const states: Record<string, NodeExecutionState> = {
+      w: { status: "completed", output: { text: "alpha\n***\nbeta\n***\ngamma" } },
+    }
+
+    const result = getListInputForNode(target, edges, states, allNodes)
+    expect(result).toEqual(["alpha", "beta", "gamma"])
+  })
+
   it("applies range filter on modern list with each + rangeFrom/rangeTo", () => {
     // User scenario: list (5 items) → generate-image with "each 1..4"
     // Run from here returned only 1 result instead of 4.
