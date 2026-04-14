@@ -54,24 +54,72 @@ function getParallelismLimit(tier: string | undefined): number {
 // ---------------------------------------------------------------------------
 
 /**
- * On startup, mark any "running" or "stopping" executions as failed.
- * These are orphaned from a previous crash — the BullMQ jobs that were
- * processing them are gone, so they'll never complete on their own.
- * "pending" executions are left alone — BullMQ will retry their jobs.
+ * On startup, reconcile executions that were in flight when the previous
+ * process exited (e.g. Railway redeploy). The old behavior unconditionally
+ * marked every "running" execution as failed — with frequent redeploys,
+ * that turned successful runs into "Execution interrupted by orchestrator
+ * restart" failures even when the node jobs had already completed.
+ *
+ * New behavior:
+ *   1. If all nodes in node_states are already "completed" → mark the
+ *      execution completed. The per-node work is done; only the final
+ *      execution-level status write was lost to the restart.
+ *   2. Otherwise, leave the execution alone. BullMQ's stalled-job detector
+ *      will re-pick the orchestration job within `stalledInterval` and
+ *      another worker will resume it. We only mark as failed if the
+ *      execution has been "running" for much longer than any job could
+ *      reasonably take (safety net for truly abandoned rows).
  */
-async function cleanupStaleExecutions(): Promise<void> {
-  const { data: cleaned, error } = await supabase
-    .from("workflow_executions")
-    .update({
-      status: "failed",
-      error_message: "Execution interrupted by orchestrator restart",
-      completed_at: new Date().toISOString(),
-    })
-    .in("status", ["running", "stopping"])
-    .select("id")
+const STALE_EXECUTION_THRESHOLD_MS = 4 * 60 * 60 * 1000 // 4 hours
 
-  if (error || !cleaned || cleaned.length === 0) return
-  console.log(`[orchestrator] Cleaned up ${cleaned.length} stale execution(s): ${cleaned.map((r) => r.id).join(", ")}`)
+async function cleanupStaleExecutions(): Promise<void> {
+  const { data: rows, error } = await supabase
+    .from("workflow_executions")
+    .select("id, started_at, node_states")
+    .in("status", ["running", "stopping"])
+
+  if (error || !rows || rows.length === 0) return
+
+  let reconciled = 0
+  let abandoned = 0
+  const now = Date.now()
+
+  for (const row of rows) {
+    const states = (row.node_states ?? {}) as Record<string, { status?: string }>
+    const nodeStatuses = Object.values(states).map((s) => s?.status)
+    const allCompleted = nodeStatuses.length > 0 && nodeStatuses.every((s) => s === "completed" || s === "skipped")
+
+    if (allCompleted) {
+      await supabase
+        .from("workflow_executions")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", row.id)
+      reconciled++
+      continue
+    }
+
+    // Only mark as failed if this row is *really* stale — otherwise let
+    // BullMQ's stalled-job retry pick it back up.
+    const startedAt = row.started_at ? new Date(row.started_at).getTime() : 0
+    if (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS) {
+      await supabase
+        .from("workflow_executions")
+        .update({
+          status: "failed",
+          error_message: "Execution abandoned — no active orchestrator worker",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", row.id)
+      abandoned++
+    }
+  }
+
+  if (reconciled > 0 || abandoned > 0) {
+    console.log(`[orchestrator] Startup reconcile: ${reconciled} completed, ${abandoned} abandoned, ${rows.length - reconciled - abandoned} left for retry`)
+  }
 }
 
 // ---------------------------------------------------------------------------
