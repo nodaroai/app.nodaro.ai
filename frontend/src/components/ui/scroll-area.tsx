@@ -12,20 +12,26 @@ import { cn } from "@/lib/utils"
  * preferences. Default `type="hover"` shows the thumb only while the
  * mouse is over the container. Passing `type="always"` keeps it visible.
  */
+type ScrollAreaProps = React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> & {
+  /** Class passed to the internal ScrollBar (e.g., extra padding for inset look). */
+  scrollBarClassName?: string
+}
+
 const ScrollArea = React.forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>
->(({ className, children, type = "hover", ...props }, ref) => (
+  ScrollAreaProps
+>(({ className, children, type = "hover", scrollHideDelay = 0, scrollBarClassName, ...props }, ref) => (
   <ScrollAreaPrimitive.Root
     ref={ref}
     type={type}
+    scrollHideDelay={scrollHideDelay}
     className={cn("relative overflow-hidden", className)}
     {...props}
   >
     <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">
       {children}
     </ScrollAreaPrimitive.Viewport>
-    <ScrollBar />
+    <ScrollBar className={scrollBarClassName} />
     <ScrollAreaPrimitive.Corner />
   </ScrollAreaPrimitive.Root>
 ))
@@ -40,8 +46,8 @@ const ScrollBar = React.forwardRef<
     orientation={orientation}
     className={cn(
       "flex touch-none select-none transition-opacity nodrag",
-      orientation === "vertical" && "h-full w-2 p-[2px]",
-      orientation === "horizontal" && "h-2 flex-col p-[2px]",
+      orientation === "vertical" && "h-full w-3 p-[2px]",
+      orientation === "horizontal" && "h-3 flex-col p-[2px]",
       className,
     )}
     {...props}
