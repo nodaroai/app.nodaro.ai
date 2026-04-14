@@ -646,12 +646,20 @@ async function pollJobToCompletion(
     // Poll job status
     const { data: jobRecord } = await supabase
       .from("jobs")
-      .select("status, output_data, error_message")
+      .select("status, output_data, error_message, progress")
       .eq("id", jobId)
       .single()
 
     if (!jobRecord) {
       throw new Error(`Job ${jobId} not found`)
+    }
+
+    // Surface progress to the orchestrator so the UI can render a progress bar
+    // during backend runs (Run-from-here, triggers). Without this, node-level
+    // currentJobProgress stayed undefined and the bar never appeared.
+    const progressValue = jobRecord.progress as number | null | undefined
+    if (typeof progressValue === "number" && ctx.onJobProgress) {
+      ctx.onJobProgress(jobId, progressValue)
     }
 
     const status = jobRecord.status as string

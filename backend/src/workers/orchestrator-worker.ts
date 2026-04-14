@@ -254,6 +254,23 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       })
     }
 
+    // Surface job progress to nodeStates so the UI can render a progress bar
+    // during backend runs. Keyed by jobId — locates the right node even when
+    // a node has a running job (fan-out maps jobs via nodeStates[node].jobId).
+    ctx.onJobProgress = (jobId, progress) => {
+      const nodeId = Object.keys(nodeStates).find((id) => nodeStates[id].jobId === jobId)
+      if (!nodeId) return
+      const prev = nodeStates[nodeId].progress
+      if (prev === progress) return
+      nodeStates[nodeId].progress = progress
+      emitExecutionEvent({
+        type: "node:updated",
+        executionId,
+        nodeStates: { ...nodeStates },
+        nodeId,
+      })
+    }
+
     // 3. Inject source node outputs + pre-complete nodes outside the subset
     //    Also handle skipped/frozen nodes — they keep their saved output
     //    so downstream nodes can resolve inputs from them.
