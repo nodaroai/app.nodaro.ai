@@ -1,13 +1,14 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { List } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import type { ListNodeData } from "@/types/nodes"
+import type { ListNodeData, WorkflowNode } from "@/types/nodes"
+import { extractNodeOutputAsList, resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-editor/node-input-resolver"
 
 const HANDLES = [
   { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
@@ -17,9 +18,24 @@ const HANDLES = [
 function ListNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ListNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const itemCount = nodeData.items
-    ? nodeData.items.split("\n").filter((line) => line.trim() !== "").length
-    : 0
+  const edges = useWorkflowStore((s) => s.edges)
+  const nodes = useWorkflowStore((s) => s.nodes)
+
+  const connectedItems = useMemo<string[] | null>(() => {
+    const inEdge = edges.find((e) => e.target === id && e.targetHandle === "in")
+    if (!inEdge) return null
+    const upstream = nodes.find((n) => n.id === inEdge.source)
+    if (!upstream) return null
+    return resolveEdgeValuesForTableColumn(inEdge, upstream, edges, nodes, undefined)
+  }, [id, edges, nodes])
+
+  const staticItems = useMemo(
+    () => extractNodeOutputAsList({ id, type: "list", data: nodeData } as WorkflowNode) ?? [],
+    [id, nodeData],
+  )
+  const items = connectedItems ?? staticItems
+  const itemCount = items.length
+  const isConnected = connectedItems !== null
 
   return (
     <div className="relative max-w-[220px]">
@@ -40,9 +56,26 @@ function ListNodeComponent({ id, data, selected }: NodeProps) {
         handles={HANDLES}
       >
         <div className="p-3">
-          <p className="text-sm text-muted-foreground">
-            {itemCount > 0 ? `${itemCount} item${itemCount !== 1 ? "s" : ""}` : "No items yet"}
-          </p>
+          {itemCount === 0 ? (
+            <p className="text-sm text-muted-foreground">No items yet</p>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground mb-1">
+                {itemCount} item{itemCount !== 1 ? "s" : ""}
+                {isConnected && <span className="ml-1 opacity-70">(upstream)</span>}
+              </p>
+              <ul className="text-xs max-h-32 overflow-y-auto space-y-0.5 nowheel">
+                {items.slice(0, 20).map((item, i) => (
+                  <li key={i} className="truncate" title={item}>
+                    <span className="text-muted-foreground">{i + 1}.</span> {item}
+                  </li>
+                ))}
+                {items.length > 20 && (
+                  <li className="text-xs text-muted-foreground italic">…and {items.length - 20} more</li>
+                )}
+              </ul>
+            </>
+          )}
         </div>
       </BaseNode>
       <HandleIcon icon={<List />} color="cyan" side="left" top="calc(100% - 20px)" />
