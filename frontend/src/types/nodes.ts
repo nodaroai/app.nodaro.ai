@@ -103,10 +103,17 @@ export function resolveViewMode(data: {
 
 /** Default maximum text lines per text cell in loop/list nodes (configurable via textMaxLines). */
 export const TEXT_CELL_DEFAULT_MAX_LINES = 7
-/** Line height approximation for text-xs cells, used to compute maxHeight from textMaxLines. */
-export const TEXT_CELL_LINE_HEIGHT_PX = 17
+/** Line height in px for text-xs cells (Tailwind text-xs → line-height: 1rem = 16px). */
+export const TEXT_CELL_LINE_HEIGHT_PX = 16
+/** Total vertical padding (top+bottom) of the inner cell in px (py-2 = 0.5rem × 2 = 16px). */
+export const TEXT_CELL_VERTICAL_PADDING_PX = 16
 /** Below this threshold, hover controllers (expand/copy/drag) are hidden to avoid overlapping short cells. */
 export const TEXT_CELL_CONTROLS_MIN_LINES = 3
+
+/** Compute the pixel maxHeight for a text cell inner div with N visible lines, including padding. */
+export function textCellMaxHeightPx(lines: number): number {
+  return lines * TEXT_CELL_LINE_HEIGHT_PX + TEXT_CELL_VERTICAL_PADDING_PX
+}
 
 /** Stable handle ID for the loop node's "quick-add column" target. */
 export const LOOP_COL_ADD_HANDLE = "col_add"

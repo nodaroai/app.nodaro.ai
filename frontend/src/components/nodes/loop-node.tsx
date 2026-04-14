@@ -23,7 +23,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { LOOP_COLUMN_TYPE_META, LOOP_COL_ADD_HANDLE, TEXT_CELL_CONTROLS_MIN_LINES, TEXT_CELL_DEFAULT_MAX_LINES, TEXT_CELL_LINE_HEIGHT_PX, loopColBaseHandle, loopColInputHandle, resolveViewMode, type LoopNodeData, type LoopColumn, type WorkflowNode } from "@/types/nodes"
+import { LOOP_COLUMN_TYPE_META, LOOP_COL_ADD_HANDLE, TEXT_CELL_CONTROLS_MIN_LINES, TEXT_CELL_DEFAULT_MAX_LINES, loopColBaseHandle, loopColInputHandle, resolveViewMode, textCellMaxHeightPx, type LoopNodeData, type LoopColumn, type WorkflowNode } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
@@ -653,7 +653,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     const innerClass = tile
       ? "text-xs text-foreground/80 h-full overflow-y-auto px-2 pt-7 pb-7 break-words"
       : "text-xs text-foreground/80 px-2 py-2 break-words overflow-y-auto"
-    const innerStyle = tile ? undefined : { maxHeight: `${textMaxLines * TEXT_CELL_LINE_HEIGHT_PX}px` }
+    const innerStyle = tile ? undefined : { maxHeight: `${textCellMaxHeightPx(textMaxLines)}px` }
 
     return (
       <div key={`${rowIdx}-${col.id}`} className={wrapper}>
