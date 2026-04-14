@@ -63,6 +63,10 @@ const PACKED_MIN_BY_TYPE: Record<string, number> = {
 const PACKED_CONTAINER_W = 376
 const PACKED_CONTAINER_H = 400
 const PACKED_GAP = 4
+/** Aspect ratio tileW/tileH in packed mode — tile is wider than tall so more items fit vertically. */
+const PACKED_ASPECT = 5 / 3
+/** Minimum tile HEIGHT in packed mode (independent of width). Below this text becomes illegible. */
+const PACKED_MIN_H = 48
 
 export function packedMin(columns: ReadonlyArray<LoopColumn>): number {
   if (columns.length === 0) return 100
@@ -72,23 +76,24 @@ export function packedMin(columns: ReadonlyArray<LoopColumn>): number {
 export function computePackedLayout(opts: {
   count: number
   min: number
+  /** Unused in the tight-packing path — kept for API compatibility. */
   hint?: number
-}): { tileSize: number; cols: number; rows: number; overflow: boolean } {
-  const { count, min, hint } = opts
+}): { tileW: number; tileH: number; cols: number; rows: number; overflow: boolean } {
+  const { count, min } = opts
   const W = PACKED_CONTAINER_W
   const H = PACKED_CONTAINER_H
   const gap = PACKED_GAP
 
-  const idealCols = Math.max(
-    1,
-    hint ?? Math.round(Math.sqrt(count * W / H))
-  )
-  const candidateW = Math.floor((W - gap * (idealCols - 1)) / idealCols)
-  const tileSize = Math.max(min, candidateW)
-  const cols = Math.max(1, Math.floor((W + gap) / (tileSize + gap)))
+  // Goal: fit as many items as possible in H without scroll (or minimize overflow).
+  // totalH(cols) decreases roughly as 1/cols² (rows ∝ 1/cols AND tileH ∝ 1/cols),
+  // so pack as many columns as the min-width floor allows.
+  const maxColsByMin = Math.max(1, Math.floor((W + gap) / (min + gap)))
+  const cols = Math.max(1, Math.min(maxColsByMin, count))
+  const tileW = Math.max(min, Math.floor((W - gap * (cols - 1)) / cols))
+  const tileH = Math.max(PACKED_MIN_H, Math.round(tileW / PACKED_ASPECT))
   const rows = Math.ceil(count / cols)
-  const totalH = rows * tileSize + (rows - 1) * gap
-  return { tileSize, cols, rows, overflow: totalH > H }
+  const totalH = rows * tileH + (rows - 1) * gap
+  return { tileW, tileH, cols, rows, overflow: totalH > H }
 }
 
 function buildHandles(columns: ReadonlyArray<LoopColumn>) {
@@ -462,7 +467,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
   const galleryCols = nodeData.galleryCols ?? DEFAULT_GALLERY_COLS
   const nodeWidth = showingPresentation
     ? resolvedViewMode === "gallery" ? Math.max(350, galleryCols * 100)
-      : resolvedViewMode === "packed" ? 400
+      : resolvedViewMode === "packed" ? 220
       : 350
     : sizeConfig.maxWidth
 
@@ -500,19 +505,24 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
       )
     }
     const tile = mode !== "list"
-    const imgClass = `w-full h-auto rounded-lg ${tile ? "object-cover aspect-square" : ""}`
+    const packed = mode === "packed"
+    const innerSize = packed ? "w-full aspect-[5/3]" : ""
+    // Gallery shows images at their natural aspect ratio (h-auto); packed crops to the shorter tile; list is flexible.
+    const imgSizing = packed ? "w-full h-full object-cover" : tile ? "w-full h-auto" : "w-full h-auto"
     const actionRowClass = tile
       ? "nodrag nopan absolute inset-x-0 bottom-0 flex justify-center gap-1 py-1 opacity-0 group-hover/img:opacity-100 transition-opacity bg-gradient-to-t from-black/50 to-transparent"
       : "nodrag nopan absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/img:opacity-100 transition-opacity"
-    const actionBtnClass = tile
+    const actionBtnClass = packed
+      ? "w-5 h-5 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full"
+      : tile
       ? "w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full"
       : "w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
     const actionIconClass = tile ? "w-3 h-3" : "w-3.5 h-3.5"
 
     return (
-      <div key={`${rowIdx}-${col.id}`} className="relative group/img">
-        <div className="relative rounded-lg overflow-hidden">
-          <CachedImage src={cell} alt="" className={imgClass} />
+      <div key={`${rowIdx}-${col.id}`} className={`relative group/img ${innerSize}`}>
+        <div className={`relative rounded-lg overflow-hidden ${innerSize}`}>
+          <CachedImage src={cell} alt="" className={`${imgSizing} rounded-lg`} />
           <button
             type="button"
             aria-label="Expand image"
@@ -540,19 +550,23 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
       )
     }
     const tile = mode !== "list"
-    const videoClass = `w-full h-auto rounded-lg ${tile ? "object-cover aspect-square" : ""}`
+    const packed = mode === "packed"
+    const innerSize = packed ? "w-full aspect-[5/3]" : ""
+    const videoSizing = packed ? "w-full h-full object-cover" : tile ? "w-full h-auto object-cover aspect-square" : "w-full h-auto"
     const actionRowClass = tile
       ? "nodrag nopan absolute inset-x-0 bottom-0 flex justify-center gap-1 py-1 opacity-0 group-hover/vid:opacity-100 transition-opacity bg-gradient-to-t from-black/50 to-transparent"
       : "nodrag nopan absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/vid:opacity-100 transition-opacity"
-    const actionBtnClass = tile
+    const actionBtnClass = packed
+      ? "w-5 h-5 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full"
+      : tile
       ? "w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full"
       : "w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
     const actionIconClass = tile ? "w-3 h-3" : "w-3.5 h-3.5"
 
     return (
-      <div key={`${rowIdx}-${col.id}`} className="relative group/vid">
-        <div className="relative rounded-lg overflow-hidden">
-          <video src={cell} crossOrigin="anonymous" className={videoClass} autoPlay loop muted playsInline />
+      <div key={`${rowIdx}-${col.id}`} className={`relative group/vid ${innerSize}`}>
+        <div className={`relative rounded-lg overflow-hidden ${innerSize}`}>
+          <video src={cell} crossOrigin="anonymous" className={`${videoSizing} rounded-lg`} autoPlay loop muted playsInline />
           <button
             type="button"
             aria-label="Expand video"
@@ -580,12 +594,16 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
       )
     }
     const tile = mode !== "list"
-    const innerClass = tile
+    const packed = mode === "packed"
+    const innerSize = packed ? "w-full aspect-[5/3]" : ""
+    const innerClass = packed
+      ? "relative rounded-lg border border-border/40 bg-transparent overflow-hidden pt-5 pb-1 px-1.5 flex flex-col justify-end h-full w-full"
+      : tile
       ? "relative rounded-lg border border-border/40 bg-transparent aspect-square overflow-hidden pt-7 pb-1.5 px-1.5 flex flex-col justify-end h-full"
       : "relative rounded-lg border border-border/40 bg-transparent p-1.5 pt-6"
 
     return (
-      <div key={`${rowIdx}-${col.id}`} className="relative group/cell">
+      <div key={`${rowIdx}-${col.id}`} className={`relative group/cell ${innerSize}`}>
         <div className={innerClass}>
           <button
             type="button"
@@ -613,25 +631,32 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
       )
     }
     const tile = mode !== "list"
-    const innerClass = `relative rounded-lg border border-border/40 bg-muted/10 ${tile ? "aspect-square overflow-hidden" : ""}`
+    const packed = mode === "packed"
+    const innerSize = packed ? "w-full aspect-[5/3]" : ""
+    const innerClass = packed
+      ? "relative rounded-lg border border-border/40 bg-muted/10 w-full h-full overflow-hidden"
+      : tile
+      ? "relative rounded-lg border border-border/40 bg-muted/10 aspect-square overflow-hidden"
+      : "relative rounded-lg border border-border/40 bg-muted/10"
 
     const textContent = (
-      <div className="text-xs text-foreground/80 break-words">
+      <div className={`${packed ? "text-[10px] leading-tight" : "text-xs"} text-foreground/80 break-words`}>
         {cell}
       </div>
     )
 
-    // Inner scrollbar disabled — content clips at textMaxLines cap via maxHeight + overflow-hidden.
+    // Inner scrollbar disabled — content clips via overflow-hidden.
     // Users open the fullscreen preview (Expand button) to see content beyond the cap.
-    // To re-enable inner scrollbar: wrap `cellContainer` content in <ScrollArea style={{ height: ... }}>.
-    const cellContainer = tile ? (
+    const cellContainer = packed ? (
+      <div className="h-full overflow-hidden px-1.5 py-1">{textContent}</div>
+    ) : tile ? (
       <div className="h-full overflow-hidden px-2 py-2">{textContent}</div>
     ) : (
       <div className="overflow-hidden px-2 py-2 pr-3" style={{ maxHeight: `${textCellMaxHeightPx(textMaxLines)}px` }}>{textContent}</div>
     )
 
     return (
-      <div key={`${rowIdx}-${col.id}`} className="relative group/cell">
+      <div key={`${rowIdx}-${col.id}`} className={`relative group/cell ${innerSize}`}>
         <div className={innerClass}>
           {cellContainer}
           {showCellControls && (
@@ -735,7 +760,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
         credits={0}
         selected={selected}
         isRunning={status === "running"}
-        minWidth={showingPresentation ? (resolvedViewMode === "packed" ? 400 : 300) : nodeWidth}
+        minWidth={showingPresentation ? (resolvedViewMode === "packed" ? 220 : 300) : nodeWidth}
         hideHeader
         topToolbarContent={
           <div className="flex items-center gap-1">
@@ -818,23 +843,12 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                     </ScrollArea>
                   )}
 
-                  {resolvedViewMode === "packed" && (() => {
-                    const layout = computePackedLayout({
-                      count: allCells.length,
-                      min: packedMin(columns),
-                      hint: galleryCols,
-                    })
-                    const containerStyle: React.CSSProperties = {
-                      height: 400,
-                      width: 376,
-                      display: "grid",
-                      gridTemplateColumns: `repeat(${layout.cols}, ${layout.tileSize}px)`,
-                      gap: 4,
-                      justifyContent: "center",
-                      overflowY: layout.overflow ? "auto" : "hidden",
-                    }
-                    return (
-                      <div style={containerStyle}>
+                  {resolvedViewMode === "packed" && (
+                    <ScrollArea className="flex-1 min-h-0">
+                      <div
+                        className="grid gap-1 pt-2 pl-2 pr-4"
+                        style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${packedMin(columns)}px, 1fr))` }}
+                      >
                         {(() => { let imgIdx = 0; let cellIdx = 0; return displayRows.flatMap((row, rowIdx) =>
                           columns.map((col, colIdx) => {
                             const cell = row[colIdx] ?? ""
@@ -843,11 +857,11 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                             const myImgIdx = t === "image-url" ? imgIdx++ : -1
                             const myCellIdx = cellIdx++
                             return renderCell(cell, rowIdx, col, myImgIdx, myCellIdx, "packed")
-                          })
+                          }),
                         ) })()}
                       </div>
-                    )
-                  })()}
+                    </ScrollArea>
+                  )}
                 </>
               ) : (
                 <div className="nodrag flex flex-col gap-2">
