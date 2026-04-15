@@ -295,6 +295,13 @@ export function getPrimaryOutput(
     return output.generatedVoiceId
   }
 
+  // Web-scrape: three output handles (text/image/video) — mirror frontend routing
+  if (sourceType === "web-scrape" && sourceHandle) {
+    if (sourceHandle === "image") return output.imageUrl
+    if (sourceHandle === "video") return output.videoUrl
+    if (sourceHandle === "text") return output.text
+  }
+
   // QA-check: route by approved/rejected handle
   if (sourceType === "qa-check" && sourceHandle) {
     if (sourceHandle === "approved" && output.approved) return output.reason
@@ -609,6 +616,18 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   if (type === "ai-writer" || type === "llm-chat" || type === "suno-lyrics" || type === "suno-style-boost") {
     const text = data.generatedText as string | undefined
     return text ? { text } : undefined
+  }
+
+  // Web-scrape: can produce text + optional imageUrl/videoUrl on separate handles
+  if (type === "web-scrape") {
+    const output: NodeOutput = {}
+    const text = data.generatedText as string | undefined
+    const imageUrl = data.generatedImageUrl as string | undefined
+    const videoUrl = data.generatedVideoUrl as string | undefined
+    if (text) output.text = text
+    if (imageUrl) output.imageUrl = imageUrl
+    if (videoUrl) output.videoUrl = videoUrl
+    return Object.keys(output).length > 0 ? output : undefined
   }
 
   if (type === "combine-text") {

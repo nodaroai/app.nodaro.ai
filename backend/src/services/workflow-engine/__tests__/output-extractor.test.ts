@@ -250,6 +250,13 @@ describe("getPrimaryOutput", () => {
     expect(getPrimaryOutput(output, "voice-design", "voiceId")).toBe("voice-123")
   })
 
+  it("routes web-scrape handles to text/image/video fields", () => {
+    const output: NodeOutput = { text: "[]", imageUrl: "ig.jpg", videoUrl: "tt.mp4" }
+    expect(getPrimaryOutput(output, "web-scrape", "text")).toBe("[]")
+    expect(getPrimaryOutput(output, "web-scrape", "image")).toBe("ig.jpg")
+    expect(getPrimaryOutput(output, "web-scrape", "video")).toBe("tt.mp4")
+  })
+
   it("routes qa-check approved handle", () => {
     expect(getPrimaryOutput({ approved: true, reason: "looks good" }, "qa-check", "approved")).toBe("looks good")
     expect(getPrimaryOutput({ approved: true, reason: "looks good" }, "qa-check", "rejected")).toBeUndefined()
@@ -352,6 +359,23 @@ describe("extractSavedNodeOutput", () => {
   it("extracts ai-writer text", () => {
     const n = node("1", "ai-writer", { generatedText: "written text" })
     expect(extractSavedNodeOutput(n)?.text).toBe("written text")
+  })
+
+  it("extracts web-scrape multi-handle output", () => {
+    const n = node("1", "web-scrape", {
+      generatedText: "scraped markdown",
+      generatedImageUrl: "https://cdn.example/first.jpg",
+      generatedVideoUrl: "https://cdn.example/first.mp4",
+    })
+    const result = extractSavedNodeOutput(n)
+    expect(result?.text).toBe("scraped markdown")
+    expect(result?.imageUrl).toBe("https://cdn.example/first.jpg")
+    expect(result?.videoUrl).toBe("https://cdn.example/first.mp4")
+  })
+
+  it("returns undefined for web-scrape before execution", () => {
+    const n = node("1", "web-scrape", {})
+    expect(extractSavedNodeOutput(n)).toBeUndefined()
   })
 
   it("extracts combine-text", () => {

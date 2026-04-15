@@ -8,6 +8,7 @@ import type {
   LipSyncProvider, ScriptProvider, AiWriterProvider, QaCheckProvider,
   SunoModel, VoiceDesignModel,
 } from "@nodaro-shared/model-constants"
+import type { ScraperActorId } from "@nodaro-shared/scraper-actors"
 import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro-shared/model-constants"
 import type { ExposableField, ExposableOutput } from "@nodaro-shared/presentation-types"
 import type { ComponentMetadata } from "@nodaro-shared/component-types"
@@ -2085,6 +2086,31 @@ export type AIWriterNodeData = {
   createdNodeIds?: string[]
 }
 
+// --- Web Scrape Node Data ---
+
+export type WebScrapeNodeData = {
+  [key: string]: unknown
+  label: string
+  actor?: ScraperActorId
+  // content-crawler
+  url?: string
+  mode?: "page" | "site"
+  // google-search
+  query?: string
+  maxResults?: number
+  countryCode?: string
+  // instagram | tiktok
+  target?: string
+  resultsLimit?: number
+  // execution state
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  // execution result
+  generatedText?: string
+  generatedImageUrl?: string
+  generatedVideoUrl?: string
+}
+
 // --- Combine Text Node Data ---
 
 export type CombineTextNodeData = {
@@ -2486,6 +2512,7 @@ export type SceneNodeData =
   | FaceNodeData
   | LLMChatData
   | AIWriterNodeData
+  | WebScrapeNodeData
   | ListNodeData
   | LoopNodeData
   | CombineTextNodeData
@@ -2513,6 +2540,7 @@ export type SceneNodeType =
   | "upload-audio"
   | "rss-feed"
   | "youtube-video"
+  | "web-scrape"
   | "reference-audio"
   | "tone"
   | "style-guide"
@@ -2706,6 +2734,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Video URL", youtubeUrl: "", videoId: "", title: "", thumbnailUrl: "" },
+  },
+  {
+    type: "web-scrape",
+    label: "Web Scrape",
+    category: "input",
+    creditCost: 5,
+    inputs: ["in"],
+    outputs: ["text", "image", "video"],
+    defaultData: { label: "Web Scrape", actor: "google-search", query: "" } as WebScrapeNodeData,
   },
   {
     type: "reference-audio",

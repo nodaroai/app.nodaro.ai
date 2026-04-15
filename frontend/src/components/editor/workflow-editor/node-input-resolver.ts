@@ -1359,6 +1359,40 @@ export function resolveNodeInputs(
       }
     } else if (src.type === "schedule-trigger") {
       inputs.prompt = output;
+    } else if (src.type === "web-scrape") {
+      const handle = srcEdge.sourceHandle;
+      if (handle === "image") {
+        if (node.type === "generate-image" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
+          inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "image");
+        } else {
+          inputs.imageUrl = output;
+        }
+      } else if (handle === "video") {
+        if (node.type === "combine-videos") {
+          inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
+          inputs.videoUrlsWithSourceIds = [
+            ...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []),
+            { nodeId: src.id, url: output },
+          ];
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "video");
+        } else if (node.type === "merge-video-audio") {
+          if (!inputs.videoUrl) {
+            inputs.videoUrl = output;
+          } else {
+            inputs.audioSources = [
+              ...(inputs.audioSources ?? []),
+              { url: output, sourceNodeId: src.id, sourceType: "video" as const },
+            ];
+          }
+        } else {
+          inputs.videoUrl = output;
+        }
+      } else {
+        inputs.prompt = output;
+      }
     } else if (src.type === "sub-workflow" || src.type === "sub-workflow-input") {
       // Route sub-workflow output by the sourceHandle to the correct media type
       const srcData = src!.data as Record<string, unknown>;

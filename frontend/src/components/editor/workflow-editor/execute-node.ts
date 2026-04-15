@@ -60,6 +60,7 @@ import {
   setForcePrivate,
   qaCheckApi,
   saveToStorageApi,
+  webScrape,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider } from "@nodaro-shared/model-constants";
@@ -147,6 +148,7 @@ import type {
   SaveToStorageData,
   QACheckData,
   GeneratedResult,
+  WebScrapeNodeData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -2247,6 +2249,49 @@ export function executeNode(
           errorMessage: err.message || "Generation failed",
         });
         guardedToast.error(`AI Agent failed: ${err.message}`);
+        throw err;
+      });
+  }
+
+  if (node.type === "web-scrape") {
+    const d = node.data as WebScrapeNodeData;
+    const actor = d.actor ?? "google-search";
+    const { updateNodeData } = useWorkflowStore.getState();
+    const upstream = inputs.prompt;
+
+    const params: Parameters<typeof webScrape>[0] = {
+      actor,
+      url: actor === "content-crawler" ? (d.url || upstream) : undefined,
+      mode: actor === "content-crawler" ? (d.mode ?? "page") : undefined,
+      query: actor === "google-search" ? (d.query || upstream) : undefined,
+      maxResults: actor === "google-search" ? d.maxResults : undefined,
+      countryCode: actor === "google-search" ? d.countryCode : undefined,
+      target: (actor === "instagram" || actor === "tiktok") ? (d.target || upstream) : undefined,
+      resultsLimit: (actor === "instagram" || actor === "tiktok") ? d.resultsLimit : undefined,
+    };
+
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      errorMessage: undefined,
+    });
+
+    return webScrape(params)
+      .then((res) => {
+        updateNodeData(node.id, {
+          executionStatus: "completed",
+          generatedText: res.text,
+          generatedImageUrl: res.imageUrl,
+          generatedVideoUrl: res.videoUrl,
+        });
+        guardedToast.success("Web Scrape completed");
+        return res.text ?? "";
+      })
+      .catch((err: Error) => {
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err.message || "Scrape failed",
+        });
+        guardedToast.error(`Web Scrape failed: ${err.message}`);
         throw err;
       });
   }

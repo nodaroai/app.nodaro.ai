@@ -3,6 +3,7 @@ import type { SourceNodeInfo } from "./types"
 import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
 import type { LlmFeature } from "@nodaro-shared/llm-models"
+import { buildScraperCreditId, isScraperActor } from "@nodaro-shared/scraper-actors"
 
 export const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = {
   prompt: ["text-prompt"],
@@ -153,6 +154,13 @@ export function getModelIdentifier(node: WorkflowNode): string {
   if (nodeType === "character" || nodeType === "face" || nodeType === "object" || nodeType === "location") {
     const entityProvider = (data.provider as string) || "nano-banana"
     return buildCreditModelIdentifier(entityProvider, data)
+  }
+
+  if (nodeType === "web-scrape") {
+    const rawActor = data.actor
+    const actor = isScraperActor(rawActor) ? rawActor : "google-search"
+    const mode = data.mode === "site" ? "site" : "page"
+    return buildScraperCreditId({ actor, mode })
   }
 
   const provider = data.provider as string | undefined

@@ -17,6 +17,7 @@ export { SubWorkflowInputConfig, SubWorkflowOutputConfig, SubWorkflowConfig } fr
 export { ComponentConfig } from "./component-config"
 export { WebhookTriggerConfig, ScheduleTriggerConfig, TelegramTriggerConfig } from "./trigger-configs"
 export { InstagramPostConfig, TiktokPostConfig, YoutubeUploadConfig, LinkedinPostConfig, XPostConfig, FacebookPostConfig, TelegramPostConfig } from "./social-configs"
+export { WebScrapeConfig } from "./scraper-configs"
 export { ResultsGallery } from "./results-gallery"
 export { PresentationDisplayConfig } from "./presentation-display-config"
 export { getConnectedSources, getModelIdentifier, buildCreditModelIdentifier } from "./helpers"

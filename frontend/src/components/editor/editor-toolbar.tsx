@@ -302,6 +302,16 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.errorMessage = undefined
           break
 
+        case "web-scrape":
+          data.generatedResults = []
+          data.activeResultIndex = 0
+          data.generatedText = undefined
+          data.generatedImageUrl = undefined
+          data.generatedVideoUrl = undefined
+          data.executionStatus = undefined
+          data.errorMessage = undefined
+          break
+
         case "forced-alignment":
           data.alignmentResults = []
           data.executionStatus = undefined

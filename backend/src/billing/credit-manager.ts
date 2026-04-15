@@ -24,6 +24,7 @@ export const CREDIT_COSTS: Record<string, number> = {
   "image-to-text": 1,
   "speech-to-video": 4,
   "llm-chat": 5,
+  "web-scrape": 5,
   "sub-workflow": 0,
   "social-media-format": 2,
   "instagram-post": 1,
