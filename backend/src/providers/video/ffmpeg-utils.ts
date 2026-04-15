@@ -26,7 +26,10 @@ function acquireFfmpegSlot(): Promise<() => void> {
   return new Promise((resolve) => {
     const grant = () => {
       ffmpegActive++
+      let released = false
       resolve(() => {
+        if (released) return
+        released = true
         ffmpegActive--
         ffmpegQueue.shift()?.()
       })
@@ -36,13 +39,18 @@ function acquireFfmpegSlot(): Promise<() => void> {
   })
 }
 
+// Hard ceiling so a hung ffmpeg can't hold its slot forever and starve the
+// FIFO queue. Must stay below the BullMQ lockDuration (15 min) to avoid
+// re-dispatches piling on the same slot.
+const DEFAULT_FFMPEG_TIMEOUT_MS = 10 * 60 * 1000
+
 export async function runFfmpeg(args: readonly string[], timeoutMs?: number): Promise<string> {
   const release = await acquireFfmpegSlot()
   try {
     return await new Promise<string>((resolve, reject) => {
       execFile("ffmpeg", args as string[], {
         maxBuffer: 10 * 1024 * 1024,
-        ...(timeoutMs != null ? { timeout: timeoutMs } : {}),
+        timeout: timeoutMs ?? DEFAULT_FFMPEG_TIMEOUT_MS,
       }, (error, stdout, stderr) => {
         if (error) {
           reject(new Error(`ffmpeg failed: ${stderr || error.message}`))

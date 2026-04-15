@@ -302,9 +302,12 @@ export function executeNode(
   const { nodes, edges } = useWorkflowStore.getState();
   const inputs = resolveNodeInputs(node, nodes, edges, listIterationIndex);
 
-  // Set forcePrivate flag if this node uses uploaded/private content as input
-  // Always explicitly set (true/false) to prevent stale state in parallel execution
-  setForcePrivate(hasUploadAncestor(node.id, nodes, edges));
+  // Set forcePrivate flag if this node uses uploaded/private content as input.
+  // The flag is module-global; it survives the sync path from here to the API
+  // wrapper's synchronous body-build + withWorkflowId consumption. Any branch
+  // below that awaits before its API call must re-apply this (see transcribe).
+  const forcePrivate = hasUploadAncestor(node.id, nodes, edges);
+  setForcePrivate(forcePrivate);
 
   // Build label→output map for resolving {Node Label} references in text fields
   const refMap = buildNodeRefMap(node.id, nodes, edges);
@@ -1868,6 +1871,9 @@ export function executeNode(
       getTranscribeAudioUrl()
         .then((resolvedAudioUrl) => {
           audioUrl = resolvedAudioUrl;
+          // Re-apply sync so transcribeApi's body build consumes the flag
+          // before another parallel executeNode can clobber it.
+          setForcePrivate(forcePrivate);
           return transcribeApi(
             audioUrl,
             d.provider || undefined,

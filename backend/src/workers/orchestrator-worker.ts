@@ -285,12 +285,21 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
 
     // 2. Initialize node states
     const nodeStates: Record<string, NodeExecutionState> = {}
+    // Jobs → owning node. Fan-out creates one job per iteration, so the
+    // scalar nodeStates[node].jobId field would only remember the last one
+    // and onJobProgress couldn't find earlier iterations.
+    const jobToNodeId = new Map<string, string>()
 
     // Surface jobId on running nodes as soon as the job is created,
     // so the execution list can open the job modal before completion.
     ctx.onJobCreated = (nodeId, jobId) => {
-      if (nodeStates[nodeId]) {
-        nodeStates[nodeId].jobId = jobId
+      jobToNodeId.set(jobId, nodeId)
+      const state = nodeStates[nodeId]
+      if (state) {
+        // Scalar .jobId is "last created" — arbitrary under fan-out; the
+        // executions UI falls back to jobIds[] when iterationTotal > 1.
+        state.jobId = jobId
+        ;(state.jobIds ??= []).push(jobId)
       }
       // Persist to DB so polling clients also see the jobId
       updateExecution(executionId, { node_states: nodeStates }).catch(() => {})
@@ -303,11 +312,12 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     }
 
     // Surface job progress to nodeStates so the UI can render a progress bar
-    // during backend runs. Keyed by jobId — locates the right node even when
-    // a node has a running job (fan-out maps jobs via nodeStates[node].jobId).
+    // during backend runs. For fan-out, iteration counts (iterationCompleted/
+    // iterationTotal) drive the UI instead of a single progress %.
     ctx.onJobProgress = (jobId, progress) => {
-      const nodeId = Object.keys(nodeStates).find((id) => nodeStates[id].jobId === jobId)
-      if (!nodeId) return
+      const nodeId = jobToNodeId.get(jobId)
+      if (!nodeId || !nodeStates[nodeId]) return
+      if ((nodeStates[nodeId].iterationTotal ?? 0) > 1) return
       const prev = nodeStates[nodeId].progress
       if (prev === progress) return
       nodeStates[nodeId].progress = progress

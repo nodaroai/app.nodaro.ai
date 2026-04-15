@@ -351,88 +351,31 @@ export function buildStatsKey(nodeType: string, inputData: InputData): StatsKey 
 // ---------------------------------------------------------------------------
 // EMA upsert
 // ---------------------------------------------------------------------------
-
-const EMA_ALPHA = 0.3
-const OUTLIER_MULTIPLIER = 3
-const OUTLIER_MIN_SAMPLES = 5
+// EMA_ALPHA=0.3, outlier guard (≥5 samples, >3× avg) live in the RPC —
+// keep migrations 078 + 088 in sync if you change them.
 
 /**
- * Upsert an execution duration into the stats table using EMA smoothing.
+ * Upsert an execution duration into the stats table.
  *
- * - If a row exists: apply EMA, update min/max, increment sample_count.
- * - Outlier guard: skip if actualDurationMs > 3× current average and
- *   sample_count >= 5 (prevents runaway values from stale jobs).
- * - If no row exists: insert first sample.
+ * Atomic via the `upsert_execution_stats` RPC so concurrent completions for the
+ * same key don't lose samples under read-modify-write races. The RPC applies
+ * EMA smoothing, updates min/max, increments sample_count, and enforces the
+ * same outlier guard (skip if duration > 3× avg when sample_count ≥ 5).
  */
 export async function upsertExecutionStats(
   key: StatsKey,
   actualDurationMs: number,
 ): Promise<void> {
   try {
-    // Fetch existing row
-    // All dimension columns are NOT NULL with defaults ('', '', 0)
-    const { data: existing, error: selectError } = await supabase
-      .from("model_execution_stats")
-      .select("id, avg_duration_ms, min_duration_ms, max_duration_ms, sample_count")
-      .eq("model_identifier", key.model_identifier)
-      .eq("aspect_ratio", key.aspect_ratio)
-      .eq("quality", key.quality)
-      .eq("duration_seconds", key.duration_seconds)
-      .maybeSingle()
-
-    if (selectError) {
-      console.error("[execution-stats] select error:", selectError.message)
-      return
-    }
-
-    if (existing) {
-      // Outlier guard
-      if (
-        existing.sample_count >= OUTLIER_MIN_SAMPLES &&
-        actualDurationMs > existing.avg_duration_ms * OUTLIER_MULTIPLIER
-      ) {
-        return
-      }
-
-      const newAvg = Math.round(
-        EMA_ALPHA * actualDurationMs + (1 - EMA_ALPHA) * existing.avg_duration_ms,
-      )
-      const newMin = Math.min(existing.min_duration_ms, actualDurationMs)
-      const newMax = Math.max(existing.max_duration_ms, actualDurationMs)
-
-      const { error: updateError } = await supabase
-        .from("model_execution_stats")
-        .update({
-          avg_duration_ms: newAvg,
-          min_duration_ms: newMin,
-          max_duration_ms: newMax,
-          sample_count: existing.sample_count + 1,
-          last_updated_at: new Date().toISOString(),
-        })
-        .eq("id", existing.id)
-
-      if (updateError) {
-        console.error("[execution-stats] update error:", updateError.message)
-      }
-    } else {
-      // First sample — insert
-      const { error: insertError } = await supabase
-        .from("model_execution_stats")
-        .insert({
-          model_identifier: key.model_identifier,
-          aspect_ratio: key.aspect_ratio,
-          quality: key.quality,
-          duration_seconds: key.duration_seconds,
-          avg_duration_ms: actualDurationMs,
-          min_duration_ms: actualDurationMs,
-          max_duration_ms: actualDurationMs,
-          sample_count: 1,
-          last_updated_at: new Date().toISOString(),
-        })
-
-      if (insertError) {
-        console.error("[execution-stats] insert error:", insertError.message)
-      }
+    const { error } = await supabase.rpc("upsert_execution_stats", {
+      p_model_identifier: key.model_identifier,
+      p_aspect_ratio: key.aspect_ratio,
+      p_quality: key.quality,
+      p_duration_seconds: key.duration_seconds,
+      p_duration_ms: actualDurationMs,
+    })
+    if (error) {
+      console.error("[execution-stats] rpc error:", error.message)
     }
   } catch (err) {
     // Never throw — stats collection must not break job completion
