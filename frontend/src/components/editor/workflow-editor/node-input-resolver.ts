@@ -12,8 +12,9 @@ import type {
 } from "@/types/nodes";
 import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
-import { resolveIndex, selectListItems, parseListExpression, resolveListExpression, type SelectorFields } from "@nodaro-shared/edge-range";
+import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro-shared/edge-range";
 import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
+import { extractAllGeneratedResults } from "@nodaro-shared/generated-results";
 
 /** Follow teleport chain to find the original non-teleport source node. */
 function resolveTeleportOrigin(node: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode {
@@ -51,12 +52,10 @@ export function resolveEdgeValuesForTableColumn(
   const ed = edge.data as Record<string, unknown> | undefined;
   const selector = ed as SelectorFields | undefined;
   const outputMode = (ed?.outputMode as string | undefined) ?? "each";
-  const useAll = !!ed?.useAllResults;
-  const runsExpr = ed?.runsExpression as string | undefined;
 
   const allOutputs = (upstream.type === "loop" || upstream.type === "list")
     ? resolveLoopColumnValues(upstream, edge.sourceHandle ?? undefined, edges, nodes)
-    : (extractNodeOutputAsList(upstream as WorkflowNode, useAll, runsExpr) ?? []);
+    : (extractNodeOutputAsList(upstream as WorkflowNode) ?? []);
 
   if (outputMode === "item") {
     const itemIndex = ed?.itemIndex as string | undefined;
@@ -77,7 +76,7 @@ export function resolveEdgeValuesForTableColumn(
     // outputMode "last" = "Selected" in the UI — the currently selected result
     // (activeResultIndex), NOT the tail of the list. The word "last" also appears
     // inside range/list expressions where it DOES mean the final array index —
-    // those are handled separately via resolveIndex/resolveListExpression.
+    // those are handled separately via resolveIndex/selectListItems.
     const single = extractNodeOutput(upstream as WorkflowNode, edge.sourceHandle ?? undefined);
     return single ? [single] : null;
   }
@@ -138,11 +137,7 @@ function resolveUpstreamWithEdgeFilter(
           edges,
           nodes,
         )
-      : (extractNodeOutputAsList(
-          upstreamNode,
-          !!edgeData?.useAllResults,
-          edgeData?.runsExpression as string | undefined,
-        ) ?? []);
+      : (extractNodeOutputAsList(upstreamNode) ?? []);
     if (raw.length === 0) {
       const single = extractNodeOutput(upstreamNode, edge.sourceHandle ?? undefined);
       return single ? [single.trim()] : undefined;
@@ -167,9 +162,7 @@ function resolveUpstreamWithEdgeFilter(
       nodes,
     );
   } else {
-    const useAll = !!edgeData?.useAllResults;
-    const runsExpr = edgeData?.runsExpression as string | undefined;
-    const raw = extractNodeOutputAsList(upstreamNode, useAll, runsExpr);
+    const raw = extractNodeOutputAsList(upstreamNode);
     if (raw && raw.length > 1) upstreamVals = raw;
   }
 
@@ -350,13 +343,11 @@ const SUNO_TRACK_NODE_TYPES = new Set([
 
 export function extractNodeOutputAsList(
   node: WorkflowNode,
-  useAllResults = false,
-  runsExpression?: string,
 ): string[] | undefined {
   const data = node.data as Record<string, unknown>;
   if (node.type === "split-text") {
-    const splitResults = (data.splitResults as string[] | undefined) ?? [];
-    return splitResults.length > 0 ? splitResults : undefined;
+    const splitResults = data.splitResults as string[] | undefined;
+    if (splitResults && splitResults.length > 0) return splitResults;
   }
   if (node.type === "list") {
     // New format: columns + rows (same as loop)
@@ -371,59 +362,13 @@ export function extractNodeOutputAsList(
     const lines = items.split("\n").filter((l: string) => l.trim().length > 0).map((l: string) => l.trim());
     return lines.length > 0 ? lines : undefined;
   }
-  if (useAllResults) {
-    // Prefer generatedResults (full history), fall back to __listResults
-    const allResults = extractAllGeneratedResults(data, true);
-    if (allResults) return applyRunsFilter(allResults, runsExpression);
-  }
+  // Prefer the node's accumulated generatedResults (persistent, ordered).
+  const accumulated = extractAllGeneratedResults(data);
+  if (accumulated) return accumulated;
+  // Fall back to in-flight listResults (current fan-out batch, mid-execution).
   const listResults = data.__listResults as string[] | undefined;
   if (listResults && listResults.length > 0) return listResults;
-  // Fall back to accumulated generatedResults (multiple manual runs)
-  const allResults = extractAllGeneratedResults(data);
-  if (allResults) return allResults;
-  const single = extractNodeOutput(node);
-  return single ? [single] : undefined;
-}
-
-/**
- * Filter accumulated runs by a list expression (e.g. "1, 3, last", "1..5").
- * Empty/missing/malformed expression returns the input unchanged.
- * Used only on the useAllResults path — narrows generatedResults to specific run indices.
- */
-function applyRunsFilter(
-  list: string[],
-  runsExpression: string | undefined,
-): string[] {
-  const expr = runsExpression?.trim();
-  if (!expr) return list;
-  if (!parseListExpression(expr).ok) return list;
-  const indices = resolveListExpression(expr, list.length);
-  return indices.map((i) => list[i]).filter((v): v is string => typeof v === "string");
-}
-
-/**
- * Extract all output values from a node's accumulated generatedResults.
- * When skipLengthGuard is true (useAllResults mode), returns even single-element arrays.
- * When false (default), requires 2+ results for fan-out benefit.
- */
-function extractAllGeneratedResults(
-  data: Record<string, unknown>,
-  skipLengthGuard = false,
-): string[] | undefined {
-  const results = data.generatedResults as
-    | Array<{ url?: string; text?: string }>
-    | undefined;
-  if (!results || results.length === 0) return undefined;
-
-  const outputs = results
-    .map((r) => r.url || r.text || "")
-    .filter((v) => v.length > 0);
-  if (outputs.length === 0) return undefined;
-
-  // Default: require 2+ outputs for fan-out benefit
-  // useAllResults: return even a single result since user explicitly opted in
-  if (!skipLengthGuard && outputs.length <= 1) return undefined;
-  return outputs;
+  return undefined;
 }
 
 /**
@@ -483,9 +428,7 @@ export function getListInputForNode(
     if (outputMode !== "each") continue;
 
     const edgeData = edge.data as Record<string, unknown> | undefined;
-    const edgeUseAll = !!edgeData?.useAllResults;
-    const edgeRunsExpr = edgeData?.runsExpression as string | undefined;
-    const rawList = extractNodeOutputAsList(sourceNode, edgeUseAll, edgeRunsExpr);
+    const rawList = extractNodeOutputAsList(sourceNode);
     if (!rawList || rawList.length < 1) continue;
     const listOutput = selectListItems(rawList, edgeData as SelectorFields | undefined);
     if (listOutput.length > 1) {
@@ -612,19 +555,11 @@ export function resolveNodeInputs(
 
     const edgeMode = (srcEdge.data as Record<string, unknown> | undefined)
       ?.outputMode as string | undefined;
-    const edgeUseAll = (srcEdge.data as Record<string, unknown> | undefined)
-      ?.useAllResults as boolean | undefined;
-    const edgeRunsExpr = (srcEdge.data as Record<string, unknown> | undefined)
-      ?.runsExpression as string | undefined;
     const srcData = src.data as Record<string, unknown>;
     // split-media uses outputChunkIndex routing, skip __listResults
-    const rawListResults = src.type === "split-media" ? undefined : (edgeUseAll
-      ? (extractAllGeneratedResults(srcData, true) ?? (srcData.__listResults as string[] | undefined))
-      : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData)));
-    // Apply runsExpression filter only on the useAllResults path
-    const srcListResults = edgeUseAll && rawListResults
-      ? applyRunsFilter(rawListResults, edgeRunsExpr)
-      : rawListResults;
+    const srcListResults = src.type === "split-media"
+      ? undefined
+      : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData));
     let output: string | undefined;
     if (edgeMode && srcListResults && srcListResults.length > 0) {
       if (edgeMode === "item") {

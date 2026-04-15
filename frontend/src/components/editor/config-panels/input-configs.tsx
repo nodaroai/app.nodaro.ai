@@ -438,7 +438,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
   const edges = useWorkflowStore((s) => s.edges)
   const allNodes = useWorkflowStore((s) => s.nodes)
 
-  /** Resolve connected rows — respects edge outputMode, selector, and useAllResults. */
+  /** Resolve connected rows — respects edge outputMode and selector. */
   const connectedRows = useMemo<string[][] | null>(() => {
     if (!nodeId || columns.length === 0) return null
 

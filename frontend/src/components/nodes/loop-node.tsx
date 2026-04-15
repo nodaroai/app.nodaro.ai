@@ -250,7 +250,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     [edges, id, targetHandleIds],
   )
 
-  /** Resolve rows from connected upstream nodes — respects edge outputMode, selector, and useAllResults. */
+  /** Resolve rows from connected upstream nodes — respects edge outputMode and selector. */
   const connectedRows = useMemo<string[][] | null>(() => {
     if (columns.length === 0) return null
 

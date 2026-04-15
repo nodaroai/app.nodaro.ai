@@ -321,10 +321,10 @@ backend/src/
 - [x] Prompt Wizard (interactive AI prompt builder with category questions, model recommendation, reference image roles)
 - [x] Extract Frame node (video→image frame extraction, 3 modes: first/last/timestamp, 1 CR)
 - [x] Video node display name audit (de-vendored Sora/Suno prefixes, standardized verb-object order)
-- [x] Edge runs selector (`runsExpression` on `useAllResults` edges — pick specific runs from accumulated `generatedResults`, same syntax as item list selector; pill shows `runs: 1,3 → items: 2..last`)
 - [x] Component marketplace preview modal — single click on a component card opens a preview (description + inputs/outputs/exposed settings + media), double click adds directly; popup marketplace shows description in place of creator name
+- [x] Dropped edge "runs" concept (useAllResults/runsExpression) — generatedResults is now a single deterministic ordered flat list
 
 ---
 
-*Last updated: 2026-04-13*
-*Version: 1.77.0*
+*Last updated: 2026-04-15*
+*Version: 1.78.0*

@@ -116,15 +116,12 @@ export function migrateEdgeOutputMode(
 }
 
 /**
- * Builds a human-readable label for edge range configuration.
- *
- * Returns `undefined` when the configuration matches defaults (no label needed).
- *
+ * Builds the edge range label shown as a pill on the edge.
  * Examples:
- * - "2..last-1"     — range from 2 to last-1
- * - "2..last-1 +2"  — with step 2
+ * - "2..last-1 +2"  — range with step 2
  * - "last..1 -1"    — reversed
  * - "3"             — item mode, index 3
+ * - undefined       — "last" mode has no label
  */
 export function buildRangeLabel(
   mode: string,
@@ -134,17 +131,8 @@ export function buildRangeLabel(
   itemIndex?: string,
   selectorMode?: SelectorMode,
   listExpression?: string,
-  useAllResults?: boolean,
-  runsExpression?: string,
 ): string | undefined {
-  const itemLabel = buildItemLabel(mode, rangeFrom, rangeTo, rangeStep, itemIndex, selectorMode, listExpression)
-  if (!useAllResults) return itemLabel
-
-  // useAllResults composition: prefix "all runs" or "runs: <expr>", optionally append "→ items: <itemLabel>"
-  const runsExpr = (runsExpression ?? "").trim()
-  const runsPart = runsExpr === "" ? "all runs" : `runs: ${runsExpr}`
-  if (!itemLabel) return runsPart
-  return `${runsPart} → items: ${itemLabel}`
+  return buildItemLabel(mode, rangeFrom, rangeTo, rangeStep, itemIndex, selectorMode, listExpression)
 }
 
 /** Internal: builds the item-side label (range / list / item / each). Mode "last" returns undefined. */
@@ -299,14 +287,11 @@ export function describeEdgeBehavior(
         rangeTo?: string
         rangeStep?: number
         itemIndex?: string
-        useAllResults?: boolean
-        runsExpression?: string
       }
     | undefined,
 ): string {
   const mode = edgeData?.outputMode
-  const sentence = buildBaseSentence(edgeData, mode)
-  return applyUseAllResultsSuffix(sentence, edgeData, mode)
+  return buildBaseSentence(edgeData, mode)
 }
 
 function buildBaseSentence(
@@ -361,63 +346,6 @@ function buildAllSentence(
     return `Passes only ${phrase.itemModeForm}.`
   }
   return `Passes ${phrase.text} at once.`
-}
-
-function applyUseAllResultsSuffix(
-  sentence: string,
-  edgeData: Parameters<typeof describeEdgeBehavior>[0],
-  mode: string | undefined,
-): string {
-  if (!edgeData?.useAllResults) return sentence
-  if (mode === "last") return sentence
-  if (!sentence.endsWith(".")) return sentence
-
-  const runsPhrase = phraseRunsExpression(edgeData?.runsExpression)
-  if (runsPhrase) {
-    return sentence.slice(0, -1) + ` (across runs ${runsPhrase}).`
-  }
-  return sentence.slice(0, -1) + " (across all accumulated results)."
-}
-
-/**
- * Phrases a runs-filter expression for the tooltip suffix.
- * "1, 3, last" → "1, 3, and the last one"
- * "1..5" → "1 through 5"
- * "last" → "the last one"
- * Returns null for empty or malformed input (caller falls back to "all accumulated results").
- */
-function phraseRunsExpression(expr: string | undefined): string | null {
-  const trimmed = (expr ?? "").trim()
-  if (trimmed === "") return null
-  const result = parseListTerms(trimmed)
-  if (!result.ok || result.terms.length === 0) return null
-
-  const normalized = result.terms.map<ListTerm>((t) => {
-    if (t.kind === "range") {
-      const cmp = compareTokens(t.from, t.to)
-      if (cmp === 0) return { kind: "index", token: t.from }
-    }
-    return t
-  })
-
-  const rendered = normalized.map((t) => {
-    if (t.kind === "index") return compactForm(t.token)
-    let text = `${compactForm(t.from)} through ${compactForm(t.to)}`
-    const absStep = Math.abs(t.step)
-    if (absStep === 1 && t.step < 0) {
-      text += " in reverse"
-    } else if (absStep > 1 && t.step > 0) {
-      text += ` (every ${ordinal(absStep)})`
-    } else if (absStep > 1 && t.step < 0) {
-      text += ` (every ${ordinal(absStep)}, in reverse)`
-    }
-    return text
-  })
-
-  if (rendered.length === 1) return rendered[0]
-  if (rendered.length === 2) return `${rendered[0]} and ${rendered[1]}`
-  const head = rendered.slice(0, -1).join(", ")
-  return `${head}, and ${rendered[rendered.length - 1]}`
 }
 
 type CanonicalRange = { from: string; to: string; step: number }

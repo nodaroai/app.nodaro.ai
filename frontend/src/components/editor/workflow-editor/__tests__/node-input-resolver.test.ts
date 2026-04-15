@@ -12,7 +12,8 @@ vi.mock("@/lib/prompt-builder", () => ({
   buildScenePrompt: vi.fn(() => "mock scene prompt"),
 }))
 
-import { resolveNodeInputs, resolveLoopColumnValues, resolveEdgeValuesForTableColumn } from "../node-input-resolver"
+import { resolveNodeInputs, resolveEdgeValuesForTableColumn, extractNodeOutputAsList } from "../node-input-resolver"
+import type { WorkflowNode } from "@/types/nodes"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -423,6 +424,20 @@ describe("resolveNodeInputs", () => {
   })
 })
 
+describe("extractNodeOutputAsList", () => {
+  it("extractNodeOutputAsList returns single-item generatedResults (no 2+ guard)", () => {
+    const node = {
+      id: "n1",
+      type: "generate-image",
+      data: {
+        generatedResults: [{ url: "https://cdn/img1.png" }],
+      },
+    } as unknown as WorkflowNode
+    const result = extractNodeOutputAsList(node)
+    expect(result).toEqual(["https://cdn/img1.png"])
+  })
+})
+
 describe("selectListItems filtering", () => {
   it("range filters the source list", () => {
     const items = ["a", "b", "c", "d", "e"]
@@ -449,332 +464,7 @@ describe("selectListItems filtering", () => {
   })
 })
 
-describe("each-mode per-iteration resolution — list/range filter applied", () => {
-  it("list mode filters per-iteration items from non-loop source", () => {
-    const imgNode = makeNode("img1", "generate-image", {
-      generatedResults: [
-        { url: "http://img/1.png" },
-        { url: "http://img/2.png" },
-        { url: "http://img/3.png" },
-        { url: "http://img/4.png" },
-        { url: "http://img/5.png" },
-      ],
-    })
-    const target = makeNode("t1", "generate-image")
-    const edge = {
-      id: "img1->t1",
-      source: "img1",
-      target: "t1",
-      data: {
-        outputMode: "each",
-        useAllResults: true,
-        selectorMode: "list",
-        listExpression: "1, 3",
-      },
-    }
-
-    const iter0 = resolveNodeInputs(target, [imgNode, target], [edge] as any, 0)
-    const iter1 = resolveNodeInputs(target, [imgNode, target], [edge] as any, 1)
-
-    expect(iter0.referenceImageUrls).toContain("http://img/1.png")
-    expect(iter1.referenceImageUrls).toContain("http://img/3.png")
-  })
-
-  it("range mode with step filters per-iteration items from non-loop source", () => {
-    const imgNode = makeNode("img1", "generate-image", {
-      generatedResults: [
-        { url: "http://img/1.png" },
-        { url: "http://img/2.png" },
-        { url: "http://img/3.png" },
-        { url: "http://img/4.png" },
-        { url: "http://img/5.png" },
-      ],
-    })
-    const target = makeNode("t1", "generate-image")
-    const edge = {
-      id: "img1->t1",
-      source: "img1",
-      target: "t1",
-      data: {
-        outputMode: "each",
-        useAllResults: true,
-        rangeStep: 2,
-      },
-    }
-
-    const iter0 = resolveNodeInputs(target, [imgNode, target], [edge] as any, 0)
-    const iter1 = resolveNodeInputs(target, [imgNode, target], [edge] as any, 1)
-    const iter2 = resolveNodeInputs(target, [imgNode, target], [edge] as any, 2)
-
-    expect(iter0.referenceImageUrls).toContain("http://img/1.png")
-    expect(iter1.referenceImageUrls).toContain("http://img/3.png")
-    expect(iter2.referenceImageUrls).toContain("http://img/5.png")
-  })
-})
-
-describe("resolveLoopColumnValues — upstream edge filter applies", () => {
-  it("range filter on upstream edge limits items flowing into loop column", () => {
-    const imgNode = makeNode("img1", "generate-image", {
-      generatedResults: [
-        { url: "u1" }, { url: "u2" }, { url: "u3" }, { url: "u4" },
-        { url: "u5" }, { url: "u6" }, { url: "u7" }, { url: "u8" },
-        { url: "u9" }, { url: "u10" }, { url: "u11" }, { url: "u12" },
-      ],
-    })
-    const loopNode = makeNode("loop1", "loop", {
-      columns: [{ id: "c1", handleId: "col_c1", type: "image-url" }],
-      rows: [],
-    })
-    const edges = [{
-      id: "img1->loop1",
-      source: "img1",
-      target: "loop1",
-      targetHandle: "col_c1_in",
-      sourceHandle: null,
-      data: { outputMode: "all", useAllResults: true, rangeFrom: "1", rangeTo: "3" },
-    }]
-
-    const values = resolveLoopColumnValues(
-      { id: "loop1", data: loopNode.data },
-      "col_c1",
-      edges as any,
-      [imgNode, loopNode] as any,
-    )
-
-    expect(values).toEqual(["u1", "u2", "u3"])
-  })
-
-  it("chained filters compose via legacy 'in' handle: source → list₁(all 3..6) → list₂(all 1..2)", () => {
-    const imgNode = makeNode("img1", "generate-image", {
-      generatedResults: Array.from({ length: 12 }, (_, i) => ({ url: `u${i + 1}` })),
-    })
-    const list1 = makeNode("list1", "list", { items: "" })
-    const list2 = makeNode("list2", "list", { items: "" })
-    const edges = [
-      {
-        id: "img1->list1",
-        source: "img1",
-        target: "list1",
-        sourceHandle: null,
-        targetHandle: "in",
-        data: { outputMode: "all", useAllResults: true, rangeFrom: "3", rangeTo: "6" },
-      },
-      {
-        id: "list1->list2",
-        source: "list1",
-        target: "list2",
-        sourceHandle: "list",
-        targetHandle: "in",
-        data: { outputMode: "all", rangeFrom: "1", rangeTo: "2" },
-      },
-    ]
-
-    const values = resolveLoopColumnValues(
-      { id: "list2", data: list2.data },
-      undefined,
-      edges as any,
-      [imgNode, list1, list2] as any,
-    )
-
-    expect(values).toEqual(["u3", "u4"])
-  })
-
-  it("chained filters compose: source → list₁(all 3..6) → list₂(all 1..2) yields 2 items", () => {
-    const imgNode = makeNode("img1", "generate-image", {
-      generatedResults: Array.from({ length: 12 }, (_, i) => ({ url: `u${i + 1}` })),
-    })
-    const list1 = makeNode("list1", "list", {
-      columns: [{ id: "c1", handleId: "col_c1", type: "image-url" }],
-      rows: [],
-    })
-    const list2 = makeNode("list2", "list", {
-      columns: [{ id: "c2", handleId: "col_c2", type: "image-url" }],
-      rows: [],
-    })
-    const edges = [
-      {
-        id: "img1->list1",
-        source: "img1",
-        target: "list1",
-        sourceHandle: null,
-        targetHandle: "col_c1_in",
-        data: { outputMode: "all", useAllResults: true, rangeFrom: "3", rangeTo: "6" },
-      },
-      {
-        id: "list1->list2",
-        source: "list1",
-        target: "list2",
-        sourceHandle: "col_c1",
-        targetHandle: "col_c2_in",
-        data: { outputMode: "all", rangeFrom: "1", rangeTo: "2" },
-      },
-    ]
-
-    const values = resolveLoopColumnValues(
-      { id: "list2", data: list2.data },
-      "col_c2",
-      edges as any,
-      [imgNode, list1, list2] as any,
-    )
-
-    expect(values).toEqual(["u3", "u4"])
-  })
-
-  it("triple chain: source → loop₁(all 2..8) → loop₂(all 1..5) → loop₃(all 1..2) yields items 2,3", () => {
-    const imgNode = makeNode("img1", "generate-image", {
-      generatedResults: Array.from({ length: 12 }, (_, i) => ({ url: `u${i + 1}` })),
-    })
-    const loop1 = makeNode("loop1", "loop", {
-      columns: [{ id: "c1", handleId: "col_c1", type: "image-url" }],
-      rows: [],
-    })
-    const loop2 = makeNode("loop2", "loop", {
-      columns: [{ id: "c2", handleId: "col_c2", type: "image-url" }],
-      rows: [],
-    })
-    const loop3 = makeNode("loop3", "loop", {
-      columns: [{ id: "c3", handleId: "col_c3", type: "image-url" }],
-      rows: [],
-    })
-    const edges = [
-      {
-        id: "img1->loop1",
-        source: "img1",
-        target: "loop1",
-        sourceHandle: null,
-        targetHandle: "col_c1_in",
-        data: { outputMode: "all", useAllResults: true, rangeFrom: "2", rangeTo: "8" },
-      },
-      {
-        id: "loop1->loop2",
-        source: "loop1",
-        target: "loop2",
-        sourceHandle: "col_c1",
-        targetHandle: "col_c2_in",
-        data: { outputMode: "all", rangeFrom: "1", rangeTo: "5" },
-      },
-      {
-        id: "loop2->loop3",
-        source: "loop2",
-        target: "loop3",
-        sourceHandle: "col_c2",
-        targetHandle: "col_c3_in",
-        data: { outputMode: "all", rangeFrom: "1", rangeTo: "2" },
-      },
-    ]
-
-    const values = resolveLoopColumnValues(
-      { id: "loop3", data: loop3.data },
-      "col_c3",
-      edges as any,
-      [imgNode, loop1, loop2, loop3] as any,
-    )
-
-    // Expected flow:
-    //   source[1..12] → loop1 filter 2..8 → [u2, u3, u4, u5, u6, u7, u8] (7 items)
-    //   loop1[1..7] → loop2 filter 1..5 → [u2, u3, u4, u5, u6] (5 items)
-    //   loop2[1..5] → loop3 filter 1..2 → [u2, u3]
-    expect(values).toEqual(["u2", "u3"])
-  })
-
-  it("list-expression filter on upstream edge limits items flowing into loop column", () => {
-    const imgNode = makeNode("img1", "generate-image", {
-      generatedResults: [
-        { url: "u1" }, { url: "u2" }, { url: "u3" }, { url: "u4" }, { url: "u5" },
-      ],
-    })
-    const loopNode = makeNode("loop1", "loop", {
-      columns: [{ id: "c1", handleId: "col_c1", type: "image-url" }],
-      rows: [],
-    })
-    const edges = [{
-      id: "img1->loop1",
-      source: "img1",
-      target: "loop1",
-      targetHandle: "col_c1_in",
-      sourceHandle: null,
-      data: {
-        outputMode: "all",
-        useAllResults: true,
-        selectorMode: "list",
-        listExpression: "1, 3, last",
-      },
-    }]
-
-    const values = resolveLoopColumnValues(
-      { id: "loop1", data: loopNode.data },
-      "col_c1",
-      edges as any,
-      [imgNode, loopNode] as any,
-    )
-
-    expect(values).toEqual(["u1", "u3", "u5"])
-  })
-})
-
 describe("resolveEdgeValuesForTableColumn (UI display helper)", () => {
-  it("honors list selector in all mode (regression: used to use applyRange which dropped list mode)", () => {
-    const imgNode = makeNode("img1", "generate-image", {
-      generatedResults: Array.from({ length: 6 }, (_, i) => ({ url: `u${i + 1}` })),
-    })
-    const edge = {
-      source: "img1",
-      target: "loop1",
-      sourceHandle: null,
-      targetHandle: "col_c1_in",
-      data: {
-        outputMode: "all",
-        useAllResults: true,
-        selectorMode: "list",
-        listExpression: "1, 3, last",
-      },
-    }
-    const vals = resolveEdgeValuesForTableColumn(edge as any, imgNode as any, [edge] as any, [imgNode] as any, undefined)
-    expect(vals).toEqual(["u1", "u3", "u6"])
-  })
-
-  it("chained tables: UI display sees upstream table's filtered values", () => {
-    const imgNode = makeNode("img1", "generate-image", {
-      generatedResults: Array.from({ length: 12 }, (_, i) => ({ url: `u${i + 1}` })),
-    })
-    const loop1 = makeNode("loop1", "loop", {
-      columns: [{ id: "c1", handleId: "col_c1", type: "image-url" }],
-      rows: [],
-    })
-    const loop2 = makeNode("loop2", "loop", {
-      columns: [{ id: "c2", handleId: "col_c2", type: "image-url" }],
-      rows: [],
-    })
-    const edges = [
-      {
-        source: "img1",
-        target: "loop1",
-        sourceHandle: null,
-        targetHandle: "col_c1_in",
-        data: { outputMode: "all", useAllResults: true, rangeFrom: "3", rangeTo: "6" },
-      },
-      {
-        source: "loop1",
-        target: "loop2",
-        sourceHandle: "col_c1",
-        targetHandle: "col_c2_in",
-        data: { outputMode: "all", rangeFrom: "1", rangeTo: "2" },
-      },
-    ]
-
-    const vals = resolveEdgeValuesForTableColumn(
-      edges[1] as any,
-      loop1 as any,
-      edges as any,
-      [imgNode, loop1, loop2] as any,
-      [{ id: "c2", handleId: "col_c2", type: "image-url" }],
-    )
-
-    // source[1..12] → loop1 filter 3..6 → [u3, u4, u5, u6]
-    // loop1[1..4] → UI edge filter 1..2 → [u3, u4]
-    expect(vals).toEqual(["u3", "u4"])
-  })
-
   it("split-text upstream is treated as already-structured — items are NOT re-split by target's delimiter", () => {
     // Regression: split-text's custom-delimiter output (e.g. 13 pieces split
     // by "---") used to be re-chopped by the target list's column delimiter
