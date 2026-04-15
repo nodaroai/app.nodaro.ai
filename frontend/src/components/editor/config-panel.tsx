@@ -116,6 +116,7 @@ import {
   LocationConfig,
   AIWriterConfig,
   LLMChatConfig,
+  WebScrapeConfig,
   CombineTextConfig,
   SaveToStorageConfig,
   WebhookOutputConfig,
@@ -150,6 +151,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "upload-audio": "Upload Audio",
   "rss-feed": "RSS Feed",
   "youtube-video": "Video URL",
+  "web-scrape": "Web Scrape",
   "reference-audio": "Reference Audio",
   "tone": "Tone",
   "style-guide": "Style Guide",
@@ -255,7 +257,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "video-upscale", "extend-video", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
-  "ai-writer", "llm-chat",
+  "ai-writer", "llm-chat", "web-scrape",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "image-to-text", "qa-check", "transcribe",
   "render-video",
@@ -305,6 +307,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "upload-audio": return <UploadAudioConfig {...configProps} />
     case "rss-feed": return <RSSFeedConfig {...configProps} />
     case "youtube-video": return <YouTubeVideoConfig {...configProps} />
+    case "web-scrape": return <WebScrapeConfig {...configProps} />
     case "reference-audio": return <ReferenceAudioConfig {...configProps} />
     case "webhook-trigger": return <WebhookTriggerConfig {...configProps} />
     case "schedule-trigger": return <ScheduleTriggerConfig {...configProps} />

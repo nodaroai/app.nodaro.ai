@@ -405,6 +405,13 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "video-upscale": 19,
   "extend-video": 40,
   "transcribe": 4,
+  // ── Web Scrape (Apify) ──
+  "web-scrape": 5,
+  "web-scrape:google-search": 2,
+  "web-scrape:content-crawler": 3,
+  "web-scrape:content-crawler:site": 10,
+  "web-scrape:instagram": 5,
+  "web-scrape:tiktok": 5,
   "qa-check": 5,
   "qa-check:economy": 3,
   "qa-check:premium": 15,

@@ -7,7 +7,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, Frame, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic,
+  SlidersHorizontal, Scissors, Frame, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -38,6 +38,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "upload-audio", label: "Upload Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
   { type: "rss-feed", label: "RSS Feed", icon: <Rss className="h-4 w-4" />, category: "Input" },
   { type: "youtube-video", label: "Video URL", icon: <Video className="h-4 w-4" />, category: "Input" },
+  { type: "web-scrape", label: "Web Scrape", icon: <Globe className="h-4 w-4" />, category: "Input" },
   { type: "reference-audio", label: "Reference Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
   { type: "webhook-trigger" as const, label: "Webhook Trigger", icon: <Webhook className="h-4 w-4" />, category: "Input" },
   { type: "schedule-trigger" as const, label: "Schedule Trigger", icon: <Clock className="h-4 w-4" />, category: "Input" },

@@ -56,6 +56,7 @@ const SYNC_HTTP_NODES = new Set([
   "telegram-post",
   "qa-check",
   "save-to-storage",
+  "web-scrape",
 ])
 
 // Maps node type to internal route path
@@ -71,6 +72,7 @@ const SYNC_HTTP_ROUTES: Record<string, string> = {
   "suno-style-boost": "/v1/suno/style-boost",
   "qa-check": "/v1/qa-check",
   "save-to-storage": "/v1/save-to-storage",
+  "web-scrape": "/v1/web-scrape",
   "instagram-post": "/v1/social/publish",
   "tiktok-post": "/v1/social/publish",
   "youtube-upload": "/v1/social/publish",
@@ -464,6 +466,28 @@ function buildSyncHttpBody(
         parseMode: data.parseMode,
         userId: ctx.userId,
       }
+    }
+
+    case "web-scrape": {
+      // Default to google-search — cheapest SKU, avoids the max-cost fallback.
+      const actor = (data.actor as string | undefined) ?? "google-search"
+      const upstreamText = resolvedInputs.prompt
+      const body: Record<string, unknown> = {
+        actor,
+        userId: ctx.userId,
+      }
+      if (actor === "content-crawler") {
+        body.url = (data.url as string) || upstreamText
+        body.mode = data.mode || "page"
+      } else if (actor === "google-search") {
+        body.query = (data.query as string) || upstreamText
+        body.maxResults = data.maxResults
+        body.countryCode = data.countryCode
+      } else {
+        body.target = (data.target as string) || upstreamText
+        body.resultsLimit = data.resultsLimit
+      }
+      return body
     }
 
     default:

@@ -27,6 +27,7 @@ import {
   SlidersHorizontal,
   Scissors,
   Frame,
+  Globe,
   HardDrive,
   Webhook,
   Clapperboard,
@@ -136,6 +137,12 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "youtube-video",
     label: "Video URL",
     icon: <Video className="h-4 w-4" />,
+    category: "Input",
+  },
+  {
+    type: "web-scrape",
+    label: "Web Scrape",
+    icon: <Globe className="h-4 w-4" />,
     category: "Input",
   },
   {

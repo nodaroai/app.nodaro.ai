@@ -4,6 +4,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers";
 import { isDefaultSelectorConfig, selectListItems, type SelectorFields } from "@nodaro-shared/edge-range";
 import { getEffectiveRepeatCount } from "@nodaro-shared/repeat-types";
+import { buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS } from "@nodaro-shared/scraper-actors";
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -90,6 +91,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "telegram-post": 1,
   "save-to-storage": 0,
   "qa-check": 5,
+  "web-scrape": 5,
 };
 
 /** Motion-transfer composite credit costs (mirrors STATIC_CREDIT_COSTS in backend) */
@@ -127,6 +129,13 @@ export function estimateNodeCredits(node: { type?: string; data?: Record<string,
     const videoDuration = node.data.videoDuration as number | undefined
     const modelId = buildMotionCreditModelIdentifier(provider, resolution, videoDuration)
     return MOTION_CREDIT_COSTS[modelId] ?? NODE_CREDIT_COSTS["motion-transfer"] ?? 0
+  }
+  if (nodeType === "web-scrape" && node.data) {
+    const rawActor = node.data.actor
+    const actor = isScraperActor(rawActor) ? rawActor : "google-search"
+    const mode = node.data.mode === "site" ? "site" : "page"
+    const modelId = buildScraperCreditId({ actor, mode })
+    return SCRAPER_CREDIT_COSTS[modelId] ?? NODE_CREDIT_COSTS["web-scrape"] ?? 0
   }
   return NODE_CREDIT_COSTS[nodeType] ?? 0
 }
@@ -213,6 +222,7 @@ export const EXECUTABLE_TYPES = new Set([
   "telegram-post",
   "save-to-storage",
   "qa-check",
+  "web-scrape",
   "router",
   "teleport-send",
   "teleport-receive",

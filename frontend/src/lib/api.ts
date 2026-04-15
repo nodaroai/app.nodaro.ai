@@ -1700,6 +1700,29 @@ export async function sendWebhookOutput(data: { url: string; payload: Record<str
   return res.json()
 }
 
+export async function webScrape(params: {
+  actor: import("@nodaro-shared/scraper-actors").ScraperActorId
+  url?: string
+  mode?: "page" | "site"
+  query?: string
+  maxResults?: number
+  countryCode?: string
+  target?: string
+  resultsLimit?: number
+  workflowId?: string
+}): Promise<{ jobId: string; text: string; imageUrl?: string; videoUrl?: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/web-scrape`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(params)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Web scrape failed")
+  }
+  return res.json()
+}
+
 export async function sunoGenerateApi(params: {
   prompt: string
   model?: string

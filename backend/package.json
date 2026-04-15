@@ -25,6 +25,7 @@
     "@remotion/bundler": "^4.0.0",
     "@remotion/renderer": "^4.0.0",
     "@supabase/supabase-js": "^2.49.1",
+    "apify-client": "^2.23.0",
     "bullmq": "^5.34.3",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",

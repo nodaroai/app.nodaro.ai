@@ -10,6 +10,7 @@ import type {
   GeneratedScriptResult,
   SceneNodeDataType,
   LoopNodeData,
+  WebScrapeNodeData,
 } from "@/types/nodes";
 
 export function buildExecutionLevels(
@@ -451,6 +452,12 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
 
   if (type === "ai-writer" || type === "llm-chat") {
     return data.generatedText as string | undefined;
+  }
+  if (type === "web-scrape") {
+    const d = node.data as WebScrapeNodeData;
+    if (sourceHandle === "image") return d.generatedImageUrl;
+    if (sourceHandle === "video") return d.generatedVideoUrl;
+    return d.generatedText;
   }
   if (type === "combine-text") {
     return data.combinedText as string | undefined;

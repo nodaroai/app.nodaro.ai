@@ -106,3 +106,21 @@ describe("resolveMarkup", () => {
     ***REDACTED-OSS-SCRUB***
   })
 })
+
+describe("web-scrape credit costs", () => {
+  it("has all 5 static composite entries", async () => {
+    const { STATIC_CREDIT_COSTS } = await import("../../billing/credits.js")
+    expect(STATIC_CREDIT_COSTS["web-scrape:google-search"]).toBe(2)
+    expect(STATIC_CREDIT_COSTS["web-scrape:content-crawler"]).toBe(3)
+    expect(STATIC_CREDIT_COSTS["web-scrape:content-crawler:site"]).toBe(10)
+    expect(STATIC_CREDIT_COSTS["web-scrape:instagram"]).toBe(5)
+    expect(STATIC_CREDIT_COSTS["web-scrape:tiktok"]).toBe(5)
+  })
+
+  it("has bare fallback entry used by estimateWorkflowCredits", async () => {
+    // Without this, estimateWorkflowCredits returns 0 for unconfigured web-scrape
+    // nodes because getNodeModelIdentifier returns the bare node type.
+    const { STATIC_CREDIT_COSTS } = await import("../../billing/credits.js")
+    expect(STATIC_CREDIT_COSTS["web-scrape"]).toBe(5)
+  })
+})
