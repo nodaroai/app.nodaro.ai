@@ -7,6 +7,10 @@ import { refreshAccessToken, type SocialPlatform } from "../services/social/oaut
 import { platformPublishers, type PublishRequest } from "../services/social/platforms/index.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { CreditsService } from "../billing/credits.js"
+import {
+  INSTAGRAM_CAROUSEL_MIN_ITEMS,
+  INSTAGRAM_CAROUSEL_MAX_ITEMS,
+} from "../../../packages/shared/src/social-post.js"
 
 const VALID_ACTIONS = [
   "post-image", "post-reel", "post-story", "post-carousel",
@@ -57,7 +61,7 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       })
     }
 
-    // Instagram carousel has strict rules: 2-10 items, all same type, no mixing.
+    // Instagram carousel rules: min/max items, all same type, no mixing.
     if (action === "post-carousel") {
       if (platform !== "instagram") {
         return reply.status(400).send({
@@ -65,9 +69,9 @@ export async function socialPublishRoutes(app: FastifyInstance) {
         })
       }
       const items = mediaItems ?? []
-      if (items.length < 2 || items.length > 10) {
+      if (items.length < INSTAGRAM_CAROUSEL_MIN_ITEMS || items.length > INSTAGRAM_CAROUSEL_MAX_ITEMS) {
         return reply.status(400).send({
-          error: { code: "validation_error", message: `Instagram carousel needs 2-10 items (got ${items.length})` },
+          error: { code: "validation_error", message: `Instagram carousel needs ${INSTAGRAM_CAROUSEL_MIN_ITEMS}-${INSTAGRAM_CAROUSEL_MAX_ITEMS} items (got ${items.length})` },
         })
       }
       const types = new Set(items.map((m) => m.type))

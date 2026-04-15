@@ -1,4 +1,8 @@
 import type { MediaItem, PublishRequest, PublishResult, PlatformPublisher } from "./index.js"
+import {
+  INSTAGRAM_CAROUSEL_MIN_ITEMS,
+  INSTAGRAM_CAROUSEL_MAX_ITEMS,
+} from "../../../../../packages/shared/src/social-post.js"
 
 const GRAPH_API = "https://graph.facebook.com/v25.0"
 
@@ -36,8 +40,8 @@ export const instagramPublisher: PlatformPublisher = {
 
     if (action === "post-carousel") {
       const { mediaItems } = request
-      if (!mediaItems || mediaItems.length < 2 || mediaItems.length > 10) {
-        throw new Error(`Carousel requires 2-10 items (got ${mediaItems?.length ?? 0})`)
+      if (!mediaItems || mediaItems.length < INSTAGRAM_CAROUSEL_MIN_ITEMS || mediaItems.length > INSTAGRAM_CAROUSEL_MAX_ITEMS) {
+        throw new Error(`Carousel requires ${INSTAGRAM_CAROUSEL_MIN_ITEMS}-${INSTAGRAM_CAROUSEL_MAX_ITEMS} items (got ${mediaItems?.length ?? 0})`)
       }
       const itemTypes = new Set(mediaItems.map((m) => m.type))
       if (itemTypes.size > 1) {
