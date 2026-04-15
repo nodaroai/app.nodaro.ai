@@ -40,11 +40,11 @@ describe("instagramPublisher.post-carousel", () => {
         action: "post-carousel",
         mediaItems: [{ type: "photo", url: "https://example.com/1.png" }],
       }, { instagram_user_id: "ig123" }),
-    ).rejects.toThrow(/2-10 items/)
+    ).rejects.toThrow(/2-20 items/)
   })
 
-  it("rejects carousel with more than 10 items", async () => {
-    const items = Array.from({ length: 11 }, (_, i) => ({
+  it("rejects carousel with more than 20 items", async () => {
+    const items = Array.from({ length: 21 }, (_, i) => ({
       type: "photo" as const,
       url: `https://example.com/${i}.png`,
     }))
@@ -53,7 +53,7 @@ describe("instagramPublisher.post-carousel", () => {
         action: "post-carousel",
         mediaItems: items,
       }, { instagram_user_id: "ig123" }),
-    ).rejects.toThrow(/2-10 items/)
+    ).rejects.toThrow(/2-20 items/)
   })
 
   it("rejects mixed-type carousel", async () => {

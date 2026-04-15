@@ -17,6 +17,7 @@ import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 import { resolveIndex, selectListItems, type SelectorFields } from "../../../../packages/shared/src/edge-range.js"
 import { splitByLoopDelimiter } from "../../../../packages/shared/src/loop-delimiter.js"
+import { SOCIAL_POST_NODE_TYPES } from "../../../../packages/shared/src/social-post.js"
 
 /**
  * Resolve a node's primary output from execution state or source node data.
@@ -107,6 +108,19 @@ export function resolveNodeInputs(
         if (ARRAY_ACCUMULATING_TYPES.has(targetNode.type)) {
           for (const item of filtered) {
             if (item) routeOutput(inputs, sourceNode, targetNode, item, edge, edges, allNodes, nodeStates)
+          }
+          continue
+        }
+        // List sources have no intrinsic media type — items can be mixed
+        // photo/video, so classify per-item via URL regex instead of srcType.
+        if (
+          SOCIAL_POST_NODE_TYPES.has(targetNode.type) &&
+          (targetNode.data?.action as string | undefined) === "post-carousel"
+        ) {
+          for (const item of filtered) {
+            if (!item) continue
+            const type = VIDEO_URL_RE.test(item) ? "video" : "photo"
+            inputs.mediaItems = [...(inputs.mediaItems ?? []), { type, url: item }]
           }
           continue
         }
@@ -674,11 +688,6 @@ const AUDIO_OUTPUT_NODE_TYPES = new Set([
   "dubbing",
   "voice-remix",
   "voice-design",
-])
-
-const SOCIAL_POST_NODE_TYPES = new Set([
-  "instagram-post", "tiktok-post", "youtube-upload",
-  "linkedin-post", "x-post", "facebook-post", "telegram-post",
 ])
 
 const IMAGE_SOURCE_NODE_TYPES = new Set([

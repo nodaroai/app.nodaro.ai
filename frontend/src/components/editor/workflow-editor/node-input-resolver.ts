@@ -15,6 +15,7 @@ import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./e
 import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro-shared/edge-range";
 import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
 import { extractAllGeneratedResults } from "@nodaro-shared/generated-results";
+import { SOCIAL_POST_NODE_TYPES } from "@nodaro-shared/social-post";
 
 /** Follow teleport chain to find the original non-teleport source node. */
 function resolveTeleportOrigin(node: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode {
@@ -610,6 +611,15 @@ export function resolveNodeInputs(
                 { nodeId: src.id, url: item },
               ];
             }
+          }
+          continue;
+        }
+        const targetAction = (node.data as Record<string, unknown> | undefined)?.action as string | undefined;
+        if (SOCIAL_POST_NODE_TYPES.has(node.type ?? "") && targetAction === "post-carousel") {
+          for (const item of filteredSrc) {
+            if (!item) continue;
+            const type = VIDEO_URL_RE.test(item) ? "video" : "photo";
+            inputs.mediaItems = [...(inputs.mediaItems ?? []), { type, url: item }];
           }
           continue;
         }
