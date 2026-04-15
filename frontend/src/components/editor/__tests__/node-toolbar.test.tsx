@@ -226,9 +226,15 @@ describe("NODE_DEFINITIONS category distribution", () => {
   })
 
   it("credit costs are 0 for all input/parameter nodes", () => {
+    // web-scrape is input-category but paid — it's a network-bound data
+    // source (Apify API), unlike uploads / text-prompts / triggers which
+    // are pure local inputs. The invariant this test guards is "users
+    // don't accidentally pay for uploading or writing text", which this
+    // exception preserves.
+    const paidInputExceptions = new Set(["web-scrape"])
     const zeroCostCategories = ["input", "parameter"]
     for (const def of NODE_DEFINITIONS) {
-      if (zeroCostCategories.includes(def.category)) {
+      if (zeroCostCategories.includes(def.category) && !paidInputExceptions.has(def.type)) {
         expect(
           def.creditCost,
           `${def.type} should have 0 credit cost`,
