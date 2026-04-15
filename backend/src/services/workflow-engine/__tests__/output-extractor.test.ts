@@ -5,6 +5,7 @@ import {
   getPrimaryOutput,
   extractSavedNodeOutput,
   buildNodeOutputFromJobData,
+  extractAllGeneratedResults,
 } from "../output-extractor.js"
 import type { SimpleNode, NodeOutput } from "../types.js"
 
@@ -436,5 +437,17 @@ describe("buildNodeOutputFromJobData", () => {
   it("returns empty output for empty data", () => {
     const result = buildNodeOutputFromJobData({}, "unknown")
     expect(result).toEqual({})
+  })
+})
+
+// ---------------------------------------------------------------------------
+// extractAllGeneratedResults
+// ---------------------------------------------------------------------------
+
+describe("extractAllGeneratedResults", () => {
+  it("extractAllGeneratedResults returns single-item array (no 2+ guard)", () => {
+    const data = { generatedResults: [{ url: "https://cdn/img1.png" }] }
+    const result = extractAllGeneratedResults(data)
+    expect(result).toEqual(["https://cdn/img1.png"])
   })
 })

@@ -2,7 +2,7 @@ import type { WorkflowNode, WorkflowEdge } from "@/types/nodes";
 import { StorageExceededError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers";
-import { isDefaultSelectorConfig, parseListExpression, resolveListExpression, selectListItems, type SelectorFields } from "@nodaro-shared/edge-range";
+import { isDefaultSelectorConfig, selectListItems, type SelectorFields } from "@nodaro-shared/edge-range";
 import { getEffectiveRepeatCount } from "@nodaro-shared/repeat-types";
 
 /** Sentinel error thrown when a polling callback detects that the active
@@ -274,23 +274,6 @@ function getBaseFanOut(
 
     const edgeData = edge.data as Record<string, unknown> | undefined;
     const selector = edgeData as SelectorFields | undefined;
-
-    const edgeUseAll = !!edgeData?.useAllResults;
-    if (edgeUseAll) {
-      const srcData = sourceNode.data as Record<string, unknown>;
-      const genResults = srcData.generatedResults as Array<unknown> | undefined;
-      if (genResults && genResults.length > 0) {
-        const runsExpr = (edgeData?.runsExpression as string | undefined)?.trim();
-        const filteredCount = (runsExpr && parseListExpression(runsExpr).ok)
-          ? resolveListExpression(runsExpr, genResults.length).length
-          : genResults.length;
-        if (filteredCount > 1) {
-          const strs = Array.from({ length: filteredCount }, (_, i) => String(i + 1));
-          const n = fanOutCount(strs, selector);
-          if (n > 0) return n;
-        }
-      }
-    }
 
     if (sourceNode.type === "list") {
       const items = ((sourceNode.data as Record<string, unknown>).items as string || "")

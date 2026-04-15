@@ -17,6 +17,9 @@ import {
 import { COMPOSER_PLAN_MAP } from "../../../../packages/shared/src/model-constants.js"
 import { buildScenePrompt } from "../../../../packages/shared/src/prompt-builder.js"
 import type { SceneData } from "../../../../packages/shared/src/types.js"
+import { extractAllGeneratedResults } from "../../../../packages/shared/src/generated-results.js"
+
+export { extractAllGeneratedResults }
 
 // Node types that output a plan (not a media URL) — derived from COMPOSER_PLAN_MAP
 const PLAN_NODE_TYPES = new Set(Object.keys(COMPOSER_PLAN_MAP))
@@ -233,24 +236,6 @@ export function extractSourceNodeOutputAsList(
     default:
       return undefined
   }
-}
-
-/**
- * Extract all output values from a node's accumulated generatedResults.
- * Returns undefined if fewer than 2 results (no fan-out benefit).
- * Mirrors frontend extractAllGeneratedResults().
- */
-export function extractAllGeneratedResults(
-  data: Record<string, unknown>,
-): string[] | undefined {
-  const results = data.generatedResults as
-    | Array<{ url?: string; text?: string }>
-    | undefined
-  if (!results || results.length <= 1) return undefined
-  const outputs = results
-    .map((r) => r.url || r.text || "")
-    .filter((v) => v.length > 0)
-  return outputs.length > 1 ? outputs : undefined
 }
 
 /**

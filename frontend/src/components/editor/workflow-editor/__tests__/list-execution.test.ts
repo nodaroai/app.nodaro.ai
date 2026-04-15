@@ -199,6 +199,53 @@ describe("executeNodeForList", () => {
 
     expect(mockExecuteNode).toHaveBeenCalledTimes(1)
   })
+
+  it("generatedResults is assembled in list-index order regardless of completion order", async () => {
+    // Mock executeNode to resolve out of order: iter 2 first, then 0, then 1.
+    const timings: Record<number, number> = { 0: 40, 1: 60, 2: 10 }
+    mockExecuteNode.mockImplementation(async (
+      _node: unknown,
+      _ctx: unknown,
+      _prompt: unknown,
+      _url: unknown,
+      iterIndex: number,
+    ) => {
+      await new Promise((r) => setTimeout(r, timings[iterIndex ?? 0]))
+      return `https://cdn/img${iterIndex}.png`
+    })
+    mockNodes = [
+      makeNode({
+        id: "n1",
+        type: "generate-image",
+        data: {
+          label: "Gen Image",
+          generatedResults: [
+            { url: "https://cdn/old.png", timestamp: "t", jobId: "old" },
+          ],
+        },
+      }),
+    ]
+    // Emulate store-backed updateNodeData so pre-batch snapshot reads the pre-existing history.
+    mockUpdateNodeData.mockImplementation((id: string, updates: Record<string, unknown>) => {
+      const node = mockNodes.find((n) => n.id === id)
+      if (node) node.data = { ...node.data, ...updates }
+    })
+
+    await executeNodeForList(
+      mockNodes[0] as unknown as WorkflowNode,
+      ["a", "b", "c"],
+      makeCtx(),
+    )
+
+    const final = (mockNodes[0].data as Record<string, unknown>)
+      .generatedResults as Array<{ url: string }>
+    expect(final.map((r) => r.url)).toEqual([
+      "https://cdn/img0.png",
+      "https://cdn/img1.png",
+      "https://cdn/img2.png",
+      "https://cdn/old.png", // preserved pre-batch history
+    ])
+  })
 })
 
 describe("expandLoopResults", () => {

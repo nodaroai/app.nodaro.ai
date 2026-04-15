@@ -20,10 +20,8 @@ type AnimatedFlowEdgeData = {
   rangeTo?: string          // "1", "last", "last-2" — default "last"
   rangeStep?: number        // only for "each" — default 1, supports negative
   itemIndex?: string        // for "item" mode: "3", "last", "last-1"
-  useAllResults?: boolean   // Include all accumulated results across runs (default false)
   selectorMode?: SelectorMode  // Selector tab: "range" (default) or "list"
   listExpression?: string   // List-mode expression: comma-separated indices/ranges, e.g. "1,3,5..last-1"
-  runsExpression?: string   // Runs-filter expression (only when useAllResults true): "1, 3, last"
   sourceNodeType?: string   // Source node's type — used to hide modes that don't apply (e.g. Selected for list/loop)
   targetNodeType?: string   // Target node's type — used to hide Each when feeding into list/loop columns
 }
@@ -149,13 +147,8 @@ function AnimatedFlowEdgeComponent({
     updateEdgeData(id, { itemIndex: value || undefined })
   }, [id, updateEdgeData])
 
-  const handleUseAllResultsChange = useCallback((checked: boolean) => {
-    updateEdgeData(id, { useAllResults: checked })
-  }, [id, updateEdgeData])
-
   const handleSelectorModeChange = (mode: SelectorMode) => { updateEdgeData(id, { selectorMode: mode }) }
   const handleListExpressionChange = (value: string) => { updateEdgeData(id, { listExpression: value }) }
-  const handleRunsExpressionChange = (value: string) => { updateEdgeData(id, { runsExpression: value }) }
 
   // Use step routing for backward connections (target left of source)
   // to avoid edges cutting through nodes
@@ -567,44 +560,6 @@ function AnimatedFlowEdgeComponent({
                     </div>
                   </>
                 )}
-
-                {/* Include previous runs — always at the end */}
-                <div style={{ height: 1, background: "#555" }} />
-                <div style={{ padding: "8px 14px" }}>
-                  <label
-                    className="flex items-center gap-2 cursor-pointer"
-                    onClick={(e) => e.stopPropagation()}
-                    onMouseDown={(e) => e.stopPropagation()}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={!!edgeData?.useAllResults}
-                      onChange={(e) => handleUseAllResultsChange(e.target.checked)}
-                      style={{
-                        accentColor: "#a78bfa",
-                        width: 14,
-                        height: 14,
-                        cursor: "pointer",
-                      }}
-                    />
-                    <span style={{ color: "#e2e8f0", fontSize: 11 }}>
-                      Include previous runs
-                    </span>
-                  </label>
-                  <span style={{ color: "#64748b", fontSize: 9.5, marginLeft: 22, display: "block", marginTop: 2 }}>
-                    Use all accumulated results, not just the latest batch
-                  </span>
-                  {edgeData?.useAllResults && (
-                    <div style={{ marginLeft: 22, marginTop: 6 }}>
-                      <ListConfig
-                        value={edgeData?.runsExpression ?? ""}
-                        onChange={handleRunsExpressionChange}
-                        placeholder="1, 2, last (which runs to include)"
-                        containerPadding="0"
-                      />
-                    </div>
-                  )}
-                </div>
               </div>
             )}
           </div>

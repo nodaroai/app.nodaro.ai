@@ -687,13 +687,13 @@ describe("extractNodeOutputAsList", () => {
     expect(result).toBeUndefined()
   })
 
-  it("ignores empty __listResults and falls back to extractNodeOutput", () => {
+  it("returns undefined when __listResults is empty and no generatedResults", () => {
     mockExtractNodeOutput.mockReturnValue("fallback-value")
 
     const node = makeNode("g1", "generate-image", { __listResults: [] })
 
     const result = extractNodeOutputAsList(node)
-    expect(result).toEqual(["fallback-value"])
+    expect(result).toBeUndefined()
   })
 })
 
@@ -1069,114 +1069,6 @@ describe("resolveNodeInputs — list edge output mode routing", () => {
     expect(inputs.referenceImageUrls).toBeDefined()
     expect(inputs.referenceImageUrls?.length).toBeGreaterThan(0)
     expect(inputs.prompt).toBeUndefined()
-  })
-})
-
-// ---------------------------------------------------------------------------
-// extractNodeOutputAsList — useAllResults
-// ---------------------------------------------------------------------------
-
-describe("extractNodeOutputAsList — useAllResults", () => {
-  it("returns generatedResults when useAllResults is true, even if __listResults exists", () => {
-    const node = makeNode("img1", "generate-image", {
-      __listResults: ["latest1.png", "latest2.png"],
-      generatedResults: [
-        { url: "old1.png" }, { url: "old2.png" }, { url: "latest1.png" }, { url: "latest2.png" },
-      ],
-    })
-    const result = extractNodeOutputAsList(node, true)
-    expect(result).toEqual(["old1.png", "old2.png", "latest1.png", "latest2.png"])
-  })
-
-  it("falls back to __listResults when generatedResults is empty and useAllResults is true", () => {
-    const node = makeNode("img1", "generate-image", {
-      __listResults: ["a.png", "b.png"],
-      generatedResults: [],
-    })
-    const result = extractNodeOutputAsList(node, true)
-    expect(result).toEqual(["a.png", "b.png"])
-  })
-
-  it("returns single generatedResult when useAllResults is true (no length > 1 guard)", () => {
-    const node = makeNode("img1", "generate-image", {
-      generatedResults: [{ url: "single.png" }],
-    })
-    const result = extractNodeOutputAsList(node, true)
-    expect(result).toEqual(["single.png"])
-  })
-
-  it("uses __listResults when useAllResults is false (default)", () => {
-    const node = makeNode("img1", "generate-image", {
-      __listResults: ["latest.png"],
-      generatedResults: [
-        { url: "old.png" }, { url: "latest.png" },
-      ],
-    })
-    const result = extractNodeOutputAsList(node, false)
-    expect(result).toEqual(["latest.png"])
-  })
-})
-
-// ---------------------------------------------------------------------------
-// resolveNodeInputs — useAllResults on edge
-// ---------------------------------------------------------------------------
-
-describe("resolveNodeInputs — useAllResults on edge", () => {
-  it("uses generatedResults when edge has useAllResults and mode is 'last'", () => {
-    const imgNode = makeNode("img1", "generate-image", {
-      __listResults: ["latest.png"],
-      generatedResults: [{ url: "old.png" }, { url: "latest.png" }],
-      generatedImageUrl: "latest.png",
-    })
-    ;(extractNodeOutput as ReturnType<typeof vi.fn>).mockReturnValue("latest.png")
-    const target = makeNode("desc1", "image-to-video")
-    const edges = [makeEdgeWithData("img1", "desc1", { outputMode: "last", useAllResults: true })]
-
-    const inputs = resolveNodeInputs(target, [imgNode, target], edges)
-    expect(inputs.imageUrl).toBe("latest.png")
-  })
-
-  it("joins all generatedResults when edge has useAllResults and mode is 'all'", () => {
-    const imgNode = makeNode("img1", "generate-image", {
-      __listResults: ["latest.png"],
-      generatedResults: [{ url: "old.png" }, { url: "latest.png" }],
-      generatedImageUrl: "old.png",
-    })
-    ;(extractNodeOutput as ReturnType<typeof vi.fn>).mockReturnValue("old.png")
-    const target = makeNode("t1", "image-to-video")
-    const edges = [makeEdgeWithData("img1", "t1", { outputMode: "all", useAllResults: true })]
-
-    const inputs = resolveNodeInputs(target, [imgNode, target], edges)
-    expect(inputs.imageUrl).toBe("old.png, latest.png")
-  })
-})
-
-// ---------------------------------------------------------------------------
-// getListInputForNode — useAllResults
-// ---------------------------------------------------------------------------
-
-describe("getListInputForNode — useAllResults", () => {
-  it("fans out over generatedResults when edge has useAllResults and mode 'each'", () => {
-    const imgNode = makeNode("img1", "generate-image", {
-      __listResults: ["latest.png"],
-      generatedResults: [{ url: "old.png" }, { url: "latest.png" }],
-    })
-    const target = makeNode("desc1", "image-to-text")
-    const edges = [makeEdgeWithData("img1", "desc1", { outputMode: "each", useAllResults: true })]
-
-    const result = getListInputForNode(target, [imgNode, target], edges)
-    expect(result).toEqual(["old.png", "latest.png"])
-  })
-
-  it("does not fan out when useAllResults but mode is 'last'", () => {
-    const imgNode = makeNode("img1", "generate-image", {
-      generatedResults: [{ url: "a.png" }, { url: "b.png" }],
-    })
-    const target = makeNode("desc1", "image-to-text")
-    const edges = [makeEdgeWithData("img1", "desc1", { outputMode: "last", useAllResults: true })]
-
-    const result = getListInputForNode(target, [imgNode, target], edges)
-    expect(result).toBeUndefined()
   })
 })
 

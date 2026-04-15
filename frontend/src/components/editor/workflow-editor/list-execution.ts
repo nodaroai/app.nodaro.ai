@@ -1,5 +1,9 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import type { WorkflowNode, SceneNodeDataType } from "@/types/nodes";
+import type {
+  GeneratedResult,
+  WorkflowNode,
+  SceneNodeDataType,
+} from "@/types/nodes";
 import { getCachedTier } from "@/hooks/use-auth";
 import { TIER_PARALLELISM } from "@/lib/pricing-data";
 import { hasCredits } from "@/lib/edition";
@@ -24,6 +28,13 @@ export async function executeNodeForList(
 
   const { updateNodeData } = useWorkflowStore.getState();
   const runId = crypto.randomUUID();
+
+  // Snapshot prior history before we clear it on the next line; re-appended
+  // after the fan-out settles so prior runs aren't lost.
+  const priorData = useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
+    ?.data as Record<string, unknown> | undefined;
+  const preBatchHistory: GeneratedResult[] =
+    (priorData?.generatedResults as GeneratedResult[] | undefined) ?? [];
 
   updateNodeData(node.id, {
     executionStatus: "running",
@@ -98,12 +109,29 @@ export async function executeNodeForList(
       }
     }
 
+    // poll-job.ts prepends each iteration in completion order during fan-out.
+    // The final write below overwrites that with list-index order.
+    const batchTimestamp = new Date().toISOString();
+    const batchResults: GeneratedResult[] = results
+      .map((url, i) =>
+        url
+          ? {
+              url,
+              timestamp: batchTimestamp,
+              jobId: `iter-${runId}-${i}`,
+            }
+          : null,
+      )
+      .filter((r): r is GeneratedResult => r !== null);
+
     useWorkflowStore.getState().updateNodeData(node.id, {
       executionStatus: failedCount === items.length ? "failed" : "completed",
       __listTotal: items.length,
       __listCompleted: completedCount + failedCount,
       __listResults: results,
       __listInputs: [...items],
+      generatedResults: [...batchResults, ...preBatchHistory],
+      activeResultIndex: 0,
       errorMessage:
         failedCount > 0
           ? `${completedCount}/${items.length} succeeded, ${failedCount} failed`
