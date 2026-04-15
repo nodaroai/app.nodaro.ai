@@ -6,6 +6,7 @@ import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
+import { config } from "../../lib/config.js"
 
 export async function downloadFile(url: string, dest: string): Promise<void> {
   const response = await fetch(url, { signal: AbortSignal.timeout(120_000) })
@@ -16,19 +17,43 @@ export async function downloadFile(url: string, dest: string): Promise<void> {
   await pipeline(nodeStream, createWriteStream(dest))
 }
 
-export function runFfmpeg(args: readonly string[], timeoutMs?: number): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile("ffmpeg", args as string[], {
-      maxBuffer: 10 * 1024 * 1024,
-      ...(timeoutMs != null ? { timeout: timeoutMs } : {}),
-    }, (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error(`ffmpeg failed: ${stderr || error.message}`))
-      } else {
-        resolve(stdout)
-      }
-    })
+// FIFO semaphore serializes ffmpeg spawns so fan-out doesn't launch N ffmpeg
+// processes on a 2-vCPU box. The worker runs at high concurrency for I/O work;
+// ffmpeg needs its own much lower cap.
+let ffmpegActive = 0
+const ffmpegQueue: Array<() => void> = []
+function acquireFfmpegSlot(): Promise<() => void> {
+  return new Promise((resolve) => {
+    const grant = () => {
+      ffmpegActive++
+      resolve(() => {
+        ffmpegActive--
+        ffmpegQueue.shift()?.()
+      })
+    }
+    if (ffmpegActive < config.FFMPEG_CONCURRENCY) grant()
+    else ffmpegQueue.push(grant)
   })
+}
+
+export async function runFfmpeg(args: readonly string[], timeoutMs?: number): Promise<string> {
+  const release = await acquireFfmpegSlot()
+  try {
+    return await new Promise<string>((resolve, reject) => {
+      execFile("ffmpeg", args as string[], {
+        maxBuffer: 10 * 1024 * 1024,
+        ...(timeoutMs != null ? { timeout: timeoutMs } : {}),
+      }, (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(`ffmpeg failed: ${stderr || error.message}`))
+        } else {
+          resolve(stdout)
+        }
+      })
+    })
+  } finally {
+    release()
+  }
 }
 
 export function runFfprobe(args: readonly string[]): Promise<string> {
