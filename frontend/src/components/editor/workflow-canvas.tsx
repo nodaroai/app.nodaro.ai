@@ -125,30 +125,35 @@ const FIELD_LABELS: Record<string, string> = {
   resolution: "Resolution",
 }
 
-/** Node types that default to "each" output mode on their edges */
-const DEFAULT_EACH_EDGE_TYPES = new Set(["list", "loop", "split-text"])
+/** Source types whose edges default to "each" (fan-out) when no explicit mode is set. */
+const DEFAULT_EACH_SOURCE_TYPES = new Set(["list", "loop", "split-text"])
+/** Target types whose incoming edges default to "all" (Bundle). Mirrors the dropdown in animated-flow-edge. */
+const DEFAULT_ALL_TARGET_TYPES = new Set(["list", "loop"])
 
-/** Get the edge output mode, considering edge data, source node type defaults.
- *  Default: list/loop/split-text → "each"; all others → no mode (uses activeResultIndex). */
-function getEdgeOutputMode(edge: WorkflowEdge, sourceNode: { type?: string } | undefined): string | undefined {
-  const edgeMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined
-  if (edgeMode) return edgeMode
-  // Default: list/loop/split-text edges default to "each", all others have no explicit mode
-  if (sourceNode?.type && DEFAULT_EACH_EDGE_TYPES.has(sourceNode.type)) return "each"
+/** Resolve the effective output mode, mirroring the dropdown defaults so the
+ *  edge label agrees with the radio selection. Target-based "all" wins over
+ *  source-based "each" (matches animated-flow-edge). */
+function resolveEffectiveOutputMode(
+  edge: WorkflowEdge,
+  sourceNode: { type?: string } | undefined,
+  targetNode: { type?: string } | undefined,
+): string | undefined {
+  const explicit = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined
+  if (explicit) return explicit
+  if (targetNode?.type && DEFAULT_ALL_TARGET_TYPES.has(targetNode.type)) return "all"
+  if (sourceNode?.type && DEFAULT_EACH_SOURCE_TYPES.has(sourceNode.type)) return "each"
   return undefined
 }
 
 /** Get the output mode label for display (separate from the edge label).
  *  Only hides the label for "last" mode (the quiet default). */
-function getOutputModeLabel(edge: WorkflowEdge, sourceNode: { type?: string } | undefined): string | undefined {
-  const edgeDataRaw = edge.data as Record<string, unknown> | undefined
-  const explicitMode = edgeDataRaw?.outputMode as string | undefined
-  // Resolve effective mode: explicit edge mode, or default for source type
-  const effectiveMode = explicitMode
-    ?? (sourceNode?.type && DEFAULT_EACH_EDGE_TYPES.has(sourceNode.type) ? "each" : undefined)
-  // "last" is the quiet default — no label needed
+function getOutputModeLabel(
+  edge: WorkflowEdge,
+  sourceNode: { type?: string } | undefined,
+  targetNode: { type?: string } | undefined,
+): string | undefined {
+  const effectiveMode = resolveEffectiveOutputMode(edge, sourceNode, targetNode)
   if (!effectiveMode || effectiveMode === "last") return undefined
-  // Normalize legacy "item:N" to "item"
   if (effectiveMode.startsWith("item:")) return "item"
   // "all" renders as "bundle" in the UI — value stays "all" for backward compat
   if (effectiveMode === "all") return "bundle"
@@ -632,17 +637,18 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
       // Compute edge label from handle IDs and node types
       const sourceNode = nodeMap.get(edge.source)
-      const edgeLabelResult = getEdgeLabel(edge, sourceNode, nodeMap.get(edge.target))
+      const targetNode = nodeMap.get(edge.target)
+      const edgeLabelResult = getEdgeLabel(edge, sourceNode, targetNode)
       const edgeLabel = edgeLabelResult?.label
       const edgeLabelColor = edgeLabel && sourceNode ? getMiniMapNodeColor(sourceNode) : undefined
-      const edgeModeLabel = getOutputModeLabel(edge, sourceNode)
+      const edgeModeLabel = getOutputModeLabel(edge, sourceNode, targetNode)
       const edgeRangeLabel = getEdgeRangeLabel(edge)
 
       return {
         ...edge,
         type: 'default', // Explicitly set type to use our AnimatedFlowEdge
         animated: hasAnimation, // Only animate for execution, not for dragging
-        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode: getEdgeOutputMode(edge, sourceNode), sourceNodeType: sourceNode?.type, targetNodeType: nodeMap.get(edge.target)?.type },
+        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode: resolveEffectiveOutputMode(edge, sourceNode, targetNode), sourceNodeType: sourceNode?.type, targetNodeType: targetNode?.type },
         style: shouldHighlight ? {
           ...edge.style,
           stroke: edgeColor,
