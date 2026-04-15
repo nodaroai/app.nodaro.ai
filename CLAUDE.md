@@ -327,4 +327,4 @@ backend/src/
 ---
 
 *Last updated: 2026-04-15*
-*Version: 1.78.0*
+*Version: 1.78.1*
