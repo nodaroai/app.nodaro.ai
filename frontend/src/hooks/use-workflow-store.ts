@@ -475,6 +475,34 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         if (connection.targetHandle === LOOP_COL_ADD_HANDLE && sourceNode) {
           const colType = detectLoopColumnType(sourceNode, connection.sourceHandle, state.nodes as WorkflowNode[], newEdges as WorkflowEdge[])
 
+          // Reuse sole empty column if it exists (e.g. default "Items" column on a new List node)
+          const soleEmptyCol = (loopData.columns ?? []).length === 1 && !(loopData.columns![0].connectedSourceId)
+            ? loopData.columns![0]
+            : undefined
+
+          if (soleEmptyCol) {
+            const sourceLabel = (sourceNode.data as Record<string, unknown>).label as string || sourceNode.type || "Column"
+            const colType = detectLoopColumnType(sourceNode, connection.sourceHandle, state.nodes as WorkflowNode[], newEdges as WorkflowEdge[])
+            const updatedColumns = (loopData.columns ?? []).map((col) =>
+              col.id === soleEmptyCol.id
+                ? { ...col, type: colType, connectedSourceId: connection.source!, name: sourceLabel }
+                : col
+            )
+            newNodes = newNodes.map((n) =>
+              n.id === connection.target
+                ? { ...n, data: { ...n.data, columns: updatedColumns } }
+                : n
+            )
+            newEdges = newEdges.map((e) =>
+              e.source === connection.source &&
+              e.target === connection.target &&
+              e.targetHandle === LOOP_COL_ADD_HANDLE
+                ? { ...e, targetHandle: loopColInputHandle(soleEmptyCol.handleId) }
+                : e
+            )
+            return { nodes: newNodes, edges: newEdges, isDirty: true }
+          }
+
           // If a column of the same type already exists (with a connected source),
           // route the new edge to that column instead of creating a new one.
           // This makes multiple same-type sources appear as rows, not columns.
