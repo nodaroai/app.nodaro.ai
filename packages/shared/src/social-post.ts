@@ -17,6 +17,8 @@ export const SOCIAL_POST_NODE_TYPES = new Set([
   "telegram-post",
 ])
 
-/** Instagram carousel limits per Meta Graph API. */
+/** Instagram carousel limits per Meta Graph API.
+ *  Meta's documented limit is 10 items; sending >10 fails at container
+ *  creation with "(#100) too little or too many attachments". */
 export const INSTAGRAM_CAROUSEL_MIN_ITEMS = 2
-export const INSTAGRAM_CAROUSEL_MAX_ITEMS = 20
+export const INSTAGRAM_CAROUSEL_MAX_ITEMS = 10
