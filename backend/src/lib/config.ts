@@ -38,6 +38,8 @@ const envSchema = z.object({
   ORCHESTRATOR_CONCURRENCY: z.coerce.number().int().min(1).max(100).default(20),
   /** BullMQ concurrency for the render worker (default 2). CPU-bound — each render spawns headless Chrome. */
   RENDER_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(2),
+  /** Max concurrent ffmpeg child processes (default 4). FFmpeg is CPU-bound; too many parallel processes thrash the box. Applies across every ffmpeg node (resize, combine, social-format, etc.). */
+  FFMPEG_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(4),
 })
 
 export type Edition = "community" | "business" | "cloud"
