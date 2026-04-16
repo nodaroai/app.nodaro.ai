@@ -14,7 +14,7 @@ import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
 import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro-shared/edge-range";
 import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
-import { extractAllGeneratedResults } from "@nodaro-shared/generated-results";
+import { extractAllGeneratedResults, extractGeneratedJsonAsList } from "@nodaro-shared/generated-results";
 import { SOCIAL_POST_NODE_TYPES } from "@nodaro-shared/social-post";
 
 /** Follow teleport chain to find the original non-teleport source node. */
@@ -364,10 +364,8 @@ export function extractNodeOutputAsList(
     return lines.length > 0 ? lines : undefined;
   }
   // JSON array output (e.g. web-scrape generatedJson) — each element is one list item.
-  const jsonArr = data.generatedJson;
-  if (Array.isArray(jsonArr) && jsonArr.length > 0) {
-    return jsonArr.map((item) => (typeof item === "string" ? item : JSON.stringify(item)));
-  }
+  const jsonItems = extractGeneratedJsonAsList(data);
+  if (jsonItems) return jsonItems;
   // Prefer the node's accumulated generatedResults (persistent, ordered).
   const accumulated = extractAllGeneratedResults(data);
   if (accumulated) return accumulated;

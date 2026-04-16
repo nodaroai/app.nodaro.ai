@@ -739,7 +739,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
           const vs = typeof v === "string" ? v : JSON.stringify(v)
           return (
             <div key={k} className="flex gap-1 min-w-0">
-              <span className="text-[#F59E0B] shrink-0">{k}:</span>
+              <span className="shrink-0" style={{ color: LOOP_COLUMN_TYPE_META.json.color }}>{k}:</span>
               <span className="text-foreground/60 truncate">{vs}</span>
             </div>
           )
