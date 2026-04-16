@@ -3908,10 +3908,12 @@ export function executeNode(
     const raw = evaluateJsonPath(value ?? null, path);
     const strings = stringifyPathResults(raw);
     const joined = strings.join("\n");
+    const isJsonOutput = extractData.outputType === "json";
     updateNodeData(node.id, {
       extractedText: joined,
       executionStatus: "completed",
       __listResults: strings,
+      generatedJson: isJsonOutput ? raw : undefined,
     });
     return Promise.resolve(joined);
   }

@@ -164,7 +164,13 @@ export function executeExtractField(
   const raw = evaluateJsonPath(value, path)
   const strings = stringifyPathResults(raw)
   const joined = strings.join("\n")
-  return { extractedText: joined, text: joined, listResults: strings }
+  const isJsonOutput = node.data.outputType === "json"
+  return {
+    extractedText: joined,
+    text: joined,
+    listResults: strings,
+    json: isJsonOutput ? raw : undefined,
+  }
 }
 
 /** Cheap fallback for source nodes that stash text on data. */
