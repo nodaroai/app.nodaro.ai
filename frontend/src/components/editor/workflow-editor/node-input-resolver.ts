@@ -164,7 +164,11 @@ function resolveUpstreamWithEdgeFilter(
     );
   } else {
     const raw = extractNodeOutputAsList(upstreamNode);
-    if (raw && raw.length > 1) upstreamVals = raw;
+    // Already-structured sources (split-text, extract-field) produce logical
+    // items — preserve them even when the list has a single item, so downstream
+    // doesn't re-split by newline. Matches resolveEdgeValuesForTableColumn.
+    const isAlreadyStructured = upstreamNode.type === "split-text" || upstreamNode.type === "extract-field"
+    if (raw && (isAlreadyStructured || raw.length > 1)) upstreamVals = raw;
   }
 
   if (upstreamVals && upstreamVals.length > 0) {
@@ -1263,6 +1267,8 @@ export function resolveNodeInputs(
     } else if (src.type === "preview") {
       inputs.prompt = output;
     } else if (src.type === "split-text") {
+      inputs.prompt = output;
+    } else if (src.type === "extract-field") {
       inputs.prompt = output;
     } else if (src.type === "generate-script") {
       const handle = srcEdge.sourceHandle;

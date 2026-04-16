@@ -630,6 +630,7 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "llm-chat",
   "combine-text",
   "split-text",
+  "extract-field",
   "suno-style-boost",
   "forced-alignment",
   "qa-check",
