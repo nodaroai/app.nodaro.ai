@@ -68,6 +68,7 @@ const SOURCE_LABELS: Record<string, string> = {
   sfx: "SFX",
   characters: "Characters",
   locations: "Locations",
+  json: "JSON",
   data: "Data",
   payload: "Payload",
   characterRef: "Character",

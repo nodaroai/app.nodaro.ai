@@ -11,6 +11,7 @@ import type {
   ResolvedInputs,
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, getPrimaryOutput } from "./output-extractor.js"
+import { extractGeneratedJsonAsList } from "../../../../packages/shared/src/generated-results.js"
 import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
@@ -82,6 +83,7 @@ export function resolveNodeInputs(
     const edgeOutputMode = edgeData?.outputMode as string | undefined
     const effectiveListResults = state?.output?.listResults
       ?? extractAllGeneratedResults(sourceNode.data as Record<string, unknown>)
+      ?? extractGeneratedJsonAsList(sourceNode.data as Record<string, unknown>)
     if (edgeOutputMode && effectiveListResults && effectiveListResults.length > 0) {
       if (edgeOutputMode === "item") {
         // Structured item mode: use resolveIndex on itemIndex expression
@@ -486,6 +488,13 @@ export function getListInputForNode(
     )
     if (savedResults) {
       const filtered = selectListItems(savedResults, selectorArg)
+      if (filtered.length > 1) return filtered
+    }
+
+    // 6. JSON array output (e.g. web-scrape generatedJson) — each element is one list item
+    const jsonItems = extractGeneratedJsonAsList(sourceNode.data as Record<string, unknown>)
+    if (jsonItems) {
+      const filtered = selectListItems(jsonItems, selectorArg)
       if (filtered.length > 1) return filtered
     }
   }

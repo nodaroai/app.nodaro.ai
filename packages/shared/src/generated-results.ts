@@ -22,3 +22,17 @@ export function extractAllGeneratedResults(
     .filter((v) => v.length > 0)
   return outputs.length > 0 ? outputs : undefined
 }
+
+/**
+ * Extract a JSON array (e.g. web-scrape `generatedJson`) as a list of strings.
+ * Each array element is stringified; already-string elements pass through.
+ */
+export function extractGeneratedJsonAsList(
+  data: Record<string, unknown>,
+): string[] | undefined {
+  const jsonArr = data.generatedJson
+  if (!Array.isArray(jsonArr) || jsonArr.length === 0) return undefined
+  return jsonArr.map((item: unknown) =>
+    typeof item === "string" ? item : JSON.stringify(item),
+  )
+}
