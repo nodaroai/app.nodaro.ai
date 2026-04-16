@@ -17,6 +17,7 @@ import { CreditsService } from "../../billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
 import { buildPayload, type WorkflowSettings } from "./payload-builder.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
+import { resolveFieldMappings, NODE_TEXT_FIELDS } from "./resolve-field-mappings.js"
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
@@ -142,6 +143,19 @@ export async function executeNode(
   // Skip nodes
   if (isSkipNode(node.type)) {
     return { output: {} }
+  }
+
+  // --- Field mapping resolution + {} injection (centralized) ---
+  const _textFields = NODE_TEXT_FIELDS[node.type]
+  if (_textFields?.length) {
+    const _resolvedData = resolveFieldMappings(
+      node.data,
+      nodeStates,
+      allNodes,
+      resolvedInputs.prompt,
+      _textFields,
+    )
+    node = { ...node, data: _resolvedData }
   }
 
   // Component nodes (published apps executed as sub-executions)
@@ -477,26 +491,19 @@ function buildSyncHttpBody(
       const actor = (data.actor as string | undefined) ?? "google-search"
       const upstreamText = resolvedInputs.prompt
 
-      // Resolve a field with upstream text: empty → upstream, contains {} → inject, otherwise as-is
-      const inject = (v: string | undefined): string | undefined => {
-        if (!v) return upstreamText
-        if (upstreamText && v.includes("{}")) return v.replaceAll("{}", upstreamText)
-        return v
-      }
-
       const body: Record<string, unknown> = {
         actor,
         userId: ctx.userId,
       }
       if (actor === "content-crawler") {
-        body.url = inject(data.url as string | undefined)
+        body.url = (data.url as string) || upstreamText
         body.mode = data.mode || "page"
       } else if (actor === "google-search") {
-        body.query = inject(data.query as string | undefined)
+        body.query = (data.query as string) || upstreamText
         body.maxResults = data.maxResults
         body.countryCode = data.countryCode
       } else {
-        body.target = inject(data.target as string | undefined)
+        body.target = (data.target as string) || upstreamText
         body.resultsLimit = data.resultsLimit
       }
       return body
