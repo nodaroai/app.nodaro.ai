@@ -164,12 +164,12 @@ export function executeExtractField(
   const raw = evaluateJsonPath(value, path)
   const strings = stringifyPathResults(raw)
   const joined = strings.join("\n")
-  const isJsonOutput = node.data.outputType === "json"
+  const outputType = (node.data.outputType as string | undefined) ?? "text"
   return {
     extractedText: joined,
     text: joined,
-    listResults: strings,
-    json: isJsonOutput ? raw : undefined,
+    listResults: outputType === "list" ? strings : undefined,
+    json: outputType === "json" ? raw : undefined,
   }
 }
 

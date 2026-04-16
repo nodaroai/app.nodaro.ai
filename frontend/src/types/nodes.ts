@@ -2166,11 +2166,16 @@ export type ExtractFieldNodeData = {
   mode: "dropdown" | "custom"
   /** Dot-notation path. Empty string = whole-item mode (returns each array element). */
   field: string
-  /** Output type: "text" stringifies results, "json" preserves structured objects. */
-  outputType?: "text" | "json"
-  /** Newline-joined list of extracted values, populated after execution. */
+  /**
+   * How downstream nodes see this node's output:
+   *   - "text" (default): single string, joined by newline if multiple matches. Delimiter-split by downstream lists works.
+   *   - "list": structured array of items — acts like a list node, supports item:N and fan-out.
+   *   - "json": raw JSON value — feeds another extract-field or any JSON consumer.
+   */
+  outputType?: "text" | "list" | "json"
+  /** Newline-joined preview of extracted values. Always set for display. */
   extractedText?: string
-  /** Raw extracted JSON (array of values), populated when outputType is "json". */
+  /** Raw extracted JSON, populated when outputType is "json". */
   generatedJson?: unknown
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
