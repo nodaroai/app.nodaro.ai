@@ -22,6 +22,7 @@ const LLM_TIMEOUT_MS = 120_000
 export type LlmContentBlock =
   | { type: "text"; text: string }
   | { type: "image"; url: string }
+  | { type: "image_base64"; mediaType: string; data: string }
 
 export interface LlmMessage {
   role: "user" | "assistant"
@@ -117,6 +118,7 @@ function buildChatCompletionsMessages(req: LlmRequest): Array<Record<string, unk
     } else {
       const parts = m.content.map((b) => {
         if (b.type === "text") return { type: "text", text: b.text }
+        if (b.type === "image_base64") return { type: "image_url", image_url: { url: `data:${b.mediaType};base64,${b.data}` } }
         return { type: "image_url", image_url: { url: b.url } }
       })
       msgs.push({ role: m.role, content: parts })
@@ -132,6 +134,7 @@ function buildMessagesBody(model: LlmModelDef, req: LlmRequest): Record<string, 
     }
     const blocks = m.content.map((b) => {
       if (b.type === "text") return { type: "text", text: b.text }
+      if (b.type === "image_base64") return { type: "image", source: { type: "base64", media_type: b.mediaType, data: b.data } }
       return { type: "image", source: { type: "url", url: b.url } }
     })
     return { role: m.role, content: blocks }
@@ -157,6 +160,7 @@ function buildResponsesInput(req: LlmRequest): Array<Record<string, unknown>> {
     } else {
       const parts = m.content.map((b) => {
         if (b.type === "text") return { type: "input_text", text: b.text }
+        if (b.type === "image_base64") return { type: "input_image", image_url: `data:${b.mediaType};base64,${b.data}` }
         return { type: "input_image", image_url: b.url }
       })
       input.push({ role: m.role, content: parts })
@@ -172,6 +176,7 @@ function buildAnthropicMessages(req: LlmRequest) {
     }
     const blocks = m.content.map((b) => {
       if (b.type === "text") return { type: "text" as const, text: b.text }
+      if (b.type === "image_base64") return { type: "image" as const, source: { type: "base64" as const, media_type: b.mediaType as "image/png" | "image/jpeg" | "image/webp" | "image/gif", data: b.data } }
       return { type: "image" as const, source: { type: "url" as const, url: b.url } }
     })
     return { role: m.role as "user" | "assistant", content: blocks }

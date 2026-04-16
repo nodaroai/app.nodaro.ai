@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../billing/credits.js"
-import { llmComplete } from "../lib/llm-client.js"
+import { llmComplete, type LlmContentBlock } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
@@ -102,13 +102,27 @@ export async function imageToTextRoutes(app: FastifyInstance) {
       try {
         const systemPrompt = customPrompt || SYSTEM_PROMPTS[detailLevel]
 
+        // Pre-fetch image to base64 — external CDNs (Instagram, etc.) often
+        // block requests from LLM provider IPs, causing empty responses.
+        let imageBlock: LlmContentBlock = { type: "image", url: imageUrl }
+        try {
+          const imgResp = await fetch(imageUrl, { signal: AbortSignal.timeout(30_000) })
+          if (imgResp.ok) {
+            const buf = Buffer.from(await imgResp.arrayBuffer())
+            const mediaType = (imgResp.headers.get("content-type") ?? "image/jpeg").split(";")[0].trim()
+            imageBlock = { type: "image_base64", mediaType, data: buf.toString("base64") }
+          }
+        } catch {
+          // Fall back to URL — might still work for public images
+        }
+
         const response = await llmComplete({
           modelId: llmModel,
           system: systemPrompt,
           messages: [{
             role: "user",
             content: [
-              { type: "image", url: imageUrl },
+              imageBlock,
               { type: "text", text: "Describe this image." },
             ],
           }],
