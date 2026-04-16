@@ -326,16 +326,16 @@ export function executeNode(
   }
 
   // --- Field mapping resolution + {} injection (centralized) ---
-  const _textFields = NODE_TEXT_FIELDS[node.type ?? ""]
-  if (_textFields?.length) {
-    const _upstreamText = overridePrompt ?? inputs.prompt
-    const _resolvedData = resolveFieldMappings(
+  const textFields = NODE_TEXT_FIELDS[node.type ?? ""]
+  if (textFields?.length) {
+    const upstreamText = overridePrompt ?? inputs.prompt
+    const resolvedData = resolveFieldMappings(
       node.data as Record<string, unknown>,
       nodes,
-      _upstreamText,
-      _textFields,
+      upstreamText,
+      textFields,
     )
-    node = { ...node, data: _resolvedData } as WorkflowNode
+    node = { ...node, data: resolvedData } as WorkflowNode
   }
 
   if (node.type === "generate-script") {

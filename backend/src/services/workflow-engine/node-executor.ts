@@ -146,16 +146,16 @@ export async function executeNode(
   }
 
   // --- Field mapping resolution + {} injection (centralized) ---
-  const _textFields = NODE_TEXT_FIELDS[node.type]
-  if (_textFields?.length) {
-    const _resolvedData = resolveFieldMappings(
+  const textFields = NODE_TEXT_FIELDS[node.type]
+  if (textFields?.length) {
+    const resolvedData = resolveFieldMappings(
       node.data,
       nodeStates,
       allNodes,
       resolvedInputs.prompt,
-      _textFields,
+      textFields,
     )
-    node = { ...node, data: _resolvedData }
+    node = { ...node, data: resolvedData }
   }
 
   // Component nodes (published apps executed as sub-executions)
