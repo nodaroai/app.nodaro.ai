@@ -426,8 +426,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "sub-workflow": return <SubWorkflowConfig {...configProps} />
     case "component": return <ComponentConfig {...configProps} nodeId={selectedNodeId} />
     case "character": return <CharacterConfig {...configProps} />
-    case "face": return <FaceConfig data={nodeData as any} onUpdate={update} />
-    case "object": return <ObjectConfig data={nodeData as any} onUpdate={update} />
+    case "face": return <FaceConfig {...configProps} />
+    case "object": return <ObjectConfig {...configProps} />
     case "location": return <LocationConfig {...configProps} />
     case "scene": return (
       <>
