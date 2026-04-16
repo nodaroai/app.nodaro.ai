@@ -58,6 +58,9 @@ export function WebScrapeConfig({ data, onUpdate }: ConfigProps<WebScrapeNodeDat
               placeholder="e.g. ai news today"
               className="text-sm"
             />
+            <p className="text-[11px] text-muted-foreground">
+              Use <code className="rounded bg-muted px-1">{"{}"}</code> to inject incoming text
+            </p>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="scraper-max-results">Max results</Label>
@@ -101,6 +104,9 @@ export function WebScrapeConfig({ data, onUpdate }: ConfigProps<WebScrapeNodeDat
               placeholder="https://example.com"
               className="text-sm"
             />
+            <p className="text-[11px] text-muted-foreground">
+              Use <code className="rounded bg-muted px-1">{"{}"}</code> to inject incoming text
+            </p>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="scraper-mode">Crawl mode</Label>
@@ -136,6 +142,9 @@ export function WebScrapeConfig({ data, onUpdate }: ConfigProps<WebScrapeNodeDat
               }
               className="text-sm"
             />
+            <p className="text-[11px] text-muted-foreground">
+              Use <code className="rounded bg-muted px-1">{"{}"}</code> to inject incoming text
+            </p>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="scraper-results-limit">Results limit</Label>

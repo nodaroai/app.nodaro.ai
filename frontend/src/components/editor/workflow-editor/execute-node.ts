@@ -2261,14 +2261,21 @@ export function executeNode(
     const { updateNodeData } = useWorkflowStore.getState();
     const upstream = inputs.prompt;
 
+    // Resolve a field value with upstream text: empty → upstream, contains {} → inject, otherwise use as-is
+    const inject = (v: string | undefined): string | undefined => {
+      if (!v) return upstream;
+      if (upstream && v.includes("{}")) return v.replaceAll("{}", upstream);
+      return v;
+    };
+
     const params: Parameters<typeof webScrape>[0] = {
       actor,
-      url: actor === "content-crawler" ? (d.url || upstream) : undefined,
+      url: actor === "content-crawler" ? inject(d.url) : undefined,
       mode: actor === "content-crawler" ? (d.mode ?? "page") : undefined,
-      query: actor === "google-search" ? (d.query || upstream) : undefined,
+      query: actor === "google-search" ? inject(d.query) : undefined,
       maxResults: actor === "google-search" ? d.maxResults : undefined,
       countryCode: actor === "google-search" ? d.countryCode : undefined,
-      target: (actor === "instagram" || actor === "tiktok") ? (d.target || upstream) : undefined,
+      target: (actor === "instagram" || actor === "tiktok") ? inject(d.target) : undefined,
       resultsLimit: (actor === "instagram" || actor === "tiktok") ? d.resultsLimit : undefined,
     };
 
