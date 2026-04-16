@@ -466,9 +466,11 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     return data.combinedText as string | undefined;
   }
   if (type === "extract-field") {
-    // When outputType is "json", stringify for text consumers (same as web-scrape json handle)
-    const json = (data as Record<string, unknown>).generatedJson;
-    if (json !== undefined) return JSON.stringify(json);
+    // Prefer __listResults (the actual extracted items array) over extractedText
+    // (newline-joined string) so a single item with internal \n is returned as-is
+    // rather than being ambiguously joined with other items.
+    const list = (data as Record<string, unknown>).__listResults as string[] | undefined;
+    if (list && list.length > 0) return list.join("\n");
     return data.extractedText as string | undefined;
   }
   if (type === "preview") {
