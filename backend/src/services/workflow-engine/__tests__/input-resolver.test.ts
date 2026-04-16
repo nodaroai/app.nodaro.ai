@@ -44,6 +44,19 @@ describe("resolveNodeInputs", () => {
     expect(result.prompt).toBe("a cat")
   })
 
+  it("resolves extract-field output as prompt for llm-chat", () => {
+    const target = node("t", "llm-chat")
+    const src = node("s", "extract-field")
+    const allNodes = [src, target]
+    const edges = [edge("s", "t", "text", "prompt")]
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { extractedText: "line one\nline two", text: "line one\nline two" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.prompt).toBe("line one\nline two")
+  })
+
   it("resolves text from completed state over source data", () => {
     const target = node("t", "generate-image")
     const src = node("s", "text-prompt", { text: "old" })

@@ -222,6 +222,60 @@ describe("resolveNodeInputs", () => {
     expect(inputs.prompt).toBe("combined output text")
   })
 
+  it("resolves extract-field output as prompt for llm-chat", () => {
+    const extractField = makeNode("ef1", "extract-field", {
+      extractedText: "line one\nline two\nline three",
+      __listResults: ["line one\nline two\nline three"],
+    })
+    const target = makeNode("t1", "llm-chat")
+    const edges = [{ id: "ef1->t1", source: "ef1", target: "t1", sourceHandle: "text", targetHandle: "prompt" }]
+
+    const inputs = resolveNodeInputs(target, [extractField, target], edges)
+    expect(inputs.prompt).toBe("line one\nline two\nline three")
+  })
+
+  it("resolves extract-field output as prompt with item:1 edge mode", () => {
+    const extractField = makeNode("ef1", "extract-field", {
+      extractedText: "line one\nline two",
+      __listResults: ["line one\nline two"],
+    })
+    const target = makeNode("t1", "llm-chat")
+    const edges = [{
+      id: "ef1->t1", source: "ef1", target: "t1",
+      sourceHandle: "text", targetHandle: "prompt",
+      data: { outputMode: "item", itemIndex: "1" },
+    }]
+
+    const inputs = resolveNodeInputs(target, [extractField, target], edges)
+    expect(inputs.prompt).toBe("line one\nline two")
+  })
+
+  it("preserves extract-field multi-line text through list to llm-chat (item:1)", () => {
+    const extractField = makeNode("ef1", "extract-field", {
+      extractedText: "line one\nline two\nline three",
+      __listResults: ["line one\nline two\nline three"],
+    })
+    const listNode = makeNode("list1", "list", {
+      rows: [[""]],
+      columns: [{ id: "default", handleId: "col_default", type: "text", name: "Extract Field" }],
+    })
+    const target = makeNode("t1", "llm-chat")
+    const edges = [
+      {
+        id: "ef1->list1", source: "ef1", target: "list1",
+        sourceHandle: "text", targetHandle: "col_default_in",
+      },
+      {
+        id: "list1->t1", source: "list1", target: "t1",
+        sourceHandle: "col_default", targetHandle: "prompt",
+        data: { outputMode: "item", itemIndex: "1" },
+      },
+    ]
+
+    const inputs = resolveNodeInputs(target, [extractField, listNode, target], edges)
+    expect(inputs.prompt).toBe("line one\nline two\nline three")
+  })
+
   it("skips source nodes with no output", () => {
     // text-prompt with no text set -> extractNodeOutput returns undefined (or empty)
     const textNode = makeNode("t1", "text-prompt", {})
