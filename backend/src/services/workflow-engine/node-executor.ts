@@ -18,7 +18,7 @@ import { refundJobCredits } from "../../workers/shared.js"
 import { buildPayload, type WorkflowSettings } from "./payload-builder.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
 
-import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter } from "./inline-executor.js"
+import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
 import { mergeExposedSettings } from "../../../../packages/shared/src/component-types.js"
 import type { ComponentMetadata } from "../../../../packages/shared/src/component-types.js"
@@ -106,6 +106,7 @@ const INLINE_NODES = new Set([
   "teleport-send",
   "teleport-receive",
   "router",
+  "extract-field",
 ])
 
 // ---------------------------------------------------------------------------
@@ -188,6 +189,9 @@ async function executeInlineNode(
       break
     case "split-text":
       output = executeSplitText(node, resolvedInputs, edges, allNodes, nodeStates)
+      break
+    case "extract-field":
+      output = executeExtractField(node, edges, allNodes, nodeStates)
       break
     case "composite":
       output = executeComposite(node, edges, allNodes, nodeStates)

@@ -103,7 +103,7 @@ describe("runScraper", () => {
       expect.objectContaining({ waitSecs: 180 }),
     )
     expect(mockDataset).toHaveBeenCalledWith("ds-1")
-    expect(JSON.parse(result.text)).toHaveLength(1)
+    expect(result.json).toHaveLength(1)
   })
 
   it("wraps SDK errors via sanitizeApifyError", async () => {

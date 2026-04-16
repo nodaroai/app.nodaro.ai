@@ -22,6 +22,8 @@ import {
   type WebhookOutputData,
   type WebhookParam,
   type SplitTextData,
+  type ExtractFieldNodeData,
+  type WebScrapeNodeData,
   type PreviewNodeData,
   type PreviewItem,
   type TeleportSendData,
@@ -29,6 +31,7 @@ import {
 } from "@/types/nodes"
 import { isMediaUrl } from "@/lib/media-type"
 import { downloadFile } from "@/components/presentation/output-cards/shared"
+import { SCRAPER_OUTPUT_FIELDS } from "@nodaro-shared/scraper-output-schemas"
 import type { ConfigProps } from "./types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
@@ -274,6 +277,90 @@ export function SplitTextConfig({ data, onUpdate }: { data: SplitTextData; onUpd
             readOnly
             className="text-xs opacity-70"
           />
+        </div>
+      )}
+    </div>
+  )
+}
+
+const EXTRACT_FIELD_CUSTOM = "__custom__"
+const EXTRACT_FIELD_WHOLE = "__whole__"
+
+export function ExtractFieldConfig({ data, onUpdate, sources }: ConfigProps<ExtractFieldNodeData>) {
+  const inSource = sources.find((s) => s.targetHandle === "in" && s.type === "web-scrape")
+  const upstreamScraperData = inSource ? (inSource.nodeData ?? null) as WebScrapeNodeData | null : null
+
+  const mode = data.mode ?? (upstreamScraperData ? "dropdown" : "custom")
+  const field = data.field ?? ""
+  const actorOptions = upstreamScraperData
+    ? SCRAPER_OUTPUT_FIELDS[upstreamScraperData.actor ?? "google-search"] ?? []
+    : []
+
+  const setField = (value: string) => onUpdate({ field: value })
+  const setMode = (next: "dropdown" | "custom") => onUpdate({ mode: next })
+
+  // Map field → dropdown sentinel for the Select's value prop.
+  const selectValue = field === ""
+    ? EXTRACT_FIELD_WHOLE
+    : (actorOptions.includes(field) ? field : "")
+
+  return (
+    <div className="flex flex-col gap-3">
+      {upstreamScraperData && mode === "dropdown" ? (
+        <div>
+          <Label>Field</Label>
+          <Select
+            value={selectValue}
+            onValueChange={(v) => {
+              if (v === EXTRACT_FIELD_CUSTOM) {
+                setMode("custom")  // keep current field as starting value in custom mode
+              } else if (v === EXTRACT_FIELD_WHOLE) {
+                setField("")
+              } else {
+                setField(v)
+              }
+            }}
+          >
+            <SelectTrigger aria-label="Field"><SelectValue placeholder="Select a field..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={EXTRACT_FIELD_WHOLE} className="text-muted-foreground">(whole item)</SelectItem>
+              {actorOptions.map((opt) => (
+                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+              ))}
+              <SelectItem value={EXTRACT_FIELD_CUSTOM} className="text-muted-foreground">Custom path…</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Pick (whole item) when the JSON is a plain list of values (e.g., <code>["a","b"]</code>).
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <Label>Path</Label>
+          <Input
+            value={field}
+            onChange={(e) => setField(e.target.value)}
+            placeholder="e.g., caption or authorMeta.name (blank = whole item)"
+          />
+          <p className="text-[10px] text-muted-foreground">
+            Use dot notation. The path runs against each item if the root is an array. Leave blank to use each item as-is (whole item).
+          </p>
+          {upstreamScraperData && (
+            <button
+              type="button"
+              className="text-[10px] text-muted-foreground hover:text-foreground text-left self-start"
+              onClick={() => setMode("dropdown")}
+            >
+              ← Back to field list
+            </button>
+          )}
+        </div>
+      )}
+
+      {data.extractedText && (
+        <div>
+          <Label>Output Preview</Label>
+          <Textarea rows={4} value={data.extractedText} readOnly className="text-xs opacity-70" />
         </div>
       )}
     </div>

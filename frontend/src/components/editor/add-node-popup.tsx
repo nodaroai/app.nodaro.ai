@@ -76,6 +76,7 @@ import {
   ZoomIn,
   Eraser,
   ListMusic,
+  Braces,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -689,6 +690,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "split-text",
     label: "Split Text",
     icon: <Scissors className="h-4 w-4" />,
+    category: "Processing",
+    group: "Text",
+  },
+  {
+    type: "extract-field",
+    label: "Extract Field",
+    icon: <Braces className="h-4 w-4" />,
     category: "Processing",
     group: "Text",
   },

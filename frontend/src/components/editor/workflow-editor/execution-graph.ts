@@ -455,12 +455,18 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   }
   if (type === "web-scrape") {
     const d = node.data as WebScrapeNodeData;
-    if (sourceHandle === "image") return d.generatedImageUrl;
-    if (sourceHandle === "video") return d.generatedVideoUrl;
-    return d.generatedText;
+    // Single json handle — stringify for text consumers; Extract Field reads
+    // d.generatedJson directly (bypasses extractNodeOutput).
+    if (sourceHandle === "json" || !sourceHandle) {
+      return d.generatedJson === undefined ? undefined : JSON.stringify(d.generatedJson);
+    }
+    return undefined;
   }
   if (type === "combine-text") {
     return data.combinedText as string | undefined;
+  }
+  if (type === "extract-field") {
+    return data.extractedText as string | undefined;
   }
   if (type === "preview") {
     // Pass through the first visible upstream value

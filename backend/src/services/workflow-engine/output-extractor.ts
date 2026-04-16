@@ -30,6 +30,8 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "videoUrl",
   "audioUrl",
   "text",
+  "json",
+  "extractedText",
   "thumbnailUrl",
   "sunoTrackId",
   "sunoTaskId",
@@ -295,11 +297,16 @@ export function getPrimaryOutput(
     return output.generatedVoiceId
   }
 
-  // Web-scrape: three output handles (text/image/video) — mirror frontend routing
-  if (sourceType === "web-scrape" && sourceHandle) {
-    if (sourceHandle === "image") return output.imageUrl
-    if (sourceHandle === "video") return output.videoUrl
-    if (sourceHandle === "text") return output.text
+  // Web-scrape: single `json` output handle. Stringify here so non-Extract-Field
+  // text consumers receive a JSON string; Extract Field reads state.output.json
+  // directly (it bypasses getPrimaryOutput).
+  if (sourceType === "web-scrape" && sourceHandle === "json") {
+    return output.json === undefined ? undefined : JSON.stringify(output.json)
+  }
+
+  // Extract Field: single `text` output.
+  if (sourceType === "extract-field") {
+    return output.extractedText
   }
 
   // QA-check: route by approved/rejected handle
@@ -618,16 +625,19 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return text ? { text } : undefined
   }
 
-  // Web-scrape: can produce text + optional imageUrl/videoUrl on separate handles
+  // Web-scrape: single `json` output (object/array from the actor).
   if (type === "web-scrape") {
-    const output: NodeOutput = {}
-    const text = data.generatedText as string | undefined
-    const imageUrl = data.generatedImageUrl as string | undefined
-    const videoUrl = data.generatedVideoUrl as string | undefined
-    if (text) output.text = text
-    if (imageUrl) output.imageUrl = imageUrl
-    if (videoUrl) output.videoUrl = videoUrl
-    return Object.keys(output).length > 0 ? output : undefined
+    const json = data.generatedJson
+    return json === undefined ? undefined : { json }
+  }
+
+  // Extract Field: stores its output in `extractedText`. Also populate `text` so
+  // downstream text consumers (split-text, generate-image, llm prompts, etc.)
+  // receive the extracted value via the standard text-routing path without
+  // needing a new branch in input-resolver.
+  if (type === "extract-field") {
+    const extractedText = data.extractedText as string | undefined
+    return extractedText === undefined ? undefined : { extractedText, text: extractedText }
   }
 
   if (type === "combine-text") {

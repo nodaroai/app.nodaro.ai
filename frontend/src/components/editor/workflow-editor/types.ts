@@ -202,6 +202,7 @@ export const EXECUTABLE_TYPES = new Set([
   "llm-chat",
   "combine-text",
   "split-text",
+  "extract-field",
   "audio-isolation",
   "text-to-dialogue",
   "image-to-text",

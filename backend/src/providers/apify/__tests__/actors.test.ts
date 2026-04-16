@@ -67,45 +67,70 @@ describe("buildActorInput — tiktok", () => {
 })
 
 describe("extractActorOutput", () => {
-  it("content-crawler joins items as markdown", () => {
-    const out = extractActorOutput("content-crawler", [
-      { url: "https://a.com", markdown: "# A" },
-      { url: "https://b.com", markdown: "# B" },
-    ])
-    expect(out.text).toContain("# A")
-    expect(out.text).toContain("# B")
-    expect(out.imageUrl).toBeUndefined()
-    expect(out.videoUrl).toBeUndefined()
+  it("content-crawler single page wraps in { pages: [...] }", () => {
+    expect(extractActorOutput("content-crawler", [
+      { url: "https://x.com/p1", markdown: "# Page 1", text: "fallback" },
+    ])).toEqual({
+      json: { pages: [{ url: "https://x.com/p1", markdown: "# Page 1" }] },
+    })
   })
 
-  it("google-search returns JSON of organicResults", () => {
-    const out = extractActorOutput("google-search", [
-      { organicResults: [{ title: "T", url: "u", description: "d" }] },
-    ])
-    const parsed = JSON.parse(out.text)
-    expect(parsed).toHaveLength(1)
-    expect(parsed[0]).toMatchObject({ title: "T", url: "u", description: "d" })
+  it("content-crawler site mode preserves multiple pages", () => {
+    expect(extractActorOutput("content-crawler", [
+      { url: "u1", markdown: "m1" },
+      { url: "u2", markdown: "m2" },
+    ])).toEqual({
+      json: { pages: [{ url: "u1", markdown: "m1" }, { url: "u2", markdown: "m2" }] },
+    })
   })
 
-  it("instagram picks first media url", () => {
-    const out = extractActorOutput("instagram", [
-      { displayUrl: "https://cdn.instagram/1.jpg", videoUrl: "https://cdn.instagram/1.mp4" },
-      { displayUrl: "https://cdn.instagram/2.jpg" },
-    ])
-    expect(out.imageUrl).toBe("https://cdn.instagram/1.jpg")
-    expect(out.videoUrl).toBe("https://cdn.instagram/1.mp4")
-    expect(JSON.parse(out.text)).toHaveLength(2)
+  it("content-crawler falls back to text field when markdown absent", () => {
+    expect(extractActorOutput("content-crawler", [
+      { url: "u", text: "plaintext" },
+    ])).toEqual({
+      json: { pages: [{ url: "u", markdown: "plaintext" }] },
+    })
   })
 
-  it("tiktok picks first videoUrl", () => {
-    const out = extractActorOutput("tiktok", [
-      { videoUrl: "https://cdn.tiktok/1.mp4" },
-    ])
-    expect(out.videoUrl).toBe("https://cdn.tiktok/1.mp4")
+  it("google-search flattens organicResults into json array", () => {
+    expect(extractActorOutput("google-search", [
+      { organicResults: [{ title: "t1", url: "u1", description: "d1" }] },
+    ])).toEqual({
+      json: [{ title: "t1", url: "u1", description: "d1" }],
+    })
   })
 
-  it("empty dataset returns empty-string text", () => {
-    const out = extractActorOutput("google-search", [])
-    expect(out.text).toBe("[]")
+  it("google-search empty dataset returns empty array", () => {
+    expect(extractActorOutput("google-search", [])).toEqual({ json: [] })
+  })
+
+  it("instagram projects posts into json array", () => {
+    expect(extractActorOutput("instagram", [
+      {
+        url: "u", shortCode: "sc", caption: "c", displayUrl: "d", videoUrl: "v",
+        timestamp: "t", likesCount: 10, commentsCount: 2, ownerUsername: "o", type: "Video",
+      },
+    ])).toEqual({
+      json: [{
+        url: "u", type: "Video", shortCode: "sc", caption: "c",
+        displayUrl: "d", videoUrl: "v", timestamp: "t",
+        likesCount: 10, commentsCount: 2, ownerUsername: "o",
+      }],
+    })
+  })
+
+  it("tiktok projects posts into json array", () => {
+    expect(extractActorOutput("tiktok", [
+      {
+        id: "id1", webVideoUrl: "wv", videoUrl: "v", text: "t",
+        createTime: 123, diggCount: 1, shareCount: 2, playCount: 3, commentCount: 4,
+      },
+    ])).toEqual({
+      json: [{
+        id: "id1", webVideoUrl: "wv", videoUrl: "v", text: "t",
+        createTime: 123, diggCount: 1, shareCount: 2, playCount: 3,
+        commentCount: 4, authorMeta: undefined, musicMeta: undefined,
+      }],
+    })
   })
 })

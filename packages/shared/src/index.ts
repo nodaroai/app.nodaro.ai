@@ -76,6 +76,10 @@ export {
 
 export { getRouteReachableNodeIds, type MinimalNode, type MinimalEdge } from "./route-filter.js"
 
+export { evaluateJsonPath, stringifyPathResults } from "./json-path.js"
+
+export { SCRAPER_OUTPUT_FIELDS } from "./scraper-output-schemas.js"
+
 export {
   resolveIndex,
   applyRange,

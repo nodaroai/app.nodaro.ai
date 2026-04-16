@@ -13,6 +13,10 @@ export interface NodeOutput {
   videoUrl?: string
   audioUrl?: string
   text?: string
+  /** JSON output for web-scrape and future JSON-emitting nodes. */
+  json?: unknown
+  /** Extract Field node output — newline-joined list of extracted values. */
+  extractedText?: string
   plan?: Record<string, unknown>
   thumbnailUrl?: string
   sunoTrackId?: string
