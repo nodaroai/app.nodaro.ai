@@ -851,7 +851,13 @@ export function resolveNodeInputs(
     } else if (src.type === "loop" || src.type === "list") {
       // output already resolved per-iteration by loop handler above — route by column type
       const loopCols = ((src.data as LoopNodeData).columns ?? []);
-      const loopCol = loopCols.find((c) => c.handleId === (srcEdge.sourceHandle ?? ""));
+      let loopCol = loopCols.find((c) => c.handleId === (srcEdge.sourceHandle ?? ""));
+      // List nodes use a fixed "list" output handle (not per-column handles like
+      // loop nodes), so the handleId lookup above won't match any column.  Fall
+      // back to the first column so the user's column-type setting is honoured.
+      if (!loopCol && src.type === "list" && loopCols.length > 0) {
+        loopCol = loopCols[0];
+      }
       const colType = loopCol?.type ?? "text";
       const targetAction = (node.data as Record<string, unknown> | undefined)?.action as string | undefined;
       const isCarouselTarget = node.type === "instagram-post" && targetAction === "post-carousel";

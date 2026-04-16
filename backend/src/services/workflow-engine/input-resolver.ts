@@ -839,7 +839,13 @@ function routeOutput(
   // which walks raw upstream and ignores edge filters.
   if ((srcType === "list" || srcType === "loop") && Array.isArray(src.data.columns) && edge.sourceHandle) {
     const columns = src.data.columns as Array<{ handleId: string; type?: string }>
-    const col = columns.find((c) => c.handleId === edge.sourceHandle)
+    let col = columns.find((c) => c.handleId === edge.sourceHandle)
+    // List nodes use a fixed "list" output handle (not per-column handles like
+    // loop nodes), so the handleId lookup won't match.  Fall back to the first
+    // column so the user's column-type setting is honoured.
+    if (!col && srcType === "list" && columns.length > 0) {
+      col = columns[0]
+    }
     const colType = col?.type ?? "text"
     const targetAction = (target.data.action as string | undefined) ?? ""
     const isCarouselTarget = SOCIAL_POST_NODE_TYPES.has(targetType) && targetAction === "post-carousel"
