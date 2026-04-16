@@ -1,13 +1,13 @@
 "use client"
 
-import { memo, useRef, useState, useEffect } from "react"
+import { memo, useRef, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Music, Upload, Link, Loader2, AlertCircle, X } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
+import { useUpstreamUrl } from "@/hooks/use-upstream-url"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
@@ -59,18 +59,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
     },
   })
 
-  // Reactively adopt upstream URL when connected to the "in" handle
-  const edges = useWorkflowStore((s) => s.edges)
-  const nodes = useWorkflowStore((s) => s.nodes)
-  useEffect(() => {
-    const inEdge = edges.find((e) => e.target === id && e.targetHandle === "in")
-    if (!inEdge) return
-    const srcNode = nodes.find((n) => n.id === inEdge.source)
-    if (!srcNode) return
-    const url = extractNodeOutput(srcNode, inEdge.sourceHandle ?? undefined)
-    if (!url || url === nodeData.externalUrl) return
-    updateNodeData(id, { url, externalUrl: url })
-  }, [id, edges, nodes, nodeData.externalUrl, updateNodeData])
+  useUpstreamUrl(id, nodeData.externalUrl, updateNodeData)
 
   const audioUrl = nodeData.r2Url || nodeData.url
   const hasFile = Boolean(audioUrl) && !nodeData.externalUrl

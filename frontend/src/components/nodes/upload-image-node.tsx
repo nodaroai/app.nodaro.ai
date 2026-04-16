@@ -8,7 +8,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
+import { useUpstreamUrl } from "@/hooks/use-upstream-url"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
@@ -67,18 +67,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
   })
   const useFull = useFullResolution(id)
 
-  // Reactively adopt upstream URL when connected to the "in" handle
-  const edges = useWorkflowStore((s) => s.edges)
-  const nodes = useWorkflowStore((s) => s.nodes)
-  useEffect(() => {
-    const inEdge = edges.find((e) => e.target === id && e.targetHandle === "in")
-    if (!inEdge) return
-    const srcNode = nodes.find((n) => n.id === inEdge.source)
-    if (!srcNode) return
-    const url = extractNodeOutput(srcNode, inEdge.sourceHandle ?? undefined)
-    if (!url || url === nodeData.externalUrl) return
-    updateNodeData(id, { url, externalUrl: url })
-  }, [id, edges, nodes, nodeData.externalUrl, updateNodeData])
+  useUpstreamUrl(id, nodeData.externalUrl, updateNodeData)
 
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0

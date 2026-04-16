@@ -66,8 +66,8 @@ vi.mock("@/hooks/use-workflow-store", () => ({
     }),
 }))
 
-vi.mock("@/components/editor/workflow-editor/execution-graph", () => ({
-  extractNodeOutput: () => undefined,
+vi.mock("@/hooks/use-upstream-url", () => ({
+  useUpstreamUrl: () => {},
 }))
 
 vi.mock("@/hooks/use-file-upload", () => ({
