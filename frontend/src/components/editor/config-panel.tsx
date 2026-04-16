@@ -123,6 +123,7 @@ import {
   WebhookOutputConfig,
   SplitTextConfig,
   ExtractFieldConfig,
+  JsonProcessConfig,
   PreviewConfig,
   TeleporterConfig,
   RouterConfig,
@@ -222,6 +223,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "combine-text": "Combine Text",
   "split-text": "Split Text",
   "extract-field": "Extract Field",
+  "json-process": "JSON Process",
   "preview": "Preview",
   "loop": "Table",
   "save-to-storage": "Save to Storage",
@@ -290,7 +292,7 @@ const RESULT_PRODUCING_TYPES = new Set([
   ...GENERATE_BUTTON_TYPES,
   ...RUN_BUTTON_TYPES,
 ].filter(t =>
-  t !== "combine-text" && t !== "split-text" && t !== "extract-field" && t !== "preview" && t !== "sub-workflow" &&
+  t !== "combine-text" && t !== "split-text" && t !== "extract-field" && t !== "json-process" && t !== "preview" && t !== "sub-workflow" &&
   t !== "instagram-post" && t !== "tiktok-post" && t !== "youtube-upload" &&
   t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post" && t !== "telegram-post" &&
   t !== "image-to-text" && t !== "qa-check" && t !== "transcribe" && t !== "llm-chat"
@@ -408,6 +410,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "combine-text": return <CombineTextConfig {...configProps} />
     case "split-text": return <SplitTextConfig {...configProps} />
     case "extract-field": return <ExtractFieldConfig {...configProps} />
+    case "json-process": return <JsonProcessConfig {...configProps} />
     case "preview": return <PreviewConfig {...configProps} />
     case "teleport-send": case "teleport-receive": return <TeleporterConfig {...configProps} nodeType={nodeType} />
     case "router": return <RouterConfig {...configProps} />

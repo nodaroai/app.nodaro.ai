@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Plus, Trash2, FileText, ImageIcon, Film, Music, GripVertical, Eye, EyeOff, ChevronUp, ChevronDown, Copy, Check, Download, X } from "lucide-react"
 import { nanoid } from "nanoid"
 import { Button } from "@/components/ui/button"
@@ -28,10 +28,18 @@ import {
   type PreviewItem,
   type TeleportSendData,
   type TeleportReceiveData,
+  type JsonProcessNodeData,
 } from "@/types/nodes"
 import { isMediaUrl } from "@/lib/media-type"
 import { downloadFile } from "@/components/presentation/output-cards/shared"
 import { SCRAPER_OUTPUT_FIELDS } from "@nodaro-shared/scraper-output-schemas"
+import { buildExpressionFromVisual, type FilterOperator } from "@nodaro-shared/json-evaluator"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import type { ConfigProps } from "./types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
@@ -773,6 +781,372 @@ export function RouterConfig({ data, onUpdate }: { data: Record<string, unknown>
             <Plus className="w-3 h-3" /> Add Route
           </button>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// JsonProcessConfig
+// ---------------------------------------------------------------------------
+
+const OPERATOR_LABELS: Record<FilterOperator, string> = {
+  equals: "equals",
+  not_equals: "not equals",
+  contains: "contains",
+  not_contains: "does not contain",
+  starts_with: "starts with",
+  ends_with: "ends with",
+  greater_than: "greater than",
+  less_than: "less than",
+  is_empty: "is empty",
+  is_not_empty: "is not empty",
+  matches_regex: "matches regex",
+  in_list: "is in list",
+}
+
+const NO_VALUE_OPERATORS: FilterOperator[] = ["is_empty", "is_not_empty"]
+
+export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNodeData>) {
+  const mode = data.mode ?? "visual"
+  const inputPath = data.inputPath ?? ""
+  const filters = data.filters ?? []
+  const projections = data.projections ?? []
+  const expression = data.expression ?? ""
+
+  // Local state for the projection tag input draft
+  const [projDraft, setProjDraft] = useState("")
+
+  // Derived expression from visual controls
+  const visualExpression = useMemo(
+    () => buildExpressionFromVisual({ inputPath, filters, projections }),
+    [inputPath, filters, projections],
+  )
+
+  // Sync expression into node data whenever visual inputs change (visual mode only)
+  useEffect(() => {
+    if (mode === "visual") {
+      onUpdate({ expression: visualExpression })
+    }
+  // We intentionally depend on the serialized form to avoid stale closure issues
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, visualExpression])
+
+  // --- Helpers ---
+
+  const setMode = (next: "visual" | "advanced") => onUpdate({ mode: next })
+
+  const updateFilter = (id: string, patch: Partial<JsonProcessNodeData["filters"][number]>) => {
+    onUpdate({
+      filters: filters.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+    })
+  }
+
+  const addFilter = () => {
+    onUpdate({
+      filters: [
+        ...filters,
+        { id: crypto.randomUUID(), field: "", operator: "equals" as const, value: "" },
+      ],
+    })
+  }
+
+  const removeFilter = (id: string) => {
+    onUpdate({ filters: filters.filter((f) => f.id !== id) })
+  }
+
+  const addProjection = (tag: string) => {
+    const trimmed = tag.trim()
+    if (!trimmed || projections.includes(trimmed)) return
+    onUpdate({ projections: [...projections, trimmed] })
+  }
+
+  const removeProjection = (tag: string) => {
+    onUpdate({ projections: projections.filter((p) => p !== tag) })
+  }
+
+  const handleProjKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault()
+      if (projDraft.trim()) {
+        addProjection(projDraft)
+        setProjDraft("")
+      }
+    } else if (e.key === "Backspace" && projDraft === "" && projections.length > 0) {
+      removeProjection(projections[projections.length - 1])
+    }
+  }
+
+  // --- Preview rendering ---
+
+  const renderPreview = () => {
+    if (data.errorMessage) {
+      return (
+        <p className="text-xs text-destructive break-all">
+          Error: {data.errorMessage}
+        </p>
+      )
+    }
+    if (data.processedResult !== undefined) {
+      const result = data.processedResult
+      if (Array.isArray(result)) {
+        const preview = result.slice(0, 5)
+        return (
+          <div className="space-y-0.5">
+            <p className="text-[10px] text-muted-foreground">First {Math.min(5, result.length)} of {result.length} items:</p>
+            <pre className="text-[10px] font-mono bg-muted/20 rounded p-1.5 overflow-x-auto whitespace-pre-wrap break-all">
+              {JSON.stringify(preview, null, 2)}
+            </pre>
+          </div>
+        )
+      }
+      if (result !== null && typeof result === "object") {
+        const entries = Object.entries(result as Record<string, unknown>).slice(0, 10)
+        return (
+          <div className="space-y-0.5">
+            <p className="text-[10px] text-muted-foreground">Fields ({Object.keys(result as object).length}):</p>
+            <div className="text-[10px] font-mono bg-muted/20 rounded p-1.5 space-y-0.5 overflow-x-auto">
+              {entries.map(([k, v]) => (
+                <div key={k} className="flex gap-1.5">
+                  <span className="text-blue-400 shrink-0">{k}:</span>
+                  <span className="text-muted-foreground truncate">{JSON.stringify(v)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      }
+      return (
+        <pre className="text-[10px] font-mono bg-muted/20 rounded p-1.5 overflow-x-auto whitespace-pre-wrap break-all">
+          {JSON.stringify(result)}
+        </pre>
+      )
+    }
+    return (
+      <p className="text-[10px] text-muted-foreground italic">Run the node to see preview</p>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Mode pill switch */}
+      <div className="flex rounded-md border border-border overflow-hidden self-start">
+        {(["visual", "advanced"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMode(m)}
+            className={
+              "px-3 py-1 text-xs font-medium transition-colors capitalize " +
+              (mode === m
+                ? "bg-foreground text-background"
+                : "bg-background text-muted-foreground hover:text-foreground")
+            }
+          >
+            {m === "visual" ? "Visual" : "Advanced"}
+          </button>
+        ))}
+      </div>
+
+      {/* Visual mode */}
+      {mode === "visual" && (
+        <>
+          <Accordion type="multiple" defaultValue={["path", "filters", "projections"]} className="border rounded-md overflow-hidden">
+            {/* Input Path */}
+            <AccordionItem value="path">
+              <AccordionTrigger className="px-3 py-2 text-xs font-medium hover:no-underline">
+                Input Path
+              </AccordionTrigger>
+              <AccordionContent className="px-3 pb-3 pt-0">
+                <Input
+                  value={inputPath}
+                  onChange={(e) => onUpdate({ inputPath: e.target.value })}
+                  placeholder="e.g. data.items"
+                  className="text-xs h-8"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Dot-notation path to the array or object to process. Leave blank for the root.
+                </p>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Filters */}
+            <AccordionItem value="filters">
+              <AccordionTrigger className="px-3 py-2 text-xs font-medium hover:no-underline">
+                Filters ({filters.length})
+              </AccordionTrigger>
+              <AccordionContent className="px-3 pb-3 pt-0">
+                <div className="flex flex-col gap-2">
+                  {filters.map((f) => {
+                    const isNoValue = NO_VALUE_OPERATORS.includes(f.operator)
+                    const isInList = f.operator === "in_list"
+                    return (
+                      <div key={f.id} className="flex items-center gap-1.5">
+                        {/* Field name */}
+                        <Input
+                          value={f.field}
+                          onChange={(e) => updateFilter(f.id, { field: e.target.value })}
+                          placeholder="field"
+                          className="text-xs h-7 min-w-0 flex-1"
+                        />
+                        {/* Operator */}
+                        <Select
+                          value={f.operator}
+                          onValueChange={(v) =>
+                            updateFilter(f.id, {
+                              operator: v as FilterOperator,
+                              // Reset value when switching to/from no-value operators
+                              value: NO_VALUE_OPERATORS.includes(v as FilterOperator) ? "" : f.value,
+                            })
+                          }
+                        >
+                          <SelectTrigger className="h-7 text-xs w-[130px] shrink-0">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(Object.entries(OPERATOR_LABELS) as [FilterOperator, string][]).map(([op, label]) => (
+                              <SelectItem key={op} value={op} className="text-xs">
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {/* Value */}
+                        {!isNoValue && (
+                          isInList ? (
+                            <Input
+                              value={Array.isArray(f.value) ? f.value.join(", ") : f.value}
+                              onChange={(e) => {
+                                const parsed = e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+                                updateFilter(f.id, { value: parsed })
+                              }}
+                              placeholder="a, b, c"
+                              className="text-xs h-7 min-w-0 flex-1"
+                              title="Comma-separated values"
+                            />
+                          ) : (
+                            <Input
+                              value={typeof f.value === "string" ? f.value : ""}
+                              onChange={(e) => updateFilter(f.id, { value: e.target.value })}
+                              placeholder="value"
+                              className="text-xs h-7 min-w-0 flex-1"
+                            />
+                          )
+                        )}
+                        {/* Delete */}
+                        <button
+                          type="button"
+                          onClick={() => removeFilter(f.id)}
+                          className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                          title="Remove filter"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )
+                  })}
+                  <button
+                    type="button"
+                    onClick={addFilter}
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 self-start mt-0.5"
+                  >
+                    <Plus className="w-3 h-3" /> Add filter
+                  </button>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Projections */}
+            <AccordionItem value="projections">
+              <AccordionTrigger className="px-3 py-2 text-xs font-medium hover:no-underline">
+                Projection ({projections.length} fields)
+              </AccordionTrigger>
+              <AccordionContent className="px-3 pb-3 pt-0">
+                <div className="flex flex-wrap gap-1 mb-2 min-h-[28px] rounded border border-border px-1.5 py-1 bg-background">
+                  {projections.map((p) => (
+                    <span
+                      key={p}
+                      className="inline-flex items-center gap-0.5 text-[10px] font-mono bg-muted rounded px-1.5 py-0.5"
+                    >
+                      {p}
+                      <button
+                        type="button"
+                        onClick={() => removeProjection(p)}
+                        className="text-muted-foreground hover:text-foreground ml-0.5"
+                        title={`Remove ${p}`}
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    type="text"
+                    value={projDraft}
+                    onChange={(e) => setProjDraft(e.target.value)}
+                    onKeyDown={handleProjKeyDown}
+                    placeholder={projections.length === 0 ? "field name, press Enter" : "add field…"}
+                    className="bg-transparent border-none outline-none text-xs text-foreground placeholder:text-muted-foreground min-w-[100px] flex-1"
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Press Enter or Tab to add. Backspace on empty removes last. Leave empty to keep all fields.
+                </p>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+
+          {/* Generated expression preview */}
+          <div className="text-[10px] text-muted-foreground bg-muted/20 rounded px-2 py-1.5 border border-border font-mono break-all">
+            <span className="not-italic text-muted-foreground">Generated: </span>
+            <code className="text-foreground/80">{visualExpression}</code>
+          </div>
+        </>
+      )}
+
+      {/* Advanced mode */}
+      {mode === "advanced" && (
+        <>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Expression</Label>
+            <Textarea
+              value={expression}
+              onChange={(e) => onUpdate({ expression: e.target.value })}
+              className="font-mono text-xs min-h-[100px] resize-y"
+              placeholder=".data.items[] | select(.active == true) | {id, name}"
+              spellCheck={false}
+            />
+          </div>
+          <Accordion type="multiple" className="border rounded-md overflow-hidden">
+            <AccordionItem value="syntax">
+              <AccordionTrigger className="px-3 py-2 text-xs font-medium hover:no-underline">
+                Syntax reference
+              </AccordionTrigger>
+              <AccordionContent className="px-3 pb-3 pt-0">
+                <pre className="text-[10px] font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap">{`.                       identity (whole input)
+.field                  field access
+.["api-key"]            bracket access (non-identifier fields)
+.[]                     iterate array (one value per element)
+.[0]  /  .[-1]          index access (supports negative)
+|                       pipe — feed left result into right
+select(expr)            keep items where expr is truthy
+{a, b: .field}          object construction / projection
+a | contains("x")       substring check
+a | startswith("x")     prefix check
+a | endswith("x")       suffix check
+a | test("regex")       regex match
+a and b  /  a or b      boolean logic
+x | not                 boolean negation
+==  !=  >  <  >=  <=    comparison operators`}</pre>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </>
+      )}
+
+      {/* Preview block — always visible */}
+      <div className="rounded-md border border-border bg-muted/10 px-2.5 py-2">
+        <p className="text-[10px] font-medium text-muted-foreground mb-1.5">Preview</p>
+        {renderPreview()}
       </div>
     </div>
   )

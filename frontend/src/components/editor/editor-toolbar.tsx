@@ -317,6 +317,13 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.errorMessage = undefined
           break
 
+        case "json-process":
+          data.processedResult = undefined
+          data.__listResults = undefined
+          data.executionStatus = undefined
+          data.errorMessage = undefined
+          break
+
         case "forced-alignment":
           data.alignmentResults = []
           data.executionStatus = undefined

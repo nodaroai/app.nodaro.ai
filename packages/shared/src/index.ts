@@ -78,6 +78,8 @@ export { getRouteReachableNodeIds, type MinimalNode, type MinimalEdge } from "./
 
 export { evaluateJsonPath, stringifyPathResults } from "./json-path.js"
 
+export { evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, type JsonEvalResult, type JsonFilter, type FilterOperator } from "./json-evaluator.js"
+
 export { SCRAPER_OUTPUT_FIELDS } from "./scraper-output-schemas.js"
 
 export {

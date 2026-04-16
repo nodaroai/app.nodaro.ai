@@ -167,7 +167,7 @@ frontend/src/
   app/gallery/            — Public community gallery
   routes/                 — Route wrapper components (workflow-editor-page, etc.)
   layouts/                — DashboardLayout, AdminLayout
-  components/nodes/       — 100+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, extend-video-node, extract-frame-node, webhook-trigger-node, schedule-trigger-node, social-node, speech-to-video-node, sora-storyboard-node, sora-character-node, 13 suno-*-nodes, preview-node)
+  components/nodes/       — 100+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, extend-video-node, extract-frame-node, webhook-trigger-node, schedule-trigger-node, social-node, speech-to-video-node, sora-storyboard-node, sora-character-node, 13 suno-*-nodes, preview-node, json-process-node)
   components/editor/
     config-panel.tsx      — Thin dispatcher (~520 lines), delegates to config-panels/
     config-panels/        — 24 files: per-category node config components (image, video, audio, composition, entity, trigger, social, etc.) + tag-textarea.tsx (autocomplete for audio tags & Suno metatags) + prompt-helper-dialog.tsx (AI prompt enhancement) + aspect-ratio-selector.tsx (visual SVG tile grid) + llm-model-select.tsx (tiered model dropdown)
@@ -323,8 +323,9 @@ backend/src/
 - [x] Video node display name audit (de-vendored Sora/Suno prefixes, standardized verb-object order)
 - [x] Component marketplace preview modal — single click on a component card opens a preview (description + inputs/outputs/exposed settings + media), double click adds directly; popup marketplace shows description in place of creator name
 - [x] Dropped edge "runs" concept (useAllResults/runsExpression) — generatedResults is now a single deterministic ordered flat list
+- [x] JSON Process node (inline 0 CR utility, visual 3-stage pipeline or jq-like expressions; custom evaluator in `packages/shared/json-evaluator.ts` shared by frontend DAG + backend orchestrator)
 
 ---
 
-*Last updated: 2026-04-15*
-*Version: 1.78.1*
+*Last updated: 2026-04-16*
+*Version: 1.79.0*

@@ -2181,6 +2181,26 @@ export type ExtractFieldNodeData = {
   errorMessage?: string
 }
 
+// --- JSON Process Node Data ---
+
+export type JsonProcessNodeData = {
+  [key: string]: unknown
+  label: string
+  mode: "visual" | "advanced"
+  inputPath: string
+  filters: Array<{
+    id: string
+    field: string
+    operator: "equals" | "not_equals" | "contains" | "not_contains" | "starts_with" | "ends_with" | "greater_than" | "less_than" | "is_empty" | "is_not_empty" | "matches_regex" | "in_list"
+    value: string | string[]
+  }>
+  projections: string[]
+  expression: string
+  processedResult?: unknown
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
 // --- Sticky Note Node Data ---
 
 export type StickyNoteData = {
@@ -2541,6 +2561,7 @@ export type SceneNodeData =
   | CombineTextNodeData
   | SplitTextData
   | ExtractFieldNodeData
+  | JsonProcessNodeData
   | PreviewNodeData
   | StickyNoteData
   | TeleportSendData
@@ -2649,6 +2670,7 @@ export type SceneNodeType =
   | "combine-text"
   | "split-text"
   | "extract-field"
+  | "json-process"
   | "preview"
   | "sticky-note"
   | "teleport-send"
@@ -4115,6 +4137,23 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       mode: "custom",
       field: "",
     } as ExtractFieldNodeData,
+  },
+  {
+    type: "json-process",
+    label: "JSON Process",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    autoExecute: true,
+    defaultData: {
+      label: "JSON Process",
+      mode: "visual",
+      inputPath: "",
+      filters: [],
+      projections: [],
+      expression: "",
+    } as JsonProcessNodeData,
   },
   {
     type: "preview",

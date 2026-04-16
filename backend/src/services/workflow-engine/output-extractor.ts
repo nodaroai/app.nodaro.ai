@@ -21,6 +21,15 @@ import { extractAllGeneratedResults } from "../../../../packages/shared/src/gene
 
 export { extractAllGeneratedResults }
 
+function processedResultToText(r: unknown): string | undefined {
+  if (r === null || r === undefined) return undefined
+  if (Array.isArray(r)) {
+    if (r.length === 0) return undefined
+    return typeof r[0] === "string" ? r[0] : JSON.stringify(r[0])
+  }
+  return typeof r === "string" ? r : JSON.stringify(r)
+}
+
 // Node types that output a plan (not a media URL) — derived from COMPOSER_PLAN_MAP
 const PLAN_NODE_TYPES = new Set(Object.keys(COMPOSER_PLAN_MAP))
 
@@ -32,6 +41,7 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "text",
   "json",
   "extractedText",
+  "processedResult",
   "thumbnailUrl",
   "sunoTrackId",
   "sunoTaskId",
@@ -307,6 +317,11 @@ export function getPrimaryOutput(
   // Extract Field: single `text` output.
   if (sourceType === "extract-field") {
     return output.extractedText
+  }
+
+  // JSON Process: stringify processedResult for text consumers.
+  if (sourceType === "json-process") {
+    return processedResultToText(output.processedResult)
   }
 
   // QA-check: route by approved/rejected handle
@@ -642,6 +657,12 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return json !== undefined
       ? { extractedText, text: extractedText, json }
       : { extractedText, text: extractedText }
+  }
+
+  if (type === "json-process") {
+    const processedResult = data.processedResult
+    if (processedResult === undefined) return undefined
+    return { processedResult, text: processedResultToText(processedResult) ?? "", json: processedResult }
   }
 
   if (type === "combine-text") {

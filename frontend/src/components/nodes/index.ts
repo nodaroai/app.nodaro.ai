@@ -64,6 +64,7 @@ import { AdjustVolumeNode } from "./adjust-volume-node";
 import { TrimVideoNode } from "./trim-video-node";
 import { ExtractFrameNode } from "./extract-frame-node";
 import { ExtractFieldNode } from "./extract-field-node";
+import { JsonProcessNode } from "./json-process-node";
 import { VideoComposerNode } from "./video-composer-node";
 import { AfterEffectsNode } from "./after-effects-node";
 import { LottieOverlayNode } from "./lottie-overlay-node";
@@ -211,6 +212,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "combine-text": CombineTextNode,
   "split-text": SplitTextNode,
   "extract-field": ExtractFieldNode,
+  "json-process": JsonProcessNode,
   "preview": PreviewNode,
   "sticky-note": StickyNoteNode,
   "router": RouterNode,

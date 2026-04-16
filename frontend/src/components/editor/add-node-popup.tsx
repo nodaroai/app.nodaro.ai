@@ -77,6 +77,7 @@ import {
   Eraser,
   ListMusic,
   Braces,
+  Filter,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -697,6 +698,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "extract-field",
     label: "Extract Field",
     icon: <Braces className="h-4 w-4" />,
+    category: "Processing",
+    group: "Text",
+  },
+  {
+    type: "json-process",
+    label: "JSON Process",
+    icon: <Filter className="h-4 w-4" />,
     category: "Processing",
     group: "Text",
   },
