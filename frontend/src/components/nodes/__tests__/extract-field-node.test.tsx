@@ -95,13 +95,13 @@ describe("ExtractFieldNode", () => {
     expect(dashed).toBeInTheDocument()
   })
 
-  it("shows item count when extractedText is set", () => {
+  it("shows item count when __listResults is set", () => {
     renderNode({
       data: {
         label: "Extract Field",
         mode: "custom",
         field: "caption",
-        extractedText: "a\nb\nc",
+        __listResults: ["a", "b", "c"],
       },
     })
     expect(screen.getByText(/3 items?/i)).toBeInTheDocument()
