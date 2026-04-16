@@ -9,6 +9,7 @@ import { HandleIcon } from "./handle-icon"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 import { copyToClipboard } from "@/lib/utils"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
@@ -64,6 +65,19 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
       })
     },
   })
+  // Reactively adopt upstream URL when connected to the "in" handle
+  const edges = useWorkflowStore((s) => s.edges)
+  const nodes = useWorkflowStore((s) => s.nodes)
+  useEffect(() => {
+    const inEdge = edges.find((e) => e.target === id && e.targetHandle === "in")
+    if (!inEdge) return
+    const srcNode = nodes.find((n) => n.id === inEdge.source)
+    if (!srcNode) return
+    const url = extractNodeOutput(srcNode, inEdge.sourceHandle ?? undefined)
+    if (!url || url === nodeData.externalUrl) return
+    updateNodeData(id, { url, externalUrl: url })
+  }, [id, edges, nodes, nodeData.externalUrl, updateNodeData])
+
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]

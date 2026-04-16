@@ -61,7 +61,13 @@ vi.mock("@/hooks/use-workflow-store", () => ({
       videoAutoplay: false,
       openFreeCut: () => {},
       openImageEdit: () => {},
+      edges: [],
+      nodes: [],
     }),
+}))
+
+vi.mock("@/components/editor/workflow-editor/execution-graph", () => ({
+  extractNodeOutput: () => undefined,
 }))
 
 vi.mock("@/hooks/use-file-upload", () => ({
