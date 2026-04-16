@@ -23,6 +23,7 @@ import { collapseExpandedClones } from "./execution-graph";
 import { getListInputForNode } from "./node-input-resolver";
 import { executeNode, rejectAllManualEdits } from "./execute-node";
 import { executeNodeForList } from "./list-execution";
+import { cascadeAutoExecute } from "./auto-execute";
 
 function warnUnderMinRows(nodes: WorkflowNode[]): void {
   const underMin = nodes.filter((n) => {
@@ -186,6 +187,10 @@ export async function handleRunSingleNode(
     : executeNode(node, ctx);
 
   execution
+    .then(() => {
+      // Cascade to downstream auto-execute nodes (combine-text, split-text, extract-field)
+      cascadeAutoExecute(nodeId);
+    })
     .catch(() => {
       // Error already handled via toast in executeNode
     })

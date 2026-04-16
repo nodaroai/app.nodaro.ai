@@ -50,7 +50,7 @@ export function migrateImageNodes(nodes: WorkflowNode[]): WorkflowNode[] {
  * will NOT capture a snapshot — preventing job polling from polluting the
  * undo history and clearing the redo stack.
  */
-const EXECUTION_DATA_KEYS = new Set([
+export const EXECUTION_DATA_KEYS = new Set([
   "executionStatus",
   "currentJobId",
   "currentJobProgress",

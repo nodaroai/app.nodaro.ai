@@ -8,13 +8,16 @@ import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { ExtractFieldNodeData } from "@/types/nodes"
 
 function ExtractFieldNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ExtractFieldNodeData
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const status = nodeData.executionStatus ?? "idle"
+
+  useAutoExecute(id, data as Record<string, unknown>)
 
   const field = nodeData.field?.trim() ?? ""
   const fieldLabel = field === "" ? "(whole item)" : field
@@ -40,7 +43,7 @@ function ExtractFieldNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         minWidth={220}
         topToolbarContent={
-          <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+          <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runFromHere?.(nid)} runFromHere />
         }
         handles={[
           { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },

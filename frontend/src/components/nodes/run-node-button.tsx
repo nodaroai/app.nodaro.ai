@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { Play, Square } from "lucide-react"
+import { FastForward, Play, Square } from "lucide-react"
 import { hasCredits } from "@/lib/edition"
 import { cancelJob } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -13,9 +13,11 @@ interface RunNodeButtonProps {
   credits?: number
   isRunning: boolean
   onRun: (nodeId: string) => void
+  /** When true, shows "Run from here" label with FastForward icon. */
+  runFromHere?: boolean
 }
 
-export function RunNodeButton({ nodeId, credits, isRunning, onRun }: RunNodeButtonProps) {
+export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }: RunNodeButtonProps) {
   // Get currentJobId from store so callers don't need to pass it
   const currentJobId = useWorkflowStore((s) => {
     const node = s.nodes.find((n) => n.id === nodeId)
@@ -68,14 +70,17 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun }: RunNodeButt
 
   if (isRunning) return null
 
+  const Icon = runFromHere ? FastForward : Play
+  const label = runFromHere ? "Run from here" : "Run"
+
   return (
     <button
       type="button"
       className="flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium text-white rounded-md whitespace-nowrap bg-[#ff0073] hover:bg-[#e60068] shadow-sm"
       onClick={(e) => { e.stopPropagation(); onRun(nodeId) }}
     >
-      <Play className="w-3 h-3" />
-      Run
+      <Icon className="w-3 h-3" />
+      {label}
       {hasCredits() && credits !== undefined && credits > 0 && (
         <span className="ml-1 opacity-80">
           ({fanOutCount > 1 ? `${fanOutCount}×${credits}` : credits} CR)

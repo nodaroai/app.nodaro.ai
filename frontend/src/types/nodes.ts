@@ -2675,6 +2675,8 @@ export interface NodeTypeDefinition {
   readonly height?: number
   readonly exposableFields?: ReadonlyArray<ExposableField>
   readonly exposableOutputs?: ReadonlyArray<ExposableOutput>
+  /** When true, node auto-executes on config change or upstream completion (zero-cost inline nodes only). */
+  readonly autoExecute?: boolean
 }
 
 export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
@@ -4067,6 +4069,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 0,
     inputs: ["in"],
     outputs: ["text"],
+    autoExecute: true,
     defaultData: {
       label: "Combine Text",
       separator: "newline",
@@ -4081,6 +4084,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
+    autoExecute: true,
     defaultData: {
       label: "Split Text",
       separator: "newline",
@@ -4096,6 +4100,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 0,
     inputs: ["in"],
     outputs: ["text"],
+    autoExecute: true,
     defaultData: {
       label: "Extract Field",
       mode: "custom",
