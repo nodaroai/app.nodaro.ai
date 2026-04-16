@@ -36,6 +36,9 @@ const AUTO_EXECUTE_TYPES = new Set(
   NODE_DEFINITIONS.filter((d) => d.autoExecute).map((d) => d.type),
 )
 
+/** Display-only nodes that read upstream data reactively (list, loop, preview). */
+const REACTIVE_DISPLAY_TYPES = new Set(["list", "loop", "preview"])
+
 /**
  * Execute a single auto-execute node if it has upstream data.
  * Does NOT save the workflow or toggle global isRunning — this is a lightweight inline run.
@@ -79,19 +82,25 @@ export function autoExecuteNode(nodeId: string, visited = new Set<string>()): vo
 }
 
 /**
- * After a node completes execution, trigger any downstream auto-execute nodes.
- * Cascades: if A → B(auto) → C(auto), completing A triggers B, which triggers C.
+ * After a node completes execution, trigger any downstream auto-execute nodes
+ * and refresh downstream display-only nodes (list, loop, preview).
  * @param visited  Cycle protection set — shared across the cascade chain.
  */
 export function cascadeAutoExecute(completedNodeId: string, visited = new Set<string>()): void {
-  const { nodes, edges } = useWorkflowStore.getState()
+  const { nodes, edges, updateNodeData } = useWorkflowStore.getState()
   const nodeMap = new Map(nodes.map((n) => [n.id, n]))
   const outEdges = edges.filter((e) => e.source === completedNodeId)
 
   for (const edge of outEdges) {
     const target = nodeMap.get(edge.target)
     if (!target) continue
-    if (!AUTO_EXECUTE_TYPES.has(target.type ?? "")) continue
-    autoExecuteNode(target.id, visited)
+
+    if (AUTO_EXECUTE_TYPES.has(target.type ?? "")) {
+      autoExecuteNode(target.id, visited)
+    } else if (REACTIVE_DISPLAY_TYPES.has(target.type ?? "")) {
+      // Touch the node to force Zustand subscribers (useMemo in list/loop/preview)
+      // to recalculate with the fresh upstream data.
+      updateNodeData(target.id, { _upstreamRefresh: Date.now() })
+    }
   }
 }

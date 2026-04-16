@@ -89,7 +89,7 @@ export function resolveEdgeValuesForTableColumn(
     // Other sources: expand each raw item through the target's delimiter so
     // delimited multi-line text (e.g., AI output with slide separators) becomes
     // individual rows.
-    const isAlreadyStructured = upstream.type === "loop" || upstream.type === "list" || upstream.type === "split-text"
+    const isAlreadyStructured = upstream.type === "loop" || upstream.type === "list" || upstream.type === "split-text" || upstream.type === "extract-field"
     const items = isAlreadyStructured
       ? allOutputs
       : (allOutputs.length > 0

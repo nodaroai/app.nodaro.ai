@@ -72,6 +72,7 @@ export const EXECUTION_DATA_KEYS = new Set([
   "outputResults",
   "shots",
   "result",
+  "_upstreamRefresh",
 ])
 
 /** Detect loop column type from upstream node's output handle. */
