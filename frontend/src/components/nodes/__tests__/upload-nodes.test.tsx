@@ -61,7 +61,13 @@ vi.mock("@/hooks/use-workflow-store", () => ({
       videoAutoplay: false,
       openFreeCut: () => {},
       openImageEdit: () => {},
+      edges: [],
+      nodes: [],
     }),
+}))
+
+vi.mock("@/hooks/use-upstream-url", () => ({
+  useUpstreamUrl: () => {},
 }))
 
 vi.mock("@/hooks/use-file-upload", () => ({

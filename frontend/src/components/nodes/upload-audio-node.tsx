@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useUpstreamUrl } from "@/hooks/use-upstream-url"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
@@ -57,6 +58,8 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
       })
     },
   })
+
+  useUpstreamUrl(id, nodeData.externalUrl, updateNodeData)
 
   const audioUrl = nodeData.r2Url || nodeData.url
   const hasFile = Boolean(audioUrl) && !nodeData.externalUrl

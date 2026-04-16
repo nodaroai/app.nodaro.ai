@@ -9,6 +9,7 @@ import { HandleIcon } from "./handle-icon"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useUpstreamUrl } from "@/hooks/use-upstream-url"
 import { copyToClipboard } from "@/lib/utils"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
@@ -64,6 +65,8 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
       })
     },
   })
+  useUpstreamUrl(id, nodeData.externalUrl, updateNodeData)
+
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
