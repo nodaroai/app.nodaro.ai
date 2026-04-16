@@ -162,6 +162,7 @@ import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, detectPreviewItemType, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
 import { resolveNodeInputs, type FrontendResolvedInputs } from "./node-input-resolver";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
+import { resolveFieldMappings, NODE_TEXT_FIELDS } from "./resolve-field-mappings";
 import { pollJobWithNodeUpdate, guardedToast } from "./poll-job";
 import {
   runImageGeneration,
@@ -322,6 +323,19 @@ export function executeNode(
   // Also resolve refs in the override prompt from list fan-out
   if (overridePrompt && refMap.size > 0) {
     overridePrompt = resolveTextRefs(overridePrompt, refMap) ?? overridePrompt;
+  }
+
+  // --- Field mapping resolution + {} injection (centralized) ---
+  const textFields = NODE_TEXT_FIELDS[node.type ?? ""]
+  if (textFields?.length) {
+    const upstreamText = overridePrompt ?? inputs.prompt
+    const resolvedData = resolveFieldMappings(
+      node.data as Record<string, unknown>,
+      nodes,
+      upstreamText,
+      textFields,
+    )
+    node = { ...node, data: resolvedData } as WorkflowNode
   }
 
   if (node.type === "generate-script") {
@@ -2261,21 +2275,14 @@ export function executeNode(
     const { updateNodeData } = useWorkflowStore.getState();
     const upstream = inputs.prompt;
 
-    // Resolve a field value with upstream text: empty → upstream, contains {} → inject, otherwise use as-is
-    const inject = (v: string | undefined): string | undefined => {
-      if (!v) return upstream;
-      if (upstream && v.includes("{}")) return v.replaceAll("{}", upstream);
-      return v;
-    };
-
     const params: Parameters<typeof webScrape>[0] = {
       actor,
-      url: actor === "content-crawler" ? inject(d.url) : undefined,
+      url: actor === "content-crawler" ? (d.url || upstream) : undefined,
       mode: actor === "content-crawler" ? (d.mode ?? "page") : undefined,
-      query: actor === "google-search" ? inject(d.query) : undefined,
+      query: actor === "google-search" ? (d.query || upstream) : undefined,
       maxResults: actor === "google-search" ? d.maxResults : undefined,
       countryCode: actor === "google-search" ? d.countryCode : undefined,
-      target: (actor === "instagram" || actor === "tiktok") ? inject(d.target) : undefined,
+      target: (actor === "instagram" || actor === "tiktok") ? (d.target || upstream) : undefined,
       resultsLimit: (actor === "instagram" || actor === "tiktok") ? d.resultsLimit : undefined,
     };
 

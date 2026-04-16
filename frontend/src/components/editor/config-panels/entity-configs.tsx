@@ -185,29 +185,27 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
           </Select>
         </div>
       )}
-      <div>
-        <Label htmlFor="char-name">Character Name</Label>
+      <MappableField field="characterName" label="Character Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
           id="char-name"
           value={data.characterName}
           onChange={(e) => onUpdate({ characterName: e.target.value })}
           onBlur={(e) => handleNameChange(e.target.value)}
-          placeholder="e.g. Sir Aldric"
+          placeholder="e.g. Sir Aldric (use {} to inject input)"
         />
         {duplicateWarning && (
           <p className="text-[10px] text-amber-500 mt-0.5">{duplicateWarning}</p>
         )}
-      </div>
-      <div>
-        <Label htmlFor="char-desc">Description</Label>
+      </MappableField>
+      <MappableField field="description" label="Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea
           id="char-desc"
           value={data.description}
           onChange={(e) => onUpdate({ description: e.target.value })}
-          placeholder="A brave knight in his 30s with blonde hair..."
+          placeholder="A brave knight in his 30s with blonde hair... (use {} to inject input)"
           rows={3}
         />
-      </div>
+      </MappableField>
       <div>
         <Label htmlFor="char-gender">Gender</Label>
         <Select value={data.gender} onValueChange={(v) => onUpdate({ gender: v as CharacterNodeData["gender"] })}>
@@ -231,16 +229,15 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
           </SelectContent>
         </Select>
       </div>
-      <div>
-        <Label htmlFor="char-outfit">Base Outfit</Label>
+      <MappableField field="baseOutfit" label="Base Outfit" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea
           id="char-outfit"
           value={data.baseOutfit}
           onChange={(e) => onUpdate({ baseOutfit: e.target.value })}
-          placeholder="Steel plate armor with blue cape..."
+          placeholder="Steel plate armor with blue cape... (use {} to inject input)"
           rows={2}
         />
-      </div>
+      </MappableField>
 
       <div>
         <Label htmlFor="char-image">Reference Image</Label>
@@ -344,7 +341,7 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
   )
 }
 
-export function FaceConfig({ data, onUpdate }: { readonly data: FaceNodeData; readonly onUpdate: (updates: Partial<FaceNodeData>) => void }) {
+export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<FaceNodeData>) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const nodes = useWorkflowStore((s) => s.nodes)
@@ -428,15 +425,13 @@ export function FaceConfig({ data, onUpdate }: { readonly data: FaceNodeData; re
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <Label htmlFor="face-name">Face Name</Label>
-        <Input id="face-name" value={data.faceName} onChange={(e) => onUpdate({ faceName: e.target.value })} onBlur={(e) => handleNameChange(e.target.value)} placeholder="e.g. John Smith" />
+      <MappableField field="faceName" label="Face Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input id="face-name" value={data.faceName} onChange={(e) => onUpdate({ faceName: e.target.value })} onBlur={(e) => handleNameChange(e.target.value)} placeholder="e.g. John Smith (use {} to inject input)" />
         {duplicateWarning && (<p className="text-[10px] text-amber-500 mt-0.5">{duplicateWarning}</p>)}
-      </div>
-      <div>
-        <Label htmlFor="face-desc">Description</Label>
-        <Textarea id="face-desc" value={data.description} onChange={(e) => onUpdate({ description: e.target.value })} placeholder="A person in their 30s with brown eyes and short dark hair..." rows={3} />
-      </div>
+      </MappableField>
+      <MappableField field="description" label="Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea id="face-desc" value={data.description} onChange={(e) => onUpdate({ description: e.target.value })} placeholder="A person in their 30s with brown eyes... (use {} to inject input)" rows={3} />
+      </MappableField>
       <div>
         <Label htmlFor="face-style">Style</Label>
         <Select value={data.style} onValueChange={(v) => onUpdate({ style: v as FaceNodeData["style"] })}>
@@ -495,7 +490,7 @@ export function FaceConfig({ data, onUpdate }: { readonly data: FaceNodeData; re
   )
 }
 
-export function ObjectConfig({ data, onUpdate }: { readonly data: ObjectNodeData; readonly onUpdate: (updates: Partial<ObjectNodeData>) => void }) {
+export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ObjectNodeData>) {
   const generateAsset = useWorkflowStore((s) => s.generateObjectAssetFn)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
@@ -569,15 +564,13 @@ export function ObjectConfig({ data, onUpdate }: { readonly data: ObjectNodeData
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <Label htmlFor="obj-name">Object Name</Label>
-        <Input id="obj-name" value={data.objectName} onChange={(e) => onUpdate({ objectName: e.target.value })} onBlur={(e) => handleNameChange(e.target.value)} placeholder="e.g. Magic Sword" />
+      <MappableField field="objectName" label="Object Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input id="obj-name" value={data.objectName} onChange={(e) => onUpdate({ objectName: e.target.value })} onBlur={(e) => handleNameChange(e.target.value)} placeholder="e.g. Magic Sword (use {} to inject input)" />
         {duplicateWarning && (<p className="text-[10px] text-amber-500 mt-0.5">{duplicateWarning}</p>)}
-      </div>
-      <div>
-        <Label htmlFor="obj-desc">Description</Label>
-        <Textarea id="obj-desc" value={data.description} onChange={(e) => onUpdate({ description: e.target.value })} placeholder="A glowing sword with ancient runes..." rows={3} />
-      </div>
+      </MappableField>
+      <MappableField field="description" label="Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea id="obj-desc" value={data.description} onChange={(e) => onUpdate({ description: e.target.value })} placeholder="A glowing sword with ancient runes... (use {} to inject input)" rows={3} />
+      </MappableField>
       <div>
         <Label htmlFor="obj-category">Category</Label>
         <Select value={data.category} onValueChange={(v) => onUpdate({ category: v as ObjectNodeData["category"] })}>
@@ -814,15 +807,13 @@ export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapFi
           </Select>
         </div>
       )}
-      <div>
-        <Label htmlFor="loc-name">Location Name</Label>
-        <Input id="loc-name" value={data.locationName} onChange={(e) => onUpdate({ locationName: e.target.value })} onBlur={(e) => handleNameChange(e.target.value)} placeholder="e.g. Ancient Forest" />
+      <MappableField field="locationName" label="Location Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input id="loc-name" value={data.locationName} onChange={(e) => onUpdate({ locationName: e.target.value })} onBlur={(e) => handleNameChange(e.target.value)} placeholder="e.g. Ancient Forest (use {} to inject input)" />
         {duplicateWarning && (<p className="text-[10px] text-amber-500 mt-0.5">{duplicateWarning}</p>)}
-      </div>
-      <div>
-        <Label htmlFor="loc-desc">Description</Label>
-        <Textarea id="loc-desc" value={data.description} onChange={(e) => onUpdate({ description: e.target.value })} placeholder="A mystical forest with ancient trees..." rows={3} />
-      </div>
+      </MappableField>
+      <MappableField field="description" label="Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea id="loc-desc" value={data.description} onChange={(e) => onUpdate({ description: e.target.value })} placeholder="A mystical forest with ancient trees... (use {} to inject input)" rows={3} />
+      </MappableField>
       <div>
         <Label htmlFor="loc-category">Category</Label>
         <Select value={data.category} onValueChange={(v) => onUpdate({ category: v as LocationNodeData["category"] })}>
