@@ -82,6 +82,13 @@ export function resolveNodeInputs(
     const edgeOutputMode = edgeData?.outputMode as string | undefined
     const effectiveListResults = state?.output?.listResults
       ?? extractAllGeneratedResults(sourceNode.data as Record<string, unknown>)
+      ?? (() => {
+        const jsonArr = (sourceNode.data as Record<string, unknown>).generatedJson
+        if (Array.isArray(jsonArr) && jsonArr.length > 0) {
+          return jsonArr.map((item: unknown) => typeof item === "string" ? item : JSON.stringify(item))
+        }
+        return undefined
+      })()
     if (edgeOutputMode && effectiveListResults && effectiveListResults.length > 0) {
       if (edgeOutputMode === "item") {
         // Structured item mode: use resolveIndex on itemIndex expression
@@ -486,6 +493,16 @@ export function getListInputForNode(
     )
     if (savedResults) {
       const filtered = selectListItems(savedResults, selectorArg)
+      if (filtered.length > 1) return filtered
+    }
+
+    // 6. JSON array output (e.g. web-scrape generatedJson) — each element is one list item
+    const jsonArr = (sourceNode.data as Record<string, unknown>).generatedJson
+    if (Array.isArray(jsonArr) && jsonArr.length > 0) {
+      const items = jsonArr.map((item: unknown) =>
+        typeof item === "string" ? item : JSON.stringify(item),
+      )
+      const filtered = selectListItems(items, selectorArg)
       if (filtered.length > 1) return filtered
     }
   }
