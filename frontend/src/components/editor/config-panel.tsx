@@ -273,14 +273,15 @@ export const GENERATE_BUTTON_TYPES = new Set([
 ])
 
 export const RUN_BUTTON_TYPES = new Set([
-  "manual-edit", "preview", "composite",
+  "manual-edit", "composite",
   "sub-workflow", "router",
 ])
 
-/** Auto-execute nodes get "Run from here" instead of "Run" — derived from NODE_DEFINITIONS. */
-const AUTO_EXECUTE_TYPES: Set<string> = new Set(
-  NODE_DEFINITIONS.filter((d) => d.autoExecute).map((d) => d.type)
-)
+/** Nodes that show "Run from here" as primary action instead of "Run". */
+const RUN_FROM_HERE_TYPES: Set<string> = new Set([
+  ...NODE_DEFINITIONS.filter((d) => d.autoExecute).map((d) => d.type),
+  "preview", "loop", "list",
+])
 
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video"])
 
@@ -803,7 +804,7 @@ export function ConfigPanel() {
               </button>
             )}
 
-            {AUTO_EXECUTE_TYPES.has(nodeType) && (
+            {RUN_FROM_HERE_TYPES.has(nodeType) && (
               <button
                 type="button"
                 onClick={() => runFromHere?.(selectedNode.id)}
@@ -819,7 +820,7 @@ export function ConfigPanel() {
               </button>
             )}
 
-            {hasDownstream && !AUTO_EXECUTE_TYPES.has(nodeType) && (
+            {hasDownstream && !RUN_FROM_HERE_TYPES.has(nodeType) && (
               <button
                 type="button"
                 onClick={() => runFromHere?.(selectedNode.id)}

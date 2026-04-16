@@ -31,9 +31,14 @@ vi.mock("../run-node-button", () => ({
 }))
 
 vi.mock("@/hooks/use-workflow-store", () => ({
-  useWorkflowStore: (selector: any) => selector({
-    runSingleNode: () => {},
-  }),
+  EXECUTION_DATA_KEYS: new Set(["executionStatus"]),
+  useWorkflowStore: Object.assign(
+    (selector: any) => selector({
+      runFromHere: () => {},
+      loadGeneration: 0,
+    }),
+    { getState: () => ({ nodes: [], edges: [] }) },
+  ),
 }))
 
 vi.mock("react-dom", async () => {

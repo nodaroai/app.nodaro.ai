@@ -199,7 +199,7 @@ function SortableNodeRow({
 function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
   const nodeData = data as LoopNodeData
   const isList = type === "list"
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const edges = useWorkflowStore((s) => s.edges)
   const nodes = useWorkflowStore((s) => s.nodes)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -868,7 +868,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
               </>
             )}
             {status !== "running" && (
-              <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+              <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runFromHere?.(nid)} runFromHere />
             )}
           </div>
         }

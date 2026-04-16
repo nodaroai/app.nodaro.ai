@@ -38,11 +38,16 @@ vi.mock("../run-node-button", () => ({
 }))
 
 vi.mock("@/hooks/use-workflow-store", () => ({
-  useWorkflowStore: (selector: any) =>
-    selector({
-      runSingleNode: () => {},
-      updateNodeData: () => {},
-    }),
+  EXECUTION_DATA_KEYS: new Set(["executionStatus"]),
+  useWorkflowStore: Object.assign(
+    (selector: any) =>
+      selector({
+        runFromHere: () => {},
+        updateNodeData: () => {},
+        loadGeneration: 0,
+      }),
+    { getState: () => ({ nodes: [], edges: [] }) },
+  ),
 }))
 
 vi.mock("../editable-node-label", () => ({
