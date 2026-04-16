@@ -13,13 +13,14 @@ const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-direct
 const Kling3StudioConfig = lazy(() => import("./config-panels/kling3-studio-config").then(m => ({ default: m.Kling3StudioConfig })))
 import { GenerateButton } from "@/components/credits/GenerateButton"
 import { createClient } from "@/lib/supabase"
-import type {
-  ImageToVideoData,
-  TextToVideoData,
-  FieldMappings,
-  PresentationDisplay,
+import {
+  NODE_DEFINITIONS,
+  type ImageToVideoData,
+  type TextToVideoData,
+  type FieldMappings,
+  type PresentationDisplay,
+  type SceneNodeDataType,
 } from "@/types/nodes"
-import type { SceneNodeDataType } from "@/types/nodes"
 import { PresentationDisplayConfig } from "./config-panels/presentation-display-config"
 import { SceneConfig } from "./scene-config"
 const SceneEditorModal = lazy(() => import("./scene-editor-modal").then(m => ({ default: m.SceneEditorModal })))
@@ -272,9 +273,14 @@ export const GENERATE_BUTTON_TYPES = new Set([
 ])
 
 export const RUN_BUTTON_TYPES = new Set([
-  "manual-edit", "combine-text", "split-text", "extract-field", "preview", "composite",
+  "manual-edit", "preview", "composite",
   "sub-workflow", "router",
 ])
+
+/** Auto-execute nodes get "Run from here" instead of "Run" — derived from NODE_DEFINITIONS. */
+const AUTO_EXECUTE_TYPES: Set<string> = new Set(
+  NODE_DEFINITIONS.filter((d) => d.autoExecute).map((d) => d.type)
+)
 
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video"])
 
@@ -797,7 +803,23 @@ export function ConfigPanel() {
               </button>
             )}
 
-            {hasDownstream && (
+            {AUTO_EXECUTE_TYPES.has(nodeType) && (
+              <button
+                type="button"
+                onClick={() => runFromHere?.(selectedNode.id)}
+                disabled={nodeData.executionStatus === "running"}
+                className="w-full flex items-center justify-center gap-2 h-10 rounded-lg text-white font-medium bg-[#ff0073] hover:bg-[#e0005f] disabled:opacity-50 transition-colors"
+                title="Runs this node and all connected downstream nodes in sequence"
+              >
+                {nodeData.executionStatus === "running"
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <FastForward className="w-4 h-4" />
+                }
+                {nodeData.executionStatus === "running" ? "Running..." : "Run from here"}
+              </button>
+            )}
+
+            {hasDownstream && !AUTO_EXECUTE_TYPES.has(nodeType) && (
               <button
                 type="button"
                 onClick={() => runFromHere?.(selectedNode.id)}
