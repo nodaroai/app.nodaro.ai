@@ -2,7 +2,6 @@ import type { FastifyInstance } from "fastify"
 import { Readable } from "node:stream"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
-import { config } from "../lib/config.js"
 
 const proxyQuery = z.object({
   url: safeUrlSchema,
@@ -25,13 +24,8 @@ export async function imageProxyRoutes(app: FastifyInstance) {
     }
 
     const { url } = parsed.data
-
-    // Only proxy images from our own R2 bucket
-    if (config.R2_PUBLIC_URL && !url.startsWith(config.R2_PUBLIC_URL)) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Only R2 bucket images can be proxied" },
-      })
-    }
+    // URL is validated by safeUrlSchema (blocks localhost, private IPs, non-http(s)).
+    // Content-type is checked below (rejects non-images unless download mode).
 
     const response = await fetch(url, { signal: AbortSignal.timeout(120_000) })
     if (!response.ok) {
