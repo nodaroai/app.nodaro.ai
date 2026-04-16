@@ -36,6 +36,11 @@ type EdgeLike = { source: string; target: string; sourceHandle?: string | null; 
 type NodeLike = { id: string; type?: string; data: Record<string, unknown> };
 type SplitColumns = ReadonlyArray<{ id: string; handleId: string; type?: string; splitDelimiter?: string }> | undefined;
 
+/** Extract-field emits structured __listResults only when configured as "list". */
+function isExtractFieldListMode(node: { type?: string; data: Record<string, unknown> }): boolean {
+  return node.type === "extract-field" && (node.data.outputType ?? "text") === "list"
+}
+
 /**
  * Resolve values flowing through `edge` for a loop/list table UI cell. Honors
  * the edge's outputMode AND selector (range/list). Returns a single-item array
@@ -86,10 +91,12 @@ export function resolveEdgeValuesForTableColumn(
     // items (rows, split pieces) — never re-split those by the target's
     // delimiter, or split-text's 13 custom-delimited items would get re-chopped
     // by newlines into whatever the target's column expects.
+    // Extract-field in "list" output mode is also structured; in "text" mode it
+    // emits a plain string and should be split by the target's delimiter.
     // Other sources: expand each raw item through the target's delimiter so
     // delimited multi-line text (e.g., AI output with slide separators) becomes
     // individual rows.
-    const isAlreadyStructured = upstream.type === "loop" || upstream.type === "list" || upstream.type === "split-text" || upstream.type === "extract-field"
+    const isAlreadyStructured = upstream.type === "loop" || upstream.type === "list" || upstream.type === "split-text" || isExtractFieldListMode(upstream)
     const items = isAlreadyStructured
       ? allOutputs
       : (allOutputs.length > 0
@@ -164,10 +171,10 @@ function resolveUpstreamWithEdgeFilter(
     );
   } else {
     const raw = extractNodeOutputAsList(upstreamNode);
-    // Already-structured sources (split-text, extract-field) produce logical
-    // items — preserve them even when the list has a single item, so downstream
-    // doesn't re-split by newline. Matches resolveEdgeValuesForTableColumn.
-    const isAlreadyStructured = upstreamNode.type === "split-text" || upstreamNode.type === "extract-field"
+    // Already-structured sources produce logical items — preserve them even
+    // when there's a single item, so downstream doesn't re-split by newline.
+    // Matches resolveEdgeValuesForTableColumn.
+    const isAlreadyStructured = upstreamNode.type === "split-text" || isExtractFieldListMode(upstreamNode)
     if (raw && (isAlreadyStructured || raw.length > 1)) upstreamVals = raw;
   }
 

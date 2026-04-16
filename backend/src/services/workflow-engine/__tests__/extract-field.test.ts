@@ -9,7 +9,7 @@ function makeNode(id: string, type: string, data: Record<string, unknown> = {}):
 describe("executeExtractField", () => {
   it("extracts scalar field from top-level array (auto-iterate)", () => {
     const scrapeNode = makeNode("s", "web-scrape", {})
-    const extract = makeNode("e", "extract-field", { field: "caption", mode: "dropdown" })
+    const extract = makeNode("e", "extract-field", { field: "caption", mode: "dropdown", outputType: "list" })
     const edges: SimpleEdge[] = [{ id: "e1", source: "s", target: "e", sourceHandle: "json", targetHandle: "in" } as SimpleEdge]
     const states: Record<string, NodeExecutionState> = {
       s: { status: "completed", output: { json: [{ caption: "a" }, { caption: "b" }, { caption: "c" }] } },
@@ -18,6 +18,32 @@ describe("executeExtractField", () => {
     expect(result.extractedText).toBe("a\nb\nc")
     expect(result.text).toBe("a\nb\nc")
     expect(result.listResults).toEqual(["a", "b", "c"])
+  })
+
+  it("default text mode emits extractedText only (no listResults, no json)", () => {
+    const scrapeNode = makeNode("s", "web-scrape", {})
+    const extract = makeNode("e", "extract-field", { field: "caption", mode: "dropdown" })
+    const edges: SimpleEdge[] = [{ id: "e1", source: "s", target: "e", sourceHandle: "json", targetHandle: "in" } as SimpleEdge]
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { json: [{ caption: "a" }, { caption: "b" }] } },
+    }
+    const result = executeExtractField(extract, edges, [scrapeNode, extract], states)
+    expect(result.extractedText).toBe("a\nb")
+    expect(result.text).toBe("a\nb")
+    expect(result.listResults).toBeUndefined()
+    expect(result.json).toBeUndefined()
+  })
+
+  it("json mode emits structured json, no listResults", () => {
+    const scrapeNode = makeNode("s", "web-scrape", {})
+    const extract = makeNode("e", "extract-field", { field: "meta", mode: "custom", outputType: "json" })
+    const edges: SimpleEdge[] = [{ id: "e1", source: "s", target: "e", sourceHandle: "json", targetHandle: "in" } as SimpleEdge]
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { json: [{ meta: { a: 1 } }, { meta: { b: 2 } }] } },
+    }
+    const result = executeExtractField(extract, edges, [scrapeNode, extract], states)
+    expect(result.json).toEqual([{ a: 1 }, { b: 2 }])
+    expect(result.listResults).toBeUndefined()
   })
 
   it("extracts nested path on custom mode", () => {
@@ -87,7 +113,7 @@ describe("executeExtractField", () => {
 
   it("returns empty output when all items miss the field", () => {
     const scrapeNode = makeNode("s", "web-scrape", {})
-    const extract = makeNode("e", "extract-field", { field: "missing", mode: "custom" })
+    const extract = makeNode("e", "extract-field", { field: "missing", mode: "custom", outputType: "list" })
     const edges: SimpleEdge[] = [{ id: "e1", source: "s", target: "e", sourceHandle: "json", targetHandle: "in" } as SimpleEdge]
     const states: Record<string, NodeExecutionState> = {
       s: { status: "completed", output: { json: [{ a: 1 }, { b: 2 }] } },
@@ -110,7 +136,7 @@ describe("executeExtractField", () => {
 
   it("empty path on a scalar array returns each element (whole-item mode)", () => {
     const scrapeNode = makeNode("s", "web-scrape", {})
-    const extract = makeNode("e", "extract-field", { field: "", mode: "dropdown" })
+    const extract = makeNode("e", "extract-field", { field: "", mode: "dropdown", outputType: "list" })
     const edges: SimpleEdge[] = [{ id: "e1", source: "s", target: "e", sourceHandle: "json", targetHandle: "in" } as SimpleEdge]
     const states: Record<string, NodeExecutionState> = {
       s: { status: "completed", output: { json: ["alpha", "beta", "gamma"] } },

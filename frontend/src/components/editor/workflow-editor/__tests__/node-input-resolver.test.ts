@@ -222,10 +222,10 @@ describe("resolveNodeInputs", () => {
     expect(inputs.prompt).toBe("combined output text")
   })
 
-  it("resolves extract-field output as prompt for llm-chat", () => {
+  it("text mode: extract-field → llm-chat passes the full joined string", () => {
     const extractField = makeNode("ef1", "extract-field", {
+      outputType: "text",
       extractedText: "line one\nline two\nline three",
-      __listResults: ["line one\nline two\nline three"],
     })
     const target = makeNode("t1", "llm-chat")
     const edges = [{ id: "ef1->t1", source: "ef1", target: "t1", sourceHandle: "text", targetHandle: "prompt" }]
@@ -234,10 +234,11 @@ describe("resolveNodeInputs", () => {
     expect(inputs.prompt).toBe("line one\nline two\nline three")
   })
 
-  it("resolves extract-field output as prompt with item:1 edge mode", () => {
+  it("list mode: extract-field → llm-chat with item:1 picks the first item", () => {
     const extractField = makeNode("ef1", "extract-field", {
-      extractedText: "line one\nline two",
-      __listResults: ["line one\nline two"],
+      outputType: "list",
+      extractedText: "item one\nitem two",
+      __listResults: ["item one", "item two"],
     })
     const target = makeNode("t1", "llm-chat")
     const edges = [{
@@ -247,11 +248,12 @@ describe("resolveNodeInputs", () => {
     }]
 
     const inputs = resolveNodeInputs(target, [extractField, target], edges)
-    expect(inputs.prompt).toBe("line one\nline two")
+    expect(inputs.prompt).toBe("item one")
   })
 
-  it("preserves extract-field multi-line text through list to llm-chat (item:1)", () => {
+  it("list mode with single item: extract-field → list → llm-chat item:1 keeps the multi-line value intact", () => {
     const extractField = makeNode("ef1", "extract-field", {
+      outputType: "list",
       extractedText: "line one\nline two\nline three",
       __listResults: ["line one\nline two\nline three"],
     })
@@ -274,6 +276,32 @@ describe("resolveNodeInputs", () => {
 
     const inputs = resolveNodeInputs(target, [extractField, listNode, target], edges)
     expect(inputs.prompt).toBe("line one\nline two\nline three")
+  })
+
+  it("text mode: extract-field → list → llm-chat item:1 splits on the list column delimiter", () => {
+    const extractField = makeNode("ef1", "extract-field", {
+      outputType: "text",
+      extractedText: "line one\nline two\nline three",
+    })
+    const listNode = makeNode("list1", "list", {
+      rows: [[""]],
+      columns: [{ id: "default", handleId: "col_default", type: "text", name: "Extract Field" }],
+    })
+    const target = makeNode("t1", "llm-chat")
+    const edges = [
+      {
+        id: "ef1->list1", source: "ef1", target: "list1",
+        sourceHandle: "text", targetHandle: "col_default_in",
+      },
+      {
+        id: "list1->t1", source: "list1", target: "t1",
+        sourceHandle: "col_default", targetHandle: "prompt",
+        data: { outputMode: "item", itemIndex: "1" },
+      },
+    ]
+
+    const inputs = resolveNodeInputs(target, [extractField, listNode, target], edges)
+    expect(inputs.prompt).toBe("line one")
   })
 
   it("skips source nodes with no output", () => {
