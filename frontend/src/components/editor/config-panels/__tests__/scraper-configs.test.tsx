@@ -15,6 +15,17 @@ vi.mock("@/components/ui/input", () => ({
   Input: (props: any) => <input {...props} />,
 }))
 
+// Wrap children in a nested <label> so getByLabelText resolves via nesting,
+// independent of the real MappableField's triggerId/context wiring.
+vi.mock("../mappable-field", () => ({
+  MappableField: ({ label, children }: any) => (
+    <label>
+      {label}
+      {children}
+    </label>
+  ),
+}))
+
 // Select mock: pick up `id` from SelectTrigger (as real component passes it) so
 // the rendered <select> has the id getByLabelText needs.
 vi.mock("@/components/ui/select", () => {
