@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Copy, Download, Expand, Film, GripVertical, Image, Info, Link, List, Loader2, Music, Plus, Repeat, Table2, Type, Upload, X } from "lucide-react"
+import { Braces, Copy, Download, Expand, Film, GripVertical, Image, Info, Link, List, Loader2, Music, Plus, Repeat, Table2, Type, Upload, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -36,6 +36,7 @@ const HANDLE_COLOR_MAP: Record<string, "pink" | "indigo" | "green" | "cyan"> = {
   "image-url": "pink",
   "video-url": "indigo",
   "audio-url": "green",
+  json: "cyan",
   "text": "cyan",
 }
 
@@ -43,6 +44,7 @@ const COLUMN_TYPE_ICON: Record<string, React.ReactElement> = {
   "image-url": <Image />,
   "video-url": <Film />,
   "audio-url": <Music />,
+  json: <Braces />,
   text: <Type />,
 }
 
@@ -58,6 +60,7 @@ const PACKED_MIN_BY_TYPE: Record<string, number> = {
   "image-url": 60,
   "video-url": 80,
   "audio-url": 220,
+  json:        140,
   "text":      100,
 }
 const PACKED_CONTAINER_W = 376
@@ -713,11 +716,78 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     )
   }
 
+  const renderJsonCell = (cell: string, rowIdx: number, col: LoopColumn, cellIdx: number, mode: RenderMode) => {
+    if (!cell) {
+      return (
+        <div key={`${rowIdx}-${col.id}`} className="w-full h-10 rounded-lg border border-dashed border-muted-foreground/10 flex items-center justify-center">
+          <span className="text-[9px] text-muted-foreground/30">{"\u2014"}</span>
+        </div>
+      )
+    }
+    let parsed: unknown
+    try { parsed = JSON.parse(cell) } catch { parsed = null }
+    const allEntries = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? Object.entries(parsed as Record<string, unknown>)
+      : null
+    const entries = allEntries?.slice(0, 4) ?? null
+    const tile = mode !== "list"
+    const packed = mode === "packed"
+
+    const content = entries ? (
+      <div className="flex flex-col gap-0.5">
+        {entries.map(([k, v]) => {
+          const vs = typeof v === "string" ? v : JSON.stringify(v)
+          return (
+            <div key={k} className="flex gap-1 min-w-0">
+              <span className="text-[#F59E0B] shrink-0">{k}:</span>
+              <span className="text-foreground/60 truncate">{vs}</span>
+            </div>
+          )
+        })}
+        {allEntries && allEntries.length > 4 && (
+          <span className="text-muted-foreground/40">+{allEntries.length - 4} more</span>
+        )}
+      </div>
+    ) : (
+      <div className="text-foreground/60 truncate">{cell}</div>
+    )
+
+    const innerClass = "relative rounded-lg border border-border/40 bg-muted/10 overflow-hidden"
+    const containerClass = packed ? "px-1.5 py-1" : tile ? "px-2 py-1.5" : "px-2 py-1.5 pr-3"
+
+    return (
+      <div key={`${rowIdx}-${col.id}`} className="relative group/cell self-start">
+        <div className={innerClass}>
+          <div className={containerClass}>
+            <div className="text-[10px] font-mono leading-relaxed" style={{ WebkitLineClamp: 5, display: "-webkit-box", WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+              {content}
+            </div>
+          </div>
+          {showCellControls && (
+            tile ? (
+              <div className="nodrag nopan absolute inset-x-0 bottom-0 flex justify-center gap-1 py-1 opacity-0 group-hover/cell:opacity-100 transition-opacity bg-gradient-to-t from-black/50 to-transparent">
+                <button type="button" aria-label="Expand" className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}><Expand className="w-3 h-3" /></button>
+                <button type="button" aria-label="Copy" className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "Copied") }}><Copy className="w-3 h-3" /></button>
+              </div>
+            ) : (
+              <>
+                <button type="button" aria-label="Expand" className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm" onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}><Expand className="w-3 h-3" /></button>
+                <button type="button" aria-label="Copy" className="nodrag nopan absolute top-6 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm" onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "Copied") }}><Copy className="w-3 h-3" /></button>
+              </>
+            )
+          )}
+        </div>
+        <span className="absolute -top-1.5 -left-1.5 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white text-[9px] font-medium tabular-nums shadow-sm">{rowIdx + 1}</span>
+      </div>
+    )
+  }
+
   const renderCell = (cell: string, rowIdx: number, col: LoopColumn, imgIdx: number, cellIdx: number, mode: RenderMode) => {
     const t = col.type ?? "text"
     if (t === "image-url") return renderImageCell(cell, rowIdx, col, imgIdx, cellIdx, mode)
     if (t === "video-url") return renderVideoCell(cell, rowIdx, col, cellIdx, mode)
     if (t === "audio-url") return renderAudioCell(cell, rowIdx, col, cellIdx, mode)
+    if (t === "json") return renderJsonCell(cell, rowIdx, col, cellIdx, mode)
     return renderTextCell(cell, rowIdx, col, cellIdx, mode)
   }
 
@@ -912,6 +982,13 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                                   return (
                                     <span key={col.id} className="text-[10px] text-muted-foreground/60 italic block py-1">
                                       {cell ? "media" : "\u2014"}
+                                    </span>
+                                  )
+                                }
+                                if (colType === "json") {
+                                  return (
+                                    <span key={col.id} className="text-[10px] text-muted-foreground/60 font-mono italic block py-1 truncate">
+                                      {cell ? `{...}` : "\u2014"}
                                     </span>
                                   )
                                 }

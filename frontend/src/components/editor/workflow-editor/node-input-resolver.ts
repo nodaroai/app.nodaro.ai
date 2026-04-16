@@ -363,6 +363,11 @@ export function extractNodeOutputAsList(
     const lines = items.split("\n").filter((l: string) => l.trim().length > 0).map((l: string) => l.trim());
     return lines.length > 0 ? lines : undefined;
   }
+  // JSON array output (e.g. web-scrape generatedJson) — each element is one list item.
+  const jsonArr = data.generatedJson;
+  if (Array.isArray(jsonArr) && jsonArr.length > 0) {
+    return jsonArr.map((item) => (typeof item === "string" ? item : JSON.stringify(item)));
+  }
   // Prefer the node's accumulated generatedResults (persistent, ordered).
   const accumulated = extractAllGeneratedResults(data);
   if (accumulated) return accumulated;
