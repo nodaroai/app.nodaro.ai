@@ -5,11 +5,16 @@ import { optimizedImageUrl } from "@/lib/image"
 // so <img> elements render synchronously without flash on remount.
 const preloaded = new Set<string>()
 
+/** Only our R2/CDN origins need CORS — external URLs (Instagram, etc.) break with crossOrigin. */
+function isInternalUrl(url: string): boolean {
+  return url.includes("cdn.nodaro.ai") || url.includes("r2.cloudflarestorage.com") || url.includes("nodaro-")
+}
+
 function preloadImage(src: string) {
   if (!src || preloaded.has(src)) return
   preloaded.add(src)
   const img = new Image()
-  img.crossOrigin = "anonymous"
+  if (isInternalUrl(src)) img.crossOrigin = "anonymous"
   img.src = src
 }
 
@@ -45,11 +50,13 @@ export function CachedImage({
     }
   }, [effectiveSrc])
 
+  const useCors = effectiveSrc ? isInternalUrl(effectiveSrc) : false
+
   return (
     <img
       ref={imgRef}
       src={effectiveSrc}
-      crossOrigin="anonymous"
+      crossOrigin={useCors ? "anonymous" : undefined}
       alt={alt}
       className={className}
       onClick={onClick}
