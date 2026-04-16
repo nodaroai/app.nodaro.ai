@@ -468,6 +468,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   if (type === "extract-field") {
     return data.extractedText as string | undefined;
   }
+  if (type === "json-process") {
+    const result = (data as { processedResult?: unknown }).processedResult;
+    if (result === undefined || result === null) return undefined;
+    if (Array.isArray(result)) {
+      if (result.length === 0) return undefined;
+      return typeof result[0] === "string" ? result[0] : JSON.stringify(result[0]);
+    }
+    return typeof result === "string" ? result : JSON.stringify(result);
+  }
   if (type === "preview") {
     // Pass through the first visible upstream value
     const items = (data.previewItems as Array<{ value: string; visible: boolean }> | undefined) ?? [];

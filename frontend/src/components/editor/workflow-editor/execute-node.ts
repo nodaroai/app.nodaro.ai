@@ -150,6 +150,7 @@ import type {
   GeneratedResult,
   WebScrapeNodeData,
   ExtractFieldNodeData,
+  JsonProcessNodeData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -188,6 +189,7 @@ import { buildImagePrompt } from "@nodaro-shared/prompt-builder";
 import type { CharacterDef } from "@nodaro-shared/types";
 import { resolveSeparator } from "@nodaro-shared/text-separators";
 import { evaluateJsonPath, stringifyPathResults } from "@nodaro-shared/json-path";
+import { evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList } from "@nodaro-shared/json-evaluator";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 
 // ---------------------------------------------------------------------------
@@ -3916,6 +3918,69 @@ export function executeNode(
       generatedJson: outputType === "json" ? raw : undefined,
     });
     return Promise.resolve(joined);
+  }
+
+  if (node.type === "json-process") {
+    const {
+      nodes: currentNodes,
+      edges: currentEdges,
+      updateNodeData,
+    } = useWorkflowStore.getState();
+    const jpData = node.data as JsonProcessNodeData;
+
+    const inEdge = currentEdges.find((e) => e.target === node.id && e.targetHandle === "in")
+      ?? currentEdges.find((e) => e.target === node.id);
+    if (!inEdge) {
+      updateNodeData(node.id, { processedResult: null, executionStatus: "completed" });
+      return Promise.resolve("");
+    }
+    const src = currentNodes.find((n) => n.id === inEdge.source);
+    if (!src) {
+      updateNodeData(node.id, { processedResult: null, executionStatus: "completed" });
+      return Promise.resolve("");
+    }
+
+    let input: unknown = (src.data as { generatedJson?: unknown }).generatedJson;
+    if (input === undefined) {
+      const text = extractNodeOutput(src, inEdge.sourceHandle ?? undefined);
+      if (typeof text !== "string" || text.length === 0) {
+        updateNodeData(node.id, { processedResult: null, executionStatus: "completed" });
+        return Promise.resolve("");
+      }
+      try {
+        input = JSON.parse(text);
+      } catch {
+        input = text;
+      }
+    }
+
+    const expression = jpData.mode === "advanced"
+      ? (jpData.expression ?? ".")
+      : buildExpressionFromVisual({
+          inputPath: jpData.inputPath ?? "",
+          filters: jpData.filters ?? [],
+          projections: jpData.projections ?? [],
+        });
+
+    const result = evaluateJsonExpression(input, expression);
+    if (!result.ok) {
+      updateNodeData(node.id, {
+        executionStatus: "failed",
+        errorMessage: result.error,
+      });
+      return Promise.reject(new Error(result.error));
+    }
+
+    const processedResult = result.value;
+    const listResults = jsonResultToList(processedResult);
+
+    updateNodeData(node.id, {
+      processedResult,
+      __listResults: listResults,
+      executionStatus: "completed",
+      errorMessage: undefined,
+    });
+    return Promise.resolve(listResults[0] ?? "");
   }
 
   // Preview — collect upstream values and pass through

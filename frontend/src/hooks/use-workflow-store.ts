@@ -73,6 +73,7 @@ export const EXECUTION_DATA_KEYS = new Set([
   "outputResults",
   "shots",
   "result",
+  "processedResult",
   "_upstreamRefresh",
 ])
 

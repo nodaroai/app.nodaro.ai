@@ -6,6 +6,7 @@
 import { ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-constants.js"
 import { resolveSeparator } from "../../../../packages/shared/src/text-separators.js"
 import { evaluateJsonPath, stringifyPathResults } from "../../../../packages/shared/src/json-path.js"
+import { evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, type JsonFilter } from "../../../../packages/shared/src/json-evaluator.js"
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeOutput, NodeExecutionState } from "./types.js"
 import { getPrimaryOutput, extractSourceNodeOutput } from "./output-extractor.js"
 import { isSourceNode, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES } from "./execution-graph.js"
@@ -171,6 +172,55 @@ export function executeExtractField(
     listResults: outputType === "list" ? strings : undefined,
     json: outputType === "json" ? raw : undefined,
   }
+}
+
+export function executeJsonProcess(
+  node: SimpleNode,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): NodeOutput {
+  const data = node.data as Record<string, unknown>
+  const mode = (data.mode as string) ?? "visual"
+
+  const expression = mode === "advanced"
+    ? ((data.expression as string) ?? ".")
+    : buildExpressionFromVisual({
+        inputPath: (data.inputPath as string) ?? "",
+        filters: (data.filters as JsonFilter[]) ?? [],
+        projections: (data.projections as string[]) ?? [],
+      })
+
+  const incoming = edges.find((e) => e.target === node.id)
+  if (!incoming) return { text: "", processedResult: null, listResults: [] }
+
+  const src = allNodes.find((n) => n.id === incoming.source)
+  if (!src) return { text: "", processedResult: null, listResults: [] }
+
+  const state = nodeStates[src.id]
+  let input: unknown
+
+  if (state?.output?.json !== undefined) {
+    input = state.output.json
+  } else {
+    const text = state?.output?.text ?? extractSavedTextFallback(src)
+    if (typeof text !== "string" || text.length === 0) {
+      return { text: "", processedResult: null, listResults: [] }
+    }
+    try {
+      input = JSON.parse(text)
+    } catch {
+      input = text
+    }
+  }
+
+  const result = evaluateJsonExpression(input, expression)
+  if (!result.ok) throw new Error(result.error)
+
+  const processedResult = result.value
+  const listResults = jsonResultToList(processedResult)
+
+  return { text: listResults[0] ?? "", processedResult, listResults }
 }
 
 /** Cheap fallback for source nodes that stash text on data. */

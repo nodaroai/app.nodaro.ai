@@ -17,6 +17,8 @@ export interface NodeOutput {
   json?: unknown
   /** Extract Field node output — newline-joined list of extracted values. */
   extractedText?: string
+  /** JSON Process node output — filtered/transformed JSON value. */
+  processedResult?: unknown
   plan?: Record<string, unknown>
   thumbnailUrl?: string
   sunoTrackId?: string
