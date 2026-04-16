@@ -23,8 +23,7 @@ function ExtractFieldNodeComponent({ id, data, selected }: NodeProps) {
   const fieldLabel = field === "" ? "(whole item)" : field
   const isJsonOutput = nodeData.outputType === "json"
   const listResults = (nodeData as Record<string, unknown>).__listResults as string[] | undefined
-  const itemCount = listResults?.length
-    ?? (nodeData.extractedText ? nodeData.extractedText.split("\n").filter((l) => l.length > 0).length : 0)
+  const itemCount = listResults?.length ?? 0
 
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>
