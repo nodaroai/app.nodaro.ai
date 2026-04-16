@@ -68,6 +68,7 @@ export const EXECUTION_DATA_KEYS = new Set([
   "__listTotal",
   "__listCompleted",
   "__listResults",
+  "generatedJson",
   "subWorkflowProgress",
   "outputResults",
   "shots",
