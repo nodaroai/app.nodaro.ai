@@ -90,11 +90,11 @@ const GENERATE_BUTTON_TYPES = new Set([
 const RUN_BUTTON_TYPES = new Set([
   "merge-video-audio", "combine-videos", "trim-audio", "trim-video",
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "manual-edit", "resize-video", "social-media-format", "adjust-volume",
-  "add-captions", "mix-audio", "preview", "composite",
+  "add-captions", "mix-audio", "composite",
   "sub-workflow",
 ])
 
-const AUTO_EXECUTE_TYPES = new Set(["combine-text", "split-text", "extract-field"])
+const RUN_FROM_HERE_TYPES = new Set(["combine-text", "split-text", "extract-field", "preview", "loop", "list"])
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -219,7 +219,7 @@ describe("RUN_BUTTON_TYPES", () => {
   })
 
   it("does NOT contain auto-execute nodes (they use Run From Here)", () => {
-    for (const type of AUTO_EXECUTE_TYPES) {
+    for (const type of RUN_FROM_HERE_TYPES) {
       expect(RUN_BUTTON_TYPES.has(type)).toBe(false)
     }
   })

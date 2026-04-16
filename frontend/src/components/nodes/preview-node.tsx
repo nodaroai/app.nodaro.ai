@@ -60,7 +60,7 @@ function PreviewNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as PreviewNodeData
   const allItems = nodeData.previewItems ?? []
   const visibleItems = allItems.filter((item) => item.visible !== false)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const status = nodeData.executionStatus ?? "idle"
   const hiddenCount = allItems.length - visibleItems.length
@@ -171,7 +171,7 @@ function PreviewNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         minWidth={220}
         topToolbarContent={
-                      <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+                      <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runFromHere?.(nid)} runFromHere />
         }
         handles={[
           { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
