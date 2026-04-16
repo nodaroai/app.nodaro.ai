@@ -107,18 +107,28 @@ export function extractActorOutput(
     // Project to the fields consumers actually need. Raw Apify posts can be
     // tens of KB each (nested comments, likes, hashtag objects) — keeping the
     // output trim avoids bloating jobs.output_data.
-    const projected = items.map((it) => ({
-      url: it.url,
-      type: it.type,
-      shortCode: it.shortCode,
-      caption: it.caption,
-      displayUrl: it.displayUrl,
-      videoUrl: it.videoUrl,
-      timestamp: it.timestamp,
-      likesCount: it.likesCount,
-      commentsCount: it.commentsCount,
-      ownerUsername: it.ownerUsername,
-    }))
+    const projected = items.map((it) => {
+      // For Sidecar (carousel) posts, extract child media URLs
+      const rawChildren = it.childPosts as Array<Record<string, unknown>> | undefined
+      const childPosts = rawChildren?.map((c) => ({
+        type: c.type,
+        displayUrl: c.displayUrl,
+        videoUrl: c.videoUrl,
+      }))
+      return {
+        url: it.url,
+        type: it.type,
+        shortCode: it.shortCode,
+        caption: it.caption,
+        displayUrl: it.displayUrl,
+        videoUrl: it.videoUrl,
+        timestamp: it.timestamp,
+        likesCount: it.likesCount,
+        commentsCount: it.commentsCount,
+        ownerUsername: it.ownerUsername,
+        ...(childPosts ? { childPosts } : {}),
+      }
+    })
     return { json: projected }
   }
 

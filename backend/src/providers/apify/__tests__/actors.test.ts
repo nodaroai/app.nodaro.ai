@@ -119,6 +119,29 @@ describe("extractActorOutput", () => {
     })
   })
 
+  it("instagram sidecar includes childPosts with media URLs", () => {
+    expect(extractActorOutput("instagram", [
+      {
+        url: "u", shortCode: "sc", caption: "c", displayUrl: "cover",
+        timestamp: "t", likesCount: 5, commentsCount: 1, ownerUsername: "o", type: "Sidecar",
+        childPosts: [
+          { type: "Image", displayUrl: "img1", videoUrl: undefined, extra: "ignored" },
+          { type: "Image", displayUrl: "img2", videoUrl: undefined },
+        ],
+      },
+    ])).toEqual({
+      json: [{
+        url: "u", type: "Sidecar", shortCode: "sc", caption: "c",
+        displayUrl: "cover", videoUrl: undefined, timestamp: "t",
+        likesCount: 5, commentsCount: 1, ownerUsername: "o",
+        childPosts: [
+          { type: "Image", displayUrl: "img1", videoUrl: undefined },
+          { type: "Image", displayUrl: "img2", videoUrl: undefined },
+        ],
+      }],
+    })
+  })
+
   it("tiktok projects posts into json array", () => {
     expect(extractActorOutput("tiktok", [
       {

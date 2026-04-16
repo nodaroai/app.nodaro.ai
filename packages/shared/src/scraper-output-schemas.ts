@@ -15,6 +15,7 @@ export const SCRAPER_OUTPUT_FIELDS: Record<ScraperActorId, readonly string[]> = 
   "instagram":       [
     "url", "shortCode", "caption", "displayUrl", "videoUrl",
     "timestamp", "likesCount", "commentsCount", "ownerUsername", "type",
+    "childPosts",
   ],
   "tiktok":          [
     "id", "webVideoUrl", "videoUrl", "text", "createTime",
