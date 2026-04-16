@@ -4,6 +4,7 @@ import { memo, useEffect, useMemo } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Webhook } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -40,6 +41,8 @@ function WebhookOutputNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as WebhookOutputData
   const updateNodeInternals = useUpdateNodeInternals()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const status = nodeData.executionStatus ?? "idle"
 
   const params = nodeData.params ?? []
   const handles = useMemo(() => buildHandles(params), [params])
@@ -62,8 +65,12 @@ function WebhookOutputNodeComponent({ id, data, selected }: NodeProps) {
         category="output"
         credits={0}
         selected={selected}
+        isRunning={status === "running"}
         hideHeader
         minWidth={220}
+        topToolbarContent={
+          <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+        }
         handles={handles}
       >
       <p className="text-muted-foreground truncate max-w-[180px]">

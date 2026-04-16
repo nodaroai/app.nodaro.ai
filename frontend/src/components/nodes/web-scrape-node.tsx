@@ -4,6 +4,7 @@ import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Globe, Braces } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -32,6 +33,8 @@ function getActorSummary(nodeData: WebScrapeNodeData): string {
 function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as WebScrapeNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const status = nodeData.executionStatus ?? "idle"
 
   const actor = nodeData.actor ?? "google-search"
   const actorLabel = SCRAPER_ACTOR_LABELS[actor]
@@ -52,8 +55,12 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
         category="input"
         credits={credits}
         selected={selected}
+        isRunning={status === "running"}
         minWidth={220}
         hideHeader
+        topToolbarContent={
+          <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+        }
         handles={HANDLES}
       >
         <div className="p-3 flex flex-col gap-1">
