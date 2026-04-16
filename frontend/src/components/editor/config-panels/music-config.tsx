@@ -15,14 +15,14 @@ import {
 import { CachedImage } from "@/components/ui/cached-image"
 import { uploadAudio, downloadYouTubeAudio } from "@/lib/api"
 import type { GenerateMusicData } from "@/types/nodes"
+import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import type { ConfigProps } from "./types"
 
-export function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<GenerateMusicData>) {
+export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateMusicData>) {
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "error">("idle")
   const [ytStatus, setYtStatus] = useState<"idle" | "downloading" | "error">("idle")
 
-  const connectedPrompt = sources.find((s) => s.targetHandle === "in")
   const connectedRef = sources.find((s) => s.targetHandle === "ref-audio")
 
   const handleFileUpload = useCallback(async (file: File) => {
@@ -71,29 +71,15 @@ export function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<Gen
           </SelectContent>
         </Select>
       </div>
-      <div>
-        <div className="flex items-center justify-between gap-1.5">
-          <Label htmlFor="music-prompt">Prompt</Label>
-          <PromptHelperButton nodeType="generate-music" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
-        </div>
-        {connectedPrompt ? (
-          <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
-            <span className="text-muted-foreground">From: </span>
-            <span className="font-medium">{connectedPrompt.label}</span>
-            {connectedPrompt.value && (
-              <p className="mt-1 text-muted-foreground truncate">{connectedPrompt.value}</p>
-            )}
-          </div>
-        ) : (
-          <Textarea
-            id="music-prompt"
-            value={data.prompt}
-            onChange={(e) => onUpdate({ prompt: e.target.value })}
-            placeholder="Describe the music you want..."
-            rows={3}
-          />
-        )}
-      </div>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="generate-music" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
+        <Textarea
+          id="music-prompt"
+          value={data.prompt}
+          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          placeholder="Describe the music you want... (use {} to inject input)"
+          rows={3}
+        />
+      </MappableField>
       {/* Replicate disabled: was musicgen/lyria/!provider, now just non-minimax */}
       {!isMinimax && (
         <div>
@@ -109,16 +95,15 @@ export function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<Gen
         </div>
       )}
       {isMinimax && (
-        <div>
-          <Label htmlFor="music-lyrics">Lyrics</Label>
+        <MappableField field="lyrics" label="Lyrics" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Textarea
             id="music-lyrics"
             value={data.lyrics || ""}
             onChange={(e) => onUpdate({ lyrics: e.target.value })}
-            placeholder="Write lyrics for the song..."
+            placeholder="Write lyrics for the song... (use {} to inject input)"
             rows={4}
           />
-        </div>
+        </MappableField>
       )}
       {isMinimax && (
         <div className="flex flex-col gap-2">
@@ -199,14 +184,12 @@ export function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<Gen
           )}
         </div>
       )}
-      <div>
-        <Label htmlFor="music-genre">Genre</Label>
-        <Input id="music-genre" value={data.genre} onChange={(e) => onUpdate({ genre: e.target.value })} placeholder="e.g. rock, jazz, electronic" />
-      </div>
-      <div>
-        <Label htmlFor="music-mood">Mood</Label>
-        <Input id="music-mood" value={data.mood} onChange={(e) => onUpdate({ mood: e.target.value })} placeholder="e.g. upbeat, melancholic, epic" />
-      </div>
+      <MappableField field="genre" label="Genre" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input id="music-genre" value={data.genre} onChange={(e) => onUpdate({ genre: e.target.value })} placeholder="e.g. rock, jazz, electronic (use {} to inject input)" />
+      </MappableField>
+      <MappableField field="mood" label="Mood" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input id="music-mood" value={data.mood} onChange={(e) => onUpdate({ mood: e.target.value })} placeholder="e.g. upbeat, melancholic, epic (use {} to inject input)" />
+      </MappableField>
       <div className="flex items-center gap-2">
         <input type="checkbox" id="music-instrumental" checked={data.instrumental} onChange={(e) => onUpdate({ instrumental: e.target.checked })} className="h-4 w-4" />
         <Label htmlFor="music-instrumental">Instrumental (no vocals)</Label>

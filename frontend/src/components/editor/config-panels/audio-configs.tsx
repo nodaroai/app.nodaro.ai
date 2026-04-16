@@ -96,20 +96,19 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
       </MappableField>
       <ModelDescriptionHint modelId={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")} />
       {textSource === "direct" && (
-        <div>
-          <Label>Text</Label>
+        <MappableField field="directText" label="Text" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <TagTextarea
             rows={4}
             value={data.directText || ""}
             onChange={(v) => onUpdate({ directText: v })}
-            placeholder="Enter text to convert to speech..."
+            placeholder="Enter text to convert to speech... (use {} to inject input)"
             provider={data.provider}
             nodeRefs={nodeRefs}
             displayMode={variableDisplayMode}
             refMap={refMap}
           />
           <p className="text-[10px] text-muted-foreground mt-1">Type [ or / for audio tags</p>
-        </div>
+        </MappableField>
       )}
       <div>
         <Label>Voice</Label>

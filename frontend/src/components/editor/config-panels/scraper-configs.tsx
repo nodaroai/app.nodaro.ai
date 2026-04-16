@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro-shared/scraper-actors"
 import type { WebScrapeNodeData } from "@/types/nodes"
+import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 
 // Ordered so google-search sits first as the default, followed by the others.
@@ -21,7 +22,7 @@ const ACTOR_OPTIONS: ReadonlyArray<ScraperActorId> = [
   "tiktok",
 ]
 
-export function WebScrapeConfig({ data, onUpdate }: ConfigProps<WebScrapeNodeData>) {
+export function WebScrapeConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<WebScrapeNodeData>) {
   const actor: ScraperActorId = data.actor ?? "google-search"
 
   return (
@@ -49,19 +50,15 @@ export function WebScrapeConfig({ data, onUpdate }: ConfigProps<WebScrapeNodeDat
       {/* Google Search */}
       {actor === "google-search" && (
         <>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="scraper-query">Query</Label>
+          <MappableField field="query" label="Query" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Input
               id="scraper-query"
               value={data.query ?? ""}
               onChange={(e) => onUpdate({ query: e.target.value })}
-              placeholder="e.g. ai news today"
+              placeholder="e.g. ai news today (use {} to inject input)"
               className="text-sm"
             />
-            <p className="text-[11px] text-muted-foreground">
-              Use <code className="rounded bg-muted px-1">{"{}"}</code> to inject incoming text
-            </p>
-          </div>
+          </MappableField>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="scraper-max-results">Max results</Label>
             <Input
@@ -95,19 +92,15 @@ export function WebScrapeConfig({ data, onUpdate }: ConfigProps<WebScrapeNodeDat
       {/* Content Crawler */}
       {actor === "content-crawler" && (
         <>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="scraper-url">Start URL</Label>
+          <MappableField field="url" label="Start URL" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Input
               id="scraper-url"
               value={data.url ?? ""}
               onChange={(e) => onUpdate({ url: e.target.value })}
-              placeholder="https://example.com"
+              placeholder="https://example.com (use {} to inject input)"
               className="text-sm"
             />
-            <p className="text-[11px] text-muted-foreground">
-              Use <code className="rounded bg-muted px-1">{"{}"}</code> to inject incoming text
-            </p>
-          </div>
+          </MappableField>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="scraper-mode">Crawl mode</Label>
             <Select
@@ -129,23 +122,19 @@ export function WebScrapeConfig({ data, onUpdate }: ConfigProps<WebScrapeNodeDat
       {/* Instagram / TikTok */}
       {(actor === "instagram" || actor === "tiktok") && (
         <>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="scraper-target">Profile or post URL</Label>
+          <MappableField field="target" label="Profile or post URL" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Input
               id="scraper-target"
               value={data.target ?? ""}
               onChange={(e) => onUpdate({ target: e.target.value })}
               placeholder={
                 actor === "instagram"
-                  ? "https://instagram.com/nasa"
-                  : "https://tiktok.com/@username"
+                  ? "https://instagram.com/nasa (use {} to inject input)"
+                  : "https://tiktok.com/@username (use {} to inject input)"
               }
               className="text-sm"
             />
-            <p className="text-[11px] text-muted-foreground">
-              Use <code className="rounded bg-muted px-1">{"{}"}</code> to inject incoming text
-            </p>
-          </div>
+          </MappableField>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="scraper-results-limit">Results limit</Label>
             <Input
