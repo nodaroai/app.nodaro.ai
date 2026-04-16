@@ -21,6 +21,7 @@ function ExtractFieldNodeComponent({ id, data, selected }: NodeProps) {
 
   const field = nodeData.field?.trim() ?? ""
   const fieldLabel = field === "" ? "(whole item)" : field
+  const isJsonOutput = nodeData.outputType === "json"
   const itemCount = nodeData.extractedText
     ? nodeData.extractedText.split("\n").filter((l) => l.length > 0).length
     : 0
@@ -69,7 +70,7 @@ function ExtractFieldNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       <HandleIcon icon={<Braces />} color="indigo" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<FileText />} color="steel" top="20px" />
+      <HandleIcon icon={isJsonOutput ? <Braces /> : <FileText />} color={isJsonOutput ? "indigo" : "steel"} top="20px" />
     </div>
   )
 }

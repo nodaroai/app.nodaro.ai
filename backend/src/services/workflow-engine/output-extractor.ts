@@ -637,7 +637,11 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // needing a new branch in input-resolver.
   if (type === "extract-field") {
     const extractedText = data.extractedText as string | undefined
-    return extractedText === undefined ? undefined : { extractedText, text: extractedText }
+    if (extractedText === undefined) return undefined
+    const json = data.generatedJson as unknown
+    return json !== undefined
+      ? { extractedText, text: extractedText, json }
+      : { extractedText, text: extractedText }
   }
 
   if (type === "combine-text") {

@@ -2166,8 +2166,12 @@ export type ExtractFieldNodeData = {
   mode: "dropdown" | "custom"
   /** Dot-notation path. Empty string = whole-item mode (returns each array element). */
   field: string
+  /** Output type: "text" stringifies results, "json" preserves structured objects. */
+  outputType?: "text" | "json"
   /** Newline-joined list of extracted values, populated after execution. */
   extractedText?: string
+  /** Raw extracted JSON (array of values), populated when outputType is "json". */
+  generatedJson?: unknown
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
 }

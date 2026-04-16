@@ -357,6 +357,23 @@ export function ExtractFieldConfig({ data, onUpdate, sources }: ConfigProps<Extr
         </div>
       )}
 
+      <div>
+        <Label>Output Type</Label>
+        <Select
+          value={data.outputType ?? "text"}
+          onValueChange={(v) => onUpdate({ outputType: v as "text" | "json" })}
+        >
+          <SelectTrigger aria-label="Output type"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="text">Text</SelectItem>
+            <SelectItem value="json">JSON</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Use JSON when extracted values are objects and you need to chain Extract Fields or feed a loop with structured data.
+        </p>
+      </div>
+
       {data.extractedText && (
         <div>
           <Label>Output Preview</Label>

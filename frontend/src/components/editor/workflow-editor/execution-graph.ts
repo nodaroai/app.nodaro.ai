@@ -466,6 +466,9 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     return data.combinedText as string | undefined;
   }
   if (type === "extract-field") {
+    // When outputType is "json", stringify for text consumers (same as web-scrape json handle)
+    const json = (data as Record<string, unknown>).generatedJson;
+    if (json !== undefined) return JSON.stringify(json);
     return data.extractedText as string | undefined;
   }
   if (type === "preview") {
