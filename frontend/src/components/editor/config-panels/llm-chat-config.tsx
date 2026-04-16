@@ -12,10 +12,11 @@ import {
 } from "@/components/ui/accordion"
 import type { LLMChatData } from "@/types/nodes"
 import { LlmModelSelect } from "./llm-model-select"
+import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import type { ConfigProps } from "./types"
 
-export function LLMChatConfig({ data, onUpdate }: ConfigProps<LLMChatData>) {
+export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<LLMChatData>) {
   const activeIdx = data.activeResultIndex ?? 0
   const results = data.generatedResults ?? []
 
@@ -31,34 +32,26 @@ export function LLMChatConfig({ data, onUpdate }: ConfigProps<LLMChatData>) {
       </div>
 
       {/* System Prompt */}
-      <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-2">
-        <div className="flex items-center justify-between gap-1.5">
-          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">System Prompt</Label>
-          <PromptHelperButton nodeType="llm-chat" currentPrompt={data.systemPrompt || ""} onAccept={(prompt) => onUpdate({ systemPrompt: prompt })} />
-        </div>
+      <MappableField field="systemPrompt" label="System Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="llm-chat" currentPrompt={data.systemPrompt || ""} onAccept={(prompt) => onUpdate({ systemPrompt: prompt })} />}>
         <Textarea
           rows={4}
           value={data.systemPrompt}
           onChange={(e) => onUpdate({ systemPrompt: e.target.value })}
-          placeholder="You are a helpful assistant..."
+          placeholder="You are a helpful assistant... (use {} to inject input)"
           className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-sm font-mono resize-y"
         />
-      </div>
+      </MappableField>
 
       {/* User Prompt */}
-      <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-2">
-        <div className="flex items-center justify-between gap-1.5">
-          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">User Prompt</Label>
-          <PromptHelperButton nodeType="llm-chat" currentPrompt={data.userInput || ""} onAccept={(prompt) => onUpdate({ userInput: prompt })} />
-        </div>
+      <MappableField field="userInput" label="User Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="llm-chat" currentPrompt={data.userInput || ""} onAccept={(prompt) => onUpdate({ userInput: prompt })} />}>
         <Textarea
           rows={4}
           value={data.userInput}
           onChange={(e) => onUpdate({ userInput: e.target.value })}
-          placeholder="Enter your prompt..."
+          placeholder="Enter your prompt... (use {} to inject input)"
           className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-sm resize-y"
         />
-      </div>
+      </MappableField>
 
       {/* Settings */}
       <Accordion type="single" collapsible defaultValue="settings">
