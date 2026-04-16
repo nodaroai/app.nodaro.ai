@@ -1710,7 +1710,7 @@ export async function webScrape(params: {
   target?: string
   resultsLimit?: number
   workflowId?: string
-}): Promise<{ jobId: string; text: string; imageUrl?: string; videoUrl?: string }> {
+}): Promise<{ jobId: string; json: unknown }> {
   const res = await fetch(`${API_BASE_URL}/v1/web-scrape`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },

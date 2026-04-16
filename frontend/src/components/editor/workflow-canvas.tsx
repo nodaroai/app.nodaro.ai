@@ -586,12 +586,17 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     setConnectingFromType(null)
   }, [])
 
-  // Prevent composition handles from connecting to non-Render-Video nodes
   const isValidConnection = useCallback<IsValidConnection>(
     (connection) => {
       if (connection.sourceHandle === "composition") {
         const targetNode = getNode(connection.target ?? "")
         return targetNode?.type === "render-video"
+      }
+      // Block json output from connecting to media-only inputs
+      if (connection.sourceHandle === "json") {
+        const th = connection.targetHandle ?? ""
+        const mediaOnly = new Set(["image", "video", "audio", "startFrame", "endFrame", "video1", "video2", "video3", "video4", "audio1", "audio2", "audio3", "audio4", "audio5", "ref-audio", "silent-video"])
+        if (mediaOnly.has(th)) return false
       }
       return true
     },

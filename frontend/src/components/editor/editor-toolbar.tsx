@@ -305,9 +305,14 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         case "web-scrape":
           data.generatedResults = []
           data.activeResultIndex = 0
-          data.generatedText = undefined
-          data.generatedImageUrl = undefined
-          data.generatedVideoUrl = undefined
+          data.generatedJson = undefined
+          data.executionStatus = undefined
+          data.errorMessage = undefined
+          break
+
+        case "extract-field":
+          data.extractedText = undefined
+          data.__listResults = undefined
           data.executionStatus = undefined
           data.errorMessage = undefined
           break

@@ -177,6 +177,7 @@ describe("NODE_DEFINITIONS essential types", () => {
       "video-upscale",
       "combine-text",
       "split-text",
+      "extract-field",
     ]
     for (const t of expected) {
       expect(allTypes.has(t as SceneNodeType), `Missing Processing type: ${t}`).toBe(true)

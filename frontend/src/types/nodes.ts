@@ -2105,10 +2105,8 @@ export type WebScrapeNodeData = {
   // execution state
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
-  // execution result
-  generatedText?: string
-  generatedImageUrl?: string
-  generatedVideoUrl?: string
+  // execution result — single structured json output (matches backend ActorOutput)
+  generatedJson?: unknown
 }
 
 // --- Combine Text Node Data ---
@@ -2154,6 +2152,21 @@ export type SplitTextData = {
   trimWhitespace: boolean
   removeEmpty: boolean
   splitResults?: string[]
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
+// --- Extract Field Node Data ---
+
+export type ExtractFieldNodeData = {
+  [key: string]: unknown
+  label: string
+  /** UX mode: dropdown of known scraper fields vs free-text path. */
+  mode: "dropdown" | "custom"
+  /** Dot-notation path. Empty string = whole-item mode (returns each array element). */
+  field: string
+  /** Newline-joined list of extracted values, populated after execution. */
+  extractedText?: string
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
 }
@@ -2517,6 +2530,7 @@ export type SceneNodeData =
   | LoopNodeData
   | CombineTextNodeData
   | SplitTextData
+  | ExtractFieldNodeData
   | PreviewNodeData
   | StickyNoteData
   | TeleportSendData
@@ -2624,6 +2638,7 @@ export type SceneNodeType =
   | "ai-writer"
   | "combine-text"
   | "split-text"
+  | "extract-field"
   | "preview"
   | "sticky-note"
   | "teleport-send"
@@ -2741,7 +2756,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "input",
     creditCost: 5,
     inputs: ["in"],
-    outputs: ["text", "image", "video"],
+    outputs: ["json"],
     defaultData: { label: "Web Scrape", actor: "google-search", query: "" } as WebScrapeNodeData,
   },
   {
@@ -4072,6 +4087,19 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       trimWhitespace: true,
       removeEmpty: true,
     } as SplitTextData,
+  },
+  {
+    type: "extract-field",
+    label: "Extract Field",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["text"],
+    defaultData: {
+      label: "Extract Field",
+      mode: "custom",
+      field: "",
+    } as ExtractFieldNodeData,
   },
   {
     type: "preview",

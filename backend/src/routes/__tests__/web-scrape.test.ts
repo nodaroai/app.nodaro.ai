@@ -52,9 +52,9 @@ describe("POST /v1/web-scrape", () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it("200 with text output for google-search happy path", async () => {
+  it("200 with json output for google-search happy path", async () => {
     const { runScraper } = await import("../../providers/apify/scraper.js")
-    vi.mocked(runScraper).mockResolvedValue({ text: "[]" })
+    vi.mocked(runScraper).mockResolvedValue({ json: [] })
     const app = await buildTestApp()
     const res = await app.inject({
       method: "POST", url: "/v1/web-scrape",
@@ -63,7 +63,7 @@ describe("POST /v1/web-scrape", () => {
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(body.jobId).toBe("job-1")
-    expect(body.text).toBe("[]")
+    expect(body.json).toEqual([])
   })
 
   it("content-crawler requires url", async () => {

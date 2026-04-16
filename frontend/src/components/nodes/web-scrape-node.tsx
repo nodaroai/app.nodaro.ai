@@ -2,7 +2,7 @@
 
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Globe, Type, ImageIcon, Video } from "lucide-react"
+import { Globe, Braces } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
@@ -13,9 +13,7 @@ import type { WebScrapeNodeData } from "@/types/nodes"
 
 const HANDLES = [
   { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-  { id: "text", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
-  { id: "image", type: "source" as const, position: Position.Right, customStyle: { top: '50px', right: '-29px' }, hideHandle: true },
-  { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: '80px', right: '-29px' }, hideHandle: true },
+  { id: "json", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
 ] as const
 
 function getActorSummary(nodeData: WebScrapeNodeData): string {
@@ -68,9 +66,7 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       <HandleIcon icon={<Globe />} color="cyan" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<Type />} top="20px" />
-      <HandleIcon icon={<ImageIcon />} top="50px" />
-      <HandleIcon icon={<Video />} top="80px" />
+      <HandleIcon icon={<Braces />} color="indigo" top="20px" />
     </div>
   )
 }

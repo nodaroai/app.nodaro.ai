@@ -34,6 +34,9 @@ export const HANDLE_COMPATIBILITY: Record<string, readonly string[]> = {
   objectRef: ["objectRef"],
   locationRef: ["locationRef"],
 
+  // JSON outputs → json or text-like inputs (auto-stringify at runtime)
+  json: ["json", "in", "text", "prompt"],
+
   // Specialized
   voiceId: ["voiceId"],
   composition: ["composition"],

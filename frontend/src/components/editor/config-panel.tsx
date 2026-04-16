@@ -121,6 +121,7 @@ import {
   SaveToStorageConfig,
   WebhookOutputConfig,
   SplitTextConfig,
+  ExtractFieldConfig,
   PreviewConfig,
   TeleporterConfig,
   RouterConfig,
@@ -219,6 +220,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "video-upscale": "Upscale Video",
   "combine-text": "Combine Text",
   "split-text": "Split Text",
+  "extract-field": "Extract Field",
   "preview": "Preview",
   "loop": "Table",
   "save-to-storage": "Save to Storage",
@@ -270,18 +272,18 @@ export const GENERATE_BUTTON_TYPES = new Set([
 ])
 
 export const RUN_BUTTON_TYPES = new Set([
-  "manual-edit", "combine-text", "split-text", "preview", "composite",
+  "manual-edit", "combine-text", "split-text", "extract-field", "preview", "composite",
   "sub-workflow", "router",
 ])
 
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video"])
 
-// Node types that produce media results (excludes text-only nodes like combine-text, split-text, sub-workflow, social posts)
+// Node types that produce media results (excludes text-only nodes like combine-text, split-text, extract-field, sub-workflow, social posts)
 const RESULT_PRODUCING_TYPES = new Set([
   ...GENERATE_BUTTON_TYPES,
   ...RUN_BUTTON_TYPES,
 ].filter(t =>
-  t !== "combine-text" && t !== "split-text" && t !== "preview" && t !== "sub-workflow" &&
+  t !== "combine-text" && t !== "split-text" && t !== "extract-field" && t !== "preview" && t !== "sub-workflow" &&
   t !== "instagram-post" && t !== "tiktok-post" && t !== "youtube-upload" &&
   t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post" && t !== "telegram-post" &&
   t !== "image-to-text" && t !== "qa-check" && t !== "transcribe" && t !== "llm-chat"
@@ -398,6 +400,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "manual-edit": return <ManualEditConfig {...configProps} />
     case "combine-text": return <CombineTextConfig {...configProps} />
     case "split-text": return <SplitTextConfig {...configProps} />
+    case "extract-field": return <ExtractFieldConfig {...configProps} />
     case "preview": return <PreviewConfig {...configProps} />
     case "teleport-send": case "teleport-receive": return <TeleporterConfig {...configProps} nodeType={nodeType} />
     case "router": return <RouterConfig {...configProps} />

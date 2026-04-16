@@ -73,20 +73,19 @@ export function buildActorInput(args: ActorArgs): Record<string, unknown> {
 }
 
 export interface ActorOutput {
-  text: string
-  imageUrl?: string
-  videoUrl?: string
+  json: unknown
 }
 
-export function extractActorOutput(actor: ScraperActorId, items: Record<string, unknown>[]): ActorOutput {
+export function extractActorOutput(
+  actor: ScraperActorId,
+  items: Record<string, unknown>[],
+): ActorOutput {
   if (actor === "content-crawler") {
-    const chunks: string[] = []
-    for (const it of items) {
-      const md = (it.markdown as string) ?? (it.text as string) ?? ""
-      const url = (it.url as string) ?? ""
-      if (md) chunks.push(url ? `## ${url}\n\n${md}` : md)
-    }
-    return { text: chunks.join("\n\n---\n\n") }
+    const pages = items.map((it) => ({
+      url: (it.url as string) ?? "",
+      markdown: (it.markdown as string) ?? (it.text as string) ?? "",
+    }))
+    return { json: { pages } }
   }
 
   if (actor === "google-search") {
@@ -101,11 +100,10 @@ export function extractActorOutput(actor: ScraperActorId, items: Record<string, 
         })
       }
     }
-    return { text: JSON.stringify(flat) }
+    return { json: flat }
   }
 
   if (actor === "instagram") {
-    const first = items[0] ?? {}
     // Project to the fields consumers actually need. Raw Apify posts can be
     // tens of KB each (nested comments, likes, hashtag objects) — keeping the
     // output trim avoids bloating jobs.output_data.
@@ -121,15 +119,10 @@ export function extractActorOutput(actor: ScraperActorId, items: Record<string, 
       commentsCount: it.commentsCount,
       ownerUsername: it.ownerUsername,
     }))
-    return {
-      text: JSON.stringify(projected),
-      imageUrl: (first.displayUrl as string) || undefined,
-      videoUrl: (first.videoUrl as string) || undefined,
-    }
+    return { json: projected }
   }
 
   // tiktok
-  const first = items[0] ?? {}
   const projected = items.map((it) => ({
     id: it.id,
     webVideoUrl: it.webVideoUrl,
@@ -143,8 +136,5 @@ export function extractActorOutput(actor: ScraperActorId, items: Record<string, 
     authorMeta: it.authorMeta,
     musicMeta: it.musicMeta,
   }))
-  return {
-    text: JSON.stringify(projected),
-    videoUrl: (first.videoUrl as string) || undefined,
-  }
+  return { json: projected }
 }

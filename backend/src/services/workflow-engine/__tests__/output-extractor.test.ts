@@ -250,11 +250,19 @@ describe("getPrimaryOutput", () => {
     expect(getPrimaryOutput(output, "voice-design", "voiceId")).toBe("voice-123")
   })
 
-  it("routes web-scrape handles to text/image/video fields", () => {
-    const output: NodeOutput = { text: "[]", imageUrl: "ig.jpg", videoUrl: "tt.mp4" }
-    expect(getPrimaryOutput(output, "web-scrape", "text")).toBe("[]")
-    expect(getPrimaryOutput(output, "web-scrape", "image")).toBe("ig.jpg")
-    expect(getPrimaryOutput(output, "web-scrape", "video")).toBe("tt.mp4")
+  it("routes web-scrape json handle to stringified json output", () => {
+    const output: NodeOutput = { json: [{ title: "t", url: "u" }] }
+    expect(getPrimaryOutput(output, "web-scrape", "json")).toBe(
+      JSON.stringify([{ title: "t", url: "u" }]),
+    )
+  })
+
+  it("web-scrape returns undefined when json is absent", () => {
+    expect(getPrimaryOutput({}, "web-scrape", "json")).toBeUndefined()
+  })
+
+  it("routes extract-field to extractedText", () => {
+    expect(getPrimaryOutput({ extractedText: "line1\nline2" }, "extract-field")).toBe("line1\nline2")
   })
 
   it("routes qa-check approved handle", () => {
@@ -361,20 +369,28 @@ describe("extractSavedNodeOutput", () => {
     expect(extractSavedNodeOutput(n)?.text).toBe("written text")
   })
 
-  it("extracts web-scrape multi-handle output", () => {
+  it("extracts web-scrape json output", () => {
     const n = node("1", "web-scrape", {
-      generatedText: "scraped markdown",
-      generatedImageUrl: "https://cdn.example/first.jpg",
-      generatedVideoUrl: "https://cdn.example/first.mp4",
+      generatedJson: { pages: [{ url: "u", markdown: "m" }] },
     })
     const result = extractSavedNodeOutput(n)
-    expect(result?.text).toBe("scraped markdown")
-    expect(result?.imageUrl).toBe("https://cdn.example/first.jpg")
-    expect(result?.videoUrl).toBe("https://cdn.example/first.mp4")
+    expect(result?.json).toEqual({ pages: [{ url: "u", markdown: "m" }] })
   })
 
   it("returns undefined for web-scrape before execution", () => {
     const n = node("1", "web-scrape", {})
+    expect(extractSavedNodeOutput(n)).toBeUndefined()
+  })
+
+  it("extracts extract-field output with text fallback", () => {
+    const n = node("1", "extract-field", { extractedText: "line1\nline2" })
+    const result = extractSavedNodeOutput(n)
+    expect(result?.extractedText).toBe("line1\nline2")
+    expect(result?.text).toBe("line1\nline2")
+  })
+
+  it("returns undefined for extract-field before execution", () => {
+    const n = node("1", "extract-field", {})
     expect(extractSavedNodeOutput(n)).toBeUndefined()
   })
 

@@ -149,6 +149,7 @@ import type {
   QACheckData,
   GeneratedResult,
   WebScrapeNodeData,
+  ExtractFieldNodeData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -185,6 +186,7 @@ import {
 import { buildImagePrompt } from "@nodaro-shared/prompt-builder";
 import type { CharacterDef } from "@nodaro-shared/types";
 import { resolveSeparator } from "@nodaro-shared/text-separators";
+import { evaluateJsonPath, stringifyPathResults } from "@nodaro-shared/json-path";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 
 // ---------------------------------------------------------------------------
@@ -2279,12 +2281,12 @@ export function executeNode(
       .then((res) => {
         updateNodeData(node.id, {
           executionStatus: "completed",
-          generatedText: res.text,
-          generatedImageUrl: res.imageUrl,
-          generatedVideoUrl: res.videoUrl,
+          generatedJson: res.json,
         });
         guardedToast.success("Web Scrape completed");
-        return res.text ?? "";
+        // Return stringified JSON for callers that expect a string — same coercion
+        // getPrimaryOutput uses on the backend.
+        return res.json === undefined ? "" : JSON.stringify(res.json);
       })
       .catch((err: Error) => {
         updateNodeData(node.id, {
@@ -3844,6 +3846,60 @@ export function executeNode(
       __listTotal: parts.length,
     });
     return Promise.resolve("");
+  }
+
+  if (node.type === "extract-field") {
+    const {
+      nodes: currentNodes,
+      edges: currentEdges,
+      updateNodeData,
+    } = useWorkflowStore.getState();
+    const extractData = node.data as ExtractFieldNodeData;
+    const path = (extractData.field ?? "").trim();
+
+    // Find the single upstream edge on `in`.
+    const inEdge = currentEdges.find((e) => e.target === node.id && e.targetHandle === "in")
+      ?? currentEdges.find((e) => e.target === node.id);
+    if (!inEdge) {
+      updateNodeData(node.id, { extractedText: "", executionStatus: "completed" });
+      return Promise.resolve("");
+    }
+    const src = currentNodes.find((n) => n.id === inEdge.source);
+    if (!src) {
+      updateNodeData(node.id, { extractedText: "", executionStatus: "completed" });
+      return Promise.resolve("");
+    }
+
+    // Prefer structured json from the source node's data (web-scrape's generatedJson).
+    let value: unknown = (src.data as { generatedJson?: unknown }).generatedJson;
+
+    // Fall back to the upstream's text output (for text-prompt, llm-chat, etc.) and JSON.parse it.
+    if (value === undefined) {
+      const text = extractNodeOutput(src, inEdge.sourceHandle ?? undefined);
+      if (typeof text !== "string" || text.length === 0) {
+        updateNodeData(node.id, { extractedText: "", executionStatus: "completed" });
+        return Promise.resolve("");
+      }
+      try {
+        value = JSON.parse(text);
+      } catch {
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: "Input is not valid JSON",
+        });
+        return Promise.reject(new Error("Input is not valid JSON"));
+      }
+    }
+
+    const raw = evaluateJsonPath(value ?? null, path);
+    const strings = stringifyPathResults(raw);
+    const joined = strings.join("\n");
+    updateNodeData(node.id, {
+      extractedText: joined,
+      executionStatus: "completed",
+      __listResults: strings,
+    });
+    return Promise.resolve(joined);
   }
 
   // Preview — collect upstream values and pass through

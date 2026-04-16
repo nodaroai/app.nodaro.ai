@@ -5,6 +5,7 @@
 
 import { ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-constants.js"
 import { resolveSeparator } from "../../../../packages/shared/src/text-separators.js"
+import { evaluateJsonPath, stringifyPathResults } from "../../../../packages/shared/src/json-path.js"
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeOutput, NodeExecutionState } from "./types.js"
 import { getPrimaryOutput, extractSourceNodeOutput } from "./output-extractor.js"
 import { isSourceNode, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES } from "./execution-graph.js"
@@ -111,6 +112,69 @@ export function executeSplitText(
     splitResults,
     listResults: splitResults,
   }
+}
+
+/**
+ * Execute extract-field node: parse JSON from upstream, apply dot-path,
+ * emit newline-joined list of values.
+ *
+ * Input source semantics:
+ *   - `json` source: read state.output.json directly (no parse).
+ *   - `text` source: JSON.parse; throw on invalid JSON.
+ *
+ * Values:
+ *   - null/undefined → skipped
+ *   - string → as-is
+ *   - number/boolean → String(value)
+ *   - object/array at leaf → JSON.stringify
+ */
+export function executeExtractField(
+  node: SimpleNode,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): NodeOutput {
+  const path = ((node.data.field as string) ?? "").trim()
+
+  const incoming = edges.find((e) => e.target === node.id)
+  if (!incoming) {
+    return { extractedText: "", text: "", listResults: [] }
+  }
+  const src = allNodes.find((n) => n.id === incoming.source)
+  if (!src) {
+    return { extractedText: "", text: "", listResults: [] }
+  }
+  const state = nodeStates[src.id]
+
+  let value: unknown
+  if (state?.output?.json !== undefined) {
+    value = state.output.json
+  } else {
+    const text = state?.output?.text ?? extractSavedTextFallback(src)
+    if (typeof text !== "string" || text.length === 0) {
+      return { extractedText: "", text: "", listResults: [] }
+    }
+    try {
+      value = JSON.parse(text)
+    } catch {
+      throw new Error("Input is not valid JSON")
+    }
+  }
+
+  const raw = evaluateJsonPath(value, path)
+  const strings = stringifyPathResults(raw)
+  const joined = strings.join("\n")
+  return { extractedText: joined, text: joined, listResults: strings }
+}
+
+/** Cheap fallback for source nodes that stash text on data. */
+function extractSavedTextFallback(src: SimpleNode): string | undefined {
+  const data = src.data as Record<string, unknown>
+  const candidates = [data.text, data.generatedText, data.combinedText]
+  for (const c of candidates) {
+    if (typeof c === "string" && c.length > 0) return c
+  }
+  return undefined
 }
 
 /**
