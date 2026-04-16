@@ -49,17 +49,20 @@ vi.mock("lucide-react", () => {
 })
 
 vi.mock("@/hooks/use-workflow-store", () => ({
+  EXECUTION_DATA_KEYS: new Set(["executionStatus"]),
   useWorkflowStore: Object.assign(
     (selector: any) =>
       selector({
         updateNodeData: () => {},
         runSingleNode: () => {},
+        runFromHere: () => {},
         selectNode: () => {},
         duplicateNode: () => {},
         newNodeIds: new Set(),
         clearNewNode: () => {},
         nodes: [],
         edges: [],
+        loadGeneration: 0,
       }),
     { getState: () => ({ nodes: [], edges: [] }) },
   ),

@@ -59,6 +59,7 @@ vi.mock("lucide-react", async (importOriginal) => {
 })
 
 vi.mock("@/hooks/use-workflow-store", () => ({
+  EXECUTION_DATA_KEYS: new Set(["executionStatus"]),
   useWorkflowStore: Object.assign(
     (selector: any) =>
       selector({
