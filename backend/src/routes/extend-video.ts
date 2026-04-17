@@ -26,16 +26,21 @@ const extendVideoBody = z.object({
   quality: z.enum(["720p", "1080p"]).optional(), // Runway only
 })
 
+// Resolve the credit identifier used by both the preHandler check and the
+// downstream credit reservation. Keeping these in sync is critical — a
+// divergence would charge the preHandler's price but reserve at a different
+// price, which can let under-funded users through or over-charge paying ones.
+function resolveExtendVideoIdentifier(body: Record<string, unknown> | undefined): string {
+  const provider = (body?.provider as string) ?? "veo-extend"
+  if (provider === "veo-extend" && body?.model === "quality") {
+    return "veo-extend:quality"
+  }
+  return provider
+}
+
 export async function extendVideoRoutes(app: FastifyInstance) {
   app.post("/v1/extend-video", {
-    preHandler: creditGuard((req) => {
-      const body = req.body as Record<string, unknown>
-      const provider = (body?.provider as string) ?? "veo-extend"
-      if (provider === "veo-extend" && body?.model === "quality") {
-        return "veo-extend:quality"
-      }
-      return provider
-    }),
+    preHandler: creditGuard((req) => resolveExtendVideoIdentifier(req.body as Record<string, unknown> | undefined)),
   }, async (req, reply) => {
     const parsed = extendVideoBody.safeParse(req.body)
     if (!parsed.success) {
@@ -82,7 +87,12 @@ export async function extendVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const reservation = await reserveCreditsForJob(req, reply, job.id, provider)
+    const reservation = await reserveCreditsForJob(
+      req,
+      reply,
+      job.id,
+      resolveExtendVideoIdentifier(req.body as Record<string, unknown> | undefined),
+    )
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 

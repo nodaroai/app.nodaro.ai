@@ -2707,14 +2707,16 @@ describe("suno-upload-extend", () => {
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
     expect(mockSunoUploadExtendApi).toHaveBeenCalledWith({
-      audioUrl: "http://clip.mp3",
+      // Route schema requires `uploadUrl` (not legacy `audioUrl`) and numeric
+      // `continueAt`; reshaped in fix/dag-execution-parity.
+      uploadUrl: "http://clip.mp3",
+      continueAt: 60,
       prompt: "extend the chorus",
       model: "chirp-v4",
       style: "pop",
       title: "My Song",
       negativeStyle: undefined,
       vocalGender: undefined,
-      continueAt: 60,
       defaultParamFlag: false,
       userId: "u1",
     })

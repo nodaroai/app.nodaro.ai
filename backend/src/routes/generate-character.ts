@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { buildCharacterPrompt } from "../../../packages/shared/src/entity-prompts.js"
 
 const generateCharacterBody = z.object({
   name: z.string().min(1).max(200),
@@ -40,15 +41,7 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
 
     const modelIdentifier = parsed.data.provider
 
-    // Build single front portrait prompt
-    const charDesc = [name, gender, description].filter(Boolean).join(", ")
-    const outfitDesc = baseOutfit ? `, wearing ${baseOutfit}` : ""
-    const styleDesc = style ?? "realistic"
-    const prompt = [
-      `${charDesc}${outfitDesc},`,
-      `${styleDesc} style, front view, looking at camera,`,
-      "full body portrait, 4k, highly detailed, clean background.",
-    ].join(" ")
+    const prompt = buildCharacterPrompt({ name, description, gender, style, baseOutfit })
 
     const { data: job, error } = await supabase
       .from("jobs")

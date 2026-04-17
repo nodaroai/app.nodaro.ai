@@ -60,15 +60,18 @@ const SYNC_HTTP_NODES = new Set([
   "web-scrape",
 ])
 
-// Maps node type to internal route path
-const SYNC_HTTP_ROUTES: Record<string, string> = {
+// Maps node type to internal route path.
+// NOTE: these must exactly match the paths registered in each route file.
+// When renaming routes, update this map in the same change. Exported for
+// testing so a regression test can assert every entry is actually routable.
+export const SYNC_HTTP_ROUTES: Record<string, string> = {
   "ai-writer": "/v1/ai-writer/generate",
   "llm-chat": "/v1/llm-chat/generate",
-  "video-composer": "/v1/scene-graph-ai/generate",
-  "after-effects": "/v1/after-effects-ai/generate",
-  "lottie-overlay": "/v1/lottie-overlay-ai/generate",
-  "3d-title": "/v1/three-d-title-ai/generate",
-  "motion-graphics": "/v1/motion-graphics-ai/generate",
+  "video-composer": "/v1/scene-graph/generate",
+  "after-effects": "/v1/after-effects/generate",
+  "lottie-overlay": "/v1/lottie-overlay/generate",
+  "3d-title": "/v1/3d-title/generate",
+  "motion-graphics": "/v1/motion-graphics/generate",
   "image-to-text": "/v1/image-to-text/describe",
   "suno-style-boost": "/v1/suno/style-boost",
   "qa-check": "/v1/qa-check",
@@ -293,7 +296,8 @@ async function executeSyncHttpNode(
   }
 }
 
-function buildSyncHttpBody(
+// Exported for testing so regression tests can assert sync-HTTP body shape.
+export function buildSyncHttpBody(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
   ctx: OrchestratorContext,
@@ -358,7 +362,8 @@ function buildSyncHttpBody(
     case "after-effects":
       return {
         prompt: resolvedInputs.prompt || data.effectPrompt || data.prompt,
-        videoUrl: resolvedInputs.videoUrl || data.sourceVideoUrl,
+        // Route schema requires `inputVideoUrl`; sending `videoUrl` fails Zod validation.
+        inputVideoUrl: resolvedInputs.videoUrl || data.sourceVideoUrl || data.inputVideoUrl,
         fps: data.fps,
         width: data.width,
         height: data.height,
@@ -368,16 +373,17 @@ function buildSyncHttpBody(
       }
 
     case "lottie-overlay": {
-      // Collect lottie asset URLs from edges with targetHandle "lottie" (matches frontend)
-      const lottieAssets: Array<{ url: string; name?: string }> = []
-      if (data.lottieAssets) {
-        // If already stored on node data
-        lottieAssets.push(...(data.lottieAssets as Array<{ url: string; name?: string }>))
-      }
+      // Lottie assets come from upstream edges with targetHandle "lottie" (resolved
+      // by input-resolver into resolvedInputs.lottieAssets) with a fallback to
+      // node data for direct API calls.
+      const lottieAssets =
+        resolvedInputs.lottieAssets ??
+        (data.lottieAssets as Array<{ url: string; name?: string }> | undefined)
       return {
         prompt: resolvedInputs.prompt || data.overlayPrompt || data.prompt,
-        videoUrl: resolvedInputs.videoUrl || data.sourceVideoUrl,
-        lottieAssets: lottieAssets.length > 0 ? lottieAssets : undefined,
+        // Route schema requires `inputVideoUrl`.
+        inputVideoUrl: resolvedInputs.videoUrl || data.sourceVideoUrl || data.inputVideoUrl,
+        lottieAssets: lottieAssets && lottieAssets.length > 0 ? lottieAssets : undefined,
         fps: data.fps,
         width: data.width,
         height: data.height,
