@@ -705,6 +705,13 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return alignment ? { alignment } : undefined
   }
 
+  if (type === "qa-check") {
+    if (data.approved == null) return undefined
+    const approved = data.approved as boolean
+    const reason = (data.reason as string | undefined) ?? (approved ? "approved" : "rejected")
+    return { approved, reason }
+  }
+
   // Plan nodes — use COMPOSER_PLAN_MAP to find the correct data field
   const composerMapping = COMPOSER_PLAN_MAP[type]
   if (composerMapping) {

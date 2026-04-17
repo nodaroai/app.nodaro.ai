@@ -429,6 +429,37 @@ describe("extractSavedNodeOutput", () => {
   it("returns undefined for unknown type with no data", () => {
     expect(extractSavedNodeOutput(node("1", "totally-unknown"))).toBeUndefined()
   })
+
+  it("extracts qa-check approved with saved reason", () => {
+    const n = node("1", "qa-check", { approved: true, reason: "looks good" })
+    const result = extractSavedNodeOutput(n)
+    expect(result?.approved).toBe(true)
+    expect(result?.reason).toBe("looks good")
+  })
+
+  it("extracts qa-check rejected with saved reason", () => {
+    const n = node("1", "qa-check", { approved: false, reason: "bad quality" })
+    const result = extractSavedNodeOutput(n)
+    expect(result?.approved).toBe(false)
+    expect(result?.reason).toBe("bad quality")
+  })
+
+  it("qa-check falls back to default reason when missing (matches frontend)", () => {
+    expect(extractSavedNodeOutput(node("1", "qa-check", { approved: true }))?.reason).toBe("approved")
+    expect(extractSavedNodeOutput(node("1", "qa-check", { approved: false }))?.reason).toBe("rejected")
+  })
+
+  it("returns undefined for qa-check without saved approved state", () => {
+    expect(extractSavedNodeOutput(node("1", "qa-check", {}))).toBeUndefined()
+    expect(extractSavedNodeOutput(node("1", "qa-check", { approved: null }))).toBeUndefined()
+    expect(extractSavedNodeOutput(node("1", "qa-check", { reason: "dangling" }))).toBeUndefined()
+  })
+
+  it("qa-check saved output routes correctly through getPrimaryOutput by handle", () => {
+    const saved = extractSavedNodeOutput(node("1", "qa-check", { approved: true, reason: "ok" }))!
+    expect(getPrimaryOutput(saved, "qa-check", "approved")).toBe("ok")
+    expect(getPrimaryOutput(saved, "qa-check", "rejected")).toBeUndefined()
+  })
 })
 
 // ---------------------------------------------------------------------------
