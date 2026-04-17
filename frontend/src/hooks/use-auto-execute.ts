@@ -13,7 +13,7 @@ const IGNORE_KEYS = new Set([
   // Extra output keys not in the undo set
   "generatedJson", "__listInputs",
   // Node-specific outputs
-  "combinedText", "splitResults", "extractedText",
+  "combinedText", "splitResults", "extractedText", "listResults",
   // Meta fields
   "label", "presentationInput", "presentationOutput", "skipped", "__expandedClone",
 ])

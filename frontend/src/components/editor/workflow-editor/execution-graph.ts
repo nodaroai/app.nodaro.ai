@@ -481,6 +481,12 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     }
     return typeof result === "string" ? result : JSON.stringify(result);
   }
+  if (type === "filter-list" || type === "deduplicate" || type === "merge-lists") {
+    const listResults =
+      ((data as { __listResults?: string[] }).__listResults) ??
+      ((data as { listResults?: string[] }).listResults);
+    return listResults && listResults.length > 0 ? listResults[0] : undefined;
+  }
   if (type === "preview") {
     // Pass through the first visible upstream value
     const items = (data.previewItems as Array<{ value: string; visible: boolean }> | undefined) ?? [];

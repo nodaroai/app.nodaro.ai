@@ -7,7 +7,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, Frame, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter,
+  SlidersHorizontal, Scissors, Frame, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -122,6 +122,9 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "split-text", label: "Split Text", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Text" },
   { type: "extract-field", label: "Extract Field", icon: <Braces className="h-4 w-4" />, category: "Processing", group: "Text" },
   { type: "json-process", label: "JSON Process", icon: <Filter className="h-4 w-4" />, category: "Processing", group: "Text" },
+  { type: "filter-list", label: "Filter List", icon: <ListFilter className="h-4 w-4" />, category: "Processing", group: "Text" },
+  { type: "deduplicate", label: "Deduplicate", icon: <CopyMinus className="h-4 w-4" />, category: "Processing", group: "Text" },
+  { type: "merge-lists", label: "Merge Lists", icon: <GitMerge className="h-4 w-4" />, category: "Processing", group: "Text" },
   // Processing — Video Production
   { type: "video-composer", label: "Compose Video", icon: <Sparkles className="h-4 w-4" />, category: "Processing", group: "Video Production" },
   { type: "after-effects", label: "After Effects", icon: <Wand2 className="h-4 w-4" />, category: "Processing", group: "Video Production" },

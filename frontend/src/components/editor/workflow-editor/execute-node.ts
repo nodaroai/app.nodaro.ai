@@ -150,6 +150,10 @@ import type {
   WebScrapeNodeData,
   ExtractFieldNodeData,
   JsonProcessNodeData,
+  FilterListNodeData,
+  FilterListCondition,
+  DeduplicateNodeData,
+  MergeListsNodeData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -160,7 +164,7 @@ import {
 } from "./types";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
-import { resolveNodeInputs, type FrontendResolvedInputs } from "./node-input-resolver";
+import { resolveNodeInputs, extractNodeOutputAsList, type FrontendResolvedInputs } from "./node-input-resolver";
 import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_TEXT_FIELDS } from "./resolve-field-mappings";
@@ -264,6 +268,131 @@ function runProcessingNode(
   ) => Record<string, unknown>,
 ): Promise<string> {
   return pollJobWithNodeUpdate(nodeId, apiCall, outputKey, label, ctx, extraOutputFields);
+}
+
+// ---------------------------------------------------------------------------
+// Helpers for list-processing inline nodes: filter-list, deduplicate, merge-lists
+// ---------------------------------------------------------------------------
+
+function collectUpstreamListItemsFrontend(
+  nodeId: string,
+  edges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null }>,
+  nodes: ReadonlyArray<WorkflowNode>,
+): string[] {
+  const items: string[] = [];
+  const incoming = edges.filter((e) => e.target === nodeId);
+  for (const edge of incoming) {
+    const src = nodes.find((n) => n.id === edge.source);
+    if (!src) continue;
+    // extractNodeOutputAsList handles split-text, list, generatedJson arrays
+    // (web-scrape), generatedResults, and __listResults — same coverage as the
+    // backend collector. Mirrors inline-executor.ts:collectUpstreamListItems.
+    const listItems = extractNodeOutputAsList(src);
+    if (listItems && listItems.length > 0) {
+      for (const item of listItems) {
+        if (item != null) items.push(item);
+      }
+      continue;
+    }
+    const primary = extractNodeOutput(src, edge.sourceHandle ?? undefined);
+    if (primary != null && primary !== "") items.push(primary);
+  }
+  return items;
+}
+
+function tryParseJsonFrontend(item: unknown): unknown {
+  if (typeof item !== "string") return item;
+  const trimmed = item.trim();
+  if (!trimmed) return item;
+  const first = trimmed[0];
+  const looksJson =
+    first === "{" || first === "[" || first === "\"" ||
+    /^-?\d/.test(trimmed) || trimmed === "true" || trimmed === "false" || trimmed === "null";
+  if (!looksJson) return item;
+  try { return JSON.parse(trimmed); } catch { return item; }
+}
+
+function resolveFilterConditionValue(raw: string, valueType: string | undefined): string {
+  if (valueType !== "variable" && !/\{\{/.test(raw)) return raw;
+  return raw.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr) => {
+    const key = String(expr).trim();
+    if (key === "now") return new Date().toISOString();
+    // trigger.* variables are resolved on the backend; frontend leaves them blank.
+    return "";
+  });
+}
+
+function asComparableNumberFrontend(v: unknown): number {
+  if (typeof v === "number") return v;
+  if (typeof v === "boolean") return v ? 1 : 0;
+  if (typeof v === "string") {
+    const trimmed = v.trim();
+    if (trimmed === "") return NaN;
+    const n = Number(trimmed);
+    if (!isNaN(n)) return n;
+    const d = Date.parse(trimmed);
+    if (!isNaN(d)) return d;
+  }
+  return NaN;
+}
+
+// Numeric-first ordering compare used by >, <, >=, <=. Falls back to
+// localeCompare when either side can't be parsed as a number.
+function compareFilterValues(a: unknown, b: unknown): number {
+  const na = asComparableNumberFrontend(a);
+  const nb = asComparableNumberFrontend(b);
+  if (!isNaN(na) && !isNaN(nb)) return na - nb;
+  return String(a ?? "").localeCompare(String(b ?? ""));
+}
+
+// Numeric-first equality used by = and !=. So "432" == 432 and 432 == "432".
+// Falls back to string equality (null/undefined coerced to "").
+function filterValuesEqual(a: unknown, b: unknown): boolean {
+  const na = asComparableNumberFrontend(a);
+  const nb = asComparableNumberFrontend(b);
+  if (!isNaN(na) && !isNaN(nb)) return na === nb;
+  return String(a ?? "") === String(b ?? "");
+}
+
+function evaluateFilterListCondition(
+  parsedItem: unknown,
+  rawItem: string,
+  condition: FilterListCondition,
+): boolean {
+  const path = (condition.field ?? "").trim();
+  let fieldValue: unknown;
+  if (path === "") {
+    fieldValue = parsedItem ?? rawItem;
+  } else {
+    const matches = evaluateJsonPath(parsedItem ?? rawItem, path);
+    fieldValue = matches.length > 0 ? matches[0] : undefined;
+  }
+  const targetStr = resolveFilterConditionValue(condition.value ?? "", condition.valueType);
+
+  switch (condition.operator) {
+    case "exists":
+      return fieldValue !== undefined && fieldValue !== null;
+    case "not_exists":
+      return fieldValue === undefined || fieldValue === null;
+    case "contains":
+      return String(fieldValue ?? "").includes(targetStr);
+    case "not_contains":
+      return !String(fieldValue ?? "").includes(targetStr);
+    case "=":
+      return filterValuesEqual(fieldValue, targetStr);
+    case "!=":
+      return !filterValuesEqual(fieldValue, targetStr);
+    case ">":
+      return compareFilterValues(fieldValue, targetStr) > 0;
+    case "<":
+      return compareFilterValues(fieldValue, targetStr) < 0;
+    case ">=":
+      return compareFilterValues(fieldValue, targetStr) >= 0;
+    case "<=":
+      return compareFilterValues(fieldValue, targetStr) <= 0;
+    default:
+      return false;
+  }
 }
 
 /**
@@ -3984,6 +4113,90 @@ export function executeNode(
       errorMessage: undefined,
     });
     return Promise.resolve(listResults[0] ?? "");
+  }
+
+  if (node.type === "filter-list") {
+    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const filterData = node.data as FilterListNodeData;
+    const items = collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
+    const effectiveConditions = (filterData.conditions ?? []).filter((c) => c && c.operator);
+    const logic = filterData.conditionLogic === "OR" ? "OR" : "AND";
+    const filtered = effectiveConditions.length === 0
+      ? items
+      : items.filter((item) => {
+        const parsed = tryParseJsonFrontend(item);
+        const results = effectiveConditions.map((c) => evaluateFilterListCondition(parsed, item, c));
+        return logic === "OR" ? results.some(Boolean) : results.every(Boolean);
+      });
+    updateNodeData(node.id, {
+      listResults: filtered,
+      __listResults: filtered,
+      __listTotal: filtered.length,
+      executionStatus: "completed",
+      errorMessage: undefined,
+    });
+    return Promise.resolve(filtered[0] ?? "");
+  }
+
+  if (node.type === "deduplicate") {
+    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const dedupData = node.data as DeduplicateNodeData;
+    const path = (dedupData.field ?? "").trim();
+    const items = collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
+
+    const seen = new Set<string>();
+    const deduped: string[] = [];
+    for (const item of items) {
+      let key: string;
+      if (path === "") {
+        key = item;
+      } else {
+        const parsed = tryParseJsonFrontend(item);
+        const matches = evaluateJsonPath(parsed, path);
+        const first = matches.length > 0 ? matches[0] : undefined;
+        key = first === undefined || first === null
+          ? ""
+          : typeof first === "string" ? first : JSON.stringify(first);
+      }
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(item);
+    }
+
+    updateNodeData(node.id, {
+      listResults: deduped,
+      __listResults: deduped,
+      __listTotal: deduped.length,
+      executionStatus: "completed",
+      errorMessage: undefined,
+    });
+    return Promise.resolve(deduped[0] ?? "");
+  }
+
+  if (node.type === "merge-lists") {
+    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const mergeData = node.data as MergeListsNodeData;
+    const items = collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
+
+    let merged = items;
+    if (mergeData.deduplicate === true) {
+      const seen = new Set<string>();
+      merged = [];
+      for (const item of items) {
+        if (seen.has(item)) continue;
+        seen.add(item);
+        merged.push(item);
+      }
+    }
+
+    updateNodeData(node.id, {
+      listResults: merged,
+      __listResults: merged,
+      __listTotal: merged.length,
+      executionStatus: "completed",
+      errorMessage: undefined,
+    });
+    return Promise.resolve(merged[0] ?? "");
   }
 
   // Preview — collect upstream values and pass through

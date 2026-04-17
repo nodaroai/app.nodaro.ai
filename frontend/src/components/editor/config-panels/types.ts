@@ -22,6 +22,9 @@ export interface ConfigProps<T> {
   readonly fieldMappings: FieldMappings
   readonly onMapField: (field: string, sourceNodeId: string | null) => void
   readonly nodes: ReadonlyArray<WorkflowNode>
+  /** Full edge list — provided so config panels can walk back through
+   *  pass-through nodes (e.g. filter-list) to locate upstream schema. */
+  readonly edges?: ReadonlyArray<WorkflowEdge>
   readonly onUpdateNode?: (nodeId: string, data: Record<string, unknown>) => void
   readonly nodeRefs?: ReadonlyArray<NodeRefItem>
   readonly refMap?: Map<string, string>

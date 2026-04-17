@@ -41,6 +41,19 @@ function isExtractFieldListMode(node: { type?: string; data: Record<string, unkn
   return node.type === "extract-field" && (node.data.outputType ?? "text") === "list"
 }
 
+/** Node types that always emit a structured list via __listResults. */
+const STRUCTURED_LIST_TYPES = new Set([
+  "split-text",
+  "json-process",
+  "filter-list",
+  "deduplicate",
+  "merge-lists",
+])
+
+function isStructuredListNode(node: { type?: string; data: Record<string, unknown> }): boolean {
+  return STRUCTURED_LIST_TYPES.has(node.type ?? "") || isExtractFieldListMode(node)
+}
+
 /**
  * Resolve values flowing through `edge` for a loop/list table UI cell. Honors
  * the edge's outputMode AND selector (range/list). Returns a single-item array
@@ -96,7 +109,7 @@ export function resolveEdgeValuesForTableColumn(
     // Other sources: expand each raw item through the target's delimiter so
     // delimited multi-line text (e.g., AI output with slide separators) becomes
     // individual rows.
-    const isAlreadyStructured = upstream.type === "loop" || upstream.type === "list" || upstream.type === "split-text" || upstream.type === "json-process" || isExtractFieldListMode(upstream)
+    const isAlreadyStructured = upstream.type === "loop" || upstream.type === "list" || isStructuredListNode(upstream)
     const items = isAlreadyStructured
       ? allOutputs
       : (allOutputs.length > 0
@@ -174,7 +187,7 @@ function resolveUpstreamWithEdgeFilter(
     // Already-structured sources produce logical items — preserve them even
     // when there's a single item, so downstream doesn't re-split by newline.
     // Matches resolveEdgeValuesForTableColumn.
-    const isAlreadyStructured = upstreamNode.type === "split-text" || isExtractFieldListMode(upstreamNode)
+    const isAlreadyStructured = isStructuredListNode(upstreamNode)
     if (raw && (isAlreadyStructured || raw.length > 1)) upstreamVals = raw;
   }
 
@@ -250,7 +263,7 @@ export function resolveLoopColumnValues(
 }
 
 /** Node types whose edges default to "each" output mode (fan-out) */
-const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"]);
+const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text", "filter-list", "deduplicate", "merge-lists"]);
 
 /** Node types that accept multiple audio inputs (accumulate to audioUrls array) */
 const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "combine-audio"]);
@@ -1276,6 +1289,8 @@ export function resolveNodeInputs(
     } else if (src.type === "split-text") {
       inputs.prompt = output;
     } else if (src.type === "extract-field") {
+      inputs.prompt = output;
+    } else if (src.type === "filter-list" || src.type === "deduplicate" || src.type === "merge-lists") {
       inputs.prompt = output;
     } else if (src.type === "generate-script") {
       const handle = srcEdge.sourceHandle;

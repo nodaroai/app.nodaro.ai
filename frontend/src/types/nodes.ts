@@ -2203,6 +2203,66 @@ export type JsonProcessNodeData = {
   errorMessage?: string
 }
 
+// --- Filter List Node Data ---
+
+export type FilterListOperator =
+  | ">"
+  | "<"
+  | ">="
+  | "<="
+  | "="
+  | "!="
+  | "contains"
+  | "not_contains"
+  | "exists"
+  | "not_exists"
+
+export type FilterListCondition = {
+  id: string
+  field: string
+  operator: FilterListOperator
+  value: string
+  valueType: "static" | "variable"
+  /** UI mode for the field input. "dropdown" (default) shows detected
+   *  upstream fields + "Custom path…"; "custom" shows a free-text input. */
+  mode?: "dropdown" | "custom"
+}
+
+export type FilterListNodeData = {
+  [key: string]: unknown
+  label: string
+  conditions: FilterListCondition[]
+  conditionLogic: "AND" | "OR"
+  listResults?: string[]
+  __listResults?: string[]
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
+// --- Deduplicate Node Data ---
+
+export type DeduplicateNodeData = {
+  [key: string]: unknown
+  label: string
+  field: string
+  listResults?: string[]
+  __listResults?: string[]
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
+// --- Merge Lists Node Data ---
+
+export type MergeListsNodeData = {
+  [key: string]: unknown
+  label: string
+  deduplicate: boolean
+  listResults?: string[]
+  __listResults?: string[]
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
 // --- Sticky Note Node Data ---
 
 export type StickyNoteData = {
@@ -2564,6 +2624,9 @@ export type SceneNodeData =
   | SplitTextData
   | ExtractFieldNodeData
   | JsonProcessNodeData
+  | FilterListNodeData
+  | DeduplicateNodeData
+  | MergeListsNodeData
   | PreviewNodeData
   | StickyNoteData
   | TeleportSendData
@@ -2673,6 +2736,9 @@ export type SceneNodeType =
   | "split-text"
   | "extract-field"
   | "json-process"
+  | "filter-list"
+  | "deduplicate"
+  | "merge-lists"
   | "preview"
   | "sticky-note"
   | "teleport-send"
@@ -4136,7 +4202,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     autoExecute: true,
     defaultData: {
       label: "Extract Field",
-      mode: "custom",
+      mode: "dropdown",
       field: "",
     } as ExtractFieldNodeData,
   },
@@ -4156,6 +4222,46 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       projections: [],
       expression: "",
     } as JsonProcessNodeData,
+  },
+  {
+    type: "filter-list",
+    label: "Filter List",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    autoExecute: true,
+    defaultData: {
+      label: "Filter List",
+      conditions: [],
+      conditionLogic: "AND",
+    } as FilterListNodeData,
+  },
+  {
+    type: "deduplicate",
+    label: "Deduplicate",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    autoExecute: true,
+    defaultData: {
+      label: "Deduplicate",
+      field: "",
+    } as DeduplicateNodeData,
+  },
+  {
+    type: "merge-lists",
+    label: "Merge Lists",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    autoExecute: true,
+    defaultData: {
+      label: "Merge Lists",
+      deduplicate: false,
+    } as MergeListsNodeData,
   },
   {
     type: "preview",
