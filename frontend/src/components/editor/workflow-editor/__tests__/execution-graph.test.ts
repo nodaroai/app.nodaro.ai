@@ -238,6 +238,17 @@ describe("extractNodeOutput", () => {
     expect(extractNodeOutput(node)).toBe("http://img.png")
   })
 
+  it("prefers upload-image data.url over stale generatedResults", () => {
+    const node = makeNode("1", "upload-image", {
+      url: "http://current.png",
+      generatedResults: [
+        { url: "http://stale.png", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    expect(extractNodeOutput(node)).toBe("http://current.png")
+  })
+
   it("returns active result url from generate-image with generatedResults", () => {
     const node = makeNode("1", "generate-image", {
       generatedResults: [
