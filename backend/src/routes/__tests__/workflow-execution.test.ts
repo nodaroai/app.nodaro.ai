@@ -809,10 +809,44 @@ describe("GET /v1/executions", () => {
     expect(res.statusCode).toBe(401)
   })
 
-  // TODO: mock chain for global executions query is complex — skip for now
-  it.skip("returns 200 with empty list", async () => {
+  it("returns 200 with empty list", async () => {
+    const emptyResult = { data: [], error: null }
+    const mockFrom = vi.mocked(supabase.from)
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "workflow_executions") {
+        // select().order().limit().eq()  — non-admin adds user_id filter after limit
+        return {
+          select: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue(emptyResult),
+              }),
+            }),
+          }),
+        } as never
+      }
+      if (table === "jobs") {
+        // select().is().not().order().limit().eq()
+        return {
+          select: vi.fn().mockReturnValue({
+            is: vi.fn().mockReturnValue({
+              not: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    eq: vi.fn().mockResolvedValue(emptyResult),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        } as never
+      }
+      return {} as never
+    })
+
     const res = await authedGet("/v1/executions")
     expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual([])
   })
 
   it("returns 403 when non-admin tries viewAll", async () => {

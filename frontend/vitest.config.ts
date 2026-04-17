@@ -10,6 +10,18 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json-summary"],
       include: ["src/**/*.{ts,tsx}"],
+      exclude: [
+        "src/main.tsx",
+        "src/router.tsx",
+        "src/vite-env.d.ts",
+        "src/app/**/page.tsx",
+        "src/app/**/layout.tsx",
+        "src/routes/**",
+        "src/types/supabase.types.ts",
+        "src/test/**",
+        "src/**/*.test.{ts,tsx}",
+        "src/**/__tests__/**",
+      ],
     },
   },
   resolve: {
