@@ -21,6 +21,30 @@ function cleanEdges(edges: WorkflowEdge[]): WorkflowEdge[] {
   return edges.map(({ selected, ...rest }) => rest as WorkflowEdge)
 }
 
+function hasCleanEdgeChange(prevEdges: WorkflowEdge[], currEdges: WorkflowEdge[]): boolean {
+  if (prevEdges === currEdges) return false
+  if (prevEdges.length !== currEdges.length) return true
+
+  const cleanedPrev = cleanEdges(prevEdges) as Array<Record<string, unknown>>
+  const cleanedCurr = cleanEdges(currEdges) as Array<Record<string, unknown>>
+
+  for (let i = 0; i < cleanedPrev.length; i++) {
+    const prev = cleanedPrev[i]
+    const curr = cleanedCurr[i]
+    const prevKeys = Object.keys(prev)
+    const currKeys = Object.keys(curr)
+
+    if (prevKeys.length !== currKeys.length) return true
+
+    for (const key of prevKeys) {
+      if (!(key in curr)) return true
+      if (prev[key] !== curr[key]) return true
+    }
+  }
+
+  return false
+}
+
 /**
  * Check if snapshot-relevant content actually changed between two states.
  * Ignores React Flow transient fields (selected, dragging, measured) by
@@ -44,7 +68,7 @@ function hasSnapshotChange(
   if (prevName !== currName) return true
   if (prevChars !== currChars) return true
   if (prevTemplates !== currTemplates) return true
-  if (prevEdges !== currEdges) return true
+  if (hasCleanEdgeChange(prevEdges, currEdges)) return true
   if (prevNodes === currNodes) return false
   if (prevNodes.length !== currNodes.length) return true
   for (let i = 0; i < prevNodes.length; i++) {
