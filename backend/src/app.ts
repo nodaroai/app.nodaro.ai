@@ -50,8 +50,6 @@ import { generateObjectRoutes } from "./routes/generate-object.js"
 import { locationRoutes } from "./routes/locations.js"
 import { generateLocationRoutes } from "./routes/generate-location.js"
 import { generateLocationAssetRoutes } from "./routes/generate-location-asset.js"
-// Replicate predictions routes disabled
-// import { predictionsRoutes } from "./routes/predictions.js"
 import { adminSettingsRoutes } from "./routes/admin-settings.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
@@ -196,8 +194,6 @@ export async function buildApp() {
   await app.register(locationRoutes)
   await app.register(generateLocationRoutes)
   await app.register(generateLocationAssetRoutes)
-  // Replicate predictions routes disabled
-  // await app.register(predictionsRoutes)
   await app.register(adminSettingsRoutes)
   await app.register(motionTransferRoutes)
   await app.register(videoUpscaleRoutes)

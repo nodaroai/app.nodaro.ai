@@ -1,6 +1,34 @@
 import type { FastifyInstance } from "fastify"
+import { z } from "zod"
 import { CreditsService } from "../services/credits.js"
 import { supabase } from "../lib/supabase.js"
+
+const modelCostsBody = z.object({
+  models: z.array(z.string().min(1)).min(1).max(50),
+})
+
+const reserveBody = z.object({
+  jobId: z.string().min(1),
+  modelIdentifier: z.string().min(1),
+  providerCostUsd: z.number().min(0).optional(),
+  displayCostUsd: z.number().min(0).optional(),
+})
+
+const commitBody = z.object({
+  usageLogId: z.string().min(1),
+  actualCredits: z.number().min(0).optional(),
+})
+
+const refundBody = z.object({
+  usageLogId: z.string().min(1),
+})
+
+const estimateWorkflowBody = z.object({
+  nodes: z.array(z.object({
+    type: z.string().min(1),
+    data: z.record(z.string(), z.unknown()).optional(),
+  })),
+})
 
 // ============================================================
 // Credits Routes
@@ -137,22 +165,14 @@ export async function creditsRoutes(app: FastifyInstance) {
    * POST /v1/credits/model-costs
    * Get credit costs for multiple models in a single request
    */
-  app.post<{
-    Body: { models: string[] }
-  }>("/v1/credits/model-costs", async (req, reply) => {
-    const { models } = req.body
-
-    if (!models || !Array.isArray(models) || models.length === 0) {
+  app.post("/v1/credits/model-costs", async (req, reply) => {
+    const parsed = modelCostsBody.safeParse(req.body ?? {})
+    if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "bad_request", message: "models array is required" },
+        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
       })
     }
-
-    if (models.length > 50) {
-      return reply.status(400).send({
-        error: { code: "bad_request", message: "Maximum 50 models per request" },
-      })
-    }
+    const { models } = parsed.data
 
     try {
       const costs: Record<string, number> = {}
@@ -174,14 +194,7 @@ export async function creditsRoutes(app: FastifyInstance) {
    * POST /v1/credits/reserve
    * Reserve credits for a job (internal use)
    */
-  app.post<{
-    Body: {
-      jobId: string
-      modelIdentifier: string
-      providerCostUsd?: number
-      displayCostUsd?: number
-    }
-  }>("/v1/credits/reserve", async (req, reply) => {
+  app.post("/v1/credits/reserve", async (req, reply) => {
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({
@@ -189,13 +202,13 @@ export async function creditsRoutes(app: FastifyInstance) {
       })
     }
 
-    const { jobId, modelIdentifier, providerCostUsd = 0, displayCostUsd = 0 } = req.body
-
-    if (!jobId || !modelIdentifier) {
+    const parsed = reserveBody.safeParse(req.body ?? {})
+    if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "bad_request", message: "jobId and modelIdentifier are required" },
+        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
       })
     }
+    const { jobId, modelIdentifier, providerCostUsd = 0, displayCostUsd = 0 } = parsed.data
 
     try {
       const result = await CreditsService.reserveCredits(
@@ -220,12 +233,7 @@ export async function creditsRoutes(app: FastifyInstance) {
    * POST /v1/credits/commit
    * Commit reserved credits after job success (internal use)
    */
-  app.post<{
-    Body: {
-      usageLogId: string
-      actualCredits?: number
-    }
-  }>("/v1/credits/commit", async (req, reply) => {
+  app.post("/v1/credits/commit", async (req, reply) => {
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({
@@ -233,13 +241,13 @@ export async function creditsRoutes(app: FastifyInstance) {
       })
     }
 
-    const { usageLogId, actualCredits } = req.body
-
-    if (!usageLogId) {
+    const parsed = commitBody.safeParse(req.body ?? {})
+    if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "bad_request", message: "usageLogId is required" },
+        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
       })
     }
+    const { usageLogId, actualCredits } = parsed.data
 
     // Verify the usage log belongs to the requesting user
     const { data: log } = await supabase
@@ -269,11 +277,7 @@ export async function creditsRoutes(app: FastifyInstance) {
    * POST /v1/credits/refund
    * Refund reserved credits after job failure (internal use)
    */
-  app.post<{
-    Body: {
-      usageLogId: string
-    }
-  }>("/v1/credits/refund", async (req, reply) => {
+  app.post("/v1/credits/refund", async (req, reply) => {
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({
@@ -281,13 +285,13 @@ export async function creditsRoutes(app: FastifyInstance) {
       })
     }
 
-    const { usageLogId } = req.body
-
-    if (!usageLogId) {
+    const parsed = refundBody.safeParse(req.body ?? {})
+    if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "bad_request", message: "usageLogId is required" },
+        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
       })
     }
+    const { usageLogId } = parsed.data
 
     // Verify the usage log belongs to the requesting user
     const { data: log } = await supabase
@@ -317,18 +321,14 @@ export async function creditsRoutes(app: FastifyInstance) {
    * POST /v1/credits/estimate-workflow
    * Estimate total credits for a workflow
    */
-  app.post<{
-    Body: {
-      nodes: Array<{ type: string; data?: Record<string, unknown> }>
-    }
-  }>("/v1/credits/estimate-workflow", async (req, reply) => {
-    const { nodes } = req.body
-
-    if (!nodes || !Array.isArray(nodes)) {
+  app.post("/v1/credits/estimate-workflow", async (req, reply) => {
+    const parsed = estimateWorkflowBody.safeParse(req.body ?? {})
+    if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "bad_request", message: "nodes array is required" },
+        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
       })
     }
+    const { nodes } = parsed.data
 
     try {
       const totalCredits = CreditsService.estimateWorkflowCredits(nodes)

@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify"
+import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 
-interface CostSummaryBody {
-  readonly jobIds: string[]
-}
+const costSummaryBody = z.object({
+  jobIds: z.array(z.string().min(1)).min(1).max(500),
+})
 
 interface JobRow {
   readonly id: string
@@ -26,20 +27,15 @@ interface BreakdownEntry {
 }
 
 export async function workflowCostRoutes(app: FastifyInstance) {
-  app.post<{ Body: CostSummaryBody }>("/v1/jobs/cost-summary", async (req, reply) => {
-    const { jobIds } = req.body
-
-    if (!jobIds || !Array.isArray(jobIds) || jobIds.length === 0) {
+  app.post("/v1/jobs/cost-summary", async (req, reply) => {
+    const parsed = costSummaryBody.safeParse(req.body ?? {})
+    if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "bad_request", message: "jobIds array is required" },
+        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
       })
     }
 
-    if (jobIds.length > 500) {
-      return reply.status(400).send({
-        error: { code: "bad_request", message: "Maximum 500 job IDs per request" },
-      })
-    }
+    const { jobIds } = parsed.data
 
     const { data: jobs, error } = await supabase
       .from("jobs")

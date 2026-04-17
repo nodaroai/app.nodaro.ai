@@ -92,7 +92,7 @@ describe("POST /v1/jobs/cost-summary", () => {
 
     expect(res.statusCode).toBe(400)
     const body = res.json()
-    expect(body.error.code).toBe("bad_request")
+    expect(body.error.code).toBe("validation_error")
   })
 
   it("returns 400 for >500 jobIds", async () => {
@@ -106,8 +106,7 @@ describe("POST /v1/jobs/cost-summary", () => {
 
     expect(res.statusCode).toBe(400)
     const body = res.json()
-    expect(body.error.code).toBe("bad_request")
-    expect(body.error.message).toContain("500")
+    expect(body.error.code).toBe("validation_error")
   })
 
   it("returns aggregated breakdown for completed jobs", async () => {

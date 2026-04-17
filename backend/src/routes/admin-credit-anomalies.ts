@@ -1,6 +1,16 @@
 import type { FastifyInstance } from "fastify"
+import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+
+const updateAnomalyBody = z.object({
+  status: z.enum(["pending", "reviewed", "resolved", "dismissed"]).optional(),
+  adminNotes: z.string().max(2000).optional(),
+})
+
+const anomalyIdParams = z.object({
+  id: z.string().uuid(),
+})
 
 export async function adminCreditAnomalyRoutes(app: FastifyInstance): Promise<void> {
   // List anomalies with pagination + filters
@@ -62,8 +72,21 @@ export async function adminCreditAnomalyRoutes(app: FastifyInstance): Promise<vo
 
   // Update status + notes
   app.patch("/v1/admin/credit-anomalies/:id", { preHandler: requireAdmin }, async (req, reply) => {
-    const { id } = req.params as { id: string }
-    const { status, adminNotes } = req.body as { status?: string; adminNotes?: string }
+    const paramsResult = anomalyIdParams.safeParse(req.params)
+    if (!paramsResult.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: paramsResult.error.issues[0]?.message ?? "Invalid id" },
+      })
+    }
+    const bodyResult = updateAnomalyBody.safeParse(req.body ?? {})
+    if (!bodyResult.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: bodyResult.error.issues[0]?.message ?? "Invalid request" },
+      })
+    }
+
+    const { id } = paramsResult.data
+    const { status, adminNotes } = bodyResult.data
 
     const updates: Record<string, unknown> = {}
     if (status) {
@@ -86,7 +109,14 @@ export async function adminCreditAnomalyRoutes(app: FastifyInstance): Promise<vo
 
   // Delete single anomaly
   app.delete("/v1/admin/credit-anomalies/:id", { preHandler: requireAdmin }, async (req, reply) => {
-    const { id } = req.params as { id: string }
+    const paramsResult = anomalyIdParams.safeParse(req.params)
+    if (!paramsResult.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: paramsResult.error.issues[0]?.message ?? "Invalid id" },
+      })
+    }
+    const { id } = paramsResult.data
+
     const { error } = await (supabase
       .from("credit_anomalies" as "assets")
       .delete()

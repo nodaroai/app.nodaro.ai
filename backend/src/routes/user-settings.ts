@@ -1,8 +1,14 @@
 import type { FastifyInstance } from "fastify"
+import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { SYSTEM_PROMPT_TEMPLATES } from "../config/prompt-templates.js"
 
 const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
+
+const updateSettingsBody = z.object({
+  publicOutputs: z.boolean().optional(),
+  promptTemplates: z.record(z.string(), z.string()).optional(),
+})
 
 export async function userSettingsRoutes(app: FastifyInstance) {
   /**
@@ -42,10 +48,15 @@ export async function userSettingsRoutes(app: FastifyInstance) {
    * Tier restriction: only Standard and above can set publicOutputs = false
    */
   app.patch("/v1/user/settings", async (req, reply) => {
-    const body = req.body as Record<string, unknown> | undefined
+    const parsed = updateSettingsBody.safeParse(req.body ?? {})
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+      })
+    }
+
     const userId = req.userId
-    const publicOutputs = body?.publicOutputs as boolean | undefined
-    const promptTemplates = body?.promptTemplates as Record<string, string> | undefined
+    const { publicOutputs, promptTemplates } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({ error: "Authentication required" })

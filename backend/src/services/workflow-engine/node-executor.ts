@@ -176,7 +176,7 @@ export async function executeNode(
 
   // Inline nodes
   if (INLINE_NODES.has(node.type)) {
-    return executeInlineNode(node, resolvedInputs, edges, allNodes, nodeStates)
+    return executeInlineNode(node, resolvedInputs, edges, allNodes, nodeStates, ctx)
   }
 
   // Sync HTTP nodes
@@ -198,6 +198,7 @@ async function executeInlineNode(
   edges: SimpleEdge[],
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
+  ctx: OrchestratorContext,
 ): Promise<ExecuteNodeResult> {
   let output: NodeOutput
 
@@ -218,7 +219,7 @@ async function executeInlineNode(
       output = executeComposite(node, edges, allNodes, nodeStates)
       break
     case "webhook-output":
-      output = await executeWebhookOutput(node, edges, allNodes, nodeStates)
+      output = await executeWebhookOutput(node, edges, allNodes, nodeStates, ctx)
       break
     case "preview":
       output = executePreview(node, edges, allNodes, nodeStates)

@@ -137,9 +137,24 @@ const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) 
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
+// URLs for social platforms that need audio extraction before the STT provider
+// can consume them. Matches the frontend regex in execute-node.ts so both
+// paths (single-node HTTP + orchestrator BullMQ) accept the same inputs.
+const SOCIAL_VIDEO_URL_RE = /(?:youtube\.com|youtu\.be|tiktok\.com|instagram\.com|twitter\.com|x\.com)/i
+
 const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
-  const { audioUrl, provider, language, diarize, tagAudioEvents } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string; diarize?: boolean; tagAudioEvents?: boolean }
+  const { audioUrl: rawAudioUrl, provider, language, diarize, tagAudioEvents } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string; diarize?: boolean; tagAudioEvents?: boolean }
   console.log(`[worker] transcribe ${ctx.jobId} (provider: ${provider ?? "whisper"}, language: ${language ?? "auto"})`)
+
+  // If the caller passed a social-platform video URL, extract audio first.
+  // STT providers can't consume a youtube/tiktok/etc. page URL directly.
+  let audioUrl = rawAudioUrl
+  if (SOCIAL_VIDEO_URL_RE.test(audioUrl)) {
+    console.log(`[worker] transcribe ${ctx.jobId}: extracting audio from social video URL`)
+    audioUrl = await extractYouTubeAudio(audioUrl)
+    await job.updateProgress(20)
+  }
+
   const result = await transcribe(audioUrl, provider, language, { diarize, tagAudioEvents })
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return

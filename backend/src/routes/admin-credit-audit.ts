@@ -1,7 +1,15 @@
 import type { FastifyInstance } from "fastify"
+import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { fetchAllKieLogs } from "../providers/kie/credit-lookup.js"
+
+const creditAuditSyncBody = z.object({
+  token: z.string().min(1, "token is required"),
+  mode: z.enum(["theoretical", "actual"]).optional(),
+  days: z.number().int().min(1).max(30).optional(),
+  lookbackMinutes: z.number().int().min(1).max(43200).optional(),
+})
 import {
   KIE_IMAGE_MODELS, KIE_VIDEO_MODELS, KIE_TEXT_TO_VIDEO_MODELS,
   KIE_VIDEO_TO_VIDEO_MODELS, KIE_MOTION_TRANSFER_MODELS, KIE_VIDEO_UPSCALE_MODELS,
@@ -203,20 +211,19 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
   // token = authorization header from kie.ai session (changes per session)
   // KIE_UNIQUE_ID is read from env (constant per account)
   app.post("/v1/admin/credit-audit/sync", { preHandler: requireAdmin }, async (request, reply) => {
-    const body = request.body as Record<string, unknown>
-    const token = body.token as string
-    const mode = (body.mode as string) === "actual" ? "actual" as const : "theoretical" as const
-
-    // Support both lookbackMinutes (fine-grained) and days (legacy)
-    const lookbackMinutes = body.lookbackMinutes
-      ? Math.min(43200, Math.max(1, Number(body.lookbackMinutes)))
-      : Math.min(30, Math.max(1, Number(body.days) || 7)) * 1440
-
-    if (!token) {
+    const parsed = creditAuditSyncBody.safeParse(request.body ?? {})
+    if (!parsed.success) {
       return reply.code(400).send({
-        error: "Provide session token from kie.ai/logs Network tab (authorization header value)",
+        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
       })
     }
+    const { token } = parsed.data
+    const mode = parsed.data.mode === "actual" ? "actual" as const : "theoretical" as const
+
+    // Support both lookbackMinutes (fine-grained) and days (legacy)
+    const lookbackMinutes = parsed.data.lookbackMinutes
+      ? parsed.data.lookbackMinutes
+      : (parsed.data.days ?? 7) * 1440
 
     const endTime = Date.now()
     const beginTime = endTime - lookbackMinutes * 60_000
