@@ -218,6 +218,14 @@ describe("EXECUTABLE_TYPES — new nodes", () => {
     expect(EXECUTABLE_TYPES.has("speech-to-video")).toBe(true)
   })
 
+  it("contains edit-image", () => {
+    expect(EXECUTABLE_TYPES.has("edit-image")).toBe(true)
+  })
+
+  it("contains image-to-image", () => {
+    expect(EXECUTABLE_TYPES.has("image-to-image")).toBe(true)
+  })
+
 })
 
 // ---------------------------------------------------------------------------

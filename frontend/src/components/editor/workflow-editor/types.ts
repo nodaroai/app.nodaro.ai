@@ -143,6 +143,8 @@ export function estimateNodeCredits(node: { type?: string; data?: Record<string,
 export const EXECUTABLE_TYPES = new Set([
   "generate-script",
   "generate-image",
+  "edit-image",
+  "image-to-image",
   "modify-image",
   "upscale-image",
   "remove-background",
