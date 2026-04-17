@@ -1,5 +1,10 @@
 import type { FastifyInstance } from "fastify"
+import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+
+const batchStatusBody = z.object({
+  jobIds: z.array(z.string().min(1)).min(1).max(100),
+})
 // Job type from database
 export interface JobRecord {
   id: string
@@ -149,28 +154,21 @@ export async function jobRoutes(app: FastifyInstance) {
   // NOTE: Cancel route moved to cancel-jobs.ts (has ownership verification + BullMQ integration)
 
   // Batch fetch job statuses by IDs (for workflow sync)
-  app.post<{ Body: { jobIds: string[] } }>("/v1/jobs/batch-status", async (req, reply) => {
+  app.post("/v1/jobs/batch-status", async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 
-    const { jobIds } = req.body
-
-    if (!jobIds || !Array.isArray(jobIds) || jobIds.length === 0) {
+    const parsed = batchStatusBody.safeParse(req.body ?? {})
+    if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "bad_request", message: "jobIds array is required" },
+        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
       })
     }
 
-    // Limit to 100 job IDs per request
-    if (jobIds.length > 100) {
-      return reply.status(400).send({
-        error: { code: "bad_request", message: "Maximum 100 job IDs per request" },
-      })
-    }
-
+    const { jobIds } = parsed.data
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
 
     let query = supabase

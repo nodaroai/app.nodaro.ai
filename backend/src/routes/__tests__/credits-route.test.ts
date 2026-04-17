@@ -251,7 +251,7 @@ describe("POST /v1/credits/model-costs", () => {
 
     expect(res.statusCode).toBe(400)
     const body = res.json()
-    expect(body.error.code).toBe("bad_request")
+    expect(body.error.code).toBe("validation_error")
   })
 
   it("returns 400 for > 50 models", async () => {
@@ -264,7 +264,7 @@ describe("POST /v1/credits/model-costs", () => {
 
     expect(res.statusCode).toBe(400)
     const body = res.json()
-    expect(body.error.message).toBe("Maximum 50 models per request")
+    expect(body.error.code).toBe("validation_error")
   })
 
   it("returns costs map on success", async () => {
@@ -298,7 +298,7 @@ describe("POST /v1/credits/reserve", () => {
 
     expect(res.statusCode).toBe(400)
     const body = res.json()
-    expect(body.error.code).toBe("bad_request")
+    expect(body.error.code).toBe("validation_error")
   })
 
   it("returns reservation result on success", async () => {
