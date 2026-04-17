@@ -12,7 +12,7 @@
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { renderQueue } from "../../lib/render-queue.js"
-import { hasCredits } from "../../lib/config.js"
+import { hasCredits, config } from "../../lib/config.js"
 import { CreditsService } from "../../billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
 import { buildPayload, type WorkflowSettings } from "./payload-builder.js"
@@ -263,9 +263,9 @@ async function executeSyncHttpNode(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      // Use service-role auth — these internal calls bypass user-level auth
-      "X-Internal-Orchestrator": "true",
-      // Pass userId for the route to use
+      // Authenticate to the auth hook with the shared orchestrator secret — NOT req.ip,
+      // which is always 127.0.0.1 behind the Caddy reverse proxy.
+      "X-Internal-Orchestrator-Secret": config.INTERNAL_ORCHESTRATOR_SECRET,
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(NODE_TIMEOUT_MS),
@@ -815,14 +815,14 @@ async function executeComponentNode(
 
   const mergedOverrides = mergeExposedSettings(inputOverrides, exposedSettings, componentMetadata)
 
-  // Call the component-execute route via internal HTTP
-  // Uses the same X-Internal-Orchestrator pattern as other sync HTTP nodes
+  // Call the component-execute route via internal HTTP.
+  // Uses the shared-secret internal-orchestrator auth, same as other sync HTTP nodes.
   const port = process.env.BACKEND_PORT || process.env.PORT || "8000"
   const res = await fetch(`http://localhost:${port}/v1/component/execute`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Internal-Orchestrator": "true",
+      "X-Internal-Orchestrator-Secret": config.INTERNAL_ORCHESTRATOR_SECRET,
     },
     body: JSON.stringify({
       appSlug,

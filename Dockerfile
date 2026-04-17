@@ -107,6 +107,15 @@ COPY <<'EOF' /app/start.sh
 
 echo "Starting with PORT=${PORT:-3000}"
 
+# Generate an internal orchestrator secret if not provided so every
+# sibling process in this container inherits the SAME value. Required
+# for orchestrator → API auth; without it, the auth hook rejects
+# internal calls (since the IP-based check has been removed).
+if [ -z "$INTERNAL_ORCHESTRATOR_SECRET" ]; then
+  export INTERNAL_ORCHESTRATOR_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+  echo "Generated INTERNAL_ORCHESTRATOR_SECRET (set the env var to persist across restarts)"
+fi
+
 # Start backend API server on fixed internal port
 cd /app/backend
 export BACKEND_PORT=9000
