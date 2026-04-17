@@ -479,4 +479,38 @@ describe("executePreview", () => {
     // then matches via IMAGE_URL_RE regex on the value
     expect(result.previewItems![0].type).toBe("image")
   })
+
+  it("tags voice-design voiceId handle as text, not audio (frontend parity)", () => {
+    const target = node("preview", "preview")
+    const vdNode = node("vd", "voice-design")
+    const allNodes = [vdNode, target]
+    const edges = [edge("vd", "preview", "voiceId")]
+    const states: Record<string, NodeExecutionState> = {
+      vd: {
+        status: "completed",
+        output: { generatedVoiceId: "voice-abc123", audioUrl: "https://aud.mp3" },
+      },
+    }
+
+    const result = executePreview(target, edges, allNodes, states)
+    expect(result.previewItems![0].type).toBe("text")
+    expect(result.previewItems![0].value).toBe("voice-abc123")
+  })
+
+  it("tags voice-design audio handle as audio", () => {
+    const target = node("preview", "preview")
+    const vdNode = node("vd", "voice-design")
+    const allNodes = [vdNode, target]
+    const edges = [edge("vd", "preview", "audio")]
+    const states: Record<string, NodeExecutionState> = {
+      vd: {
+        status: "completed",
+        output: { generatedVoiceId: "voice-abc123", audioUrl: "https://aud.mp3" },
+      },
+    }
+
+    const result = executePreview(target, edges, allNodes, states)
+    expect(result.previewItems![0].type).toBe("audio")
+    expect(result.previewItems![0].value).toBe("https://aud.mp3")
+  })
 })

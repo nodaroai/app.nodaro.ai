@@ -363,7 +363,9 @@ export const AUDIO_URL_RE = /^https?:\/\/.*\.(mp3|wav|ogg|aac|flac|m4a)/i
 function detectPreviewItemType(
   nodeType: string,
   value?: string,
+  sourceHandle?: string,
 ): "image" | "video" | "audio" | "data" | "text" {
+  if (nodeType === "voice-design" && sourceHandle === "voiceId") return "text"
   if (IMAGE_SOURCE_TYPES.has(nodeType)) return "image"
   if (VIDEO_SOURCE_TYPES.has(nodeType)) return "video"
   if (AUDIO_SOURCE_TYPES.has(nodeType)) return "audio"
@@ -404,7 +406,7 @@ export function executePreview(
 
     const srcType = srcNode.type ?? ""
     const srcLabel = (srcNode.data.label as string) || srcType
-    const itemType = detectPreviewItemType(srcType, trimmed)
+    const itemType = detectPreviewItemType(srcType, trimmed, edge.sourceHandle ?? undefined)
 
     previewItems.push({
       type: itemType,
