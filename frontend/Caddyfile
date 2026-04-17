@@ -12,6 +12,12 @@
 	}
 
 	handle /v1/* {
+		# Strip any attempt by an external client to spoof internal-orchestrator
+		# auth headers. Backend authenticates internal calls via a shared secret,
+		# but stripping here is defense-in-depth — if the secret ever leaks,
+		# externally-forwarded headers still can't reach the backend.
+		request_header -X-Internal-Orchestrator
+		request_header -X-Internal-Orchestrator-Secret
 		reverse_proxy 127.0.0.1:9000 {
 			# Disable response buffering for SSE streams
 			flush_interval -1

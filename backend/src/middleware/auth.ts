@@ -1,6 +1,7 @@
-import { createHash } from "node:crypto"
+import { createHash, timingSafeEqual } from "node:crypto"
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { supabase } from "../lib/supabase.js"
+import { config } from "../lib/config.js"
 import { warmAdminCache } from "../lib/admin-check.js"
 
 /**
@@ -117,25 +118,45 @@ function isPublicRoute(method: string, url: string): boolean {
 // Auth hook registration
 // ---------------------------------------------------------------------------
 
+// Timing-safe comparison that never throws for mismatched lengths.
+function constantTimeEqualStr(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a, "utf8")
+  const bBuf = Buffer.from(b, "utf8")
+  if (aBuf.length !== bBuf.length) {
+    // Still compare against a buffer of the same length to avoid a short-circuit
+    // timing side channel. The result is discarded.
+    timingSafeEqual(aBuf, Buffer.alloc(aBuf.length))
+    return false
+  }
+  return timingSafeEqual(aBuf, bBuf)
+}
+
 export function registerAuthHook(app: FastifyInstance): void {
   app.addHook("preHandler", async (req: FastifyRequest, reply: FastifyReply) => {
     const isPublic = isPublicRoute(req.method, req.url)
 
-    // Internal orchestrator calls: trust X-Internal-Orchestrator header ONLY from localhost
-    // and extract userId from the request body (sync HTTP nodes pass userId in body)
-    if (req.headers["x-internal-orchestrator"] === "true") {
-      const remoteIp = req.ip
-      if (remoteIp === "127.0.0.1" || remoteIp === "::1" || remoteIp === "::ffff:127.0.0.1") {
-        const body = req.body as Record<string, unknown> | undefined
-        if (body?.userId && typeof body.userId === "string") {
-          req.userId = body.userId
-        }
+    // Internal orchestrator calls: authenticate via shared-secret header, NOT req.ip.
+    // (req.ip is unreliable behind the Caddy reverse proxy — every external request
+    // arrives from 127.0.0.1 because Caddy proxies from localhost, which made the
+    // previous IP-based check an auth bypass.)
+    const internalSecretHeader = req.headers["x-internal-orchestrator-secret"]
+    const hasInternalHeader =
+      req.headers["x-internal-orchestrator"] !== undefined ||
+      internalSecretHeader !== undefined
+    if (hasInternalHeader) {
+      const provided = Array.isArray(internalSecretHeader)
+        ? internalSecretHeader[0]
+        : internalSecretHeader
+      if (typeof provided !== "string" || !constantTimeEqualStr(provided, config.INTERNAL_ORCHESTRATOR_SECRET)) {
+        reply.status(403).send({
+          error: { code: "forbidden", message: "Invalid internal orchestrator secret" },
+        })
         return
       }
-      // External request with internal header — reject
-      reply.status(403).send({
-        error: { code: "forbidden", message: "Internal header not allowed from external sources" },
-      })
+      const body = req.body as Record<string, unknown> | undefined
+      if (body?.userId && typeof body.userId === "string") {
+        req.userId = body.userId
+      }
       return
     }
 

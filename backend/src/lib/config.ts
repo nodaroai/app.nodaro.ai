@@ -41,6 +41,8 @@ const envSchema = z.object({
   RENDER_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(2),
   /** Max concurrent ffmpeg child processes (default 4). FFmpeg is CPU-bound; too many parallel processes thrash the box. Applies across every ffmpeg node (resize, combine, social-format, etc.). */
   FFMPEG_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(4),
+  /** Shared secret for authenticating internal orchestrator → API calls (replaces the unreliable `req.ip === 127.0.0.1` check). MUST be set to ≥32 random bytes hex. In Docker, start.sh auto-generates one if unset so all sibling processes inherit the same value. */
+  INTERNAL_ORCHESTRATOR_SECRET: z.string().min(32, "INTERNAL_ORCHESTRATOR_SECRET must be at least 32 characters (use `openssl rand -hex 32`)"),
 })
 
 export type Edition = "community" | "business" | "cloud"
