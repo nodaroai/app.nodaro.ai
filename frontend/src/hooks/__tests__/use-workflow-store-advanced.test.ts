@@ -248,6 +248,111 @@ describe("useWorkflowStore advanced", () => {
       expect(columns).toHaveLength(1)
       expect(columns[0].name).toBe("Existing")
     })
+
+    it("auto-populates Preview with handle-aware items and preserves duplicate source nodes by handle", () => {
+      useWorkflowStore.setState({
+        nodes: [
+          {
+            id: "voice_1",
+            type: "voice-design",
+            position: { x: 0, y: 0 },
+            data: {
+              label: "Voice Design",
+              generatedVoiceId: "voice_123",
+              generatedResults: [{ url: "https://cdn.example.com/voice-preview.mp3" }],
+              activeResultIndex: 0,
+            },
+          } as any,
+          {
+            id: "preview_1",
+            type: "preview",
+            position: { x: 200, y: 0 },
+            data: { label: "Preview", previewItems: [], itemOrder: [] },
+          } as any,
+        ],
+      })
+
+      useWorkflowStore.getState().onConnect({
+        source: "voice_1",
+        target: "preview_1",
+        sourceHandle: "voiceId",
+        targetHandle: null,
+      })
+
+      useWorkflowStore.getState().onConnect({
+        source: "voice_1",
+        target: "preview_1",
+        sourceHandle: null,
+        targetHandle: null,
+      })
+
+      const preview = useWorkflowStore.getState().nodes.find((node) => node.id === "preview_1")!
+      const previewData = preview.data as Record<string, unknown>
+      const previewItems = previewData.previewItems as Array<Record<string, unknown>>
+      const itemOrder = previewData.itemOrder as string[]
+
+      expect(previewItems).toHaveLength(2)
+      expect(previewItems[0].value).toBe("voice_123")
+      expect(previewItems[0].type).toBe("text")
+      expect(previewItems[0].itemKey).toBe("voice_1:voiceId")
+      expect(previewItems[1].value).toBe("https://cdn.example.com/voice-preview.mp3")
+      expect(previewItems[1].type).toBe("audio")
+      expect(previewItems[1].itemKey).toBe("voice_1:")
+      expect(itemOrder).toEqual(["voice_1:voiceId", "voice_1:"])
+    })
+
+    it("auto-populates Preview from distinct sub-workflow output ports", () => {
+      useWorkflowStore.setState({
+        nodes: [
+          {
+            id: "sub_1",
+            type: "sub-workflow",
+            position: { x: 0, y: 0 },
+            data: {
+              label: "Sub Workflow",
+              outputResults: {
+                img_port: "https://cdn.example.com/preview.png",
+                txt_port: "hello world",
+              },
+              routeSnapshot: {
+                visibleOutputPortId: "img_port",
+              },
+            },
+          } as any,
+          {
+            id: "preview_1",
+            type: "preview",
+            position: { x: 200, y: 0 },
+            data: { label: "Preview", previewItems: [], itemOrder: [] },
+          } as any,
+        ],
+      })
+
+      useWorkflowStore.getState().onConnect({
+        source: "sub_1",
+        target: "preview_1",
+        sourceHandle: "out_img_port",
+        targetHandle: null,
+      })
+
+      useWorkflowStore.getState().onConnect({
+        source: "sub_1",
+        target: "preview_1",
+        sourceHandle: "out_txt_port",
+        targetHandle: null,
+      })
+
+      const preview = useWorkflowStore.getState().nodes.find((node) => node.id === "preview_1")!
+      const previewData = preview.data as Record<string, unknown>
+      const previewItems = previewData.previewItems as Array<Record<string, unknown>>
+
+      expect(previewItems).toHaveLength(2)
+      expect(previewItems[0].value).toBe("https://cdn.example.com/preview.png")
+      expect(previewItems[0].itemKey).toBe("sub_1:out_img_port")
+      expect(previewItems[1].value).toBe("hello world")
+      expect(previewItems[1].itemKey).toBe("sub_1:out_txt_port")
+      expect(previewData.itemOrder).toEqual(["sub_1:out_img_port", "sub_1:out_txt_port"])
+    })
   })
 
   // ---------------------------------------------------------------

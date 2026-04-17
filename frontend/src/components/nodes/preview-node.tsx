@@ -9,10 +9,11 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { isMediaUrl } from "@/lib/media-type"
+import { getPreviewItemKey } from "@/lib/preview-items"
 import {
-  extractNodeOutput,
-  detectPreviewItemType,
-} from "@/components/editor/workflow-editor/execution-graph"
+  buildPreviewFingerprint,
+  collectPreviewItems,
+} from "@/components/editor/workflow-editor/preview-items"
 import type { PreviewNodeData, PreviewItem } from "@/types/nodes"
 
 const TYPE_ICON: Record<PreviewItem["type"], React.ReactNode> = {
@@ -69,11 +70,7 @@ function PreviewNodeComponent({ id, data, selected }: NodeProps) {
   // only when an edge changes or an upstream node produces new output.
   const upstreamFingerprint = useWorkflowStore(
     useCallback((s) => {
-      const inEdges = s.edges.filter((e) => e.target === id)
-      return inEdges.map((e) => {
-        const src = s.nodes.find((n) => n.id === e.source)
-        return src ? `${e.source}:${extractNodeOutput(src) ?? ""}` : ""
-      }).join("||")
+      return buildPreviewFingerprint(id, s.nodes, s.edges)
     }, [id])
   )
 
@@ -85,54 +82,7 @@ function PreviewNodeComponent({ id, data, selected }: NodeProps) {
     if (!thisNode) return
     const prevData = thisNode.data as PreviewNodeData
 
-    const incomingEdges = currentEdges.filter((e) => e.target === id)
-
-    // Preserve previous visibility settings and ordering
-    const prevVisibility = new Map<string, boolean>()
-    for (const item of prevData.previewItems ?? []) {
-      prevVisibility.set(item.sourceNodeId, item.visible)
-    }
-    const prevOrder = prevData.itemOrder ?? []
-
-    const freshItems: PreviewItem[] = []
-
-    for (const edge of incomingEdges) {
-      const sourceNode = currentNodes.find((n) => n.id === edge.source)
-      if (!sourceNode) continue
-
-      const raw = extractNodeOutput(sourceNode)
-      const trimmed = raw?.trim()
-      if (!trimmed) continue
-
-      const srcType = sourceNode.type ?? ""
-      const srcLabel = ((sourceNode.data as Record<string, unknown>).label as string) || srcType
-
-      const itemType = detectPreviewItemType(srcType, trimmed)
-
-      freshItems.push({
-        type: itemType,
-        value: trimmed,
-        sourceNodeId: sourceNode.id,
-        sourceNodeLabel: srcLabel,
-        visible: prevVisibility.get(sourceNode.id) ?? true,
-      })
-    }
-
-    // Apply saved ordering: known items first in saved order, new items appended
-    const itemMap = new Map(freshItems.map((item) => [item.sourceNodeId, item]))
-    const ordered: PreviewItem[] = []
-    for (const oid of prevOrder) {
-      const item = itemMap.get(oid)
-      if (item) {
-        ordered.push(item)
-        itemMap.delete(oid)
-      }
-    }
-    for (const item of itemMap.values()) {
-      ordered.push(item)
-    }
-
-    const newOrder = ordered.map((item) => item.sourceNodeId)
+    const { ordered, itemOrder } = collectPreviewItems(id, currentNodes, currentEdges, prevData)
 
     // Only update if items actually changed to avoid infinite loops
     const prevItems = prevData.previewItems ?? []
@@ -141,14 +91,14 @@ function PreviewNodeComponent({ id, data, selected }: NodeProps) {
       ordered.some((item, i) =>
         item.value !== prevItems[i]?.value ||
         item.type !== prevItems[i]?.type ||
-        item.sourceNodeId !== prevItems[i]?.sourceNodeId ||
+        getPreviewItemKey(item) !== getPreviewItemKey(prevItems[i] ?? item) ||
         item.sourceNodeLabel !== prevItems[i]?.sourceNodeLabel
       )
 
     if (changed) {
       updateNodeData(id, {
         previewItems: ordered,
-        itemOrder: newOrder,
+        itemOrder,
       })
     }
   }, [upstreamFingerprint, id, updateNodeData])
@@ -180,8 +130,8 @@ function PreviewNodeComponent({ id, data, selected }: NodeProps) {
       >
         {visibleItems.length > 0 ? (
           <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
-            {visibleItems.map((item, i) => (
-              <PreviewItemRow key={`${item.sourceNodeId}-${i}`} item={item} />
+            {visibleItems.map((item) => (
+              <PreviewItemRow key={getPreviewItemKey(item)} item={item} />
             ))}
             {hiddenCount > 0 && (
               <span className="text-[10px] text-muted-foreground/60 text-center py-0.5">
