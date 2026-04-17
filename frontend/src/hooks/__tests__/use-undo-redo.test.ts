@@ -19,7 +19,23 @@ vi.mock("@xyflow/react", () => ({
       return n
     })
   }),
-  applyEdgeChanges: vi.fn((_changes, edges) => edges),
+  applyEdgeChanges: vi.fn((changes, edges) => {
+    const removeIds = changes
+      .filter((c: { type: string }) => c.type === "remove")
+      .map((c: { id: string }) => c.id)
+
+    return edges
+      .filter((e: { id: string }) => !removeIds.includes(e.id))
+      .map((e: { id: string }) => {
+        const selectChange = changes.find(
+          (c: { type: string; id: string }) => c.type === "select" && c.id === e.id
+        )
+        if (selectChange) {
+          return { ...e, selected: (selectChange as { selected: boolean }).selected }
+        }
+        return e
+      })
+  }),
   addEdge: vi.fn((connection, edges) => [
     ...edges,
     { ...connection, id: connection.id ?? `edge_mock` },
@@ -45,6 +61,32 @@ function setupUndoSubscription() {
   }
   function cleanEdges(edges: Array<Record<string, unknown>>) {
     return edges.map(({ selected, ...rest }) => rest)
+  }
+  function hasCleanEdgeChange(
+    prevEdges: Array<Record<string, unknown>>,
+    currEdges: Array<Record<string, unknown>>,
+  ) {
+    if (prevEdges === currEdges) return false
+    if (prevEdges.length !== currEdges.length) return true
+
+    const cleanedPrev = cleanEdges(prevEdges)
+    const cleanedCurr = cleanEdges(currEdges)
+
+    for (let i = 0; i < cleanedPrev.length; i++) {
+      const prev = cleanedPrev[i]
+      const curr = cleanedCurr[i]
+      const prevKeys = Object.keys(prev)
+      const currKeys = Object.keys(curr)
+
+      if (prevKeys.length !== currKeys.length) return true
+
+      for (const key of prevKeys) {
+        if (!(key in curr)) return true
+        if (prev[key] !== curr[key]) return true
+      }
+    }
+
+    return false
   }
   function captureSnapshot(): WorkflowSnapshot {
     const s = useWorkflowStore.getState()
@@ -81,7 +123,10 @@ function setupUndoSubscription() {
       prevState.workflowName === state.workflowName &&
       prevState.characterDefinitions === state.characterDefinitions &&
       prevState.flowPromptTemplates === state.flowPromptTemplates &&
-      prevState.edges === state.edges &&
+      !hasCleanEdgeChange(
+        prevState.edges as unknown as Array<Record<string, unknown>>,
+        state.edges as unknown as Array<Record<string, unknown>>,
+      ) &&
       (() => {
         const pn = prevState.nodes, cn = state.nodes
         if (pn === cn) return true
@@ -373,6 +418,40 @@ describe("Undo/Redo System", () => {
     expect(sub.canRedo).toBe(true)
 
     // Redo should still work
+    const redoResult = sub.redo()
+    expect(redoResult).toBe(true)
+    expect(useWorkflowStore.getState().workflowName).toBe("Renamed")
+  })
+
+  it("should not clear redo stack for edge selection changes", () => {
+    sub.unsub()
+    useWorkflowStore.getState().clearWorkflow()
+    useUndoRedoStore.getState().clear()
+    useWorkflowStore.getState().loadWorkflow("wf1", "Test", [
+      { id: "node_1", type: "generate-image", position: { x: 0, y: 0 }, data: { provider: "test" } },
+      { id: "node_2", type: "generate-image", position: { x: 200, y: 0 }, data: { provider: "test2" } },
+    ] as any, [
+      { id: "e1", source: "node_1", target: "node_2" },
+    ] as any, [], {})
+    sub = setupUndoSubscription()
+
+    useWorkflowStore.getState().setWorkflowName("Renamed")
+    vi.advanceTimersByTime(301)
+    expect(sub.pastLength).toBe(1)
+
+    sub.undo()
+    expect(useWorkflowStore.getState().workflowName).toBe("Test")
+    expect(sub.canRedo).toBe(true)
+
+    useWorkflowStore.getState().onEdgesChange([
+      { type: "select", id: "e1", selected: true } as any,
+    ])
+    vi.advanceTimersByTime(301)
+
+    expect(sub.pastLength).toBe(0)
+    expect(sub.futureLength).toBe(1)
+    expect(sub.canRedo).toBe(true)
+
     const redoResult = sub.redo()
     expect(redoResult).toBe(true)
     expect(useWorkflowStore.getState().workflowName).toBe("Renamed")
