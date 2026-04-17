@@ -149,7 +149,10 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     return (data.text as string | undefined)?.trim();
   }
   if (type === "schedule-trigger") {
-    return (data.text as string | undefined)?.trim();
+    const scheduleText = (data.text as string | undefined)?.trim();
+    if (scheduleText) return scheduleText;
+    const triggerData = data.__triggerData as Record<string, unknown> | undefined;
+    return (triggerData?.timestamp as string | undefined)?.trim();
   }
   if (type === "telegram-trigger") {
     const triggerData = data.__triggerData as Record<string, unknown> | undefined;
