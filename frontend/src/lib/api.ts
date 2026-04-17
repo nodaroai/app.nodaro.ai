@@ -2033,26 +2033,26 @@ export async function sunoConvertWavApi(params: {
 }
 
 export async function sunoUploadExtendApi(params: {
-  audioUrl: string
+  uploadUrl: string
+  continueAt: number
   prompt?: string
   model?: string
   style?: string
   title?: string
   negativeStyle?: string
   vocalGender?: string
-  continueAt?: number
   defaultParamFlag?: boolean
   userId?: string
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = {
-    audioUrl: params.audioUrl,
+    uploadUrl: params.uploadUrl,
+    continueAt: params.continueAt,
     defaultParamFlag: params.defaultParamFlag ?? true,
     model: params.model || "V5",
   }
   if (params.prompt) body.prompt = params.prompt
   if (params.style) body.style = params.style
   if (params.title) body.title = params.title
-  if (params.continueAt != null) body.continueAt = params.continueAt
   if (params.negativeStyle) body.negativeStyle = params.negativeStyle
   if (params.vocalGender) body.vocalGender = params.vocalGender
   if (params.userId) body.userId = params.userId
@@ -2205,7 +2205,7 @@ export async function lipSyncApi(
   return res.json()
 }
 
-export async function generateMusicApi(prompt: string, provider?: string, duration?: number, genre?: string, mood?: string, instrumental?: boolean, lyrics?: string, referenceAudioUrl?: string, userId?: string): Promise<{ jobId: string }> {
+export async function generateMusicApi(prompt: string, provider?: string, duration?: number, genre?: string, mood?: string, instrumental?: boolean, lyrics?: string, referenceAudioUrl?: string, userId?: string, modelVersion?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (provider) body.provider = provider
   if (duration !== undefined) body.duration = duration
@@ -2215,6 +2215,7 @@ export async function generateMusicApi(prompt: string, provider?: string, durati
   if (lyrics) body.lyrics = lyrics
   if (referenceAudioUrl) body.referenceAudioUrl = referenceAudioUrl
   if (userId) body.userId = userId
+  if (modelVersion) body.modelVersion = modelVersion
   const res = await fetch(`${API_BASE_URL}/v1/generate-music`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },

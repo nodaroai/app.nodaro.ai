@@ -793,5 +793,19 @@ export function buildNodeOutputFromJobData(
     }
   }
 
+  // Normalize save-to-storage: worker stores { url, filename, type } where
+  // `type` is "image" | "video" | "audio" and `url` is the R2 URL. Route those
+  // to the matching media URL field so downstream nodes see a typed URL rather
+  // than an opaque "url" value (which none of them read).
+  if (!output.imageUrl && !output.videoUrl && !output.audioUrl) {
+    const storageUrl = outputData.url as string | undefined
+    const storageType = outputData.type as string | undefined
+    if (storageUrl) {
+      if (storageType === "video") output.videoUrl = storageUrl
+      else if (storageType === "audio") output.audioUrl = storageUrl
+      else if (storageType === "image") output.imageUrl = storageUrl
+    }
+  }
+
   return output
 }

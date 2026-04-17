@@ -14,6 +14,13 @@ import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 import type { CharacterDef, SceneData } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
 import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-constants.js"
+import { buildLlmCreditIdentifier } from "../../../../packages/shared/src/llm-models.js"
+import {
+  buildCharacterPrompt,
+  buildObjectPrompt,
+  buildLocationPrompt,
+  buildFaceTemplateInputs,
+} from "../../../../packages/shared/src/entity-prompts.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
 
@@ -891,10 +898,15 @@ export function buildPayload(
 
     case "lip-sync": {
       const provider = (data.provider as string) ?? "kling-avatar"
+      // infinitalk is tier-priced by resolution — `/v1/lip-sync` reserves
+      // credits using the composite `infinitalk:{resolution}` identifier.
+      const lipSyncResolution = (data.resolution as string | undefined) ?? "720p"
+      const lipSyncIdentifier =
+        provider === "infinitalk" ? `infinitalk:${lipSyncResolution}` : provider
       return {
         jobName: "lip-sync",
         queueName: "video-generation",
-        modelIdentifier: provider,
+        modelIdentifier: lipSyncIdentifier,
         payload: {
           jobId,
           imageUrl: resolvedInputs.imageUrl || data.imageUrl,
@@ -1058,6 +1070,9 @@ export function buildPayload(
           instrumental: data.instrumental,
           lyrics: resolveRefs(data.lyrics as string | undefined, refMap),
           referenceAudioUrl: resolvedInputs.audioUrl || data.referenceAudioUrl,
+          // modelVersion is an optional Suno-family field (v4/v5/v4.5); forward
+          // so orchestrator runs respect the user's model selection.
+          modelVersion: data.modelVersion,
           usageLogId,
         },
       }
@@ -1218,14 +1233,21 @@ export function buildPayload(
         usageLogId,
       })
 
-    case "suno-separate":
-      return simpleResult("suno-separate", "suno-separate", {
+    case "suno-separate": {
+      // `split_stem` is ~3x more expensive than `separate_vocal` — the route's
+      // creditGuard switches identifiers based on `type`. Mirror that here so
+      // orchestrated split_stem runs don't under-charge the user.
+      const separateType = (data.type as string | undefined) || "separate_vocal"
+      const separateIdentifier =
+        separateType === "split_stem" ? "suno-separate-stem" : "suno-separate"
+      return simpleResult("suno-separate", separateIdentifier, {
         jobId,
         taskId: resolvedInputs.sunoTaskId || data.sunoTaskId || data.taskId,
         audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
-        type: data.type || "separate_vocal",
+        type: separateType,
         usageLogId,
       })
+    }
 
     case "suno-music-video":
       return simpleResult("suno-music-video", "suno-music-video", {
@@ -1295,7 +1317,9 @@ export function buildPayload(
         jobId,
         uploadUrl: resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl,
         prompt: resolveRefs(data.prompt as string | undefined, refMap),
-        continueAt: data.continueAt,
+        // Route schema requires continueAt as a non-negative number; default to
+        // 0 (extend from start) to match the frontend single-node behaviour.
+        continueAt: (data.continueAt as number | undefined) ?? 0,
         defaultParamFlag: data.defaultParamFlag ?? true,
         model: data.model,
         style: resolvedInputs.prompt || data.style,
@@ -1425,6 +1449,9 @@ export function buildPayload(
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         startTime: data.startTime,
         endTime: data.endTime,
+        // outputSilentVideo toggles the dual-output silent-video branch that
+        // writes `generatedSilentVideoUrl` alongside the main trimmed clip.
+        outputSilentVideo: data.outputSilentVideo,
         usageLogId,
       })
 
@@ -1521,21 +1548,44 @@ export function buildPayload(
       })
 
     case "mix-audio": {
-      let mixAudioUrls = resolvedInputs.audioUrls || data.audioUrls || []
-      // Apply user-configured track ordering if available (matches frontend logic)
+      // Build ordered [{nodeId, url}] so we can key trackVolumes by nodeId and
+      // emit them in the same order as audioUrls (the worker expects a plain
+      // number[] aligned with audioUrls indexing).
+      const sourceEntries = resolvedInputs.audioUrlsWithSourceIds ?? []
+      let orderedEntries: Array<{ nodeId: string; url: string }> = sourceEntries
       const trackOrder = data.trackOrder as string[] | undefined
-      if (trackOrder?.length && resolvedInputs.audioUrlsWithSourceIds?.length) {
-        const ordered: string[] = []
+      if (trackOrder?.length && sourceEntries.length) {
+        const ordered: Array<{ nodeId: string; url: string }> = []
         for (const nodeId of trackOrder) {
-          const entry = resolvedInputs.audioUrlsWithSourceIds.find((e) => e.nodeId === nodeId)
-          if (entry) ordered.push(entry.url)
+          const entry = sourceEntries.find((e) => e.nodeId === nodeId)
+          if (entry) ordered.push(entry)
         }
-        if (ordered.length >= 2) mixAudioUrls = ordered
+        if (ordered.length >= 2) orderedEntries = ordered
       }
+
+      // If the frontend only gave us raw audioUrls (no source IDs), fall back.
+      const fallbackUrls = resolvedInputs.audioUrls || (data.audioUrls as string[] | undefined) || []
+      const mixAudioUrls: string[] = orderedEntries.length > 0
+        ? orderedEntries.map((e) => e.url)
+        : fallbackUrls
+
+      // trackVolumes on the node data is stored as Record<nodeId, number>, but
+      // the worker (backend/src/workers/handlers/ffmpeg.ts) expects number[]
+      // aligned with audioUrls. Convert here so orchestrated runs honour
+      // user-configured per-track volumes. Legacy `volumes` array is kept as
+      // a fallback for direct API callers.
+      const rawVolumes = data.trackVolumes as Record<string, number> | undefined
+      let trackVolumes: number[] | undefined
+      if (orderedEntries.length > 0 && rawVolumes && typeof rawVolumes === "object") {
+        trackVolumes = orderedEntries.map((e) => rawVolumes[e.nodeId] ?? 100)
+      } else if (Array.isArray(data.volumes)) {
+        trackVolumes = data.volumes as number[]
+      }
+
       return ffmpegResult("mix-audio", {
         jobId,
         audioUrls: mixAudioUrls,
-        trackVolumes: data.trackVolumes ?? data.volumes,
+        trackVolumes,
         usageLogId,
       })
     }
@@ -1583,19 +1633,119 @@ export function buildPayload(
       })
     }
 
-    // --- Entity generation (character, face, object, location share identical structure) ---
-    case "character":
-    case "face":
-    case "object":
-    case "location": {
+    // --- Entity generation (character, face, object, location) ---
+    // IMPORTANT: build the same prompt the route would produce. A single-node
+    // HTTP call hits /v1/generate-{character,face,object,location} which enriches
+    // the prompt from name/gender/style/baseOutfit/category. The orchestrator
+    // enqueues directly to the worker, bypassing that enrichment — so we must
+    // construct the prompt ourselves using the shared builders.
+    case "character": {
       const provider = (data.provider as string) ?? "nano-banana"
+      const name = (data.name as string | undefined) ?? ""
+      const entityPrompt = name
+        ? buildCharacterPrompt({
+            name,
+            description: data.description as string | undefined,
+            gender: data.gender as string | undefined,
+            style: data.style as string | undefined,
+            baseOutfit: data.baseOutfit as string | undefined,
+          })
+        : resolveRefs(data.description as string | undefined, refMap)
+          ?? resolveRefs(data.prompt as string | undefined, refMap)
       return {
-        jobName: `generate-${type}`,
+        jobName: "generate-character",
         queueName: "video-generation",
         modelIdentifier: provider,
         payload: {
           jobId,
-          prompt: resolveRefs(data.description as string | undefined, refMap) || resolveRefs(data.prompt as string | undefined, refMap),
+          prompt: entityPrompt,
+          sourceImageUrl: data.sourceImageUrl,
+          provider,
+          referenceImageUrls: resolvedInputs.referenceImageUrls,
+          usageLogId,
+        },
+      }
+    }
+    case "face": {
+      const provider = (data.provider as string) ?? "nano-banana"
+      const name = (data.name as string | undefined) ?? ""
+      let entityPrompt: string | undefined
+      if (name) {
+        const templateInputs = buildFaceTemplateInputs({
+          name,
+          description: data.description as string | undefined,
+          style: data.style as string | undefined,
+        })
+        const template = resolveTemplate(
+          "face-generation",
+          buildCtx?.settings?.userPromptTemplates,
+          buildCtx?.settings?.flowPromptTemplates,
+        )
+        entityPrompt = applyTemplate(template, templateInputs)
+      } else {
+        entityPrompt = resolveRefs(data.description as string | undefined, refMap)
+          ?? resolveRefs(data.prompt as string | undefined, refMap)
+      }
+      return {
+        jobName: "generate-face",
+        queueName: "video-generation",
+        modelIdentifier: provider,
+        payload: {
+          jobId,
+          prompt: entityPrompt,
+          sourceImageUrl: data.sourceImageUrl,
+          provider,
+          referenceImageUrls: resolvedInputs.referenceImageUrls,
+          usageLogId,
+        },
+      }
+    }
+    case "object": {
+      const provider = (data.provider as string) ?? "nano-banana"
+      const name = (data.name as string | undefined) ?? ""
+      const entityPrompt = name
+        ? buildObjectPrompt({
+            name,
+            description: data.description as string | undefined,
+            category: data.category as string | undefined,
+            style: data.style as string | undefined,
+          })
+        : resolveRefs(data.description as string | undefined, refMap)
+          ?? resolveRefs(data.prompt as string | undefined, refMap)
+      return {
+        jobName: "generate-object",
+        queueName: "video-generation",
+        modelIdentifier: provider,
+        payload: {
+          jobId,
+          prompt: entityPrompt,
+          sourceImageUrl: data.sourceImageUrl,
+          provider,
+          referenceImageUrls: resolvedInputs.referenceImageUrls,
+          usageLogId,
+        },
+      }
+    }
+    case "location": {
+      const provider = (data.provider as string) ?? "nano-banana"
+      const name = (data.name as string | undefined) ?? ""
+      const entityPrompt = name
+        ? buildLocationPrompt({
+            name,
+            description: data.description as string | undefined,
+            category: data.category as string | undefined,
+            style: data.style as string | undefined,
+          })
+        : resolveRefs(data.description as string | undefined, refMap)
+          ?? resolveRefs(data.prompt as string | undefined, refMap)
+      return {
+        jobName: "generate-location",
+        queueName: "video-generation",
+        modelIdentifier: provider,
+        payload: {
+          jobId,
+          prompt: entityPrompt,
+          sourceImageUrl: data.sourceImageUrl,
           provider,
           referenceImageUrls: resolvedInputs.referenceImageUrls,
           usageLogId,
@@ -1668,16 +1818,27 @@ export function buildPayload(
       }
     }
 
-    case "generate-script":
-      return simpleResult("generate-script", "generate-script", {
-        jobId,
-        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
-        sceneCount: data.sceneCount,
-        tone: data.tone ?? data.style,
-        targetDuration: data.targetDuration ?? data.targetLength,
-        provider: data.provider,
-        usageLogId,
-      })
+    case "generate-script": {
+      // Credit ID is tier-based when an LLM model is selected (e.g.
+      // `generate-script:economy`). Must also forward `llmModel` so the worker
+      // routes to the user's chosen model instead of the default.
+      const scriptLlmModel = data.llmModel as string | undefined
+      return {
+        jobName: "generate-script",
+        queueName: "video-generation",
+        modelIdentifier: buildLlmCreditIdentifier("generate-script", scriptLlmModel),
+        payload: {
+          jobId,
+          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+          sceneCount: data.sceneCount,
+          tone: data.tone ?? data.style,
+          targetDuration: data.targetDuration ?? data.targetLength,
+          provider: data.provider,
+          llmModel: scriptLlmModel,
+          usageLogId,
+        },
+      }
+    }
 
     // --- Render video (goes to render queue) ---
     case "render-video": {

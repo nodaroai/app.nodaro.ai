@@ -9,6 +9,18 @@ export const DEFAULT_TEMPLATES: Record<string, string> = {
   "location-description": "Include location '{name}': {description}.",
   "face-description":
     "Include the exact face and facial features of '{name}' from the reference image. Maintain perfect likeness and facial identity.",
+  // `-generation` templates drive standalone entity generation routes
+  // (`/v1/generate-character`, `/v1/generate-face`, etc.). Duplicated between
+  // frontend and backend historically; consolidated here so the backend DAG
+  // orchestrator produces the same prompt as a single-node HTTP call.
+  "character-generation":
+    "Create a full-body character portrait: {description}. Style: {style}. Gender: {gender}. High quality, detailed, consistent lighting, neutral background.",
+  "object-generation":
+    "Create a product photo of: {description}. Category: {category}. Clean background, professional studio lighting, high detail.",
+  "location-generation":
+    "Create a cinematic scene of: {description}. Category: {category}. Atmospheric lighting, high detail, wide angle.",
+  "face-generation":
+    "Create a professional close-up face portrait headshot: {description}. Style: {style}. Looking directly at camera, sharp focus on facial features, clean background, studio lighting, high resolution. Maintain exact facial identity and features from the reference image.",
   "generate-image-wrapper": "{userPrompt}\n{assetDescriptions}",
 }
 

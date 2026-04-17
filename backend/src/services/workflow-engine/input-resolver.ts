@@ -810,6 +810,16 @@ function routeOutput(
     inputs.maskUrl = output
     return
   }
+  if (edge.targetHandle === "lottie") {
+    if (output.startsWith("http") || output.startsWith("/")) {
+      const name = (src.data.label as string | undefined) ?? "Lottie Asset"
+      inputs.lottieAssets = [
+        ...(inputs.lottieAssets ?? []),
+        { id: src.id, url: output, name },
+      ]
+    }
+    return
+  }
   const refHandleKey = REFERENCE_HANDLE_MAP[edge.targetHandle ?? ""]
   if (refHandleKey) {
     inputs[refHandleKey] = [...((inputs[refHandleKey] as string[] | undefined) ?? []), output]

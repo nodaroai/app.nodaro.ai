@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { buildLocationPrompt } from "../../../packages/shared/src/entity-prompts.js"
 
 const generateLocationBody = z.object({
   name: z.string().min(1).max(200),
@@ -39,15 +40,7 @@ export async function generateLocationRoutes(app: FastifyInstance) {
 
     const modelIdentifier = parsed.data.provider
 
-    // Build location scene prompt
-    const categoryDesc = category ?? "location"
-    const descPart = description ? `, ${description}` : ""
-    const styleDesc = style ?? "realistic"
-    const prompt = [
-      `${categoryDesc} scene, ${name}${descPart},`,
-      `${styleDesc} art style,`,
-      "wide establishing shot, 4k, highly detailed, cinematic lighting, no people, no text, no labels, no watermarks.",
-    ].join(" ")
+    const prompt = buildLocationPrompt({ name, description, category, style })
 
     const { data: job, error } = await supabase
       .from("jobs")

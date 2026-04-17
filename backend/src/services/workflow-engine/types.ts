@@ -181,6 +181,8 @@ export interface ResolvedInputs {
   caption?: string
   systemPrompt?: string
   componentInputMap?: Record<string, string>
+  /** Lottie asset URLs from upstream nodes connected to the "lottie" handle */
+  lottieAssets?: Array<{ id?: string; url: string; name?: string }>
 }
 
 // ---------------------------------------------------------------------------

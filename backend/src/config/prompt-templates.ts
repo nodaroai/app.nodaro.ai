@@ -1,36 +1,18 @@
-export const SYSTEM_PROMPT_TEMPLATES: Record<string, string> = {
-  "character-description": "Include character '{name}': {description}.",
-  "object-description": "Include object '{name}': {description}.",
-  "location-description": "Include location '{name}': {description}.",
-  "face-description":
-    "Include the exact face and facial features of '{name}' from the reference image. Maintain perfect likeness and facial identity.",
-  "character-generation":
-    "Create a full-body character portrait: {description}. Style: {style}. Gender: {gender}. High quality, detailed, consistent lighting, neutral background.",
-  "object-generation":
-    "Create a product photo of: {description}. Category: {category}. Clean background, professional studio lighting, high detail.",
-  "location-generation":
-    "Create a cinematic scene of: {description}. Category: {category}. Atmospheric lighting, high detail, wide angle.",
-  "face-generation":
-    "Create a professional close-up face portrait headshot: {description}. Style: {style}. Looking directly at camera, sharp focus on facial features, clean background, studio lighting, high resolution. Maintain exact facial identity and features from the reference image.",
-  "generate-image-wrapper": "{userPrompt}\n{assetDescriptions}",
-}
+/**
+ * Shim that re-exports prompt-template helpers from the shared package so
+ * backend routes and the DAG orchestrator share a single source of truth.
+ *
+ * Historically this file had its own copy of the templates which drifted from
+ * `packages/shared/src/prompt-templates.ts` and caused DAG parity bugs (e.g.
+ * orchestrator producing empty face prompts because `"face-generation"` was
+ * only defined here).
+ */
 
-export function applyTemplate(
-  template: string,
-  vars: Record<string, string>,
-): string {
-  return Object.entries(vars).reduce(
-    (result, [key, value]) => result.replaceAll(`{${key}}`, value || ""),
-    template,
-  )
-}
+import {
+  DEFAULT_TEMPLATES,
+  resolveTemplate,
+  applyTemplate,
+} from "../../../packages/shared/src/prompt-templates.js"
 
-export function resolveTemplate(
-  key: string,
-  userTemplates?: Record<string, string>,
-  flowTemplates?: Record<string, string>,
-): string {
-  return (
-    flowTemplates?.[key] ?? userTemplates?.[key] ?? SYSTEM_PROMPT_TEMPLATES[key] ?? ""
-  )
-}
+export const SYSTEM_PROMPT_TEMPLATES = DEFAULT_TEMPLATES
+export { resolveTemplate, applyTemplate }

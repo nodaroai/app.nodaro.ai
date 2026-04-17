@@ -1047,6 +1047,7 @@ export function executeNode(
           d.lyrics || undefined,
           refUrl,
           ctx.userId,
+          d.modelVersion || undefined,
         ),
       "generatedAudioUrl",
       "Generate Music",
@@ -1821,14 +1822,16 @@ export function executeNode(
       node.id,
       () =>
         sunoUploadExtendApi({
-          audioUrl,
+          // Route expects `uploadUrl`, not `audioUrl`.
+          uploadUrl: audioUrl,
+          // Route requires a numeric continueAt; default to 0 (extend from start).
+          continueAt: d.continueAt ?? 0,
           prompt: d.prompt?.trim() || undefined,
           model: d.model || undefined,
           style: inputs.prompt || d.style || undefined,
           title: d.title || undefined,
           negativeStyle: d.negativeStyle || undefined,
           vocalGender: d.vocalGender || undefined,
-          continueAt: d.continueAt ?? undefined,
           defaultParamFlag: d.defaultParamFlag ?? true,
           userId: ctx.userId,
         }),

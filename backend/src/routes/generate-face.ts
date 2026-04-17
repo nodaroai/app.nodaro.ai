@@ -6,6 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { resolveTemplate, applyTemplate } from "../config/prompt-templates.js"
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { buildFaceTemplateInputs } from "../../../packages/shared/src/entity-prompts.js"
 
 const generateFaceBody = z.object({
   name: z.string().min(1).max(200),
@@ -59,11 +60,7 @@ export async function generateFaceRoutes(app: FastifyInstance) {
       }
 
       const template = resolveTemplate("face-generation", userTemplates)
-      const descParts = [name, description].filter(Boolean).join(", ")
-      prompt = applyTemplate(template, {
-        description: descParts,
-        style: style ?? "realistic",
-      })
+      prompt = applyTemplate(template, buildFaceTemplateInputs({ name, description, style }))
     }
 
     const { data: job, error } = await supabase

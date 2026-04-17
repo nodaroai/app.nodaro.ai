@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { buildObjectPrompt } from "../../../packages/shared/src/entity-prompts.js"
 
 const generateObjectBody = z.object({
   name: z.string().min(1).max(200),
@@ -39,15 +40,7 @@ export async function generateObjectRoutes(app: FastifyInstance) {
 
     const modelIdentifier = parsed.data.provider
 
-    // Build single front view object prompt
-    const categoryDesc = category ?? "object"
-    const descPart = description ? `, ${description}` : ""
-    const styleDesc = style ?? "realistic"
-    const prompt = [
-      `Single ${categoryDesc} ${name}${descPart},`,
-      `${styleDesc} art style, front view,`,
-      "4k, highly detailed, white/plain background, no text, no labels, no watermarks, product photography style.",
-    ].join(" ")
+    const prompt = buildObjectPrompt({ name, description, category, style })
 
     const { data: job, error } = await supabase
       .from("jobs")

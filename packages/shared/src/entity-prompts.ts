@@ -1,0 +1,86 @@
+/**
+ * Prompt builders for entity nodes (character, face, object, location).
+ *
+ * Single source of truth shared between:
+ * - Route handlers: `backend/src/routes/generate-{character,face,object,location}.ts`
+ * - Backend orchestrator: `backend/src/services/workflow-engine/payload-builder.ts`
+ *
+ * The route handlers call these when no client-supplied prompt is provided.
+ * The orchestrator calls these to build the same prompt that a single-node
+ * HTTP call would produce.
+ */
+
+export type EntityStyle = "realistic" | "anime" | "3d-pixar" | "illustration"
+
+export interface CharacterPromptInput {
+  name: string
+  description?: string
+  gender?: string
+  style?: EntityStyle | string
+  baseOutfit?: string
+}
+
+export function buildCharacterPrompt(input: CharacterPromptInput): string {
+  const charDesc = [input.name, input.gender, input.description].filter(Boolean).join(", ")
+  const outfitDesc = input.baseOutfit ? `, wearing ${input.baseOutfit}` : ""
+  const styleDesc = input.style ?? "realistic"
+  return [
+    `${charDesc}${outfitDesc},`,
+    `${styleDesc} style, front view, looking at camera,`,
+    "full body portrait, 4k, highly detailed, clean background.",
+  ].join(" ")
+}
+
+export interface ObjectPromptInput {
+  name: string
+  description?: string
+  category?: string
+  style?: EntityStyle | string
+}
+
+export function buildObjectPrompt(input: ObjectPromptInput): string {
+  const categoryDesc = input.category ?? "object"
+  const descPart = input.description ? `, ${input.description}` : ""
+  const styleDesc = input.style ?? "realistic"
+  return [
+    `Single ${categoryDesc} ${input.name}${descPart},`,
+    `${styleDesc} art style, front view,`,
+    "4k, highly detailed, white/plain background, no text, no labels, no watermarks, product photography style.",
+  ].join(" ")
+}
+
+export interface LocationPromptInput {
+  name: string
+  description?: string
+  category?: string
+  style?: EntityStyle | string
+}
+
+export function buildLocationPrompt(input: LocationPromptInput): string {
+  const categoryDesc = input.category ?? "location"
+  const descPart = input.description ? `, ${input.description}` : ""
+  const styleDesc = input.style ?? "realistic"
+  return [
+    `${categoryDesc} scene, ${input.name}${descPart},`,
+    `${styleDesc} art style,`,
+    "wide establishing shot, 4k, highly detailed, cinematic lighting, no people, no text, no labels, no watermarks.",
+  ].join(" ")
+}
+
+export interface FacePromptInput {
+  name: string
+  description?: string
+  style?: EntityStyle | string
+}
+
+/**
+ * Face prompt uses the "face-generation" template (resolved via prompt-templates.ts).
+ * Returns the template inputs so callers can call resolveTemplate + applyTemplate.
+ */
+export function buildFaceTemplateInputs(input: FacePromptInput): {
+  description: string
+  style: string
+} {
+  const descParts = [input.name, input.description].filter(Boolean).join(", ")
+  return { description: descParts, style: input.style ?? "realistic" }
+}
