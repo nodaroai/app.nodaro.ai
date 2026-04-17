@@ -23,7 +23,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
 ])
 
 // Variable pricing: which setting type affects cost per provider
-export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution"> = {
+export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | "rendering-speed"> = {
   "gpt-image": "quality",
   "gpt-image-i2i": "quality",
   "nano-banana-pro": "resolution",
@@ -37,6 +37,10 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution"> =
   "seedream-5-lite": "quality",
   "seedream-5-lite-i2i": "quality",
   "topaz-image-upscale": "resolution",
+  "ideogram-edit": "rendering-speed",
+  "ideogram-remix": "rendering-speed",
+  "ideogram-reframe": "rendering-speed",
+  "ideogram-v3": "rendering-speed",
 }
 
 

@@ -137,10 +137,17 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "imagen4-fast":      { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
   "imagen4-ultra":     { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr
   "ideogram-v3":       { provider: "KIE.ai",    providerCostUsd: 0.035, markupPct: 25 },  // 7 KIE cr (BALANCED)
+  "ideogram-edit":     { provider: "KIE.ai",    providerCostUsd: 0.090, markupPct: 25 },  // 18 KIE cr (BALANCED)
+  "ideogram-remix":    { provider: "KIE.ai",    providerCostUsd: 0.090, markupPct: 25 },  // 18 KIE cr (BALANCED)
+  "ideogram-reframe":  { provider: "KIE.ai",    providerCostUsd: 0.035, markupPct: 25 },  // 7 KIE cr (BALANCED)
   "qwen":              { provider: "KIE.ai",    providerCostUsd: 0.010, markupPct: 25 },  // 2 KIE cr
+  "qwen-i2i":          { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
+  "qwen-edit":         { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },  // 5 KIE cr
   "z-image":           { provider: "KIE.ai",    providerCostUsd: 0.004, markupPct: 25 },  // 0.8 KIE cr
   "seedream":          { provider: "KIE.ai",    providerCostUsd: 0.0275, markupPct: 25 }, // 5.5 KIE cr
+  "seedream-edit":     { provider: "KIE.ai",    providerCostUsd: 0.032, markupPct: 25 },  // 6.5 KIE cr
   "seedream-5-lite":   { provider: "KIE.ai",    providerCostUsd: 0.0275, markupPct: 25 }, // 5.5 KIE cr
+  "seedream-5-lite-i2i": { provider: "KIE.ai",  providerCostUsd: 0.0275, markupPct: 25 }, // 5.5 KIE cr
   // ── Image Editing ──
   "recraft-upscale":   { provider: "KIE.ai",    providerCostUsd: 0.0025, markupPct: 25 }, // 0.5 KIE cr
   "recraft-remove-bg": { provider: "KIE.ai",    providerCostUsd: 0,      markupPct: 25 }, // 1 KIE cr (free)
@@ -176,10 +183,16 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "runway-aleph":      { provider: "KIE.ai",    providerCostUsd: 0.550, markupPct: 25 },  // 110 KIE cr
   // ── Video Extend / Upscale ──
   "veo-extend":        { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 60 KIE cr (VEO 3.1 Fast)
+  "runway-extend":     { provider: "KIE.ai",    providerCostUsd: 0.500, markupPct: 25 },  // ~100 KIE cr (Runway extend)
   "veo-1080p":         { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },  // 5 KIE cr
   "veo-4k":            { provider: "KIE.ai",    providerCostUsd: 0.600, markupPct: 25 },  // 120 KIE cr
   // ── Video-to-Video / Motion ──
   "wan":               { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },  // 70 KIE cr (V2V 5s 720p)
+  "wan-flash":         { provider: "KIE.ai",    providerCostUsd: 0.200, markupPct: 25 },  // ~40 KIE cr (Flash V2V, faster)
+  "wan-t2v":           { provider: "KIE.ai",    providerCostUsd: 0.5225, markupPct: 25 }, // 104.5 KIE cr (T2V 5s 1080p)
+  "wan-turbo-t2v":     { provider: "KIE.ai",    providerCostUsd: 0.400, markupPct: 25 },  // 80 KIE cr (T2V 5s 720p)
+  "wan-animate-move":  { provider: "KIE.ai",    providerCostUsd: 0.510, markupPct: 25 },  // 102 KIE cr (480p default)
+  "wan-animate-replace": { provider: "KIE.ai",  providerCostUsd: 0.510, markupPct: 25 },  // 102 KIE cr (480p default)
   "luma-modify":       { provider: "KIE.ai",    providerCostUsd: 0.500, markupPct: 25 },  // ~100 KIE cr (estimated)
   "topaz-video":       { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr (upscale 1x/2x/4x)
   "motion-transfer":   { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 6 cr/sec × 10s (kling 2.6 720p)
@@ -191,6 +204,7 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "infinitalk":        { provider: "KIE.ai",    providerCostUsd: 0.525, markupPct: 25 },  // 3–12 KIE cr/sec × ~14s (avg 480p/720p)
   "hailuo-avatar":     { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },  // estimated
   // ── Audio / TTS / Music ──
+  "elevenlabs-v3":     { provider: "ElevenLabs", providerCostUsd: 0.050, markupPct: 25 },  // direct ElevenLabs API
   "elevenlabs-turbo":       { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },  // 6 KIE cr
   "elevenlabs-multilingual": { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 }, // 12 KIE cr
   "elevenlabs":        { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },  // alias for turbo
@@ -198,6 +212,12 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "elevenlabs-dialogue": { provider: "KIE.ai",  providerCostUsd: 0.070, markupPct: 25 },  // 14 KIE cr
   "elevenlabs-stt":    { provider: "KIE.ai",    providerCostUsd: 0.0175, markupPct: 25 }, // 3.5 KIE cr
   "elevenlabs-isolation": { provider: "KIE.ai", providerCostUsd: 0.001, markupPct: 25 },  // 0.2 KIE cr
+  "voice-clone":       { provider: "ElevenLabs", providerCostUsd: 0.060, markupPct: 25 },  // instant clone
+  "elevenlabs-voice-changer":    { provider: "ElevenLabs", providerCostUsd: 0.050, markupPct: 25 },  // speech-to-speech
+  "elevenlabs-dubbing":          { provider: "ElevenLabs", providerCostUsd: 0.100, markupPct: 25 },  // async dubbing
+  "elevenlabs-voice-remix":      { provider: "ElevenLabs", providerCostUsd: 0.050, markupPct: 25 },  // voice preview
+  "elevenlabs-voice-design":     { provider: "ElevenLabs", providerCostUsd: 0.060, markupPct: 25 },  // full voice design
+  "elevenlabs-forced-alignment": { provider: "ElevenLabs", providerCostUsd: 0.035, markupPct: 25 },  // timestamps
   "suno":              { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr
   "suno-v5":           { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
   "suno-generate":     { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },

@@ -109,7 +109,8 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   if (type === "upload-image") {
     const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
     const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
-    return results[activeIndex]?.url ?? (data.url as string | undefined)?.trim()
+    const directUrl = (data.url as string | undefined)?.trim()
+    return directUrl || results[activeIndex]?.url
   }
   if (type === "upload-video") {
     return (data.url as string | undefined)?.trim();
@@ -148,7 +149,10 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     return (data.text as string | undefined)?.trim();
   }
   if (type === "schedule-trigger") {
-    return (data.text as string | undefined)?.trim();
+    const scheduleText = (data.text as string | undefined)?.trim();
+    if (scheduleText) return scheduleText;
+    const triggerData = data.__triggerData as Record<string, unknown> | undefined;
+    return (triggerData?.timestamp as string | undefined)?.trim();
   }
   if (type === "telegram-trigger") {
     const triggerData = data.__triggerData as Record<string, unknown> | undefined;

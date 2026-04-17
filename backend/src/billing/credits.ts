@@ -395,7 +395,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "video-to-video": 25,
   "text-to-video": 25,
   "text-to-speech": 4,
-  "generate-music": 7,
+  "generate-music": 4,
   "text-to-audio": 4,
   "lip-sync": 13,
   "latentsync": 5,

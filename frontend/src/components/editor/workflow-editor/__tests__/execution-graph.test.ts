@@ -238,6 +238,24 @@ describe("extractNodeOutput", () => {
     expect(extractNodeOutput(node)).toBe("http://img.png")
   })
 
+  it("prefers upload-image data.url over stale generatedResults", () => {
+    const node = makeNode("1", "upload-image", {
+      url: "http://current.png",
+      generatedResults: [
+        { url: "http://stale.png", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    expect(extractNodeOutput(node)).toBe("http://current.png")
+  })
+
+  it("schedule-trigger falls back to injected timestamp when text is empty", () => {
+    const node = makeNode("1", "schedule-trigger", {
+      __triggerData: { timestamp: "2025-01-01T00:00:00Z" },
+    })
+    expect(extractNodeOutput(node)).toBe("2025-01-01T00:00:00Z")
+  })
+
   it("returns active result url from generate-image with generatedResults", () => {
     const node = makeNode("1", "generate-image", {
       generatedResults: [
