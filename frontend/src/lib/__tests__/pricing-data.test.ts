@@ -6,6 +6,7 @@ import {
   getTierPrice,
   getTierPriceId,
   getAnnualSavingsPercent,
+  getAnnualSavingsDollars,
   getBillingCycleFromPriceId,
 } from "../pricing-data"
 import type { PricingTier } from "../pricing-data"
@@ -178,6 +179,24 @@ describe("getAnnualSavingsPercent", () => {
   it("returns positive savings for all paid tiers", () => {
     for (const tier of PRICING_TIERS.slice(1)) {
       expect(getAnnualSavingsPercent(tier)).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe("getAnnualSavingsDollars", () => {
+  it("returns 0 for free tier", () => {
+    const free = PRICING_TIERS[0]
+    expect(getAnnualSavingsDollars(free)).toBe(0)
+  })
+
+  it("returns annual savings in dollars for basic tier", () => {
+    const basic = PRICING_TIERS.find((t) => t.id === "basic")!
+    expect(getAnnualSavingsDollars(basic)).toBe((basic.priceMonthly - basic.priceAnnual) * 12)
+  })
+
+  it("returns positive savings for all paid tiers", () => {
+    for (const tier of PRICING_TIERS.slice(1)) {
+      expect(getAnnualSavingsDollars(tier)).toBeGreaterThan(0)
     }
   })
 })

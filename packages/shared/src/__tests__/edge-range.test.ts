@@ -416,34 +416,34 @@ import { describeEdgeBehavior } from "../edge-range"
 describe("describeEdgeBehavior — basic modes", () => {
   it("last mode", () => {
     expect(describeEdgeBehavior({ outputMode: "last" })).toBe(
-      "Passes only the most recent result.",
+      "Passes the selected result.",
     )
   })
 
   it("each default config", () => {
     expect(describeEdgeBehavior({ outputMode: "each" })).toBe(
-      "Runs the downstream node once per item.",
+      "Runs the next node one by one, per item.",
     )
   })
 
   it("all default config", () => {
     expect(describeEdgeBehavior({ outputMode: "all" })).toBe(
-      "Passes all items together as a list.",
+      "Passes all items at once.",
     )
   })
 
   it("default config treats empty-string range fields as defaults", () => {
     expect(
       describeEdgeBehavior({ outputMode: "each", rangeFrom: "", rangeTo: "" }),
-    ).toBe("Runs the downstream node once per item.")
+    ).toBe("Runs the next node one by one, per item.")
     expect(
       describeEdgeBehavior({ outputMode: "each", rangeFrom: " ", rangeTo: "last" }),
-    ).toBe("Runs the downstream node once per item.")
+    ).toBe("Runs the next node one by one, per item.")
   })
 
   it("default config treats step 0 as default", () => {
     expect(describeEdgeBehavior({ outputMode: "each", rangeStep: 0 })).toBe(
-      "Runs the downstream node once per item.",
+      "Runs the next node one by one, per item.",
     )
   })
 })
@@ -504,13 +504,13 @@ describe("describeEdgeBehavior — Range tab SELECTION_PHRASE", () => {
   it("each with simple range", () => {
     expect(
       describeEdgeBehavior({ outputMode: "each", rangeFrom: "2", rangeTo: "last-1" }),
-    ).toBe("Fans out over items 2 through the second-to-last.")
+    ).toBe("Runs the next node once for items 2 through the second-to-last.")
   })
 
   it("all with simple range", () => {
     expect(
       describeEdgeBehavior({ outputMode: "all", rangeFrom: "2", rangeTo: "last-1" }),
-    ).toBe("Passes items 2 through the second-to-last as a list.")
+    ).toBe("Passes items 2 through the second-to-last at once.")
   })
 
   it("each full-list reverse", () => {
@@ -521,7 +521,7 @@ describe("describeEdgeBehavior — Range tab SELECTION_PHRASE", () => {
         rangeTo: "1",
         rangeStep: -1,
       }),
-    ).toBe("Fans out over all items in reverse order.")
+    ).toBe("Runs the next node once for all items in reverse order.")
   })
 
   it("each positive step > 1", () => {
@@ -532,7 +532,7 @@ describe("describeEdgeBehavior — Range tab SELECTION_PHRASE", () => {
         rangeTo: "10",
         rangeStep: 2,
       }),
-    ).toBe("Fans out over items 1 through 10 (every 2nd item).")
+    ).toBe("Runs the next node once for items 1 through 10 (every 2nd item).")
   })
 
   it("each step 3 and step 21 ordinals", () => {
@@ -543,7 +543,7 @@ describe("describeEdgeBehavior — Range tab SELECTION_PHRASE", () => {
         rangeTo: "10",
         rangeStep: 3,
       }),
-    ).toBe("Fans out over items 1 through 10 (every 3rd item).")
+    ).toBe("Runs the next node once for items 1 through 10 (every 3rd item).")
     expect(
       describeEdgeBehavior({
         outputMode: "each",
@@ -551,7 +551,7 @@ describe("describeEdgeBehavior — Range tab SELECTION_PHRASE", () => {
         rangeTo: "21",
         rangeStep: 21,
       }),
-    ).toBe("Fans out over items 1 through 21 (every 21st item).")
+    ).toBe("Runs the next node once for items 1 through 21 (every 21st item).")
   })
 
   it("empty-result concrete", () => {
@@ -562,7 +562,7 @@ describe("describeEdgeBehavior — Range tab SELECTION_PHRASE", () => {
         rangeTo: "2",
         rangeStep: 1,
       }),
-    ).toBe("Selects no items — downstream node will not run.")
+    ).toBe("Nothing selected — the next node won't run.")
     expect(
       describeEdgeBehavior({
         outputMode: "all",
@@ -570,7 +570,7 @@ describe("describeEdgeBehavior — Range tab SELECTION_PHRASE", () => {
         rangeTo: "2",
         rangeStep: 1,
       }),
-    ).toBe("Selects no items — downstream node will receive an empty list.")
+    ).toBe("Nothing selected — the next node will get an empty bundle.")
   })
 
   it("empty-result both relative", () => {
@@ -581,7 +581,7 @@ describe("describeEdgeBehavior — Range tab SELECTION_PHRASE", () => {
         rangeTo: "last-3",
         rangeStep: 1,
       }),
-    ).toBe("Selects no items — downstream node will not run.")
+    ).toBe("Nothing selected — the next node won't run.")
   })
 
   it("empty-result negative step with from < to", () => {
@@ -592,7 +592,7 @@ describe("describeEdgeBehavior — Range tab SELECTION_PHRASE", () => {
         rangeTo: "5",
         rangeStep: -1,
       }),
-    ).toBe("Selects no items — downstream node will not run.")
+    ).toBe("Nothing selected — the next node won't run.")
   })
 
   it("mixed-kind skips empty-result detection (falls through)", () => {
@@ -603,7 +603,7 @@ describe("describeEdgeBehavior — Range tab SELECTION_PHRASE", () => {
         rangeTo: "3",
         rangeStep: 1,
       }),
-    ).toBe("Fans out over items the 6th-from-last through 3.")
+    ).toBe("Runs the next node once for items the 6th-from-last through 3.")
   })
 
   it("A==B collapse concrete", () => {
@@ -613,7 +613,7 @@ describe("describeEdgeBehavior — Range tab SELECTION_PHRASE", () => {
         rangeFrom: "3",
         rangeTo: "3",
       }),
-    ).toBe("Runs the downstream node only on item 3.")
+    ).toBe("Runs the next node only on item 3.")
   })
 
   it("A==B collapse relative via last/last-0 alias", () => {
@@ -623,7 +623,7 @@ describe("describeEdgeBehavior — Range tab SELECTION_PHRASE", () => {
         rangeFrom: "last",
         rangeTo: "last-0",
       }),
-    ).toBe("Runs the downstream node only on the last item.")
+    ).toBe("Runs the next node only on the last item.")
   })
 })
 
@@ -635,7 +635,7 @@ describe("describeEdgeBehavior — List tab SELECTION_PHRASE", () => {
         selectorMode: "list",
         listExpression: "1, 3, last",
       }),
-    ).toBe("Fans out over items 1, 3, and the last one.")
+    ).toBe("Runs the next node once for items 1, 3, and the last one.")
   })
 
   it("all mode 3-term list with inner range", () => {
@@ -645,7 +645,7 @@ describe("describeEdgeBehavior — List tab SELECTION_PHRASE", () => {
         selectorMode: "list",
         listExpression: "1, 3..5, last",
       }),
-    ).toBe("Passes items 1, 3 through 5, and the last one as a list.")
+    ).toBe("Passes items 1, 3 through 5, and the last one at once.")
   })
 
   it("2-term list (no Oxford comma)", () => {
@@ -655,14 +655,14 @@ describe("describeEdgeBehavior — List tab SELECTION_PHRASE", () => {
         selectorMode: "list",
         listExpression: "1, last",
       }),
-    ).toBe("Fans out over items 1 and the last one.")
+    ).toBe("Runs the next node once for items 1 and the last one.")
     expect(
       describeEdgeBehavior({
         outputMode: "all",
         selectorMode: "list",
         listExpression: "1, last",
       }),
-    ).toBe("Passes items 1 and the last one as a list.")
+    ).toBe("Passes items 1 and the last one at once.")
   })
 
   it("single-range-term list", () => {
@@ -672,7 +672,7 @@ describe("describeEdgeBehavior — List tab SELECTION_PHRASE", () => {
         selectorMode: "list",
         listExpression: "1..5",
       }),
-    ).toBe("Fans out over items 1 through 5.")
+    ).toBe("Runs the next node once for items 1 through 5.")
   })
 
   it("single-index term triggers special case", () => {
@@ -682,14 +682,14 @@ describe("describeEdgeBehavior — List tab SELECTION_PHRASE", () => {
         selectorMode: "list",
         listExpression: "last",
       }),
-    ).toBe("Runs the downstream node only on the last item.")
+    ).toBe("Runs the next node only on the last item.")
     expect(
       describeEdgeBehavior({
         outputMode: "all",
         selectorMode: "list",
         listExpression: "3",
       }),
-    ).toBe("Passes only item 3 as a list.")
+    ).toBe("Passes only item 3.")
   })
 
   it("collapsed range term A..A only triggers single-index special case", () => {
@@ -699,14 +699,14 @@ describe("describeEdgeBehavior — List tab SELECTION_PHRASE", () => {
         selectorMode: "list",
         listExpression: "3..3",
       }),
-    ).toBe("Passes only item 3 as a list.")
+    ).toBe("Passes only item 3.")
     expect(
       describeEdgeBehavior({
         outputMode: "all",
         selectorMode: "list",
         listExpression: "last..last-0",
       }),
-    ).toBe("Passes only the last item as a list.")
+    ).toBe("Passes only the last item.")
   })
 
   it("empty/whitespace listExpression → default config", () => {
@@ -716,14 +716,14 @@ describe("describeEdgeBehavior — List tab SELECTION_PHRASE", () => {
         selectorMode: "list",
         listExpression: "",
       }),
-    ).toBe("Runs the downstream node once per item.")
+    ).toBe("Runs the next node one by one, per item.")
     expect(
       describeEdgeBehavior({
         outputMode: "all",
         selectorMode: "list",
         listExpression: "   ",
       }),
-    ).toBe("Passes all items together as a list.")
+    ).toBe("Passes all items at once.")
   })
 
   it("malformed listExpression → fallback to mode default", () => {
@@ -733,14 +733,14 @@ describe("describeEdgeBehavior — List tab SELECTION_PHRASE", () => {
         selectorMode: "list",
         listExpression: "garbage",
       }),
-    ).toBe("Runs the downstream node once per item.")
+    ).toBe("Runs the next node one by one, per item.")
     expect(
       describeEdgeBehavior({
         outputMode: "all",
         selectorMode: "list",
         listExpression: "garbage",
       }),
-    ).toBe("Passes all items together as a list.")
+    ).toBe("Passes all items at once.")
   })
 
   it("List tab range term with step > 1", () => {
@@ -750,7 +750,7 @@ describe("describeEdgeBehavior — List tab SELECTION_PHRASE", () => {
         selectorMode: "list",
         listExpression: "1..10:2",
       }),
-    ).toBe("Fans out over items 1 through 10 (every 2nd).")
+    ).toBe("Runs the next node once for items 1 through 10 (every 2nd).")
   })
 
   it("List tab empty-result range term rendered as-typed", () => {
@@ -760,6 +760,6 @@ describe("describeEdgeBehavior — List tab SELECTION_PHRASE", () => {
         selectorMode: "list",
         listExpression: "5..2",
       }),
-    ).toBe("Fans out over items 5 through 2.")
+    ).toBe("Runs the next node once for items 5 through 2.")
   })
 })

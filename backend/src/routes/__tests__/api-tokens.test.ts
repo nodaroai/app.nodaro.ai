@@ -190,7 +190,7 @@ describe("POST /v1/api-tokens", () => {
     expect(res.json().error.code).toBe("validation_error")
   })
 
-  it.skip("returns 400 when max 10 tokens reached", async () => {
+  it("returns 400 when max 10 tokens reached", async () => {
     const mockFrom = vi.mocked(supabase.from)
     let callNum = 0
     mockFrom.mockImplementation(() => {
