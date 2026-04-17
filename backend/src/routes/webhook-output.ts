@@ -1,10 +1,11 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
 const sendSchema = z.object({
-  url: z.string().url(),
+  url: safeUrlSchema,
   payload: z.record(z.unknown()),
   workflowId: z.string().uuid().optional(),
   forcePrivate: z.boolean().optional(),

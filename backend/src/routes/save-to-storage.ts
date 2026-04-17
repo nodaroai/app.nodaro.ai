@@ -2,11 +2,12 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { uploadToR2 } from "../lib/storage.js"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { creditGuard } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
 const saveToStorageBody = z.object({
-  mediaUrl: z.string().url(),
+  mediaUrl: safeUrlSchema,
   filename: z.string().optional(),
   mediaType: z.enum(["image", "video", "audio"]).optional(),
 })

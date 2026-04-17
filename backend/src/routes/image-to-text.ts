@@ -6,10 +6,11 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { CreditsService } from "../billing/credits.js"
 import { llmComplete, type LlmContentBlock } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
 const imageToTextBody = z.object({
-  imageUrl: z.string().url(),
+  imageUrl: safeUrlSchema,
   detailLevel: z
     .enum(["brief", "detailed", "structured"])
     .default("detailed"),
