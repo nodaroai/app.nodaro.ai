@@ -275,6 +275,13 @@ describe("getPrimaryOutput", () => {
     expect(getPrimaryOutput({ approved: false, reason: "bad quality" }, "qa-check", "approved")).toBeUndefined()
   })
 
+  it("qa-check with undefined approved returns undefined for both handles (parity with frontend)", () => {
+    // Unexecuted qa-check: must not fire the rejected branch via truthy check.
+    expect(getPrimaryOutput({ reason: "no run yet" }, "qa-check", "approved")).toBeUndefined()
+    expect(getPrimaryOutput({ reason: "no run yet" }, "qa-check", "rejected")).toBeUndefined()
+    expect(getPrimaryOutput({}, "qa-check", "rejected")).toBeUndefined()
+  })
+
   it("routes adjust-volume by _lastInputType", () => {
     expect(getPrimaryOutput({ videoUrl: "v.mp4", _lastInputType: "video" }, "adjust-volume")).toBe("v.mp4")
     expect(getPrimaryOutput({ audioUrl: "a.mp3", _lastInputType: "audio" }, "adjust-volume")).toBe("a.mp3")

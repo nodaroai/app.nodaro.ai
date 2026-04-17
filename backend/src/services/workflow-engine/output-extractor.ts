@@ -324,10 +324,14 @@ export function getPrimaryOutput(
     return processedResultToText(output.processedResult)
   }
 
-  // QA-check: route by approved/rejected handle
+  // QA-check: route by approved/rejected handle.
+  // Strict equality on boolean — truthy checks would conflate `undefined`
+  // (unexecuted) with `false` (rejected), causing unexecuted qa-check nodes
+  // to silently fire the rejected branch. Matches frontend execution-graph.ts.
   if (sourceType === "qa-check" && sourceHandle) {
-    if (sourceHandle === "approved" && output.approved) return output.reason
-    if (sourceHandle === "rejected" && !output.approved) return output.reason
+    if (output.approved === undefined) return undefined
+    if (sourceHandle === "approved" && output.approved === true) return output.reason
+    if (sourceHandle === "rejected" && output.approved === false) return output.reason
     return undefined
   }
 
