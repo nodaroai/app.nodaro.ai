@@ -1469,7 +1469,9 @@ export function buildPayload(
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         targetAspect: data.targetAspect ?? data.aspectRatio,
-        method: data.method ?? "fit",
+        // Default "pad" matches the route's Zod schema; sending "fit" (an
+        // unsupported enum value) would make the worker silently no-op.
+        method: data.method ?? "pad",
         padColor: data.padColor,
         usageLogId,
       })

@@ -157,6 +157,42 @@ describe("executeSubWorkflow", () => {
     expect(result.text).toBe("upstream text")
   })
 
+  it("emits _outputResults keyed by portId for per-port downstream routing", async () => {
+    // Regression: backend runs used to return flat {text,imageUrl,...} with no
+    // _outputResults map, so when downstream consumed the sub-workflow via a
+    // specific `out_{portId}` handle, per-port routing silently fell back to
+    // media-type matching. Output-extractor requires _outputResults for
+    // handle-based routing.
+    const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
+
+    const subNodes: SimpleNode[] = [
+      node("promptA", "text-prompt", { text: "value-A" }),
+      node("promptB", "text-prompt", { text: "value-B" }),
+      node("out", "sub-workflow-output", {
+        ports: [
+          { id: "portA", mediaType: "text" },
+          { id: "portB", mediaType: "text" },
+        ],
+        visibleOutputPortId: "portA",
+      }),
+    ]
+    const subEdges: SimpleEdge[] = [
+      { id: "eA", source: "promptA", target: "out", sourceHandle: null, targetHandle: "portA" },
+      { id: "eB", source: "promptB", target: "out", sourceHandle: null, targetHandle: "portB" },
+    ]
+
+    mockSingle.mockResolvedValue({
+      data: { nodes: subNodes, edges: subEdges },
+      error: null,
+    })
+
+    const result = await executeSubWorkflow(n, {}, ctx())
+    expect(result._outputResults).toBeDefined()
+    expect(result._outputResults?.portA).toBe("value-A")
+    expect(result._outputResults?.portB).toBe("value-B")
+    expect(result._visibleOutputPortId).toBe("portA")
+  })
+
   it("throws when execution is cancelled", async () => {
     const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
 

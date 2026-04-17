@@ -7,9 +7,10 @@ import { ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-c
 import { resolveSeparator } from "../../../../packages/shared/src/text-separators.js"
 import { evaluateJsonPath, stringifyPathResults } from "../../../../packages/shared/src/json-path.js"
 import { evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, type JsonFilter } from "../../../../packages/shared/src/json-evaluator.js"
-import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeOutput, NodeExecutionState } from "./types.js"
+import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeOutput, NodeExecutionState, OrchestratorContext } from "./types.js"
 import { getPrimaryOutput, extractSourceNodeOutput } from "./output-extractor.js"
 import { isSourceNode, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES } from "./execution-graph.js"
+import { supabase } from "../../lib/supabase.js"
 
 /**
  * Collect text outputs from all upstream nodes connected to a target node.
@@ -476,12 +477,18 @@ export function executeRouter(
 
 /**
  * Execute webhook-output node: collect upstream outputs and POST to configured URL.
+ *
+ * Creates a `jobs` row with `status: completed|failed` and captures
+ * statusCode + responseBody in `output_data`, matching the single-node route
+ * (`/v1/webhook-output/send`). Without this, orchestrated runs left no audit
+ * trail for webhook deliveries.
  */
 export async function executeWebhookOutput(
   node: SimpleNode,
   edges: SimpleEdge[],
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
+  ctx?: OrchestratorContext,
 ): Promise<NodeOutput> {
   const url = (node.data.url as string)?.trim()
   if (!url) {
@@ -523,17 +530,69 @@ export async function executeWebhookOutput(
     }
   }
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(30_000),
-  })
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "")
-    throw new Error(`Webhook POST failed (${response.status}): ${body.slice(0, 200)}`)
+  // Create audit job row upfront when we have ctx (orchestrator run); direct
+  // unit-test callers may omit ctx and skip the DB round-trip.
+  let jobId: string | undefined
+  if (ctx?.userId) {
+    const { data: job } = await supabase
+      .from("jobs")
+      .insert({
+        workflow_id: null,
+        workflow_execution_id: ctx.executionId,
+        user_id: ctx.userId,
+        status: "pending",
+        provider: "webhook-output",
+        input_data: { url, payload, type: "webhook-output" },
+      })
+      .select("id")
+      .single()
+    jobId = job?.id
+    if (jobId) ctx.onJobCreated?.(node.id, jobId)
   }
 
-  return { text: "sent" }
+  let statusCode = 0
+  let responseBody = ""
+  let success = false
+  let errorMessage: string | undefined
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(30_000),
+    })
+    statusCode = response.status
+    responseBody = (await response.text().catch(() => "")).slice(0, 2000)
+    success = response.ok
+    if (!response.ok) {
+      errorMessage = `Webhook POST failed (${statusCode}): ${responseBody.slice(0, 200)}`
+    }
+  } catch (err) {
+    errorMessage = err instanceof Error ? err.message : "Webhook POST failed"
+  }
+
+  if (jobId) {
+    await supabase
+      .from("jobs")
+      .update({
+        status: success ? "completed" : "failed",
+        error_message: success ? null : errorMessage,
+        output_data: { success, statusCode, responseBody },
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", jobId)
+  }
+
+  if (!success) {
+    // Throw so the orchestrator marks the node as failed and short-circuits.
+    throw new Error(errorMessage ?? `Webhook POST failed (${statusCode})`)
+  }
+
+  return {
+    text: "sent",
+    webhookSuccess: true,
+    webhookStatusCode: statusCode,
+    webhookResponseBody: responseBody,
+  }
 }

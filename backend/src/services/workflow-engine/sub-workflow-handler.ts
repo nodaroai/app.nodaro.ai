@@ -17,7 +17,7 @@ import {
   isSkipNode,
 } from "./execution-graph.js"
 import { resolveNodeInputs } from "./input-resolver.js"
-import { extractSourceNodeOutput } from "./output-extractor.js"
+import { extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { executeNode } from "./node-executor.js"
 import type {
   SimpleNode,
@@ -216,22 +216,60 @@ export async function executeSubWorkflow(
     }
   }
 
-  // Collect outputs from the sub-workflow output node
+  // Collect outputs from the sub-workflow output node.
+  //
+  // Emits BOTH:
+  //   - `_outputResults: Record<portId, value>` for handle-based downstream
+  //     routing via `out_{portId}` (matches frontend behaviour — without this,
+  //     per-port routing on backend-run sub-workflows was broken)
+  //   - `_visibleOutputPortId` so output-extractor's fallback picks the
+  //     user-selected visible port when no specific `out_{portId}` handle is
+  //     wired downstream
+  //   - Flat `{imageUrl, videoUrl, audioUrl, text}` for legacy callers and
+  //     for the final execution-result collection
   const output: NodeOutput = {}
+  const outputResults: Record<string, string> = {}
+  let visiblePortId: string | undefined
 
-  // Find the output node and collect its upstream outputs
   for (const subNode of subNodes) {
-    if (subNode.type === "sub-workflow-output") {
-      // Get inputs to the output node (these are the sub-workflow's outputs)
-      const outputInputs = resolveNodeInputs(subNode, subEdges, nodeStates, subNodes)
-      if (outputInputs.imageUrl) output.imageUrl = outputInputs.imageUrl
-      if (outputInputs.videoUrl) output.videoUrl = outputInputs.videoUrl
-      if (outputInputs.audioUrl) output.audioUrl = outputInputs.audioUrl
-      if (outputInputs.prompt) output.text = outputInputs.prompt
+    if (subNode.type !== "sub-workflow-output") continue
+    const outNodeData = subNode.data as Record<string, unknown>
+    const ports = (outNodeData.ports as Array<{ id: string }> | undefined) ?? []
+    if (!visiblePortId) {
+      visiblePortId = outNodeData.visibleOutputPortId as string | undefined
+    }
+
+    for (const port of ports) {
+      const incomingEdge = subEdges.find(
+        (e) => e.target === subNode.id && e.targetHandle === port.id,
+      )
+      if (!incomingEdge) continue
+      const srcNode = subNodes.find((n) => n.id === incomingEdge.source)
+      if (!srcNode) continue
+      const srcState = nodeStates[srcNode.id]
+      if (!srcState?.output) continue
+      const value = getPrimaryOutput(srcState.output, srcNode.type, incomingEdge.sourceHandle)
+      if (value) outputResults[port.id] = value
+    }
+
+    // Also fill the flat NodeOutput slots from the output node's upstream
+    // inputs, so callers that consume the sub-workflow without a port-handle
+    // (legacy path + fallback) still see a typed media URL.
+    const outputInputs = resolveNodeInputs(subNode, subEdges, nodeStates, subNodes)
+    if (outputInputs.imageUrl && !output.imageUrl) output.imageUrl = outputInputs.imageUrl
+    if (outputInputs.videoUrl && !output.videoUrl) output.videoUrl = outputInputs.videoUrl
+    if (outputInputs.audioUrl && !output.audioUrl) output.audioUrl = outputInputs.audioUrl
+    if (outputInputs.prompt && !output.text) output.text = outputInputs.prompt
+  }
+
+  if (Object.keys(outputResults).length > 0) {
+    output._outputResults = outputResults
+    if (visiblePortId && outputResults[visiblePortId]) {
+      output._visibleOutputPortId = visiblePortId
     }
   }
 
-  // Fallback: if no output node, collect from all terminal nodes
+  // Fallback: if no output node was found, collect from all terminal nodes
   if (!output.imageUrl && !output.videoUrl && !output.audioUrl && !output.text) {
     const terminalNodes = findTerminalNodes(subNodes, subEdges)
     for (const termNode of terminalNodes) {

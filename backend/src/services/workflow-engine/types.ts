@@ -59,6 +59,12 @@ export interface NodeOutput {
   activeRoutes?: string[]
   /** Router: route ID -> output value (undefined for inactive routes) */
   routeOutputs?: Record<string, string | undefined>
+  /** Webhook-output: whether the POST returned a 2xx status */
+  webhookSuccess?: boolean
+  /** Webhook-output: HTTP status code from the destination */
+  webhookStatusCode?: number
+  /** Webhook-output: first 2000 chars of the response body */
+  webhookResponseBody?: string
 }
 
 export type NodeExecutionStatus =
