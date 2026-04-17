@@ -78,6 +78,9 @@ import {
   ListMusic,
   Braces,
   Filter,
+  ListFilter,
+  CopyMinus,
+  GitMerge,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -705,6 +708,27 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "json-process",
     label: "JSON Process",
     icon: <Filter className="h-4 w-4" />,
+    category: "Processing",
+    group: "Text",
+  },
+  {
+    type: "filter-list",
+    label: "Filter List",
+    icon: <ListFilter className="h-4 w-4" />,
+    category: "Processing",
+    group: "Text",
+  },
+  {
+    type: "deduplicate",
+    label: "Deduplicate",
+    icon: <CopyMinus className="h-4 w-4" />,
+    category: "Processing",
+    group: "Text",
+  },
+  {
+    type: "merge-lists",
+    label: "Merge Lists",
+    icon: <GitMerge className="h-4 w-4" />,
     category: "Processing",
     group: "Text",
   },

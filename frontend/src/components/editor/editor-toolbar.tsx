@@ -324,6 +324,16 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.errorMessage = undefined
           break
 
+        case "filter-list":
+        case "deduplicate":
+        case "merge-lists":
+          data.listResults = undefined
+          data.__listResults = undefined
+          data.__listTotal = undefined
+          data.executionStatus = undefined
+          data.errorMessage = undefined
+          break
+
         case "forced-alignment":
           data.alignmentResults = []
           data.executionStatus = undefined

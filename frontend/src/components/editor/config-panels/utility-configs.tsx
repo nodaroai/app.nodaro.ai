@@ -29,6 +29,13 @@ import {
   type TeleportSendData,
   type TeleportReceiveData,
   type JsonProcessNodeData,
+  type FilterListNodeData,
+  type FilterListCondition,
+  type FilterListOperator,
+  type DeduplicateNodeData,
+  type MergeListsNodeData,
+  type WorkflowNode,
+  type WorkflowEdge,
 } from "@/types/nodes"
 import { isMediaUrl } from "@/lib/media-type"
 import { getPreviewItemKey } from "@/lib/preview-items"
@@ -41,7 +48,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
-import type { ConfigProps } from "./types"
+import type { ConfigProps, SourceNodeInfo } from "./types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 const SEPARATOR_OPTIONS = [
@@ -292,30 +299,172 @@ export function SplitTextConfig({ data, onUpdate }: { data: SplitTextData; onUpd
   )
 }
 
+// ---------------------------------------------------------------------------
+// Upstream field-schema detection (shared by ExtractFieldConfig + FilterListConfig)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract top-level field keys from an upstream node's stored output.
+ * Checks list-shaped outputs (__listResults / listResults / splitResults —
+ * first item's keys), JSON-shaped outputs (generatedJson / processedResult —
+ * object keys or first array element's keys), and stringified JSON list
+ * items. Returns [] when nothing schema-like is found.
+ */
+function detectUpstreamFieldKeys(
+  nodeData: Record<string, unknown> | null | undefined,
+): readonly string[] {
+  if (!nodeData) return []
+
+  const listCandidates: ReadonlyArray<unknown> = [
+    nodeData.__listResults,
+    nodeData.listResults,
+    nodeData.splitResults,
+  ]
+  for (const list of listCandidates) {
+    if (Array.isArray(list) && list.length > 0) {
+      const keys = extractKeysFromValue(list[0])
+      if (keys.length > 0) return keys
+    }
+  }
+
+  const jsonCandidates: ReadonlyArray<unknown> = [
+    nodeData.generatedJson,
+    nodeData.processedResult,
+  ]
+  for (const json of jsonCandidates) {
+    const keys = extractKeysFromValue(json)
+    if (keys.length > 0) return keys
+  }
+
+  return []
+}
+
+function extractKeysFromValue(v: unknown): readonly string[] {
+  if (v === null || v === undefined) return []
+  if (Array.isArray(v)) {
+    return v.length > 0 ? extractKeysFromValue(v[0]) : []
+  }
+  if (typeof v === "object") {
+    return Object.keys(v as Record<string, unknown>)
+  }
+  if (typeof v === "string") {
+    const trimmed = v.trim()
+    if (trimmed.length < 2) return []
+    const first = trimmed[0]
+    if (first !== "{" && first !== "[") return []
+    try {
+      return extractKeysFromValue(JSON.parse(trimmed))
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+/** Node types that don't transform item structure — items flow through
+ *  unchanged. Schema detection walks back through these to find the real
+ *  producer (e.g. Web Scrape) when the pass-through itself has no cache. */
+const PASS_THROUGH_SCHEMA_TYPES: ReadonlySet<string> = new Set([
+  "filter-list",
+  "deduplicate",
+  "merge-lists",
+])
+
+/**
+ * Compute dropdown options for the Field selector. Resolution order:
+ *   1. Live-detected keys from the immediate upstream's cached output.
+ *   2. SCRAPER_OUTPUT_FIELDS fallback when the upstream is a web-scrape
+ *      node with no cached data yet.
+ *   3. For pass-through upstreams (filter-list/deduplicate/merge-lists),
+ *      walk further back through the graph until a real producer is
+ *      reached, then apply the same two strategies there.
+ */
+function getUpstreamFieldOptions(
+  sources: ReadonlyArray<SourceNodeInfo>,
+  allNodes?: ReadonlyArray<WorkflowNode>,
+  allEdges?: ReadonlyArray<WorkflowEdge>,
+): readonly string[] {
+  const inSource = sources.find((s) => s.targetHandle === "in")
+  if (!inSource) return []
+  return resolveNodeSchema(
+    inSource.type,
+    inSource.id,
+    (inSource.nodeData ?? null) as Record<string, unknown> | null,
+    allNodes,
+    allEdges,
+    new Set<string>(),
+  )
+}
+
+function resolveNodeSchema(
+  type: string | undefined,
+  id: string,
+  data: Record<string, unknown> | null,
+  allNodes: ReadonlyArray<WorkflowNode> | undefined,
+  allEdges: ReadonlyArray<WorkflowEdge> | undefined,
+  visited: Set<string>,
+): readonly string[] {
+  if (visited.has(id)) return []
+  visited.add(id)
+
+  // 1. Live cached schema on this node.
+  const detected = detectUpstreamFieldKeys(data)
+  if (detected.length > 0) return detected
+
+  // 2. Web-scrape static fallback for known actor shapes.
+  if (type === "web-scrape" && data) {
+    const actor = (data as WebScrapeNodeData).actor ?? "google-search"
+    const fallback = SCRAPER_OUTPUT_FIELDS[actor] ?? []
+    if (fallback.length > 0) return fallback
+  }
+
+  // 3. Pass-through nodes: items preserve structure, so look at their
+  //    producers. (Filter List, Deduplicate, Merge Lists.)
+  if (PASS_THROUGH_SCHEMA_TYPES.has(type ?? "") && allNodes && allEdges) {
+    const incoming = allEdges.filter((e) => e.target === id)
+    for (const edge of incoming) {
+      const src = allNodes.find((n) => n.id === edge.source)
+      if (!src) continue
+      const keys = resolveNodeSchema(
+        src.type,
+        src.id,
+        src.data as Record<string, unknown>,
+        allNodes,
+        allEdges,
+        visited,
+      )
+      if (keys.length > 0) return keys
+    }
+  }
+
+  return []
+}
+
 const EXTRACT_FIELD_CUSTOM = "__custom__"
 const EXTRACT_FIELD_WHOLE = "__whole__"
 
-export function ExtractFieldConfig({ data, onUpdate, sources }: ConfigProps<ExtractFieldNodeData>) {
-  const inSource = sources.find((s) => s.targetHandle === "in" && s.type === "web-scrape")
-  const upstreamScraperData = inSource ? (inSource.nodeData ?? null) as WebScrapeNodeData | null : null
-
-  const mode = data.mode ?? (upstreamScraperData ? "dropdown" : "custom")
+export function ExtractFieldConfig({ data, onUpdate, sources, nodes, edges }: ConfigProps<ExtractFieldNodeData>) {
+  // Dropdown is the default UI — users opt into manual entry via "Custom path…".
+  const mode = data.mode ?? "dropdown"
   const field = data.field ?? ""
-  const actorOptions = upstreamScraperData
-    ? SCRAPER_OUTPUT_FIELDS[upstreamScraperData.actor ?? "google-search"] ?? []
-    : []
+  const actorOptions = useMemo(
+    () => getUpstreamFieldOptions(sources, nodes, edges),
+    [sources, nodes, edges],
+  )
 
   const setField = (value: string) => onUpdate({ field: value })
   const setMode = (next: "dropdown" | "custom") => onUpdate({ mode: next })
 
   // Map field → dropdown sentinel for the Select's value prop.
+  // Custom values fall back to "" so the placeholder shows (the stored field is
+  // preserved on node data and re-selecting an option overwrites it).
   const selectValue = field === ""
     ? EXTRACT_FIELD_WHOLE
     : (actorOptions.includes(field) ? field : "")
 
   return (
     <div className="flex flex-col gap-3">
-      {upstreamScraperData && mode === "dropdown" ? (
+      {mode === "dropdown" ? (
         <div>
           <Label>Field</Label>
           <Select
@@ -340,7 +489,9 @@ export function ExtractFieldConfig({ data, onUpdate, sources }: ConfigProps<Extr
             </SelectContent>
           </Select>
           <p className="text-[10px] text-muted-foreground mt-1">
-            Pick (whole item) when the JSON is a plain list of values (e.g., <code>["a","b"]</code>).
+            {actorOptions.length > 0
+              ? <>Pick (whole item) when the JSON is a plain list of values (e.g., <code>["a","b"]</code>), or choose Custom path… for a manual dot-path.</>
+              : <>Connect an upstream node that emits JSON or list data to detect its fields, or choose Custom path… to enter a dot-path manually.</>}
           </p>
         </div>
       ) : (
@@ -354,15 +505,13 @@ export function ExtractFieldConfig({ data, onUpdate, sources }: ConfigProps<Extr
           <p className="text-[10px] text-muted-foreground">
             Use dot notation. The path runs against each item if the root is an array. Leave blank to use each item as-is (whole item).
           </p>
-          {upstreamScraperData && (
-            <button
-              type="button"
-              className="text-[10px] text-muted-foreground hover:text-foreground text-left self-start"
-              onClick={() => setMode("dropdown")}
-            >
-              ← Back to field list
-            </button>
-          )}
+          <button
+            type="button"
+            className="text-[11px] text-muted-foreground hover:text-foreground hover:underline text-left self-start mt-0.5"
+            onClick={() => setMode("dropdown")}
+          >
+            ← Back to field list
+          </button>
         </div>
       )}
 
@@ -1149,6 +1298,313 @@ x | not                 boolean negation
         <p className="text-[10px] font-medium text-muted-foreground mb-1.5">Preview</p>
         {renderPreview()}
       </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// FilterListConfig
+// ---------------------------------------------------------------------------
+
+const FILTER_OPERATOR_LABELS: Record<FilterListOperator, string> = {
+  ">": "greater than",
+  "<": "less than",
+  ">=": "greater or equal",
+  "<=": "less or equal",
+  "=": "equals",
+  "!=": "not equals",
+  contains: "contains",
+  not_contains: "does not contain",
+  exists: "exists",
+  not_exists: "does not exist",
+}
+
+const FILTER_NO_VALUE_OPERATORS: ReadonlySet<FilterListOperator> = new Set(["exists", "not_exists"])
+
+const FILTER_VARIABLE_TOKENS: ReadonlyArray<{ token: string; label: string }> = [
+  { token: "{{now}}", label: "Current ISO time ({{now}})" },
+  { token: "{{trigger.last_triggered_at}}", label: "Last trigger fire ({{trigger.last_triggered_at}})" },
+]
+
+export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: ConfigProps<FilterListNodeData>) {
+  const conditions = data.conditions ?? []
+  const logic = data.conditionLogic ?? "AND"
+
+  // Upstream field schema — detected live from any upstream node's cached
+  // output. Walks back through pass-through nodes (filter-list / dedupe /
+  // merge) to reach the real producer; falls back to SCRAPER_OUTPUT_FIELDS
+  // only for a web-scrape upstream with no cached data yet.
+  const actorOptions = useMemo(
+    () => getUpstreamFieldOptions(sources, nodes, edges),
+    [sources, nodes, edges],
+  )
+
+  const updateCondition = (id: string, patch: Partial<FilterListCondition>) => {
+    onUpdate({
+      conditions: conditions.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    })
+  }
+
+  const addCondition = () => {
+    onUpdate({
+      conditions: [
+        ...conditions,
+        { id: nanoid(), field: "", operator: "=", value: "", valueType: "static", mode: "dropdown" },
+      ],
+    })
+  }
+
+  const removeCondition = (id: string) => {
+    onUpdate({ conditions: conditions.filter((c) => c.id !== id) })
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <Label>Conditions ({conditions.length})</Label>
+        <div className="flex rounded-md border border-border overflow-hidden">
+          {(["AND", "OR"] as const).map((logicMode) => (
+            <button
+              key={logicMode}
+              type="button"
+              onClick={() => onUpdate({ conditionLogic: logicMode })}
+              className={
+                "px-2.5 py-1 text-[10px] font-medium transition-colors " +
+                (logic === logicMode
+                  ? "bg-foreground text-background"
+                  : "bg-background text-muted-foreground hover:text-foreground")
+              }
+            >
+              {logicMode}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {conditions.length === 0 && (
+        <p className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
+          No conditions — every item passes through. Add one below to filter.
+        </p>
+      )}
+
+      <div className="flex flex-col gap-2">
+        {conditions.map((cond) => {
+          const isNoValue = FILTER_NO_VALUE_OPERATORS.has(cond.operator)
+          const isVariable = cond.valueType === "variable"
+          const condMode = cond.mode ?? "dropdown"
+          const fieldValue = cond.field ?? ""
+          // Custom values fall back to "" so the placeholder shows.
+          const selectValue = fieldValue === ""
+            ? EXTRACT_FIELD_WHOLE
+            : (actorOptions.includes(fieldValue) ? fieldValue : "")
+          return (
+            <div key={cond.id} className="flex flex-col gap-1.5 rounded-md border border-border bg-muted/20 p-2">
+              <div className="flex items-center gap-1.5">
+                {condMode === "dropdown" ? (
+                  <Select
+                    value={selectValue}
+                    onValueChange={(v) => {
+                      if (v === EXTRACT_FIELD_CUSTOM) {
+                        updateCondition(cond.id, { mode: "custom" })
+                      } else if (v === EXTRACT_FIELD_WHOLE) {
+                        updateCondition(cond.id, { field: "" })
+                      } else {
+                        updateCondition(cond.id, { field: v })
+                      }
+                    }}
+                  >
+                    <SelectTrigger aria-label="Field" className="h-7 text-xs min-w-0 flex-1">
+                      <SelectValue placeholder="Select a field..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={EXTRACT_FIELD_WHOLE} className="text-muted-foreground">(whole item)</SelectItem>
+                      {actorOptions.map((opt) => (
+                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                      ))}
+                      <SelectItem value={EXTRACT_FIELD_CUSTOM} className="text-muted-foreground">Custom path…</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={fieldValue}
+                    onChange={(e) => updateCondition(cond.id, { field: e.target.value })}
+                    placeholder="field (blank = whole item)"
+                    className="text-xs h-7 min-w-0 flex-1"
+                  />
+                )}
+                <Select
+                  value={cond.operator}
+                  onValueChange={(v) =>
+                    updateCondition(cond.id, {
+                      operator: v as FilterListOperator,
+                      value: FILTER_NO_VALUE_OPERATORS.has(v as FilterListOperator) ? "" : cond.value,
+                    })
+                  }
+                >
+                  <SelectTrigger className="h-7 text-xs w-[140px] shrink-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.entries(FILTER_OPERATOR_LABELS) as [FilterListOperator, string][]).map(([op, label]) => (
+                      <SelectItem key={op} value={op} className="text-xs">
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <button
+                  type="button"
+                  onClick={() => removeCondition(cond.id)}
+                  className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                  title="Remove condition"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {condMode === "custom" && (
+                <button
+                  type="button"
+                  className="text-[11px] text-muted-foreground hover:text-foreground hover:underline text-left self-start"
+                  onClick={() => updateCondition(cond.id, { mode: "dropdown" })}
+                >
+                  ← Back to field list
+                </button>
+              )}
+              {!isNoValue && (
+                <div className="flex items-center gap-1.5">
+                  {isVariable ? (
+                    <Select
+                      value={cond.value || ""}
+                      onValueChange={(v) => updateCondition(cond.id, { value: v })}
+                    >
+                      <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
+                        <SelectValue placeholder="Select variable..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FILTER_VARIABLE_TOKENS.map((v) => (
+                          <SelectItem key={v.token} value={v.token} className="text-xs">
+                            {v.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={cond.value ?? ""}
+                      onChange={(e) => updateCondition(cond.id, { value: e.target.value })}
+                      placeholder="value"
+                      className="text-xs h-7 min-w-0 flex-1"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateCondition(cond.id, {
+                        valueType: isVariable ? "static" : "variable",
+                        value: "",
+                      })
+                    }
+                    className={
+                      "shrink-0 text-[10px] px-2 py-1 rounded-md border transition-colors " +
+                      (isVariable
+                        ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-400"
+                        : "border-border text-muted-foreground hover:text-foreground")
+                    }
+                    title="Toggle static/variable value"
+                  >
+                    {isVariable ? "var" : "str"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })}
+        <button
+          type="button"
+          onClick={addCondition}
+          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 self-start"
+        >
+          <Plus className="w-3 h-3" /> Add condition
+        </button>
+      </div>
+
+      <p className="text-[10px] text-muted-foreground">
+        Items flowing in are parsed as JSON when a field path is provided. Variables:
+        <code className="ml-1">{"{{now}}"}</code> and
+        <code className="ml-1">{"{{trigger.last_triggered_at}}"}</code>.
+      </p>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// DeduplicateConfig
+// ---------------------------------------------------------------------------
+
+export function DeduplicateConfig({ data, onUpdate }: ConfigProps<DeduplicateNodeData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <Label>Deduplicate by field</Label>
+        <Input
+          value={data.field ?? ""}
+          onChange={(e) => onUpdate({ field: e.target.value })}
+          placeholder="e.g., id or url (blank = whole item)"
+        />
+        <p className="text-[10px] text-muted-foreground">
+          Dot-notation path. Items are parsed as JSON when the path resolves against them. Leave blank to compare whole items as strings.
+        </p>
+      </div>
+
+      {data.listResults && data.listResults.length > 0 && (
+        <div>
+          <Label>Preview ({data.listResults.length} unique items)</Label>
+          <Textarea
+            rows={Math.min(data.listResults.length, 6)}
+            value={data.listResults.map((item, i) => `${i + 1}. ${item}`).join("\n")}
+            readOnly
+            className="text-xs opacity-70"
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// MergeListsConfig
+// ---------------------------------------------------------------------------
+
+export function MergeListsConfig({ data, onUpdate }: ConfigProps<MergeListsNodeData>) {
+  const dedupeOn = data.deduplicate === true
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <Label>Remove duplicates after merge</Label>
+        <Button
+          variant={dedupeOn ? "default" : "outline"}
+          size="sm"
+          className="h-7 text-xs"
+          onClick={() => onUpdate({ deduplicate: !dedupeOn })}
+        >
+          {dedupeOn ? "On" : "Off"}
+        </Button>
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        All upstream lists are concatenated in edge order. Single-value outputs are treated as a one-item list.
+      </p>
+
+      {data.listResults && data.listResults.length > 0 && (
+        <div>
+          <Label>Preview ({data.listResults.length} items)</Label>
+          <Textarea
+            rows={Math.min(data.listResults.length, 6)}
+            value={data.listResults.map((item, i) => `${i + 1}. ${item}`).join("\n")}
+            readOnly
+            className="text-xs opacity-70"
+          />
+        </div>
+      )}
     </div>
   )
 }

@@ -234,6 +234,294 @@ function extractSavedTextFallback(src: SimpleNode): string | undefined {
   return undefined
 }
 
+// ---------------------------------------------------------------------------
+// List-processing inline nodes: filter-list, deduplicate, merge-lists
+// ---------------------------------------------------------------------------
+
+export interface FilterListCondition {
+  id?: string
+  field?: string
+  operator: ">" | "<" | ">=" | "<=" | "=" | "!=" | "contains" | "not_contains" | "exists" | "not_exists"
+  value?: string
+  valueType?: "static" | "variable"
+}
+
+/**
+ * Collect list items from every upstream edge. For each incoming connection,
+ * in priority order:
+ *   1. `output.listResults` — include every element (already split by the
+ *      producer, e.g. extract-field in "list" mode, split-text).
+ *   2. `output.json` — structured JSON. Arrays are spread so each element
+ *      becomes its own filter-list item (critical for web-scrape, whose
+ *      output is `{ json: [{post}, {post}, …] }`); objects and primitives
+ *      are pushed as a single stringified item.
+ *   3. `getPrimaryOutput` — fallback to the node's primary text/URL output.
+ */
+function collectUpstreamListItems(
+  nodeId: string,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): string[] {
+  const incomingEdges = edges.filter((e) => e.target === nodeId)
+  const items: string[] = []
+
+  for (const edge of incomingEdges) {
+    const srcNode = allNodes.find((n) => n.id === edge.source)
+    if (!srcNode) continue
+
+    let output = nodeStates[srcNode.id]?.output
+    if (!output && isSourceNode(srcNode.type)) {
+      output = extractSourceNodeOutput(srcNode)
+    }
+    if (!output) continue
+
+    const listResults = output.listResults
+    if (listResults && listResults.length > 0) {
+      for (const item of listResults) {
+        if (item != null) items.push(item)
+      }
+      continue
+    }
+
+    // Structured JSON arrays (web-scrape's `generatedJson`, any future source
+    // that emits `{ json: [...] }`) need to be spread so each element becomes
+    // its own filter-list item. Otherwise getPrimaryOutput would collapse the
+    // whole array into a single stringified blob and per-item conditions
+    // couldn't match. Explicit `json: null` means "no items" — we must not
+    // fall through or getPrimaryOutput would surface the literal "null".
+    if (output.json !== undefined) {
+      const json = output.json
+      if (json !== null) {
+        if (Array.isArray(json)) {
+          for (const element of json) {
+            if (element === undefined || element === null) continue
+            items.push(typeof element === "string" ? element : JSON.stringify(element))
+          }
+        } else if (typeof json === "object") {
+          items.push(JSON.stringify(json))
+        } else {
+          items.push(String(json))
+        }
+      }
+      continue
+    }
+
+    const primary = getPrimaryOutput(output, srcNode.type, edge.sourceHandle)
+    if (primary != null && primary !== "") items.push(primary)
+  }
+
+  return items
+}
+
+function tryParseJson(item: unknown): unknown {
+  if (typeof item !== "string") return item
+  const trimmed = item.trim()
+  if (!trimmed) return item
+  const first = trimmed[0]
+  if (first !== "{" && first !== "[" && first !== "\"" && !/^-?\d/.test(trimmed) && trimmed !== "true" && trimmed !== "false" && trimmed !== "null") {
+    return item
+  }
+  try { return JSON.parse(trimmed) } catch { return item }
+}
+
+function stringifyListKey(value: unknown): string {
+  if (value === undefined || value === null) return ""
+  if (typeof value === "string") return value
+  return JSON.stringify(value)
+}
+
+function resolveConditionValue(
+  raw: string,
+  valueType: string | undefined,
+  triggerData: Record<string, unknown> | undefined,
+): string {
+  const hasTemplate = /\{\{/.test(raw)
+  if (valueType !== "variable" && !hasTemplate) return raw
+  return raw.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr) => {
+    const key = String(expr).trim()
+    if (key === "now") return new Date().toISOString()
+    if (key === "trigger.last_triggered_at") {
+      const v = triggerData?.last_triggered_at
+      return v == null ? "" : String(v)
+    }
+    if (key.startsWith("trigger.")) {
+      const path = key.slice("trigger.".length)
+      const v = triggerData?.[path]
+      return v == null ? "" : String(v)
+    }
+    return ""
+  })
+}
+
+function asComparableNumber(v: unknown): number {
+  if (typeof v === "number") return v
+  if (typeof v === "boolean") return v ? 1 : 0
+  if (typeof v === "string") {
+    const trimmed = v.trim()
+    if (trimmed === "") return NaN
+    const n = Number(trimmed)
+    if (!isNaN(n)) return n
+    const d = Date.parse(trimmed)
+    if (!isNaN(d)) return d
+  }
+  return NaN
+}
+
+// Numeric-first ordering compare used by >, <, >=, <=. Falls back to
+// localeCompare when either side can't be parsed as a number.
+function compareValues(a: unknown, b: unknown): number {
+  const na = asComparableNumber(a)
+  const nb = asComparableNumber(b)
+  if (!isNaN(na) && !isNaN(nb)) return na - nb
+  return String(a ?? "").localeCompare(String(b ?? ""))
+}
+
+// Numeric-first equality used by = and !=. So "432" == 432, and 432 == "432".
+// Falls back to strict string equality (null/undefined coerced to "") so
+// alpha values still work.
+function valuesEqual(a: unknown, b: unknown): boolean {
+  const na = asComparableNumber(a)
+  const nb = asComparableNumber(b)
+  if (!isNaN(na) && !isNaN(nb)) return na === nb
+  return String(a ?? "") === String(b ?? "")
+}
+
+function evaluateFilterCondition(
+  parsedItem: unknown,
+  rawItem: string,
+  condition: FilterListCondition,
+  triggerData: Record<string, unknown> | undefined,
+): boolean {
+  const path = (condition.field ?? "").trim()
+  let fieldValue: unknown
+  if (path === "") {
+    fieldValue = parsedItem ?? rawItem
+  } else {
+    const matches = evaluateJsonPath(parsedItem ?? rawItem, path)
+    fieldValue = matches.length > 0 ? matches[0] : undefined
+  }
+
+  const targetStr = resolveConditionValue(condition.value ?? "", condition.valueType, triggerData)
+
+  switch (condition.operator) {
+    case "exists":
+      return fieldValue !== undefined && fieldValue !== null
+    case "not_exists":
+      return fieldValue === undefined || fieldValue === null
+    case "contains":
+      return String(fieldValue ?? "").includes(targetStr)
+    case "not_contains":
+      return !String(fieldValue ?? "").includes(targetStr)
+    case "=":
+      return valuesEqual(fieldValue, targetStr)
+    case "!=":
+      return !valuesEqual(fieldValue, targetStr)
+    case ">":
+      return compareValues(fieldValue, targetStr) > 0
+    case "<":
+      return compareValues(fieldValue, targetStr) < 0
+    case ">=":
+      return compareValues(fieldValue, targetStr) >= 0
+    case "<=":
+      return compareValues(fieldValue, targetStr) <= 0
+    default:
+      return false
+  }
+}
+
+/**
+ * Execute filter-list node: filter an upstream list using AND/OR-joined
+ * field/operator/value conditions. Operates on stringified or JSON items;
+ * string items are parsed when a field path is supplied.
+ */
+export function executeFilterList(
+  node: SimpleNode,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+  triggerData?: Record<string, unknown>,
+): NodeOutput {
+  const data = node.data as Record<string, unknown>
+  const conditions = (data.conditions as FilterListCondition[] | undefined) ?? []
+  const logic = ((data.conditionLogic as string) ?? "AND").toUpperCase() === "OR" ? "OR" : "AND"
+
+  const items = collectUpstreamListItems(node.id, edges, allNodes, nodeStates)
+
+  const effectiveConditions = conditions.filter((c) => c && c.operator)
+  const filtered = effectiveConditions.length === 0
+    ? items
+    : items.filter((item) => {
+      const parsed = tryParseJson(item)
+      const results = effectiveConditions.map((c) => evaluateFilterCondition(parsed, item, c, triggerData))
+      return logic === "OR" ? results.some(Boolean) : results.every(Boolean)
+    })
+
+  return { text: filtered[0] ?? "", listResults: filtered }
+}
+
+/**
+ * Execute deduplicate node: remove duplicates from an upstream list,
+ * keeping the first occurrence. Uniqueness is computed from the item
+ * (via the optional dot-path field) stringified.
+ */
+export function executeDeduplicateList(
+  node: SimpleNode,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): NodeOutput {
+  const path = ((node.data.field as string | undefined) ?? "").trim()
+  const items = collectUpstreamListItems(node.id, edges, allNodes, nodeStates)
+
+  const seen = new Set<string>()
+  const deduped: string[] = []
+
+  for (const item of items) {
+    let key: string
+    if (path === "") {
+      key = item
+    } else {
+      const parsed = tryParseJson(item)
+      const matches = evaluateJsonPath(parsed, path)
+      key = stringifyListKey(matches.length > 0 ? matches[0] : undefined)
+    }
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(item)
+  }
+
+  return { text: deduped[0] ?? "", listResults: deduped }
+}
+
+/**
+ * Execute merge-lists node: concatenate list items from every upstream
+ * connection in edge order. Optionally deduplicates by stringified value
+ * after merging.
+ */
+export function executeMergeLists(
+  node: SimpleNode,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): NodeOutput {
+  const shouldDedupe = node.data.deduplicate === true
+  const items = collectUpstreamListItems(node.id, edges, allNodes, nodeStates)
+
+  if (!shouldDedupe) {
+    return { text: items[0] ?? "", listResults: items }
+  }
+
+  const seen = new Set<string>()
+  const merged: string[] = []
+  for (const item of items) {
+    if (seen.has(item)) continue
+    seen.add(item)
+    merged.push(item)
+  }
+  return { text: merged[0] ?? "", listResults: merged }
+}
+
 /**
  * Execute composite node: build composite plan from layer config + upstream video URLs.
  * The composite plan is sent to the render queue by the render-video node downstream.
