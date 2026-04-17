@@ -10,6 +10,7 @@ const mockToastSuccess = vi.fn()
 const mockToastInfo = vi.fn()
 const mockResolveNodeInputs = vi.fn()
 const mockExtractNodeOutput = vi.fn()
+const mockDetectPreviewItemType = vi.fn()
 const mockCollectMediaAssets = vi.fn()
 const mockBuildAutoComposition = vi.fn()
 const mockCollectAncestorRefs = vi.fn()
@@ -171,6 +172,7 @@ vi.mock("../node-input-resolver", () => ({
 
 vi.mock("../execution-graph", () => ({
   extractNodeOutput: (...args: unknown[]) => mockExtractNodeOutput(...args),
+  detectPreviewItemType: (...args: unknown[]) => mockDetectPreviewItemType(...args),
   collectMediaAssets: (...args: unknown[]) => mockCollectMediaAssets(...args),
   buildAutoComposition: (...args: unknown[]) =>
     mockBuildAutoComposition(...args),
@@ -278,6 +280,13 @@ beforeEach(() => {
   mockNodes = []
   mockEdges = []
   mockCharacterDefinitions = []
+  mockDetectPreviewItemType.mockImplementation((_nodeType: string, value?: string) => {
+    if (!value) return "text"
+    if (/\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(value)) return "image"
+    if (/\.(mp4|mov|webm)$/i.test(value)) return "video"
+    if (/\.(mp3|wav|ogg|aac|flac|m4a)$/i.test(value)) return "audio"
+    return "text"
+  })
   mockResolveNodeInputs.mockReturnValue({})
   mockCollectAncestorRefs.mockReturnValue([])
 })
@@ -330,6 +339,89 @@ describe("manual-edit bridge", () => {
   it("resolveManualEdit is a no-op for unknown nodeId", () => {
     resolveManualEdit("unknown-node")
     // should not throw
+  })
+})
+
+// ---------------------------------------------------------------------------
+// preview
+// ---------------------------------------------------------------------------
+
+describe("preview", () => {
+  it("collects handle-specific outputs and preserves duplicate source nodes by handle", async () => {
+    const previewNode = {
+      id: "preview_1",
+      type: "preview",
+      position: { x: 0, y: 0 },
+      data: { label: "preview", previewItems: [], itemOrder: [] },
+    } as any
+
+    mockNodes = [
+      {
+        id: "sub_1",
+        type: "sub-workflow",
+        position: { x: 0, y: 0 },
+        data: { label: "Sub Workflow" },
+      },
+      previewNode,
+    ]
+    mockEdges = [
+      { id: "e1", source: "sub_1", target: "preview_1", sourceHandle: "out_img" },
+      { id: "e2", source: "sub_1", target: "preview_1", sourceHandle: "out_txt" },
+    ] as any
+
+    mockExtractNodeOutput.mockImplementation((node: any, sourceHandle?: string) => {
+      if (node.id !== "sub_1") return undefined
+      if (sourceHandle === "out_img") return "https://cdn.example.com/image.png"
+      if (sourceHandle === "out_txt") return "hello world"
+      return undefined
+    })
+    mockDetectPreviewItemType.mockImplementation((_nodeType: string, value?: string, sourceHandle?: string) => {
+      if (sourceHandle === "out_img") return "image"
+      if (sourceHandle === "out_txt") return "text"
+      return value?.startsWith("https://") ? "image" : "text"
+    })
+
+    await expect(executeNode(previewNode, makeCtx())).resolves.toBe("")
+
+    expect(mockExtractNodeOutput).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "sub_1" }),
+      "out_img",
+    )
+    expect(mockExtractNodeOutput).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "sub_1" }),
+      "out_txt",
+    )
+    expect(mockDetectPreviewItemType).toHaveBeenCalledWith(
+      "sub-workflow",
+      "https://cdn.example.com/image.png",
+      "out_img",
+    )
+    expect(mockDetectPreviewItemType).toHaveBeenCalledWith(
+      "sub-workflow",
+      "hello world",
+      "out_txt",
+    )
+    expect(mockUpdateNodeData).toHaveBeenLastCalledWith(
+      "preview_1",
+      expect.objectContaining({
+        executionStatus: "completed",
+        itemOrder: ["sub_1:out_img", "sub_1:out_txt"],
+        previewItems: [
+          expect.objectContaining({
+            itemKey: "sub_1:out_img",
+            sourceNodeId: "sub_1",
+            sourceHandle: "out_img",
+            value: "https://cdn.example.com/image.png",
+          }),
+          expect.objectContaining({
+            itemKey: "sub_1:out_txt",
+            sourceNodeId: "sub_1",
+            sourceHandle: "out_txt",
+            value: "hello world",
+          }),
+        ],
+      }),
+    )
   })
 })
 

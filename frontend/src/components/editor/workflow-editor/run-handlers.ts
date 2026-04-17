@@ -702,7 +702,14 @@ interface NodeExecutionState {
     kieTaskId?: string;
     thumbnailUrl?: string;
     paramOutputs?: Record<string, string>;
-    previewItems?: Array<{ type: string; value: string; sourceNodeId: string; sourceNodeLabel: string }>;
+    previewItems?: Array<{
+      type: string;
+      value: string;
+      itemKey?: string;
+      sourceNodeId: string;
+      sourceHandle?: string;
+      sourceNodeLabel: string;
+    }>;
     _outputResults?: Record<string, string>;
   };
   error?: string;
@@ -915,4 +922,3 @@ function syncNodeStatesToStore(
   }));
   setSkipUndoCapture(false);
 }
-

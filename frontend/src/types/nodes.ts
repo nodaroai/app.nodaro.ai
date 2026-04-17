@@ -2127,7 +2127,9 @@ export type CombineTextNodeData = {
 export interface PreviewItem {
   readonly type: "text" | "image" | "video" | "audio" | "data"
   readonly value: string
+  readonly itemKey?: string
   readonly sourceNodeId: string
+  readonly sourceHandle?: string
   readonly sourceNodeLabel: string
   readonly visible: boolean
 }
@@ -2136,7 +2138,7 @@ export type PreviewNodeData = {
   [key: string]: unknown
   label: string
   previewItems: PreviewItem[]
-  /** Persisted ordering by sourceNodeId — survives re-execution */
+  /** Persisted ordering by preview item key — survives re-execution */
   itemOrder: string[]
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

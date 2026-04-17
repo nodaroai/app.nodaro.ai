@@ -150,6 +150,13 @@ vi.mock("../node-input-resolver", () => ({
 
 vi.mock("../execution-graph", () => ({
   extractNodeOutput: (...args: unknown[]) => mockExtractNodeOutput(...args),
+  detectPreviewItemType: (_nodeType: string, value?: string) => {
+    if (!value) return "text"
+    if (/\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(value)) return "image"
+    if (/\.(mp4|mov|webm)$/i.test(value)) return "video"
+    if (/\.(mp3|wav|ogg|aac|flac|m4a)$/i.test(value)) return "audio"
+    return "text"
+  },
   collectMediaAssets: (...args: unknown[]) => mockCollectMediaAssets(...args),
   buildAutoComposition: (...args: unknown[]) =>
     mockBuildAutoComposition(...args),

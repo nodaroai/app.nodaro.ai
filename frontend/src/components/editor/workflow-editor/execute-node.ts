@@ -136,7 +136,6 @@ import type {
   CombineTextNodeData,
   SplitTextData,
   PreviewNodeData,
-  PreviewItem,
   VoiceChangerData,
   DubbingData,
   VoiceRemixData,
@@ -160,8 +159,9 @@ import {
   type ExecutionContext,
 } from "./types";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
-import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, detectPreviewItemType, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
+import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
 import { resolveNodeInputs, type FrontendResolvedInputs } from "./node-input-resolver";
+import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_TEXT_FIELDS } from "./resolve-field-mappings";
 import { pollJobWithNodeUpdate, guardedToast } from "./poll-job";
@@ -3997,58 +3997,11 @@ export function executeNode(
     const prevData = node.data as PreviewNodeData;
     updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
 
-    const incomingEdges = currentEdges.filter((e) => e.target === node.id);
-
-    // Build a map of previous items to preserve visibility settings
-    const prevVisibility = new Map<string, boolean>();
-    for (const item of prevData.previewItems ?? []) {
-      prevVisibility.set(item.sourceNodeId, item.visible);
-    }
-    const prevOrder = prevData.itemOrder ?? [];
-
-    const freshItems: PreviewItem[] = [];
-
-    for (const edge of incomingEdges) {
-      const sourceNode = currentNodes.find((n) => n.id === edge.source);
-      if (!sourceNode) continue;
-
-      const raw = extractNodeOutput(sourceNode);
-      const trimmed = raw?.trim();
-      if (!trimmed) continue;
-
-      const srcType = sourceNode.type ?? "";
-      const srcLabel = (sourceNode.data as Record<string, unknown>).label as string || srcType;
-
-      const itemType = detectPreviewItemType(srcType, trimmed);
-
-      freshItems.push({
-        type: itemType,
-        value: trimmed,
-        sourceNodeId: sourceNode.id,
-        sourceNodeLabel: srcLabel,
-        visible: prevVisibility.get(sourceNode.id) ?? true,
-      });
-    }
-
-    // Apply saved ordering: known items first in saved order, new items appended
-    const itemMap = new Map(freshItems.map((item) => [item.sourceNodeId, item]));
-    const ordered: PreviewItem[] = [];
-    for (const id of prevOrder) {
-      const item = itemMap.get(id);
-      if (item) {
-        ordered.push(item);
-        itemMap.delete(id);
-      }
-    }
-    for (const item of itemMap.values()) {
-      ordered.push(item);
-    }
-
-    const newOrder = ordered.map((item) => item.sourceNodeId);
+    const { ordered, itemOrder } = collectPreviewItems(node.id, currentNodes, currentEdges, prevData);
 
     updateNodeData(node.id, {
       previewItems: ordered,
-      itemOrder: newOrder,
+      itemOrder,
       executionStatus: "completed",
     });
     return Promise.resolve("");

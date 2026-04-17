@@ -16,6 +16,7 @@ import { filterCloneNodes } from "@nodaro-shared/clone-utils"
 import type { PresentationItem } from "@nodaro-shared/presentation-types"
 import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems } from "@nodaro-shared/presentation-utils"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
+import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
 
 /**
  * Migrate legacy image node types to the new split types.
@@ -108,13 +109,164 @@ function detectLoopColumnType(
   return "text"
 }
 
+function classifyPreviewValue(
+  nodeType: string,
+  value: string,
+  sourceHandle?: string | null,
+): PreviewItem["type"] {
+  if (nodeType === "voice-design" && sourceHandle === "voiceId") return "text"
+  if (nodeType === "forced-alignment") return "data"
+  if (/\.(png|jpe?g|gif|webp|svg|bmp)/i.test(value)) return "image"
+  if (/\.(mp4|mov|webm)/i.test(value)) return "video"
+  if (/\.(mp3|wav|ogg|aac|flac|m4a)/i.test(value)) return "audio"
+  if (nodeType.includes("image") || nodeType === "character" || nodeType === "face" || nodeType === "object" || nodeType === "location") {
+    return "image"
+  }
+  if (nodeType.includes("video")) return "video"
+  if (
+    nodeType.includes("audio") ||
+    nodeType.includes("speech") ||
+    nodeType.includes("music") ||
+    nodeType.includes("suno") ||
+    nodeType === "voice-design"
+  ) {
+    return "audio"
+  }
+  return "text"
+}
+
 /**
  * Simplified output extraction for preview auto-populate (avoids circular import
  * with execution-graph.ts). Returns null if the node has no results yet.
  */
-function getNodeOutputForPreview(node: WorkflowNode): { type: PreviewItem["type"]; value: string } | null {
+function getNodeOutputForPreview(
+  node: WorkflowNode,
+  sourceHandle?: string | null,
+): { type: PreviewItem["type"]; value: string } | null {
   const d = node.data as Record<string, unknown>
   const t = node.type ?? ""
+
+  if (t === "list" || t === "loop") {
+    const columns = d.columns as Array<{ handleId: string; type?: string }> | undefined
+    const rows = d.rows as string[][] | undefined
+    if (columns && sourceHandle) {
+      const colIndex = columns.findIndex((col) => col.handleId === sourceHandle)
+      const value = rows?.[0]?.[colIndex]?.trim()
+      if (value) {
+        const colType = columns[colIndex]?.type ?? "text"
+        if (colType === "image-url") return { type: "image", value }
+        if (colType === "video-url") return { type: "video", value }
+        if (colType === "audio-url") return { type: "audio", value }
+        if (colType === "json") return { type: "data", value }
+        return { type: "text", value }
+      }
+    }
+    if (t === "list") {
+      const first = ((d.items as string | undefined) ?? "")
+        .split("\n")
+        .map((line) => line.trim())
+        .find(Boolean)
+      return first ? { type: "text", value: first } : null
+    }
+    const first = rows?.[0]?.[0]?.trim()
+    return first ? { type: "text", value: first } : null
+  }
+
+  if (t === "webhook-trigger") {
+    const params = d.params as Array<{ id: string; name: string }> | undefined
+    const triggerData = d.__triggerData as Record<string, unknown> | undefined
+    if (params && params.length > 0 && triggerData) {
+      if (sourceHandle) {
+        const param = params.find((p) => p.id === sourceHandle)
+        const value = param ? triggerData[param.name] : undefined
+        if (value != null) return { type: classifyPreviewValue(t, String(value), sourceHandle), value: String(value) }
+      }
+      for (const param of params) {
+        const value = triggerData[param.name]
+        if (value != null) return { type: classifyPreviewValue(t, String(value), sourceHandle), value: String(value) }
+      }
+    }
+    const value = (d.text as string | undefined)?.trim()
+    return value ? { type: "text", value } : null
+  }
+
+  if (t === "schedule-trigger") {
+    const value =
+      (d.text as string | undefined)?.trim() ||
+      (d.__triggerData as Record<string, unknown> | undefined)?.timestamp as string | undefined
+    return value ? { type: "text", value: value.trim() } : null
+  }
+
+  if (t === "telegram-trigger") {
+    const triggerData = d.__triggerData as Record<string, unknown> | undefined
+    const fields: Record<string, string> = {
+      text: String((triggerData?.text ?? d.text) || ""),
+      imageUrl: String((triggerData?.imageUrl ?? d.imageUrl) || ""),
+      videoUrl: String((triggerData?.videoUrl ?? d.videoUrl) || ""),
+      audioUrl: String((triggerData?.audioUrl ?? d.audioUrl) || ""),
+      chatId: String((triggerData?.chatId ?? d.chatId) || ""),
+      messageId: String((triggerData?.messageId ?? d.messageId) || ""),
+    }
+    const value = sourceHandle ? fields[sourceHandle] : fields.text
+    return value ? { type: classifyPreviewValue(t, value, sourceHandle), value } : null
+  }
+
+  if (t === "voice-design" && sourceHandle === "voiceId") {
+    const value = (d.generatedVoiceId as string | undefined)?.trim()
+    return value ? { type: "text", value } : null
+  }
+
+  if (t === "split-media") {
+    const videoUrls = (d.generatedVideoUrls as string[] | undefined) ?? []
+    const audioUrls = (d.generatedAudioUrls as string[] | undefined) ?? []
+    const value = sourceHandle === "audio-out"
+      ? audioUrls[0]
+      : (videoUrls[0] ?? audioUrls[0])
+    return value ? { type: classifyPreviewValue(t, value, sourceHandle), value } : null
+  }
+
+  if (t === "qa-check") {
+    if (d.approved == null) return null
+    const approved = d.approved as boolean
+    const reason = ((d.reason as string | undefined) ?? (approved ? "approved" : "rejected")).trim()
+    if (sourceHandle === "approved") return approved ? { type: "text", value: reason } : null
+    if (sourceHandle === "rejected") return !approved ? { type: "text", value: reason } : null
+    return { type: "text", value: reason }
+  }
+
+  if (t === "router") {
+    const routeOutputs = d.routeOutputs as Record<string, string | undefined> | undefined
+    const value = sourceHandle
+      ? routeOutputs?.[sourceHandle]
+      : (d.result as string | undefined)
+    return value ? { type: classifyPreviewValue(t, value, sourceHandle), value } : null
+  }
+
+  if (t === "sub-workflow" || t === "component") {
+    const outputResults = d.outputResults as Record<string, string> | undefined
+    if (!outputResults) return null
+    let value: string | undefined
+    if (sourceHandle) {
+      value = outputResults[sourceHandle.replace(/^out_/, "")]
+    }
+    if (!value && t === "component") {
+      const metadata = d.componentMetadata as { outputs?: Array<{ id: string; mediaPreview?: boolean }> } | undefined
+      const previewHandle = metadata?.outputs?.find((output) => output.mediaPreview)
+      if (previewHandle) value = outputResults[previewHandle.id]
+    }
+    if (!value) {
+      const visiblePortId = (d.routeSnapshot as Record<string, unknown> | undefined)?.visibleOutputPortId as string | undefined
+      value = (visiblePortId ? outputResults[visiblePortId] : undefined) ?? Object.values(outputResults)[0]
+    }
+    return value ? { type: classifyPreviewValue(t, value, sourceHandle), value } : null
+  }
+
+  if (t === "sub-workflow-input") {
+    const injected = d.__injectedPortValues as Record<string, string> | undefined
+    if (!injected) return null
+    const value = sourceHandle ? injected[sourceHandle] : Object.values(injected)[0]
+    return value ? { type: classifyPreviewValue(t, value, sourceHandle), value } : null
+  }
 
   // Text source nodes
   if (t === "text-prompt") {
@@ -148,14 +300,7 @@ function getNodeOutputForPreview(node: WorkflowNode): { type: PreviewItem["type"
   const result = results?.[idx]
   if (result?.url) {
     const url = result.url.trim()
-    if (/\.(png|jpe?g|gif|webp|svg|bmp)/i.test(url)) return { type: "image", value: url }
-    if (/\.(mp4|mov|webm)/i.test(url)) return { type: "video", value: url }
-    if (/\.(mp3|wav|ogg|aac|flac|m4a)/i.test(url)) return { type: "audio", value: url }
-    // Infer from node type
-    if (t.includes("image") || t === "character" || t === "face" || t === "object" || t === "location") return { type: "image", value: url }
-    if (t.includes("video")) return { type: "video", value: url }
-    if (t.includes("audio") || t.includes("speech") || t.includes("music") || t.includes("suno")) return { type: "audio", value: url }
-    return { type: "image", value: url }
+    return { type: classifyPreviewValue(t, url, sourceHandle), value: url }
   }
 
   // Fallback URL fields
@@ -165,6 +310,9 @@ function getNodeOutputForPreview(node: WorkflowNode): { type: PreviewItem["type"
   if (vidUrl) return { type: "video", value: vidUrl }
   const audUrl = (d.generatedAudioUrl as string)?.trim()
   if (audUrl) return { type: "audio", value: audUrl }
+
+  const textUrl = (d.generatedText as string)?.trim()
+  if (textUrl) return { type: "text", value: textUrl }
 
   return null
 }
@@ -588,12 +736,15 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         for (const edge of allIncoming) {
           const src = newNodes.find((n) => n.id === edge.source)
           if (!src) continue
-          const output = getNodeOutputForPreview(src)
+          const output = getNodeOutputForPreview(src, edge.sourceHandle ?? undefined)
           if (!output) continue
+          const itemKey = buildPreviewItemKey(src.id, edge.sourceHandle)
           items.push({
             type: output.type,
             value: output.value,
+            itemKey,
             sourceNodeId: src.id,
+            sourceHandle: edge.sourceHandle ?? undefined,
             sourceNodeLabel: (src.data as Record<string, unknown>).label as string || src.type || "",
             visible: true,
           })
@@ -601,12 +752,26 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         if (items.length > 0) {
           const prevData = previewTarget.data as PreviewNodeData
           const prevItems = prevData.previewItems ?? []
+          const prevVisibility = new Map(prevItems.map((item) => [getPreviewItemKey(item), item.visible]))
+          const normalizedItems = items.map((item) => ({
+            ...item,
+            visible: prevVisibility.get(getPreviewItemKey(item)) ?? item.visible,
+          }))
           // Merge: keep existing items, add/update from fresh data
-          const merged = new Map(prevItems.map((it) => [it.sourceNodeId, it]))
-          for (const item of items) merged.set(item.sourceNodeId, item)
+          const merged = new Map(prevItems.map((it) => [getPreviewItemKey(it), it]))
+          for (const item of normalizedItems) merged.set(getPreviewItemKey(item), item)
+          const mergedItems = [...merged.values()]
           newNodes = newNodes.map((n) =>
             n.id === previewTarget.id
-              ? { ...n, data: { ...n.data, previewItems: [...merged.values()], executionStatus: "completed" } }
+              ? {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    previewItems: mergedItems,
+                    itemOrder: mergedItems.map((item) => getPreviewItemKey(item)),
+                    executionStatus: "completed",
+                  },
+                }
               : n,
           )
         }

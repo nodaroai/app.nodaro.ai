@@ -31,6 +31,7 @@ import {
   type JsonProcessNodeData,
 } from "@/types/nodes"
 import { isMediaUrl } from "@/lib/media-type"
+import { getPreviewItemKey } from "@/lib/preview-items"
 import { downloadFile } from "@/components/presentation/output-cards/shared"
 import { SCRAPER_OUTPUT_FIELDS } from "@nodaro-shared/scraper-output-schemas"
 import { buildExpressionFromVisual, type FilterOperator } from "@nodaro-shared/json-evaluator"
@@ -425,7 +426,7 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
     )
     onUpdate({
       previewItems: updated,
-      itemOrder: updated.map((item) => item.sourceNodeId),
+      itemOrder: updated.map((item) => getPreviewItemKey(item)),
     })
   }, [items, onUpdate])
 
@@ -436,7 +437,7 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
     updated.splice(toIndex, 0, moved)
     onUpdate({
       previewItems: updated,
-      itemOrder: updated.map((item) => item.sourceNodeId),
+      itemOrder: updated.map((item) => getPreviewItemKey(item)),
     })
   }, [items, onUpdate])
 
@@ -486,7 +487,7 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
 
           return (
             <div
-              key={`${item.sourceNodeId}-${i}`}
+              key={getPreviewItemKey(item)}
               draggable
               onDragStart={() => handleDragStart(i)}
               onDragOver={(e) => handleDragOver(e, i)}

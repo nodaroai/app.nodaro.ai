@@ -15,6 +15,7 @@ import {
   buildExecutionLevels,
   getEffectivelySkippedIds,
   extractNodeOutput,
+  detectPreviewItemType,
 } from "../execution-graph"
 
 // ---------------------------------------------------------------------------
@@ -530,5 +531,11 @@ describe("extractNodeOutput", () => {
   it("returns undefined for suno-style-boost without generatedText", () => {
     const node = makeNode("1", "suno-style-boost", {})
     expect(extractNodeOutput(node)).toBeUndefined()
+  })
+})
+
+describe("detectPreviewItemType", () => {
+  it("treats voice-design voiceId handle as text", () => {
+    expect(detectPreviewItemType("voice-design", "voice_123", "voiceId")).toBe("text")
   })
 })

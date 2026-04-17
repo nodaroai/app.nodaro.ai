@@ -686,7 +686,9 @@ export const AUDIO_URL_RE = /^https?:\/\/.*\.(mp3|wav|ogg|aac|flac|m4a)/i
 export function detectPreviewItemType(
   nodeType: string,
   value?: string,
+  sourceHandle?: string,
 ): "image" | "video" | "audio" | "data" | "text" {
+  if (nodeType === "voice-design" && sourceHandle === "voiceId") return "text"
   if (IMAGE_SOURCE_TYPES.has(nodeType)) return "image"
   if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(nodeType)) return "video"
   if (AUDIO_SOURCE_TYPES.has(nodeType)) return "audio"
