@@ -90,8 +90,8 @@ describe("NODE_CREDIT_COSTS", () => {
     expect(NODE_CREDIT_COSTS["generate-script"]).toBe(10)
   })
 
-  it("has trim-video at 0 credits", () => {
-    expect(NODE_CREDIT_COSTS["trim-video"]).toBe(0)
+  it("has trim-video at 1 credit", () => {
+    expect(NODE_CREDIT_COSTS["trim-video"]).toBe(1)
   })
 
   it("has 3d-title at 15 credits", () => {

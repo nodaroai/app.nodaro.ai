@@ -6,7 +6,6 @@ import { OUTPUT_FIELD_MAP } from "../../../packages/shared/src/component-types.j
 import type { ComponentMetadata } from "../../../packages/shared/src/component-types.js"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
-import { CREDIT_COSTS } from "../billing/credit-manager.js"
 import { buildCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 
@@ -228,7 +227,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
 
       const provider = data.provider as string | undefined
       if (!provider) {
-        total += CREDIT_COSTS[nodeType] ?? 0
+        total += STATIC_CREDIT_COSTS[nodeType] ?? 0
         continue
       }
 
@@ -239,7 +238,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         data.renderingSpeed as string | undefined,
         data.targetResolution as string | undefined,
       )
-      total += STATIC_CREDIT_COSTS[creditModelId] ?? STATIC_CREDIT_COSTS[provider] ?? CREDIT_COSTS[nodeType] ?? 0
+      total += STATIC_CREDIT_COSTS[creditModelId] ?? STATIC_CREDIT_COSTS[provider] ?? STATIC_CREDIT_COSTS[nodeType] ?? 0
     }
 
     return reply.send({ estimatedCredits: total })
