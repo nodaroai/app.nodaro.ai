@@ -2245,6 +2245,9 @@ export type DeduplicateNodeData = {
   [key: string]: unknown
   label: string
   field: string
+  /** UI mode for the field input. "dropdown" (default) shows detected
+   *  upstream fields + "Custom path…"; "custom" shows a free-text input. */
+  mode?: "dropdown" | "custom"
   listResults?: string[]
   __listResults?: string[]
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -4248,6 +4251,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: {
       label: "Deduplicate",
       field: "",
+      mode: "dropdown",
     } as DeduplicateNodeData,
   },
   {

@@ -3,6 +3,7 @@ export const SCRAPER_ACTOR_IDS = [
   "google-search",
   "instagram",
   "tiktok",
+  "rss",
 ] as const
 
 export type ScraperActorId = (typeof SCRAPER_ACTOR_IDS)[number]
@@ -12,6 +13,7 @@ export const SCRAPER_ACTOR_LABELS: Record<ScraperActorId, string> = {
   "google-search":   "Google Search",
   "instagram":       "Instagram",
   "tiktok":          "TikTok",
+  "rss":             "RSS Feed",
 }
 
 /** Credit costs per composite SKU — must stay in sync with STATIC_CREDIT_COSTS in backend. */
@@ -22,6 +24,7 @@ export const SCRAPER_CREDIT_COSTS: Record<string, number> = {
   "web-scrape:content-crawler:site": 10,
   "web-scrape:instagram": 5,
   "web-scrape:tiktok": 5,
+  "web-scrape:rss": 1,
 }
 
 export function isScraperActor(value: unknown): value is ScraperActorId {

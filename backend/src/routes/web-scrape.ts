@@ -4,8 +4,10 @@ import { supabase } from "../lib/supabase.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../billing/credits.js"
 import { runScraper } from "../providers/apify/scraper.js"
+import { fetchRssItems } from "../providers/rss/parser.js"
 import { resolveScraperCreditId } from "../../../packages/shared/src/scraper-actors.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { safeUrlSchema } from "../lib/url-validator.js"
 
 const contentCrawlerBody = z.object({
   actor: z.literal("content-crawler"),
@@ -28,8 +30,15 @@ const tiktokBody = z.object({
   target: z.string().url().max(2048),
   resultsLimit: z.number().int().min(1).max(20).optional(),
 })
+// RSS is the only actor that doesn't go through Apify — we fetch + parse
+// directly on this server, so the URL needs SSRF protection via safeUrlSchema.
+const rssBody = z.object({
+  actor: z.literal("rss"),
+  url: safeUrlSchema,
+  resultsLimit: z.number().int().min(1).max(50).optional(),
+})
 const webScrapeBody = z.discriminatedUnion("actor", [
-  contentCrawlerBody, googleSearchBody, instagramBody, tiktokBody,
+  contentCrawlerBody, googleSearchBody, instagramBody, tiktokBody, rssBody,
 ])
 
 export async function webScrapeRoutes(app: FastifyInstance) {
@@ -75,7 +84,12 @@ export async function webScrapeRoutes(app: FastifyInstance) {
     const usageLogId = reservation?.usageLogId
 
     try {
-      const result = await runScraper(parsed.data)
+      // RSS bypasses Apify entirely — a plain HTTP GET + XML parse. Keeps
+      // this path off the Apify bill and cuts per-run latency ~orders
+      // of magnitude.
+      const result = parsed.data.actor === "rss"
+        ? { json: await fetchRssItems({ url: parsed.data.url, resultsLimit: parsed.data.resultsLimit }) }
+        : await runScraper(parsed.data)
 
       await supabase.from("jobs").update({
         status: "completed",

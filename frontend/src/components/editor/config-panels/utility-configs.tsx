@@ -1321,10 +1321,130 @@ const FILTER_OPERATOR_LABELS: Record<FilterListOperator, string> = {
 
 const FILTER_NO_VALUE_OPERATORS: ReadonlySet<FilterListOperator> = new Set(["exists", "not_exists"])
 
+const FILTER_COMPARISON_OPERATORS: ReadonlySet<FilterListOperator> = new Set([">", "<", ">=", "<="])
+
 const FILTER_VARIABLE_TOKENS: ReadonlyArray<{ token: string; label: string }> = [
   { token: "{{now}}", label: "Current ISO time ({{now}})" },
   { token: "{{trigger.last_triggered_at}}", label: "Last trigger fire ({{trigger.last_triggered_at}})" },
 ]
+
+/** Field names we treat as date/time for the smart value picker. */
+const DATE_FIELD_EXACT = new Set(["timestamp", "created_at", "updated_at", "published_at", "date"])
+const DATE_FIELD_SUFFIX_RE = /(_at|_date|At|Date)$/
+
+// Exported for unit testing — the smart picker is a UI concern, but the
+// detection / parse / build helpers are pure logic and worth covering directly.
+export function isDateTimeField(name: string): boolean {
+  if (!name) return false
+  if (DATE_FIELD_EXACT.has(name.toLowerCase())) return true
+  // Case-sensitive suffix so `createdAt` and `published_date` both qualify,
+  // but normal words ending in "at"/"date" (e.g. `location`) don't.
+  return DATE_FIELD_SUFFIX_RE.test(name)
+}
+
+export type DateValueMode = "since-last-run" | "last-hours" | "last-days" | "last-weeks" | "custom"
+
+/** Parse the stored value back into a (mode, N) pair for the UI. Unknown
+ *  tokens + free text both surface as "custom" so power users can edit raw. */
+export function parseDateValueMode(value: string): { mode: DateValueMode; n: number } {
+  if (value === "{{trigger.last_triggered_at}}") return { mode: "since-last-run", n: 0 }
+  const hours = /^\{\{\s*last_N_hours:(\d+)\s*\}\}$/.exec(value)
+  if (hours) return { mode: "last-hours", n: parseInt(hours[1], 10) }
+  const days = /^\{\{\s*last_N_days:(\d+)\s*\}\}$/.exec(value)
+  if (days) return { mode: "last-days", n: parseInt(days[1], 10) }
+  const weeks = /^\{\{\s*last_N_weeks:(\d+)\s*\}\}$/.exec(value)
+  if (weeks) return { mode: "last-weeks", n: parseInt(weeks[1], 10) }
+  return { mode: "custom", n: 0 }
+}
+
+const DATE_MODE_DEFAULT_N: Record<Exclude<DateValueMode, "since-last-run" | "custom">, number> = {
+  "last-hours": 3,
+  "last-days": 1,
+  "last-weeks": 1,
+}
+
+export function buildDateValueToken(mode: DateValueMode, n: number): string {
+  switch (mode) {
+    case "since-last-run":
+      return "{{trigger.last_triggered_at}}"
+    case "last-hours":
+      return `{{last_N_hours:${n}}}`
+    case "last-days":
+      return `{{last_N_days:${n}}}`
+    case "last-weeks":
+      return `{{last_N_weeks:${n}}}`
+    case "custom":
+      return ""
+  }
+}
+
+const DATE_MODE_LABEL: Record<DateValueMode, string> = {
+  "since-last-run": "Since last run",
+  "last-hours": "Last N hours",
+  "last-days": "Last N days",
+  "last-weeks": "Last N weeks",
+  custom: "Custom…",
+}
+
+/** Smart value picker shown when field looks like a date/time and operator
+ *  is a comparison. Emits tokens the backend's resolveConditionValue
+ *  understands (see inline-executor.ts:resolveRelativeWindowToken). */
+function DateTimeValuePicker({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (nextValue: string, nextValueType: "static" | "variable") => void
+}) {
+  const parsed = parseDateValueMode(value)
+  const showNInput = parsed.mode === "last-hours" || parsed.mode === "last-days" || parsed.mode === "last-weeks"
+
+  return (
+    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+      <Select
+        value={parsed.mode}
+        onValueChange={(raw) => {
+          const nextMode = raw as DateValueMode
+          if (nextMode === "custom") {
+            // Clear the token so the Input renders empty; user can type freely.
+            onChange("", "static")
+            return
+          }
+          if (nextMode === "since-last-run") {
+            onChange(buildDateValueToken(nextMode, 0), "variable")
+            return
+          }
+          const n = parsed.n > 0 ? parsed.n : DATE_MODE_DEFAULT_N[nextMode]
+          onChange(buildDateValueToken(nextMode, n), "variable")
+        }}
+      >
+        <SelectTrigger className="h-7 text-xs flex-1 min-w-0" aria-label="Date value mode">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {(Object.keys(DATE_MODE_LABEL) as DateValueMode[]).map((mode) => (
+            <SelectItem key={mode} value={mode} className="text-xs">
+              {DATE_MODE_LABEL[mode]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {showNInput && (
+        <Input
+          type="number"
+          min={1}
+          value={parsed.n || 1}
+          onChange={(e) => {
+            const n = Math.max(1, parseInt(e.target.value, 10) || 1)
+            onChange(buildDateValueToken(parsed.mode, n), "variable")
+          }}
+          className="text-xs h-7 w-16 shrink-0"
+          aria-label="Number of units"
+        />
+      )}
+    </div>
+  )
+}
 
 export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: ConfigProps<FilterListNodeData>) {
   const conditions = data.conditions ?? []
@@ -1470,52 +1590,66 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
                   ← Back to field list
                 </button>
               )}
-              {!isNoValue && (
-                <div className="flex items-center gap-1.5">
-                  {isVariable ? (
-                    <Select
-                      value={cond.value || ""}
-                      onValueChange={(v) => updateCondition(cond.id, { value: v })}
-                    >
-                      <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
-                        <SelectValue placeholder="Select variable..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {FILTER_VARIABLE_TOKENS.map((v) => (
-                          <SelectItem key={v.token} value={v.token} className="text-xs">
-                            {v.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
+              {!isNoValue && (() => {
+                const useDatePicker =
+                  isDateTimeField(fieldValue) && FILTER_COMPARISON_OPERATORS.has(cond.operator)
+                if (useDatePicker) {
+                  return (
+                    <DateTimeValuePicker
                       value={cond.value ?? ""}
-                      onChange={(e) => updateCondition(cond.id, { value: e.target.value })}
-                      placeholder="value"
-                      className="text-xs h-7 min-w-0 flex-1"
+                      onChange={(nextValue, nextValueType) =>
+                        updateCondition(cond.id, { value: nextValue, valueType: nextValueType })
+                      }
                     />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateCondition(cond.id, {
-                        valueType: isVariable ? "static" : "variable",
-                        value: "",
-                      })
-                    }
-                    className={
-                      "shrink-0 text-[10px] px-2 py-1 rounded-md border transition-colors " +
-                      (isVariable
-                        ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-400"
-                        : "border-border text-muted-foreground hover:text-foreground")
-                    }
-                    title="Toggle static/variable value"
-                  >
-                    {isVariable ? "var" : "str"}
-                  </button>
-                </div>
-              )}
+                  )
+                }
+                return (
+                  <div className="flex items-center gap-1.5">
+                    {isVariable ? (
+                      <Select
+                        value={cond.value || ""}
+                        onValueChange={(v) => updateCondition(cond.id, { value: v })}
+                      >
+                        <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
+                          <SelectValue placeholder="Select variable..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {FILTER_VARIABLE_TOKENS.map((v) => (
+                            <SelectItem key={v.token} value={v.token} className="text-xs">
+                              {v.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={cond.value ?? ""}
+                        onChange={(e) => updateCondition(cond.id, { value: e.target.value })}
+                        placeholder="value"
+                        className="text-xs h-7 min-w-0 flex-1"
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateCondition(cond.id, {
+                          valueType: isVariable ? "static" : "variable",
+                          value: "",
+                        })
+                      }
+                      className={
+                        "shrink-0 text-[10px] px-2 py-1 rounded-md border transition-colors " +
+                        (isVariable
+                          ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-400"
+                          : "border-border text-muted-foreground hover:text-foreground")
+                      }
+                      title="Toggle static/variable value"
+                    >
+                      {isVariable ? "var" : "str"}
+                    </button>
+                  </div>
+                )
+              })()}
             </div>
           )
         })}
@@ -1529,9 +1663,15 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
       </div>
 
       <p className="text-[10px] text-muted-foreground">
-        Items flowing in are parsed as JSON when a field path is provided. Variables:
-        <code className="ml-1">{"{{now}}"}</code> and
-        <code className="ml-1">{"{{trigger.last_triggered_at}}"}</code>.
+        Items flowing in are parsed as JSON when a field path is provided. Date/time fields
+        (<code>created_at</code>, <code>published_at</code>, <code>*_at</code>, <code>*Date</code>, …)
+        show a relative-window picker for comparison operators; everything else accepts raw
+        values or the variables
+        <code className="ml-1">{"{{now}}"}</code>,
+        <code className="ml-1">{"{{trigger.last_triggered_at}}"}</code>,
+        <code className="ml-1">{"{{last_N_hours:3}}"}</code>,
+        <code className="ml-1">{"{{last_N_days:1}}"}</code>,
+        <code className="ml-1">{"{{last_N_weeks:2}}"}</code>.
       </p>
     </div>
   )
@@ -1541,20 +1681,76 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
 // DeduplicateConfig
 // ---------------------------------------------------------------------------
 
-export function DeduplicateConfig({ data, onUpdate }: ConfigProps<DeduplicateNodeData>) {
+export function DeduplicateConfig({ data, onUpdate, sources, nodes, edges }: ConfigProps<DeduplicateNodeData>) {
+  // Mirrors ExtractFieldConfig + FilterListConfig: dropdown fed by upstream
+  // schema detection, with an explicit "Custom path…" escape hatch.
+  const mode = data.mode ?? "dropdown"
+  const field = data.field ?? ""
+  const actorOptions = useMemo(
+    () => getUpstreamFieldOptions(sources, nodes, edges),
+    [sources, nodes, edges],
+  )
+
+  const setField = (value: string) => onUpdate({ field: value })
+  const setMode = (next: "dropdown" | "custom") => onUpdate({ mode: next })
+
+  // Custom values fall back to "" so the placeholder shows.
+  const selectValue = field === ""
+    ? EXTRACT_FIELD_WHOLE
+    : (actorOptions.includes(field) ? field : "")
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1.5">
-        <Label>Deduplicate by field</Label>
-        <Input
-          value={data.field ?? ""}
-          onChange={(e) => onUpdate({ field: e.target.value })}
-          placeholder="e.g., id or url (blank = whole item)"
-        />
-        <p className="text-[10px] text-muted-foreground">
-          Dot-notation path. Items are parsed as JSON when the path resolves against them. Leave blank to compare whole items as strings.
-        </p>
-      </div>
+      {mode === "dropdown" ? (
+        <div className="flex flex-col gap-1.5">
+          <Label>Deduplicate by field</Label>
+          <Select
+            value={selectValue}
+            onValueChange={(v) => {
+              if (v === EXTRACT_FIELD_CUSTOM) {
+                setMode("custom")
+              } else if (v === EXTRACT_FIELD_WHOLE) {
+                setField("")
+              } else {
+                setField(v)
+              }
+            }}
+          >
+            <SelectTrigger aria-label="Deduplicate by field"><SelectValue placeholder="Select a field..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={EXTRACT_FIELD_WHOLE} className="text-muted-foreground">(whole item)</SelectItem>
+              {actorOptions.map((opt) => (
+                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+              ))}
+              <SelectItem value={EXTRACT_FIELD_CUSTOM} className="text-muted-foreground">Custom path…</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground">
+            {actorOptions.length > 0
+              ? <>Pick (whole item) to compare whole strings, or choose Custom path… for a manual dot-path.</>
+              : <>Connect an upstream node that emits JSON or list data to detect its fields, or choose Custom path… to enter a dot-path manually.</>}
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <Label>Deduplicate by field</Label>
+          <Input
+            value={field}
+            onChange={(e) => setField(e.target.value)}
+            placeholder="e.g., id or url (blank = whole item)"
+          />
+          <p className="text-[10px] text-muted-foreground">
+            Dot-notation path. Items are parsed as JSON when the path resolves against them. Leave blank to compare whole items as strings.
+          </p>
+          <button
+            type="button"
+            className="text-[11px] text-muted-foreground hover:text-foreground hover:underline text-left self-start mt-0.5"
+            onClick={() => setMode("dropdown")}
+          >
+            ← Back to field list
+          </button>
+        </div>
+      )}
 
       {data.listResults && data.listResults.length > 0 && (
         <div>

@@ -21,4 +21,5 @@ export const SCRAPER_OUTPUT_FIELDS: Record<ScraperActorId, readonly string[]> = 
     "id", "webVideoUrl", "videoUrl", "text", "createTime",
     "diggCount", "shareCount", "playCount", "commentCount",
   ],
+  "rss":             ["title", "url", "description", "pubDate", "guid"],
 } as const

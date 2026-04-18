@@ -5,7 +5,12 @@ export interface ActorDefinition {
   timeoutSecs: number
 }
 
-export const ACTORS: Record<ScraperActorId, ActorDefinition> = {
+// Apify actors are a subset of the full scraper actor list — RSS is fetched
+// and parsed directly by this server and never hits Apify. Narrowing the
+// keys here keeps tsc honest when new non-Apify actors (like `rss`) land.
+export type ApifyActorId = Exclude<ScraperActorId, "rss">
+
+export const ACTORS: Record<ApifyActorId, ActorDefinition> = {
   "content-crawler": { apifyActorId: "apify/website-content-crawler", timeoutSecs: 600 },
   "google-search":   { apifyActorId: "apify/google-search-scraper",   timeoutSecs: 180 },
   "instagram":       { apifyActorId: "apify/instagram-scraper",       timeoutSecs: 300 },
@@ -77,7 +82,7 @@ export interface ActorOutput {
 }
 
 export function extractActorOutput(
-  actor: ScraperActorId,
+  actor: ApifyActorId,
   items: Record<string, unknown>[],
 ): ActorOutput {
   if (actor === "content-crawler") {
