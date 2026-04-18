@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
 
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
+  const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
   const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
   const mockWatermarkLocalVideoAndUpload = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1-merged.mp4")
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
@@ -42,6 +43,7 @@ const mocks = vi.hoisted(() => {
     mockCleanupWorkDir,
     mockCommitJobCredits,
     mockShouldSaveJobResult,
+    mockMarkJobCompleted,
     mockUploadVideoMaybeWatermark,
     mockWatermarkLocalVideoAndUpload,
     mockGenerateAndUploadThumbnail,
@@ -79,6 +81,7 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
 vi.mock("../../shared.js", () => ({
   commitJobCredits: mocks.mockCommitJobCredits,
   shouldSaveJobResult: mocks.mockShouldSaveJobResult,
+  markJobCompleted: mocks.mockMarkJobCompleted,
   uploadVideoMaybeWatermark: mocks.mockUploadVideoMaybeWatermark,
   watermarkLocalVideoAndUpload: mocks.mockWatermarkLocalVideoAndUpload,
   generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,

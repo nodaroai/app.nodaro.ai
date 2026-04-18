@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => {
   const mockGenerateScript = vi.fn()
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
+  const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
   const mockUploadImageMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/images/job-1.png")
 
   const mockEq = vi.fn().mockResolvedValue({ data: null, error: null })
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => {
     mockGenerateScript,
     mockCommitJobCredits,
     mockShouldSaveJobResult,
+    mockMarkJobCompleted,
     mockUploadImageMaybeWatermark,
     mockFrom,
     mockUpdate,
@@ -29,6 +31,7 @@ vi.mock("@/providers/script/script-generator.js", () => ({ generateScript: mocks
 vi.mock("../../shared.js", () => ({
   commitJobCredits: mocks.mockCommitJobCredits,
   shouldSaveJobResult: mocks.mockShouldSaveJobResult,
+  markJobCompleted: mocks.mockMarkJobCompleted,
   uploadImageMaybeWatermark: mocks.mockUploadImageMaybeWatermark,
 }))
 
@@ -54,6 +57,7 @@ beforeEach(() => {
   mocks.mockGenerateImage.mockResolvedValue(PROVIDER_RESULT)
   mocks.mockGenerateScript.mockResolvedValue({ title: "My Script", scenes: [{ description: "Scene 1" }] })
   mocks.mockShouldSaveJobResult.mockResolvedValue(true)
+  mocks.mockMarkJobCompleted.mockResolvedValue(true)
 })
 
 describe("generate-character handler", () => {
@@ -97,7 +101,7 @@ describe("generate-character-asset handler", () => {
   it("includes assetType in output", async () => {
     const job = makeJob("generate-character-asset", { prompt: "a sword", assetType: "weapon" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { imageUrl: "https://r2.example.com/images/job-1.png", assetType: "weapon" },
     }))
   })
@@ -120,7 +124,7 @@ describe("generate-object-asset handler", () => {
   it("includes assetType in output", async () => {
     const job = makeJob("generate-object-asset", { prompt: "a key", assetType: "prop" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { imageUrl: "https://r2.example.com/images/job-1.png", assetType: "prop" },
     }))
   })
@@ -143,7 +147,7 @@ describe("generate-location-asset handler", () => {
   it("includes assetType in output", async () => {
     const job = makeJob("generate-location-asset", { prompt: "a castle", assetType: "background" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { imageUrl: "https://r2.example.com/images/job-1.png", assetType: "background" },
     }))
   })
@@ -157,7 +161,7 @@ describe("generate-script handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockGenerateScript).toHaveBeenCalledWith("a story about adventure", undefined, undefined, undefined, undefined, undefined)
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { script: { title: "My Script", scenes: [{ description: "Scene 1" }] } },
     }))
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
@@ -170,7 +174,7 @@ describe("shared entity handler behavior", () => {
     const handler = entityHandlers["generate-character"]
     const job = makeJob("generate-character", { prompt: "cancelled" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockUpdate).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
   })
 

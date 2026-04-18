@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
   const mockEditImage = vi.fn()
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
+  const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
   const mockUploadImageMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/images/job-1.png")
 
   // Supabase chain
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => {
     mockEditImage,
     mockCommitJobCredits,
     mockShouldSaveJobResult,
+    mockMarkJobCompleted,
     mockUploadImageMaybeWatermark,
     mockFrom,
     mockUpdate,
@@ -40,6 +42,7 @@ vi.mock("@/providers/index.js", () => ({
 vi.mock("../../shared.js", () => ({
   commitJobCredits: mocks.mockCommitJobCredits,
   shouldSaveJobResult: mocks.mockShouldSaveJobResult,
+  markJobCompleted: mocks.mockMarkJobCompleted,
   uploadImageMaybeWatermark: mocks.mockUploadImageMaybeWatermark,
 }))
 
@@ -110,17 +113,12 @@ describe("generate-image handler", () => {
     )
     expect(job.updateProgress).toHaveBeenCalledWith(50)
     expect(job.updateProgress).toHaveBeenCalledWith(100)
-    expect(mocks.mockFrom).toHaveBeenCalledWith("jobs")
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "completed",
-        progress: 100,
-        output_data: { imageUrl: "https://r2.example.com/images/job-1.png" },
-        provider: "nano-banana",
-        provider_cost: 0.02,
-        display_cost: 0.025,
-      }),
-    )
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: { imageUrl: "https://r2.example.com/images/job-1.png" },
+      provider: "nano-banana",
+      provider_cost: 0.02,
+      display_cost: 0.025,
+    }))
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
   })
 
@@ -161,7 +159,7 @@ describe("generate-image handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockUploadImageMaybeWatermark).toHaveBeenCalled()
-    expect(mocks.mockUpdate).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
   })
 
@@ -263,7 +261,7 @@ describe("image-to-image handler", () => {
     const job = makeJob("image-to-image", { imageUrl: "https://main.png", prompt: "cancelled" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockUpdate).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
   })
 })

@@ -15,6 +15,7 @@ import { forcedAlignment } from "../../providers/elevenlabs/forced-alignment.js"
 import {
   commitJobCredits,
   shouldSaveJobResult,
+  markJobCompleted,
   type HandlerFn,
 } from "../shared.js"
 
@@ -54,16 +55,11 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
 
     if (!await shouldSaveJobResult(ctx.jobId)) return
 
-    await supabase
-      .from("jobs")
-      .update({
-        status: "completed",
-        progress: 100,
-        output_data: { audioUrl: r2Url },
-        completed_at: new Date().toISOString(),
-        provider: "elevenlabs-direct",
-      })
-      .eq("id", ctx.jobId)
+    const ok = await markJobCompleted(ctx.jobId, {
+      output_data: { audioUrl: r2Url },
+      provider: "elevenlabs-direct",
+    })
+    if (!ok) return
 
     await commitJobCredits(ctx.usageLogId, ctx.jobId)
     console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: elevenlabs-direct)`)
@@ -78,18 +74,13 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase
-    .from("jobs")
-    .update({
-      status: "completed",
-      progress: 100,
-      output_data: { audioUrl: r2Url },
-      completed_at: new Date().toISOString(),
-      provider: result.providerUsed,
-      provider_cost: result.cost,
-      display_cost: result.displayCost,
-    })
-    .eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { audioUrl: r2Url },
+    provider: result.providerUsed,
+    provider_cost: result.cost,
+    display_cost: result.displayCost,
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
@@ -103,7 +94,8 @@ const handleGenerateMusic: HandlerFn = async function handleGenerateMusic(job, c
   const r2Url = await uploadToR2(replicateUrl, ctx.jobId, "audio", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, { output_data: { audioUrl: r2Url } })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
@@ -132,7 +124,8 @@ const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) 
   const r2Url = await uploadToR2(audioUrl, ctx.jobId, "audio", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, { output_data: { audioUrl: r2Url } })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
@@ -158,12 +151,10 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
   const result = await transcribe(audioUrl, provider, language, { diarize, tagAudioEvents })
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { text: result.text, language: result.language, segments: result.segments },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: transcribed ${result.text.length} chars (language: ${result.language})`)
 }
@@ -174,7 +165,8 @@ const handleExtractYoutubeAudio: HandlerFn = async function handleExtractYoutube
   const audioUrl = await extractYouTubeAudio(youtubeUrl)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl }, completed_at: new Date().toISOString() }).eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, { output_data: { audioUrl } })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${audioUrl}`)
 }
@@ -188,13 +180,11 @@ const handleAudioIsolation: HandlerFn = async function handleAudioIsolation(job,
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url },
-    completed_at: new Date().toISOString(),
     provider_cost: result.cost,
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
@@ -216,13 +206,11 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url },
-    completed_at: new Date().toISOString(),
     provider_cost: result.cost,
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
@@ -238,12 +226,11 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
   const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed", progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url },
-    completed_at: new Date().toISOString(),
     provider: "elevenlabs-direct",
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
@@ -267,12 +254,11 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
   const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed", progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url },
-    completed_at: new Date().toISOString(),
     provider: "elevenlabs-direct",
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
@@ -285,12 +271,11 @@ const handleVoiceRemix: HandlerFn = async function handleVoiceRemix(job, ctx) {
   const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed", progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url },
-    completed_at: new Date().toISOString(),
     provider: "elevenlabs-direct",
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
@@ -307,12 +292,11 @@ const handleVoiceDesign: HandlerFn = async function handleVoiceDesign(job, ctx) 
   const r2Url = await uploadBufferToR2(result.audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed", progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url, generatedVoiceId: result.generatedVoiceId },
-    completed_at: new Date().toISOString(),
     provider: "elevenlabs-direct",
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (voiceId: ${result.generatedVoiceId})`)
 }
@@ -323,12 +307,11 @@ const handleForcedAlignment: HandlerFn = async function handleForcedAlignment(jo
   const result = await forcedAlignment(audioUrl, transcript)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed", progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { alignment: result.alignment, text: transcript },
-    completed_at: new Date().toISOString(),
     provider: "elevenlabs-direct",
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: aligned ${result.alignment.length} words`)
 }

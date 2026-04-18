@@ -18,10 +18,16 @@ const mocks = vi.hoisted(() => {
   // Supabase mock with fine-grained control per call
   const mockSingle = vi.fn().mockResolvedValue({ data: null, error: null })
   const mockMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+  // Terminal `.select()` after a conditional UPDATE — used by markJobCompleted.
+  // Default: 1-row response so the existing complete*Job tests treat the
+  // conditional UPDATE as successful.
+  const mockUpdateSelect = vi.fn().mockResolvedValue({ data: [{ id: "ok" }], error: null })
+  const mockNeq = vi.fn().mockReturnValue({ select: mockUpdateSelect })
   const mockEq = vi.fn().mockReturnValue({
     single: mockSingle,
     maybeSingle: mockMaybeSingle,
     eq: vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockMaybeSingle }),
+    neq: mockNeq,
   })
   const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
   const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
@@ -46,6 +52,8 @@ const mocks = vi.hoisted(() => {
     mockSingle,
     mockMaybeSingle,
     mockEq,
+    mockNeq,
+    mockUpdateSelect,
     mockSelect,
     mockUpdate,
     mockInsert,
@@ -105,6 +113,7 @@ vi.mock("youtube-dl-exec", () => ({ default: vi.fn() }))
 import {
   isSocialUrl,
   shouldSaveJobResult,
+  markJobCompleted,
   commitJobCredits,
   refundJobCredits,
   uploadImageMaybeWatermark,
@@ -173,6 +182,76 @@ describe("shouldSaveJobResult", () => {
   it("returns true when job record not found", async () => {
     mocks.mockSingle.mockResolvedValueOnce({ data: null, error: null })
     expect(await shouldSaveJobResult("job-1")).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// markJobCompleted — atomic conditional UPDATE
+// ---------------------------------------------------------------------------
+
+describe("markJobCompleted", () => {
+  // Each test installs its own mock supabase.from chain because the new
+  // helper uses .update().eq().neq().select() which the shared mock above
+  // doesn't terminate cleanly (it returns chainable objects, not a Promise).
+
+  function installUpdateMock(updateResult: { data: unknown; error: unknown }): {
+    update: ReturnType<typeof vi.fn>
+    eq: ReturnType<typeof vi.fn>
+    neq: ReturnType<typeof vi.fn>
+    select: ReturnType<typeof vi.fn>
+  } {
+    const select = vi.fn().mockResolvedValue(updateResult)
+    const neq = vi.fn().mockReturnValue({ select })
+    const eq = vi.fn().mockReturnValue({ neq })
+    const update = vi.fn().mockReturnValue({ eq })
+    mocks.mockFrom.mockReturnValueOnce({ update } as never)
+    return { update, eq, neq, select }
+  }
+
+  it("returns true when the row was updated (status was not cancelled)", async () => {
+    installUpdateMock({ data: [{ id: "job-1" }], error: null })
+
+    const ok = await markJobCompleted("job-1", { output_data: { videoUrl: "x" } })
+    expect(ok).toBe(true)
+  })
+
+  it("returns false when zero rows matched (regression: race with cancellation)", async () => {
+    // The conditional UPDATE matched zero rows because the user cancelled the
+    // job between the worker's pre-check and the UPDATE. Caller must skip
+    // commitJobCredits — otherwise the user gets a free generation.
+    installUpdateMock({ data: [], error: null })
+
+    const ok = await markJobCompleted("job-1", { output_data: { videoUrl: "x" } })
+    expect(ok).toBe(false)
+  })
+
+  it("returns false on supabase error (defensive — don't commit credits on DB failure)", async () => {
+    installUpdateMock({ data: null, error: { message: "DB down" } })
+
+    const ok = await markJobCompleted("job-1", { output_data: { videoUrl: "x" } })
+    expect(ok).toBe(false)
+  })
+
+  it("uses .neq('status', 'cancelled') to gate the update atomically", async () => {
+    const { eq, neq } = installUpdateMock({ data: [{ id: "job-1" }], error: null })
+
+    await markJobCompleted("job-1", { output_data: {} })
+
+    expect(eq).toHaveBeenCalledWith("id", "job-1")
+    expect(neq).toHaveBeenCalledWith("status", "cancelled")
+  })
+
+  it("includes status, progress, and completed_at in the update payload", async () => {
+    const { update } = installUpdateMock({ data: [{ id: "job-1" }], error: null })
+
+    await markJobCompleted("job-1", { output_data: { videoUrl: "x" }, provider: "kie" })
+
+    const payload = update.mock.calls[0][0] as Record<string, unknown>
+    expect(payload.status).toBe("completed")
+    expect(payload.progress).toBe(100)
+    expect(typeof payload.completed_at).toBe("string")
+    expect(payload.output_data).toEqual({ videoUrl: "x" })
+    expect(payload.provider).toBe("kie")
   })
 })
 

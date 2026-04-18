@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => {
   const mockForcedAlignment = vi.fn().mockResolvedValue({ words: [] })
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
+  const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
 
   const mockEq = vi.fn().mockResolvedValue({ data: null, error: null })
   const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
@@ -52,6 +53,7 @@ const mocks = vi.hoisted(() => {
     mockForcedAlignment,
     mockCommitJobCredits,
     mockShouldSaveJobResult,
+    mockMarkJobCompleted,
     mockFrom,
     mockUpdate,
     mockEq,
@@ -75,6 +77,7 @@ vi.mock("@/providers/audio/youtube-extractor.js", () => ({ extractYouTubeAudio: 
 vi.mock("../../shared.js", () => ({
   commitJobCredits: mocks.mockCommitJobCredits,
   shouldSaveJobResult: mocks.mockShouldSaveJobResult,
+  markJobCompleted: mocks.mockMarkJobCompleted,
 }))
 
 import { audioAIHandlers } from "../audio-ai.js"
@@ -110,8 +113,7 @@ describe("text-to-speech handler", () => {
     expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://provider.example.com/tts.mp3", "job-1", "audio", "user-1")
     expect(job.updateProgress).toHaveBeenCalledWith(50)
     expect(job.updateProgress).toHaveBeenCalledWith(100)
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      status: "completed", progress: 100,
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { audioUrl: "https://r2.example.com/audio/job-1.mp3" },
       provider: "elevenlabs-turbo",
     }))
@@ -132,7 +134,7 @@ describe("text-to-speech handler", () => {
     mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
     const job = makeJob("text-to-speech", { text: "cancel" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockUpdate).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
   })
 })
@@ -181,7 +183,7 @@ describe("text-to-audio handler", () => {
     mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
     const job = makeJob("text-to-audio", { prompt: "cancel" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockUpdate).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
   })
 })
 
@@ -193,7 +195,7 @@ describe("transcribe handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://example.com/audio.mp3", undefined, undefined, { diarize: undefined, tagAudioEvents: undefined })
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { text: "Hello world", language: "en", segments: [] },
     }))
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", undefined)
@@ -214,7 +216,7 @@ describe("extract-youtube-audio handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockExtractYouTubeAudio).toHaveBeenCalledWith("https://youtube.com/watch?v=abc")
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { audioUrl: "https://example.com/yt-audio.mp3" },
     }))
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
@@ -232,8 +234,7 @@ describe("audio-isolation handler", () => {
     expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://kie.example.com/isolated.mp3", "job-1", "audio", "user-1")
     expect(job.updateProgress).toHaveBeenCalledWith(50)
     expect(job.updateProgress).toHaveBeenCalledWith(100)
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      status: "completed",
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { audioUrl: "https://r2.example.com/audio/job-1.mp3" },
       provider_cost: 0.01,
     }))
@@ -244,6 +245,6 @@ describe("audio-isolation handler", () => {
     mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
     const job = makeJob("audio-isolation", { audioUrl: "https://example.com/song.mp3" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockUpdate).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
   })
 })

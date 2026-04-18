@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => {
   // Shared helpers
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
+  const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
   const mockCompleteFfmpegVideoJob = vi.fn().mockResolvedValue(undefined)
   const mockCompleteFfmpegAudioJob = vi.fn().mockResolvedValue(undefined)
@@ -62,6 +63,7 @@ const mocks = vi.hoisted(() => {
     BROWSER_SAFE_VIDEO_ARGS,
     mockCommitJobCredits,
     mockShouldSaveJobResult,
+    mockMarkJobCompleted,
     mockGenerateAndUploadThumbnail,
     mockCompleteFfmpegVideoJob,
     mockCompleteFfmpegAudioJob,
@@ -139,6 +141,7 @@ vi.mock("@/providers/video/fade-video.js", () => ({
 vi.mock("../../shared.js", () => ({
   commitJobCredits: mocks.mockCommitJobCredits,
   shouldSaveJobResult: mocks.mockShouldSaveJobResult,
+  markJobCompleted: mocks.mockMarkJobCompleted,
   generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
   completeFfmpegVideoJob: mocks.mockCompleteFfmpegVideoJob,
   completeFfmpegAudioJob: mocks.mockCompleteFfmpegAudioJob,
@@ -329,8 +332,7 @@ describe("trim-audio handler", () => {
     const job = makeJob("trim-audio", { videoUrl: "https://vid.mp4" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
         output_data: {
           audioUrl: "https://r2.example.com/audio.mp3",
         },
@@ -381,8 +383,7 @@ describe("trim-video handler", () => {
     expect(mocks.mockUploadFileToR2).toHaveBeenCalledTimes(2)
     expect(mocks.mockUploadFileToR2).toHaveBeenCalledWith("/tmp/trim-work/output.mp4", "job-1", "video", "user-1")
     expect(mocks.mockUploadFileToR2).toHaveBeenCalledWith("/tmp/trim-work/silent.mp4", "job-1-silent", "video", "user-1")
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
         output_data: expect.objectContaining({
           videoUrl: "https://r2.example.com/video.mp4",
           videoUrlSilent: "https://r2.example.com/silent.mp4",
@@ -639,8 +640,7 @@ describe("adjust-volume handler", () => {
     })
     expect(mocks.mockUploadFileToR2).toHaveBeenCalledWith("/tmp/vol/out.mp4", "job-1", "video", "user-1")
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
         output_data: expect.objectContaining({
           videoUrl: expect.any(String),
           thumbnailUrl: expect.any(String),
@@ -657,8 +657,7 @@ describe("adjust-volume handler", () => {
 
     expect(mocks.mockUploadFileToR2).toHaveBeenCalledWith("/tmp/vol/out.mp3", "job-1", "audio", "user-1")
     expect(mocks.mockGenerateAndUploadThumbnail).not.toHaveBeenCalled()
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
         output_data: expect.objectContaining({
           audioUrl: expect.any(String),
           inputType: "audio",

@@ -1,10 +1,10 @@
 import type { Job } from "bullmq"
-import { supabase } from "../../lib/supabase.js"
 import { generateImage } from "../../providers/index.js"
 import { generateScript, type ScriptProvider } from "../../providers/script/script-generator.js"
 import {
   commitJobCredits,
   shouldSaveJobResult,
+  markJobCompleted,
   uploadImageMaybeWatermark,
   type HandlerFn,
   type JobContext,
@@ -47,15 +47,13 @@ function makeEntityImageHandler(
       outputData.assetType = assetType
     }
 
-    await supabase.from("jobs").update({
-      status: "completed",
-      progress: 100,
+    const ok = await markJobCompleted(ctx.jobId, {
       output_data: outputData,
-      completed_at: new Date().toISOString(),
       provider: result.providerUsed,
       provider_cost: result.cost,
       display_cost: result.displayCost,
-    }).eq("id", ctx.jobId)
+    })
+    if (!ok) return
 
     await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
     console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
@@ -79,15 +77,10 @@ const handleGenerateScript: HandlerFn = async function handleGenerateScript(job,
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase
-    .from("jobs")
-    .update({
-      status: "completed",
-      progress: 100,
-      output_data: { script },
-      completed_at: new Date().toISOString(),
-    })
-    .eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { script },
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: "${script.title}" (${script.scenes.length} scenes)`)
