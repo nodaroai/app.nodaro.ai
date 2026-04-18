@@ -525,6 +525,10 @@ export function buildSyncHttpBody(
         body.query = (data.query as string) || upstreamText
         body.maxResults = data.maxResults
         body.countryCode = data.countryCode
+      } else if (actor === "rss") {
+        // Same shape as content-crawler but resolved via direct fetch, not Apify.
+        body.url = (data.url as string) || upstreamText
+        body.resultsLimit = data.resultsLimit
       } else {
         body.target = (data.target as string) || upstreamText
         body.resultsLimit = data.resultsLimit

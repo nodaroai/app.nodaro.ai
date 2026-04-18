@@ -18,6 +18,7 @@ import type { ConfigProps } from "./types"
 const ACTOR_OPTIONS: ReadonlyArray<ScraperActorId> = [
   "google-search",
   "content-crawler",
+  "rss",
   "instagram",
   "tiktok",
 ]
@@ -115,6 +116,38 @@ export function WebScrapeConfig({ data, onUpdate, sources, fieldMappings, onMapF
                 <SelectItem value="site">Site crawl, up to 20 pages (10 CR)</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+        </>
+      )}
+
+      {/* RSS — direct fetch + XML parse, no Apify */}
+      {actor === "rss" && (
+        <>
+          <MappableField field="url" label="Feed URL" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Input
+              id="scraper-rss-url"
+              value={data.url ?? ""}
+              onChange={(e) => onUpdate({ url: e.target.value })}
+              placeholder="https://feeds.feedburner.com/TechCrunch"
+              className="text-sm"
+            />
+          </MappableField>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="scraper-rss-limit">Results limit</Label>
+            <Input
+              id="scraper-rss-limit"
+              type="number"
+              min={1}
+              max={50}
+              value={data.resultsLimit ?? 10}
+              onChange={(e) =>
+                onUpdate({ resultsLimit: parseInt(e.target.value, 10) || 10 })
+              }
+              className="text-sm"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Fetched directly (no Apify). Emits an array of {"{ title, url, description, pubDate, guid }"}.
+            </p>
           </div>
         </>
       )}

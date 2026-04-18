@@ -270,6 +270,52 @@ function runProcessingNode(
   return pollJobWithNodeUpdate(nodeId, apiCall, outputKey, label, ctx, extraOutputFields);
 }
 
+/**
+ * Build the request params for the /v1/web-scrape endpoint from node data.
+ *
+ * Kept as a pure, exported function so it's testable without a full
+ * executor harness — the RSS field-dropping bug could have been caught here
+ * with a one-line assertion. Each actor reuses a small, overlapping set of
+ * config keys (url / query / target + resultsLimit / maxResults) and the
+ * mapping is purely declarative.
+ *
+ * `upstream` is the prompt value flowing in from upstream text so users can
+ * wire a Text Prompt → Web Scrape without re-typing URLs/queries.
+ */
+export function buildWebScrapeParams(
+  data: WebScrapeNodeData,
+  upstream: string | undefined,
+): Parameters<typeof webScrape>[0] {
+  const actor = data.actor ?? "google-search";
+  const params: Parameters<typeof webScrape>[0] = { actor };
+  switch (actor) {
+    case "content-crawler":
+      params.url = data.url || upstream;
+      params.mode = data.mode ?? "page";
+      break;
+    case "google-search":
+      params.query = data.query || upstream;
+      params.maxResults = data.maxResults;
+      params.countryCode = data.countryCode;
+      break;
+    case "instagram":
+    case "tiktok":
+      params.target = data.target || upstream;
+      params.resultsLimit = data.resultsLimit;
+      break;
+    case "rss":
+      // RSS reuses the same `url` node-data key as content-crawler and the
+      // `resultsLimit` key as instagram/tiktok. The previous ternary-ladder
+      // implementation only set url for content-crawler and resultsLimit
+      // for instagram/tiktok, so running the RSS actor sent
+      // `{ actor: "rss", workflowId }` to the backend and 400'd at Zod.
+      params.url = data.url || upstream;
+      params.resultsLimit = data.resultsLimit;
+      break;
+  }
+  return params;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers for list-processing inline nodes: filter-list, deduplicate, merge-lists
 // ---------------------------------------------------------------------------
@@ -2405,20 +2451,9 @@ export function executeNode(
 
   if (node.type === "web-scrape") {
     const d = node.data as WebScrapeNodeData;
-    const actor = d.actor ?? "google-search";
     const { updateNodeData } = useWorkflowStore.getState();
     const upstream = inputs.prompt;
-
-    const params: Parameters<typeof webScrape>[0] = {
-      actor,
-      url: actor === "content-crawler" ? (d.url || upstream) : undefined,
-      mode: actor === "content-crawler" ? (d.mode ?? "page") : undefined,
-      query: actor === "google-search" ? (d.query || upstream) : undefined,
-      maxResults: actor === "google-search" ? d.maxResults : undefined,
-      countryCode: actor === "google-search" ? d.countryCode : undefined,
-      target: (actor === "instagram" || actor === "tiktok") ? (d.target || upstream) : undefined,
-      resultsLimit: (actor === "instagram" || actor === "tiktok") ? d.resultsLimit : undefined,
-    };
+    const params = buildWebScrapeParams(d, upstream);
 
     updateNodeData(node.id, {
       executionStatus: "running",
