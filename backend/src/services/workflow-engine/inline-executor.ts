@@ -120,9 +120,14 @@ export function executeSplitText(
  * Execute extract-field node: parse JSON from upstream, apply dot-path,
  * emit newline-joined list of values.
  *
- * Input source semantics:
- *   - `json` source: read state.output.json directly (no parse).
- *   - `text` source: JSON.parse; throw on invalid JSON.
+ * Input source precedence:
+ *   1. `output.json` — already-structured input (web-scrape). Arrays auto-iterate.
+ *   2. `output.listResults` — list-producing upstream (filter-list, deduplicate,
+ *      merge-lists, split-text). Every item is parsed individually so the path
+ *      evaluates across the WHOLE list, not just `listResults[0]`. Without this
+ *      branch Extract Field would silently read only the first item and produce
+ *      inconsistent counts whenever upstream order shifted.
+ *   3. `output.text` (or saved fallback) — scalar text parsed as JSON.
  *
  * Values:
  *   - null/undefined → skipped
@@ -151,6 +156,11 @@ export function executeExtractField(
   let value: unknown
   if (state?.output?.json !== undefined) {
     value = state.output.json
+  } else if (state?.output?.listResults && state.output.listResults.length > 0) {
+    // Treat the list as a structured array input. Parse each item so object
+    // paths like "url" or "authorMeta.name" resolve per-element; non-JSON
+    // strings pass through as-is (whole-item mode with empty path still works).
+    value = state.output.listResults.map((item) => tryParseJson(item))
   } else {
     const text = state?.output?.text ?? extractSavedTextFallback(src)
     if (typeof text !== "string" || text.length === 0) {
@@ -331,6 +341,23 @@ function stringifyListKey(value: unknown): string {
   return JSON.stringify(value)
 }
 
+const HOUR_MS = 60 * 60 * 1000
+const DAY_MS = 24 * HOUR_MS
+const WEEK_MS = 7 * DAY_MS
+
+/** Resolve a relative-window token like `last_N_hours:3` to an ISO timestamp
+ *  N units before `Date.now()`. Returns undefined for malformed tokens so the
+ *  caller can decide whether to fall through (unknown tokens currently
+ *  resolve to empty string, same as unrecognized `{{foo}}`). */
+function resolveRelativeWindowToken(key: string): string | undefined {
+  const m = /^last_N_(hours|days|weeks):(-?\d+)$/.exec(key)
+  if (!m) return undefined
+  const n = parseInt(m[2], 10)
+  if (!Number.isFinite(n)) return undefined
+  const unitMs = m[1] === "hours" ? HOUR_MS : m[1] === "days" ? DAY_MS : WEEK_MS
+  return new Date(Date.now() - n * unitMs).toISOString()
+}
+
 function resolveConditionValue(
   raw: string,
   valueType: string | undefined,
@@ -350,6 +377,8 @@ function resolveConditionValue(
       const v = triggerData?.[path]
       return v == null ? "" : String(v)
     }
+    const relative = resolveRelativeWindowToken(key)
+    if (relative !== undefined) return relative
     return ""
   })
 }

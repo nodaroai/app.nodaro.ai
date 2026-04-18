@@ -43,6 +43,111 @@ function warnUnderMinRows(nodes: WorkflowNode[]): void {
   toast.warning(`Under minimum rows: ${names.join(", ")}`)
 }
 
+/**
+ * Reset persisted `rows` on list/loop nodes whose columns are driven by
+ * upstream connections, so each execution starts from a clean slate and
+ * doesn't display rows left over from a previous run.
+ *
+ * Only clears nodes where at least one column has `connectedSourceId` —
+ * fully-manual tables keep their user-entered rows untouched. Within a
+ * connected node we also preserve cell values in any column that was still
+ * manual (no `connectedSourceId`) so mixed tables don't lose unrelated data.
+ *
+ * This is the persistence-side complement to the live `connectedRows` memo
+ * used for display: without clearing, a saved workflow would carry stale
+ * cells in connected columns across runs and show them briefly (or durably,
+ * if the upstream disconnects) as leftover data.
+ */
+type ListLoopColumn = {
+  handleId: string
+  connectedSourceId?: string
+  [key: string]: unknown
+}
+
+/**
+ * Fields that accumulate output across runs. `syncNodeStatesToStore` and
+ * `applyRestoredJobCompletion` both prepend new results to `generatedResults`
+ * (`[...newResults, ...prev]`) — fine for a single node's history browser,
+ * but downstream list/loop/preview consumers read via
+ * `extractAllGeneratedResults` and see every prior run's items too. Without
+ * clearing at run start, running the same workflow twice makes the list
+ * display grow: 3 items after run 1, 6 after run 2, 9 after run 3…
+ *
+ * `listResults` / `__listResults` are replaced (not appended) by the fan-out
+ * and inline executors, but clearing them pre-run prevents a stale flash
+ * while the new run is still populating. `activeResultIndex` is reset to 0
+ * to stay consistent with the emptied `generatedResults`.
+ */
+const ACCUMULATION_FIELDS_TO_CLEAR: ReadonlyArray<string> = [
+  "generatedResults",
+  "activeResultIndex",
+  "__listResults",
+  "__listTotal",
+  "__listCompleted",
+  "__listInputs",
+  "listResults",
+]
+
+/**
+ * Reset per-run output state on every executable node in `nodes`. Source
+ * nodes (text-prompt, upload-*, triggers, list, loop) are skipped via the
+ * `isExecutableNode` filter — their data is user-provided and must persist.
+ *
+ * Each cleared field is only patched when present, so fresh nodes with no
+ * prior state don't take a pointless store write (and don't register as
+ * dirty for the auto-save).
+ */
+export function resetNodeAccumulation(nodes: ReadonlyArray<WorkflowNode>): void {
+  const { updateNodeData } = useWorkflowStore.getState()
+  for (const node of nodes) {
+    if (!isExecutableNode(node)) continue
+    const data = node.data as Record<string, unknown>
+    const patch: Record<string, unknown> = {}
+    for (const key of ACCUMULATION_FIELDS_TO_CLEAR) {
+      if (data[key] === undefined) continue
+      if (key === "generatedResults") {
+        if (Array.isArray(data[key]) && (data[key] as unknown[]).length === 0) continue
+        patch[key] = []
+      } else if (key === "activeResultIndex") {
+        if (data[key] === 0) continue
+        patch[key] = 0
+      } else {
+        patch[key] = undefined
+      }
+    }
+    if (Object.keys(patch).length > 0) {
+      updateNodeData(node.id, patch)
+    }
+  }
+}
+
+export function clearConnectedListRows(nodes: WorkflowNode[]): void {
+  const { updateNodeData } = useWorkflowStore.getState()
+  for (const node of nodes) {
+    if (node.type !== "list" && node.type !== "loop") continue
+    const data = node.data as Record<string, unknown>
+    const columns = (data.columns as ListLoopColumn[] | undefined) ?? []
+    if (columns.length === 0) continue
+    const connectedIdxs = columns
+      .map((c, i) => (c.connectedSourceId ? i : -1))
+      .filter((i) => i >= 0)
+    if (connectedIdxs.length === 0) continue
+
+    const existingRows = (data.rows as string[][] | undefined) ?? []
+    const connectedSet = new Set(connectedIdxs)
+    // Reset only connected cells; leave manual columns alone so mixed tables
+    // don't lose user input when a sibling column is wired to upstream.
+    const clearedRows = existingRows.map((row) =>
+      row.map((cell, ci) => (connectedSet.has(ci) ? "" : cell)),
+    )
+    // If every column is connected, collapse to a single empty row so the
+    // live upstream resolver drives row count from scratch.
+    const allConnected = connectedIdxs.length === columns.length
+    const nextRows = allConnected ? [columns.map(() => "")] : clearedRows
+    updateNodeData(node.id, { rows: nextRows })
+  }
+}
+
 // ---------------------------------------------------------------------------
 // handleRun
 // ---------------------------------------------------------------------------
@@ -59,6 +164,7 @@ export async function handleRun(
   rejectAllManualEdits();
   const { nodes } = collapseExpandedClones();
   warnUnderMinRows(nodes);
+  clearConnectedListRows(nodes);
 
   const executableNodes = nodes.filter(isExecutableNode);
   if (executableNodes.length === 0) {
@@ -72,6 +178,11 @@ export async function handleRun(
     toast.error("Save the workflow before running.");
     return;
   }
+
+  // Reset accumulated output so downstream list/preview nodes reflect only
+  // this run — mirrors the per-run clear the backend orchestrator applies
+  // via list-execution.ts:42.
+  resetNodeAccumulation(executableNodes);
 
   if (projectId) {
     await save(projectId);
@@ -172,6 +283,9 @@ export async function handleRunSingleNode(
     return;
   }
 
+  clearConnectedListRows(nodes);
+  resetNodeAccumulation([node]);
+
   if (projectId) {
     await save(projectId);
   }
@@ -225,6 +339,8 @@ export async function handleRunFromHere(
   const startNode = nodes.find((n) => n.id === nodeId);
   if (!startNode) return;
 
+  clearConnectedListRows(nodes);
+
   const workflowId = useWorkflowStore.getState().workflowId;
   if (!workflowId) {
     toast.error("Save the workflow before running.");
@@ -257,6 +373,11 @@ export async function handleRunFromHere(
     toast.error("No executable nodes found downstream.");
     return;
   }
+
+  // Only clear the scope that's actually re-running — upstream/out-of-subset
+  // nodes keep their saved output so the backend orchestrator can still
+  // resolve inputs from them via extractSavedNodeOutput.
+  resetNodeAccumulation(executableNodes);
 
   // Mark nodes as pending for immediate UI feedback
   const { updateNodeData } = useWorkflowStore.getState();
@@ -313,6 +434,10 @@ export async function handleRunSelected(
     return;
   }
 
+  // Clear stale upstream-driven rows across the whole graph — even selected-run
+  // can drive downstream list nodes that weren't themselves in the selection.
+  clearConnectedListRows(nodes);
+
   const workflowId = useWorkflowStore.getState().workflowId;
   if (!workflowId) {
     toast.error("Save the workflow before running.");
@@ -331,6 +456,8 @@ export async function handleRunSelected(
   warnUnderMinRows(selectedNodes);
 
   const selectedIds = selectedNodes.map((n) => n.id);
+
+  resetNodeAccumulation(executableNodes);
 
   // Mark nodes as pending for immediate UI feedback
   const { updateNodeData } = useWorkflowStore.getState();

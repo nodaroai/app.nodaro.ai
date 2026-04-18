@@ -140,6 +140,8 @@ import {
   handleRunSingleNode,
   handleRunFromHere,
   handleRunSelected,
+  clearConnectedListRows,
+  resetNodeAccumulation,
 } from "../run-handlers"
 
 // ---------------------------------------------------------------------------
@@ -620,5 +622,464 @@ describe("handleRunSelected", () => {
       expect.objectContaining({ description: "2 node(s) to run" }),
     )
     expect(save).toHaveBeenCalledWith("p1")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// clearConnectedListRows
+// ---------------------------------------------------------------------------
+
+describe("clearConnectedListRows", () => {
+  it("clears rows on a list node whose only column is connected to upstream", () => {
+    const listNode = {
+      id: "list-1",
+      type: "list",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "List",
+        columns: [{ id: "c1", handleId: "col_c1", connectedSourceId: "upstream-1" }],
+        // Stale rows persisted from previous run's upstream output.
+        rows: [["stale-1"], ["stale-2"], ["stale-3"]],
+      },
+    } as any
+
+    clearConnectedListRows([listNode])
+
+    // Fully-connected → collapses to a single empty row so the live upstream
+    // resolver drives row count from scratch.
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("list-1", { rows: [[""]] })
+  })
+
+  it("only clears cells in connected columns, preserves manual columns", () => {
+    const loopNode = {
+      id: "loop-1",
+      type: "loop",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Table",
+        columns: [
+          { id: "c1", handleId: "col_c1", connectedSourceId: "up-1" },
+          { id: "c2", handleId: "col_c2" }, // manual
+        ],
+        rows: [
+          ["from-upstream-1", "manual-a"],
+          ["from-upstream-2", "manual-b"],
+        ],
+      },
+    } as any
+
+    clearConnectedListRows([loopNode])
+
+    // Manual column kept, connected column cleared.
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("loop-1", {
+      rows: [
+        ["", "manual-a"],
+        ["", "manual-b"],
+      ],
+    })
+  })
+
+  it("skips list/loop nodes with no connected columns (fully manual table)", () => {
+    const manualList = {
+      id: "list-manual",
+      type: "list",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Manual List",
+        columns: [{ id: "c1", handleId: "col_c1" }], // no connectedSourceId
+        rows: [["user-typed-1"], ["user-typed-2"]],
+      },
+    } as any
+
+    clearConnectedListRows([manualList])
+
+    // Fully-manual tables untouched so user-entered rows are preserved.
+    expect(mockUpdateNodeData).not.toHaveBeenCalled()
+  })
+
+  it("skips non-list/loop node types", () => {
+    const imgNode = {
+      id: "img-1",
+      type: "generate-image",
+      position: { x: 0, y: 0 },
+      data: { label: "Image", rows: [["whatever"]] },
+    } as any
+
+    clearConnectedListRows([imgNode])
+
+    expect(mockUpdateNodeData).not.toHaveBeenCalled()
+  })
+
+  it("handles list node with no columns defined (legacy/uninitialized)", () => {
+    const legacyList = {
+      id: "list-legacy",
+      type: "list",
+      position: { x: 0, y: 0 },
+      data: { label: "Legacy", items: "line1\nline2" },
+    } as any
+
+    clearConnectedListRows([legacyList])
+
+    // Nothing to clear when there are no columns — legacy `items` format
+    // isn't upstream-driven.
+    expect(mockUpdateNodeData).not.toHaveBeenCalled()
+  })
+
+  it("runs across multiple list/loop nodes in a single pass", () => {
+    const nodes = [
+      {
+        id: "list-a",
+        type: "list",
+        position: { x: 0, y: 0 },
+        data: {
+          columns: [{ id: "c1", handleId: "col_c1", connectedSourceId: "up" }],
+          rows: [["x"]],
+        },
+      },
+      {
+        id: "list-b",
+        type: "loop",
+        position: { x: 0, y: 0 },
+        data: {
+          columns: [{ id: "c1", handleId: "col_c1", connectedSourceId: "up" }],
+          rows: [["y"], ["z"]],
+        },
+      },
+    ] as any
+
+    clearConnectedListRows(nodes)
+
+    expect(mockUpdateNodeData).toHaveBeenCalledTimes(2)
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("list-a", { rows: [[""]] })
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("list-b", { rows: [[""]] })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Run handlers — clearConnectedListRows integration
+// ---------------------------------------------------------------------------
+
+describe("run handlers clear connected list rows at execution start", () => {
+  function makeConnectedListNode() {
+    return {
+      id: "list-x",
+      type: "list",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "List",
+        columns: [{ id: "c1", handleId: "col_c1", connectedSourceId: "up-1" }],
+        rows: [["stale-1"], ["stale-2"]],
+      },
+    }
+  }
+
+  it("handleRun clears rows before starting the workflow", async () => {
+    const listNode = makeConnectedListNode()
+    const execNode = makeNode("exec", "generate-image")
+    mockCollapseExpandedClones.mockReturnValue({
+      nodes: [listNode, execNode],
+      edges: [],
+    })
+
+    const ctx = makeCtx()
+    await handleRun(ctx, "p1", "wf-1", vi.fn().mockResolvedValue(undefined), vi.fn())
+
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("list-x", { rows: [[""]] })
+  })
+
+  it("handleRunSelected clears rows even for lists outside the selection", async () => {
+    // The list sits downstream of a selected exec node; the selection only
+    // contains the exec node, but running it still drives the list.
+    const listNode = makeConnectedListNode()
+    const execNode = makeNode("exec", "generate-image", { selected: true })
+    mockCollapseExpandedClones.mockReturnValue({
+      nodes: [execNode, listNode],
+      edges: [],
+    })
+
+    const ctx = makeCtx()
+    await handleRunSelected(ctx, "p1", vi.fn().mockResolvedValue(undefined), vi.fn())
+
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("list-x", { rows: [[""]] })
+  })
+
+  it("handleRunFromHere clears rows before starting", async () => {
+    const listNode = makeConnectedListNode()
+    const execNode = makeNode("exec", "generate-image")
+    mockCollapseExpandedClones.mockReturnValue({
+      nodes: [listNode, execNode],
+      edges: [],
+    })
+
+    const ctx = makeCtx()
+    await handleRunFromHere("exec", ctx, "p1", vi.fn().mockResolvedValue(undefined), vi.fn())
+
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("list-x", { rows: [[""]] })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resetNodeAccumulation
+// ---------------------------------------------------------------------------
+
+describe("resetNodeAccumulation", () => {
+  function makeNodeWithAccumulation() {
+    // Use generate-image because the test-file mock whitelists only a small
+    // set of node types for isExecutableNode. The accumulation logic is
+    // type-agnostic: the same clearing applies to every executable node
+    // (extract-field, filter-list, etc. in production).
+    return {
+      id: "ef",
+      type: "generate-image",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Generator",
+        // Accumulated history from two prior runs — the root cause of the
+        // downstream list display growing across runs.
+        generatedResults: [
+          { url: "run2-a", jobId: "j2", timestamp: "t2" },
+          { url: "run2-b", jobId: "j2", timestamp: "t2" },
+          { url: "run1-a", jobId: "j1", timestamp: "t1" },
+          { url: "run1-b", jobId: "j1", timestamp: "t1" },
+        ],
+        activeResultIndex: 0,
+        __listResults: ["run2-a", "run2-b"],
+        __listTotal: 2,
+        __listCompleted: 2,
+        __listInputs: ["in-a", "in-b"],
+        listResults: ["run2-a", "run2-b"],
+      },
+    } as any
+  }
+
+  it("empties generatedResults and resets activeResultIndex on an executable node", () => {
+    const ef = makeNodeWithAccumulation()
+
+    resetNodeAccumulation([ef])
+
+    expect(mockUpdateNodeData).toHaveBeenCalledTimes(1)
+    const [id, patch] = mockUpdateNodeData.mock.calls[0]
+    expect(id).toBe("ef")
+    expect(patch.generatedResults).toEqual([])
+    // activeResultIndex already 0 in the fixture — skipped as a no-op write.
+    expect("activeResultIndex" in patch).toBe(false)
+  })
+
+  it("resets non-zero activeResultIndex", () => {
+    const node = {
+      id: "n",
+      type: "generate-image",
+      position: { x: 0, y: 0 },
+      data: {
+        generatedResults: [{ url: "a" }, { url: "b" }],
+        activeResultIndex: 1,
+      },
+    } as any
+
+    resetNodeAccumulation([node])
+
+    const patch = mockUpdateNodeData.mock.calls[0][1]
+    expect(patch.activeResultIndex).toBe(0)
+    expect(patch.generatedResults).toEqual([])
+  })
+
+  it("clears all listResults-style accumulation fields", () => {
+    const ef = makeNodeWithAccumulation()
+
+    resetNodeAccumulation([ef])
+
+    const patch = mockUpdateNodeData.mock.calls[0][1]
+    expect(patch.__listResults).toBeUndefined()
+    expect(patch.__listTotal).toBeUndefined()
+    expect(patch.__listCompleted).toBeUndefined()
+    expect(patch.__listInputs).toBeUndefined()
+    expect(patch.listResults).toBeUndefined()
+  })
+
+  it("skips source nodes entirely (text-prompt, upload-*, triggers, list, loop)", () => {
+    const textPrompt = {
+      id: "tp",
+      type: "text-prompt",
+      position: { x: 0, y: 0 },
+      data: { text: "hello", generatedResults: [{ text: "stale" }] },
+    } as any
+    const listNode = {
+      id: "ln",
+      type: "list",
+      position: { x: 0, y: 0 },
+      data: { rows: [["a"]], generatedResults: [{ text: "stale" }] },
+    } as any
+
+    resetNodeAccumulation([textPrompt, listNode])
+
+    // Source types must be preserved — isExecutableNode filter drops them.
+    expect(mockUpdateNodeData).not.toHaveBeenCalled()
+  })
+
+  it("skips nodes with no accumulation fields set (no pointless store write)", () => {
+    const freshNode = {
+      id: "fresh",
+      type: "generate-image",
+      position: { x: 0, y: 0 },
+      data: { label: "Fresh" },
+    } as any
+
+    resetNodeAccumulation([freshNode])
+
+    expect(mockUpdateNodeData).not.toHaveBeenCalled()
+  })
+
+  it("only patches fields that are currently set, leaves others untouched", () => {
+    const partial = {
+      id: "p",
+      type: "generate-image",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Partial",
+        generatedResults: [{ url: "img-a", jobId: "j1" }],
+        // __listResults, listResults, activeResultIndex not set
+      },
+    } as any
+
+    resetNodeAccumulation([partial])
+
+    const patch = mockUpdateNodeData.mock.calls[0][1]
+    expect(patch.generatedResults).toEqual([])
+    expect("__listResults" in patch).toBe(false)
+    expect("listResults" in patch).toBe(false)
+    expect("activeResultIndex" in patch).toBe(false)
+  })
+
+  it("skips already-empty generatedResults to avoid no-op writes", () => {
+    const emptyGen = {
+      id: "eg",
+      type: "generate-image",
+      position: { x: 0, y: 0 },
+      data: { generatedResults: [] },
+    } as any
+
+    resetNodeAccumulation([emptyGen])
+
+    expect(mockUpdateNodeData).not.toHaveBeenCalled()
+  })
+
+  it("runs across a mixed batch of nodes", () => {
+    const execA = makeNodeWithAccumulation()
+    const textPrompt = {
+      id: "tp",
+      type: "text-prompt",
+      position: { x: 0, y: 0 },
+      data: { text: "x" },
+    } as any
+    const execB = {
+      id: "img",
+      type: "image-to-video",
+      position: { x: 0, y: 0 },
+      data: { generatedResults: [{ url: "old" }] },
+    } as any
+
+    resetNodeAccumulation([execA, textPrompt, execB])
+
+    expect(mockUpdateNodeData).toHaveBeenCalledTimes(2)
+    const patchedIds = mockUpdateNodeData.mock.calls.map((c: any[]) => c[0])
+    expect(patchedIds).toEqual(expect.arrayContaining(["ef", "img"]))
+    expect(patchedIds).not.toContain("tp")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Run handlers — resetNodeAccumulation integration
+// ---------------------------------------------------------------------------
+
+describe("run handlers reset accumulation at execution start", () => {
+  function makeAccumulatedExecNode(id: string, type = "generate-image", extras: any = {}) {
+    return {
+      id,
+      type,
+      position: { x: 0, y: 0 },
+      data: {
+        label: type,
+        generatedResults: [{ url: "prior-run-1", jobId: "j1" }, { url: "prior-run-2", jobId: "j2" }],
+        activeResultIndex: 1,
+        ...extras,
+      },
+    }
+  }
+
+  it("handleRun resets generatedResults on every executable node", async () => {
+    const execA = makeAccumulatedExecNode("a", "generate-image")
+    const execB = makeAccumulatedExecNode("b", "image-to-video")
+    mockCollapseExpandedClones.mockReturnValue({
+      nodes: [execA, execB],
+      edges: [],
+    })
+
+    const ctx = makeCtx()
+    await handleRun(ctx, "p1", "wf-1", vi.fn().mockResolvedValue(undefined), vi.fn())
+
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "a",
+      expect.objectContaining({ generatedResults: [], activeResultIndex: 0 }),
+    )
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "b",
+      expect.objectContaining({ generatedResults: [], activeResultIndex: 0 }),
+    )
+  })
+
+  it("handleRunSingleNode resets only the target node, not siblings", async () => {
+    const target = makeAccumulatedExecNode("target", "generate-image")
+    const sibling = makeAccumulatedExecNode("sibling", "generate-image")
+    mockNodes.splice(0, mockNodes.length, target, sibling)
+
+    const ctx = makeCtx()
+    const pollRef = { current: new Set<any>() } as any
+    await handleRunSingleNode("target", ctx, "p1", vi.fn().mockResolvedValue(undefined), vi.fn(), pollRef)
+
+    // Target cleared; sibling's accumulation untouched.
+    const patchedIds = mockUpdateNodeData.mock.calls
+      .filter((c: any[]) => c[1]?.generatedResults !== undefined)
+      .map((c: any[]) => c[0])
+    expect(patchedIds).toEqual(["target"])
+  })
+
+  it("handleRunSelected resets only selected executable nodes", async () => {
+    const selected = { ...makeAccumulatedExecNode("sel", "generate-image"), selected: true }
+    const unselected = { ...makeAccumulatedExecNode("unsel", "generate-image"), selected: false }
+    mockCollapseExpandedClones.mockReturnValue({
+      nodes: [selected, unselected],
+      edges: [],
+    })
+
+    const ctx = makeCtx()
+    await handleRunSelected(ctx, "p1", vi.fn().mockResolvedValue(undefined), vi.fn())
+
+    const patchedIds = mockUpdateNodeData.mock.calls
+      .filter((c: any[]) => c[1]?.generatedResults !== undefined)
+      .map((c: any[]) => c[0])
+    expect(patchedIds).toEqual(["sel"])
+  })
+
+  it("handleRunFromHere resets only downstream executable nodes", async () => {
+    const upstream = makeAccumulatedExecNode("up", "generate-image")
+    const start = makeAccumulatedExecNode("start", "image-to-video")
+    const downstream = makeAccumulatedExecNode("down", "text-to-speech")
+    mockCollapseExpandedClones.mockReturnValue({
+      nodes: [upstream, start, downstream],
+      edges: [
+        { id: "e1", source: "up", target: "start" },
+        { id: "e2", source: "start", target: "down" },
+      ],
+    })
+
+    const ctx = makeCtx()
+    await handleRunFromHere("start", ctx, "p1", vi.fn().mockResolvedValue(undefined), vi.fn())
+
+    const patchedIds = mockUpdateNodeData.mock.calls
+      .filter((c: any[]) => c[1]?.generatedResults !== undefined)
+      .map((c: any[]) => c[0])
+    // Upstream out-of-subset stays accumulated (backend reads extractSavedNodeOutput).
+    expect(patchedIds).not.toContain("up")
+    expect(patchedIds).toEqual(expect.arrayContaining(["start", "down"]))
   })
 })

@@ -4056,6 +4056,19 @@ export function executeNode(
     // Prefer structured json from the source node's data (web-scrape's generatedJson).
     let value: unknown = (src.data as { generatedJson?: unknown }).generatedJson;
 
+    // When upstream is a list-producing node (filter-list / deduplicate /
+    // merge-lists / split-text), iterate over the FULL list so the path
+    // evaluates per-item. Without this, Extract Field would silently read only
+    // listResults[0] via extractNodeOutput and produce inconsistent counts
+    // whenever upstream order shifted between runs. Mirrors backend
+    // executeExtractField's `output.listResults` branch.
+    if (value === undefined) {
+      const listItems = extractNodeOutputAsList(src);
+      if (listItems && listItems.length > 0) {
+        value = listItems.map((item) => tryParseJsonFrontend(item));
+      }
+    }
+
     // Fall back to the upstream's text output (for text-prompt, llm-chat, etc.) and JSON.parse it.
     if (value === undefined) {
       const text = extractNodeOutput(src, inEdge.sourceHandle ?? undefined);
