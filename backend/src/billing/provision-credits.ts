@@ -442,18 +442,6 @@ export async function handleTransactionCompleted(
     return
   }
 
-  // Idempotency: check if this transaction already exists
-  const { data: existing } = await supabase
-    .from("transactions")
-    .select("id")
-    .eq("stripe_transaction_id", data.transactionId)
-    .single()
-
-  if (existing) {
-    console.log("[stripe] transaction.completed: already processed, skipping", data.transactionId)
-    return
-  }
-
   // Find top-up price in line items
   let totalCredits = 0
   for (const item of data.lineItems) {
@@ -478,7 +466,39 @@ export async function handleTransactionCompleted(
     return
   }
 
-  // Grant top-up credits
+  // Atomic idempotency claim. Stripe delivers webhooks at-least-once and may
+  // retry on transient non-2xx responses, so two deliveries of the same event
+  // can race here. Inserting the transactions row FIRST (before the additive
+  // add_topup_credits RPC) makes the UNIQUE(stripe_transaction_id) constraint
+  // the mutex: the winning delivery inserts and grants credits; any duplicate
+  // gets a unique_violation (23505) and short-circuits without re-granting.
+  const { error: insertError } = await supabase
+    .from("transactions")
+    .insert({
+      user_id: userId,
+      stripe_transaction_id: data.transactionId,
+      type: "topup",
+      amount_usd: data.totalAmount / 100, // Stripe amounts in cents
+      credits_granted: totalCredits,
+    })
+
+  if (insertError) {
+    if (insertError.code === "23505") {
+      console.log(
+        "[stripe] transaction.completed: already processed (unique_violation), skipping",
+        data.transactionId,
+      )
+      return
+    }
+    console.error(
+      "[stripe] transaction.completed: insert failed:",
+      data.transactionId,
+      insertError.message,
+    )
+    return
+  }
+
+  // Insert succeeded — we are the sole processor; safe to grant credits.
   const { error: rpcError } = await supabase.rpc("add_topup_credits", {
     p_user_id: userId,
     p_credits: totalCredits,
@@ -488,15 +508,6 @@ export async function handleTransactionCompleted(
     console.error("[stripe] transaction.completed: add_topup_credits failed:", rpcError.message)
     return
   }
-
-  // Record transaction
-  await insertTransaction({
-    userId,
-    stripeTransactionId: data.transactionId,
-    type: "topup",
-    amountUsd: data.totalAmount / 100, // Stripe amounts in cents
-    creditsGranted: totalCredits,
-  })
 
   invalidateBalanceCache(userId)
 
