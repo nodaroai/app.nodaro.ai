@@ -83,6 +83,11 @@ async function checkScheduledTriggers(): Promise<void> {
 
       if (activeExec && activeExec.length > 0) continue
 
+      // Snapshot the previous fire time before we overwrite it below — this is
+      // what `{{trigger.last_triggered_at}}` filters compare against (e.g.
+      // "fetch items newer than the previous run").
+      const previousLastTriggeredAt = trigger.last_triggered_at as string | null
+
       // Create execution
       const { data: execution, error: execError } = await supabase
         .from("workflow_executions")
@@ -91,7 +96,11 @@ async function checkScheduledTriggers(): Promise<void> {
           user_id: trigger.user_id,
           status: "pending",
           trigger_type: "schedule",
-          trigger_data: { timestamp: now.toISOString(), cron: config.cron },
+          trigger_data: {
+            timestamp: now.toISOString(),
+            cron: config.cron,
+            last_triggered_at: previousLastTriggeredAt,
+          },
         })
         .select("id")
         .single()
@@ -113,7 +122,10 @@ async function checkScheduledTriggers(): Promise<void> {
         workflowId: trigger.workflow_id,
         userId: trigger.user_id,
         triggerType: "schedule",
-        triggerData: { timestamp: now.toISOString() },
+        triggerData: {
+          timestamp: now.toISOString(),
+          last_triggered_at: previousLastTriggeredAt,
+        },
       }
 
       await orchestrationQueue.add("workflow-execution", jobData, {
