@@ -83,6 +83,11 @@ async function checkScheduledTriggers(): Promise<void> {
 
       if (activeExec && activeExec.length > 0) continue
 
+      // Snapshot the previous fire time before we overwrite it below — this is
+      // what `{{trigger.last_triggered_at}}` filters compare against (e.g.
+      // "fetch items newer than the previous run").
+      const previousLastTriggeredAt = trigger.last_triggered_at as string | null
+
       // Create execution
       const { data: execution, error: execError } = await supabase
         .from("workflow_executions")
@@ -91,7 +96,11 @@ async function checkScheduledTriggers(): Promise<void> {
           user_id: trigger.user_id,
           status: "pending",
           trigger_type: "schedule",
-          trigger_data: { timestamp: now.toISOString(), cron: config.cron },
+          trigger_data: {
+            timestamp: now.toISOString(),
+            cron: config.cron,
+            last_triggered_at: previousLastTriggeredAt,
+          },
         })
         .select("id")
         .single()
@@ -113,7 +122,10 @@ async function checkScheduledTriggers(): Promise<void> {
         workflowId: trigger.workflow_id,
         userId: trigger.user_id,
         triggerType: "schedule",
-        triggerData: { timestamp: now.toISOString() },
+        triggerData: {
+          timestamp: now.toISOString(),
+          last_triggered_at: previousLastTriggeredAt,
+        },
       }
 
       await orchestrationQueue.add("workflow-execution", jobData, {
@@ -176,7 +188,7 @@ function shouldFireByInterval(
   return now.getTime() - lastTime >= ms
 }
 
-function parseIntervalToMs(interval: string): number {
+export function parseIntervalToMs(interval: string): number {
   const match = interval.match(/^(\d+)([smhd])$/)
   if (!match) return 0
 
@@ -196,7 +208,7 @@ function parseIntervalToMs(interval: string): number {
  * Simple cron expression matching (minute-level granularity).
  * Supports standard 5-field cron: minute hour day month weekday
  */
-function matchesCronMinute(
+export function matchesCronMinute(
   cronExpr: string,
   now: Date,
   timezone?: string,
@@ -239,7 +251,7 @@ function matchesCronMinute(
   }
 }
 
-function matchesCronField(field: string, value: number, min: number, max: number): boolean {
+export function matchesCronField(field: string, value: number, min: number, max: number): boolean {
   if (field === "*") return true
 
   // Handle comma-separated values: "1,15,30"
@@ -247,26 +259,49 @@ function matchesCronField(field: string, value: number, min: number, max: number
     return field.split(",").some((part) => matchesCronField(part.trim(), value, min, max))
   }
 
-  // Handle ranges: "1-5"
-  if (field.includes("-")) {
-    const [start, end] = field.split("-").map(Number)
-    return value >= start && value <= end
-  }
-
-  // Handle step values: "*/5" or "1-10/2"
+  // IMPORTANT: handle step values BEFORE ranges. Otherwise a field like
+  // "1-10/2" enters the range branch (which contains "-"), splits on "-"
+  // into ["1", "10/2"], and Number("10/2") is NaN — the range never matches
+  // and the trigger silently never fires. Standard cron syntax allows ranges
+  // with steps, so this branch must run first.
   if (field.includes("/")) {
     const [range, step] = field.split("/")
     const stepNum = parseInt(step, 10)
+    if (Number.isNaN(stepNum) || stepNum <= 0) return false
     if (range === "*") {
       return value % stepNum === 0
     }
     if (range.includes("-")) {
-      const [start, end] = range.split("-").map(Number)
+      const [start, end] = parseRange(range)
+      if (start == null || end == null) return false
       return value >= start && value <= end && (value - start) % stepNum === 0
     }
-    return false
+    // "5/15" form (start with no end) — match start, start+step, start+2step, ...
+    // up to the field's max. Standard cron treats this as start-max/step.
+    const start = parseInt(range, 10)
+    if (Number.isNaN(start)) return false
+    return value >= start && value <= max && (value - start) % stepNum === 0
+  }
+
+  // Handle ranges: "1-5"
+  if (field.includes("-")) {
+    const [start, end] = parseRange(field)
+    if (start == null || end == null) return false
+    return value >= start && value <= end
   }
 
   // Simple number
-  return parseInt(field, 10) === value
+  const num = parseInt(field, 10)
+  if (Number.isNaN(num)) return false
+  return num === value
+}
+
+// parseInt (not Number) so empty strings — "" from "-5".split("-") or
+// "1-".split("-") — produce NaN instead of silently coercing to 0.
+function parseRange(range: string): [number | null, number | null] {
+  const parts = range.split("-")
+  if (parts.length !== 2) return [null, null]
+  const start = parseInt(parts[0], 10)
+  const end = parseInt(parts[1], 10)
+  return [Number.isNaN(start) ? null : start, Number.isNaN(end) ? null : end]
 }

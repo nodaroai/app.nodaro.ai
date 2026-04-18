@@ -10,14 +10,15 @@ const { mockFrom, mockRpc, tableResponses, setLastMatchedResponse, mockHasCredit
   const mockHasCreditsRef = { value: true }
 
   function createChain(response: { data: unknown; error: unknown } | null) {
+    const fallback = response ?? { data: null, error: { code: "PGRST116" } }
     return {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      neq: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockImplementation(() =>
-        Promise.resolve(response ?? { data: null, error: { code: "PGRST116" } })
-      ),
+      single: vi.fn().mockImplementation(() => Promise.resolve(fallback)),
+      maybeSingle: vi.fn().mockImplementation(() => Promise.resolve(fallback)),
       insert: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
     }
@@ -254,16 +255,39 @@ describe("CreditsService — extended", () => {
         error: { message: "function not found" },
       })
 
-      // Fallback: query usage_logs to find the log entry
+      // Fallback reads the canonical `status` column (not metadata.status) to
+      // decide eligibility — matches the SQL refund_credits guard.
       mockTable("usage_logs", {
         user_id: "user-123",
         job_id: "job-456",
         credits_used: 5,
-        metadata: { status: "refunded" },
+        status: "refunded",
+        metadata: { from_sub: 5, from_topup: 0 },
       })
 
       // Should not throw — already refunded is handled gracefully
       await expect(CreditsService.refundCredits("usage-log-abc")).resolves.toBeUndefined()
+      // No pool-restoring RPC should have been called
+      expect(mockRpc).not.toHaveBeenCalledWith("add_subscription_credits", expect.anything())
+      expect(mockRpc).not.toHaveBeenCalledWith("add_topup_credits", expect.anything())
+    })
+
+    it("skips refund when usage log status is 'committed' (already settled)", async () => {
+      mockRpc.mockResolvedValueOnce({ data: null, error: { message: "fn missing" } })
+      mockTable("usage_logs", {
+        user_id: "user-123",
+        job_id: "job-456",
+        credits_used: 5,
+        status: "committed",
+        metadata: { from_sub: 5, from_topup: 0 },
+      })
+
+      await CreditsService.refundCredits("usage-log-committed")
+
+      // A committed row must NOT be refunded — would otherwise double-credit
+      // the user (they got the output AND the credits back).
+      expect(mockRpc).not.toHaveBeenCalledWith("add_subscription_credits", expect.anything())
+      expect(mockRpc).not.toHaveBeenCalledWith("add_topup_credits", expect.anything())
     })
   })
 
@@ -417,12 +441,14 @@ describe("CreditsService — extended", () => {
         // add_subscription_credits RPC
         .mockResolvedValueOnce({ data: null, error: null })
 
-      // usage_logs query returns sub-only deduction
+      // usage_logs query returns sub-only deduction; status="reserved" makes
+      // it eligible for refund.
       mockTable("usage_logs", {
         user_id: "user-123",
         job_id: "job-456",
         credits_used: 5,
-        metadata: { status: "reserved", from_sub: 5, from_topup: 0 },
+        status: "reserved",
+        metadata: { from_sub: 5, from_topup: 0 },
       })
 
       await CreditsService.refundCredits("usage-log-abc")
@@ -442,7 +468,8 @@ describe("CreditsService — extended", () => {
         user_id: "user-123",
         job_id: "job-456",
         credits_used: 3,
-        metadata: { status: "reserved", from_sub: 0, from_topup: 3 },
+        status: "reserved",
+        metadata: { from_sub: 0, from_topup: 3 },
       })
 
       await CreditsService.refundCredits("usage-log-topup")
@@ -462,7 +489,8 @@ describe("CreditsService — extended", () => {
         user_id: "user-123",
         job_id: "job-456",
         credits_used: 4,
-        metadata: { status: "reserved" },
+        status: "reserved",
+        metadata: {},
       })
 
       await CreditsService.refundCredits("usage-log-no-pool")
@@ -471,6 +499,72 @@ describe("CreditsService — extended", () => {
         p_user_id: "user-123",
         p_credits: 4,
       })
+    })
+
+    it("claims status atomically BEFORE restoring credits (race-safe)", async () => {
+      // Verify the order: the status-flip UPDATE must complete before any
+      // pool-restoring RPC fires. If a concurrent caller already flipped the
+      // row, the conditional UPDATE returns 0 rows and we must NOT restore.
+      mockRpc
+        .mockResolvedValueOnce({ data: null, error: { message: "fn missing" } }) // refund_credits RPC fails
+        .mockResolvedValueOnce({ data: null, error: null }) // would-be add_*_credits
+
+      // Override the chain for usage_logs so the SECOND access (the conditional
+      // UPDATE...select.maybeSingle) returns no row — simulating "another
+      // caller already flipped this row from reserved to refunded."
+      const originalImpl = mockFrom.getMockImplementation()
+      let usageLogsCall = 0
+      mockFrom.mockImplementation((table: string) => {
+        if (table !== "usage_logs") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            neq: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            insert: vi.fn().mockReturnThis(),
+            update: vi.fn().mockReturnThis(),
+          }
+        }
+        usageLogsCall += 1
+        // Call 1: SELECT — returns the reserved row.
+        // Call 2: UPDATE...SELECT.maybeSingle — returns null (claim lost).
+        const isFirstCall = usageLogsCall === 1
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          neq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue(isFirstCall ? {
+            data: {
+              user_id: "user-123",
+              job_id: "job-456",
+              credits_used: 5,
+              status: "reserved",
+              metadata: { from_sub: 5, from_topup: 0 },
+            },
+            error: null,
+          } : { data: null, error: null }),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          insert: vi.fn().mockReturnThis(),
+          update: vi.fn().mockReturnThis(),
+        }
+      })
+
+      try {
+        await CreditsService.refundCredits("usage-log-raced")
+
+        // Critical: pool-restoring RPCs must NOT fire when claim is lost,
+        // otherwise concurrent refunds would double-credit the user.
+        expect(mockRpc).not.toHaveBeenCalledWith("add_subscription_credits", expect.anything())
+        expect(mockRpc).not.toHaveBeenCalledWith("add_topup_credits", expect.anything())
+      } finally {
+        // Restore the default impl so later tests don't see the overridden chain
+        if (originalImpl) mockFrom.mockImplementation(originalImpl)
+      }
     })
   })
 

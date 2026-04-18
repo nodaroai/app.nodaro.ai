@@ -396,4 +396,65 @@ describe("executeFilterList — operator semantics", () => {
       expect(kept).toEqual([])
     })
   })
+
+  describe("variable substitution: {{trigger.last_triggered_at}}", () => {
+    it("resolves last_triggered_at from triggerData (incremental polling pattern)", () => {
+      const items = [
+        JSON.stringify({ id: 1, createdAt: "2026-04-15T10:00:00Z" }),
+        JSON.stringify({ id: 2, createdAt: "2026-04-17T10:00:00Z" }),
+        JSON.stringify({ id: 3, createdAt: "2026-04-18T10:00:00Z" }),
+      ]
+      const { filter, edges, nodes, states } = setup(items, [{
+        field: "createdAt",
+        operator: ">",
+        value: "{{trigger.last_triggered_at}}",
+        valueType: "variable",
+      }])
+      const triggerData = { last_triggered_at: "2026-04-16T00:00:00Z" }
+      const kept = executeFilterList(filter, edges, nodes, states, triggerData).listResults ?? []
+      expect(kept.map((s) => JSON.parse(s).id)).toEqual([2, 3])
+    })
+
+    it("missing last_triggered_at resolves to empty string (first-run safe)", () => {
+      // On the very first scheduled run there's no prior fire time. Filter
+      // should fall back to "" — the existing string-vs-string compare path.
+      const items = [JSON.stringify({ createdAt: "2026-04-18T10:00:00Z" })]
+      const { filter, edges, nodes, states } = setup(items, [{
+        field: "createdAt",
+        operator: ">",
+        value: "{{trigger.last_triggered_at}}",
+        valueType: "variable",
+      }])
+      const kept = executeFilterList(filter, edges, nodes, states, {}).listResults ?? []
+      expect(kept).toHaveLength(1)
+    })
+
+    it("resolves arbitrary {{trigger.X}} from triggerData", () => {
+      const items = [
+        JSON.stringify({ author: "alice", body: "x" }),
+        JSON.stringify({ author: "bob", body: "y" }),
+      ]
+      const { filter, edges, nodes, states } = setup(items, [{
+        field: "author",
+        operator: "=",
+        value: "{{trigger.user}}",
+        valueType: "variable",
+      }])
+      const kept = executeFilterList(filter, edges, nodes, states, { user: "bob" }).listResults ?? []
+      expect(kept.map((s) => JSON.parse(s).author)).toEqual(["bob"])
+    })
+
+    it("{{now}} resolves regardless of triggerData", () => {
+      // {{now}} is always-resolvable; we just verify it isn't left as-is.
+      const items = [JSON.stringify({ ts: "2099-01-01T00:00:00Z" })]
+      const { filter, edges, nodes, states } = setup(items, [{
+        field: "ts",
+        operator: ">",
+        value: "{{now}}",
+        valueType: "variable",
+      }])
+      const kept = executeFilterList(filter, edges, nodes, states).listResults ?? []
+      expect(kept).toHaveLength(1)
+    })
+  })
 })

@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
   const mockUploadToR2 = vi.fn().mockResolvedValue("https://r2.example.com/audio/job-1.mp3")
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
+  const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbs/job-1.jpg")
   const mockIsSocialUrl = vi.fn().mockReturnValue(false)
   const mockDownloadAudioToR2 = vi.fn().mockResolvedValue("https://r2.example.com/downloads/audio.mp3")
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => {
     mockSunoGenerate, mockSunoCover, mockSunoExtend, mockSunoLyrics, mockSunoSeparate, mockSunoMusicVideo,
     mockSunoMashup, mockSunoReplaceSection, mockSunoAddInstrumental, mockSunoAddVocals, mockSunoConvertWav, mockSunoUploadExtend,
     mockUploadToR2, mockCommitJobCredits, mockShouldSaveJobResult,
+    mockMarkJobCompleted,
     mockGenerateAndUploadThumbnail, mockIsSocialUrl, mockDownloadAudioToR2,
     mockFrom, mockUpdate, mockEq,
   }
@@ -52,6 +54,7 @@ vi.mock("@/providers/kie/suno-client.js", () => ({
 vi.mock("../../shared.js", () => ({
   commitJobCredits: mocks.mockCommitJobCredits,
   shouldSaveJobResult: mocks.mockShouldSaveJobResult,
+  markJobCompleted: mocks.mockMarkJobCompleted,
   generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
   isSocialUrl: mocks.mockIsSocialUrl,
   downloadAudioToR2: mocks.mockDownloadAudioToR2,
@@ -101,7 +104,7 @@ describe("suno-generate handler", () => {
 
     expect(mocks.mockSunoGenerate).toHaveBeenCalledWith(expect.objectContaining({ prompt: "epic rock song" }))
     expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://suno.example.com/track.mp3", "job-1", "audio", "user-1")
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: expect.objectContaining({
         audioUrl: "https://r2.example.com/audio/job-1.mp3",
         sunoTrackId: "track-1",
@@ -160,7 +163,7 @@ describe("suno-lyrics handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockSunoLyrics).toHaveBeenCalledWith({ prompt: "a love song" })
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { lyrics: "La la la", sunoTaskId: "suno-task-1" },
     }))
     expect(mocks.mockUploadToR2).not.toHaveBeenCalled()
@@ -181,7 +184,7 @@ describe("suno-separate handler", () => {
 
     expect(mocks.mockSunoSeparate).toHaveBeenCalledWith({ taskId: "suno-task-1", audioId: "audio-1", type: "separate_vocal" })
     expect(mocks.mockUploadToR2).toHaveBeenCalledTimes(2)
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: expect.objectContaining({
         separateType: "separate_vocal",
         vocalUrl: "https://r2.example.com/audio/job-1-vocal.mp3",
@@ -202,7 +205,7 @@ describe("suno-music-video handler", () => {
     expect(mocks.mockSunoMusicVideo).toHaveBeenCalledWith({ taskId: "suno-task-1", audioId: "audio-1" })
     expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://suno.example.com/video.mp4", "job-1", "video", "user-1")
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalledWith("https://r2.example.com/video/job-1.mp4", "job-1", "user-1")
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: expect.objectContaining({
         videoUrl: "https://r2.example.com/video/job-1.mp4",
         thumbnailUrl: "https://r2.example.com/thumbs/job-1.jpg",
@@ -297,7 +300,7 @@ describe("suno-convert-wav handler", () => {
 
     expect(mocks.mockSunoConvertWav).toHaveBeenCalledWith({ taskId: "suno-task-1", audioId: "audio-1" })
     expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://suno.example.com/track.wav", "job-1", "audio", "user-1")
-    expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { audioUrl: "https://r2.example.com/audio/job-1.mp3", sunoTaskId: "suno-task-1" },
     }))
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
@@ -338,7 +341,7 @@ describe("shared suno handler behavior", () => {
     const handler = sunoHandlers["suno-generate"]
     const job = makeJob("suno-generate", { prompt: "cancel" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockUpdate).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
   })
 })

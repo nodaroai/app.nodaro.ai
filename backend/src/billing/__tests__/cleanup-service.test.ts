@@ -29,6 +29,7 @@ const { mockFrom, mockRpc, tableResponses, setLastMatchedResponse, mockBatchDele
     chain.neq = vi.fn(self)
     chain.or = vi.fn(self)
     chain.not = vi.fn(self)
+    chain.is = vi.fn(self)
     chain.lt = vi.fn(self)
     chain.gt = vi.fn(self)
 
@@ -456,6 +457,43 @@ describe("cleanup-service", () => {
 
       const result = await cleanupCanceledUserMedia()
       // _cleaned jobs should be skipped
+      expect(result.filesDeleted).toBe(0)
+      expect(mockBatchDeleteFromR2).not.toHaveBeenCalled()
+    })
+
+    it("terminates when a full BATCH_SIZE of _cleaned jobs returns (regression: was infinite loop)", async () => {
+      // Without the SQL `.is("output_data->>_cleaned", null)` filter AND the
+      // defensive `jobsToClean.length === 0` break, this scenario looped
+      // forever: the mock kept returning 100 _cleaned jobs (jobs.length stays
+      // at BATCH_SIZE so the < BATCH_SIZE termination never fires), the JS
+      // skip prevented re-processing them, but the outer while never exited.
+      // In production this hung the daily cleanup cron the moment any user
+      // had ≥100 jobs that had already been marked _cleaned.
+      mockTableQueue("profiles", [
+        {
+          data: [{ id: "user-stuck", tier: "pro", subscription_tier: null }],
+          error: null,
+        },
+      ])
+      mockTableQueue("assets", [
+        { data: [], error: null },
+      ])
+      // Build a full batch (100 = BATCH_SIZE) of already-cleaned jobs.
+      const cleanedBatch = Array.from({ length: 100 }, (_, i) => ({
+        id: `job-${i}`,
+        output_data: { _cleaned: true, videoUrl: null },
+      }))
+      mockTableQueue("jobs", [{ data: cleanedBatch, error: null }])
+
+      // Bound the test so a regression manifests as a timeout failure rather
+      // than hanging the whole vitest run forever.
+      const result = await Promise.race([
+        cleanupCanceledUserMedia(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("cleanupCanceledUserMedia did not terminate (infinite loop regression)")), 2000),
+        ),
+      ]) as Awaited<ReturnType<typeof cleanupCanceledUserMedia>>
+
       expect(result.filesDeleted).toBe(0)
       expect(mockBatchDeleteFromR2).not.toHaveBeenCalled()
     })

@@ -1,4 +1,3 @@
-import { supabase } from "../../lib/supabase.js"
 import { uploadToR2 } from "../../lib/storage.js"
 import {
   sunoGenerate, sunoCover, sunoExtend, sunoLyrics, sunoSeparate, sunoMusicVideo,
@@ -8,6 +7,7 @@ import {
 import {
   commitJobCredits,
   shouldSaveJobResult,
+  markJobCompleted,
   generateAndUploadThumbnail,
   isSocialUrl,
   downloadAudioToR2,
@@ -29,11 +29,10 @@ const handleSunoGenerate: HandlerFn = async function handleSunoGenerate(job, ctx
   const r2Url = await uploadToR2(firstTrack.audioUrl, ctx.jobId, "audio", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed", progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url, sunoTrackId: firstTrack.id, sunoTitle: firstTrack.title, sunoDuration: firstTrack.duration, sunoImageUrl: firstTrack.imageUrl, sunoTaskId: result.taskId, trackCount: result.tracks.length },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (${result.tracks.length} tracks)`)
 }
@@ -57,11 +56,10 @@ const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
   const r2Url = await uploadToR2(firstTrack.audioUrl, ctx.jobId, "audio", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed", progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url, sunoTrackId: firstTrack.id, sunoTitle: firstTrack.title, sunoDuration: firstTrack.duration, sunoImageUrl: firstTrack.imageUrl, sunoTaskId: result.taskId, trackCount: result.tracks.length },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (${result.tracks.length} tracks)`)
 }
@@ -79,11 +77,10 @@ const handleSunoExtend: HandlerFn = async function handleSunoExtend(job, ctx) {
   const r2Url = await uploadToR2(firstTrack.audioUrl, ctx.jobId, "audio", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed", progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url, sunoTrackId: firstTrack.id, sunoTitle: firstTrack.title, sunoDuration: firstTrack.duration, sunoImageUrl: firstTrack.imageUrl, sunoTaskId: result.taskId, trackCount: result.tracks.length },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (${result.tracks.length} tracks)`)
 }
@@ -94,12 +91,10 @@ const handleSunoLyrics: HandlerFn = async function handleSunoLyrics(job, ctx) {
   const result = await sunoLyrics({ prompt })
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { lyrics: result.lyrics, sunoTaskId: result.taskId },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${result.lyrics.length} lyrics generated`)
 }
@@ -146,12 +141,8 @@ const handleSunoSeparate: HandlerFn = async function handleSunoSeparate(job, ctx
 
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
-    output_data: outputData,
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, { output_data: outputData })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${uploadedCount} stem(s) uploaded`)
 }
@@ -165,12 +156,10 @@ const handleSunoMusicVideo: HandlerFn = async function handleSunoMusicVideo(job,
   await job.updateProgress(100)
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, sunoTaskId: result.taskId },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: music video generated`)
 }
@@ -188,11 +177,10 @@ const handleSunoMashup: HandlerFn = async function handleSunoMashup(job, ctx) {
   const r2Url = await uploadToR2(firstTrack.audioUrl, ctx.jobId, "audio", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed", progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url, sunoTrackId: firstTrack.id, sunoTitle: firstTrack.title, sunoDuration: firstTrack.duration, sunoImageUrl: firstTrack.imageUrl, sunoTaskId: result.taskId, trackCount: result.tracks.length },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (${result.tracks.length} tracks)`)
 }
@@ -209,11 +197,10 @@ const handleSunoReplaceSection: HandlerFn = async function handleSunoReplaceSect
   const r2Url = await uploadToR2(firstTrack.audioUrl, ctx.jobId, "audio", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed", progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url, sunoTrackId: firstTrack.id, sunoTitle: firstTrack.title, sunoDuration: firstTrack.duration, sunoImageUrl: firstTrack.imageUrl, sunoTaskId: result.taskId, trackCount: result.tracks.length },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (${result.tracks.length} tracks)`)
 }
@@ -230,11 +217,10 @@ const handleSunoAddInstrumental: HandlerFn = async function handleSunoAddInstrum
   const r2Url = await uploadToR2(firstTrack.audioUrl, ctx.jobId, "audio", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed", progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url, sunoTrackId: firstTrack.id, sunoTitle: firstTrack.title, sunoDuration: firstTrack.duration, sunoImageUrl: firstTrack.imageUrl, sunoTaskId: result.taskId, trackCount: result.tracks.length },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (${result.tracks.length} tracks)`)
 }
@@ -251,11 +237,10 @@ const handleSunoAddVocals: HandlerFn = async function handleSunoAddVocals(job, c
   const r2Url = await uploadToR2(firstTrack.audioUrl, ctx.jobId, "audio", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed", progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url, sunoTrackId: firstTrack.id, sunoTitle: firstTrack.title, sunoDuration: firstTrack.duration, sunoImageUrl: firstTrack.imageUrl, sunoTaskId: result.taskId, trackCount: result.tracks.length },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (${result.tracks.length} tracks)`)
 }
@@ -268,12 +253,10 @@ const handleSunoConvertWav: HandlerFn = async function handleSunoConvertWav(job,
   const r2Url = await uploadToR2(result.audioUrl, ctx.jobId, "audio", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url, sunoTaskId: result.taskId },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: WAV conversion done`)
 }
@@ -297,11 +280,10 @@ const handleSunoUploadExtend: HandlerFn = async function handleSunoUploadExtend(
   const r2Url = await uploadToR2(firstTrack.audioUrl, ctx.jobId, "audio", ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed", progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url, sunoTrackId: firstTrack.id, sunoTitle: firstTrack.title, sunoDuration: firstTrack.duration, sunoImageUrl: firstTrack.imageUrl, sunoTaskId: result.taskId, trackCount: result.tracks.length },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (${result.tracks.length} tracks)`)
 }

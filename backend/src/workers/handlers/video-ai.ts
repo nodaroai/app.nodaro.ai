@@ -20,6 +20,7 @@ import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import {
   commitJobCredits,
   shouldSaveJobResult,
+  markJobCompleted,
   uploadVideoMaybeWatermark,
   watermarkLocalVideoAndUpload,
   generateAndUploadThumbnail,
@@ -107,22 +108,17 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase
-    .from("jobs")
-    .update({
-      status: "completed",
-      progress: 100,
-      output_data: {
-        videoUrl: finalVideoUrl,
-        thumbnailUrl: thumbUrl,
-        ...(result.kieTaskId && { kieTaskId: result.kieTaskId }),
-      },
-      completed_at: new Date().toISOString(),
-      provider: result.providerUsed,
-      provider_cost: result.cost,
-      display_cost: result.displayCost,
-    })
-    .eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: {
+      videoUrl: finalVideoUrl,
+      thumbnailUrl: thumbUrl,
+      ...(result.kieTaskId && { kieTaskId: result.kieTaskId }),
+    },
+    provider: result.providerUsed,
+    provider_cost: result.cost,
+    display_cost: result.displayCost,
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${finalVideoUrl} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
@@ -162,18 +158,13 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase
-    .from("jobs")
-    .update({
-      status: "completed",
-      progress: 100,
-      output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
-      completed_at: new Date().toISOString(),
-      provider: result.providerUsed,
-      provider_cost: result.cost,
-      display_cost: result.displayCost,
-    })
-    .eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    provider: result.providerUsed,
+    provider_cost: result.cost,
+    display_cost: result.displayCost,
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
@@ -225,22 +216,17 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase
-    .from("jobs")
-    .update({
-      status: "completed",
-      progress: 100,
-      output_data: {
-        videoUrl: r2Url,
-        thumbnailUrl: thumbUrl,
-        ...(result.kieTaskId && { kieTaskId: result.kieTaskId }),
-      },
-      completed_at: new Date().toISOString(),
-      provider: result.providerUsed,
-      provider_cost: result.cost,
-      display_cost: result.displayCost,
-    })
-    .eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: {
+      videoUrl: r2Url,
+      thumbnailUrl: thumbUrl,
+      ...(result.kieTaskId && { kieTaskId: result.kieTaskId }),
+    },
+    provider: result.providerUsed,
+    provider_cost: result.cost,
+    display_cost: result.displayCost,
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
@@ -315,18 +301,13 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase
-    .from("jobs")
-    .update({
-      status: "completed",
-      progress: 100,
-      output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
-      completed_at: new Date().toISOString(),
-      provider: resultProviderUsed,
-      provider_cost: resultCost,
-      display_cost: resultDisplayCost,
-    })
-    .eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    provider: resultProviderUsed,
+    provider_cost: resultCost,
+    display_cost: resultDisplayCost,
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId, resultCost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${resultProviderUsed}, cost: $${resultCost?.toFixed(6) ?? "N/A"})`)
@@ -369,17 +350,12 @@ const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, c
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase
-    .from("jobs")
-    .update({
-      status: "completed",
-      progress: 100,
-      output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
-      completed_at: new Date().toISOString(),
-      provider: "kie",
-      provider_cost: result.cost,
-    })
-    .eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    provider: "kie",
+    provider_cost: result.cost,
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: kie, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
@@ -426,15 +402,13 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
-    completed_at: new Date().toISOString(),
     provider: result.providerUsed,
     provider_cost: result.cost,
     display_cost: result.displayCost,
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
@@ -480,14 +454,12 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
-    completed_at: new Date().toISOString(),
     provider: upscaleProvider,
     provider_cost: null,
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${upscaleProvider})`)
@@ -531,18 +503,16 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: {
       videoUrl: r2Url,
       thumbnailUrl: thumbUrl,
       ...(newTaskId && { kieTaskId: newTaskId }),
     },
-    completed_at: new Date().toISOString(),
     provider,
     provider_cost: null,
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${provider})`)

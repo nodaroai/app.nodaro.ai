@@ -1080,15 +1080,16 @@ export class CreditsService {
 
     if (!rpcError) return
 
-    // Fallback: manual commit
+    // Fallback: manual commit. Update the canonical `status` column (the same
+    // column the SQL `commit_credits`/`refund_credits` functions use), guarded
+    // by status='reserved' so a concurrent commit/refund can't double-fire.
     console.warn("[credits] commit_credits RPC not found, using fallback")
 
     const { error } = await supabase
       .from("usage_logs")
-      .update({
-        metadata: { status: "committed" },
-      })
+      .update({ status: "committed" })
       .eq("id", usageLogId)
+      .eq("status", "reserved")
 
     if (error) {
       console.error("[credits] Failed to commit credits:", error)
@@ -1115,7 +1116,7 @@ export class CreditsService {
     // Get the usage log to find credits to refund
     const { data: usageLog, error: logError } = await supabase
       .from("usage_logs")
-      .select("user_id, job_id, credits_used, metadata")
+      .select("user_id, job_id, credits_used, status, metadata")
       .eq("id", usageLogId)
       .single()
 
@@ -1124,13 +1125,36 @@ export class CreditsService {
       return
     }
 
-    // Check if already refunded
-    if ((usageLog.metadata as Record<string, unknown>)?.status === "refunded") {
-      console.warn("[credits] Credits already refunded for:", usageLogId)
+    // Only `reserved` rows are eligible to refund. Already-committed or
+    // already-refunded rows must not be touched (mirrors the SQL function's
+    // `WHERE id = ? AND status = 'reserved'` guard).
+    if (usageLog.status !== "reserved") {
+      console.warn(`[credits] Skipping refund — usage log ${usageLogId} status is "${usageLog.status}"`)
       return
     }
 
-    // Restore credits to the original pools based on metadata from reserve_credits RPC
+    // Atomic claim: flip status reserved → refunded conditionally. If two
+    // callers race here, exactly one matches a row; the other gets `null` and
+    // returns without touching balances. Done BEFORE any credit restoration
+    // so the balance mutation is gated behind a single-winner mutex.
+    const { data: claimed, error: claimError } = await supabase
+      .from("usage_logs")
+      .update({ status: "refunded" })
+      .eq("id", usageLogId)
+      .eq("status", "reserved")
+      .select("id")
+      .maybeSingle()
+
+    if (claimError) {
+      console.error("[credits] Failed to claim refund slot:", usageLogId, claimError.message)
+      return
+    }
+    if (!claimed) {
+      console.warn("[credits] Refund slot already claimed (concurrent caller):", usageLogId)
+      return
+    }
+
+    // Past this point we are the sole refunder; safe to restore balances.
     const meta = usageLog.metadata as Record<string, unknown> | null
     const fromSub = (meta?.from_sub as number) ?? 0
     const fromTopup = (meta?.from_topup as number) ?? 0
@@ -1181,14 +1205,6 @@ export class CreditsService {
       jobId: usageLog.job_id ?? undefined,
       balanceAfter: 0,
     })
-
-    // Mark as refunded
-    await supabase
-      .from("usage_logs")
-      .update({
-        metadata: { status: "refunded" },
-      })
-      .eq("id", usageLogId)
   }
 
   /**

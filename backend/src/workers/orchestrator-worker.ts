@@ -90,6 +90,9 @@ async function cleanupStaleExecutions(): Promise<void> {
     const allCompleted = nodeStatuses.length > 0 && nodeStatuses.every((s) => s === "completed" || s === "skipped")
 
     if (allCompleted) {
+      // .neq("status", "cancelled") to avoid the same overwrite race during
+      // stale-execution reconciliation: row was selected with status="running"
+      // but the user could cancel between SELECT and this UPDATE.
       await supabase
         .from("workflow_executions")
         .update({
@@ -97,12 +100,14 @@ async function cleanupStaleExecutions(): Promise<void> {
           completed_at: new Date().toISOString(),
         })
         .eq("id", row.id)
+        .neq("status", "cancelled")
       reconciled++
       continue
     }
 
     // Only mark as failed if this row is *really* stale — otherwise let
     // BullMQ's stalled-job retry pick it back up.
+    // .neq("status", "cancelled") to avoid overwriting a user cancellation.
     const startedAt = row.started_at ? new Date(row.started_at).getTime() : 0
     if (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS) {
       await supabase
@@ -113,6 +118,7 @@ async function cleanupStaleExecutions(): Promise<void> {
           completed_at: new Date().toISOString(),
         })
         .eq("id", row.id)
+        .neq("status", "cancelled")
       abandoned++
     }
   }
@@ -993,10 +999,14 @@ async function failExecution(
   if (failedNodes !== undefined) updates.failed_nodes = failedNodes
   if (totalCredits !== undefined) updates.total_credits_used = totalCredits
 
+  // .neq("status", "cancelled") so a fail-write doesn't overwrite a user
+  // cancellation that landed in the same window. Same rationale as
+  // updateExecution() — terminal states must not clobber "cancelled".
   await supabase
     .from("workflow_executions")
     .update(updates)
     .eq("id", executionId)
+    .neq("status", "cancelled")
 
   emitExecutionEvent({
     type: "execution:failed",
@@ -1013,10 +1023,22 @@ async function updateExecution(
   executionId: string,
   updates: Record<string, unknown>,
 ): Promise<void> {
-  await supabase
+  const builder = supabase
     .from("workflow_executions")
     .update(updates)
     .eq("id", executionId)
+
+  // Terminal-state transitions must NEVER overwrite a row the user already
+  // cancelled. Otherwise, between checkExecutionControl and this UPDATE the
+  // user can hit /v1/workflow-executions/:id/cancel — and the orchestrator
+  // would silently flip status from "cancelled" back to "completed"/"failed",
+  // claiming work the user actually cancelled (and which has already had its
+  // child-job credits refunded by the cancel route).
+  if (updates.status === "completed" || updates.status === "failed") {
+    builder.neq("status", "cancelled")
+  }
+
+  await builder
 }
 
 function emitExecutionEvent(event: ExecutionEvent): void {

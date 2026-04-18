@@ -1,6 +1,38 @@
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
+import { CreditsService } from "../billing/credits.js"
+import { invalidateBalanceCache } from "./credits.js"
+
+/**
+ * Refund any reserved credit holds for the given job IDs. Best-effort —
+ * `CreditsService.refundCredits` already short-circuits on rows that aren't
+ * `status='reserved'` (see PR #1502), so it's safe if the worker happens to
+ * commit/refund the same row concurrently.
+ *
+ * Without this, cancelling a job leaves its `usage_logs` row stuck at
+ * `status='reserved'` forever — the user's balance was decremented when the
+ * job was reserved but never restored. Net effect: silent credit theft on
+ * every cancellation.
+ */
+async function refundReservedCreditsForJobs(jobIds: string[]): Promise<void> {
+  if (jobIds.length === 0) return
+  const { data: usageLogs } = await supabase
+    .from("usage_logs")
+    .select("id")
+    .in("job_id", jobIds)
+    .eq("status", "reserved")
+
+  if (!usageLogs || usageLogs.length === 0) return
+
+  await Promise.all(
+    usageLogs.map((row) =>
+      CreditsService.refundCredits(row.id).catch((err) =>
+        console.error(`[cancel-job] Failed to refund usage_log ${row.id}:`, err),
+      ),
+    ),
+  )
+}
 
 export async function cancelJobsRoutes(app: FastifyInstance) {
   // Cancel a single job
@@ -63,6 +95,11 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
           })
         }
 
+        // Refund any reserved credits — without this, cancelling silently
+        // forfeits the user's balance for work that never produced output.
+        await refundReservedCreditsForJobs([jobId])
+        invalidateBalanceCache(userId)
+
         return { success: true, cancelled: 1 }
       } catch (err) {
         console.error("[cancel-job] Error:", err)
@@ -119,6 +156,10 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
           error: { code: "internal_error", message: updateError.message },
         })
       }
+
+      // Refund reserved credits for every cancelled job in one pass.
+      await refundReservedCreditsForJobs(jobIds)
+      invalidateBalanceCache(userId)
 
       return { success: true, cancelled: jobIds.length }
     } catch (err) {

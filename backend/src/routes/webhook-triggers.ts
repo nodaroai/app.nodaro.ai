@@ -108,7 +108,7 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
     // Look up trigger by token
     const { data: trigger, error: triggerError } = await supabase
       .from("workflow_triggers")
-      .select("id, workflow_id, user_id, type, config, is_active")
+      .select("id, workflow_id, user_id, type, config, is_active, last_triggered_at")
       .eq("webhook_token", token)
       .single()
 
@@ -142,8 +142,16 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
       })
     }
 
-    // Extract trigger data from request body
-    const triggerData = (req.body as Record<string, unknown>) ?? {}
+    // Extract trigger data from request body. Inject system fields LAST so a
+    // user-posted body can't shadow `last_triggered_at` (webhook tokens are
+    // public auth — without this, an attacker could POST a future timestamp
+    // to bypass any `{{trigger.last_triggered_at}}` filter).
+    const userBody = (req.body as Record<string, unknown>) ?? {}
+    const previousLastTriggeredAt = trigger.last_triggered_at as string | null
+    const triggerData: Record<string, unknown> = {
+      ...userBody,
+      last_triggered_at: previousLastTriggeredAt,
+    }
 
     // Create execution
     const { data: execution, error: execError } = await supabase

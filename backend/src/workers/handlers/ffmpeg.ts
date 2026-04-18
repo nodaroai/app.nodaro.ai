@@ -1,6 +1,5 @@
 import { dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
-import { supabase } from "../../lib/supabase.js"
 import { uploadFileToR2 } from "../../lib/storage.js"
 import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS } from "../../providers/video/ffmpeg-utils.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
@@ -21,6 +20,7 @@ import { fadeVideo } from "../../providers/video/fade-video.js"
 import {
   commitJobCredits,
   shouldSaveJobResult,
+  markJobCompleted,
   generateAndUploadThumbnail,
   completeFfmpegVideoJob,
   completeFfmpegAudioJob,
@@ -52,15 +52,10 @@ const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, c
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase
-    .from("jobs")
-    .update({
-      status: "completed",
-      progress: 100,
-      output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
-      completed_at: new Date().toISOString(),
-    })
-    .eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
@@ -89,12 +84,10 @@ const handleTrimAudio: HandlerFn = async function handleTrimAudio(job, ctx) {
   await cleanupWorkDir(dirname(result.audioPath))
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: audioR2Url },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${audioR2Url}`)
 }
@@ -115,12 +108,10 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...(silentVideoR2Url ? { videoUrlSilent: silentVideoR2Url } : {}) },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
@@ -136,12 +127,10 @@ const handleExtractFrame: HandlerFn = async function handleExtractFrame(job, ctx
   await cleanupWorkDir(dirname(result.imagePath))
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { imageUrl: r2Url, thumbnailUrl: r2Url },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
@@ -199,12 +188,10 @@ const handleAdjustVolume: HandlerFn = async function handleAdjustVolume(job, ctx
   const thumbUrl = inputType === "video" ? await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId) : null
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const outputData = inputType === "video" ? { videoUrl: r2Url, thumbnailUrl: thumbUrl } : { audioUrl: r2Url }
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { ...outputData, inputType },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
@@ -287,12 +274,10 @@ const handleSocialMediaFormat: HandlerFn = async function handleSocialMediaForma
     await cleanupWorkDir(dirname(outputPath))
     await job.updateProgress(100)
     if (!await shouldSaveJobResult(ctx.jobId)) return
-    await supabase.from("jobs").update({
-      status: "completed",
-      progress: 100,
+    const ok = await markJobCompleted(ctx.jobId, {
       output_data: { videoUrl: r2Url, imageUrl: r2Url, mediaType: "image" },
-      completed_at: new Date().toISOString(),
-    }).eq("id", ctx.jobId)
+    })
+    if (!ok) return
     await commitJobCredits(ctx.usageLogId, ctx.jobId)
     console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
   } else {
@@ -330,16 +315,14 @@ const handleSplitMedia: HandlerFn = async function handleSplitMedia(job, ctx) {
 
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: {
       videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
       audioUrls: audioUrls.length > 0 ? audioUrls : undefined,
       chunkCount: Math.max(videoUrls.length, audioUrls.length),
     },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${videoUrls.length} video chunks, ${audioUrls.length} audio chunks`)
 }

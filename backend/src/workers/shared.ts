@@ -93,8 +93,14 @@ export async function downloadAudioToR2(url: string): Promise<string> {
 
 /**
  * Check if job was cancelled before saving completion result.
- * This prevents race condition where user cancels but job already completed.
- * Returns true if job should proceed with saving, false if cancelled.
+ *
+ * Useful as a CHEAP PRE-CHECK to avoid expensive post-processing (thumbnail
+ * generation, R2 cleanup) when the job is already cancelled. But it does NOT
+ * prevent the cancel-during-update race — between this SELECT and the
+ * subsequent UPDATE the user can cancel, and an unconditional UPDATE will
+ * overwrite their cancellation. Use markJobCompleted() for the actual
+ * status flip — it does the SELECT and UPDATE atomically via a conditional
+ * WHERE clause.
  */
 export async function shouldSaveJobResult(jobId: string): Promise<boolean> {
   const { data: currentJob } = await supabase
@@ -105,6 +111,50 @@ export async function shouldSaveJobResult(jobId: string): Promise<boolean> {
 
   if (currentJob?.status === "cancelled") {
     console.log(`[worker] Job ${jobId} was cancelled during processing, discarding result`)
+    return false
+  }
+  return true
+}
+
+/**
+ * Atomically flip a job to completed, but only if it hasn't been cancelled.
+ * Returns true if the row was updated, false if the user cancelled mid-flight.
+ *
+ * Use this instead of `supabase.from("jobs").update({status:"completed",...}).eq("id", jobId)`
+ * to close the cancel-during-update race. Otherwise:
+ *   - Worker reads status="processing" (shouldSaveJobResult passes)
+ *   - User cancels via /v1/jobs/:id/cancel — status flipped to "cancelled",
+ *     usage_log refunded (per PR #1508)
+ *   - Worker UPDATEs unconditionally → overwrites cancellation to "completed"
+ *   - Net: jobs.status="completed" but usage_log.status="refunded" — user
+ *     got the output AND a credit refund (free generation).
+ *
+ * The conditional UPDATE matches zero rows when the row was cancelled, and
+ * the caller can skip commitJobCredits.
+ */
+export async function markJobCompleted(
+  jobId: string,
+  fields: Record<string, unknown>,
+): Promise<boolean> {
+  const completion = {
+    status: "completed",
+    progress: 100,
+    completed_at: new Date().toISOString(),
+    ...fields,
+  }
+  const { data, error } = await supabase
+    .from("jobs")
+    .update(completion)
+    .eq("id", jobId)
+    .neq("status", "cancelled")
+    .select("id")
+
+  if (error) {
+    console.error(`[worker] Failed to mark job ${jobId} completed:`, error.message)
+    return false
+  }
+  if (!data || data.length === 0) {
+    console.log(`[worker] Job ${jobId} cancelled mid-update — not flipping to completed`)
     return false
   }
   return true
@@ -310,14 +360,16 @@ export async function completeFfmpegVideoJob(
   await cleanupWorkDir(dirname(outputPath))
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
+  // Cheap pre-check to skip the conditional update when we already know the
+  // job was cancelled before post-processing. The atomic guard below handles
+  // the actual race during the update.
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  // Atomic conditional update — skips commit if user cancelled mid-flight.
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
@@ -336,12 +388,10 @@ export async function completeFfmpegAudioJob(
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase.from("jobs").update({
-    status: "completed",
-    progress: 100,
+  const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url },
-    completed_at: new Date().toISOString(),
-  }).eq("id", ctx.jobId)
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)

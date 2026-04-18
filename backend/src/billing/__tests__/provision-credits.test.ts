@@ -13,14 +13,16 @@ const {
   mockFrom,
   mockRpc,
   selectResponses,
+  writeErrors,
   resetMockState,
   mockLogTransaction,
   mockInvalidateBalanceCache,
 } = vi.hoisted(() => {
   // Queue-based responses: each from(table).select().eq().single() call
   // shifts the next response off the queue. Write operations (insert,
-  // update, upsert) always succeed.
+  // update, upsert) default to success unless `writeErrors` overrides them.
   const selectResponses = new Map<string, Array<{ data: unknown; error: unknown }>>()
+  const writeErrors = new Map<string, Array<{ code?: string; message?: string } | null>>()
 
   function shiftResponse(table: string): { data: unknown; error: unknown } {
     const queue = selectResponses.get(table)
@@ -32,9 +34,17 @@ const {
     return queue.shift()!
   }
 
+  function shiftWriteError(table: string): { code?: string; message?: string } | null {
+    const queue = writeErrors.get(table)
+    if (!queue || queue.length === 0) return null
+    if (queue.length === 1) return queue[0]
+    return queue.shift()!
+  }
+
   // Build a chainable mock that:
   // - Resolves .single() using the selectResponses queue
-  // - Resolves write terminals (insert/update/upsert) to success
+  // - Resolves write terminals (insert/update/upsert) to success or to a
+  //   queued error (via mockWriteError)
   // - Supports arbitrary .method().method() chaining
   function createChain(table: string) {
     const chain: Record<string, unknown> = {}
@@ -49,9 +59,11 @@ const {
     chain.single = vi.fn(() => Promise.resolve(shiftResponse(table)))
 
     // Make the chain "thenable" so `await supabase.from("x").update({}).eq()`
-    // resolves to success for write operations.
-    chain.then = (resolve: (v: unknown) => void) =>
-      resolve({ data: null, error: null })
+    // resolves. Default success unless a writeErrors entry is queued.
+    chain.then = (resolve: (v: unknown) => void) => {
+      const error = shiftWriteError(table)
+      resolve({ data: null, error })
+    }
 
     return chain
   }
@@ -63,6 +75,7 @@ const {
 
   function resetMockState() {
     selectResponses.clear()
+    writeErrors.clear()
     mockFrom.mockClear()
     mockRpc.mockClear()
     mockLogTransaction.mockClear()
@@ -73,6 +86,7 @@ const {
     mockFrom,
     mockRpc,
     selectResponses,
+    writeErrors,
     resetMockState,
     mockLogTransaction,
     mockInvalidateBalanceCache,
@@ -132,6 +146,13 @@ function mockSelect(table: string, data: unknown, error: unknown = null) {
 /** Shorthand to enqueue a "not found" select response. */
 function mockSelectNotFound(table: string) {
   mockSelect(table, null, { code: "PGRST116" })
+}
+
+/** Enqueue an error response for the next write (insert/update/upsert) on a table. */
+function mockWriteError(table: string, error: { code?: string; message?: string }) {
+  const queue = writeErrors.get(table) ?? []
+  queue.push(error)
+  writeErrors.set(table, queue)
 }
 
 // ---------------------------------------------------------------------------
@@ -448,10 +469,9 @@ describe("provision-credits", () => {
     }
 
     it("grants topup credits for valid topup transaction", async () => {
-      // Idempotency check: transaction not found
-      mockSelectNotFound("transactions")
       // resolveUserId: stripe_customers found
       mockSelect("stripe_customers", { user_id: "user-001" })
+      // Atomic claim INSERT into transactions succeeds (no writeError queued)
 
       await handleTransactionCompleted(baseTransactionData)
 
@@ -478,20 +498,32 @@ describe("provision-credits", () => {
       expect(mockInvalidateBalanceCache).not.toHaveBeenCalled()
     })
 
-    it("skips duplicate transactions (idempotent)", async () => {
-      // Transaction already exists
-      mockSelect("transactions", { id: "existing-tx-id" })
+    it("skips duplicate transactions when INSERT raises unique_violation (race-safe)", async () => {
+      // resolveUserId still runs (it's needed to build the INSERT row)
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      // Stripe redelivers the same event; the unique constraint on
+      // stripe_transaction_id rejects the duplicate insert with code 23505.
+      mockWriteError("transactions", { code: "23505", message: "duplicate key" })
 
       await handleTransactionCompleted(baseTransactionData)
 
-      expect(mockRpc).not.toHaveBeenCalled()
+      // CRITICAL: no credit RPC may fire when the insert lost the race —
+      // otherwise the user would be double-credited.
+      expect(mockRpc).not.toHaveBeenCalledWith("add_topup_credits", expect.anything())
       expect(mockInvalidateBalanceCache).not.toHaveBeenCalled()
     })
 
-    it("returns early if no topup credits found for price", async () => {
-      mockSelectNotFound("transactions")
+    it("does not grant credits when INSERT fails for a non-conflict reason", async () => {
       mockSelect("stripe_customers", { user_id: "user-001" })
+      mockWriteError("transactions", { code: "42501", message: "permission denied" })
 
+      await handleTransactionCompleted(baseTransactionData)
+
+      expect(mockRpc).not.toHaveBeenCalledWith("add_topup_credits", expect.anything())
+      expect(mockInvalidateBalanceCache).not.toHaveBeenCalled()
+    })
+
+    it("returns early if no topup credits found for price (no insert, no RPC)", async () => {
       const unknownPriceData = {
         ...baseTransactionData,
         lineItems: [{ priceId: "pri_unknown_price" }],
@@ -501,6 +533,9 @@ describe("provision-credits", () => {
 
       expect(mockRpc).not.toHaveBeenCalled()
       expect(mockInvalidateBalanceCache).not.toHaveBeenCalled()
+      // Should NOT have touched transactions table either
+      const calledTables = mockFrom.mock.calls.map((c: unknown[]) => c[0])
+      expect(calledTables).not.toContain("transactions")
     })
   })
 })

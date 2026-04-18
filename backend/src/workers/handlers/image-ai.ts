@@ -1,8 +1,8 @@
-import { supabase } from "../../lib/supabase.js"
 import { generateImage, editImage } from "../../providers/index.js"
 import {
   commitJobCredits,
   shouldSaveJobResult,
+  markJobCompleted,
   uploadImageMaybeWatermark,
   type HandlerFn,
 } from "../shared.js"
@@ -46,18 +46,13 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase
-    .from("jobs")
-    .update({
-      status: "completed",
-      progress: 100,
-      output_data: { imageUrl: r2Url },
-      completed_at: new Date().toISOString(),
-      provider: result.providerUsed,
-      provider_cost: result.cost,
-      display_cost: result.displayCost,
-    })
-    .eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { imageUrl: r2Url },
+    provider: result.providerUsed,
+    provider_cost: result.cost,
+    display_cost: result.displayCost,
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
@@ -96,18 +91,13 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase
-    .from("jobs")
-    .update({
-      status: "completed",
-      progress: 100,
-      output_data: { imageUrl: r2Url },
-      completed_at: new Date().toISOString(),
-      provider: result.providerUsed,
-      provider_cost: result.cost,
-      display_cost: result.displayCost,
-    })
-    .eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { imageUrl: r2Url },
+    provider: result.providerUsed,
+    provider_cost: result.cost,
+    display_cost: result.displayCost,
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
@@ -155,18 +145,13 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  await supabase
-    .from("jobs")
-    .update({
-      status: "completed",
-      progress: 100,
-      output_data: { imageUrl: r2Url },
-      completed_at: new Date().toISOString(),
-      provider: result.providerUsed,
-      provider_cost: result.cost,
-      display_cost: result.displayCost,
-    })
-    .eq("id", ctx.jobId)
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { imageUrl: r2Url },
+    provider: result.providerUsed,
+    provider_cost: result.cost,
+    display_cost: result.displayCost,
+  })
+  if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
