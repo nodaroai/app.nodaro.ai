@@ -48,6 +48,18 @@ vi.mock("@/lib/admin-check.js", () => ({
   checkIsAdmin: vi.fn().mockResolvedValue(false),
 }))
 
+// Refund-on-cancel uses CreditsService.refundCredits and invalidateBalanceCache.
+const mockRefundCredits = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const mockInvalidateBalanceCache = vi.hoisted(() => vi.fn())
+
+vi.mock("@/billing/credits.js", () => ({
+  CreditsService: { refundCredits: mockRefundCredits },
+}))
+
+vi.mock("@/routes/credits.js", () => ({
+  invalidateBalanceCache: mockInvalidateBalanceCache,
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -93,12 +105,48 @@ afterEach(async () => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Mock the select chain: from("jobs").select(...).eq("id", jobId).single() */
-function mockJobLookup(result: { data: unknown; error: unknown }) {
-  const mockSingle = vi.fn().mockResolvedValue(result)
-  const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
-  const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
-  return { select: mockSelect, mockSingle }
+/**
+ * Per-table dispatching mock. Each test sets up handlers per table name
+ * (e.g. "jobs", "usage_logs"). The cancel route reads/updates "jobs" and
+ * then queries "usage_logs" to refund — so a single mockReturnValue is no
+ * longer enough.
+ */
+type TableHandler = () => Record<string, unknown>
+
+function setupTableMocks(handlers: Record<string, TableHandler>) {
+  vi.mocked(supabase.from).mockImplementation((table: string) => {
+    const handler = handlers[table]
+    if (!handler) throw new Error(`No mock handler registered for table "${table}"`)
+    return handler() as never
+  })
+}
+
+/** Build a "jobs" chain that handles both select-by-id and update-by-id. */
+function jobsHandler(opts: {
+  jobLookup?: { data: unknown; error: unknown }
+  jobsList?: { data: unknown; error: unknown }
+  updateError?: unknown
+}): TableHandler {
+  return () => {
+    const single = vi.fn().mockResolvedValue(opts.jobLookup ?? { data: null, error: { message: "not found" } })
+    const inForList = vi.fn().mockResolvedValue(opts.jobsList ?? { data: [], error: null })
+    const eqAfterSelect = vi.fn().mockReturnValue({ single, in: inForList })
+    const select = vi.fn().mockReturnValue({ eq: eqAfterSelect })
+
+    const updateThen = vi.fn().mockResolvedValue({ error: opts.updateError ?? null })
+    const update = vi.fn().mockReturnValue({ eq: updateThen, in: updateThen })
+    return { select, update }
+  }
+}
+
+/** Build a "usage_logs" chain for the refund lookup: select().in().eq(). */
+function usageLogsHandler(rows: Array<{ id: string }>): TableHandler {
+  return () => {
+    const eq = vi.fn().mockResolvedValue({ data: rows, error: null })
+    const inFn = vi.fn().mockReturnValue({ eq })
+    const select = vi.fn().mockReturnValue({ in: inFn })
+    return { select }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -114,13 +162,13 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
     })
 
     expect(res.statusCode).toBe(401)
-    const body = res.json()
-    expect(body.error.code).toBe("unauthorized")
+    expect(res.json().error.code).toBe("unauthorized")
   })
 
   it("returns 404 when job not found", async () => {
-    const chain = mockJobLookup({ data: null, error: { message: "not found" } })
-    vi.mocked(supabase.from).mockReturnValue(chain as never)
+    setupTableMocks({
+      jobs: jobsHandler({ jobLookup: { data: null, error: { message: "not found" } } }),
+    })
 
     const res = await app.inject({
       method: "POST",
@@ -129,16 +177,18 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
     })
 
     expect(res.statusCode).toBe(404)
-    const body = res.json()
-    expect(body.error.code).toBe("not_found")
+    expect(res.json().error.code).toBe("not_found")
   })
 
   it("returns 403 when job belongs to different user", async () => {
-    const chain = mockJobLookup({
-      data: { id: "job-1", status: "pending", user_id: "other-user-id", input_data: {}, output_data: {} },
-      error: null,
+    setupTableMocks({
+      jobs: jobsHandler({
+        jobLookup: {
+          data: { id: "job-1", status: "pending", user_id: "other-user-id", input_data: {}, output_data: {} },
+          error: null,
+        },
+      }),
     })
-    vi.mocked(supabase.from).mockReturnValue(chain as never)
 
     const res = await app.inject({
       method: "POST",
@@ -147,16 +197,19 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
     })
 
     expect(res.statusCode).toBe(403)
-    const body = res.json()
-    expect(body.error.code).toBe("forbidden")
+    expect(res.json().error.code).toBe("forbidden")
+    expect(mockRefundCredits).not.toHaveBeenCalled()
   })
 
   it("returns 400 when job already completed", async () => {
-    const chain = mockJobLookup({
-      data: { id: "job-1", status: "completed", user_id: TEST_USER_ID, input_data: {}, output_data: {} },
-      error: null,
+    setupTableMocks({
+      jobs: jobsHandler({
+        jobLookup: {
+          data: { id: "job-1", status: "completed", user_id: TEST_USER_ID, input_data: {}, output_data: {} },
+          error: null,
+        },
+      }),
     })
-    vi.mocked(supabase.from).mockReturnValue(chain as never)
 
     const res = await app.inject({
       method: "POST",
@@ -165,26 +218,20 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
     })
 
     expect(res.statusCode).toBe(400)
-    const body = res.json()
-    expect(body.error.code).toBe("invalid_status")
+    expect(res.json().error.code).toBe("invalid_status")
+    expect(mockRefundCredits).not.toHaveBeenCalled()
   })
 
-  it("returns success and removes from queue for pending job", async () => {
-    // Mock select chain for job lookup
-    const selectChain = mockJobLookup({
-      data: { id: "job-1", status: "pending", user_id: TEST_USER_ID, input_data: {}, output_data: {} },
-      error: null,
+  it("refunds reserved credits and returns success for pending job (regression: was silent credit theft)", async () => {
+    setupTableMocks({
+      jobs: jobsHandler({
+        jobLookup: {
+          data: { id: "job-1", status: "pending", user_id: TEST_USER_ID, input_data: {}, output_data: {} },
+          error: null,
+        },
+      }),
+      usage_logs: usageLogsHandler([{ id: "usage-log-1" }]),
     })
-
-    // Mock update chain: from("jobs").update({...}).eq("id", jobId)
-    const mockUpdateEq = vi.fn().mockResolvedValue({ error: null })
-    const mockUpdate = vi.fn().mockReturnValue({ eq: mockUpdateEq })
-
-    // Both select and update go through from("jobs"), so provide both
-    vi.mocked(supabase.from).mockReturnValue({
-      ...selectChain,
-      update: mockUpdate,
-    } as never)
 
     const res = await app.inject({
       method: "POST",
@@ -193,12 +240,35 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    const body = res.json()
-    expect(body.success).toBe(true)
-    expect(body.cancelled).toBe(1)
-
-    // Verify queue removal was attempted
+    expect(res.json()).toEqual({ success: true, cancelled: 1 })
     expect(tryRemoveFromQueue).toHaveBeenCalledWith("job-1")
+    // CRITICAL: the reserved credit hold MUST be refunded — without this the
+    // user pays for cancelled work that never produced output.
+    expect(mockRefundCredits).toHaveBeenCalledWith("usage-log-1")
+    expect(mockInvalidateBalanceCache).toHaveBeenCalledWith(TEST_USER_ID)
+  })
+
+  it("succeeds even if no usage_log exists (e.g. zero-cost job)", async () => {
+    setupTableMocks({
+      jobs: jobsHandler({
+        jobLookup: {
+          data: { id: "job-1", status: "pending", user_id: TEST_USER_ID, input_data: {}, output_data: {} },
+          error: null,
+        },
+      }),
+      usage_logs: usageLogsHandler([]),
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/jobs/job-1/cancel",
+      payload: { userId: TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockRefundCredits).not.toHaveBeenCalled()
+    // Balance cache is still invalidated for consistency, even with no refund.
+    expect(mockInvalidateBalanceCache).toHaveBeenCalledWith(TEST_USER_ID)
   })
 })
 
@@ -211,16 +281,13 @@ describe("POST /v1/jobs/cancel-all", () => {
     })
 
     expect(res.statusCode).toBe(401)
-    const body = res.json()
-    expect(body.error.code).toBe("unauthorized")
+    expect(res.json().error.code).toBe("unauthorized")
   })
 
   it("returns { cancelled: 0 } when no pending jobs", async () => {
-    // Chain: from("jobs").select("id").eq("user_id", ...).in("status", [...])
-    const mockIn = vi.fn().mockResolvedValue({ data: [], error: null })
-    const mockEq = vi.fn().mockReturnValue({ in: mockIn })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+    setupTableMocks({
+      jobs: jobsHandler({ jobsList: { data: [], error: null } }),
+    })
 
     const res = await app.inject({
       method: "POST",
@@ -229,28 +296,20 @@ describe("POST /v1/jobs/cancel-all", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    const body = res.json()
-    expect(body.success).toBe(true)
-    expect(body.cancelled).toBe(0)
+    expect(res.json()).toEqual({ success: true, cancelled: 0 })
+    expect(mockRefundCredits).not.toHaveBeenCalled()
   })
 
-  it("cancels all pending jobs for user", async () => {
-    // Mock select: from("jobs").select("id").eq("user_id", ...).in("status", [...])
-    const mockIn = vi.fn().mockResolvedValue({
-      data: [{ id: "job-1" }, { id: "job-2" }],
-      error: null,
+  it("cancels all pending jobs and refunds each one's reserved credits", async () => {
+    setupTableMocks({
+      jobs: jobsHandler({
+        jobsList: { data: [{ id: "job-1" }, { id: "job-2" }], error: null },
+      }),
+      usage_logs: usageLogsHandler([
+        { id: "usage-log-1" },
+        { id: "usage-log-2" },
+      ]),
     })
-    const mockEq = vi.fn().mockReturnValue({ in: mockIn })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
-
-    // Mock update: from("jobs").update({...}).in("id", [...])
-    const mockUpdateIn = vi.fn().mockResolvedValue({ error: null })
-    const mockUpdate = vi.fn().mockReturnValue({ in: mockUpdateIn })
-
-    vi.mocked(supabase.from).mockReturnValue({
-      select: mockSelect,
-      update: mockUpdate,
-    } as never)
 
     const res = await app.inject({
       method: "POST",
@@ -259,12 +318,12 @@ describe("POST /v1/jobs/cancel-all", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    const body = res.json()
-    expect(body.success).toBe(true)
-    expect(body.cancelled).toBe(2)
-
-    // Verify queue removal was attempted for each job
+    expect(res.json()).toEqual({ success: true, cancelled: 2 })
     expect(tryRemoveFromQueue).toHaveBeenCalledWith("job-1")
     expect(tryRemoveFromQueue).toHaveBeenCalledWith("job-2")
+    // Both reserved holds refunded — bulk cancel previously also leaked credits.
+    expect(mockRefundCredits).toHaveBeenCalledWith("usage-log-1")
+    expect(mockRefundCredits).toHaveBeenCalledWith("usage-log-2")
+    expect(mockInvalidateBalanceCache).toHaveBeenCalledWith(TEST_USER_ID)
   })
 })
