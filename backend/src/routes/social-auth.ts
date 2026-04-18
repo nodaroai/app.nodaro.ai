@@ -346,8 +346,10 @@ function successHtml(platform: string, username: string): string {
 <p>Account: ${safeUsername}</p>
 <p>You can close this window.</p>
 <script>
+  // Target window.location.origin (not "*") so a parent that navigates away
+  // mid-flow can't receive this message on a foreign origin.
   if (window.opener) {
-    window.opener.postMessage({ type: "social-auth-success", platform: ${JSON.stringify(platform)} }, "*");
+    window.opener.postMessage({ type: "social-auth-success", platform: ${JSON.stringify(platform)} }, window.location.origin);
   }
   setTimeout(() => window.close(), 2000);
 </script>
@@ -371,8 +373,10 @@ function errorHtml(message: string, hint?: string): string {
 <p>${safeMessage}</p>
 ${safeHint ? `<div class="hint">${safeHint}</div>` : "<p>You can close this window and try again.</p>"}
 <script>
+  // Target window.location.origin (not "*") so error details aren't leaked
+  // to a foreign origin if the opener navigated away mid-flow.
   if (window.opener) {
-    window.opener.postMessage({ type: "social-auth-error", message: ${JSON.stringify(message)} }, "*");
+    window.opener.postMessage({ type: "social-auth-error", message: ${JSON.stringify(message)} }, window.location.origin);
   }
 </script>
 </body></html>`
