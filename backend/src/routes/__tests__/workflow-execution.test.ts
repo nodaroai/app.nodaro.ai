@@ -80,6 +80,17 @@ vi.mock("@/lib/execution-events.js", () => ({
   },
 }))
 
+const mockRefundCredits = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const mockInvalidateBalanceCache = vi.hoisted(() => vi.fn())
+
+vi.mock("@/billing/credits.js", () => ({
+  CreditsService: { refundCredits: mockRefundCredits },
+}))
+
+vi.mock("@/routes/credits.js", () => ({
+  invalidateBalanceCache: mockInvalidateBalanceCache,
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -577,10 +588,21 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
           }),
         } as never
       }
-      // Job update
+      if (callNum === 3) {
+        // Job update
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+          }),
+        } as never
+      }
+      // Call 4: usage_logs lookup for refund (added by workflow-cancel
+      // credit-refund fix). Return no rows so refund is a no-op.
       return {
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+          }),
         }),
       } as never
     })
@@ -588,6 +610,40 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
     const res = await authedPost(`/v1/workflow-executions/${TEST_JOB_ID}/cancel`)
     expect(res.statusCode).toBe(200)
     expect(res.json().success).toBe(true)
+  })
+
+  it("refunds reserved credits when cancelling a standalone job (regression: was silent leak)", async () => {
+    // Mirror of cancel-jobs.ts #1508 — this parallel cancel route had the
+    // same gap: marked job cancelled without refunding the usage_log hold.
+    const mockFrom = vi.mocked(supabase.from)
+    let callNum = 0
+    mockFrom.mockImplementation(() => {
+      callNum++
+      if (callNum === 1) {
+        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: null, error: { code: "PGRST116" } }) }) }) }) } as never
+      }
+      if (callNum === 2) {
+        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: TEST_JOB_ID, status: "pending" }, error: null }) }) }) }) } as never
+      }
+      if (callNum === 3) {
+        return { update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }) } as never
+      }
+      // Call 4: usage_logs lookup — return one reserved hold for this job.
+      return {
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ data: [{ id: "usage-log-1" }], error: null }),
+          }),
+        }),
+      } as never
+    })
+
+    const res = await authedPost(`/v1/workflow-executions/${TEST_JOB_ID}/cancel`)
+    expect(res.statusCode).toBe(200)
+    // CRITICAL: the reserved credit hold MUST be refunded — this is the
+    // financial leak the route previously suffered.
+    expect(mockRefundCredits).toHaveBeenCalledWith("usage-log-1")
+    expect(mockInvalidateBalanceCache).toHaveBeenCalledWith(TEST_USER_ID)
   })
 
   it("returns 404 when neither execution nor job found", async () => {

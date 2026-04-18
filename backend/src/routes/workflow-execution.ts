@@ -16,6 +16,39 @@ import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
+import { CreditsService } from "../billing/credits.js"
+import { invalidateBalanceCache } from "./credits.js"
+
+/**
+ * Refund any reserved credit holds for the given job IDs. Best-effort —
+ * `CreditsService.refundCredits` short-circuits on rows that aren't
+ * `status='reserved'` (per PR #1502), so it's safe if the worker happens to
+ * commit/refund the same row concurrently.
+ *
+ * Without this, cancelling a workflow execution leaves every child job's
+ * `usage_logs` row stuck at `status='reserved'` — the user's balance was
+ * decremented when each node was reserved but never restored. Same shape
+ * as the per-job leak fixed in PR #1508; this closes the workflow-level
+ * variant for all queued/running children.
+ */
+async function refundReservedCreditsForJobs(jobIds: string[]): Promise<void> {
+  if (jobIds.length === 0) return
+  const { data: usageLogs } = await supabase
+    .from("usage_logs")
+    .select("id")
+    .in("job_id", jobIds)
+    .eq("status", "reserved")
+
+  if (!usageLogs || usageLogs.length === 0) return
+
+  await Promise.all(
+    usageLogs.map((row) =>
+      CreditsService.refundCredits(row.id).catch((err) =>
+        console.error(`[workflow-cancel] Failed to refund usage_log ${row.id}:`, err),
+      ),
+    ),
+  )
+}
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -325,6 +358,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         .update({ status: "cancelled" })
         .eq("id", parsed.data.id)
 
+      // Refund the reserved credit hold so cancelling doesn't silently
+      // forfeit the user's balance (mirrors cancel-jobs.ts after #1508).
+      await refundReservedCreditsForJobs([parsed.data.id])
+      invalidateBalanceCache(req.userId)
+
       return { success: true }
     }
 
@@ -350,10 +388,13 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       .eq("id", parsed.data.id)
 
     // For immediate cancellation, also cancel all pending/queued/processing jobs
-    // belonging to this execution so the BullMQ worker discards their results.
+    // belonging to this execution so the BullMQ worker discards their results,
+    // and refund their reserved credit holds so the user isn't charged for
+    // never-completed nodes (workflow-level analog of cancel-jobs.ts #1508).
     // Fire-and-forget — the DB status is already set, so the orchestrator will
     // pick up the cancellation regardless.
     if (mode === "cancelled") {
+      const userId = req.userId
       void (async () => {
         const { data: activeJobs } = await supabase
           .from("jobs")
@@ -368,6 +409,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
             .from("jobs")
             .update({ status: "cancelled" })
             .in("id", jobIds)
+          await refundReservedCreditsForJobs(jobIds)
+          invalidateBalanceCache(userId)
         }
       })().catch(() => {})
     }
