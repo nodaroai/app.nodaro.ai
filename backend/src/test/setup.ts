@@ -3,3 +3,4 @@ process.env.SUPABASE_URL = "https://test.supabase.co"
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
 process.env.EDITION = "cloud"
 process.env.NODE_ENV = "test"
+process.env.INTERNAL_ORCHESTRATOR_SECRET = "0".repeat(64)
