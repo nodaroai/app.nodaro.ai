@@ -185,6 +185,11 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
       .eq("status", "completed")
       .not("output_data", "is", null)
       .lt("created_at", cutoff)
+      // Exclude jobs we've already marked _cleaned. Without this filter the
+      // marker key is added to output_data but the row still matches the
+      // other predicates, so the same BATCH_SIZE rows return forever and
+      // the loop never terminates (jobs.length stays at BATCH_SIZE).
+      .is("output_data->>_cleaned", null)
       .limit(BATCH_SIZE)
 
     if (error) {
@@ -198,11 +203,22 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
       break
     }
 
+    // Defensive belt-and-suspenders: if every row in the batch is somehow
+    // already _cleaned (e.g. Postgrest version doesn't apply the JSONB
+    // filter as expected), break instead of looping forever.
+    const jobsToClean = jobs.filter(job => {
+      const o = job.output_data as Record<string, unknown> | null
+      return o != null && !o._cleaned
+    })
+    if (jobsToClean.length === 0) {
+      hasMoreJobs = false
+      break
+    }
+
     // Collect all R2 keys across all jobs in this batch
     const allR2Keys: string[] = []
-    for (const job of jobs) {
-      const output = job.output_data as Record<string, unknown> | null
-      if (!output) continue
+    for (const job of jobsToClean) {
+      const output = job.output_data as Record<string, unknown>
       const urls = extractR2UrlsFromOutput(output)
       for (const url of urls) {
         const r2Key = r2KeyFromUrl(url)
@@ -218,19 +234,17 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
     }
 
     // Update DB records in parallel chunks of 10
-    const jobUpdates = jobs
-      .filter(job => job.output_data != null)
-      .map(job => {
-        const output = job.output_data as Record<string, unknown>
-        const urls = extractR2UrlsFromOutput(output)
-        const cleanedOutput: Record<string, unknown> = { ...output, _cleaned: true }
-        for (const url of urls) {
-          for (const [key, value] of Object.entries(cleanedOutput)) {
-            if (value === url) cleanedOutput[key] = null
-          }
+    const jobUpdates = jobsToClean.map(job => {
+      const output = job.output_data as Record<string, unknown>
+      const urls = extractR2UrlsFromOutput(output)
+      const cleanedOutput: Record<string, unknown> = { ...output, _cleaned: true }
+      for (const url of urls) {
+        for (const [key, value] of Object.entries(cleanedOutput)) {
+          if (value === url) cleanedOutput[key] = null
         }
-        return { id: job.id, cleanedOutput }
-      })
+      }
+      return { id: job.id, cleanedOutput }
+    })
 
     for (let i = 0; i < jobUpdates.length; i += 10) {
       const chunk = jobUpdates.slice(i, i + 10)
@@ -325,6 +339,11 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
         .eq("user_id", user.id)
         .eq("status", "completed")
         .not("output_data", "is", null)
+        // Exclude jobs we've already marked _cleaned. Without this filter the
+        // marker key is added to output_data but the row still matches the
+        // other predicates, so the same BATCH_SIZE rows return forever and
+        // the loop never terminates.
+        .is("output_data->>_cleaned", null)
         .limit(BATCH_SIZE)
 
       if (!jobs || jobs.length === 0) {
@@ -332,11 +351,21 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
         break
       }
 
+      // Defensive: if every row is somehow already _cleaned, break instead of
+      // looping forever (covers the case where the JSONB filter doesn't apply).
+      const jobsToClean = jobs.filter(j => {
+        const o = j.output_data as Record<string, unknown> | null
+        return o && !o._cleaned
+      })
+      if (jobsToClean.length === 0) {
+        hasMore = false
+        break
+      }
+
       // Collect all R2 keys across jobs
       const allR2Keys: string[] = []
-      for (const job of jobs) {
-        const output = job.output_data as Record<string, unknown> | null
-        if (!output || output._cleaned) continue
+      for (const job of jobsToClean) {
+        const output = job.output_data as Record<string, unknown>
         const urls = extractR2UrlsFromOutput(output)
         for (const url of urls) {
           const r2Key = r2KeyFromUrl(url)
@@ -351,10 +380,6 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
       }
 
       // Update job output_data in parallel chunks of 10
-      const jobsToClean = jobs.filter(j => {
-        const o = j.output_data as Record<string, unknown> | null
-        return o && !o._cleaned
-      })
       for (let i = 0; i < jobsToClean.length; i += 10) {
         const chunk = jobsToClean.slice(i, i + 10)
         await Promise.all(chunk.map(job =>
