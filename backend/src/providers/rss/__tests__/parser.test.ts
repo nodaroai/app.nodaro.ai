@@ -245,4 +245,88 @@ describe("fetchRssItems", () => {
       }),
     ).rejects.toThrow(/too large/i)
   })
+
+  it("decodes feeds that declare ISO-8859-1 in the XML prolog", async () => {
+    // Latin-1 bytes for "café" — 0xe9 is é. Decoded as utf-8 it becomes "", which
+    // would leak into downstream text consumers as mojibake.
+    const prologAndBefore = new TextEncoder().encode(
+      `<?xml version="1.0" encoding="ISO-8859-1"?>\n` +
+      `<rss version="2.0"><channel><item><title>`,
+    )
+    const titleBytes = new Uint8Array([0x63, 0x61, 0x66, 0xe9]) // "café" in Latin-1
+    const afterTitle = new TextEncoder().encode(
+      `</title><link>https://e.com/a</link></item></channel></rss>`,
+    )
+    const body = new Uint8Array(prologAndBefore.length + titleBytes.length + afterTitle.length)
+    body.set(prologAndBefore, 0)
+    body.set(titleBytes, prologAndBefore.length)
+    body.set(afterTitle, prologAndBefore.length + titleBytes.length)
+
+    const fakeFetch = async () => new Response(body, { status: 200 })
+    const items = await fetchRssItems({
+      url: "https://example.com/feed.xml",
+      fetchImpl: fakeFetch as unknown as typeof fetch,
+    })
+    expect(items[0].title).toBe("café")
+  })
+
+  it("strips a UTF-8 BOM before parsing", async () => {
+    const bom = new Uint8Array([0xef, 0xbb, 0xbf])
+    const body = new TextEncoder().encode(BASIC_RSS)
+    const combined = new Uint8Array(bom.length + body.length)
+    combined.set(bom, 0)
+    combined.set(body, bom.length)
+    const fakeFetch = async () => new Response(combined, { status: 200 })
+    const items = await fetchRssItems({
+      url: "https://example.com/feed.xml",
+      fetchImpl: fakeFetch as unknown as typeof fetch,
+    })
+    expect(items).toHaveLength(2)
+    expect(items[0].title).toBe("First post")
+  })
+
+  it("falls back to utf-8 when the prolog declares an unknown encoding", async () => {
+    // Typo'd encoding label ("utff-8") — TextDecoder would RangeError; ensure
+    // we swallow that and still decode the body so the feed isn't lost to a
+    // typo upstream.
+    const xml = `<?xml version="1.0" encoding="utff-8"?>\n${BASIC_RSS.replace(/^<\?xml[^>]*\?>\s*/, "")}`
+    const fakeFetch = async () => new Response(new TextEncoder().encode(xml), { status: 200 })
+    const items = await fetchRssItems({
+      url: "https://example.com/feed.xml",
+      fetchImpl: fakeFetch as unknown as typeof fetch,
+    })
+    expect(items).toHaveLength(2)
+    expect(items[0].title).toBe("First post")
+  })
+
+  it("aborts the body read when the timeout fires mid-stream", async () => {
+    // Simulates a slowloris feed: headers land instantly (Response resolves)
+    // but the body stalls after one chunk. If the timeout only covered
+    // fetch+headers, readLimited would hang until Fastify's 10-min request
+    // timeout. With the fix, the controller.abort() fires during streaming
+    // and the stream errors out in under the test's 2s budget.
+    let streamController: ReadableStreamDefaultController<Uint8Array> | undefined
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamController = controller
+        controller.enqueue(new TextEncoder().encode(`<?xml version="1.0"?><rss>`))
+        // Intentionally never enqueue more, never close.
+      },
+    })
+    const fakeFetch = async (_input: unknown, init?: RequestInit) => {
+      // Real undici tears down the socket on abort; simulate by erroring the
+      // stream so reader.read() throws.
+      init?.signal?.addEventListener("abort", () => {
+        streamController?.error(new Error("aborted"))
+      })
+      return new Response(stream, { status: 200 })
+    }
+    await expect(
+      fetchRssItems({
+        url: "https://example.com/feed.xml",
+        timeoutMs: 50,
+        fetchImpl: fakeFetch as unknown as typeof fetch,
+      }),
+    ).rejects.toThrow()
+  }, 2000)
 })
