@@ -358,11 +358,32 @@ function tryParseJsonFrontend(item: unknown): unknown {
   try { return JSON.parse(trimmed); } catch { return item; }
 }
 
-function resolveFilterConditionValue(raw: string, valueType: string | undefined): string {
+const FILTER_HOUR_MS = 60 * 60 * 1000;
+const FILTER_DAY_MS = 24 * FILTER_HOUR_MS;
+const FILTER_WEEK_MS = 7 * FILTER_DAY_MS;
+
+// Mirrors backend `resolveRelativeWindowToken` in inline-executor.ts so manual
+// (frontend) and triggered (backend) runs of the same filter produce identical
+// results. Drift here = same filter passes different items in different runs.
+function resolveRelativeWindowTokenFrontend(key: string): string | undefined {
+  const m = key.match(/^last_N_(hours|days|weeks):(-?\d+)$/);
+  if (!m) return undefined;
+  const n = parseInt(m[2], 10);
+  if (!Number.isFinite(n)) return undefined;
+  const unitMs = m[1] === "hours" ? FILTER_HOUR_MS : m[1] === "days" ? FILTER_DAY_MS : FILTER_WEEK_MS;
+  return new Date(Date.now() - n * unitMs).toISOString();
+}
+
+// Exported for unit testing — must stay in lockstep with backend
+// `resolveConditionValue` (inline-executor.ts) so manual + triggered runs
+// produce identical filter results.
+export function resolveFilterConditionValue(raw: string, valueType: string | undefined): string {
   if (valueType !== "variable" && !/\{\{/.test(raw)) return raw;
   return raw.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr) => {
     const key = String(expr).trim();
     if (key === "now") return new Date().toISOString();
+    const relative = resolveRelativeWindowTokenFrontend(key);
+    if (relative !== undefined) return relative;
     // trigger.* variables are resolved on the backend; frontend leaves them blank.
     return "";
   });
