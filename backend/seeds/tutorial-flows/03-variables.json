@@ -1,0 +1,148 @@
+{
+  "meta": {
+    "slug": "03-variables",
+    "title": "Tutorial: Variables",
+    "tier": "medium",
+    "focus": "One source, many consumers",
+    "learning_goal": "A node's output can feed many downstream nodes at once. Change the source once, and every downstream node updates. Use the {} placeholder to inject upstream text, or the field-mapping dropdown to bind explicitly.",
+    "node_count": 4,
+    "credit_estimate": 6
+  },
+  "workflow": {
+    "name": "Tutorial: Variables",
+    "source_prompt": null,
+    "nodes": [
+      {
+        "id": "text-prompt-1",
+        "type": "text-prompt",
+        "position": { "x": 0, "y": 160 },
+        "data": {
+          "label": "Brand",
+          "text": "Drift Coffee",
+          "variables": {}
+        }
+      },
+      {
+        "id": "generate-image-1",
+        "type": "generate-image",
+        "position": { "x": 420, "y": 0 },
+        "data": {
+          "label": "Product image",
+          "prompt": "minimalist product shot of a coffee bag for the brand {} on a warm cream background, soft natural light",
+          "provider": "z-image",
+          "model": "z-image",
+          "style": "",
+          "aspectRatio": "1:1",
+          "negativePrompt": "",
+          "fieldMappings": {}
+        }
+      },
+      {
+        "id": "ai-writer-1",
+        "type": "ai-writer",
+        "position": { "x": 420, "y": 320 },
+        "data": {
+          "label": "Tagline",
+          "templateId": "custom",
+          "systemPrompt": "Write a short, evocative 6-word tagline for the brand. Return only the tagline, no quotes.",
+          "userInput": "{}",
+          "provider": "claude",
+          "llmModel": "gemini-3-flash",
+          "temperature": 0.8,
+          "maxTokens": 64,
+          "fieldMappings": {}
+        }
+      },
+      {
+        "id": "preview-1",
+        "type": "preview",
+        "position": { "x": 820, "y": 320 },
+        "data": {
+          "label": "Tagline preview",
+          "previewItems": [],
+          "itemOrder": []
+        }
+      },
+      {
+        "id": "sticky-1",
+        "type": "sticky-note",
+        "position": { "x": -60, "y": -120 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "1. A node as a variable\n\nThe Brand text-prompt is the single source. Change its text and the whole flow re-runs with the new value.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 400,
+          "height": 230,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      },
+      {
+        "id": "sticky-2",
+        "type": "sticky-note",
+        "position": { "x": 380, "y": -260 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "2. Reuse with {}\n\nThe {} placeholder in any text field gets replaced by the upstream text at runtime. Here, both the image prompt and the tagline instruction use {} — and both receive the same brand value.\n\nAlternative: use the field-mapping dropdown on any field to bind it directly to a specific upstream node.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 460,
+          "height": 260,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      },
+      {
+        "id": "sticky-3",
+        "type": "sticky-note",
+        "position": { "x": 880, "y": -120 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "3. Change once, everything updates\n\nEdit the Brand value and hit Run. Both the image and the tagline regenerate off the same new value.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 400,
+          "height": 230,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "text-prompt-1",
+        "sourceHandle": "prompt",
+        "target": "generate-image-1",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      },
+      {
+        "id": "e2",
+        "source": "text-prompt-1",
+        "sourceHandle": "prompt",
+        "target": "ai-writer-1",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      },
+      {
+        "id": "e3",
+        "source": "ai-writer-1",
+        "sourceHandle": "text",
+        "target": "preview-1",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      }
+    ]
+  }
+}

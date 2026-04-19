@@ -1,0 +1,87 @@
+{
+  "meta": {
+    "slug": "01-your-first-image",
+    "title": "Tutorial: Your first image",
+    "tier": "simple",
+    "focus": "Generate an image from a prompt",
+    "learning_goal": "Understand the minimum shape of a workflow — a prompt, a generator, a result. Run and inspect the output.",
+    "node_count": 2,
+    "credit_estimate": 1
+  },
+  "workflow": {
+    "name": "Tutorial: Your first image",
+    "source_prompt": null,
+    "nodes": [
+      {
+        "id": "text-prompt-1",
+        "type": "text-prompt",
+        "position": { "x": 0, "y": 0 },
+        "data": {
+          "label": "Prompt",
+          "text": "a serene mountain lake at golden hour, cinematic wide shot",
+          "variables": {}
+        }
+      },
+      {
+        "id": "generate-image-1",
+        "type": "generate-image",
+        "position": { "x": 400, "y": 0 },
+        "data": {
+          "label": "Generate Image",
+          "prompt": "",
+          "provider": "z-image",
+          "model": "z-image",
+          "style": "",
+          "aspectRatio": "16:9",
+          "negativePrompt": "",
+          "fieldMappings": {}
+        }
+      },
+      {
+        "id": "sticky-1",
+        "type": "sticky-note",
+        "position": { "x": -40, "y": -260 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "1. Write your prompt\n\nA Text Prompt node is your starting point. Whatever text you write here gets passed to the downstream node as its input.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 380,
+          "height": 220,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      },
+      {
+        "id": "sticky-2",
+        "type": "sticky-note",
+        "position": { "x": 360, "y": -260 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "2. Generate\n\nPress Run (or hover the node to Run just this step). The result appears on the Generate Image node — click it to preview.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 380,
+          "height": 220,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "text-prompt-1",
+        "sourceHandle": "prompt",
+        "target": "generate-image-1",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      }
+    ]
+  }
+}

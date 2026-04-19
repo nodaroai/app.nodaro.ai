@@ -1,0 +1,233 @@
+{
+  "meta": {
+    "slug": "05-edge-selectors",
+    "title": "Tutorial: Edge selectors",
+    "tier": "medium",
+    "focus": "Each / Bundle / Item / Selected — four ways to consume a multi-result upstream",
+    "learning_goal": "One multi-result source has four possible downstream shapes. Picking the wrong edge mode is the most common source of unexpected results. Click an edge to set its mode.",
+    "node_count": 7,
+    "credit_estimate": 10
+  },
+  "workflow": {
+    "name": "Tutorial: Edge selectors",
+    "source_prompt": null,
+    "nodes": [
+      {
+        "id": "text-prompt-1",
+        "type": "text-prompt",
+        "position": { "x": 0, "y": 320 },
+        "data": {
+          "label": "Concept",
+          "text": "three very different vibes for a coffee ad",
+          "variables": {}
+        }
+      },
+      {
+        "id": "ai-writer-1",
+        "type": "ai-writer",
+        "position": { "x": 380, "y": 320 },
+        "data": {
+          "label": "AI Agent (3 prompts)",
+          "templateId": "custom",
+          "systemPrompt": "Generate 3 distinct image prompts based on the concept below. Separate each prompt with ===NEXT=== on its own line. Return ONLY the prompts, no commentary.",
+          "userInput": "{}",
+          "provider": "claude",
+          "llmModel": "gemini-3-flash",
+          "temperature": 0.9,
+          "maxTokens": 512,
+          "fieldMappings": {}
+        }
+      },
+      {
+        "id": "generate-image-each",
+        "type": "generate-image",
+        "position": { "x": 820, "y": 0 },
+        "data": {
+          "label": "Each — fan-out (3 images)",
+          "prompt": "",
+          "provider": "z-image",
+          "model": "z-image",
+          "style": "",
+          "aspectRatio": "1:1",
+          "negativePrompt": "",
+          "fieldMappings": {}
+        }
+      },
+      {
+        "id": "combine-text-bundle",
+        "type": "combine-text",
+        "position": { "x": 820, "y": 240 },
+        "data": {
+          "label": "Bundle — all items combined",
+          "separator": "double-newline",
+          "customSeparator": "",
+          "combinedText": ""
+        }
+      },
+      {
+        "id": "preview-bundle",
+        "type": "preview",
+        "position": { "x": 1180, "y": 240 },
+        "data": {
+          "label": "Bundle preview",
+          "previewItems": [],
+          "itemOrder": []
+        }
+      },
+      {
+        "id": "generate-image-item",
+        "type": "generate-image",
+        "position": { "x": 820, "y": 460 },
+        "data": {
+          "label": "Item — first prompt only",
+          "prompt": "",
+          "provider": "z-image",
+          "model": "z-image",
+          "style": "",
+          "aspectRatio": "1:1",
+          "negativePrompt": "",
+          "fieldMappings": {}
+        }
+      },
+      {
+        "id": "generate-image-selected",
+        "type": "generate-image",
+        "position": { "x": 820, "y": 700 },
+        "data": {
+          "label": "Selected — active result",
+          "prompt": "",
+          "provider": "z-image",
+          "model": "z-image",
+          "style": "",
+          "aspectRatio": "1:1",
+          "negativePrompt": "",
+          "fieldMappings": {}
+        }
+      },
+      {
+        "id": "sticky-1",
+        "type": "sticky-note",
+        "position": { "x": -60, "y": 80 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "1. One source, four ways to consume it\n\nThe AI Agent emits 3 prompts (separated by ===NEXT===). The frontend executor splits them into generatedResults with an activeResultIndex — which is what makes all four edge modes available.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 360,
+          "height": 220,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      },
+      {
+        "id": "sticky-each",
+        "type": "sticky-note",
+        "position": { "x": 1200, "y": 0 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "2. Each — fan out\n\nThe downstream runs once per result. 3 prompts → 3 image runs. Results show up as a list on the Generate Image node.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 340,
+          "height": 200,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      },
+      {
+        "id": "sticky-bundle",
+        "type": "sticky-note",
+        "position": { "x": 1540, "y": 240 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "3. Bundle — one run with all items\n\nBundle passes the whole array. Combine Text joins them into a single string. For fields like generate-image.referenceImageUrls or combine-audio, Bundle lands as multiple inputs.\n\nFor a text combiner like this, Bundle and Each produce the same concatenation — the difference is execution count (1 vs 3).",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 400,
+          "height": 260,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      },
+      {
+        "id": "sticky-item-selected",
+        "type": "sticky-note",
+        "position": { "x": 1200, "y": 460 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "4. Item vs Selected\n\nItem is a fixed index — here 0, the first prompt. Even if you click a different result on the source, Item keeps picking index 0.\n\nSelected reads whichever result is currently active on the source node (click a result on the AI Agent carousel to change which one).",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 400,
+          "height": 260,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-concept",
+        "source": "text-prompt-1",
+        "sourceHandle": "prompt",
+        "target": "ai-writer-1",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      },
+      {
+        "id": "e-each",
+        "source": "ai-writer-1",
+        "sourceHandle": "text",
+        "target": "generate-image-each",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": { "outputMode": "each" }
+      },
+      {
+        "id": "e-bundle",
+        "source": "ai-writer-1",
+        "sourceHandle": "text",
+        "target": "combine-text-bundle",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": { "outputMode": "all" }
+      },
+      {
+        "id": "e-bundle-preview",
+        "source": "combine-text-bundle",
+        "sourceHandle": "text",
+        "target": "preview-bundle",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      },
+      {
+        "id": "e-item",
+        "source": "ai-writer-1",
+        "sourceHandle": "text",
+        "target": "generate-image-item",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": { "outputMode": "item", "itemIndex": "1" }
+      },
+      {
+        "id": "e-selected",
+        "source": "ai-writer-1",
+        "sourceHandle": "text",
+        "target": "generate-image-selected",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": { "outputMode": "last" }
+      }
+    ]
+  }
+}

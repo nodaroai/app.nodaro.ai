@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "generated_at": "2026-04-19",
+  "flows": [
+    {
+      "slug": "01-your-first-image",
+      "title": "Tutorial: Your first image",
+      "tier": "simple",
+      "focus": "Generate an image from a prompt",
+      "node_count": 2,
+      "credit_estimate": 1,
+      "file": "01-your-first-image.json"
+    },
+    {
+      "slug": "02-your-first-chain",
+      "title": "Tutorial: Your first chain",
+      "tier": "simple",
+      "focus": "Chain three generators: LLM → image → video",
+      "node_count": 4,
+      "credit_estimate": 20,
+      "file": "02-your-first-chain.json"
+    },
+    {
+      "slug": "03-variables",
+      "title": "Tutorial: Variables",
+      "tier": "medium",
+      "focus": "One source, many consumers",
+      "node_count": 4,
+      "credit_estimate": 6,
+      "file": "03-variables.json"
+    },
+    {
+      "slug": "04-lists-filter-merge",
+      "title": "Tutorial: Lists, filter, merge",
+      "tier": "medium",
+      "focus": "Data plumbing for list inputs",
+      "node_count": 6,
+      "credit_estimate": 0,
+      "file": "04-lists-filter-merge.json"
+    },
+    {
+      "slug": "05-edge-selectors",
+      "title": "Tutorial: Edge selectors",
+      "tier": "medium",
+      "focus": "Each / Bundle / Item / Selected",
+      "node_count": 7,
+      "credit_estimate": 10,
+      "file": "05-edge-selectors.json"
+    },
+    {
+      "slug": "06-sub-flows-and-teleport",
+      "title": "Tutorial: Sub-flows and teleport",
+      "tier": "advanced",
+      "focus": "Reuse logic and teleport assets across the canvas",
+      "node_count": 11,
+      "credit_estimate": 18,
+      "file": "06-sub-flows-and-teleport.json"
+    },
+    {
+      "slug": "07-scheduled-web-to-instagram",
+      "title": "Tutorial: Scheduled web-to-Instagram pipeline",
+      "tier": "advanced",
+      "focus": "End-to-end automation driven by a schedule trigger",
+      "node_count": 7,
+      "credit_estimate": 12,
+      "file": "07-scheduled-web-to-instagram.json"
+    }
+  ],
+  "sub_workflows": [
+    {
+      "slug": "style-normalizer",
+      "title": "Tutorial: Style Normalizer",
+      "file": "style-normalizer.json",
+      "referenced_by": ["06-sub-flows-and-teleport"]
+    }
+  ]
+}
