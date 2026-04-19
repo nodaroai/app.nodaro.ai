@@ -1398,9 +1398,15 @@ function DateTimeValuePicker({
 }) {
   const parsed = parseDateValueMode(value)
   const showNInput = parsed.mode === "last-hours" || parsed.mode === "last-days" || parsed.mode === "last-weeks"
+  // {{trigger.last_triggered_at}} is resolved server-side from triggerData.
+  // A manual Run in the editor has no trigger context, so the token resolves
+  // to "" and the comparison silently passes (or rejects) every item. Warn so
+  // the user understands the option is trigger/schedule-only.
+  const isSinceLastRun = parsed.mode === "since-last-run"
 
   return (
-    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+    <div className="flex flex-col gap-1 flex-1 min-w-0">
+      <div className="flex items-center gap-1.5 flex-1 min-w-0">
       <Select
         value={parsed.mode}
         onValueChange={(raw) => {
@@ -1441,6 +1447,12 @@ function DateTimeValuePicker({
           className="text-xs h-7 w-16 shrink-0"
           aria-label="Number of units"
         />
+      )}
+      </div>
+      {isSinceLastRun && (
+        <p className="text-[10px] text-amber-500/90" role="note">
+          Resolves only on triggered/scheduled runs. A manual Run treats this as empty.
+        </p>
       )}
     </div>
   )
