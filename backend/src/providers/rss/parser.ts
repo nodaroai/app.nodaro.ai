@@ -61,11 +61,15 @@ export async function fetchRssItems(opts: FetchRssOptions): Promise<RssItem[]> {
   }
 
   const controller = new AbortController()
+  // The timer must cover body streaming too, not just the initial fetch + headers.
+  // undici resolves the Response as soon as headers land; if clearTimeout ran in
+  // a finally around just the fetch, a slowloris-style server trickling body bytes
+  // would have no wall-clock bound — it could stall readLimited until it either
+  // hit maxBytes or Fastify's 10-min request timeout.
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
-  let response: Response
   try {
-    response = await fetchFn(opts.url, {
+    const response = await fetchFn(opts.url, {
       method: "GET",
       headers: {
         "User-Agent": USER_AGENT,
@@ -74,21 +78,21 @@ export async function fetchRssItems(opts: FetchRssOptions): Promise<RssItem[]> {
       redirect: "follow",
       signal: controller.signal,
     })
+
+    if (!response.ok) {
+      throw new Error(`RSS fetch failed: HTTP ${response.status}`)
+    }
+
+    const contentLength = Number(response.headers.get("content-length") ?? "0")
+    if (contentLength > maxBytes) {
+      throw new Error(`RSS feed too large: ${contentLength} bytes (max ${maxBytes})`)
+    }
+
+    const xml = await readLimited(response, maxBytes)
+    return parseRssXml(xml, limit)
   } finally {
     clearTimeout(timeout)
   }
-
-  if (!response.ok) {
-    throw new Error(`RSS fetch failed: HTTP ${response.status}`)
-  }
-
-  const contentLength = Number(response.headers.get("content-length") ?? "0")
-  if (contentLength > maxBytes) {
-    throw new Error(`RSS feed too large: ${contentLength} bytes (max ${maxBytes})`)
-  }
-
-  const xml = await readLimited(response, maxBytes)
-  return parseRssXml(xml, limit)
 }
 
 function clampLimit(n: number | undefined): number {
@@ -98,12 +102,14 @@ function clampLimit(n: number | undefined): number {
 }
 
 async function readLimited(response: Response, maxBytes: number): Promise<string> {
-  // Stream so we can abort on oversized bodies without buffering them fully.
+  // Buffer bytes (still capped at maxBytes) so we can inspect the XML prolog
+  // for an `encoding="…"` declaration before decoding. Feeds commonly declare
+  // ISO-8859-1 or windows-1252; decoding those as utf-8 produces garbled
+  // titles/descriptions. At 5 MB the memory overhead is negligible.
   const reader = response.body?.getReader()
   if (!reader) return ""
-  const decoder = new TextDecoder("utf-8")
+  const chunks: Uint8Array[] = []
   let total = 0
-  let out = ""
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
@@ -113,10 +119,45 @@ async function readLimited(response: Response, maxBytes: number): Promise<string
       reader.cancel().catch(() => {})
       throw new Error(`RSS feed too large: over ${maxBytes} bytes`)
     }
-    out += decoder.decode(value, { stream: true })
+    chunks.push(value)
   }
-  out += decoder.decode() // flush
+
+  const bytes = concatChunks(chunks, total)
+  const encoding = detectEncoding(bytes)
+  try {
+    return new TextDecoder(encoding, { fatal: false }).decode(bytes)
+  } catch {
+    // TextDecoder throws RangeError on unknown labels (e.g. a typo in the
+    // prolog). Fall back to utf-8 so a malformed header doesn't take the
+    // whole fetch down.
+    return new TextDecoder("utf-8").decode(bytes)
+  }
+}
+
+function concatChunks(chunks: Uint8Array[], total: number): Uint8Array {
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    out.set(chunk, offset)
+    offset += chunk.byteLength
+  }
   return out
+}
+
+function detectEncoding(bytes: Uint8Array): string {
+  // Byte-order marks are authoritative when present (XML 1.0 Appendix F).
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return "utf-8"
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) return "utf-16be"
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) return "utf-16le"
+
+  // Look for `encoding="…"` in the first 1 KB. Encoding names are ASCII so the
+  // preview decodes safely regardless of the actual body encoding.
+  const previewLen = Math.min(bytes.length, 1024)
+  const preview = new TextDecoder("ascii", { fatal: false }).decode(bytes.subarray(0, previewLen))
+  const match = /<\?xml\b[^?]*\bencoding=["']([^"']+)["']/i.exec(preview)
+  if (match) return match[1].toLowerCase()
+
+  return "utf-8"
 }
 
 // ---------------------------------------------------------------------------
