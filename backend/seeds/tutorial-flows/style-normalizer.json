@@ -1,0 +1,96 @@
+{
+  "meta": {
+    "slug": "style-normalizer",
+    "title": "Tutorial: Style Normalizer",
+    "tier": "advanced",
+    "focus": "Reusable sub-workflow: rewrite text in brand voice",
+    "learning_goal": "A sub-workflow has an input port, some internal logic, and an output port. The parent Sub-Workflow node calls it, passes input, and reads output.",
+    "node_count": 3,
+    "credit_estimate": 5,
+    "is_sub_workflow": true
+  },
+  "workflow": {
+    "name": "Tutorial: Style Normalizer",
+    "source_prompt": null,
+    "nodes": [
+      {
+        "id": "sub-input-1",
+        "type": "sub-workflow-input",
+        "position": { "x": 0, "y": 0 },
+        "data": {
+          "label": "Incoming text",
+          "routeId": "default",
+          "ports": [
+            { "id": "text-in", "name": "Text", "mediaType": "text" }
+          ]
+        }
+      },
+      {
+        "id": "ai-writer-1",
+        "type": "ai-writer",
+        "position": { "x": 380, "y": 0 },
+        "data": {
+          "label": "Rewrite in brand voice",
+          "templateId": "custom",
+          "systemPrompt": "Rewrite the following paragraph in a calm, confident, specific brand voice. Keep the meaning; change the tone. Return only the rewritten paragraph.",
+          "userInput": "{}",
+          "provider": "claude",
+          "llmModel": "gemini-3-flash",
+          "temperature": 0.6,
+          "maxTokens": 512,
+          "fieldMappings": {}
+        }
+      },
+      {
+        "id": "sub-output-1",
+        "type": "sub-workflow-output",
+        "position": { "x": 780, "y": 0 },
+        "data": {
+          "label": "Rewritten text",
+          "routeId": "default",
+          "ports": [
+            { "id": "text-out", "name": "Text", "mediaType": "text" }
+          ],
+          "visibleOutputPortId": "text-out"
+        }
+      },
+      {
+        "id": "sticky-1",
+        "type": "sticky-note",
+        "position": { "x": 0, "y": -240 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "Style Normalizer\n\nReusable brand-voice rewrite. Used by the Brand-a-thon tutorial — each branch in the parent flow invokes this sub-workflow on its copy of the script.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 760,
+          "height": 200,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-in-ai",
+        "source": "sub-input-1",
+        "sourceHandle": "out",
+        "target": "ai-writer-1",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      },
+      {
+        "id": "e-ai-out",
+        "source": "ai-writer-1",
+        "sourceHandle": "text",
+        "target": "sub-output-1",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      }
+    ]
+  }
+}

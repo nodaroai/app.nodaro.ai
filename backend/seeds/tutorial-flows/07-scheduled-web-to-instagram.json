@@ -1,0 +1,243 @@
+{
+  "meta": {
+    "slug": "07-scheduled-web-to-instagram",
+    "title": "Tutorial: Scheduled web-to-Instagram pipeline",
+    "tier": "advanced",
+    "focus": "End-to-end automation driven by a schedule trigger",
+    "learning_goal": "Combine a trigger, a list-producing ingest step, item selection via edge mode, field extraction, media generation, and a publishing node into one hands-off pipeline.",
+    "node_count": 7,
+    "credit_estimate": 12
+  },
+  "workflow": {
+    "name": "Tutorial: Scheduled web-to-Instagram",
+    "source_prompt": null,
+    "nodes": [
+      {
+        "id": "schedule-trigger-1",
+        "type": "schedule-trigger",
+        "position": { "x": 0, "y": 320 },
+        "data": {
+          "label": "Daily at 9 AM",
+          "cron": "0 9 * * *"
+        }
+      },
+      {
+        "id": "web-scrape-1",
+        "type": "web-scrape",
+        "position": { "x": 360, "y": 320 },
+        "data": {
+          "label": "Scrape articles",
+          "actor": "content-crawler",
+          "url": "",
+          "mode": "page"
+        }
+      },
+      {
+        "id": "extract-field-title",
+        "type": "extract-field",
+        "position": { "x": 760, "y": 160 },
+        "data": {
+          "label": "Get title",
+          "mode": "custom",
+          "field": "title"
+        }
+      },
+      {
+        "id": "extract-field-summary",
+        "type": "extract-field",
+        "position": { "x": 760, "y": 480 },
+        "data": {
+          "label": "Get summary",
+          "mode": "custom",
+          "field": "summary"
+        }
+      },
+      {
+        "id": "generate-image-1",
+        "type": "generate-image",
+        "position": { "x": 1160, "y": 160 },
+        "data": {
+          "label": "Hero image",
+          "prompt": "a stylized editorial hero image for an article titled: {}",
+          "provider": "z-image",
+          "model": "z-image",
+          "style": "",
+          "aspectRatio": "1:1",
+          "negativePrompt": "",
+          "fieldMappings": {}
+        }
+      },
+      {
+        "id": "ai-writer-caption",
+        "type": "ai-writer",
+        "position": { "x": 1160, "y": 480 },
+        "data": {
+          "label": "Caption writer",
+          "templateId": "custom",
+          "systemPrompt": "Turn this article summary into a 100-character Instagram caption with 3 relevant hashtags. Return only the caption.",
+          "userInput": "{}",
+          "provider": "claude",
+          "llmModel": "gemini-3-flash",
+          "temperature": 0.7,
+          "maxTokens": 256,
+          "fieldMappings": {}
+        }
+      },
+      {
+        "id": "instagram-post-1",
+        "type": "instagram-post",
+        "position": { "x": 1560, "y": 320 },
+        "data": {
+          "label": "Post to Instagram",
+          "platform": "instagram",
+          "action": "post-image",
+          "caption": "",
+          "fieldMappings": {
+            "caption": { "sourceNodeId": "ai-writer-caption" }
+          }
+        }
+      },
+      {
+        "id": "sticky-1",
+        "type": "sticky-note",
+        "position": { "x": -40, "y": 80 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "1. Trigger — runs every day at 9 AM\n\nCron: 0 9 * * *. The schedule fires autonomously via the backend orchestrator. Enable the trigger on the workflow triggers page before it will actually run.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 340,
+          "height": 220,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      },
+      {
+        "id": "sticky-2",
+        "type": "sticky-note",
+        "position": { "x": 320, "y": 80 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "2. Scrape + pick the latest\n\nWeb Scrape returns a list of articles (shape depends on the Apify actor). We pick the first item by setting both edges out of Web Scrape to Item mode with index 0.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 380,
+          "height": 240,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      },
+      {
+        "id": "sticky-3",
+        "type": "sticky-note",
+        "position": { "x": 720, "y": 80 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "3. Extract fields\n\nExtract Field pulls one field per node. We use two — one for `title`, one for `summary` — since a single extract-field can't return both at once.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 400,
+          "height": 220,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      },
+      {
+        "id": "sticky-4",
+        "type": "sticky-note",
+        "position": { "x": 1120, "y": 80 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "4. Compose\n\nHero image prompt uses {} to inject the article title. The caption writer uses {} to inject the summary. Instagram Post's caption field is bound via field mapping to the AI Agent output.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 440,
+          "height": 240,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      },
+      {
+        "id": "sticky-5",
+        "type": "sticky-note",
+        "position": { "x": 1500, "y": 80 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "⚠️ Before running\n\n• Set the web-scrape URL + actor\n• Connect Instagram in Integrations\n• Enable the schedule trigger",
+          "color": "#7c2d12",
+          "textColor": "#ffffff",
+          "width": 320,
+          "height": 220,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-trigger",
+        "source": "schedule-trigger-1",
+        "sourceHandle": "payload",
+        "target": "web-scrape-1",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      },
+      {
+        "id": "e-scrape-title",
+        "source": "web-scrape-1",
+        "sourceHandle": "json",
+        "target": "extract-field-title",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": { "outputMode": "item", "itemIndex": "0" }
+      },
+      {
+        "id": "e-scrape-summary",
+        "source": "web-scrape-1",
+        "sourceHandle": "json",
+        "target": "extract-field-summary",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": { "outputMode": "item", "itemIndex": "0" }
+      },
+      {
+        "id": "e-title-image",
+        "source": "extract-field-title",
+        "sourceHandle": "text",
+        "target": "generate-image-1",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      },
+      {
+        "id": "e-summary-writer",
+        "source": "extract-field-summary",
+        "sourceHandle": "text",
+        "target": "ai-writer-caption",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      },
+      {
+        "id": "e-image-post",
+        "source": "generate-image-1",
+        "sourceHandle": "image",
+        "target": "instagram-post-1",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      }
+    ]
+  }
+}

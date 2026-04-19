@@ -1,0 +1,273 @@
+{
+  "meta": {
+    "slug": "06-sub-flows-and-teleport",
+    "title": "Tutorial: Sub-flows and teleport",
+    "tier": "advanced",
+    "focus": "Reuse logic (sub-workflows) and reuse a single source across distant branches (teleport)",
+    "learning_goal": "Avoid duplicating common transforms, and avoid crossing wires to far-away consumers. Sub-flows package a reusable subgraph. Teleport pairs publish and subscribe on a named channel without a visible edge.",
+    "node_count": 11,
+    "credit_estimate": 18
+  },
+  "workflow": {
+    "name": "Tutorial: Sub-flows and teleport",
+    "source_prompt": null,
+    "nodes": [
+      {
+        "id": "text-prompt-script",
+        "type": "text-prompt",
+        "position": { "x": 0, "y": 320 },
+        "data": {
+          "label": "Script",
+          "text": "Drift Coffee brings slow mornings to your kitchen. Single-origin beans roasted light, brewed simply.",
+          "variables": {}
+        }
+      },
+      {
+        "id": "teleport-send-1",
+        "type": "teleport-send",
+        "position": { "x": 400, "y": 320 },
+        "data": {
+          "label": "Send script",
+          "channel": "script",
+          "channelColor": "#f59e0b"
+        }
+      },
+      {
+        "id": "teleport-receive-reel",
+        "type": "teleport-receive",
+        "position": { "x": 760, "y": 0 },
+        "data": {
+          "label": "Recv script",
+          "channel": "script",
+          "channelColor": "#f59e0b"
+        }
+      },
+      {
+        "id": "sub-workflow-reel",
+        "type": "sub-workflow",
+        "position": { "x": 1120, "y": 0 },
+        "data": {
+          "label": "Style Normalizer",
+          "referencedWorkflowId": "",
+          "referencedWorkflowSlug": "style-normalizer",
+          "referencedWorkflowName": "Tutorial: Style Normalizer",
+          "selectedRouteId": "",
+          "routeSnapshot": null,
+          "fieldMappings": {},
+          "executionStatus": "idle"
+        }
+      },
+      {
+        "id": "generate-image-reel",
+        "type": "generate-image",
+        "position": { "x": 1500, "y": 0 },
+        "data": {
+          "label": "Reel frame (9:16)",
+          "prompt": "",
+          "provider": "z-image",
+          "model": "z-image",
+          "style": "",
+          "aspectRatio": "9:16",
+          "negativePrompt": "",
+          "fieldMappings": {}
+        }
+      },
+      {
+        "id": "teleport-receive-blog",
+        "type": "teleport-receive",
+        "position": { "x": 760, "y": 320 },
+        "data": {
+          "label": "Recv script",
+          "channel": "script",
+          "channelColor": "#f59e0b"
+        }
+      },
+      {
+        "id": "sub-workflow-blog",
+        "type": "sub-workflow",
+        "position": { "x": 1120, "y": 320 },
+        "data": {
+          "label": "Style Normalizer",
+          "referencedWorkflowId": "",
+          "referencedWorkflowSlug": "style-normalizer",
+          "referencedWorkflowName": "Tutorial: Style Normalizer",
+          "selectedRouteId": "",
+          "routeSnapshot": null,
+          "fieldMappings": {},
+          "executionStatus": "idle"
+        }
+      },
+      {
+        "id": "generate-image-blog",
+        "type": "generate-image",
+        "position": { "x": 1500, "y": 320 },
+        "data": {
+          "label": "Blog thumbnail (16:9)",
+          "prompt": "",
+          "provider": "z-image",
+          "model": "z-image",
+          "style": "",
+          "aspectRatio": "16:9",
+          "negativePrompt": "",
+          "fieldMappings": {}
+        }
+      },
+      {
+        "id": "teleport-receive-story",
+        "type": "teleport-receive",
+        "position": { "x": 760, "y": 640 },
+        "data": {
+          "label": "Recv script",
+          "channel": "script",
+          "channelColor": "#f59e0b"
+        }
+      },
+      {
+        "id": "sub-workflow-story",
+        "type": "sub-workflow",
+        "position": { "x": 1120, "y": 640 },
+        "data": {
+          "label": "Style Normalizer",
+          "referencedWorkflowId": "",
+          "referencedWorkflowSlug": "style-normalizer",
+          "referencedWorkflowName": "Tutorial: Style Normalizer",
+          "selectedRouteId": "",
+          "routeSnapshot": null,
+          "fieldMappings": {},
+          "executionStatus": "idle"
+        }
+      },
+      {
+        "id": "generate-image-story",
+        "type": "generate-image",
+        "position": { "x": 1500, "y": 640 },
+        "data": {
+          "label": "Story frame (1:1)",
+          "prompt": "",
+          "provider": "z-image",
+          "model": "z-image",
+          "style": "",
+          "aspectRatio": "1:1",
+          "negativePrompt": "",
+          "fieldMappings": {}
+        }
+      },
+      {
+        "id": "sticky-1",
+        "type": "sticky-note",
+        "position": { "x": -60, "y": 80 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "1. One script, three variations\n\nThe Script text-prompt is the single source. Below, three branches each produce a different asset size — all from the same source.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 400,
+          "height": 220,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      },
+      {
+        "id": "sticky-2",
+        "type": "sticky-note",
+        "position": { "x": 380, "y": 80 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "2. Teleport — no spaghetti edges\n\nTeleport Send publishes on a named channel; any number of Teleport Receive nodes on the same channel pick it up. Great for reaching distant branches without drawing long edges across the canvas.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 400,
+          "height": 240,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      },
+      {
+        "id": "sticky-3",
+        "type": "sticky-note",
+        "position": { "x": 1080, "y": -260 },
+        "data": {
+          "label": "Sticky Note",
+          "text": "3. Sub-flow — reusable logic\n\nStyle Normalizer is a separate workflow that rewrites text in brand voice. Each branch invokes the SAME sub-flow, so any edit to Style Normalizer propagates everywhere it's used.",
+          "color": "#2d2d44",
+          "textColor": "#ffffff",
+          "width": 420,
+          "height": 240,
+          "fontSize": "base",
+          "bold": false,
+          "italic": false,
+          "alignment": "left"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-source-send",
+        "source": "text-prompt-script",
+        "sourceHandle": "prompt",
+        "target": "teleport-send-1",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      },
+      {
+        "id": "e-recv-sub-reel",
+        "source": "teleport-receive-reel",
+        "sourceHandle": "out",
+        "target": "sub-workflow-reel",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      },
+      {
+        "id": "e-sub-img-reel",
+        "source": "sub-workflow-reel",
+        "sourceHandle": "out",
+        "target": "generate-image-reel",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      },
+      {
+        "id": "e-recv-sub-blog",
+        "source": "teleport-receive-blog",
+        "sourceHandle": "out",
+        "target": "sub-workflow-blog",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      },
+      {
+        "id": "e-sub-img-blog",
+        "source": "sub-workflow-blog",
+        "sourceHandle": "out",
+        "target": "generate-image-blog",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      },
+      {
+        "id": "e-recv-sub-story",
+        "source": "teleport-receive-story",
+        "sourceHandle": "out",
+        "target": "sub-workflow-story",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      },
+      {
+        "id": "e-sub-img-story",
+        "source": "sub-workflow-story",
+        "sourceHandle": "out",
+        "target": "generate-image-story",
+        "targetHandle": "in",
+        "type": "animated-flow",
+        "data": {}
+      }
+    ]
+  }
+}
