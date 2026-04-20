@@ -101,17 +101,25 @@ export function isPrivateOrReservedIP(ip: string): boolean {
 }
 
 /**
- * Validate a DNS answer set and choose the address to connect to.
+ * Validate a DNS answer set and return the addresses undici may connect to.
  *
  * We fail closed if any answer is private/reserved, because a public hostname
  * that round-robins between public and private targets is still unsafe. When
- * no family is requested, prefer IPv4 over IPv6 so dual-stack hosts remain
- * reachable on servers without IPv6 egress.
+ * no family is requested, IPv4 is ordered before IPv6 so dual-stack hosts
+ * remain reachable on servers without IPv6 egress (Railway's default).
+ *
+ * Returns an **array** because undici's `connect.lookup` callback expects the
+ * `net.lookup` `all: true` shape — `cb(null, addresses)`. Passing a single
+ * `(address, family)` pair causes undici to read `address` off `undefined`
+ * and throw `TypeError: Invalid IP address: undefined` before connecting
+ * (reproduced on undici 6.25 against `scontent-*.cdninstagram.com`). The
+ * pre-fix variant of this helper returned a single address and broke every
+ * outbound `safeFetch` call on dual-stack upstreams.
  */
-export function selectSafeResolvedAddress(
+export function filterSafeResolvedAddresses(
   addrs: readonly ResolvedAddress[],
   requestedFamily?: 0 | 4 | 6,
-): ResolvedAddress {
+): ResolvedAddress[] {
   if (!Array.isArray(addrs) || addrs.length === 0) {
     throw new Error("safeFetch: no DNS resolution")
   }
@@ -125,11 +133,13 @@ export function selectSafeResolvedAddress(
   }
 
   if (requestedFamily === 4 || requestedFamily === 6) {
-    const match = addrs.find((a) => a.family === requestedFamily)
-    if (match) return match
+    const matches = addrs.filter((a) => a.family === requestedFamily)
+    if (matches.length > 0) return matches
   }
 
-  return addrs.find((a) => a.family === 4) ?? addrs[0]!
+  const v4 = addrs.filter((a) => a.family === 4)
+  const v6 = addrs.filter((a) => a.family === 6)
+  return v4.length > 0 ? [...v4, ...v6] : [...addrs]
 }
 
 /**
@@ -155,11 +165,14 @@ const safeAgent = new Agent({
             return
           }
           try {
-            const selected = selectSafeResolvedAddress(
+            const filtered = filterSafeResolvedAddresses(
               addrs as ResolvedAddress[],
               (options.family as 0 | 4 | 6 | undefined) ?? 0,
             )
-            cb(null, selected.address, selected.family)
+            // undici 6.x expects the `all:true` callback shape: an array of
+            // `{ address, family }`. Passing a single `(address, family)`
+            // triple causes `TypeError: Invalid IP address: undefined`.
+            ;(cb as unknown as (err: NodeJS.ErrnoException | null, addrs: ResolvedAddress[]) => void)(null, filtered)
           } catch (lookupErr) {
             const wrapped =
               lookupErr instanceof Error

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { isPrivateOrReservedIP, safeFetch, selectSafeResolvedAddress } from "../safe-fetch.js"
+import { isPrivateOrReservedIP, safeFetch, filterSafeResolvedAddresses } from "../safe-fetch.js"
 
 // ---------------------------------------------------------------------------
 // IP classifier — exercises the raw blocklist. The runtime path (DNS-lookup
@@ -66,23 +66,38 @@ describe("isPrivateOrReservedIP", () => {
   })
 })
 
-describe("selectSafeResolvedAddress", () => {
-  it("prefers public IPv4 over IPv6 when no family is requested", () => {
-    expect(selectSafeResolvedAddress([
+describe("filterSafeResolvedAddresses", () => {
+  // Orders IPv4 before IPv6 so undici's connector tries IPv4 first — Railway's
+  // egress is IPv4-only, and a dual-stack answer with IPv6 first would otherwise
+  // sit in connect-timeout before falling back. IPv6 is retained (not dropped)
+  // so IPv6-only environments aren't broken.
+  it("orders IPv4 before IPv6 when no family is requested", () => {
+    expect(filterSafeResolvedAddresses([
       { address: "2606:4700:4700::1111", family: 6 },
       { address: "1.1.1.1", family: 4 },
-    ])).toEqual({ address: "1.1.1.1", family: 4 })
+    ])).toEqual([
+      { address: "1.1.1.1", family: 4 },
+      { address: "2606:4700:4700::1111", family: 6 },
+    ])
   })
 
-  it("honors a requested address family when that family is available", () => {
-    expect(selectSafeResolvedAddress([
+  it("returns only the requested family when one is specified and available", () => {
+    expect(filterSafeResolvedAddresses([
       { address: "2606:4700:4700::1111", family: 6 },
       { address: "1.1.1.1", family: 4 },
-    ], 6)).toEqual({ address: "2606:4700:4700::1111", family: 6 })
+    ], 6)).toEqual([{ address: "2606:4700:4700::1111", family: 6 }])
+  })
+
+  it("falls back to all addresses when the requested family has no match", () => {
+    // Undici asked for IPv4 but DNS only returned IPv6 — don't lie with an empty
+    // answer (that trips undici's "no addresses" path); hand over what we have.
+    expect(filterSafeResolvedAddresses([
+      { address: "2606:4700:4700::1111", family: 6 },
+    ], 4)).toEqual([{ address: "2606:4700:4700::1111", family: 6 }])
   })
 
   it("rejects the whole answer set if any resolved address is private or reserved", () => {
-    expect(() => selectSafeResolvedAddress([
+    expect(() => filterSafeResolvedAddresses([
       { address: "1.1.1.1", family: 4 },
       { address: "10.0.0.7", family: 4 },
     ])).toThrow(/10\.0\.0\.7/)
