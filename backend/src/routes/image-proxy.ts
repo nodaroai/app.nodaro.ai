@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { Readable } from "node:stream"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { safeFetch } from "../lib/safe-fetch.js"
 import { config } from "../lib/config.js"
 
 const proxyQuery = z.object({
@@ -14,11 +15,25 @@ const proxyQuery = z.object({
 // as a phishing/malware download proxy under app.nodaro.ai.
 const ALLOWED_DOMAIN = "pub-c813076fe3024da78029786e7b9fd59d.r2.dev"
 
+// Parsed origin of R2_PUBLIC_URL, cached once. Origin (protocol+host+port)
+// comparison replaces the previous `rawUrl.startsWith(config.R2_PUBLIC_URL)`
+// check — which, with the env example value `https://assets.nodaro.ai` (no
+// trailing slash), allowed look-alike hostnames like
+// `assets.nodaro.ai.evil.com` to pass the allowlist.
+const R2_PUBLIC_ORIGIN: string | null = (() => {
+  if (!config.R2_PUBLIC_URL) return null
+  try {
+    return new URL(config.R2_PUBLIC_URL).origin
+  } catch {
+    return null
+  }
+})()
+
 function isAllowedDownloadHost(rawUrl: string): boolean {
   try {
     const parsed = new URL(rawUrl)
     if (parsed.hostname === ALLOWED_DOMAIN) return true
-    if (config.R2_PUBLIC_URL && rawUrl.startsWith(config.R2_PUBLIC_URL)) return true
+    if (R2_PUBLIC_ORIGIN !== null && parsed.origin === R2_PUBLIC_ORIGIN) return true
     return false
   } catch {
     return false
@@ -54,10 +69,11 @@ export async function imageProxyRoutes(app: FastifyInstance) {
       })
     }
 
-    // URL is validated by safeUrlSchema (blocks localhost, private IPs, non-http(s)).
+    // Two-layer SSRF defense: safeUrlSchema rejects syntactic red flags at
+    // request boundary; safeFetch rejects DNS resolutions to private IP ranges
+    // at connect time (catches hostnames that resolve to internal targets).
     // Content-type is checked below (rejects non-images unless download mode).
-
-    const response = await fetch(url, { signal: AbortSignal.timeout(120_000) })
+    const response = await safeFetch(url, { timeoutMs: 120_000 })
     if (!response.ok) {
       return reply.status(502).send({
         error: { code: "proxy_error", message: `Upstream returned ${response.status}` },

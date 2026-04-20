@@ -7,6 +7,7 @@ import { CreditsService } from "../billing/credits.js"
 import { llmComplete, type LlmContentBlock } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { safeFetch } from "../lib/safe-fetch.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
 const imageToTextBody = z.object({
@@ -107,7 +108,13 @@ export async function imageToTextRoutes(app: FastifyInstance) {
         // block requests from LLM provider IPs, causing empty responses.
         let imageBlock: LlmContentBlock = { type: "image", url: imageUrl }
         try {
-          const imgResp = await fetch(imageUrl, { signal: AbortSignal.timeout(30_000) })
+          // safeFetch: imageUrl is user-supplied (safeUrlSchema-validated),
+          // but that's syntactic only. The fetched bytes are base64-encoded
+          // and sent to a vision LLM which describes them back to the
+          // caller — a read-oracle through text description for any internal
+          // endpoint whose response decodes as an image. Use safeFetch so
+          // hostnames resolving to private IPs are rejected at connect time.
+          const imgResp = await safeFetch(imageUrl, { timeoutMs: 30_000 })
           if (imgResp.ok) {
             const buf = Buffer.from(await imgResp.arrayBuffer())
             const mediaType = (imgResp.headers.get("content-type") ?? "image/jpeg").split(";")[0].trim()

@@ -1,9 +1,22 @@
 import { z } from "zod"
+import { isPrivateOrReservedIP } from "./safe-fetch.js"
 
 /**
- * SSRF-safe URL schema.
- * Validates that a URL uses http/https and does not point to localhost,
- * loopback, or private IP ranges.
+ * Syntactic SSRF gate — rejects URLs whose string form already targets
+ * localhost, a private/reserved IP literal, or a non-http(s) protocol.
+ *
+ * **This is the first of two layers. It is NOT sufficient on its own.**
+ * It cannot resolve DNS, so a hostname `attacker.example` that A-records
+ * to `10.x`, `127.x`, `169.254.169.254`, etc. passes this schema. Any
+ * server-side fetch of a URL accepted by this schema MUST go through
+ * `safeFetch` in `./safe-fetch.ts`, which validates the resolved IP at
+ * connection time (and re-validates each redirect hop).
+ *
+ * Pair:
+ *   - Route boundary: `z.object({ url: safeUrlSchema })` — rejects the
+ *     obvious attacks at Zod parse (fast-fail, cheap).
+ *   - Network boundary: `safeFetch(url, init)` — rejects DNS-based
+ *     attacks at connect time (authoritative).
  */
 export const safeUrlSchema = z
   .string()
@@ -12,44 +25,18 @@ export const safeUrlSchema = z
     (url) => {
       try {
         const parsed = new URL(url)
-
-        // Only allow http and https protocols
         if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
           return false
         }
-
         const hostname = parsed.hostname.toLowerCase()
-
-        // Block localhost variants
         if (hostname === "localhost" || hostname === "[::1]") {
           return false
         }
-
-        // Block IP-based hostnames in private/loopback ranges
-        // Remove brackets from IPv6
+        // Hostnames from URL parsing retain brackets for IPv6. Strip them
+        // before handing to the shared IP classifier so `::1`, `fe80::…`,
+        // IPv4-mapped, etc. are all handled consistently with safeFetch.
         const ip = hostname.replace(/^\[|\]$/g, "")
-
-        // IPv4 checks
-        const ipv4Match = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
-        if (ipv4Match) {
-          const [, a, b] = ipv4Match.map(Number)
-          // 127.0.0.0/8 (loopback)
-          if (a === 127) return false
-          // 10.0.0.0/8 (private)
-          if (a === 10) return false
-          // 172.16.0.0/12 (private)
-          if (a === 172 && b >= 16 && b <= 31) return false
-          // 192.168.0.0/16 (private)
-          if (a === 192 && b === 168) return false
-          // 0.0.0.0
-          if (a === 0 && b === 0) return false
-          // 169.254.0.0/16 (link-local)
-          if (a === 169 && b === 254) return false
-        }
-
-        // IPv6 loopback ::1
-        if (ip === "::1") return false
-
+        if (isPrivateOrReservedIP(ip)) return false
         return true
       } catch {
         return false

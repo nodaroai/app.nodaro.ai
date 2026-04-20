@@ -53,11 +53,20 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
+// download now fetches via safeFetch (DNS-aware SSRF gate). Stubbing
+// globalThis.fetch wouldn't intercept undici's internal fetch, so we mock
+// the module directly and configure per-test responses.
+vi.mock("@/lib/safe-fetch.js", () => ({
+  safeFetch: vi.fn(),
+  isPrivateOrReservedIP: vi.fn(() => false),
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
 import { downloadRoutes } from "../download.js"
+import { safeFetch } from "../../lib/safe-fetch.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -117,15 +126,12 @@ describe("GET /v1/download", () => {
       fileContent.byteOffset + fileContent.byteLength,
     )
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        headers: new Headers({ "content-type": "image/png" }),
-        arrayBuffer: () => Promise.resolve(mockArrayBuffer),
-      }),
-    )
+    vi.mocked(safeFetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "image/png" }),
+      arrayBuffer: () => Promise.resolve(mockArrayBuffer),
+    } as unknown as Response)
 
     const res = await app.inject({
       method: "GET",
@@ -136,19 +142,14 @@ describe("GET /v1/download", () => {
     expect(res.headers["content-type"]).toBe("image/png")
     expect(res.headers["content-disposition"]).toContain("attachment")
     expect(res.headers["content-disposition"]).toContain("test.png")
-
-    vi.unstubAllGlobals()
   })
 
   it("returns 502 when R2 fetch fails", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 500,
-        headers: new Headers(),
-      }),
-    )
+    vi.mocked(safeFetch).mockResolvedValue({
+      ok: false,
+      status: 500,
+      headers: new Headers(),
+    } as unknown as Response)
 
     const res = await app.inject({
       method: "GET",
@@ -159,7 +160,36 @@ describe("GET /v1/download", () => {
     const body = res.json()
     expect(body.error.code).toBe("proxy_error")
     expect(body.error.message).toContain("500")
+  })
 
-    vi.unstubAllGlobals()
+  // ─────────────────────────────────────────────────────────────────────────
+  // Prefix-spoofing regression — `rawUrl.startsWith(R2_PUBLIC_URL)` (the
+  // previous check) with `R2_PUBLIC_URL=https://assets.nodaro.ai` (no
+  // trailing slash, as env.example ships) passed `assets.nodaro.ai.evil.com`
+  // and turned /v1/download (public) into a phishing download proxy under
+  // app.nodaro.ai. The fix compares parsed origin, not string prefix.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  it("rejects a look-alike hostname that shares a string prefix with R2_PUBLIC_URL", async () => {
+    const res = await app.inject({
+      method: "GET",
+      // Prefix matches "https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev"
+      // but hostname is attacker-controlled. Must 403.
+      url: "/v1/download?url=https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev.evil.com/payload.exe",
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("forbidden")
+    expect(vi.mocked(safeFetch)).not.toHaveBeenCalled()
+  })
+
+  it("rejects a URL whose query string embeds the R2 origin", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/download?url=https://evil.example.com/?x=https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev/images",
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(vi.mocked(safeFetch)).not.toHaveBeenCalled()
   })
 })

@@ -7,9 +7,14 @@ import { randomUUID } from "node:crypto"
 import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { config } from "../../lib/config.js"
+import { safeFetch } from "../../lib/safe-fetch.js"
 
 export async function downloadFile(url: string, dest: string): Promise<void> {
-  const response = await fetch(url, { signal: AbortSignal.timeout(120_000) })
+  // safeFetch: callers include media-process which streams user-supplied
+  // sourceUrl into ffmpeg. Without DNS-aware SSRF protection, a hostname
+  // resolving to an internal IP would have the response processed and the
+  // result uploaded to R2 (read-oracle). See backend/src/lib/safe-fetch.ts.
+  const response = await safeFetch(url, { timeoutMs: 120_000 })
   if (!response.ok) {
     throw new Error(`Failed to download: ${url} (${response.status})`)
   }

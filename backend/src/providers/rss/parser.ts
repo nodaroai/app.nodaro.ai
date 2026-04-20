@@ -14,6 +14,7 @@
  * it could recognise and drops the rest — it never throws on malformed XML.
  */
 import { URL } from "url"
+import { safeFetch } from "../../lib/safe-fetch.js"
 
 export interface RssItem {
   title: string
@@ -48,7 +49,10 @@ const USER_AGENT = "Nodaro-RSS/1.0 (+https://nodaro.ai)"
  * surface the message — matching the Apify scraper error contract.
  */
 export async function fetchRssItems(opts: FetchRssOptions): Promise<RssItem[]> {
-  const fetchFn = opts.fetchImpl ?? fetch
+  // Default to safeFetch so the RSS URL (user-supplied) is validated against
+  // DNS resolution to private/reserved IPs at connection time. Tests inject
+  // `fetchImpl` to bypass networking entirely.
+  const fetchFn = (opts.fetchImpl ?? safeFetch) as typeof fetch
   const limit = clampLimit(opts.resultsLimit)
   const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS

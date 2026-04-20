@@ -22,11 +22,20 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
+// image-proxy now fetches via safeFetch (DNS-aware SSRF gate). Stubbing
+// globalThis.fetch wouldn't intercept undici's internal fetch, so we mock
+// the module directly and configure per-test responses via vi.mocked().
+vi.mock("@/lib/safe-fetch.js", () => ({
+  safeFetch: vi.fn(),
+  isPrivateOrReservedIP: vi.fn(() => false),
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
 import { imageProxyRoutes } from "../image-proxy.js"
+import { safeFetch } from "../../lib/safe-fetch.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -77,16 +86,26 @@ describe("GET /v1/image-proxy", () => {
     expect(body.error.message).toContain("Nodaro media")
   })
 
-  it("does not reach upstream fetch when download mode is rejected", async () => {
-    const fetchSpy = vi.fn()
-    vi.stubGlobal("fetch", fetchSpy)
+  it("rejects download=1 for a hostname that shares a string prefix with R2_PUBLIC_URL", async () => {
+    // Regression: previously `rawUrl.startsWith(config.R2_PUBLIC_URL)` passed
+    // `https://<R2_PUBLIC_URL>.evil.com/…` because prefix-matching doesn't
+    // distinguish the hostname boundary. Fix compares parsed origin.
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/image-proxy?url=https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev.evil.com/payload.exe&download=1",
+    })
 
+    expect(res.statusCode).toBe(403)
+    expect(vi.mocked(safeFetch)).not.toHaveBeenCalled()
+  })
+
+  it("does not reach upstream fetch when download mode is rejected", async () => {
     await app.inject({
       method: "GET",
       url: "/v1/image-proxy?url=https://evil.example.com/payload.exe&download=1",
     })
 
-    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(vi.mocked(safeFetch)).not.toHaveBeenCalled()
   })
 
   it("allows download=1 for the R2 public URL host", async () => {
@@ -98,15 +117,12 @@ describe("GET /v1/image-proxy", () => {
       },
     })
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        headers: new Headers({ "content-type": "application/octet-stream" }),
-        body: stream,
-      }),
-    )
+    vi.mocked(safeFetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/octet-stream" }),
+      body: stream,
+    } as unknown as Response)
 
     const res = await app.inject({
       method: "GET",
@@ -126,15 +142,12 @@ describe("GET /v1/image-proxy", () => {
       },
     })
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        headers: new Headers({ "content-type": "video/mp4" }),
-        body: stream,
-      }),
-    )
+    vi.mocked(safeFetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "video/mp4" }),
+      body: stream,
+    } as unknown as Response)
 
     const res = await app.inject({
       method: "GET",
@@ -145,8 +158,9 @@ describe("GET /v1/image-proxy", () => {
   })
 
   it("still proxies non-download images from arbitrary domains (cached-image use case)", async () => {
-    // The non-download path stays permissive: safeUrlSchema blocks SSRF and
-    // the content-type check rejects non-images, but any public image URL
+    // The non-download path stays permissive: safeUrlSchema blocks syntactic
+    // red flags, safeFetch blocks DNS-resolved private IPs at connect time,
+    // and the content-type check rejects non-images. Any public image URL
     // (avatar, OG preview, etc.) must still pass through for display.
     const stream = new ReadableStream({
       start(controller) {
@@ -155,15 +169,12 @@ describe("GET /v1/image-proxy", () => {
       },
     })
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        headers: new Headers({ "content-type": "image/jpeg" }),
-        body: stream,
-      }),
-    )
+    vi.mocked(safeFetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "image/jpeg" }),
+      body: stream,
+    } as unknown as Response)
 
     const res = await app.inject({
       method: "GET",
@@ -177,14 +188,11 @@ describe("GET /v1/image-proxy", () => {
   })
 
   it("rejects non-image content-type when not in download mode", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        headers: new Headers({ "content-type": "application/pdf" }),
-      }),
-    )
+    vi.mocked(safeFetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/pdf" }),
+    } as unknown as Response)
 
     const res = await app.inject({
       method: "GET",

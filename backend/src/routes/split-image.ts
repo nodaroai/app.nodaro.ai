@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { safeFetch } from "../lib/safe-fetch.js"
 import sharp from "sharp"
 import { uploadBufferToR2 } from "../lib/storage.js"
 import { randomUUID } from "node:crypto"
@@ -36,7 +37,11 @@ export async function splitImageRoutes(app: FastifyInstance) {
     }
 
     try {
-      const response = await fetch(imageUrl, { signal: AbortSignal.timeout(60_000) })
+      // safeFetch: the route takes a user-supplied imageUrl, splits it into
+      // grid cells, and uploads each cell to R2 where the caller gets URLs
+      // back. Without DNS-aware SSRF protection, an internal endpoint that
+      // returns image-looking bytes would be exfiltrated tile-by-tile.
+      const response = await safeFetch(imageUrl, { timeoutMs: 60_000 })
       if (!response.ok) {
         throw new Error(`Failed to download image: ${response.status}`)
       }

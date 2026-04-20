@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { safeFetch } from "../lib/safe-fetch.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
 const sendSchema = z.object({
@@ -40,11 +41,16 @@ export async function webhookOutputRoutes(app: FastifyInstance) {
     }
 
     try {
-      const response = await fetch(url, {
+      // safeFetch: this endpoint returns the response body (first 2000
+      // chars) back to the caller — a direct read-oracle if the target
+      // URL resolves to an internal HTTP service. safeUrlSchema catches
+      // literal private IPs at the Zod boundary; safeFetch catches
+      // hostnames that resolve to private IPs at connect time.
+      const response = await safeFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(30_000),
+        timeoutMs: 30_000,
       })
 
       const rawBody = await response.text().catch(() => "")

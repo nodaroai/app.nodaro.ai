@@ -87,6 +87,13 @@ vi.mock("@/lib/storage.js", () => ({
   uploadFileWithKeyToR2: vi.fn(),
 }))
 
+// uploadImageMaybeWatermark now uses safeFetch (DNS-aware SSRF gate) instead
+// of global fetch; tests inject responses via vi.mocked(safeFetch).
+vi.mock("@/lib/safe-fetch.js", () => ({
+  safeFetch: vi.fn(),
+  isPrivateOrReservedIP: vi.fn(() => false),
+}))
+
 vi.mock("@/utils/watermark.js", () => ({
   applyImageWatermark: mocks.mockApplyImageWatermark,
   applyVideoWatermark: vi.fn(),
@@ -361,12 +368,13 @@ describe("uploadImageMaybeWatermark", () => {
   })
 
   it("downloads, watermarks, and uploads buffer when watermark=true", async () => {
-    // Mock global fetch for the image download
-    const mockFetch = vi.fn().mockResolvedValue({
+    // safeFetch mock (replaces the previous globalThis.fetch stub) — covers
+    // the watermark download path that now goes through the SSRF-safe fetch.
+    const { safeFetch } = await import("../../lib/safe-fetch.js")
+    vi.mocked(safeFetch).mockResolvedValue({
       ok: true,
       arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
-    })
-    vi.stubGlobal("fetch", mockFetch)
+    } as unknown as Response)
 
     const url = await uploadImageMaybeWatermark("https://source.com/img.png", "job-1", "user-1", true)
     expect(mocks.mockApplyImageWatermark).toHaveBeenCalled()
@@ -377,8 +385,6 @@ describe("uploadImageMaybeWatermark", () => {
       "user-1",
     )
     expect(url).toBe("https://r2.example.com/images/test-wm.png")
-
-    vi.unstubAllGlobals()
   })
 })
 
