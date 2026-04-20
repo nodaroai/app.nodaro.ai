@@ -87,6 +87,13 @@ export async function objectRoutes(app: FastifyInstance) {
 
   // Get single object by ID
   app.get("/v1/objects/:id", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const parsed = deleteObjectParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -103,6 +110,7 @@ export async function objectRoutes(app: FastifyInstance) {
       .from("objects")
       .select("id, user_id, node_id, project_id, name, description, category, style, source_image_url, angles, materials, variations, created_at, updated_at")
       .eq("id", id)
+      .eq("user_id", userId)
       .single()
 
     if (error) {
@@ -173,11 +181,14 @@ export async function objectRoutes(app: FastifyInstance) {
     }
 
     if (id) {
-      // Update existing
+      // Update existing. Scope by user_id so a caller cannot overwrite another
+      // user's row by passing their id (the update would otherwise rewrite
+      // user_id to the caller, silently stealing the record).
       const { data: updated, error } = await supabase
         .from("objects")
         .update(row)
         .eq("id", id)
+        .eq("user_id", userId)
         .select("id")
         .single()
 
@@ -207,6 +218,13 @@ export async function objectRoutes(app: FastifyInstance) {
 
   // Delete object permanently
   app.delete("/v1/objects/:id", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const parsed = deleteObjectParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -223,6 +241,7 @@ export async function objectRoutes(app: FastifyInstance) {
       .from("objects")
       .delete()
       .eq("id", id)
+      .eq("user_id", userId)
 
     if (error) {
       return reply.status(500).send({

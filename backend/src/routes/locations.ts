@@ -87,6 +87,13 @@ export async function locationRoutes(app: FastifyInstance) {
 
   // Get single location by ID
   app.get("/v1/locations/:id", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const parsed = deleteLocationParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -103,6 +110,7 @@ export async function locationRoutes(app: FastifyInstance) {
       .from("locations")
       .select("id, user_id, node_id, project_id, name, description, category, style, source_image_url, time_of_day, weather, angles, created_at, updated_at")
       .eq("id", id)
+      .eq("user_id", userId)
       .single()
 
     if (error) {
@@ -173,11 +181,14 @@ export async function locationRoutes(app: FastifyInstance) {
     }
 
     if (id) {
-      // Update existing
+      // Update existing. Scope by user_id so a caller cannot overwrite another
+      // user's row by passing their id (the update would otherwise rewrite
+      // user_id to the caller, silently stealing the record).
       const { data: updated, error } = await supabase
         .from("locations")
         .update(row)
         .eq("id", id)
+        .eq("user_id", userId)
         .select("id")
         .single()
 
@@ -207,6 +218,13 @@ export async function locationRoutes(app: FastifyInstance) {
 
   // Delete location permanently
   app.delete("/v1/locations/:id", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const parsed = deleteLocationParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -223,6 +241,7 @@ export async function locationRoutes(app: FastifyInstance) {
       .from("locations")
       .delete()
       .eq("id", id)
+      .eq("user_id", userId)
 
     if (error) {
       return reply.status(500).send({

@@ -190,33 +190,54 @@ describe("GET /v1/characters", () => {
 // ---------------------------------------------------------------------------
 
 describe("GET /v1/characters/:id", () => {
-  it("returns 200 with camelCase data", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({ data: DB_CHARACTER, error: null })
-    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
+  function getByIdChain(result: { data: unknown; error: unknown }) {
+    const mockSingle = vi.fn().mockResolvedValue(result)
+    const chain: Record<string, unknown> = {
+      eq: vi.fn().mockReturnThis(),
+      single: mockSingle,
+    }
+    const mockSelect = vi.fn().mockReturnValue(chain)
+    return { mockSelect, chain, mockSingle }
+  }
+
+  it("returns 401 when unauthenticated", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+    })
+    expect(res.statusCode).toBe(401)
+    expect(res.json().error.code).toBe("unauthorized")
+  })
+
+  it("returns 200 with camelCase data and scopes by user_id", async () => {
+    const { mockSelect, chain } = getByIdChain({ data: DB_CHARACTER, error: null })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
     const res = await app.inject({
       method: "GET",
       url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
     })
 
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual(CAMEL_CHARACTER)
+    expect(chain.eq).toHaveBeenCalledWith("id", TEST_CHARACTER_ID)
+    expect(chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
   })
 
-  it("returns 404 on PGRST116 (not found)", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({
+  it("returns 404 on PGRST116 (not found OR not owned)", async () => {
+    // PGRST116 is returned both when the row doesn't exist and when the
+    // user_id scope excludes it — the two cases must be indistinguishable.
+    const { mockSelect } = getByIdChain({
       data: null,
       error: { code: "PGRST116", message: "not found" },
     })
-    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
     const res = await app.inject({
       method: "GET",
       url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
     })
 
     expect(res.statusCode).toBe(404)
@@ -224,17 +245,16 @@ describe("GET /v1/characters/:id", () => {
   })
 
   it("returns 500 on DB error", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({
+    const { mockSelect } = getByIdChain({
       data: null,
       error: { code: "OTHER", message: "DB error" },
     })
-    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
     const res = await app.inject({
       method: "GET",
       url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
     })
 
     expect(res.statusCode).toBe(500)
@@ -296,11 +316,14 @@ describe("POST /v1/characters", () => {
     )
   })
 
-  it("returns 200 on update (id in body)", async () => {
+  it("returns 200 on update (id in body) and scopes by user_id", async () => {
     const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_CHARACTER_ID }, error: null })
     const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq = vi.fn().mockReturnValue({ select: mockSelect })
-    const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
+    const chain: Record<string, unknown> = {
+      eq: vi.fn().mockReturnThis(),
+      select: mockSelect,
+    }
+    const mockUpdate = vi.fn().mockReturnValue(chain)
     vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
 
     const res = await app.inject({
@@ -317,6 +340,8 @@ describe("POST /v1/characters", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().id).toBe(TEST_CHARACTER_ID)
     expect(mockUpdate).toHaveBeenCalled()
+    expect(chain.eq).toHaveBeenCalledWith("id", TEST_CHARACTER_ID)
+    expect(chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
   })
 
   it("returns 500 on DB error (insert)", async () => {
@@ -344,28 +369,49 @@ describe("POST /v1/characters", () => {
 // ---------------------------------------------------------------------------
 
 describe("DELETE /v1/characters/:id", () => {
-  it("returns 200 on success", async () => {
-    const mockEq = vi.fn().mockResolvedValue({ error: null })
-    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq })
-    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+  function deleteChain(result: { error: unknown }) {
+    const chain: Record<string, unknown> = {
+      eq: vi.fn().mockReturnThis(),
+      then: (resolve: (value: { error: unknown }) => unknown) =>
+        Promise.resolve(result).then(resolve),
+    }
+    const mockDelete = vi.fn().mockReturnValue(chain)
+    return { mockDelete, chain }
+  }
 
+  it("returns 401 when unauthenticated", async () => {
     const res = await app.inject({
       method: "DELETE",
       url: `/v1/characters/${TEST_CHARACTER_ID}`,
     })
-
-    expect(res.statusCode).toBe(200)
-    expect(res.json().success).toBe(true)
+    expect(res.statusCode).toBe(401)
+    expect(res.json().error.code).toBe("unauthorized")
   })
 
-  it("returns 500 on DB error", async () => {
-    const mockEq = vi.fn().mockResolvedValue({ error: { message: "FK constraint" } })
-    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq })
+  it("returns 200 on success and scopes by user_id", async () => {
+    const { mockDelete, chain } = deleteChain({ error: null })
     vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
 
     const res = await app.inject({
       method: "DELETE",
       url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().success).toBe(true)
+    expect(chain.eq).toHaveBeenCalledWith("id", TEST_CHARACTER_ID)
+    expect(chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+  })
+
+  it("returns 500 on DB error", async () => {
+    const { mockDelete } = deleteChain({ error: { message: "FK constraint" } })
+    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
     })
 
     expect(res.statusCode).toBe(500)
