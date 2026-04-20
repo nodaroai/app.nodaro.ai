@@ -2214,6 +2214,9 @@ export type FilterListOperator =
   | "!="
   | "contains"
   | "not_contains"
+  | "starts_with"
+  | "ends_with"
+  | "regex"
   | "exists"
   | "not_exists"
 

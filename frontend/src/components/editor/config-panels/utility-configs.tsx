@@ -315,6 +315,15 @@ function detectUpstreamFieldKeys(
 ): readonly string[] {
   if (!nodeData) return []
 
+  const sample = detectSampleItem(nodeData)
+  if (sample === undefined) return []
+  return extractPathsFromValue(sample)
+}
+
+/** Find the first upstream-data sample to derive a schema from. Mirrors the
+ *  priority used by filter-list at runtime: list-shaped outputs first, then
+ *  JSON-shaped. Returns the first list item when the payload is a list. */
+function detectSampleItem(nodeData: Record<string, unknown>): unknown {
   const listCandidates: ReadonlyArray<unknown> = [
     nodeData.__listResults,
     nodeData.listResults,
@@ -322,8 +331,8 @@ function detectUpstreamFieldKeys(
   ]
   for (const list of listCandidates) {
     if (Array.isArray(list) && list.length > 0) {
-      const keys = extractKeysFromValue(list[0])
-      if (keys.length > 0) return keys
+      const parsed = tryParseSampleItem(list[0])
+      if (parsed !== undefined) return parsed
     }
   }
 
@@ -332,33 +341,70 @@ function detectUpstreamFieldKeys(
     nodeData.processedResult,
   ]
   for (const json of jsonCandidates) {
-    const keys = extractKeysFromValue(json)
-    if (keys.length > 0) return keys
+    const parsed = tryParseSampleItem(json)
+    if (parsed !== undefined) return parsed
   }
 
-  return []
+  return undefined
 }
 
-function extractKeysFromValue(v: unknown): readonly string[] {
-  if (v === null || v === undefined) return []
-  if (Array.isArray(v)) {
-    return v.length > 0 ? extractKeysFromValue(v[0]) : []
-  }
-  if (typeof v === "object") {
-    return Object.keys(v as Record<string, unknown>)
-  }
+/** Coerce arbitrary sample data to a value we can walk: parses string JSON,
+ *  unwraps single-element arrays so nested paths are discovered, and drops
+ *  null/undefined. Returns undefined when nothing walkable is found. */
+function tryParseSampleItem(v: unknown): unknown {
+  if (v === null || v === undefined) return undefined
+  if (Array.isArray(v)) return v.length > 0 ? tryParseSampleItem(v[0]) : undefined
+  if (typeof v === "object") return v
   if (typeof v === "string") {
     const trimmed = v.trim()
-    if (trimmed.length < 2) return []
+    if (trimmed.length < 2) return undefined
     const first = trimmed[0]
-    if (first !== "{" && first !== "[") return []
+    if (first !== "{" && first !== "[") return undefined
     try {
-      return extractKeysFromValue(JSON.parse(trimmed))
+      return tryParseSampleItem(JSON.parse(trimmed))
     } catch {
-      return []
+      return undefined
     }
   }
-  return []
+  return undefined
+}
+
+/** Walk a sample value and collect every dot-path that resolves to a leaf or
+ *  a step along the way. Arrays are treated transparently so "pages.url" is
+ *  offered for `{ pages: [{url: "..."}] }` — matching evaluateJsonPath's
+ *  auto-iterate semantics. Bounded by depth + total-path count to avoid
+ *  pathological dropdowns on deeply-nested payloads. */
+function extractPathsFromValue(v: unknown): readonly string[] {
+  const MAX_DEPTH = 4
+  const MAX_PATHS = 200
+  const out: string[] = []
+  const seen = new Set<string>()
+
+  const push = (p: string) => {
+    if (!p || seen.has(p) || out.length >= MAX_PATHS) return
+    seen.add(p)
+    out.push(p)
+  }
+
+  const walk = (node: unknown, prefix: string, depth: number): void => {
+    if (out.length >= MAX_PATHS || depth > MAX_DEPTH) return
+    if (node === null || node === undefined) return
+    if (Array.isArray(node)) {
+      if (node.length > 0) walk(node[0], prefix, depth)
+      return
+    }
+    if (typeof node === "object") {
+      for (const key of Object.keys(node as Record<string, unknown>)) {
+        if (!key) continue
+        const path = prefix ? `${prefix}.${key}` : key
+        push(path)
+        walk((node as Record<string, unknown>)[key], path, depth + 1)
+      }
+    }
+  }
+
+  walk(v, "", 0)
+  return out
 }
 
 /** Node types that don't transform item structure — items flow through
@@ -394,6 +440,63 @@ function getUpstreamFieldOptions(
     allEdges,
     new Set<string>(),
   )
+}
+
+/** Resolve the first upstream sample item that has walkable shape (object /
+ *  parsed JSON). Walks back through pass-through nodes (filter-list, dedupe,
+ *  merge-lists) so previews still work when the filter is chained. Returns
+ *  undefined when nothing walkable is cached upstream. */
+function getUpstreamSampleItem(
+  sources: ReadonlyArray<SourceNodeInfo>,
+  allNodes?: ReadonlyArray<WorkflowNode>,
+  allEdges?: ReadonlyArray<WorkflowEdge>,
+): unknown {
+  const inSource = sources.find((s) => s.targetHandle === "in")
+  if (!inSource) return undefined
+  return resolveSampleItem(
+    inSource.type,
+    inSource.id,
+    (inSource.nodeData ?? null) as Record<string, unknown> | null,
+    allNodes,
+    allEdges,
+    new Set<string>(),
+  )
+}
+
+function resolveSampleItem(
+  type: string | undefined,
+  id: string,
+  data: Record<string, unknown> | null,
+  allNodes: ReadonlyArray<WorkflowNode> | undefined,
+  allEdges: ReadonlyArray<WorkflowEdge> | undefined,
+  visited: Set<string>,
+): unknown {
+  if (visited.has(id)) return undefined
+  visited.add(id)
+
+  if (data) {
+    const sample = detectSampleItem(data)
+    if (sample !== undefined) return sample
+  }
+
+  if (PASS_THROUGH_SCHEMA_TYPES.has(type ?? "") && allNodes && allEdges) {
+    const incoming = allEdges.filter((e) => e.target === id)
+    for (const edge of incoming) {
+      const src = allNodes.find((n) => n.id === edge.source)
+      if (!src) continue
+      const sample = resolveSampleItem(
+        src.type,
+        src.id,
+        src.data as Record<string, unknown>,
+        allNodes,
+        allEdges,
+        visited,
+      )
+      if (sample !== undefined) return sample
+    }
+  }
+
+  return undefined
 }
 
 function resolveNodeSchema(
@@ -1142,13 +1245,18 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
                         {/* Operator */}
                         <Select
                           value={f.operator}
-                          onValueChange={(v) =>
-                            updateFilter(f.id, {
-                              operator: v as FilterOperator,
-                              // Reset value when switching to/from no-value operators
-                              value: NO_VALUE_OPERATORS.includes(v as FilterOperator) ? "" : f.value,
-                            })
-                          }
+                          onValueChange={(v) => {
+                            const nextOp = v as FilterOperator
+                            let nextValue: string | string[] = f.value
+                            if (NO_VALUE_OPERATORS.includes(nextOp)) {
+                              nextValue = ""
+                            } else if (nextOp === "in_list" && !Array.isArray(f.value)) {
+                              nextValue = String(f.value ?? "").split(",").map((s) => s.trim()).filter(Boolean)
+                            } else if (nextOp !== "in_list" && Array.isArray(f.value)) {
+                              nextValue = f.value.join(", ")
+                            }
+                            updateFilter(f.id, { operator: nextOp, value: nextValue })
+                          }}
                         >
                           <SelectTrigger className="h-7 text-xs w-[130px] shrink-0">
                             <SelectValue />
@@ -1315,6 +1423,9 @@ const FILTER_OPERATOR_LABELS: Record<FilterListOperator, string> = {
   "!=": "not equals",
   contains: "contains",
   not_contains: "does not contain",
+  starts_with: "starts with",
+  ends_with: "ends with",
+  regex: "matches regex",
   exists: "exists",
   not_exists: "does not exist",
 }
@@ -1458,9 +1569,81 @@ function DateTimeValuePicker({
   )
 }
 
+/** Render a JSON value with every key labelled by its dot-path. Keys whose
+ *  path appears in `highlightedPaths` are dimmed to gray so the user can see
+ *  at a glance which parts of the payload the active filter conditions read.
+ *  Arrays collapse to their first element + a length hint — matching the
+ *  evaluator's auto-iterate semantics, and keeping the panel compact. */
+function FilterJsonPreview({
+  value,
+  highlightedPaths,
+}: {
+  value: unknown
+  highlightedPaths: ReadonlySet<string>
+}) {
+  const render = (v: unknown, path: string, indent: number): React.ReactNode => {
+    const pad = "  ".repeat(indent)
+    if (v === null) return <span className="text-amber-400">null</span>
+    if (v === undefined) return <span className="text-muted-foreground italic">undefined</span>
+    if (typeof v === "string") return <span className="text-emerald-400">{JSON.stringify(v)}</span>
+    if (typeof v === "number" || typeof v === "boolean") return <span className="text-sky-400">{String(v)}</span>
+    if (Array.isArray(v)) {
+      if (v.length === 0) return <span>[]</span>
+      const hint = v.length > 1 ? ` /* +${v.length - 1} more */` : ""
+      return (
+        <>
+          <span>[</span>
+          <span className="text-muted-foreground/60">{hint}</span>
+          {"\n"}
+          <span>{pad}  </span>
+          {render(v[0], path, indent + 1)}
+          {"\n"}
+          <span>{pad}]</span>
+        </>
+      )
+    }
+    if (typeof v === "object") {
+      const entries = Object.entries(v as Record<string, unknown>)
+      if (entries.length === 0) return <span>{"{}"}</span>
+      return (
+        <>
+          <span>{"{"}</span>
+          {"\n"}
+          {entries.map(([k, child], i) => {
+            const childPath = path ? `${path}.${k}` : k
+            const isHit = highlightedPaths.has(childPath)
+            const keyClass = isHit
+              ? "bg-muted/70 text-muted-foreground rounded px-0.5"
+              : "text-pink-400"
+            return (
+              <span key={childPath}>
+                <span>{pad}  </span>
+                <span className={keyClass}>{JSON.stringify(k)}</span>
+                <span>: </span>
+                {render(child, childPath, indent + 1)}
+                {i < entries.length - 1 ? "," : ""}
+                {"\n"}
+              </span>
+            )
+          })}
+          <span>{pad}{"}"}</span>
+        </>
+      )
+    }
+    return <span>{String(v)}</span>
+  }
+
+  return (
+    <pre className="text-[10px] font-mono bg-muted/20 rounded p-2 overflow-auto max-h-56 whitespace-pre leading-relaxed">
+      {render(value, "", 0)}
+    </pre>
+  )
+}
+
 export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: ConfigProps<FilterListNodeData>) {
   const conditions = data.conditions ?? []
   const logic = data.conditionLogic ?? "AND"
+  const [previewOpen, setPreviewOpen] = useState(true)
 
   // Upstream field schema — detected live from any upstream node's cached
   // output. Walks back through pass-through nodes (filter-list / dedupe /
@@ -1470,6 +1653,23 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
     () => getUpstreamFieldOptions(sources, nodes, edges),
     [sources, nodes, edges],
   )
+
+  // Live sample of the first upstream item (object / parsed JSON). Feeds the
+  // preview pane so users see the shape they're filtering against.
+  const sampleItem = useMemo(
+    () => getUpstreamSampleItem(sources, nodes, edges),
+    [sources, nodes, edges],
+  )
+
+  // Paths actively used by conditions — highlighted in the preview.
+  const highlightedPaths = useMemo(() => {
+    const s = new Set<string>()
+    for (const c of conditions) {
+      const f = (c.field ?? "").trim()
+      if (f) s.add(f)
+    }
+    return s
+  }, [conditions])
 
   const updateCondition = (id: string, patch: Partial<FilterListCondition>) => {
     onUpdate({
@@ -1492,6 +1692,29 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
 
   return (
     <div className="flex flex-col gap-3">
+      {sampleItem !== undefined && (
+        <div className="flex flex-col gap-1.5">
+          <button
+            type="button"
+            onClick={() => setPreviewOpen((v) => !v)}
+            className="flex items-center justify-between text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <span>Upstream sample (first item)</span>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${previewOpen ? "rotate-180" : ""}`} />
+          </button>
+          {previewOpen && (
+            <>
+              <FilterJsonPreview value={sampleItem} highlightedPaths={highlightedPaths} />
+              {highlightedPaths.size > 0 && (
+                <p className="text-[10px] text-muted-foreground">
+                  Fields in gray are referenced by active conditions.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <Label>Conditions ({conditions.length})</Label>
         <div className="flex rounded-md border border-border overflow-hidden">

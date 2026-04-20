@@ -251,7 +251,12 @@ function extractSavedTextFallback(src: SimpleNode): string | undefined {
 export interface FilterListCondition {
   id?: string
   field?: string
-  operator: ">" | "<" | ">=" | "<=" | "=" | "!=" | "contains" | "not_contains" | "exists" | "not_exists"
+  operator:
+    | ">" | "<" | ">=" | "<="
+    | "=" | "!="
+    | "contains" | "not_contains"
+    | "starts_with" | "ends_with" | "regex"
+    | "exists" | "not_exists"
   value?: string
   valueType?: "static" | "variable"
 }
@@ -442,6 +447,18 @@ function evaluateFilterCondition(
       return String(fieldValue ?? "").includes(targetStr)
     case "not_contains":
       return !String(fieldValue ?? "").includes(targetStr)
+    case "starts_with":
+      return String(fieldValue ?? "").startsWith(targetStr)
+    case "ends_with":
+      return String(fieldValue ?? "").endsWith(targetStr)
+    case "regex": {
+      if (!targetStr) return false
+      try {
+        return new RegExp(targetStr).test(String(fieldValue ?? ""))
+      } catch {
+        return false
+      }
+    }
     case "=":
       return valuesEqual(fieldValue, targetStr)
     case "!=":

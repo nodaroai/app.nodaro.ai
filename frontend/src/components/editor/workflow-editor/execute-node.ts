@@ -445,6 +445,18 @@ function evaluateFilterListCondition(
       return String(fieldValue ?? "").includes(targetStr);
     case "not_contains":
       return !String(fieldValue ?? "").includes(targetStr);
+    case "starts_with":
+      return String(fieldValue ?? "").startsWith(targetStr);
+    case "ends_with":
+      return String(fieldValue ?? "").endsWith(targetStr);
+    case "regex": {
+      if (!targetStr) return false;
+      try {
+        return new RegExp(targetStr).test(String(fieldValue ?? ""));
+      } catch {
+        return false;
+      }
+    }
     case "=":
       return filterValuesEqual(fieldValue, targetStr);
     case "!=":

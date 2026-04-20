@@ -94,6 +94,15 @@ describe("filter operator mapping", () => {
   it("matches_regex", () => expect(wrap("matches_regex", "s", "^A")).toBe('.[] | select(.s | test("^A"))'))
   it("in_list", () => expect(wrap("in_list", "s", ["a", "b"])).toBe('.[] | select(.s == "a" or .s == "b")'))
   it("in_list with number", () => expect(wrap("in_list", "n", ["1", "2"])).toBe('.[] | select(.n == 1 or .n == 2)'))
+  // Regression: switching to in_list keeps the previous operator's string value
+  // until the user edits it. Previously this threw `value.map is not a function`
+  // during re-render, crashing the config panel.
+  it("in_list tolerates a comma-separated string (operator just switched)", () =>
+    expect(wrap("in_list", "s", "a, b, c")).toBe('.[] | select(.s == "a" or .s == "b" or .s == "c")'))
+  it("in_list with a plain string falls back to single-value equality", () =>
+    expect(wrap("in_list", "s", "only")).toBe('.[] | select(.s == "only")'))
+  it("in_list with empty value emits select(false) so nothing passes", () =>
+    expect(wrap("in_list", "s", "")).toBe('.[] | select(false)'))
 })
 
 describe("string escaping", () => {
