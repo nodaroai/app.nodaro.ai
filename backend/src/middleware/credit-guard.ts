@@ -101,7 +101,7 @@ export function creditGuard(
 
     // Step 2: Check if user has enough credits (using pre-fetched profile)
     try {
-      const creditCheck = await CreditsService.checkCreditsWithProfile(userId, profile as CreditProfile, modelIdentifier)
+      const creditCheck = await CreditsService.checkCreditsWithProfile(userId, profile as CreditProfile, modelIdentifier, req.isAppRun)
 
       if (!creditCheck.allowed) {
         reply.status(402).send({
@@ -154,7 +154,7 @@ export async function reserveCreditsForJob(
       modelIdentifier,
       0, // provider cost calculated in worker
       0, // display cost calculated in worker
-      { watermarkOverride: req.creditReservation?.watermark },
+      { watermarkOverride: req.creditReservation?.watermark, isAppRun: req.isAppRun },
     )
 
     // Store usageLogId, estimated credits, and watermark decision on the job

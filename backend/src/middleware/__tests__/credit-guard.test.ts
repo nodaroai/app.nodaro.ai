@@ -77,11 +77,15 @@ function createSupabaseProfileChain(data: unknown, error: unknown = null) {
 async function buildApp(modelResolver?: (req: unknown) => string): Promise<FastifyInstance> {
   const app = Fastify({ logger: false })
 
-  // Simulate authenticated user via userId in the request body
+  // Simulate authenticated user via userId in the request body.
+  // Mirrors auth.ts: X-App-Run: "true" header sets req.isAppRun for internal orchestrator calls.
   app.addHook("preHandler", async (req) => {
     const body = req.body as Record<string, unknown> | undefined
     if (body?.userId && typeof body.userId === "string") {
       req.userId = body.userId
+    }
+    if (req.headers["x-app-run"] === "true") {
+      req.isAppRun = true
     }
   })
 
@@ -300,6 +304,87 @@ describe("creditGuard", () => {
     })
   })
 
+  it("forwards req.isAppRun=true to checkCreditsWithProfile (app-run gating)", async () => {
+    const profile = {
+      role: "user",
+      tier: "free",
+      subscription_tier: null,
+      subscription_credits: 50,
+      topup_credits: 0,
+      daily_spent_credits: 0,
+      last_daily_reset: new Date().toISOString(),
+      storage_used_bytes: 0,
+      storage_limit_bytes: 1_000_000_000,
+    }
+    mockFrom.mockReturnValue(createSupabaseProfileChain(profile))
+    mockCheckStorageLimitWithProfile.mockReturnValue({
+      allowed: true,
+      usedBytes: 0,
+      limitBytes: 1_000_000_000,
+    })
+    mockCheckCreditsWithProfile.mockResolvedValue({
+      allowed: true,
+      balance: 50,
+      required: 5,
+      watermark: true,
+    })
+    app = await buildApp()
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/test-route",
+      headers: { "x-app-run": "true" },
+      payload: { userId: "user-1", provider: "flux" },
+    })
+
+    expect(mockCheckCreditsWithProfile).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ tier: "free" }),
+      "flux",
+      true,
+    )
+  })
+
+  it("omits isAppRun when X-App-Run header absent (flow-run gating)", async () => {
+    const profile = {
+      role: "user",
+      tier: "free",
+      subscription_tier: null,
+      subscription_credits: 50,
+      topup_credits: 0,
+      daily_spent_credits: 0,
+      last_daily_reset: new Date().toISOString(),
+      storage_used_bytes: 0,
+      storage_limit_bytes: 1_000_000_000,
+    }
+    mockFrom.mockReturnValue(createSupabaseProfileChain(profile))
+    mockCheckStorageLimitWithProfile.mockReturnValue({
+      allowed: true,
+      usedBytes: 0,
+      limitBytes: 1_000_000_000,
+    })
+    mockCheckCreditsWithProfile.mockResolvedValue({
+      allowed: true,
+      balance: 50,
+      required: 5,
+      watermark: true,
+    })
+    app = await buildApp()
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/test-route",
+      payload: { userId: "user-1", provider: "flux" },
+    })
+
+    expect(mockCheckCreditsWithProfile).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ tier: "free" }),
+      "flux",
+      undefined,
+    )
+  })
+
   it("sets watermark=false for paid tier", async () => {
     const profile = {
       role: "user",
@@ -401,6 +486,41 @@ describe("reserveCreditsForJob", () => {
       creditsReserved: 1,
       watermark: false,
     })
-    expect(mockReserveCredits).toHaveBeenCalledWith("user-1", "job-1", "ffmpeg", 0, 0, { watermarkOverride: undefined })
+    expect(mockReserveCredits).toHaveBeenCalledWith("user-1", "job-1", "ffmpeg", 0, 0, { watermarkOverride: undefined, isAppRun: undefined })
+  })
+
+  it("forwards req.isAppRun=true to reserveCredits (app-run pool accounting)", async () => {
+    mockReserveCredits.mockResolvedValueOnce({
+      usageLogId: "ul-2",
+      creditsReserved: 5,
+      watermark: false,
+    })
+    mockFrom.mockReturnValue({
+      update: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    })
+
+    const mockReq = {
+      userId: "user-1",
+      url: "/v1/test-route",
+      isAppRun: true,
+      creditReservation: undefined,
+    } as unknown as Parameters<typeof reserveCreditsForJob>[0]
+    const mockReply = {
+      status: vi.fn().mockReturnThis(),
+      send: vi.fn(),
+    } as unknown as Parameters<typeof reserveCreditsForJob>[1]
+
+    await reserveCreditsForJob(mockReq, mockReply, "job-2", "ai-writer")
+
+    expect(mockReserveCredits).toHaveBeenCalledWith(
+      "user-1",
+      "job-2",
+      "ai-writer",
+      0,
+      0,
+      { watermarkOverride: undefined, isAppRun: true },
+    )
   })
 })
