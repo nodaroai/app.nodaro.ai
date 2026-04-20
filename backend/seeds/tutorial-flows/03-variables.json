@@ -68,7 +68,7 @@
         "type": "sticky-note",
         "position": { "x": -60, "y": -120 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 1 - Source variable",
           "text": "1. A node as a variable\n\nThe Brand text-prompt is the single source. Change its text and the whole flow re-runs with the new value.",
           "color": "#2d2d44",
           "textColor": "#ffffff",
@@ -85,7 +85,7 @@
         "type": "sticky-note",
         "position": { "x": 380, "y": -260 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 2 - Inject with {}",
           "text": "2. Reuse with {}\n\nThe {} placeholder in any text field gets replaced by the upstream text at runtime. Here, both the image prompt and the tagline instruction use {} — and both receive the same brand value.\n\nAlternative: use the field-mapping dropdown on any field to bind it directly to a specific upstream node.",
           "color": "#2d2d44",
           "textColor": "#ffffff",
@@ -102,7 +102,7 @@
         "type": "sticky-note",
         "position": { "x": 880, "y": -120 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 3 - Propagate changes",
           "text": "3. Change once, everything updates\n\nEdit the Brand value and hit Run. Both the image and the tagline regenerate off the same new value.",
           "color": "#2d2d44",
           "textColor": "#ffffff",

@@ -87,7 +87,7 @@
         "type": "sticky-note",
         "position": { "x": -40, "y": -260 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 1 - Sources",
           "text": "1. Sources — two RSS feeds\n\n⚠️ Before running: set both feed URLs. Items carry `title`, `description`, and `link` fields.",
           "color": "#2d2d44",
           "textColor": "#ffffff",
@@ -104,7 +104,7 @@
         "type": "sticky-note",
         "position": { "x": 340, "y": -260 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 2 - Merge & filter",
           "text": "2. Merge + filter\n\nMerge Lists unions both feeds into one stream. Filter List keeps items whose `title` contains the keyword. Swap to `matches_regex` or `starts_with` for richer matching.",
           "color": "#2d2d44",
           "textColor": "#ffffff",
@@ -121,7 +121,7 @@
         "type": "sticky-note",
         "position": { "x": 1040, "y": -260 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 3 - Dedupe & preview",
           "text": "3. Dedupe + inspect\n\nDeduplicate collapses items that share the same `link`. Preview shows the final clean list.",
           "color": "#2d2d44",
           "textColor": "#ffffff",

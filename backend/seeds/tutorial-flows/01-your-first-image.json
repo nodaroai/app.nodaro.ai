@@ -42,7 +42,7 @@
         "type": "sticky-note",
         "position": { "x": -40, "y": -260 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 1 - Prompt",
           "text": "1. Write your prompt\n\nA Text Prompt node is your starting point. Whatever text you write here gets passed to the downstream node as its input.",
           "color": "#2d2d44",
           "textColor": "#ffffff",
@@ -59,7 +59,7 @@
         "type": "sticky-note",
         "position": { "x": 360, "y": -260 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 2 - Generate",
           "text": "2. Generate\n\nPress Run (or hover the node to Run just this step). The result appears on the Generate Image node — click it to preview.",
           "color": "#2d2d44",
           "textColor": "#ffffff",

@@ -70,7 +70,7 @@
         "type": "sticky-note",
         "position": { "x": -40, "y": -260 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 1 - Idea",
           "text": "1. Start with an idea\n\nA short concept in plain English. The chain will expand and realize it.",
           "color": "#2d2d44",
           "textColor": "#ffffff",
@@ -87,7 +87,7 @@
         "type": "sticky-note",
         "position": { "x": 320, "y": -260 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 2 - Expand prompt",
           "text": "2. Let AI write a detailed prompt\n\nAI Agent rewrites the idea as a rich image prompt. Note the {} in the user-input field — it gets replaced by the upstream text at runtime.",
           "color": "#2d2d44",
           "textColor": "#ffffff",
@@ -104,7 +104,7 @@
         "type": "sticky-note",
         "position": { "x": 720, "y": -260 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 3 - Image → Video",
           "text": "3. Image → Video\n\nEach node feeds the next. One Run triggers the whole chain; every downstream step starts as soon as its upstream finishes.",
           "color": "#2d2d44",
           "textColor": "#ffffff",

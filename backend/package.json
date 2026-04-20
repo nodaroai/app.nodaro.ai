@@ -11,6 +11,7 @@
     "render-worker": "tsx watch src/render-worker.ts",
     "lint": "eslint src/",
     "lint:tenant-scope": "node scripts/check-tenant-scope.mjs",
+    "lint:admin-client-import": "node scripts/check-admin-client-import.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

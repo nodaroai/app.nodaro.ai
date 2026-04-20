@@ -521,3 +521,76 @@ describe("DELETE /v1/projects/:id", () => {
     expect(res.statusCode).toBe(500)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Cross-tenant denial — behavior contract
+// ---------------------------------------------------------------------------
+// Simulates a project UUID that exists but is owned by a different user.
+// The user-scoped query returns PGRST116 (no match) and the handler must
+// reject. We assert `.eq("user_id", CALLER)` is invoked so a refactor that
+// drops the scope but keeps the 404 path doesn't look green while silently
+// re-opening IDOR.
+// ---------------------------------------------------------------------------
+
+describe("cross-tenant denial", () => {
+  it("GET /v1/projects/:id — foreign-owner row is 404 and query is user-scoped", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "PGRST116", message: "no rows" },
+    })
+    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/projects/${TEST_PROJECT_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(mockEq1).toHaveBeenCalledWith("id", TEST_PROJECT_ID)
+    expect(mockEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+  })
+
+  it("PATCH /v1/projects/:id — foreign-owner row is 404 and update is user-scoped", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "PGRST116", message: "no rows" },
+    })
+    const mockSelectAfterEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelectAfterEq })
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/projects/${TEST_PROJECT_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "takeover attempt" },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(mockEq1).toHaveBeenCalledWith("id", TEST_PROJECT_ID)
+    expect(mockEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+  })
+
+  it("DELETE /v1/projects/:id — delete is user-scoped (foreign rows untouched)", async () => {
+    const mockEq2 = vi.fn().mockResolvedValue({ error: null })
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
+    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/projects/${TEST_PROJECT_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockEq1).toHaveBeenCalledWith("id", TEST_PROJECT_ID)
+    expect(mockEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+  })
+})

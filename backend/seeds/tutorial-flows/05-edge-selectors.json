@@ -109,7 +109,7 @@
         "type": "sticky-note",
         "position": { "x": -60, "y": 80 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 1 - Multi-result source",
           "text": "1. One source, four ways to consume it\n\nThe AI Agent emits 3 prompts (separated by ===NEXT===). The frontend executor splits them into generatedResults with an activeResultIndex — which is what makes all four edge modes available.",
           "color": "#2d2d44",
           "textColor": "#ffffff",
@@ -126,7 +126,7 @@
         "type": "sticky-note",
         "position": { "x": 1200, "y": 0 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 2 - Each (fan-out)",
           "text": "2. Each — fan out\n\nThe downstream runs once per result. 3 prompts → 3 image runs. Results show up as a list on the Generate Image node.",
           "color": "#2d2d44",
           "textColor": "#ffffff",
@@ -143,7 +143,7 @@
         "type": "sticky-note",
         "position": { "x": 1540, "y": 240 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 3 - Bundle",
           "text": "3. Bundle — one run with all items\n\nBundle passes the whole array. Combine Text joins them into a single string. For fields like generate-image.referenceImageUrls or combine-audio, Bundle lands as multiple inputs.\n\nFor a text combiner like this, Bundle and Each produce the same concatenation — the difference is execution count (1 vs 3).",
           "color": "#2d2d44",
           "textColor": "#ffffff",
@@ -160,7 +160,7 @@
         "type": "sticky-note",
         "position": { "x": 1200, "y": 460 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 4 - Item vs Selected",
           "text": "4. Item vs Selected\n\nItem is a fixed index — here 0, the first prompt. Even if you click a different result on the source, Item keeps picking index 0.\n\nSelected reads whichever result is currently active on the source node (click a result on the AI Agent carousel to change which one).",
           "color": "#2d2d44",
           "textColor": "#ffffff",

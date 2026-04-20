@@ -597,5 +597,84 @@ describe("DELETE /v1/workflows/:id", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// Cross-tenant denial — behavior contract
+// ---------------------------------------------------------------------------
+// These tests simulate the case where a workflow UUID exists in the DB but
+// is owned by a DIFFERENT user than the caller. The user_id-scoped query
+// returns PGRST116 (no match), and the handler must reject the request.
+// We additionally assert `.eq("user_id", CALLER)` is invoked — without this,
+// a refactor that drops the scope but keeps the 404 path (e.g., by handling
+// PGRST116 generically) would look green while silently re-opening IDOR.
+// ---------------------------------------------------------------------------
+
+describe("cross-tenant denial", () => {
+  it("GET /v1/workflows/:id — foreign-owner row is 404 and query is user-scoped", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "PGRST116", message: "no rows" },
+    })
+    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(mockEq1).toHaveBeenCalledWith("id", TEST_WORKFLOW_ID)
+    expect(mockEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+  })
+
+  it("PATCH /v1/workflows/:id — foreign-owner row is 404 and update is user-scoped", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "PGRST116", message: "no rows" },
+    })
+    const mockSelectAfterEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelectAfterEq })
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "takeover attempt" },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(mockEq1).toHaveBeenCalledWith("id", TEST_WORKFLOW_ID)
+    expect(mockEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+  })
+
+  it("DELETE /v1/workflows/:id — delete is user-scoped (foreign rows untouched)", async () => {
+    // supabase delete().eq().eq() returns { error: null } whether or not
+    // rows matched — no way to distinguish "deleted" from "no-match" at the
+    // query level. The critical security property is that .eq("user_id",
+    // CALLER) is applied, which excludes other users' rows from the delete
+    // set. We assert the scope; the victim's row is then provably untouched.
+    const mockEq2 = vi.fn().mockResolvedValue({ error: null })
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
+    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockEq1).toHaveBeenCalledWith("id", TEST_WORKFLOW_ID)
+    expect(mockEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+  })
+})
+
 // POST /v1/workflows/:id/run — now handled by workflow-execution routes
 // (tested in workflow-execution.test.ts if present)

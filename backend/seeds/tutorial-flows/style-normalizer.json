@@ -59,7 +59,7 @@
         "type": "sticky-note",
         "position": { "x": 0, "y": -240 },
         "data": {
-          "label": "Sticky Note",
+          "label": "About this sub-flow",
           "text": "Style Normalizer\n\nReusable brand-voice rewrite. Used by the Brand-a-thon tutorial — each branch in the parent flow invokes this sub-workflow on its copy of the script.",
           "color": "#2d2d44",
           "textColor": "#ffffff",

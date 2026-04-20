@@ -157,7 +157,7 @@
         "type": "sticky-note",
         "position": { "x": -60, "y": 80 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 1 - Single source",
           "text": "1. One script, three variations\n\nThe Script text-prompt is the single source. Below, three branches each produce a different asset size — all from the same source.",
           "color": "#2d2d44",
           "textColor": "#ffffff",
@@ -174,7 +174,7 @@
         "type": "sticky-note",
         "position": { "x": 380, "y": 80 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 2 - Teleport",
           "text": "2. Teleport — no spaghetti edges\n\nTeleport Send publishes on a named channel; any number of Teleport Receive nodes on the same channel pick it up. Great for reaching distant branches without drawing long edges across the canvas.",
           "color": "#2d2d44",
           "textColor": "#ffffff",
@@ -191,7 +191,7 @@
         "type": "sticky-note",
         "position": { "x": 1080, "y": -260 },
         "data": {
-          "label": "Sticky Note",
+          "label": "STEP 3 - Sub-flow",
           "text": "3. Sub-flow — reusable logic\n\nStyle Normalizer is a separate workflow that rewrites text in brand voice. Each branch invokes the SAME sub-flow, so any edit to Style Normalizer propagates everywhere it's used.",
           "color": "#2d2d44",
           "textColor": "#ffffff",
