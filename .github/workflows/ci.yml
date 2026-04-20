@@ -113,6 +113,8 @@ jobs:
           node-version: 22
       - name: Check tenant-scoped queries
         run: node backend/scripts/check-tenant-scope.mjs
+      - name: Check admin-client imports
+        run: node backend/scripts/check-admin-client-import.mjs
 
   migrate:
     name: Push Database Migrations
