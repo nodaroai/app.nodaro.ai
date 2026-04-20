@@ -101,6 +101,7 @@ export async function webScrapeRoutes(app: FastifyInstance) {
       return reply.send({ jobId: job.id, ...result })
     } catch (err) {
       const message = err instanceof Error ? err.message : "Scrape failed"
+      // tenant-scope-ignore: job.id is server-generated in this request
       await supabase.from("jobs").update({ status: "failed", output_data: { error: message } }).eq("id", job.id)
       if (usageLogId) await CreditsService.refundCredits(usageLogId)
       return reply.status(502).send({ error: { code: "scrape_error", message } })

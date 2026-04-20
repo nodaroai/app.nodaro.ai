@@ -103,11 +103,22 @@ jobs:
         run: npx tsc --noEmit
         working-directory: backend
 
+  tenant-scope-lint:
+    name: Tenant Scope Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check tenant-scoped queries
+        run: node backend/scripts/check-tenant-scope.mjs
+
   migrate:
     name: Push Database Migrations
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [frontend-tests, backend-tests, typecheck]
+    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint]
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
