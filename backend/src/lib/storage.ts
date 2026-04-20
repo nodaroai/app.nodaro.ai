@@ -4,6 +4,7 @@ import { createReadStream } from "node:fs"
 import { stat } from "node:fs/promises"
 import { Readable } from "node:stream"
 import { config } from "./config.js"
+import { safeFetch } from "./safe-fetch.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
 
 export const s3 = new S3Client({
@@ -76,7 +77,12 @@ export async function uploadToR2(
   type: MediaType = "image",
   trackUserId?: string,
 ): Promise<string> {
-  const response = await fetch(sourceUrl, { signal: AbortSignal.timeout(120_000) })
+  // safeFetch: validate DNS resolution against private/reserved IP ranges at
+  // connection time. Without this, a user-supplied sourceUrl resolving to an
+  // internal IP (cloud metadata, admin service, 127.0.0.1) would stream that
+  // response into R2 and return the public URL — a read-oracle for internal
+  // HTTP. See backend/src/lib/safe-fetch.ts.
+  const response = await safeFetch(sourceUrl, { timeoutMs: 120_000 })
   if (!response.ok) {
     throw new Error(`Failed to download ${type}: ${response.status}`)
   }

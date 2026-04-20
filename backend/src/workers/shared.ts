@@ -9,6 +9,7 @@ import { supabase } from "../lib/supabase.js"
 import { CreditsService } from "../services/credits.js"
 import { computeActualCredits, checkAndLogAnomaly } from "../billing/credit-anomaly.js"
 import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2 } from "../lib/storage.js"
+import { safeFetch } from "../lib/safe-fetch.js"
 import { applyImageWatermark, applyVideoWatermark } from "../utils/watermark.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, transcodeToBrowserSafe } from "../providers/video/ffmpeg-utils.js"
@@ -271,7 +272,10 @@ export async function uploadImageMaybeWatermark(
   if (!watermark) {
     return uploadToR2(sourceUrl, jobId, "image", jobUserId)
   }
-  const response = await fetch(sourceUrl, { signal: AbortSignal.timeout(60_000) })
+  // safeFetch: watermarking path fetches sourceUrl and re-uploads the body
+  // (with watermark overlay) to R2. An unvalidated fetch here would be an
+  // SSRF read-oracle identical to uploadToR2's raw fetch path.
+  const response = await safeFetch(sourceUrl, { timeoutMs: 60_000 })
   if (!response.ok) throw new Error(`Failed to download image: ${response.status}`)
   const buffer = Buffer.from(await response.arrayBuffer())
   const watermarked = await applyImageWatermark(buffer)

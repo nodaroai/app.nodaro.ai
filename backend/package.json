@@ -36,6 +36,7 @@
     "replicate": "^1.4.0",
     "sharp": "^0.34.5",
     "stripe": "^20.4.1",
+    "undici": "^6.25.0",
     "youtube-dl-exec": "^3.0.30",
     "zod": "^3.24.2"
   },
