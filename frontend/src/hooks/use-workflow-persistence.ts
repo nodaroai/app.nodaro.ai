@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
-import { getBatchJobStatus, getWorkflowExecution, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
+import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
 import { prefetchModelCredits } from "@/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
@@ -595,6 +595,12 @@ export function useWorkflowPersistence(projectId?: string) {
         // Check for backend orchestrator executions:
         // 1. Active (pending/running) → restore polling + apply current state
         // 2. Most recent completed → apply results to nodes missing outputs
+        //
+        // The list response already includes nodeStates, so we use it directly
+        // instead of issuing a separate /v1/workflow-executions/:id detail call.
+        // That second call was racing list/detail consistency (single-node job
+        // IDs merged into the list could 404 on detail) and showing loud 404s
+        // in the console on every workflow refresh.
         let activeBackendExecution: ActiveBackendExecution | undefined
         try {
           // First check for an active execution (editor-triggered only — exclude
@@ -605,13 +611,11 @@ export function useWorkflowPersistence(projectId?: string) {
             source: "editor",
           })
           if (activeExecs.length > 0) {
-            const execId = activeExecs[0].id
-            const exec = await getWorkflowExecution(execId)
+            const exec = activeExecs[0]
             const nodeStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>
-            // Double-check execution is still active — it may have completed
-            // between the list query and the detail fetch. Without this guard
-            // the frontend briefly shows nodes as running + fires a "completed"
-            // toast on every page refresh after an execution finishes.
+            // Status from list is a point-in-time snapshot — the subsequent
+            // poll (once restored) will fetch fresh state and correct any
+            // drift (e.g. execution completed between load and render).
             const stillActive = exec.status === "pending" || exec.status === "running" || exec.status === "stopping"
             if (stillActive && Object.keys(nodeStates).length > 0) {
               nodes = applyBackendExecutionState(nodes, nodeStates)
@@ -633,7 +637,7 @@ export function useWorkflowPersistence(projectId?: string) {
               source: "editor",
             })
             if (completedExecs.length > 0) {
-              const exec = await getWorkflowExecution(completedExecs[0].id)
+              const exec = completedExecs[0]
               const nodeStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>
               if (Object.keys(nodeStates).length > 0) {
                 // Only apply outputs to nodes that don't already have results
