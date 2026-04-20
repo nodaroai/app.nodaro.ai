@@ -12,6 +12,7 @@ declare module "fastify" {
   interface FastifyRequest {
     userId?: string
     userRole?: string
+    isAppRun?: boolean
     creditReservation?: import("./credit-guard.js").CreditReservation
   }
 }
@@ -156,6 +157,11 @@ export function registerAuthHook(app: FastifyInstance): void {
       const body = req.body as Record<string, unknown> | undefined
       if (body?.userId && typeof body.userId === "string") {
         req.userId = body.userId
+      }
+      const appRunHeader = req.headers["x-app-run"]
+      const appRunValue = Array.isArray(appRunHeader) ? appRunHeader[0] : appRunHeader
+      if (appRunValue === "true") {
+        req.isAppRun = true
       }
       return
     }

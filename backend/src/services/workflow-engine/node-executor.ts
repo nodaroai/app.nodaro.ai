@@ -271,14 +271,21 @@ async function executeSyncHttpNode(
   // Build request body from node data + resolved inputs
   const body = buildSyncHttpBody(node, resolvedInputs, ctx)
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    // Authenticate to the auth hook with the shared orchestrator secret — NOT req.ip,
+    // which is always 127.0.0.1 behind the Caddy reverse proxy.
+    "X-Internal-Orchestrator-Secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+  }
+  // Propagate app-run context so the route's credit reservation applies the
+  // free-tier app allowance gate (and avoids crediting allowance on app runs).
+  if (ctx.isAppRun) {
+    headers["X-App-Run"] = "true"
+  }
+
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      // Authenticate to the auth hook with the shared orchestrator secret — NOT req.ip,
-      // which is always 127.0.0.1 behind the Caddy reverse proxy.
-      "X-Internal-Orchestrator-Secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-    },
+    headers,
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(NODE_TIMEOUT_MS),
   })
