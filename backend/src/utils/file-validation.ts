@@ -243,3 +243,58 @@ export async function updateStorageUsage(
     console.error("[updateStorageUsage] increment_storage RPC failed:", error.message)
   }
 }
+
+/**
+ * Atomically reserve storage quota before an upload starts. Takes a row-level
+ * lock on profiles and commits the increment only if the resulting usage stays
+ * within the tier-resolved quota. This closes the concurrent-upload
+ * oversubscription window that per-request snapshots leave open.
+ *
+ * Returns true on successful reservation. On self-hosted (`hasCredits()` false)
+ * returns true without touching the DB, matching updateStorageUsage semantics.
+ */
+export async function reserveStorageIfWithinLimit(
+  userId: string,
+  bytes: number,
+): Promise<boolean> {
+  if (!hasCredits()) return true
+  if (bytes <= 0) return true
+
+  const { data, error } = await supabase.rpc("reserve_storage_if_within_limit", {
+    p_user_id: userId,
+    p_bytes: bytes,
+  })
+
+  if (error) {
+    console.error(
+      "[reserveStorageIfWithinLimit] RPC failed:",
+      error.message,
+    )
+    return false
+  }
+
+  return data === true
+}
+
+/**
+ * Refund previously reserved storage bytes. Pairs with
+ * reserveStorageIfWithinLimit after an upload either finishes smaller than
+ * the reservation or fails entirely. Non-positive inputs and self-hosted
+ * deployments are no-ops.
+ */
+export async function refundStorage(
+  userId: string,
+  bytes: number,
+): Promise<void> {
+  if (!hasCredits()) return
+  if (bytes <= 0) return
+
+  const { error } = await supabase.rpc("decrement_storage", {
+    p_user_id: userId,
+    p_bytes: bytes,
+  })
+
+  if (error) {
+    console.error("[refundStorage] decrement_storage RPC failed:", error.message)
+  }
+}

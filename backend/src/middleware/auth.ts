@@ -14,6 +14,7 @@ declare module "fastify" {
     userRole?: string
     isAppRun?: boolean
     creditReservation?: import("./credit-guard.js").CreditReservation
+    storageSnapshot?: import("./credit-guard.js").StorageSnapshot
   }
 }
 

@@ -74,8 +74,20 @@ export async function saveToStorageRoutes(app: FastifyInstance) {
       })
     }
 
+    // Snapshot hints at how much to reserve; the authoritative check is the
+    // reserve_storage_if_within_limit RPC inside uploadToR2, which takes a
+    // row lock on profiles so concurrent callers can't all pass a stale
+    // pre-upload usage read.
+    const snap = req.storageSnapshot
+    const remainingQuotaBytes = snap
+      ? Math.max(0, snap.limitBytes - snap.usedBytes)
+      : undefined
+
     try {
-      const r2Url = await uploadToR2(mediaUrl, job.id, detectedType, userId)
+      const r2Url = await uploadToR2(mediaUrl, job.id, detectedType, userId, {
+        remainingQuotaBytes,
+        reserveQuota: true,
+      })
 
       await supabase
         .from("jobs")
