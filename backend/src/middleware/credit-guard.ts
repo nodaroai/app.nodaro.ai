@@ -22,6 +22,7 @@ export interface CreditReservation {
 export interface StorageSnapshot {
   usedBytes: number
   limitBytes: number
+  tier: string
 }
 
 // Note: FastifyRequest augmentation (userId, userRole, creditReservation)
@@ -86,9 +87,9 @@ export function creditGuard(
     // Step 1: Check storage limit BEFORE credit check (for routes that produce output files)
     try {
       const storageCheck = CreditsService.checkStorageLimitWithProfile(profile as StorageProfile)
+      const tier = (profile as CreditProfile).tier ?? "free"
 
       if (!storageCheck.allowed) {
-        const tier = (profile as CreditProfile).tier ?? "free"
         const quotaBytes = storageCheck.limitBytes
         const usedBytes = storageCheck.usedBytes
 
@@ -108,6 +109,7 @@ export function creditGuard(
       req.storageSnapshot = {
         usedBytes: storageCheck.usedBytes,
         limitBytes: storageCheck.limitBytes,
+        tier,
       }
     } catch (err) {
       console.error(`[credit-guard] ${routeName} storage check failed:`, err)

@@ -32,6 +32,7 @@ import {
   getImageProxyUrl,
   generateImage,
   uploadFile,
+  saveToStorageApi,
   getBatchJobStatus,
   getJobStatus,
   subscribeToDownloadProgress,
@@ -261,6 +262,59 @@ describe("uploadFile", () => {
 
     const file = new File(["x"], "f.png", { type: "image/png" })
     await expect(uploadFile(file)).rejects.toThrow("Server down")
+  })
+})
+
+// ---- saveToStorageApi -----------------------------------------------------
+
+describe("saveToStorageApi", () => {
+  it("sends mediaType when provided", async () => {
+    sessionWith("tok-save")
+    const mock = mockFetchJson({ jobId: "job-1", url: "https://r2/video" })
+    vi.stubGlobal("fetch", mock)
+
+    await saveToStorageApi({
+      mediaUrl: "https://cdn.example.com/media",
+      filename: "clip.mp4",
+      mediaType: "video",
+    })
+
+    expect(mock).toHaveBeenCalledWith(
+      "/v1/save-to-storage",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer tok-save",
+        },
+      }),
+    )
+    expect(JSON.parse(mock.mock.calls[0][1].body as string)).toEqual({
+      mediaUrl: "https://cdn.example.com/media",
+      filename: "clip.mp4",
+      mediaType: "video",
+    })
+  })
+
+  it("throws StorageExceededError for storage_limit_exceeded", async () => {
+    noSession()
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(413, {
+        error: {
+          code: "storage_limit_exceeded",
+          message: "Storage limit exceeded",
+          usedBytes: 512,
+          quotaBytes: 1024,
+          remainingBytes: 0,
+          tier: "pro",
+        },
+      }),
+    )
+
+    await expect(
+      saveToStorageApi({ mediaUrl: "https://cdn.example.com/media", mediaType: "video" }),
+    ).rejects.toThrow(StorageExceededError)
   })
 })
 

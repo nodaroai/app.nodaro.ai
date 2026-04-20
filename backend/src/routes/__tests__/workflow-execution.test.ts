@@ -372,18 +372,37 @@ describe("GET /v1/workflow-executions/:id", () => {
 
   it("returns 404 when execution not found", async () => {
     const mockFrom = vi.mocked(supabase.from)
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
+    mockFrom.mockImplementation((table) => {
+      if (table === "workflow_executions") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: { code: "PGRST116", message: "not found" },
+                }),
+              }),
+            }),
+          }),
+        } as never
+      }
+
+      return {
+        select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: null,
-              error: { code: "PGRST116", message: "not found" },
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: { code: "PGRST116", message: "not found" },
+                }),
+              }),
             }),
           }),
         }),
-      }),
-    } as never)
+      } as never
+    })
 
     const res = await authedGet(`/v1/workflow-executions/${TEST_EXEC_ID}`)
     expect(res.statusCode).toBe(404)
@@ -433,6 +452,65 @@ describe("GET /v1/workflow-executions/:id", () => {
     expect(data.triggerType).toBe("manual")
     expect(data.totalNodes).toBe(3)
     expect(data.completedNodes).toBe(1)
+  })
+
+  it("falls back to standalone jobs when no workflow_execution exists", async () => {
+    const mockFrom = vi.mocked(supabase.from)
+    mockFrom.mockImplementation((table) => {
+      if (table === "workflow_executions") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: { code: "PGRST116", message: "not found" },
+                }),
+              }),
+            }),
+          }),
+        } as never
+      }
+
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id: TEST_JOB_ID,
+                    workflow_id: TEST_WORKFLOW_ID,
+                    user_id: TEST_USER_ID,
+                    workflow_execution_id: null,
+                    status: "processing",
+                    provider: "web-scrape",
+                    input_data: { type: "web-scrape", actor: "rss" },
+                    credits: 3,
+                    error_message: null,
+                    started_at: "2026-01-01T00:01:00Z",
+                    completed_at: null,
+                    created_at: "2026-01-01T00:00:00Z",
+                    updated_at: "2026-01-01T00:01:30Z",
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        }),
+      } as never
+    })
+
+    const res = await authedGet(`/v1/workflow-executions/${TEST_JOB_ID}`)
+    expect(res.statusCode).toBe(200)
+    const data = res.json().data
+    expect(data.id).toBe(TEST_JOB_ID)
+    expect(data.workflowId).toBe(TEST_WORKFLOW_ID)
+    expect(data.status).toBe("running")
+    expect(data.triggerType).toBe("single-node")
+    expect(data.totalNodes).toBe(1)
+    expect(data.nodeStates[TEST_JOB_ID].jobId).toBe(TEST_JOB_ID)
   })
 })
 

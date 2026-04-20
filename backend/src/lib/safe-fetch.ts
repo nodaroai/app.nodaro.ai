@@ -41,6 +41,11 @@ import { isIP } from "node:net"
 
 const DEFAULT_TIMEOUT_MS = 30_000
 
+export interface ResolvedAddress {
+  address: string
+  family: 4 | 6
+}
+
 /**
  * True if the IP belongs to a range we refuse to connect to from server-side
  * fetches. Covers IPv4 loopback/private/link-local/cloud-metadata/multicast
@@ -96,6 +101,38 @@ export function isPrivateOrReservedIP(ip: string): boolean {
 }
 
 /**
+ * Validate a DNS answer set and choose the address to connect to.
+ *
+ * We fail closed if any answer is private/reserved, because a public hostname
+ * that round-robins between public and private targets is still unsafe. When
+ * no family is requested, prefer IPv4 over IPv6 so dual-stack hosts remain
+ * reachable on servers without IPv6 egress.
+ */
+export function selectSafeResolvedAddress(
+  addrs: readonly ResolvedAddress[],
+  requestedFamily?: 0 | 4 | 6,
+): ResolvedAddress {
+  if (!Array.isArray(addrs) || addrs.length === 0) {
+    throw new Error("safeFetch: no DNS resolution")
+  }
+
+  for (const a of addrs) {
+    if (isPrivateOrReservedIP(a.address)) {
+      throw new Error(
+        `safeFetch: refusing connection — DNS resolution includes private/reserved IP ${a.address}`,
+      )
+    }
+  }
+
+  if (requestedFamily === 4 || requestedFamily === 6) {
+    const match = addrs.find((a) => a.family === requestedFamily)
+    if (match) return match
+  }
+
+  return addrs.find((a) => a.family === 4) ?? addrs[0]!
+}
+
+/**
  * Shared agent — a single instance across all safeFetch calls so the undici
  * connection pool is reused. The `connect.lookup` hook resolves the hostname
  * with `all: true` so multi-record answers are fully inspected; any private
@@ -117,24 +154,19 @@ const safeAgent = new Agent({
             cb(err, "", 0)
             return
           }
-          if (!Array.isArray(addrs) || addrs.length === 0) {
-            cb(new Error(`safeFetch: no DNS resolution for ${hostname}`), "", 0)
-            return
+          try {
+            const selected = selectSafeResolvedAddress(
+              addrs as ResolvedAddress[],
+              (options.family as 0 | 4 | 6 | undefined) ?? 0,
+            )
+            cb(null, selected.address, selected.family)
+          } catch (lookupErr) {
+            const wrapped =
+              lookupErr instanceof Error
+                ? new Error(lookupErr.message.replace("safeFetch: no DNS resolution", `safeFetch: no DNS resolution for ${hostname}`))
+                : new Error(`safeFetch: DNS lookup failed for ${hostname}`)
+            cb(wrapped, "", 0)
           }
-          for (const a of addrs) {
-            if (isPrivateOrReservedIP(a.address)) {
-              cb(
-                new Error(
-                  `safeFetch: refusing connection — ${hostname} resolves to private/reserved IP ${a.address}`,
-                ),
-                "",
-                0,
-              )
-              return
-            }
-          }
-          const first = addrs[0]
-          cb(null, first.address, first.family === 6 ? 6 : 4)
         },
       )
     },

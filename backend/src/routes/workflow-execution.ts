@@ -194,14 +194,31 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       .eq("user_id", req.userId)
       .single()
 
-    if (error || !execution) {
+    if (!error && execution) {
+      return {
+        data: toExecutionResponse(execution),
+      }
+    }
+
+    // Execution-history lists intentionally merge workflow_executions with
+    // standalone single-node jobs (`workflow_execution_id IS NULL`). Detail
+    // lookup needs the same fallback so a list row's `id` works uniformly.
+    const { data: job, error: jobError } = await supabase
+      .from("jobs")
+      .select("id, workflow_id, user_id, workflow_execution_id, status, provider, input_data, credits, error_message, started_at, completed_at, created_at, updated_at")
+      .eq("id", parsed.data.id)
+      .eq("user_id", req.userId)
+      .is("workflow_execution_id", null)
+      .single()
+
+    if (jobError || !job) {
       return reply.status(404).send({
         error: { code: "not_found", message: "Execution not found" },
       })
     }
 
     return {
-      data: toExecutionResponse(execution),
+      data: jobToExecutionResponse(job),
     }
   })
 
@@ -807,6 +824,17 @@ function jobToExecutionSummary(row: Record<string, unknown>) {
     startedAt: row.started_at,
     completedAt: row.completed_at,
     createdAt: row.created_at,
+  }
+}
+
+function jobToExecutionResponse(row: Record<string, unknown>) {
+  const summary = jobToExecutionSummary(row)
+  return {
+    ...summary,
+    workflowId: row.workflow_id,
+    userId: row.user_id,
+    triggerData: row.input_data,
+    updatedAt: row.updated_at ?? row.completed_at ?? row.started_at ?? row.created_at,
   }
 }
 

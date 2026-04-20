@@ -4435,6 +4435,14 @@ export function executeNode(
     const { updateNodeData } = useWorkflowStore.getState();
     const d = node.data as SaveToStorageData;
     const mediaUrl = overrideMediaUrl ?? inputs.videoUrl ?? inputs.imageUrl ?? inputs.audioUrl;
+    const mediaType =
+      mediaUrl === inputs.videoUrl ? "video"
+      : mediaUrl === inputs.imageUrl ? "image"
+      : mediaUrl === inputs.audioUrl ? "audio"
+      : inputs.videoUrl ? "video"
+      : inputs.imageUrl ? "image"
+      : inputs.audioUrl ? "audio"
+      : undefined;
 
     if (!mediaUrl) {
       updateNodeData(node.id, { executionStatus: "failed", errorMessage: "No media input connected" });
@@ -4446,6 +4454,7 @@ export function executeNode(
     return saveToStorageApi({
       mediaUrl,
       filename: d.filename || undefined,
+      mediaType,
     }).then(
       (result) => {
         const prev = ((node.data as SaveToStorageData).generatedResults ?? []) as readonly GeneratedResult[];

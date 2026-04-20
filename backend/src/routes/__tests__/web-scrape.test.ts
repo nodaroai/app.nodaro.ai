@@ -4,6 +4,9 @@ import Fastify from "fastify"
 vi.mock("../../providers/apify/scraper.js", () => ({
   runScraper: vi.fn(),
 }))
+vi.mock("../../providers/rss/parser.js", () => ({
+  fetchRssItems: vi.fn(),
+}))
 vi.mock("../../middleware/credit-guard.js", () => ({
   creditGuard: () => async () => {},
   reserveCreditsForJob: vi.fn().mockResolvedValue({ usageLogId: "usage-1" }),
@@ -66,6 +69,38 @@ describe("POST /v1/web-scrape", () => {
     expect(body.json).toEqual([])
   })
 
+  it("200 with json output for rss happy path", async () => {
+    const { fetchRssItems } = await import("../../providers/rss/parser.js")
+    vi.mocked(fetchRssItems).mockResolvedValue([
+      {
+        title: "First post",
+        url: "https://example.com/first",
+        description: "Hello world",
+        pubDate: "2026-04-20T00:00:00.000Z",
+        guid: "guid-1",
+      },
+    ])
+
+    const app = await buildTestApp()
+    const res = await app.inject({
+      method: "POST", url: "/v1/web-scrape",
+      payload: { actor: "rss", url: "https://feeds.feedburner.com/TechCrunch" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.jobId).toBe("job-1")
+    expect(body.json).toEqual([
+      {
+        title: "First post",
+        url: "https://example.com/first",
+        description: "Hello world",
+        pubDate: "2026-04-20T00:00:00.000Z",
+        guid: "guid-1",
+      },
+    ])
+  })
+
   it("content-crawler requires url", async () => {
     const app = await buildTestApp()
     const res = await app.inject({
@@ -84,5 +119,19 @@ describe("POST /v1/web-scrape", () => {
       payload: { actor: "google-search", query: "ai" },
     })
     expect(res.statusCode).toBe(502)
+  })
+
+  it("502 on rss fetch error", async () => {
+    const { fetchRssItems } = await import("../../providers/rss/parser.js")
+    vi.mocked(fetchRssItems).mockRejectedValue(new Error("connect ENETUNREACH"))
+
+    const app = await buildTestApp()
+    const res = await app.inject({
+      method: "POST", url: "/v1/web-scrape",
+      payload: { actor: "rss", url: "https://feeds.feedburner.com/TechCrunch" },
+    })
+
+    expect(res.statusCode).toBe(502)
+    expect(res.json().error.code).toBe("scrape_error")
   })
 })

@@ -13,6 +13,13 @@ const splitImageBody = z.object({
   names: z.array(z.string().min(1)).min(1).max(36),
 })
 
+function isBlockedUpstreamUrlError(error: unknown): boolean {
+  return error instanceof Error && (
+    error.message.startsWith("safeFetch: blocked") ||
+    error.message.includes("private/reserved IP")
+  )
+}
+
 export async function splitImageRoutes(app: FastifyInstance) {
   app.post("/v1/split-image", async (req, reply) => {
     const parsed = splitImageBody.safeParse(req.body)
@@ -79,8 +86,12 @@ export async function splitImageRoutes(app: FastifyInstance) {
       return { images: results }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error"
-      return reply.status(500).send({
-        error: { code: "internal_error", message },
+      const isBlocked = isBlockedUpstreamUrlError(err)
+      return reply.status(isBlocked ? 400 : 500).send({
+        error: {
+          code: isBlocked ? "validation_error" : "internal_error",
+          message: isBlocked ? "URL resolves to a blocked address" : message,
+        },
       })
     }
   })
