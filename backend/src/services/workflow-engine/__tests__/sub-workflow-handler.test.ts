@@ -15,14 +15,14 @@ vi.mock("../../../lib/supabase.js", () => ({
     from: vi.fn().mockReturnValue({
       select: (...args: unknown[]) => {
         mockSelect(...args)
-        return {
+        const chain = {
           eq: (...eqArgs: unknown[]) => {
             mockEq(...eqArgs)
-            return {
-              single: () => mockSingle(),
-            }
+            return chain
           },
+          single: () => mockSingle(),
         }
+        return chain
       },
     }),
   },
@@ -102,6 +102,24 @@ describe("executeSubWorkflow", () => {
     await expect(
       executeSubWorkflow(n, {}, ctx()),
     ).rejects.toThrow("not found")
+  })
+
+  it("scopes the workflow fetch to ctx.userId (IDOR regression)", async () => {
+    // Regression: previously the sub-workflow load was .eq("id", X).single()
+    // with the service-role client, letting any user execute any workflow
+    // by UUID. The query MUST include .eq("user_id", ctx.userId) so that
+    // referencing another user's workflow yields "not found".
+    const n = node("sw", "sub-workflow", { workflowId: "victim-wf" })
+    mockSingle.mockResolvedValue({
+      data: { nodes: [node("p", "text-prompt", { text: "ok" })], edges: [] },
+      error: null,
+    })
+
+    await executeSubWorkflow(n, {}, ctx({ userId: "attacker-1" }))
+
+    const eqCalls = mockEq.mock.calls
+    expect(eqCalls).toContainEqual(["id", "victim-wf"])
+    expect(eqCalls).toContainEqual(["user_id", "attacker-1"])
   })
 
   it("executes a simple sub-workflow with source + inline nodes", async () => {

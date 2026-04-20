@@ -66,11 +66,16 @@ export async function executeSubWorkflow(
   const newRouteKeys = new Set(executingRouteKeys)
   newRouteKeys.add(routeKey)
 
-  // Load referenced workflow
+  // Load referenced workflow. Scope by ctx.userId: `supabase` here is the
+  // service-role client (bypasses RLS), and the node's workflowId is
+  // user-controlled, so without this filter any authenticated user could
+  // reference an arbitrary workflow UUID and have its nodes executed /
+  // exfiltrated under their own identity.
   const { data: workflow, error: wfError } = await supabase
     .from("workflows")
     .select("nodes, edges")
     .eq("id", referencedWorkflowId)
+    .eq("user_id", ctx.userId)
     .single()
 
   if (wfError || !workflow) {
