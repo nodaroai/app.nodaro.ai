@@ -160,7 +160,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
           err instanceof Error ? err.message : "Claude API call failed"
 
         await supabase
-          .from("jobs")
+          .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
           .update({ status: "failed", output_data: { error: message } })
           .eq("id", job.id)
 

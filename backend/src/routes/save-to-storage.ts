@@ -95,7 +95,7 @@ export async function saveToStorageRoutes(app: FastifyInstance) {
         err instanceof Error ? err.message : "Failed to save media to storage"
 
       await supabase
-        .from("jobs")
+        .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
         .update({ status: "failed", output_data: { error: message } })
         .eq("id", job.id)
 

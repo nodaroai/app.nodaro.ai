@@ -178,7 +178,7 @@ Prompt: ${prompt}`
         console.error(`[motion-graphics-ai] Error for job ${job.id}:`, message)
 
         await supabase
-          .from("jobs")
+          .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
           .update({ status: "failed", output_data: { error: message } })
           .eq("id", job.id)
 

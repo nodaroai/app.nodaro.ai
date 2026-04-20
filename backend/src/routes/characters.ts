@@ -89,6 +89,13 @@ export async function characterRoutes(app: FastifyInstance) {
 
   // Get single character by ID
   app.get("/v1/characters/:id", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const parsed = deleteCharacterParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -105,6 +112,7 @@ export async function characterRoutes(app: FastifyInstance) {
       .from("characters")
       .select("id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, created_at, updated_at")
       .eq("id", id)
+      .eq("user_id", userId)
       .single()
 
     if (error) {
@@ -177,11 +185,14 @@ export async function characterRoutes(app: FastifyInstance) {
     }
 
     if (id) {
-      // Update existing
+      // Update existing. Scope by user_id so a caller cannot overwrite another
+      // user's row by passing their id (the update would otherwise rewrite
+      // user_id to the caller, silently stealing the record).
       const { data: updated, error } = await supabase
         .from("characters")
         .update(row)
         .eq("id", id)
+        .eq("user_id", userId)
         .select("id")
         .single()
 
@@ -211,6 +222,13 @@ export async function characterRoutes(app: FastifyInstance) {
 
   // Delete character permanently
   app.delete("/v1/characters/:id", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const parsed = deleteCharacterParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -227,6 +245,7 @@ export async function characterRoutes(app: FastifyInstance) {
       .from("characters")
       .delete()
       .eq("id", id)
+      .eq("user_id", userId)
 
     if (error) {
       return reply.status(500).send({
