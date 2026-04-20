@@ -2,10 +2,10 @@ import { S3Client, PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand }
 import { Upload } from "@aws-sdk/lib-storage"
 import { createReadStream } from "node:fs"
 import { stat } from "node:fs/promises"
-import { Readable } from "node:stream"
+import { Readable, Transform } from "node:stream"
 import { config } from "./config.js"
 import { safeFetch } from "./safe-fetch.js"
-import { updateStorageUsage } from "../utils/file-validation.js"
+import { updateStorageUsage, getSizeLimit, type FileCategory } from "../utils/file-validation.js"
 
 export const s3 = new S3Client({
   region: "auto",
@@ -69,13 +69,48 @@ function trackStorage(trackUserId: string | undefined, sizeBytes: number): void 
 }
 
 /**
- * Stream a remote URL directly to R2 without buffering the entire file in memory.
+ * Transform that counts bytes flowing through it and errors once the cap is
+ * crossed. Used by uploadToR2 to bound streaming downloads of user-supplied
+ * URLs: Content-Length is advisory (attacker-controlled servers may lie or
+ * omit it), so authoritative enforcement happens here, mid-stream.
+ */
+class SizeLimitedStream extends Transform {
+  private counted = 0
+  constructor(private readonly maxBytes: number) {
+    super()
+  }
+  _transform(
+    chunk: Buffer,
+    _encoding: BufferEncoding,
+    cb: (err?: Error | null, data?: Buffer) => void,
+  ): void {
+    this.counted += chunk.length
+    if (this.counted > this.maxBytes) {
+      cb(
+        new Error(
+          `upload-size-exceeded: ${this.counted} bytes read, cap is ${this.maxBytes}`,
+        ),
+      )
+      return
+    }
+    cb(null, chunk)
+  }
+  get bytesRead(): number {
+    return this.counted
+  }
+}
+
+/**
+ * Stream a remote URL directly to R2, bounded by
+ * `min(getSizeLimit(type), opts.remainingQuotaBytes ?? ∞)` via
+ * SizeLimitedStream. Content-Length is an advisory early-reject only.
  */
 export async function uploadToR2(
   sourceUrl: string,
   jobId: string,
   type: MediaType = "image",
   trackUserId?: string,
+  opts: { remainingQuotaBytes?: number } = {},
 ): Promise<string> {
   // safeFetch: validate DNS resolution against private/reserved IP ranges at
   // connection time. Without this, a user-supplied sourceUrl resolving to an
@@ -87,15 +122,45 @@ export async function uploadToR2(
     throw new Error(`Failed to download ${type}: ${response.status}`)
   }
 
-  const contentLength = parseInt(response.headers.get("content-length") ?? "0", 10)
-  const key = r2Key(jobId, type)
-  const nodeStream = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
+  const typeCap = getSizeLimit(type as FileCategory)
+  const quotaCap = opts.remainingQuotaBytes ?? Number.POSITIVE_INFINITY
+  const effectiveCap = Math.min(typeCap, quotaCap)
 
-  await streamToR2(key, nodeStream, MEDIA_MIME[type])
-
-  if (contentLength > 0) {
-    trackStorage(trackUserId, contentLength)
+  const advertised = parseInt(response.headers.get("content-length") ?? "", 10)
+  if (Number.isFinite(advertised) && advertised > effectiveCap) {
+    try { await response.body?.cancel() } catch { /* best effort */ }
+    throw new Error(
+      `upload-size-exceeded: Content-Length ${advertised} > cap ${effectiveCap}`,
+    )
   }
+
+  const key = r2Key(jobId, type)
+  const source = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
+  const counter = new SizeLimitedStream(effectiveCap)
+
+  // Propagate teardown: a counter error (or source error) must destroy both
+  // sides so the upstream fetch socket is closed and the Upload aborts.
+  counter.once("error", (err) => {
+    if (!source.destroyed) source.destroy(err)
+  })
+  source.once("error", (err) => {
+    if (!counter.destroyed) counter.destroy(err)
+  })
+  source.pipe(counter)
+
+  try {
+    await streamToR2(key, counter, MEDIA_MIME[type])
+  } catch (err) {
+    // lib-storage aborts in-flight multipart uploads on error, but a
+    // completed single-part PutObject that failed post-commit could leak.
+    // Best-effort delete keeps accounting clean.
+    await deleteFromR2(key).catch((delErr) => {
+      console.error("[uploadToR2] cleanup delete failed:", delErr)
+    })
+    throw err
+  }
+
+  trackStorage(trackUserId, counter.bytesRead)
 
   return r2Url(key)
 }

@@ -14,6 +14,16 @@ export interface CreditReservation {
   watermark: boolean
 }
 
+/**
+ * Storage usage snapshot attached to the request by creditGuard.
+ * Routes that stream remote content into R2 use this to cap the upload
+ * against the user's remaining quota without re-querying profiles.
+ */
+export interface StorageSnapshot {
+  usedBytes: number
+  limitBytes: number
+}
+
 // Note: FastifyRequest augmentation (userId, userRole, creditReservation)
 // is in ./auth.ts which is the canonical source for the declare module block.
 
@@ -93,6 +103,11 @@ export function creditGuard(
           },
         })
         return
+      }
+
+      req.storageSnapshot = {
+        usedBytes: storageCheck.usedBytes,
+        limitBytes: storageCheck.limitBytes,
       }
     } catch (err) {
       console.error(`[credit-guard] ${routeName} storage check failed:`, err)
