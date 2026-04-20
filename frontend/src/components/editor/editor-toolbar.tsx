@@ -530,7 +530,14 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
   }, [nodes, edges, workflowName, flowTemplates])
 
   function parseWorkflowJson(jsonStr: string): ExportedWorkflow {
-    const data = JSON.parse(jsonStr) as ExportedWorkflow
+    const raw = JSON.parse(jsonStr) as Record<string, unknown>
+    // Tutorial/seed format wraps the workflow: `{ meta, workflow: { name, nodes, edges, ... } }`.
+    // Unwrap so downstream import logic sees the flat ExportedWorkflow shape.
+    const inner = (raw.workflow && typeof raw.workflow === "object" && raw.workflow !== null
+      && "nodes" in (raw.workflow as object))
+      ? (raw.workflow as Record<string, unknown>)
+      : raw
+    const data = inner as unknown as ExportedWorkflow
     if (!data.nodes || !Array.isArray(data.nodes)) throw new Error("Missing nodes array")
     if (!data.edges || !Array.isArray(data.edges)) throw new Error("Missing edges array")
     return data

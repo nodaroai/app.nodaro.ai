@@ -66,11 +66,21 @@ export async function executeSubWorkflow(
   const newRouteKeys = new Set(executingRouteKeys)
   newRouteKeys.add(routeKey)
 
-  // Load referenced workflow
+  // Load referenced workflow. `supabase` here is the service-role client
+  // (bypasses RLS) and the node's workflowId is user-controlled, so we must
+  // scope by owner to prevent referencing arbitrary workflows (IDOR).
+  //
+  // Scope to `ctx.workflowOwnerId` when set: sub-workflow references point at
+  // workflows owned by the *author* of the containing workflow, which can
+  // differ from `ctx.userId` for shared-workflow presentation runs (viewer
+  // pays) and app runs (creator's snapshot, runner's identity). Fall back to
+  // `ctx.userId` when owner is unknown so legacy callers stay protected.
+  const ownerId = ctx.workflowOwnerId ?? ctx.userId
   const { data: workflow, error: wfError } = await supabase
     .from("workflows")
     .select("nodes, edges")
     .eq("id", referencedWorkflowId)
+    .eq("user_id", ownerId)
     .single()
 
   if (wfError || !workflow) {
