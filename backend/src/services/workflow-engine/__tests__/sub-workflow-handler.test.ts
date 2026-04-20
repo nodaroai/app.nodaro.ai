@@ -104,11 +104,12 @@ describe("executeSubWorkflow", () => {
     ).rejects.toThrow("not found")
   })
 
-  it("scopes the workflow fetch to ctx.userId (IDOR regression)", async () => {
+  it("scopes the workflow fetch to ctx.userId when no workflowOwnerId (IDOR regression)", async () => {
     // Regression: previously the sub-workflow load was .eq("id", X).single()
     // with the service-role client, letting any user execute any workflow
-    // by UUID. The query MUST include .eq("user_id", ctx.userId) so that
-    // referencing another user's workflow yields "not found".
+    // by UUID. Without a workflowOwnerId (legacy callers), the scope falls
+    // back to ctx.userId — so an attacker's own runs can't reference anyone
+    // else's workflows.
     const n = node("sw", "sub-workflow", { workflowId: "victim-wf" })
     mockSingle.mockResolvedValue({
       data: { nodes: [node("p", "text-prompt", { text: "ok" })], edges: [] },
@@ -120,6 +121,47 @@ describe("executeSubWorkflow", () => {
     const eqCalls = mockEq.mock.calls
     expect(eqCalls).toContainEqual(["id", "victim-wf"])
     expect(eqCalls).toContainEqual(["user_id", "attacker-1"])
+  })
+
+  it("scopes to workflowOwnerId when set (shared/app run with runner ≠ owner)", async () => {
+    // Shared-workflow presentation runs execute under the viewer's identity
+    // (ctx.userId = viewer) while the sub-workflow reference belongs to the
+    // owner. Same shape for app runs (ctx.userId = runner, workflowOwnerId =
+    // creator). The fetch must scope to the owner so those flows still work.
+    const n = node("sw", "sub-workflow", { workflowId: "owner-sub-wf" })
+    mockSingle.mockResolvedValue({
+      data: { nodes: [node("p", "text-prompt", { text: "ok" })], edges: [] },
+      error: null,
+    })
+
+    await executeSubWorkflow(
+      n,
+      {},
+      ctx({ userId: "viewer-1", workflowOwnerId: "owner-1" }),
+    )
+
+    const eqCalls = mockEq.mock.calls
+    expect(eqCalls).toContainEqual(["id", "owner-sub-wf"])
+    expect(eqCalls).toContainEqual(["user_id", "owner-1"])
+    // Must NOT scope to the viewer — that would break shared/app runs.
+    expect(eqCalls).not.toContainEqual(["user_id", "viewer-1"])
+  })
+
+  it("throws when sub-workflow fetch returns null (not found / not owned)", async () => {
+    // When the owner-scoped query returns no row — either because the
+    // workflow doesn't exist or because it belongs to a different user —
+    // the handler throws the same "not found" error. Caller can't
+    // distinguish the two cases, which is the desired security property.
+    const n = node("sw", "sub-workflow", { workflowId: "foreign-wf" })
+    mockSingle.mockResolvedValue({ data: null, error: null })
+
+    await expect(
+      executeSubWorkflow(
+        n,
+        {},
+        ctx({ userId: "viewer-1", workflowOwnerId: "owner-1" }),
+      ),
+    ).rejects.toThrow("not found")
   })
 
   it("executes a simple sub-workflow with source + inline nodes", async () => {

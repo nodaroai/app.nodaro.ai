@@ -192,13 +192,16 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
   }
 
   try {
-    // 1. Load workflow from DB (or from published app snapshot if running a specific version)
+    // 1. Load workflow from DB (or from published app snapshot if running a specific version).
+    //    Also capture the workflow owner (distinct from `userId` for shared/app runs);
+    //    `ctx.workflowOwnerId` scopes sub-workflow resolution so a shared/app viewer
+    //    can run the owner's sub-flows without re-opening the IDOR path.
     let workflowData: { nodes: unknown; edges: unknown; settings: unknown } | null = null
 
     if (appVersionId) {
       const { data: appVersion, error: appError } = await supabase
         .from("published_apps")
-        .select("snapshot_nodes, snapshot_edges, snapshot_settings")
+        .select("snapshot_nodes, snapshot_edges, snapshot_settings, creator_id")
         .eq("id", appVersionId)
         .single()
 
@@ -208,13 +211,14 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
           edges: appVersion.snapshot_edges,
           settings: appVersion.snapshot_settings,
         }
+        ctx.workflowOwnerId = (appVersion.creator_id as string | null) ?? undefined
       }
     }
 
     if (!workflowData) {
       const { data: workflow, error: wfError } = await supabase
         .from("workflows")
-        .select("nodes, edges, settings")
+        .select("nodes, edges, settings, user_id")
         .eq("id", workflowId)
         .single()
 
@@ -223,6 +227,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         return
       }
       workflowData = workflow
+      ctx.workflowOwnerId = (workflow.user_id as string | null) ?? undefined
     }
 
     // Migrate legacy image node types (edit-image → modify/upscale/remove-background, image-to-image → modify)

@@ -221,6 +221,11 @@ export interface OrchestratorContext {
   componentDepth?: number
   /** Slugs of ancestor components in the execution chain — used for cycle detection */
   executingComponentIds?: string[]
+  /** Owner of the top-level workflow being executed (workflows.user_id or
+   *  published_apps.creator_id). Distinct from `userId`, which is the runner:
+   *  a shared workflow or an app run executes under the runner's identity but
+   *  must only resolve sub-workflow references belonging to the owner. */
+  workflowOwnerId?: string
 }
 
 // ---------------------------------------------------------------------------
