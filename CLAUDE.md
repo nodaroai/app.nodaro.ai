@@ -328,5 +328,5 @@ backend/src/
 
 ---
 
-*Last updated: 2026-04-17*
-*Version: 1.80.0*
+*Last updated: 2026-04-20*
+*Version: 1.80.1*
