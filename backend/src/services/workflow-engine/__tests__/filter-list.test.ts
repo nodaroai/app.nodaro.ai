@@ -195,6 +195,74 @@ describe("executeFilterList — operator semantics", () => {
     })
   })
 
+  describe("string: starts_with ends_with", () => {
+    it("starts_with matches prefix", () => {
+      const kept = run(
+        [JSON.stringify({ url: "https://foo.com" }), JSON.stringify({ url: "http://bar.com" })],
+        { field: "url", operator: "starts_with", value: "https" },
+      )
+      expect(kept.map((s) => JSON.parse(s).url)).toEqual(["https://foo.com"])
+    })
+
+    it("ends_with matches suffix", () => {
+      const kept = run(
+        [JSON.stringify({ file: "cat.jpg" }), JSON.stringify({ file: "dog.png" })],
+        { field: "file", operator: "ends_with", value: ".jpg" },
+      )
+      expect(kept.map((s) => JSON.parse(s).file)).toEqual(["cat.jpg"])
+    })
+
+    it("starts_with stringifies numeric field values", () => {
+      const kept = run(
+        [JSON.stringify({ code: 4321 }), JSON.stringify({ code: 1234 })],
+        { field: "code", operator: "starts_with", value: "43" },
+      )
+      expect(kept.map((s) => JSON.parse(s).code)).toEqual([4321])
+    })
+
+    it("ends_with against missing field with empty value passes ('' endsWith '' is true)", () => {
+      const kept = run(
+        [JSON.stringify({ other: 1 })],
+        { field: "missing", operator: "ends_with", value: "" },
+      )
+      expect(kept).toHaveLength(1)
+    })
+  })
+
+  describe("regex", () => {
+    it("regex matches pattern", () => {
+      const kept = run(
+        [JSON.stringify({ email: "a@b.com" }), JSON.stringify({ email: "not-email" })],
+        { field: "email", operator: "regex", value: "^[^@]+@[^@]+$" },
+      )
+      expect(kept.map((s) => JSON.parse(s).email)).toEqual(["a@b.com"])
+    })
+
+    it("regex case-sensitive by default", () => {
+      const kept = run(
+        [JSON.stringify({ v: "HELLO" }), JSON.stringify({ v: "hello" })],
+        { field: "v", operator: "regex", value: "^hello$" },
+      )
+      expect(kept.map((s) => JSON.parse(s).v)).toEqual(["hello"])
+    })
+
+    it("regex with invalid pattern drops the item (doesn't throw)", () => {
+      const kept = run(
+        [JSON.stringify({ v: "x" })],
+        { field: "v", operator: "regex", value: "[unclosed" },
+      )
+      expect(kept).toEqual([])
+    })
+
+    it("regex with empty pattern drops all items", () => {
+      const kept = run(
+        [JSON.stringify({ v: "x" })],
+        { field: "v", operator: "regex", value: "" },
+      )
+      expect(kept).toEqual([])
+    })
+  })
+
   describe("existence: exists not_exists", () => {
     it("exists: present number passes", () => {
       const kept = run([JSON.stringify({ v: 0 })], { field: "v", operator: "exists" })

@@ -62,7 +62,14 @@ function buildFilterExpr(f: JsonFilter): string {
     case "is_not_empty": return `select(${ref} != null and ${ref} != "")`
     case "matches_regex": return `select(${ref} | test("${escapeString(f.value as string)}"))`
     case "in_list": {
-      const items = (f.value as string[]).map((v) => `${ref} == ${coerceValue(v)}`)
+      // Tolerate string form: users can switch operator to "in_list" while the
+      // previous operator's string value is still in place. Comma-split so the
+      // config panel's "a, b, c" shape works before it's persisted as an array.
+      const raw = Array.isArray(f.value)
+        ? f.value
+        : String(f.value ?? "").split(",").map((s) => s.trim()).filter(Boolean)
+      if (raw.length === 0) return `select(false)`
+      const items = raw.map((v) => `${ref} == ${coerceValue(v)}`)
       return `select(${items.join(" or ")})`
     }
     default: return `select(true)`
