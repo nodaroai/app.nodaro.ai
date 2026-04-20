@@ -23,8 +23,19 @@ const ACTOR_OPTIONS: ReadonlyArray<ScraperActorId> = [
   "tiktok",
 ]
 
+// Cleared on actor switch so old values don't resurface when switching back.
+const ACTOR_FIELD_KEYS = ["query", "maxResults", "countryCode", "url", "mode", "target", "resultsLimit"] as const
+
 export function WebScrapeConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<WebScrapeNodeData>) {
   const actor: ScraperActorId = data.actor ?? "google-search"
+
+  const handleActorChange = (v: string) => {
+    const next = v as ScraperActorId
+    if (next === actor) return
+    const patch: Record<string, unknown> = { actor: next }
+    for (const key of ACTOR_FIELD_KEYS) patch[key] = undefined
+    onUpdate(patch)
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -33,7 +44,7 @@ export function WebScrapeConfig({ data, onUpdate, sources, fieldMappings, onMapF
         <Label htmlFor="scraper-actor">Source</Label>
         <Select
           value={actor}
-          onValueChange={(v) => onUpdate({ actor: v as ScraperActorId })}
+          onValueChange={handleActorChange}
         >
           <SelectTrigger id="scraper-actor" className="h-9 text-sm">
             <SelectValue />
