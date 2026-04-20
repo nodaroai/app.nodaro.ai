@@ -77,6 +77,8 @@ vi.mock("@/lib/config.js", () => ({
 
 vi.mock("@/utils/file-validation.js", () => ({
   updateStorageUsage: vi.fn().mockResolvedValue(undefined),
+  reserveStorageIfWithinLimit: vi.fn().mockResolvedValue(true),
+  refundStorage: vi.fn().mockResolvedValue(undefined),
   // Small caps keep size tests cheap; real values are 25MB/500MB/50MB.
   getSizeLimit: vi.fn((category: string) =>
     category === "image" ? 1024 : category === "video" ? 4096 : 2048,
@@ -93,7 +95,11 @@ import {
   deleteFromR2,
   batchDeleteFromR2,
 } from "@/lib/storage.js"
-import { updateStorageUsage } from "@/utils/file-validation.js"
+import {
+  updateStorageUsage,
+  reserveStorageIfWithinLimit,
+  refundStorage,
+} from "@/utils/file-validation.js"
 
 // Build a fetch-Response-like object with a WHATWG ReadableStream body.
 // `chunks` are emitted in order; pass `headerLength` to advertise a
@@ -406,5 +412,128 @@ describe("uploadToR2 — streaming size enforcement", () => {
     ).rejects.toThrow(/404/)
 
     expect(updateStorageUsage).not.toHaveBeenCalled()
+  })
+})
+
+// ---------- uploadToR2 — atomic quota reservation ----------
+//
+// These tests cover the concurrent-upload oversubscription fix: reserveQuota
+// pre-reserves effectiveCap via RPC, refunds the unused portion on success,
+// and refunds the full reservation on failure. trackStorage is skipped in
+// the reserved path because the RPC already committed the write.
+
+describe("uploadToR2 — atomic quota reservation", () => {
+  const reserveMock = vi.mocked(reserveStorageIfWithinLimit)
+  const refundMock = vi.mocked(refundStorage)
+  const trackMock = vi.mocked(updateStorageUsage)
+
+  it("reserves effectiveCap before streaming and refunds unused bytes on success", async () => {
+    // Image type cap (mocked) = 1024, snapshot says 800 remaining →
+    // effectiveCap = 800. Actual body is 500 → refund 300.
+    const payload = new Uint8Array(500)
+    mocks.safeFetchMock.mockResolvedValueOnce(
+      makeResponse({ chunks: [payload], headerLength: null }),
+    )
+    reserveMock.mockResolvedValueOnce(true)
+
+    await uploadToR2("https://src.example/x.png", "job-r1", "image", "user-r1", {
+      remainingQuotaBytes: 800,
+      reserveQuota: true,
+    })
+
+    expect(reserveMock).toHaveBeenCalledWith("user-r1", 800)
+    expect(refundMock).toHaveBeenCalledWith("user-r1", 300)
+    expect(trackMock).not.toHaveBeenCalled()
+  })
+
+  it("rejects when the reservation RPC returns false (concurrent exhaustion)", async () => {
+    // Two parallel callers each try to reserve 800 bytes; second one must
+    // be turned away by the RPC because the first already committed.
+    const payload = new Uint8Array(200)
+    mocks.safeFetchMock.mockResolvedValueOnce(
+      makeResponse({ chunks: [payload], headerLength: null }),
+    )
+    reserveMock.mockResolvedValueOnce(false)
+
+    await expect(
+      uploadToR2("https://src.example/x.png", "job-r2", "image", "user-r2", {
+        remainingQuotaBytes: 800,
+        reserveQuota: true,
+      }),
+    ).rejects.toThrow(/storage|limit|quota/i)
+
+    expect(mocks.uploadBodies).toHaveLength(0)
+    expect(refundMock).not.toHaveBeenCalled()
+    expect(trackMock).not.toHaveBeenCalled()
+  })
+
+  it("refunds the full reservation when the upload fails mid-stream", async () => {
+    // Reserve 800, then body overflows the cap → stream aborts → full refund.
+    const chunks = [new Uint8Array(400), new Uint8Array(400), new Uint8Array(400)]
+    mocks.safeFetchMock.mockResolvedValueOnce(
+      makeResponse({ chunks, headerLength: null }),
+    )
+    reserveMock.mockResolvedValueOnce(true)
+
+    await expect(
+      uploadToR2("https://src.example/x.png", "job-r3", "image", "user-r3", {
+        remainingQuotaBytes: 800,
+        reserveQuota: true,
+      }),
+    ).rejects.toThrow(/size|limit|exceed/i)
+
+    expect(reserveMock).toHaveBeenCalledWith("user-r3", 800)
+    expect(refundMock).toHaveBeenCalledWith("user-r3", 800)
+    expect(trackMock).not.toHaveBeenCalled()
+  })
+
+  it("skips refund when actual upload matches the reservation exactly", async () => {
+    // effectiveCap = 800, body = 800, so nothing to refund.
+    const payload = new Uint8Array(800)
+    mocks.safeFetchMock.mockResolvedValueOnce(
+      makeResponse({ chunks: [payload], headerLength: null }),
+    )
+    reserveMock.mockResolvedValueOnce(true)
+
+    await uploadToR2("https://src.example/x.png", "job-r4", "image", "user-r4", {
+      remainingQuotaBytes: 800,
+      reserveQuota: true,
+    })
+
+    expect(reserveMock).toHaveBeenCalledWith("user-r4", 800)
+    expect(refundMock).not.toHaveBeenCalled()
+    expect(trackMock).not.toHaveBeenCalled()
+  })
+
+  it("leaves the non-reserve path using trackStorage (back-compat)", async () => {
+    const payload = new Uint8Array(300)
+    mocks.safeFetchMock.mockResolvedValueOnce(
+      makeResponse({ chunks: [payload], headerLength: null }),
+    )
+
+    await uploadToR2("https://src.example/x.png", "job-r5", "image", "user-r5")
+
+    expect(reserveMock).not.toHaveBeenCalled()
+    expect(refundMock).not.toHaveBeenCalled()
+    expect(trackMock).toHaveBeenCalledWith("user-r5", 300)
+  })
+
+  it("short-circuits Content-Length early-reject without consuming the reservation", async () => {
+    // Content-Length advertises a value larger than effectiveCap → caller
+    // must fail before reserving, so the user's quota isn't held unnecessarily.
+    mocks.safeFetchMock.mockResolvedValueOnce(
+      makeResponse({ chunks: [new Uint8Array(0)], headerLength: 5000 }),
+    )
+
+    await expect(
+      uploadToR2("https://src.example/x.png", "job-r6", "image", "user-r6", {
+        remainingQuotaBytes: 800,
+        reserveQuota: true,
+      }),
+    ).rejects.toThrow(/size|limit|exceed/i)
+
+    expect(reserveMock).not.toHaveBeenCalled()
+    expect(refundMock).not.toHaveBeenCalled()
+    expect(trackMock).not.toHaveBeenCalled()
   })
 })

@@ -74,12 +74,10 @@ export async function saveToStorageRoutes(app: FastifyInstance) {
       })
     }
 
-    // Cap this upload against the user's remaining storage quota mid-stream.
-    // Snapshot comes from creditGuard's already-fetched profile; absent in
-    // self-hosted mode, where uploadToR2 falls back to per-type caps only.
-    // TOCTOU-best-effort: concurrent uploads from the same user can still
-    // oversubscribe; a DB-side atomic reservation is required for a perfect
-    // quota guarantee.
+    // Snapshot hints at how much to reserve; the authoritative check is the
+    // reserve_storage_if_within_limit RPC inside uploadToR2, which takes a
+    // row lock on profiles so concurrent callers can't all pass a stale
+    // pre-upload usage read.
     const snap = req.storageSnapshot
     const remainingQuotaBytes = snap
       ? Math.max(0, snap.limitBytes - snap.usedBytes)
@@ -88,6 +86,7 @@ export async function saveToStorageRoutes(app: FastifyInstance) {
     try {
       const r2Url = await uploadToR2(mediaUrl, job.id, detectedType, userId, {
         remainingQuotaBytes,
+        reserveQuota: true,
       })
 
       await supabase

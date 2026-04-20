@@ -5,7 +5,13 @@ import { stat } from "node:fs/promises"
 import { Readable, Transform } from "node:stream"
 import { config } from "./config.js"
 import { safeFetch } from "./safe-fetch.js"
-import { updateStorageUsage, getSizeLimit, type FileCategory } from "../utils/file-validation.js"
+import {
+  updateStorageUsage,
+  reserveStorageIfWithinLimit,
+  refundStorage,
+  getSizeLimit,
+  type FileCategory,
+} from "../utils/file-validation.js"
 
 export const s3 = new S3Client({
   region: "auto",
@@ -104,13 +110,21 @@ class SizeLimitedStream extends Transform {
  * Stream a remote URL directly to R2, bounded by
  * `min(getSizeLimit(type), opts.remainingQuotaBytes ?? ∞)` via
  * SizeLimitedStream. Content-Length is an advisory early-reject only.
+ *
+ * Pass `opts.reserveQuota: true` (together with `trackUserId`) to do an
+ * atomic pre-upload reservation of `effectiveCap` bytes through the
+ * reserve_storage_if_within_limit RPC. The unused portion is refunded on
+ * success; the full reservation is refunded on failure. This is what
+ * protects against the concurrent-upload quota oversubscription: the RPC
+ * serialises against a FOR UPDATE lock on the profile row, so N parallel
+ * callers cannot each pass the same pre-upload snapshot check.
  */
 export async function uploadToR2(
   sourceUrl: string,
   jobId: string,
   type: MediaType = "image",
   trackUserId?: string,
-  opts: { remainingQuotaBytes?: number } = {},
+  opts: { remainingQuotaBytes?: number; reserveQuota?: boolean } = {},
 ): Promise<string> {
   // safeFetch: validate DNS resolution against private/reserved IP ranges at
   // connection time. Without this, a user-supplied sourceUrl resolving to an
@@ -134,6 +148,17 @@ export async function uploadToR2(
     )
   }
 
+  let reserved = false
+  if (opts.reserveQuota && trackUserId) {
+    reserved = await reserveStorageIfWithinLimit(trackUserId, effectiveCap)
+    if (!reserved) {
+      try { await response.body?.cancel() } catch { /* best effort */ }
+      throw new Error(
+        `storage-limit-exceeded: atomic reservation of ${effectiveCap} bytes refused`,
+      )
+    }
+  }
+
   const key = r2Key(jobId, type)
   const source = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
   const counter = new SizeLimitedStream(effectiveCap)
@@ -151,16 +176,32 @@ export async function uploadToR2(
   try {
     await streamToR2(key, counter, MEDIA_MIME[type])
   } catch (err) {
-    // lib-storage aborts in-flight multipart uploads on error, but a
-    // completed single-part PutObject that failed post-commit could leak.
-    // Best-effort delete keeps accounting clean.
-    await deleteFromR2(key).catch((delErr) => {
-      console.error("[uploadToR2] cleanup delete failed:", delErr)
-    })
+    // Reservation must be released before surfacing the error, otherwise a
+    // failed upload permanently holds the user's quota. lib-storage aborts
+    // in-flight multipart uploads, but a completed single-part PutObject
+    // that failed post-commit could still leak — best-effort delete covers
+    // that case. Refund + delete are independent, so run in parallel.
+    const cleanupTasks: Promise<unknown>[] = [deleteFromR2(key)]
+    if (reserved) cleanupTasks.push(refundStorage(trackUserId!, effectiveCap))
+    const results = await Promise.allSettled(cleanupTasks)
+    for (const r of results) {
+      if (r.status === "rejected") {
+        console.error("[uploadToR2] cleanup failed:", r.reason)
+      }
+    }
     throw err
   }
 
-  trackStorage(trackUserId, counter.bytesRead)
+  if (reserved) {
+    const unused = effectiveCap - counter.bytesRead
+    if (unused > 0) {
+      await refundStorage(trackUserId!, unused).catch((refundErr) => {
+        console.error("[uploadToR2] unused-bytes refund failed:", refundErr)
+      })
+    }
+  } else {
+    trackStorage(trackUserId, counter.bytesRead)
+  }
 
   return r2Url(key)
 }
