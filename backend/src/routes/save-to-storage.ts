@@ -5,6 +5,7 @@ import { uploadToR2 } from "../lib/storage.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { creditGuard } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { getSizeLimit, type FileCategory } from "../utils/file-validation.js"
 
 const saveToStorageBody = z.object({
   mediaUrl: safeUrlSchema,
@@ -22,6 +23,27 @@ function detectMediaType(url: string): MediaType {
   if (VIDEO_EXTS.some((ext) => lower.endsWith(ext))) return "video"
   if (AUDIO_EXTS.some((ext) => lower.endsWith(ext))) return "audio"
   return "image"
+}
+
+function isStorageLimitExceededError(error: unknown): error is Error {
+  return error instanceof Error && error.message.startsWith("storage-limit-exceeded:")
+}
+
+function isUploadSizeExceededError(error: unknown): error is Error {
+  return error instanceof Error && error.message.startsWith("upload-size-exceeded:")
+}
+
+function buildStorageLimitError(
+  snap: { usedBytes: number; limitBytes: number; tier: string } | undefined,
+) {
+  return {
+    code: "storage_limit_exceeded" as const,
+    message: "Storage limit exceeded",
+    usedBytes: snap?.usedBytes ?? 0,
+    quotaBytes: snap?.limitBytes ?? 0,
+    remainingBytes: snap ? Math.max(0, snap.limitBytes - snap.usedBytes) : 0,
+    tier: snap?.tier ?? "free",
+  }
 }
 
 export async function saveToStorageRoutes(app: FastifyInstance) {
@@ -82,6 +104,7 @@ export async function saveToStorageRoutes(app: FastifyInstance) {
     const remainingQuotaBytes = snap
       ? Math.max(0, snap.limitBytes - snap.usedBytes)
       : undefined
+    const typeCap = getSizeLimit(detectedType as FileCategory)
 
     try {
       const r2Url = await uploadToR2(mediaUrl, job.id, detectedType, userId, {
@@ -110,6 +133,27 @@ export async function saveToStorageRoutes(app: FastifyInstance) {
         .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
         .update({ status: "failed", output_data: { error: message } })
         .eq("id", job.id)
+
+      if (isStorageLimitExceededError(err)) {
+        return reply.status(413).send({
+          error: buildStorageLimitError(snap),
+        })
+      }
+
+      if (isUploadSizeExceededError(err)) {
+        if (remainingQuotaBytes !== undefined && remainingQuotaBytes < typeCap) {
+          return reply.status(413).send({
+            error: buildStorageLimitError(snap),
+          })
+        }
+
+        return reply.status(413).send({
+          error: {
+            code: "payload_too_large",
+            message: `${detectedType} media exceeds the allowed upload size`,
+          },
+        })
+      }
 
       return reply.status(502).send({
         error: { code: "storage_error", message },

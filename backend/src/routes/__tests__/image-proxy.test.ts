@@ -202,4 +202,30 @@ describe("GET /v1/image-proxy", () => {
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
   })
+
+  it("returns 400 when safeFetch blocks the resolved upstream address", async () => {
+    vi.mocked(safeFetch).mockRejectedValue(
+      new Error("safeFetch: refusing connection — DNS resolution includes private/reserved IP 10.0.0.7"),
+    )
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/image-proxy?url=https://example.com/avatar.jpg",
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("returns 502 instead of leaking an uncaught 500 when upstream fetch throws", async () => {
+    vi.mocked(safeFetch).mockRejectedValue(new Error("connect ENETUNREACH"))
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/image-proxy?url=https://example.com/avatar.jpg",
+    })
+
+    expect(res.statusCode).toBe(502)
+    expect(res.json().error.code).toBe("proxy_error")
+  })
 })

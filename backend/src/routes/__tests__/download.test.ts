@@ -142,6 +142,10 @@ describe("GET /v1/download", () => {
     expect(res.headers["content-type"]).toBe("image/png")
     expect(res.headers["content-disposition"]).toContain("attachment")
     expect(res.headers["content-disposition"]).toContain("test.png")
+    expect(vi.mocked(safeFetch)).toHaveBeenCalledWith(
+      "https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev/images/test.png",
+      { timeoutMs: 120_000 },
+    )
   })
 
   it("returns 502 when R2 fetch fails", async () => {
@@ -160,6 +164,23 @@ describe("GET /v1/download", () => {
     const body = res.json()
     expect(body.error.code).toBe("proxy_error")
     expect(body.error.message).toContain("500")
+  })
+
+  it("returns 502 instead of leaking an uncaught 500 when upstream fetch throws", async () => {
+    vi.mocked(safeFetch).mockRejectedValue(new Error("connect ENETUNREACH"))
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/download?url=https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev/images/test.png",
+    })
+
+    expect(res.statusCode).toBe(502)
+    expect(res.json()).toEqual({
+      error: {
+        code: "proxy_error",
+        message: "Failed to fetch upstream file",
+      },
+    })
   })
 
   // ─────────────────────────────────────────────────────────────────────────

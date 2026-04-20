@@ -46,6 +46,13 @@ function sanitizeFilename(rawUrl: string): string {
   return decoded.replace(/["\r\n\\]/g, "_")
 }
 
+function isBlockedUpstreamUrlError(error: unknown): boolean {
+  return error instanceof Error && (
+    error.message.startsWith("safeFetch: blocked") ||
+    error.message.includes("private/reserved IP")
+  )
+}
+
 export async function imageProxyRoutes(app: FastifyInstance) {
   app.get("/v1/image-proxy", async (req, reply) => {
     const parsed = proxyQuery.safeParse(req.query)
@@ -73,7 +80,21 @@ export async function imageProxyRoutes(app: FastifyInstance) {
     // request boundary; safeFetch rejects DNS resolutions to private IP ranges
     // at connect time (catches hostnames that resolve to internal targets).
     // Content-type is checked below (rejects non-images unless download mode).
-    const response = await safeFetch(url, { timeoutMs: 120_000 })
+    let response: Response
+    try {
+      response = await safeFetch(url, { timeoutMs: 120_000 })
+    } catch (error) {
+      req.log.warn({ err: error, url }, "[image-proxy] upstream fetch failed")
+      if (isBlockedUpstreamUrlError(error)) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "URL resolves to a blocked address" },
+        })
+      }
+      return reply.status(502).send({
+        error: { code: "proxy_error", message: "Failed to fetch upstream URL" },
+      })
+    }
+
     if (!response.ok) {
       return reply.status(502).send({
         error: { code: "proxy_error", message: `Upstream returned ${response.status}` },

@@ -43,6 +43,7 @@ const mockDubbingApi = vi.fn()
 const mockVoiceRemixApi = vi.fn()
 const mockVoiceDesignApi = vi.fn()
 const mockForcedAlignmentApi = vi.fn()
+const mockSaveToStorageApi = vi.fn()
 const mockSunoMashupApi = vi.fn()
 const mockSunoReplaceSectionApi = vi.fn()
 const mockSunoStyleBoostApi = vi.fn()
@@ -120,6 +121,7 @@ vi.mock("@/lib/api", () => ({
   voiceRemixApi: (...args: unknown[]) => mockVoiceRemixApi(...args),
   voiceDesignApi: (...args: unknown[]) => mockVoiceDesignApi(...args),
   forcedAlignmentApi: (...args: unknown[]) => mockForcedAlignmentApi(...args),
+  saveToStorageApi: (...args: unknown[]) => mockSaveToStorageApi(...args),
   transcribeApi: vi.fn(),
   downloadYouTubeAudio: vi.fn(),
   lipSyncApi: vi.fn(),
@@ -1685,6 +1687,52 @@ describe("image-to-text", () => {
     mockImageToTextApi.mockResolvedValue({ text: "A cat" })
     await executeNode(makeNode("image-to-text", {}), makeCtx())
     expect(mockImageToTextApi).toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// save-to-storage
+// ---------------------------------------------------------------------------
+
+describe("save-to-storage", () => {
+  it("rejects when no media input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("save-to-storage", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).resolves.toBe("")
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({ executionStatus: "failed", errorMessage: "No media input connected" }),
+    )
+  })
+
+  it("passes the resolved mediaType for extension-less video URLs", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "https://cdn.example.com/media" })
+    mockSaveToStorageApi.mockResolvedValue({ jobId: "job-1", url: "https://r2.example.com/video" })
+
+    await executeNode(makeNode("save-to-storage", { filename: "clip.mp4" }), makeCtx())
+
+    expect(mockSaveToStorageApi).toHaveBeenCalledWith({
+      mediaUrl: "https://cdn.example.com/media",
+      filename: "clip.mp4",
+      mediaType: "video",
+    })
+  })
+
+  it("passes audio mediaType when the source is audio-only", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "https://cdn.example.com/stream" })
+    mockSaveToStorageApi.mockResolvedValue({ jobId: "job-2", url: "https://r2.example.com/audio" })
+
+    await executeNode(makeNode("save-to-storage", {}), makeCtx())
+
+    expect(mockSaveToStorageApi).toHaveBeenCalledWith({
+      mediaUrl: "https://cdn.example.com/stream",
+      filename: undefined,
+      mediaType: "audio",
+    })
   })
 })
 

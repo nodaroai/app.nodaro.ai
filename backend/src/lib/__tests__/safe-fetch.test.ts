@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { isPrivateOrReservedIP, safeFetch } from "../safe-fetch.js"
+import { isPrivateOrReservedIP, safeFetch, selectSafeResolvedAddress } from "../safe-fetch.js"
 
 // ---------------------------------------------------------------------------
 // IP classifier — exercises the raw blocklist. The runtime path (DNS-lookup
@@ -63,6 +63,29 @@ describe("isPrivateOrReservedIP", () => {
 
   it("accepts public IPv6 addresses", () => {
     expect(isPrivateOrReservedIP("2606:4700:4700::1111")).toBe(false) // cloudflare DNS
+  })
+})
+
+describe("selectSafeResolvedAddress", () => {
+  it("prefers public IPv4 over IPv6 when no family is requested", () => {
+    expect(selectSafeResolvedAddress([
+      { address: "2606:4700:4700::1111", family: 6 },
+      { address: "1.1.1.1", family: 4 },
+    ])).toEqual({ address: "1.1.1.1", family: 4 })
+  })
+
+  it("honors a requested address family when that family is available", () => {
+    expect(selectSafeResolvedAddress([
+      { address: "2606:4700:4700::1111", family: 6 },
+      { address: "1.1.1.1", family: 4 },
+    ], 6)).toEqual({ address: "2606:4700:4700::1111", family: 6 })
+  })
+
+  it("rejects the whole answer set if any resolved address is private or reserved", () => {
+    expect(() => selectSafeResolvedAddress([
+      { address: "1.1.1.1", family: 4 },
+      { address: "10.0.0.7", family: 4 },
+    ])).toThrow(/10\.0\.0\.7/)
   })
 })
 

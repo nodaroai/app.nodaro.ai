@@ -12,6 +12,13 @@ const sendSchema = z.object({
   forcePrivate: z.boolean().optional(),
 })
 
+function isBlockedUpstreamUrlError(error: unknown): boolean {
+  return error instanceof Error && (
+    error.message.startsWith("safeFetch: blocked") ||
+    error.message.includes("private/reserved IP")
+  )
+}
+
 export async function webhookOutputRoutes(app: FastifyInstance) {
   app.post("/v1/webhook-output/send", async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = sendSchema.safeParse(req.body)
@@ -95,6 +102,16 @@ export async function webhookOutputRoutes(app: FastifyInstance) {
           output_data: { success: false, statusCode: 0, responseBody: "" },
         })
         .eq("id", job.id)
+
+      if (isBlockedUpstreamUrlError(err)) {
+        return reply.status(400).send({
+          jobId: job.id,
+          success: false,
+          statusCode: 0,
+          responseBody: "",
+          error: "Webhook URL resolves to a blocked address",
+        })
+      }
 
       return reply.status(502).send({
         jobId: job.id,

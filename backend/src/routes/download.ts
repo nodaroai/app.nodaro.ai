@@ -60,7 +60,16 @@ export async function downloadRoutes(app: FastifyInstance) {
     // fetch through safeFetch rules out any future regression where the
     // allowlist loosens or an attacker finds a bypass — DNS resolution to
     // private IPs is rejected at connect time regardless.
-    const upstream = await safeFetch(url)
+    let upstream: Response
+    try {
+      upstream = await safeFetch(url, { timeoutMs: 120_000 })
+    } catch (error) {
+      req.log.warn({ err: error, url }, "[download] upstream fetch failed")
+      return reply.status(502).send({
+        error: { code: "proxy_error", message: "Failed to fetch upstream file" },
+      })
+    }
+
     if (!upstream.ok) {
       return reply.status(502).send({
         error: { code: "proxy_error", message: `Upstream returned ${upstream.status}` },
