@@ -49,19 +49,17 @@ export function autoExecuteNode(nodeId: string, visited = new Set<string>()): vo
   visited.add(nodeId)
 
   const { nodes, edges } = useWorkflowStore.getState()
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]))
-  const node = nodeMap.get(nodeId)
+  const node = nodes.find((n) => n.id === nodeId)
   if (!node) return
   if (!AUTO_EXECUTE_TYPES.has(node.type ?? "")) return
 
   const data = node.data as Record<string, unknown>
   if (data.executionStatus === "running") return
 
-  // Must have at least one upstream connection
   const inEdges = edges.filter((e) => e.target === nodeId)
   if (inEdges.length === 0) return
 
-  // At least one upstream must have output data
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]))
   const hasUpstreamData = inEdges.some((e) => {
     const src = nodeMap.get(e.source)
     if (!src) return false

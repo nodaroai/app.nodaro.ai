@@ -17,6 +17,7 @@ import type { PresentationItem } from "@nodaro-shared/presentation-types"
 import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems } from "@nodaro-shared/presentation-utils"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
+import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
 
 /**
  * Migrate legacy image node types to the new split types.
@@ -611,7 +612,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       return { nodes, edges: newEdges, isDirty: true }
     }),
 
-  onConnect: (connection) =>
+  onConnect: (connection) => {
     set((state) => {
       let newEdges = addEdge(
         { ...connection, id: `edge_${Date.now()}` },
@@ -780,7 +781,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       }
 
       return { nodes: newNodes, edges: newEdges, isDirty: true }
-    }),
+    })
+
+    // Trigger auto-execute on the newly-connected target (combine-text, filter-list,
+    // router, etc.). The function no-ops for non-auto-execute types and for targets
+    // whose upstream has no output yet, so this is safe for every connection.
+    autoExecuteNode(connection.target)
+  },
 
   addNode: (type, position, initialData) => {
     const definition = NODE_DEFINITIONS.find((d) => d.type === type)
