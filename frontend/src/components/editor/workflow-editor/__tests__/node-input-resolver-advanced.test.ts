@@ -863,6 +863,21 @@ describe("getListInputForNode", () => {
     const result = getListInputForNode(target, [textNode, loopNode, target], edges)
     expect(result).toEqual(["one", "two", "three", "four"])
   })
+
+  it("ignores edges on the 'variables' target handle (no fan-out from a variable source)", () => {
+    // A 3-item list connected to filter-list's main `in` would normally
+    // fan out. On the `variables` handle it must not — that handle feeds
+    // condition refs only.
+    const listNode = makeNode("l1", "list", {
+      columns: [{ handleId: "col-0", name: "Col", type: "text" }],
+      rows: [["a"], ["b"], ["c"]],
+    })
+    const target = makeNode("f1", "filter-list")
+    const edges = [makeEdge("l1", "f1", "col-0", "variables")]
+
+    const result = getListInputForNode(target, [listNode, target], edges)
+    expect(result).toBeUndefined()
+  })
 })
 
 // ---------------------------------------------------------------------------

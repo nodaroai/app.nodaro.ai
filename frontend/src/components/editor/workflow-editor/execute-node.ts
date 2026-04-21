@@ -205,6 +205,7 @@ import {
   resolveConditionValue,
 } from "@nodaro-shared/filter-condition";
 import { sortListItems } from "@nodaro-shared/list-sort";
+import { buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro-shared/condition-variables";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 
 // ---------------------------------------------------------------------------
@@ -332,10 +333,11 @@ export function buildWebScrapeParams(
 // ---------------------------------------------------------------------------
 
 function collectItemsForEdgeFrontend(
-  edge: { source: string; target: string; sourceHandle?: string | null },
+  edge: { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null },
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
 ): string[] {
+  if (edge.targetHandle === VARIABLES_HANDLE_ID) return [];
   const resolvedEdge = resolveSourceThroughConnectedList(edge, nodes, edges);
   const src = nodes.find((n) => n.id === resolvedEdge.source);
   if (!src) return [];
@@ -3840,8 +3842,8 @@ export function executeNode(
     const mode = routerData.mode ?? "radio"
     const routes = routerData.routes ?? []
 
-    // Resolve upstream input (passthrough)
-    const incomingEdges = currentEdges.filter((e) => e.target === node.id)
+    // Resolve upstream input (passthrough) — skip the dedicated variables handle
+    const incomingEdges = currentEdges.filter((e) => e.target === node.id && e.targetHandle !== VARIABLES_HANDLE_ID)
     let inputValue: string | undefined
     for (const edge of incomingEdges) {
       const src = currentNodes.find((n) => n.id === edge.source)
@@ -3858,11 +3860,13 @@ export function executeNode(
       } else {
         const parsed = tryParseJson(inputValue ?? "")
         const raw = inputValue ?? ""
+        const variables = buildConditionVariables(node.id, currentEdges, currentNodes, (n) => extractNodeOutput(n))
+        const opts = { variables }
         const union = new Set<string>()
         for (const group of groups) {
           if (!group.routeIds?.length) continue
           const logic = group.conditionLogic === "OR" ? "OR" : "AND"
-          if (evaluateConditionGroup(parsed, raw, group.conditions ?? [], logic)) {
+          if (evaluateConditionGroup(parsed, raw, group.conditions ?? [], logic, undefined, opts)) {
             for (const id of group.routeIds) union.add(id)
           }
         }
@@ -4130,12 +4134,18 @@ export function executeNode(
     const items = collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
     const effectiveConditions = (filterData.conditions ?? []).filter((c) => c && c.operator);
     const logic = filterData.conditionLogic === "OR" ? "OR" : "AND";
+    const variables = buildConditionVariables(node.id, currentEdges, currentNodes, (n) => extractNodeOutput(n));
+    // Condition values are constant across items — resolve once up-front.
+    const resolvedConditions = effectiveConditions.map((c) => ({
+      ...c,
+      value: resolveConditionValue(c.value ?? "", c.valueType, undefined, variables),
+    }));
     const opts = { caseSensitive: filterData.caseSensitive };
-    const filtered = effectiveConditions.length === 0
+    const filtered = resolvedConditions.length === 0
       ? items
       : items.filter((item) => {
         const parsed = tryParseJson(item);
-        const results = effectiveConditions.map((c) => evaluateCondition(parsed, item, c, undefined, opts));
+        const results = resolvedConditions.map((c) => evaluateCondition(parsed, item, c, undefined, opts));
         return logic === "OR" ? results.some(Boolean) : results.every(Boolean);
       });
     updateNodeData(node.id, {

@@ -25,7 +25,7 @@ import { SOCIAL_POST_NODE_TYPES } from "../../../../packages/shared/src/social-p
  * Shared helper — deduplicates the check-state-then-source pattern used in
  * resolveNodeInputs, getListInputForNode, and loop column routing.
  */
-function getNodeOutput(
+export function getNodeOutput(
   node: SimpleNode,
   sourceHandle: string | null | undefined,
   nodeStates: Record<string, NodeExecutionState>,

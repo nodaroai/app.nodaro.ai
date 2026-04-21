@@ -22,7 +22,7 @@ const RESERVED_TEMPLATE_VARS = new Set([
  */
 export function resolveNodeRefs(
   text: string,
-  labelToOutput: Map<string, string>,
+  labelToOutput: ReadonlyMap<string, string>,
 ): string {
   const MAX_PASSES = 10
   let result = text

@@ -11,6 +11,7 @@ import {
   tryParseJson,
   evaluateCondition,
   evaluateConditionGroup,
+  resolveConditionValue,
   type FilterListCondition,
   type RouterConditionGroup,
 } from "../../../../packages/shared/src/filter-condition.js"
@@ -18,11 +19,13 @@ import { sortListItems, type SortType, type SortDirection } from "../../../../pa
 import { spreadJsonArrayIfSingleton } from "../../../../packages/shared/src/generated-results.js"
 import { zipMergeLists } from "../../../../packages/shared/src/list-merge.js"
 import { resolveSourceThroughConnectedList } from "../../../../packages/shared/src/list-source-resolver.js"
+import { buildConditionVariables, VARIABLES_HANDLE_ID } from "../../../../packages/shared/src/condition-variables.js"
 
 // Re-export for tests and downstream consumers.
 export type { FilterListCondition }
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeOutput, NodeExecutionState, OrchestratorContext } from "./types.js"
 import { getPrimaryOutput, extractSourceNodeOutput } from "./output-extractor.js"
+import { getNodeOutput } from "./input-resolver.js"
 import { isSourceNode, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES } from "./execution-graph.js"
 import { supabase } from "../../lib/supabase.js"
 
@@ -285,6 +288,7 @@ function collectItemsForEdge(
   nodeStates: Record<string, NodeExecutionState>,
   allEdges: SimpleEdge[],
 ): string[] {
+  if (edge.targetHandle === VARIABLES_HANDLE_ID) return []
   const resolvedEdge = resolveSourceThroughConnectedList(edge, allNodes, allEdges)
   const srcNode = allNodes.find((n) => n.id === resolvedEdge.source)
   if (!srcNode) return []
@@ -388,12 +392,22 @@ export function executeFilterList(
   const items = collectUpstreamListItems(node.id, edges, allNodes, nodeStates)
 
   const effectiveConditions = conditions.filter((c) => c && c.operator)
+  const variables = buildConditionVariables(node.id, edges, allNodes, (n) =>
+    getNodeOutput(n, undefined, nodeStates),
+  )
+  // Condition values depend only on the node config + triggerData + variables
+  // — all constant across list items. Hoist the substitution so we don't
+  // re-run resolveNodeRefs / {{token}} passes N times per execution.
+  const resolvedConditions = effectiveConditions.map((c) => ({
+    ...c,
+    value: resolveConditionValue(c.value ?? "", c.valueType, triggerData, variables),
+  }))
   const opts = { caseSensitive: data.caseSensitive as boolean | undefined }
-  const filtered = effectiveConditions.length === 0
+  const filtered = resolvedConditions.length === 0
     ? items
     : items.filter((item) => {
       const parsed = tryParseJson(item)
-      const results = effectiveConditions.map((c) => evaluateCondition(parsed, item, c, triggerData, opts))
+      const results = resolvedConditions.map((c) => evaluateCondition(parsed, item, c, undefined, opts))
       return logic === "OR" ? results.some(Boolean) : results.every(Boolean)
     })
 
@@ -723,11 +737,15 @@ export function executeRouter(
     } else {
       const parsed = tryParseJson(inputValue ?? "")
       const raw = inputValue ?? ""
+      const variables = buildConditionVariables(node.id, edges, allNodes, (n) =>
+        getNodeOutput(n, undefined, nodeStates),
+      )
+      const opts = { variables }
       const union = new Set<string>()
       for (const group of groups) {
         if (!group?.routeIds?.length) continue
         const logic = group.conditionLogic === "OR" ? "OR" : "AND"
-        if (evaluateConditionGroup(parsed, raw, group.conditions ?? [], logic, triggerData)) {
+        if (evaluateConditionGroup(parsed, raw, group.conditions ?? [], logic, triggerData, opts)) {
           for (const id of group.routeIds) union.add(id)
         }
       }
@@ -755,7 +773,7 @@ function resolveRouterInputValue(
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
 ): string | undefined {
-  const incomingEdges = edges.filter((e) => e.target === nodeId)
+  const incomingEdges = edges.filter((e) => e.target === nodeId && e.targetHandle !== VARIABLES_HANDLE_ID)
   for (const edge of incomingEdges) {
     const srcNode = allNodes.find((n) => n.id === edge.source)
     if (!srcNode) continue

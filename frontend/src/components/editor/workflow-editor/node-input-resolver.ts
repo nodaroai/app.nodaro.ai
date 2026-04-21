@@ -17,6 +17,7 @@ import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
 import { extractAllGeneratedResults, extractGeneratedJsonAsList } from "@nodaro-shared/generated-results";
 import { SOCIAL_POST_NODE_TYPES } from "@nodaro-shared/social-post";
 import { resolveSourceThroughConnectedList } from "@nodaro-shared/list-source-resolver";
+import { VARIABLES_HANDLE_ID } from "@nodaro-shared/condition-variables";
 export { resolveSourceThroughConnectedList };
 
 /** Follow teleport chain to find the original non-teleport source node. */
@@ -417,7 +418,7 @@ export function getListInputForNode(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
 ): string[] | undefined {
-  const incomingEdges = edges.filter((e) => e.target === node.id);
+  const incomingEdges = edges.filter((e) => e.target === node.id && e.targetHandle !== VARIABLES_HANDLE_ID);
   let maxLen = 0;
   /** The longest concrete item list (used when only one source contributes). */
   let longestItems: string[] | undefined;
