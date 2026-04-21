@@ -241,7 +241,7 @@ async function executeInlineNode(
       output = executeTeleporterPassthrough(node, resolvedInputs)
       break
     case "router":
-      output = executeRouter(node, edges, allNodes, nodeStates)
+      output = executeRouter(node, edges, allNodes, nodeStates, ctx.triggerData)
       break
     default:
       throw new Error(`Unknown inline node type: ${node.type}`)

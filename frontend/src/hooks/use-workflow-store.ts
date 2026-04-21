@@ -75,6 +75,8 @@ export const EXECUTION_DATA_KEYS = new Set([
   "shots",
   "result",
   "processedResult",
+  "activeRoutes",
+  "routeOutputs",
   "_upstreamRefresh",
 ])
 

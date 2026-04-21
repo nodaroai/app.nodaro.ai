@@ -7,6 +7,16 @@ import { ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-c
 import { resolveSeparator } from "../../../../packages/shared/src/text-separators.js"
 import { evaluateJsonPath, stringifyPathResults } from "../../../../packages/shared/src/json-path.js"
 import { evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, type JsonFilter } from "../../../../packages/shared/src/json-evaluator.js"
+import {
+  tryParseJson,
+  evaluateCondition,
+  evaluateConditionGroup,
+  type FilterListCondition,
+  type RouterConditionGroup,
+} from "../../../../packages/shared/src/filter-condition.js"
+
+// Re-export for tests and downstream consumers.
+export type { FilterListCondition }
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeOutput, NodeExecutionState, OrchestratorContext } from "./types.js"
 import { getPrimaryOutput, extractSourceNodeOutput } from "./output-extractor.js"
 import { isSourceNode, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES } from "./execution-graph.js"
@@ -248,19 +258,6 @@ function extractSavedTextFallback(src: SimpleNode): string | undefined {
 // List-processing inline nodes: filter-list, deduplicate, merge-lists
 // ---------------------------------------------------------------------------
 
-export interface FilterListCondition {
-  id?: string
-  field?: string
-  operator:
-    | ">" | "<" | ">=" | "<="
-    | "=" | "!="
-    | "contains" | "not_contains"
-    | "starts_with" | "ends_with" | "regex"
-    | "exists" | "not_exists"
-  value?: string
-  valueType?: "static" | "variable"
-}
-
 /**
  * Collect list items from every upstream edge. For each incoming connection,
  * in priority order:
@@ -329,151 +326,10 @@ function collectUpstreamListItems(
   return items
 }
 
-function tryParseJson(item: unknown): unknown {
-  if (typeof item !== "string") return item
-  const trimmed = item.trim()
-  if (!trimmed) return item
-  const first = trimmed[0]
-  if (first !== "{" && first !== "[" && first !== "\"" && !/^-?\d/.test(trimmed) && trimmed !== "true" && trimmed !== "false" && trimmed !== "null") {
-    return item
-  }
-  try { return JSON.parse(trimmed) } catch { return item }
-}
-
 function stringifyListKey(value: unknown): string {
   if (value === undefined || value === null) return ""
   if (typeof value === "string") return value
   return JSON.stringify(value)
-}
-
-const HOUR_MS = 60 * 60 * 1000
-const DAY_MS = 24 * HOUR_MS
-const WEEK_MS = 7 * DAY_MS
-
-/** Resolve a relative-window token like `last_N_hours:3` to an ISO timestamp
- *  N units before `Date.now()`. Returns undefined for malformed tokens so the
- *  caller can decide whether to fall through (unknown tokens currently
- *  resolve to empty string, same as unrecognized `{{foo}}`). */
-function resolveRelativeWindowToken(key: string): string | undefined {
-  const m = /^last_N_(hours|days|weeks):(-?\d+)$/.exec(key)
-  if (!m) return undefined
-  const n = parseInt(m[2], 10)
-  if (!Number.isFinite(n)) return undefined
-  const unitMs = m[1] === "hours" ? HOUR_MS : m[1] === "days" ? DAY_MS : WEEK_MS
-  return new Date(Date.now() - n * unitMs).toISOString()
-}
-
-function resolveConditionValue(
-  raw: string,
-  valueType: string | undefined,
-  triggerData: Record<string, unknown> | undefined,
-): string {
-  const hasTemplate = /\{\{/.test(raw)
-  if (valueType !== "variable" && !hasTemplate) return raw
-  return raw.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr) => {
-    const key = String(expr).trim()
-    if (key === "now") return new Date().toISOString()
-    if (key === "trigger.last_triggered_at") {
-      const v = triggerData?.last_triggered_at
-      return v == null ? "" : String(v)
-    }
-    if (key.startsWith("trigger.")) {
-      const path = key.slice("trigger.".length)
-      const v = triggerData?.[path]
-      return v == null ? "" : String(v)
-    }
-    const relative = resolveRelativeWindowToken(key)
-    if (relative !== undefined) return relative
-    return ""
-  })
-}
-
-function asComparableNumber(v: unknown): number {
-  if (typeof v === "number") return v
-  if (typeof v === "boolean") return v ? 1 : 0
-  if (typeof v === "string") {
-    const trimmed = v.trim()
-    if (trimmed === "") return NaN
-    const n = Number(trimmed)
-    if (!isNaN(n)) return n
-    const d = Date.parse(trimmed)
-    if (!isNaN(d)) return d
-  }
-  return NaN
-}
-
-// Numeric-first ordering compare used by >, <, >=, <=. Falls back to
-// localeCompare when either side can't be parsed as a number.
-function compareValues(a: unknown, b: unknown): number {
-  const na = asComparableNumber(a)
-  const nb = asComparableNumber(b)
-  if (!isNaN(na) && !isNaN(nb)) return na - nb
-  return String(a ?? "").localeCompare(String(b ?? ""))
-}
-
-// Numeric-first equality used by = and !=. So "432" == 432, and 432 == "432".
-// Falls back to strict string equality (null/undefined coerced to "") so
-// alpha values still work.
-function valuesEqual(a: unknown, b: unknown): boolean {
-  const na = asComparableNumber(a)
-  const nb = asComparableNumber(b)
-  if (!isNaN(na) && !isNaN(nb)) return na === nb
-  return String(a ?? "") === String(b ?? "")
-}
-
-function evaluateFilterCondition(
-  parsedItem: unknown,
-  rawItem: string,
-  condition: FilterListCondition,
-  triggerData: Record<string, unknown> | undefined,
-): boolean {
-  const path = (condition.field ?? "").trim()
-  let fieldValue: unknown
-  if (path === "") {
-    fieldValue = parsedItem ?? rawItem
-  } else {
-    const matches = evaluateJsonPath(parsedItem ?? rawItem, path)
-    fieldValue = matches.length > 0 ? matches[0] : undefined
-  }
-
-  const targetStr = resolveConditionValue(condition.value ?? "", condition.valueType, triggerData)
-
-  switch (condition.operator) {
-    case "exists":
-      return fieldValue !== undefined && fieldValue !== null
-    case "not_exists":
-      return fieldValue === undefined || fieldValue === null
-    case "contains":
-      return String(fieldValue ?? "").includes(targetStr)
-    case "not_contains":
-      return !String(fieldValue ?? "").includes(targetStr)
-    case "starts_with":
-      return String(fieldValue ?? "").startsWith(targetStr)
-    case "ends_with":
-      return String(fieldValue ?? "").endsWith(targetStr)
-    case "regex": {
-      if (!targetStr) return false
-      try {
-        return new RegExp(targetStr).test(String(fieldValue ?? ""))
-      } catch {
-        return false
-      }
-    }
-    case "=":
-      return valuesEqual(fieldValue, targetStr)
-    case "!=":
-      return !valuesEqual(fieldValue, targetStr)
-    case ">":
-      return compareValues(fieldValue, targetStr) > 0
-    case "<":
-      return compareValues(fieldValue, targetStr) < 0
-    case ">=":
-      return compareValues(fieldValue, targetStr) >= 0
-    case "<=":
-      return compareValues(fieldValue, targetStr) <= 0
-    default:
-      return false
-  }
 }
 
 /**
@@ -499,7 +355,7 @@ export function executeFilterList(
     ? items
     : items.filter((item) => {
       const parsed = tryParseJson(item)
-      const results = effectiveConditions.map((c) => evaluateFilterCondition(parsed, item, c, triggerData))
+      const results = effectiveConditions.map((c) => evaluateCondition(parsed, item, c, triggerData))
       return logic === "OR" ? results.some(Boolean) : results.every(Boolean)
     })
 
@@ -769,46 +625,82 @@ export function executeTeleporterPassthrough(
 
 /**
  * Execute router node: route upstream data to active output handles.
- * Radio mode: exactly one active. Checkbox mode: any combination.
+ * - Radio: exactly one active (user-toggled).
+ * - Checkbox: any combination (user-toggled).
+ * - Conditional: active set is the deduped union of routeIds from every
+ *   condition group whose AND/OR conditions match the upstream input.
+ *   `triggerData` (when provided) resolves `trigger.*` tokens inside rules.
  */
 export function executeRouter(
   node: SimpleNode,
   edges: SimpleEdge[],
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
+  triggerData?: Record<string, unknown>,
 ): NodeOutput {
-  const routes = (node.data.routes as Array<{ id: string; name: string; active: boolean }>) ?? []
+  const data = node.data as Record<string, unknown>
+  const mode = (data.mode as string) ?? "radio"
+  const routes = (data.routes as Array<{ id: string; name: string; active: boolean }>) ?? []
 
-  // Resolve upstream input (passthrough)
-  const incomingEdges = edges.filter((e) => e.target === node.id)
-  let inputValue: string | undefined
+  const inputValue = resolveRouterInputValue(node.id, edges, allNodes, nodeStates)
+
+  let activeRouteIds: string[]
+  if (mode === "conditional") {
+    const groups = (data.conditionGroups as RouterConditionGroup[] | undefined) ?? []
+    if (groups.length === 0) {
+      activeRouteIds = []
+    } else {
+      const parsed = tryParseJson(inputValue ?? "")
+      const raw = inputValue ?? ""
+      const union = new Set<string>()
+      for (const group of groups) {
+        if (!group?.routeIds?.length) continue
+        const logic = group.conditionLogic === "OR" ? "OR" : "AND"
+        if (evaluateConditionGroup(parsed, raw, group.conditions ?? [], logic, triggerData)) {
+          for (const id of group.routeIds) union.add(id)
+        }
+      }
+      activeRouteIds = routes.filter((r) => union.has(r.id)).map((r) => r.id)
+    }
+  } else {
+    activeRouteIds = routes.filter((r) => r.active).map((r) => r.id)
+  }
+
+  const routeOutputs: Record<string, string | undefined> = {}
+  for (const route of routes) {
+    routeOutputs[route.id] = activeRouteIds.includes(route.id) ? (inputValue ?? "gate") : undefined
+  }
+
+  return {
+    text: activeRouteIds.length > 0 ? "routed" : undefined,
+    activeRoutes: activeRouteIds,
+    routeOutputs,
+  }
+}
+
+function resolveRouterInputValue(
+  nodeId: string,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): string | undefined {
+  const incomingEdges = edges.filter((e) => e.target === nodeId)
   for (const edge of incomingEdges) {
     const srcNode = allNodes.find((n) => n.id === edge.source)
     if (!srcNode) continue
     const state = nodeStates[srcNode.id]
     if (state?.output) {
       const val = getPrimaryOutput(state.output, srcNode.type, edge.sourceHandle)
-      if (val) { inputValue = val; break }
+      if (val) return val
     } else if (isSourceNode(srcNode.type)) {
       const srcOutput = extractSourceNodeOutput(srcNode)
       if (srcOutput) {
         const val = getPrimaryOutput(srcOutput, srcNode.type, edge.sourceHandle)
-        if (val) { inputValue = val; break }
+        if (val) return val
       }
     }
   }
-
-  const activeRoutes = routes.filter((r) => r.active).map((r) => r.id)
-  const routeOutputs: Record<string, string | undefined> = {}
-  for (const route of routes) {
-    routeOutputs[route.id] = route.active ? (inputValue ?? "gate") : undefined
-  }
-
-  return {
-    text: activeRoutes.length > 0 ? "routed" : undefined,
-    activeRoutes,
-    routeOutputs,
-  }
+  return undefined
 }
 
 /**
