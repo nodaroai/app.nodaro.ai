@@ -39,6 +39,12 @@ const localStorageMock = {
 }
 Object.defineProperty(globalThis, "localStorage", { value: localStorageMock, writable: true })
 
+const autoExecuteNodeMock = vi.fn()
+vi.mock("@/components/editor/workflow-editor/auto-execute", () => ({
+  autoExecuteNode: (id: string) => autoExecuteNodeMock(id),
+  cascadeAutoExecute: vi.fn(),
+}))
+
 import { useWorkflowStore } from "../use-workflow-store"
 
 function resetStore() {
@@ -352,6 +358,24 @@ describe("useWorkflowStore advanced", () => {
       expect(previewItems[1].value).toBe("hello world")
       expect(previewItems[1].itemKey).toBe("sub_1:out_txt_port")
       expect(previewData.itemOrder).toEqual(["sub_1:out_img_port", "sub_1:out_txt_port"])
+    })
+
+    it("triggers autoExecuteNode on the target when an edge is connected", () => {
+      useWorkflowStore.setState({
+        nodes: [
+          { id: "src_1", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "Source", generatedText: "hi" } } as any,
+          { id: "combine_1", type: "combine-text", position: { x: 200, y: 0 }, data: { label: "Combine" } } as any,
+        ],
+      })
+
+      useWorkflowStore.getState().onConnect({
+        source: "src_1",
+        target: "combine_1",
+        sourceHandle: null,
+        targetHandle: null,
+      })
+
+      expect(autoExecuteNodeMock).toHaveBeenCalledWith("combine_1")
     })
   })
 
