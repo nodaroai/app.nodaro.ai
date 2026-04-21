@@ -327,6 +327,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         case "filter-list":
         case "deduplicate":
         case "merge-lists":
+        case "sort-list":
           data.listResults = undefined
           data.__listResults = undefined
           data.__listTotal = undefined

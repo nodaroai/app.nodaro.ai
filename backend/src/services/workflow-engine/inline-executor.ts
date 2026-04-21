@@ -14,6 +14,7 @@ import {
   type FilterListCondition,
   type RouterConditionGroup,
 } from "../../../../packages/shared/src/filter-condition.js"
+import { sortListItems, type SortType, type SortDirection } from "../../../../packages/shared/src/list-sort.js"
 
 // Re-export for tests and downstream consumers.
 export type { FilterListCondition }
@@ -351,11 +352,12 @@ export function executeFilterList(
   const items = collectUpstreamListItems(node.id, edges, allNodes, nodeStates)
 
   const effectiveConditions = conditions.filter((c) => c && c.operator)
+  const opts = { caseSensitive: data.caseSensitive as boolean | undefined }
   const filtered = effectiveConditions.length === 0
     ? items
     : items.filter((item) => {
       const parsed = tryParseJson(item)
-      const results = effectiveConditions.map((c) => evaluateCondition(parsed, item, c, triggerData))
+      const results = effectiveConditions.map((c) => evaluateCondition(parsed, item, c, triggerData, opts))
       return logic === "OR" ? results.some(Boolean) : results.every(Boolean)
     })
 
@@ -422,6 +424,28 @@ export function executeMergeLists(
     merged.push(item)
   }
   return { text: merged[0] ?? "", listResults: merged }
+}
+
+/**
+ * Execute sort-list node: sort items from the upstream list by an optional
+ * dot-path field, with Auto/Text/Number/Date comparison and asc/desc
+ * direction. Missing/invalid values always appear last regardless of
+ * direction.
+ */
+export function executeSortList(
+  node: SimpleNode,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): NodeOutput {
+  const data = node.data as Record<string, unknown>
+  const items = collectUpstreamListItems(node.id, edges, allNodes, nodeStates)
+  const sorted = sortListItems(items, {
+    field: typeof data.field === "string" ? data.field : "",
+    sortType: (data.sortType as SortType) ?? "auto",
+    direction: (data.direction as SortDirection) ?? "asc",
+  })
+  return { text: sorted[0] ?? "", listResults: sorted }
 }
 
 /**

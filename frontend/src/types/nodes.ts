@@ -2236,6 +2236,11 @@ export type FilterListNodeData = {
   label: string
   conditions: FilterListCondition[]
   conditionLogic: "AND" | "OR"
+  /** When true, text operators (contains, starts_with, ends_with, =, !=)
+   *  compare case-sensitively. Default false for new nodes (set via
+   *  NODE_DEFINITIONS). Legacy nodes without this field are treated as
+   *  case-sensitive by the evaluator's default. */
+  caseSensitive?: boolean
   listResults?: string[]
   __listResults?: string[]
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -2263,6 +2268,23 @@ export type MergeListsNodeData = {
   [key: string]: unknown
   label: string
   deduplicate: boolean
+  listResults?: string[]
+  __listResults?: string[]
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
+// --- Sort List Node Data ---
+
+export type SortListNodeData = {
+  [key: string]: unknown
+  label: string
+  field: string
+  /** UI mode for the field input. "dropdown" (default) shows detected
+   *  upstream fields + "Custom path…"; "custom" shows a free-text input. */
+  mode?: "dropdown" | "custom"
+  sortType: "auto" | "text" | "number" | "date"
+  direction: "asc" | "desc"
   listResults?: string[]
   __listResults?: string[]
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -2646,6 +2668,7 @@ export type SceneNodeData =
   | FilterListNodeData
   | DeduplicateNodeData
   | MergeListsNodeData
+  | SortListNodeData
   | PreviewNodeData
   | StickyNoteData
   | TeleportSendData
@@ -2758,6 +2781,7 @@ export type SceneNodeType =
   | "filter-list"
   | "deduplicate"
   | "merge-lists"
+  | "sort-list"
   | "preview"
   | "sticky-note"
   | "teleport-send"
@@ -4254,6 +4278,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Filter List",
       conditions: [],
       conditionLogic: "AND",
+      caseSensitive: false,
     } as FilterListNodeData,
   },
   {
@@ -4284,6 +4309,22 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     } as MergeListsNodeData,
   },
   {
+    type: "sort-list",
+    label: "Sort List",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    autoExecute: true,
+    defaultData: {
+      label: "Sort List",
+      field: "",
+      mode: "dropdown",
+      sortType: "auto",
+      direction: "asc",
+    } as SortListNodeData,
+  },
+  {
     type: "preview",
     label: "Preview",
     category: "utility",
@@ -4303,6 +4344,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 0,
     inputs: ["in"],
     outputs: ["route_a", "route_b"],
+    autoExecute: true,
     defaultData: {
       label: "Router",
       mode: "radio" as const,

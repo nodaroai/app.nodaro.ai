@@ -525,4 +525,104 @@ describe("executeFilterList — operator semantics", () => {
       expect(kept).toHaveLength(1)
     })
   })
+
+  /**
+   * Node-wide case-sensitive flag on filter-list. The evaluator defaults to
+   * case-sensitive when the flag is undefined (preserving legacy behavior).
+   * New nodes set caseSensitive=false via NODE_DEFINITIONS.defaultData; the
+   * UI checkbox renders as checked when undefined so legacy nodes accurately
+   * reflect their runtime behavior.
+   */
+  describe("executeFilterList — caseSensitive flag", () => {
+    /** Build a filter-list node with an explicit caseSensitive setting on the
+     *  node data (omit the field to simulate a legacy saved node). */
+    function setupWithCase(
+      items: string[],
+      condition: Cond,
+      caseSensitive: boolean | undefined,
+      conditionLogic: "AND" | "OR" = "AND",
+    ) {
+      const src = makeNode("s", "extract-field", {})
+      const filterData: Record<string, unknown> = {
+        conditions: [{
+          id: "c0",
+          field: condition.field ?? "",
+          operator: condition.operator,
+          value: condition.value ?? "",
+          valueType: condition.valueType ?? "static",
+        }],
+        conditionLogic,
+      }
+      if (caseSensitive !== undefined) filterData.caseSensitive = caseSensitive
+      const filter = makeNode("f", "filter-list", filterData)
+      const edges: SimpleEdge[] = [
+        { id: "e1", source: "s", target: "f", sourceHandle: "text", targetHandle: "in" } as SimpleEdge,
+      ]
+      const states: Record<string, NodeExecutionState> = {
+        s: { status: "completed", output: { listResults: items, text: items[0] ?? "" } },
+      }
+      return { filter, edges, nodes: [src, filter], states }
+    }
+
+    it("default (undefined) is case-sensitive — preserves existing behavior", () => {
+      const items = [
+        JSON.stringify({ title: "HELLO" }),
+        JSON.stringify({ title: "hello" }),
+        JSON.stringify({ title: "Hello World" }),
+      ]
+      // No caseSensitive field — legacy node shape
+      const { filter, edges, nodes, states } = setupWithCase(
+        items,
+        { field: "title", operator: "contains", value: "hello" },
+        undefined,
+      )
+      const kept = executeFilterList(filter, edges, nodes, states).listResults ?? []
+      expect(kept.map((s) => JSON.parse(s).title)).toEqual(["hello"])
+    })
+
+    it("caseSensitive: false — contains matches case-insensitively", () => {
+      const items = [
+        JSON.stringify({ title: "HELLO" }),
+        JSON.stringify({ title: "world" }),
+        JSON.stringify({ title: "Hello World" }),
+      ]
+      const { filter, edges, nodes, states } = setupWithCase(
+        items,
+        { field: "title", operator: "contains", value: "hello" },
+        false,
+      )
+      const kept = executeFilterList(filter, edges, nodes, states).listResults ?? []
+      expect(kept.map((s) => JSON.parse(s).title)).toEqual(["HELLO", "Hello World"])
+    })
+
+    it("caseSensitive: true — explicit opt-in matches default", () => {
+      const items = [
+        JSON.stringify({ title: "HELLO" }),
+        JSON.stringify({ title: "hello" }),
+      ]
+      const { filter, edges, nodes, states } = setupWithCase(
+        items,
+        { field: "title", operator: "contains", value: "hello" },
+        true,
+      )
+      const kept = executeFilterList(filter, edges, nodes, states).listResults ?? []
+      expect(kept.map((s) => JSON.parse(s).title)).toEqual(["hello"])
+    })
+
+    it("caseSensitive: false with equals — Apple == apple", () => {
+      const items = [
+        JSON.stringify({ name: "Apple" }),
+        JSON.stringify({ name: "apple" }),
+        JSON.stringify({ name: "APPLE" }),
+        JSON.stringify({ name: "banana" }),
+      ]
+      const { filter, edges, nodes, states } = setupWithCase(
+        items,
+        { field: "name", operator: "=", value: "apple" },
+        false,
+      )
+      const kept = executeFilterList(filter, edges, nodes, states).listResults ?? []
+      expect(kept.map((s) => JSON.parse(s).name)).toEqual(["Apple", "apple", "APPLE"])
+    })
+  })
 })

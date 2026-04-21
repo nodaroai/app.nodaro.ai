@@ -5,6 +5,7 @@ import {
   resolveConditionValue,
   tryParseJson,
   type FilterListCondition,
+  type FilterListOperator,
 } from "../filter-condition.js"
 
 function cond(partial: Partial<FilterListCondition> & { operator: FilterListCondition["operator"] }): FilterListCondition {
@@ -119,5 +120,93 @@ describe("tryParseJson", () => {
   it("non-string values are passed through", () => {
     const obj = { a: 1 }
     expect(tryParseJson(obj)).toBe(obj)
+  })
+})
+
+describe("evaluateCondition — case sensitivity option", () => {
+  const mkCond = (operator: FilterListOperator, value: string, field = ""): FilterListCondition =>
+    ({ operator, value, field })
+
+  // Default behavior: case-sensitive (preserves existing production semantics)
+
+  it("default behavior is case-sensitive — contains", () => {
+    expect(evaluateCondition("HELLO world", "HELLO world", mkCond("contains", "hello"))).toBe(false)
+    expect(evaluateCondition("HELLO world", "HELLO world", mkCond("contains", "HELLO"))).toBe(true)
+  })
+
+  it("default behavior is case-sensitive — equals", () => {
+    expect(evaluateCondition("Apple", "Apple", mkCond("=", "apple"))).toBe(false)
+    expect(evaluateCondition("Apple", "Apple", mkCond("=", "Apple"))).toBe(true)
+  })
+
+  // Explicit caseSensitive: true — identical to default, exercised for completeness
+
+  it("caseSensitive: true — explicit opt-in matches default", () => {
+    expect(evaluateCondition("HELLO", "HELLO", mkCond("contains", "hello"), undefined,
+      { caseSensitive: true })).toBe(false)
+    expect(evaluateCondition("HELLO hello", "HELLO hello", mkCond("contains", "hello"), undefined,
+      { caseSensitive: true })).toBe(true)
+  })
+
+  it("caseSensitive: true — equals, starts_with, ends_with are strict", () => {
+    expect(evaluateCondition("Apple", "Apple", mkCond("=", "apple"), undefined,
+      { caseSensitive: true })).toBe(false)
+    expect(evaluateCondition("Apple", "Apple", mkCond("starts_with", "apple"), undefined,
+      { caseSensitive: true })).toBe(false)
+    expect(evaluateCondition("Apple", "Apple", mkCond("ends_with", "pple"), undefined,
+      { caseSensitive: true })).toBe(true)
+  })
+
+  // caseSensitive: false — the new case-insensitive mode
+
+  it("caseSensitive: false — contains", () => {
+    expect(evaluateCondition("HELLO world", "HELLO world", mkCond("contains", "hello"), undefined,
+      { caseSensitive: false })).toBe(true)
+    expect(evaluateCondition("Foo", "Foo", mkCond("contains", "BAR"), undefined,
+      { caseSensitive: false })).toBe(false)
+  })
+
+  it("caseSensitive: false — equals, not_equals, starts_with, ends_with", () => {
+    expect(evaluateCondition("Apple", "Apple", mkCond("=", "apple"), undefined,
+      { caseSensitive: false })).toBe(true)
+    expect(evaluateCondition("Apple", "Apple", mkCond("!=", "APPLE"), undefined,
+      { caseSensitive: false })).toBe(false)
+    expect(evaluateCondition("Apple Pie", "Apple Pie", mkCond("starts_with", "apple"), undefined,
+      { caseSensitive: false })).toBe(true)
+    expect(evaluateCondition("Apple Pie", "Apple Pie", mkCond("ends_with", "PIE"), undefined,
+      { caseSensitive: false })).toBe(true)
+  })
+
+  it("caseSensitive: false — not_contains respects the flag", () => {
+    expect(evaluateCondition("HELLO world", "HELLO world", mkCond("not_contains", "hello"), undefined,
+      { caseSensitive: false })).toBe(false)
+    expect(evaluateCondition("HELLO world", "HELLO world", mkCond("not_contains", "xyz"), undefined,
+      { caseSensitive: false })).toBe(true)
+  })
+
+  // Non-text operators are never affected by the flag
+
+  it("ignores the option for non-text operators — >, <, exists, not_exists", () => {
+    expect(evaluateCondition("5", "5", mkCond(">", "3"), undefined,
+      { caseSensitive: true })).toBe(true)
+    expect(evaluateCondition("5", "5", mkCond(">", "3"), undefined,
+      { caseSensitive: false })).toBe(true)
+    expect(evaluateCondition("value", "value", mkCond("exists", ""), undefined,
+      { caseSensitive: true })).toBe(true)
+    // not_exists is null/undefined-sensitive only. Use a field path pointing at
+    // a missing key so the fieldValue is legitimately undefined under both settings.
+    expect(evaluateCondition({ other: 1 }, "", mkCond("not_exists", "", "v"), undefined,
+      { caseSensitive: false })).toBe(true)
+    expect(evaluateCondition({ other: 1 }, "", mkCond("not_exists", "", "v"), undefined,
+      { caseSensitive: true })).toBe(true)
+  })
+
+  it("regex operator is always driven by the pattern itself — option ignored", () => {
+    // Users can use `(?i)` flags or explicitly matching patterns for
+    // case-insensitive regex. The caseSensitive option does not modify the regex.
+    expect(evaluateCondition("Apple", "Apple", mkCond("regex", "^apple$"), undefined,
+      { caseSensitive: false })).toBe(false)
+    expect(evaluateCondition("Apple", "Apple", mkCond("regex", "^Apple$"), undefined,
+      { caseSensitive: false })).toBe(true)
   })
 })

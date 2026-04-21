@@ -48,6 +48,7 @@ const STRUCTURED_LIST_TYPES = new Set([
   "filter-list",
   "deduplicate",
   "merge-lists",
+  "sort-list",
 ])
 
 function isStructuredListNode(node: { type?: string; data: Record<string, unknown> }): boolean {
@@ -263,7 +264,7 @@ export function resolveLoopColumnValues(
 }
 
 /** Node types whose edges default to "each" output mode (fan-out) */
-const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text", "filter-list", "deduplicate", "merge-lists"]);
+const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text", "filter-list", "deduplicate", "merge-lists", "sort-list"]);
 
 /** Node types that accept multiple audio inputs (accumulate to audioUrls array) */
 const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "combine-audio"]);
@@ -1290,7 +1291,7 @@ export function resolveNodeInputs(
       inputs.prompt = output;
     } else if (src.type === "extract-field") {
       inputs.prompt = output;
-    } else if (src.type === "filter-list" || src.type === "deduplicate" || src.type === "merge-lists") {
+    } else if (src.type === "filter-list" || src.type === "deduplicate" || src.type === "merge-lists" || src.type === "sort-list") {
       inputs.prompt = output;
     } else if (src.type === "generate-script") {
       const handle = srcEdge.sourceHandle;

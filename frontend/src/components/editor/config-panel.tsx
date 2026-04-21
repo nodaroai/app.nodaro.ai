@@ -127,6 +127,7 @@ import {
   FilterListConfig,
   DeduplicateConfig,
   MergeListsConfig,
+  SortListConfig,
   PreviewConfig,
   TeleporterConfig,
   RouterConfig,
@@ -230,6 +231,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "filter-list": "Filter List",
   "deduplicate": "Remove Duplicates",
   "merge-lists": "Merge Lists",
+  "sort-list": "Sort List",
   "preview": "Preview",
   "loop": "Table",
   "save-to-storage": "Save to Storage",
@@ -299,7 +301,7 @@ const RESULT_PRODUCING_TYPES = new Set([
   ...RUN_BUTTON_TYPES,
 ].filter(t =>
   t !== "combine-text" && t !== "split-text" && t !== "extract-field" && t !== "json-process" &&
-  t !== "filter-list" && t !== "deduplicate" && t !== "merge-lists" &&
+  t !== "filter-list" && t !== "deduplicate" && t !== "merge-lists" && t !== "sort-list" &&
   t !== "preview" && t !== "sub-workflow" &&
   t !== "instagram-post" && t !== "tiktok-post" && t !== "youtube-upload" &&
   t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post" && t !== "telegram-post" &&
@@ -422,6 +424,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "filter-list": return <FilterListConfig {...configProps} />
     case "deduplicate": return <DeduplicateConfig {...configProps} />
     case "merge-lists": return <MergeListsConfig {...configProps} />
+    case "sort-list": return <SortListConfig {...configProps} />
     case "preview": return <PreviewConfig {...configProps} />
     case "teleport-send": case "teleport-receive": return <TeleporterConfig {...configProps} nodeType={nodeType} />
     case "router": return <RouterConfig {...configProps} />

@@ -29,6 +29,27 @@ export interface RouterConditionGroup {
   routeIds?: string[]
 }
 
+/**
+ * Options for `evaluateCondition` / `evaluateConditionGroup`.
+ */
+export interface EvaluateConditionOptions {
+  /** When `false`, text operators (`contains`, `not_contains`, `starts_with`,
+   *  `ends_with`, `=`, `!=`) compare case-insensitively using case-folded
+   *  string equality.
+   *
+   *  Note: `=` and `!=` lose their default numeric-coercion semantics under
+   *  `caseSensitive: false`. Under the default (case-sensitive), `1 == "1.0"`
+   *  via `valuesEqual`; under `caseSensitive: false`, comparison is pure
+   *  case-folded string equality, so `"1" !== "1.0"`.
+   *
+   *  Default (when undefined): `true` (case-sensitive) — preserves existing
+   *  behavior for all callers.
+   *
+   *  Non-text operators (`>`, `<`, `>=`, `<=`, `exists`, `not_exists`,
+   *  `regex`) are unaffected by this flag. */
+  caseSensitive?: boolean
+}
+
 export function tryParseJson(item: unknown): unknown {
   if (typeof item !== "string") return item
   const trimmed = item.trim()
@@ -113,11 +134,16 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   return String(a ?? "") === String(b ?? "")
 }
 
+function applyCase(s: string, caseSensitive: boolean): string {
+  return caseSensitive ? s : s.toLowerCase()
+}
+
 export function evaluateCondition(
   parsedItem: unknown,
   rawItem: string,
   condition: FilterListCondition,
   triggerData?: Record<string, unknown>,
+  options?: EvaluateConditionOptions,
 ): boolean {
   const path = (condition.field ?? "").trim()
   let fieldValue: unknown
@@ -129,6 +155,11 @@ export function evaluateCondition(
   }
 
   const targetStr = resolveConditionValue(condition.value ?? "", condition.valueType, triggerData)
+  // Default to case-sensitive when the flag is not explicitly set. This
+  // preserves existing behavior for Router conditional mode and legacy
+  // Filter List nodes that don't carry the new `caseSensitive` field.
+  const cs = options?.caseSensitive ?? true
+  const fieldStr = String(fieldValue ?? "")
 
   switch (condition.operator) {
     case "exists":
@@ -136,25 +167,29 @@ export function evaluateCondition(
     case "not_exists":
       return fieldValue === undefined || fieldValue === null
     case "contains":
-      return String(fieldValue ?? "").includes(targetStr)
+      return applyCase(fieldStr, cs).includes(applyCase(targetStr, cs))
     case "not_contains":
-      return !String(fieldValue ?? "").includes(targetStr)
+      return !applyCase(fieldStr, cs).includes(applyCase(targetStr, cs))
     case "starts_with":
-      return String(fieldValue ?? "").startsWith(targetStr)
+      return applyCase(fieldStr, cs).startsWith(applyCase(targetStr, cs))
     case "ends_with":
-      return String(fieldValue ?? "").endsWith(targetStr)
+      return applyCase(fieldStr, cs).endsWith(applyCase(targetStr, cs))
     case "regex": {
       if (!targetStr) return false
       try {
-        return new RegExp(targetStr).test(String(fieldValue ?? ""))
+        return new RegExp(targetStr).test(fieldStr)
       } catch {
         return false
       }
     }
     case "=":
-      return valuesEqual(fieldValue, targetStr)
+      return cs
+        ? valuesEqual(fieldValue, targetStr)
+        : applyCase(fieldStr, false) === applyCase(targetStr, false)
     case "!=":
-      return !valuesEqual(fieldValue, targetStr)
+      return cs
+        ? !valuesEqual(fieldValue, targetStr)
+        : applyCase(fieldStr, false) !== applyCase(targetStr, false)
     case ">":
       return compareValues(fieldValue, targetStr) > 0
     case "<":
@@ -177,9 +212,10 @@ export function evaluateConditionGroup(
   conditions: readonly FilterListCondition[],
   logic: "AND" | "OR",
   triggerData?: Record<string, unknown>,
+  options?: EvaluateConditionOptions,
 ): boolean {
   const effective = conditions.filter((c) => c && c.operator)
   if (effective.length === 0) return true
-  const results = effective.map((c) => evaluateCondition(parsedItem, rawItem, c, triggerData))
+  const results = effective.map((c) => evaluateCondition(parsedItem, rawItem, c, triggerData, options))
   return logic === "OR" ? results.some(Boolean) : results.every(Boolean)
 }

@@ -84,6 +84,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "filter-list": 0,
   "deduplicate": 0,
   "merge-lists": 0,
+  "sort-list": 0,
   "social-media-format": 2,
   "instagram-post": 1,
   "tiktok-post": 1,
@@ -212,6 +213,7 @@ export const EXECUTABLE_TYPES = new Set([
   "filter-list",
   "deduplicate",
   "merge-lists",
+  "sort-list",
   "audio-isolation",
   "text-to-dialogue",
   "image-to-text",
@@ -257,7 +259,7 @@ export function isExecutableNode(node: WorkflowNode): boolean {
   return EXECUTABLE_TYPES.has(node.type ?? "");
 }
 
-const FAN_OUT_EACH_TYPES = new Set(["list", "loop", "split-text", "filter-list", "deduplicate", "merge-lists"]);
+const FAN_OUT_EACH_TYPES = new Set(["list", "loop", "split-text", "filter-list", "deduplicate", "merge-lists", "sort-list"]);
 
 /**
  * Estimate the fan-out multiplier for a node based on upstream list/loop nodes.

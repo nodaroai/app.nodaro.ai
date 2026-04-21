@@ -89,6 +89,7 @@ export {
   type FilterListCondition,
   type FilterListOperator,
   type RouterConditionGroup,
+  type EvaluateConditionOptions,
 } from "./filter-condition.js"
 
 export { SCRAPER_OUTPUT_FIELDS } from "./scraper-output-schemas.js"
@@ -134,3 +135,6 @@ export {
   type SeparatorPreset,
   type ResolveSeparatorOptions,
 } from "./text-separators.js"
+
+export { sortListItems } from "./list-sort.js"
+export type { SortType, SortDirection, SortListOptions } from "./list-sort.js"
