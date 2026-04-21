@@ -103,18 +103,6 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Input",
   },
   {
-    type: "list",
-    label: "List",
-    icon: <List className="h-4 w-4" />,
-    category: "Input",
-  },
-  {
-    type: "loop",
-    label: "Table",
-    icon: <Repeat className="h-4 w-4" />,
-    category: "Input",
-  },
-  {
     type: "upload-image",
     label: "Upload Image",
     icon: <Upload className="h-4 w-4" />,
@@ -132,12 +120,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Music className="h-4 w-4" />,
     category: "Input",
   },
-  {
-    type: "rss-feed",
-    label: "RSS Feed",
-    icon: <Rss className="h-4 w-4" />,
-    category: "Input",
-  },
+  // Hidden — uncomment to restore in the Add Node UI:
+  // {
+  //   type: "rss-feed",
+  //   label: "RSS Feed",
+  //   icon: <Rss className="h-4 w-4" />,
+  //   category: "Input",
+  // },
   {
     type: "youtube-video",
     label: "Video URL",
@@ -171,17 +160,30 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
   // Data
   {
+    type: "list",
+    label: "List",
+    icon: <List className="h-4 w-4" />,
+    category: "Data",
+  },
+  {
+    type: "loop",
+    label: "Table",
+    icon: <Repeat className="h-4 w-4" />,
+    category: "Data",
+  },
+  {
     type: "web-scrape",
     label: "Web Scrape",
     icon: <Globe className="h-4 w-4" />,
     category: "Data",
   },
-  {
-    type: "json-process",
-    label: "JSON Process",
-    icon: <Filter className="h-4 w-4" />,
-    category: "Data",
-  },
+  // Hidden — uncomment to restore in the Add Node UI:
+  // {
+  //   type: "json-process",
+  //   label: "JSON Process",
+  //   icon: <Filter className="h-4 w-4" />,
+  //   category: "Data",
+  // },
   {
     type: "extract-field",
     label: "Extract Field",
@@ -861,17 +863,22 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Workflow",
   },
   {
+    type: "router",
+    label: "Router",
+    icon: <GitBranch className="h-4 w-4" />,
+    category: "Workflow",
+  },
+  {
+    type: "sticky-note",
+    label: "Sticky Note",
+    icon: <StickyNote className="h-4 w-4" />,
+    category: "Workflow",
+  },
+  {
     type: "component" as SceneNodeType,
     label: "Component",
     icon: <Puzzle className="h-4 w-4" />,
     category: "Component",
-  },
-  {
-    type: "router",
-    label: "Router",
-    icon: <GitBranch className="h-4 w-4" />,
-    category: "Processing",
-    group: "Control Flow",
   },
   {
     type: "preview",
@@ -879,12 +886,6 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Eye className="h-4 w-4" />,
     category: "Processing",
     group: "Text",
-  },
-  {
-    type: "sticky-note",
-    label: "Sticky Note",
-    icon: <StickyNote className="h-4 w-4" />,
-    category: "Input",
   },
 ];
 
