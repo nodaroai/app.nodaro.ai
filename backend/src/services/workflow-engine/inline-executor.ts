@@ -17,6 +17,7 @@ import {
 import { sortListItems, type SortType, type SortDirection } from "../../../../packages/shared/src/list-sort.js"
 import { spreadJsonArrayIfSingleton } from "../../../../packages/shared/src/generated-results.js"
 import { zipMergeLists } from "../../../../packages/shared/src/list-merge.js"
+import { resolveSourceThroughConnectedList } from "../../../../packages/shared/src/list-source-resolver.js"
 
 // Re-export for tests and downstream consumers.
 export type { FilterListCondition }
@@ -156,10 +157,11 @@ export function executeExtractField(
 ): NodeOutput {
   const path = ((node.data.field as string) ?? "").trim()
 
-  const incoming = edges.find((e) => e.target === node.id)
-  if (!incoming) {
+  const rawIncoming = edges.find((e) => e.target === node.id)
+  if (!rawIncoming) {
     return { extractedText: "", text: "", listResults: [] }
   }
+  const incoming = resolveSourceThroughConnectedList(rawIncoming, allNodes, edges)
   const src = allNodes.find((n) => n.id === incoming.source)
   if (!src) {
     return { extractedText: "", text: "", listResults: [] }
@@ -216,8 +218,9 @@ export function executeJsonProcess(
         projections: (data.projections as string[]) ?? [],
       })
 
-  const incoming = edges.find((e) => e.target === node.id)
-  if (!incoming) return { text: "", processedResult: null, listResults: [] }
+  const rawIncoming = edges.find((e) => e.target === node.id)
+  if (!rawIncoming) return { text: "", processedResult: null, listResults: [] }
+  const incoming = resolveSourceThroughConnectedList(rawIncoming, allNodes, edges)
 
   const src = allNodes.find((n) => n.id === incoming.source)
   if (!src) return { text: "", processedResult: null, listResults: [] }
@@ -272,13 +275,18 @@ function extractSavedTextFallback(src: SimpleNode): string | undefined {
  *      output is `{ json: [{post}, {post}, …] }`); objects and primitives
  *      are pushed as a single stringified item.
  *   3. `getPrimaryOutput` — fallback to the node's primary text/URL output.
+ *
+ * Edges pointing at a connected-mode list are transparently re-routed to the
+ * list's upstream via `resolveSourceThroughConnectedList`.
  */
 function collectItemsForEdge(
   edge: SimpleEdge,
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
+  allEdges: SimpleEdge[],
 ): string[] {
-  const srcNode = allNodes.find((n) => n.id === edge.source)
+  const resolvedEdge = resolveSourceThroughConnectedList(edge, allNodes, allEdges)
+  const srcNode = allNodes.find((n) => n.id === resolvedEdge.source)
   if (!srcNode) return []
 
   let output = nodeStates[srcNode.id]?.output
@@ -319,7 +327,7 @@ function collectItemsForEdge(
     return items
   }
 
-  const primary = getPrimaryOutput(output, srcNode.type, edge.sourceHandle)
+  const primary = getPrimaryOutput(output, srcNode.type, resolvedEdge.sourceHandle)
   if (primary != null && primary !== "") items.push(primary)
   return items
 }
@@ -333,7 +341,7 @@ function collectUpstreamListItems(
   const incomingEdges = edges.filter((e) => e.target === nodeId)
   const items: string[] = []
   for (const edge of incomingEdges) {
-    items.push(...collectItemsForEdge(edge, allNodes, nodeStates))
+    items.push(...collectItemsForEdge(edge, allNodes, nodeStates, edges))
   }
   return spreadJsonArrayIfSingleton(items)
 }
@@ -351,7 +359,7 @@ function collectUpstreamListsPerEdge(
 ): string[][] {
   const incomingEdges = edges.filter((e) => e.target === nodeId)
   return incomingEdges.map((edge) =>
-    spreadJsonArrayIfSingleton(collectItemsForEdge(edge, allNodes, nodeStates)),
+    spreadJsonArrayIfSingleton(collectItemsForEdge(edge, allNodes, nodeStates, edges)),
   )
 }
 
