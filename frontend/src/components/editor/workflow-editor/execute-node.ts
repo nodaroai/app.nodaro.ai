@@ -152,6 +152,7 @@ import type {
   JsonProcessNodeData,
   FilterListNodeData,
   FilterListCondition,
+  RouterNodeData,
   DeduplicateNodeData,
   MergeListsNodeData,
 } from "@/types/nodes";
@@ -194,6 +195,12 @@ import type { CharacterDef } from "@nodaro-shared/types";
 import { resolveSeparator } from "@nodaro-shared/text-separators";
 import { evaluateJsonPath, stringifyPathResults } from "@nodaro-shared/json-path";
 import { evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList } from "@nodaro-shared/json-evaluator";
+import {
+  tryParseJson,
+  evaluateCondition,
+  evaluateConditionGroup,
+  resolveConditionValue,
+} from "@nodaro-shared/filter-condition";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 
 // ---------------------------------------------------------------------------
@@ -346,132 +353,8 @@ function collectUpstreamListItemsFrontend(
   return items;
 }
 
-function tryParseJsonFrontend(item: unknown): unknown {
-  if (typeof item !== "string") return item;
-  const trimmed = item.trim();
-  if (!trimmed) return item;
-  const first = trimmed[0];
-  const looksJson =
-    first === "{" || first === "[" || first === "\"" ||
-    /^-?\d/.test(trimmed) || trimmed === "true" || trimmed === "false" || trimmed === "null";
-  if (!looksJson) return item;
-  try { return JSON.parse(trimmed); } catch { return item; }
-}
-
-const FILTER_HOUR_MS = 60 * 60 * 1000;
-const FILTER_DAY_MS = 24 * FILTER_HOUR_MS;
-const FILTER_WEEK_MS = 7 * FILTER_DAY_MS;
-
-// Mirrors backend `resolveRelativeWindowToken` in inline-executor.ts so manual
-// (frontend) and triggered (backend) runs of the same filter produce identical
-// results. Drift here = same filter passes different items in different runs.
-function resolveRelativeWindowTokenFrontend(key: string): string | undefined {
-  const m = key.match(/^last_N_(hours|days|weeks):(-?\d+)$/);
-  if (!m) return undefined;
-  const n = parseInt(m[2], 10);
-  if (!Number.isFinite(n)) return undefined;
-  const unitMs = m[1] === "hours" ? FILTER_HOUR_MS : m[1] === "days" ? FILTER_DAY_MS : FILTER_WEEK_MS;
-  return new Date(Date.now() - n * unitMs).toISOString();
-}
-
-// Exported for unit testing — must stay in lockstep with backend
-// `resolveConditionValue` (inline-executor.ts) so manual + triggered runs
-// produce identical filter results.
 export function resolveFilterConditionValue(raw: string, valueType: string | undefined): string {
-  if (valueType !== "variable" && !/\{\{/.test(raw)) return raw;
-  return raw.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr) => {
-    const key = String(expr).trim();
-    if (key === "now") return new Date().toISOString();
-    const relative = resolveRelativeWindowTokenFrontend(key);
-    if (relative !== undefined) return relative;
-    // trigger.* variables are resolved on the backend; frontend leaves them blank.
-    return "";
-  });
-}
-
-function asComparableNumberFrontend(v: unknown): number {
-  if (typeof v === "number") return v;
-  if (typeof v === "boolean") return v ? 1 : 0;
-  if (typeof v === "string") {
-    const trimmed = v.trim();
-    if (trimmed === "") return NaN;
-    const n = Number(trimmed);
-    if (!isNaN(n)) return n;
-    const d = Date.parse(trimmed);
-    if (!isNaN(d)) return d;
-  }
-  return NaN;
-}
-
-// Numeric-first ordering compare used by >, <, >=, <=. Falls back to
-// localeCompare when either side can't be parsed as a number.
-function compareFilterValues(a: unknown, b: unknown): number {
-  const na = asComparableNumberFrontend(a);
-  const nb = asComparableNumberFrontend(b);
-  if (!isNaN(na) && !isNaN(nb)) return na - nb;
-  return String(a ?? "").localeCompare(String(b ?? ""));
-}
-
-// Numeric-first equality used by = and !=. So "432" == 432 and 432 == "432".
-// Falls back to string equality (null/undefined coerced to "").
-function filterValuesEqual(a: unknown, b: unknown): boolean {
-  const na = asComparableNumberFrontend(a);
-  const nb = asComparableNumberFrontend(b);
-  if (!isNaN(na) && !isNaN(nb)) return na === nb;
-  return String(a ?? "") === String(b ?? "");
-}
-
-function evaluateFilterListCondition(
-  parsedItem: unknown,
-  rawItem: string,
-  condition: FilterListCondition,
-): boolean {
-  const path = (condition.field ?? "").trim();
-  let fieldValue: unknown;
-  if (path === "") {
-    fieldValue = parsedItem ?? rawItem;
-  } else {
-    const matches = evaluateJsonPath(parsedItem ?? rawItem, path);
-    fieldValue = matches.length > 0 ? matches[0] : undefined;
-  }
-  const targetStr = resolveFilterConditionValue(condition.value ?? "", condition.valueType);
-
-  switch (condition.operator) {
-    case "exists":
-      return fieldValue !== undefined && fieldValue !== null;
-    case "not_exists":
-      return fieldValue === undefined || fieldValue === null;
-    case "contains":
-      return String(fieldValue ?? "").includes(targetStr);
-    case "not_contains":
-      return !String(fieldValue ?? "").includes(targetStr);
-    case "starts_with":
-      return String(fieldValue ?? "").startsWith(targetStr);
-    case "ends_with":
-      return String(fieldValue ?? "").endsWith(targetStr);
-    case "regex": {
-      if (!targetStr) return false;
-      try {
-        return new RegExp(targetStr).test(String(fieldValue ?? ""));
-      } catch {
-        return false;
-      }
-    }
-    case "=":
-      return filterValuesEqual(fieldValue, targetStr);
-    case "!=":
-      return !filterValuesEqual(fieldValue, targetStr);
-    case ">":
-      return compareFilterValues(fieldValue, targetStr) > 0;
-    case "<":
-      return compareFilterValues(fieldValue, targetStr) < 0;
-    case ">=":
-      return compareFilterValues(fieldValue, targetStr) >= 0;
-    case "<=":
-      return compareFilterValues(fieldValue, targetStr) <= 0;
-    default:
-      return false;
-  }
+  return resolveConditionValue(raw, valueType);
 }
 
 /**
@@ -3933,8 +3816,9 @@ export function executeNode(
 
   if (node.type === "router") {
     const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState()
-    const routerData = node.data as Record<string, unknown>
-    const routes = (routerData.routes as Array<{ id: string; name: string; active: boolean }>) ?? []
+    const routerData = node.data as RouterNodeData
+    const mode = routerData.mode ?? "radio"
+    const routes = routerData.routes ?? []
 
     // Resolve upstream input (passthrough)
     const incomingEdges = currentEdges.filter((e) => e.target === node.id)
@@ -3946,10 +3830,31 @@ export function executeNode(
       if (output) { inputValue = output; break }
     }
 
-    const activeRoutes = routes.filter((r) => r.active).map((r) => r.id)
+    let activeRoutes: string[]
+    if (mode === "conditional") {
+      const groups = routerData.conditionGroups ?? []
+      if (groups.length === 0) {
+        activeRoutes = []
+      } else {
+        const parsed = tryParseJson(inputValue ?? "")
+        const raw = inputValue ?? ""
+        const union = new Set<string>()
+        for (const group of groups) {
+          if (!group.routeIds?.length) continue
+          const logic = group.conditionLogic === "OR" ? "OR" : "AND"
+          if (evaluateConditionGroup(parsed, raw, group.conditions ?? [], logic)) {
+            for (const id of group.routeIds) union.add(id)
+          }
+        }
+        activeRoutes = routes.filter((r) => union.has(r.id)).map((r) => r.id)
+      }
+    } else {
+      activeRoutes = routes.filter((r) => r.active).map((r) => r.id)
+    }
+
     const routeOutputs: Record<string, string | undefined> = {}
     for (const route of routes) {
-      routeOutputs[route.id] = route.active ? (inputValue ?? "gate") : undefined
+      routeOutputs[route.id] = activeRoutes.includes(route.id) ? (inputValue ?? "gate") : undefined
     }
 
     updateNodeData(node.id, {
@@ -4098,7 +4003,7 @@ export function executeNode(
     if (value === undefined) {
       const listItems = extractNodeOutputAsList(src);
       if (listItems && listItems.length > 0) {
-        value = listItems.map((item) => tryParseJsonFrontend(item));
+        value = listItems.map((item) => tryParseJson(item));
       }
     }
 
@@ -4205,8 +4110,8 @@ export function executeNode(
     const filtered = effectiveConditions.length === 0
       ? items
       : items.filter((item) => {
-        const parsed = tryParseJsonFrontend(item);
-        const results = effectiveConditions.map((c) => evaluateFilterListCondition(parsed, item, c));
+        const parsed = tryParseJson(item);
+        const results = effectiveConditions.map((c) => evaluateCondition(parsed, item, c));
         return logic === "OR" ? results.some(Boolean) : results.every(Boolean);
       });
     updateNodeData(node.id, {
@@ -4232,7 +4137,7 @@ export function executeNode(
       if (path === "") {
         key = item;
       } else {
-        const parsed = tryParseJsonFrontend(item);
+        const parsed = tryParseJson(item);
         const matches = evaluateJsonPath(parsed, path);
         const first = matches.length > 0 ? matches[0] : undefined;
         key = first === undefined || first === null

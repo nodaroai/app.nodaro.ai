@@ -38,10 +38,18 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "upload-audio", label: "Upload Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
   { type: "rss-feed", label: "RSS Feed", icon: <Rss className="h-4 w-4" />, category: "Input" },
   { type: "youtube-video", label: "Video URL", icon: <Video className="h-4 w-4" />, category: "Input" },
-  { type: "web-scrape", label: "Web Scrape", icon: <Globe className="h-4 w-4" />, category: "Input" },
   { type: "reference-audio", label: "Reference Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
-  { type: "webhook-trigger" as const, label: "Webhook Trigger", icon: <Webhook className="h-4 w-4" />, category: "Input" },
-  { type: "schedule-trigger" as const, label: "Schedule Trigger", icon: <Clock className="h-4 w-4" />, category: "Input" },
+  // Triggers
+  { type: "webhook-trigger" as const, label: "Webhook Trigger", icon: <Webhook className="h-4 w-4" />, category: "Triggers" },
+  { type: "schedule-trigger" as const, label: "Schedule Trigger", icon: <Clock className="h-4 w-4" />, category: "Triggers" },
+  { type: "telegram-trigger", label: "Telegram Trigger", icon: <Send className="h-4 w-4" />, category: "Triggers" },
+  // Data
+  { type: "web-scrape", label: "Web Scrape", icon: <Globe className="h-4 w-4" />, category: "Data" },
+  { type: "json-process", label: "JSON Process", icon: <Filter className="h-4 w-4" />, category: "Data" },
+  { type: "extract-field", label: "Extract Field", icon: <Braces className="h-4 w-4" />, category: "Data" },
+  { type: "filter-list", label: "Filter List", icon: <ListFilter className="h-4 w-4" />, category: "Data" },
+  { type: "deduplicate", label: "Remove Duplicates", icon: <CopyMinus className="h-4 w-4" />, category: "Data" },
+  { type: "merge-lists", label: "Merge Lists", icon: <GitMerge className="h-4 w-4" />, category: "Data" },
   // Parameter
   { type: "tone", label: "Tone", icon: <Palette className="h-4 w-4" />, category: "Parameter" },
   { type: "style-guide", label: "Style Guide", icon: <PaintBucket className="h-4 w-4" />, category: "Parameter" },
@@ -120,11 +128,6 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Processing — Text
   { type: "combine-text", label: "Combine Text", icon: <Merge className="h-4 w-4" />, category: "Processing", group: "Text" },
   { type: "split-text", label: "Split Text", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Text" },
-  { type: "extract-field", label: "Extract Field", icon: <Braces className="h-4 w-4" />, category: "Processing", group: "Text" },
-  { type: "json-process", label: "JSON Process", icon: <Filter className="h-4 w-4" />, category: "Processing", group: "Text" },
-  { type: "filter-list", label: "Filter List", icon: <ListFilter className="h-4 w-4" />, category: "Processing", group: "Text" },
-  { type: "deduplicate", label: "Deduplicate", icon: <CopyMinus className="h-4 w-4" />, category: "Processing", group: "Text" },
-  { type: "merge-lists", label: "Merge Lists", icon: <GitMerge className="h-4 w-4" />, category: "Processing", group: "Text" },
   // Processing — Video Production
   { type: "video-composer", label: "Compose Video", icon: <Sparkles className="h-4 w-4" />, category: "Processing", group: "Video Production" },
   { type: "after-effects", label: "After Effects", icon: <Wand2 className="h-4 w-4" />, category: "Processing", group: "Video Production" },
@@ -154,15 +157,13 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "x-post", label: "X Post", icon: <Twitter className="h-4 w-4" />, category: "Output", group: "Social Media" },
   { type: "facebook-post", label: "Facebook Post", icon: <Facebook className="h-4 w-4" />, category: "Output", group: "Social Media" },
   { type: "telegram-post", label: "Telegram Post", icon: <Send className="h-4 w-4" />, category: "Output", group: "Social Media" },
-  { type: "telegram-trigger", label: "Telegram Trigger", icon: <Send className="h-4 w-4" />, category: "Input", group: "Triggers" },
   // Workflow
   { type: "sub-workflow-input", label: "Sub-Workflow Input", icon: <LogIn className="h-4 w-4" />, category: "Workflow" },
   { type: "sub-workflow-output", label: "Sub-Workflow Output", icon: <LogOut className="h-4 w-4" />, category: "Workflow" },
   { type: "sub-workflow", label: "Sub-Workflow", icon: <Workflow className="h-4 w-4" />, category: "Workflow" },
+  { type: "teleport-send", label: "Teleport Send", icon: <Send className="h-4 w-4" />, category: "Workflow" },
+  { type: "teleport-receive", label: "Teleport Receive", icon: <Download className="h-4 w-4" />, category: "Workflow" },
   { type: "component" as SceneNodeType, label: "Component", icon: <Puzzle className="h-4 w-4" />, category: "Component" },
-  // Utility
-  { type: "teleport-send", label: "Teleport Send", icon: <Send className="h-4 w-4" />, category: "Processing", group: "Text" },
-  { type: "teleport-receive", label: "Teleport Receive", icon: <Download className="h-4 w-4" />, category: "Processing", group: "Text" },
   { type: "router", label: "Router", icon: <GitBranch className="h-4 w-4" />, category: "Processing", group: "Control Flow" },
   { type: "preview", label: "Preview", icon: <Eye className="h-4 w-4" />, category: "Processing", group: "Text" },
   { type: "sticky-note", label: "Sticky Note", icon: <StickyNote className="h-4 w-4" />, category: "Input" },
@@ -173,6 +174,8 @@ const CATEGORIES = Array.from(new Set(NODE_OPTIONS.map((n) => n.category)))
 // Category-specific hover colors for icons
 const CATEGORY_ICON_HOVER: Record<string, string> = {
   Input: "group-hover:text-[#007AFF]",
+  Triggers: "group-hover:text-[#F97316]",
+  Data: "group-hover:text-[#14B8A6]",
   Parameter: "group-hover:text-[#6366F1]",
   AI: "group-hover:text-[#ff0073]",
   Processing: "group-hover:text-[#475569]",

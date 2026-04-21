@@ -80,6 +80,17 @@ export { evaluateJsonPath, stringifyPathResults } from "./json-path.js"
 
 export { evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, type JsonEvalResult, type JsonFilter, type FilterOperator } from "./json-evaluator.js"
 
+export {
+  tryParseJson,
+  resolveRelativeWindowToken,
+  resolveConditionValue,
+  evaluateCondition,
+  evaluateConditionGroup,
+  type FilterListCondition,
+  type FilterListOperator,
+  type RouterConditionGroup,
+} from "./filter-condition.js"
+
 export { SCRAPER_OUTPUT_FIELDS } from "./scraper-output-schemas.js"
 
 export {

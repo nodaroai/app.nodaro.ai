@@ -17,8 +17,18 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeInternals = useUpdateNodeInternals()
   const routes = nodeData.routes ?? []
   const mode = nodeData.mode ?? "radio"
+  const isConditional = mode === "conditional"
+  const activeRoutes = nodeData.activeRoutes ?? []
   const routeIds = routes.map((r) => r.id).join(",")
   const spacing = routes.length <= 1 ? 30 : Math.min(30, Math.floor(120 / routes.length))
+
+  // In conditional mode the "active" state is derived from rule evaluation,
+  // so we read the post-execution activeRoutes rather than the stored flags.
+  const isRouteActive = useCallback(
+    (route: { id: string; active: boolean }) =>
+      isConditional ? activeRoutes.includes(route.id) : route.active,
+    [isConditional, activeRoutes],
+  )
 
   // Update React Flow internals when route IDs change (add/remove/replace)
   useEffect(() => {
@@ -27,6 +37,8 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
 
   const toggleRoute = useCallback((routeId: string, e: React.MouseEvent) => {
     e.stopPropagation()
+    // Conditional mode: active state is derived, not user-toggled. Ignore clicks.
+    if (isConditional) return
     const updated = routes.map((r) => {
       if (mode === "radio") {
         return { ...r, active: r.id === routeId }
@@ -34,7 +46,7 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
       return r.id === routeId ? { ...r, active: !r.active } : r
     })
     updateNodeData(id, { routes: updated })
-  }, [id, routes, mode, updateNodeData])
+  }, [id, routes, mode, isConditional, updateNodeData])
 
   // Build dynamic handles — only recompute when route IDs or spacing change
   const handles = useMemo(() => {
@@ -52,6 +64,8 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
     })
     return h
   }, [routeIds, spacing]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const modeLabel = mode === "radio" ? "Radio" : mode === "checkbox" ? "Checkbox" : "Conditional"
 
   return (
     <div className="relative" style={{ maxWidth: "220px" }}>
@@ -72,42 +86,50 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
       >
         <div className="flex items-center justify-between px-3 pt-2 pb-1">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-            {mode === "radio" ? "Radio" : "Checkbox"}
+            {modeLabel}
           </span>
-          {routes.length > 0 && routes.every((r) => !r.active) && (
+          {routes.length > 0 && routes.every((r) => !isRouteActive(r)) && (
             <span className="text-[9px] bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded font-medium">
               NONE
             </span>
           )}
         </div>
         <div className="flex flex-col gap-1 px-3 pb-2 nopan nodrag">
-          {routes.map((route) => (
-            <button
-              key={route.id}
-              type="button"
-              className="flex items-center gap-2 w-full text-left py-0.5 hover:opacity-80 transition-opacity"
-              onClick={(e) => toggleRoute(route.id, e)}
-            >
-              {mode === "radio" ? (
-                <div className={`w-3 h-3 rounded-full border-2 flex items-center justify-center ${
-                  route.active ? "border-green-500" : "border-muted-foreground/40"
-                }`}>
-                  {route.active && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
-                </div>
-              ) : (
-                <div className={`w-6 h-3.5 rounded-full relative transition-colors ${
-                  route.active ? "bg-green-500" : "bg-muted-foreground/30"
-                }`}>
-                  <div className={`w-2.5 h-2.5 rounded-full bg-white absolute top-0.5 transition-all ${
-                    route.active ? "right-0.5" : "left-0.5"
-                  }`} />
-                </div>
-              )}
-              <span className={`text-[11px] truncate ${route.active ? "text-foreground" : "text-muted-foreground"}`}>
-                {route.name}
-              </span>
-            </button>
-          ))}
+          {routes.map((route) => {
+            const active = isRouteActive(route)
+            return (
+              <button
+                key={route.id}
+                type="button"
+                className={
+                  "flex items-center gap-2 w-full text-left py-0.5 transition-opacity " +
+                  (isConditional ? "cursor-default" : "hover:opacity-80")
+                }
+                onClick={(e) => toggleRoute(route.id, e)}
+                title={isConditional ? "Active state is decided by condition groups at run time" : undefined}
+              >
+                {mode === "checkbox" ? (
+                  <div className={`w-6 h-3.5 rounded-full relative transition-colors ${
+                    active ? "bg-green-500" : "bg-muted-foreground/30"
+                  }`}>
+                    <div className={`w-2.5 h-2.5 rounded-full bg-white absolute top-0.5 transition-all ${
+                      active ? "right-0.5" : "left-0.5"
+                    }`} />
+                  </div>
+                ) : (
+                  // radio + conditional both render as a filled circle
+                  <div className={`w-3 h-3 rounded-full border-2 flex items-center justify-center ${
+                    active ? "border-green-500" : "border-muted-foreground/40"
+                  }`}>
+                    {active && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+                  </div>
+                )}
+                <span className={`text-[11px] truncate ${active ? "text-foreground" : "text-muted-foreground"}`}>
+                  {route.name}
+                </span>
+              </button>
+            )
+          })}
         </div>
       </BaseNode>
       <HandleIcon icon={<ChevronRight />} color="cyan" side="left" top="calc(100% - 20px)" />
@@ -115,7 +137,7 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
         <HandleIcon
           key={route.id}
           icon={<span className="text-[8px] font-bold">{LETTERS[i] ?? "?"}</span>}
-          color={route.active ? "green" : "steel"}
+          color={isRouteActive(route) ? "green" : "steel"}
           top={`${20 + i * spacing}px`}
           label={route.name}
         />

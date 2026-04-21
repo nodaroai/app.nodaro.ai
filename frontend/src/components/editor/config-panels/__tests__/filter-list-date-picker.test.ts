@@ -3,7 +3,7 @@ import {
   isDateTimeField,
   parseDateValueMode,
   buildDateValueToken,
-} from "../utility-configs"
+} from "../condition-row-editor"
 
 describe("isDateTimeField", () => {
   it("matches exact canonical names case-insensitively", () => {

@@ -32,12 +32,15 @@ import {
   type FilterListNodeData,
   type FilterListCondition,
   type FilterListOperator,
+  type RouterNodeData,
+  type RouterConditionGroup,
   type DeduplicateNodeData,
   type MergeListsNodeData,
   type WorkflowNode,
   type WorkflowEdge,
 } from "@/types/nodes"
 import { isMediaUrl } from "@/lib/media-type"
+import { AndOrToggle, ConditionRowEditor } from "./condition-row-editor"
 import { getPreviewItemKey } from "@/lib/preview-items"
 import { downloadFile } from "@/components/presentation/output-cards/shared"
 import { SCRAPER_OUTPUT_FIELDS } from "@nodaro-shared/scraper-output-schemas"
@@ -425,7 +428,7 @@ const PASS_THROUGH_SCHEMA_TYPES: ReadonlySet<string> = new Set([
  *      walk further back through the graph until a real producer is
  *      reached, then apply the same two strategies there.
  */
-function getUpstreamFieldOptions(
+export function getUpstreamFieldOptions(
   sources: ReadonlyArray<SourceNodeInfo>,
   allNodes?: ReadonlyArray<WorkflowNode>,
   allEdges?: ReadonlyArray<WorkflowEdge>,
@@ -446,7 +449,7 @@ function getUpstreamFieldOptions(
  *  parsed JSON). Walks back through pass-through nodes (filter-list, dedupe,
  *  merge-lists) so previews still work when the filter is chained. Returns
  *  undefined when nothing walkable is cached upstream. */
-function getUpstreamSampleItem(
+export function getUpstreamSampleItem(
   sources: ReadonlyArray<SourceNodeInfo>,
   allNodes?: ReadonlyArray<WorkflowNode>,
   allEdges?: ReadonlyArray<WorkflowEdge>,
@@ -937,9 +940,29 @@ export function TeleporterConfig({ data, onUpdate, nodeType }: { data: TeleportS
   )
 }
 
-export function RouterConfig({ data, onUpdate }: { data: Record<string, unknown>; onUpdate: (d: Record<string, unknown>) => void }) {
-  const mode = (data.mode as string) ?? "radio"
-  const routes = (data.routes as Array<{ id: string; name: string; active: boolean }>) ?? []
+export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigProps<RouterNodeData>) {
+  const mode = data.mode ?? "radio"
+  const routes = data.routes ?? []
+  const isConditional = mode === "conditional"
+  const conditionGroups = data.conditionGroups ?? []
+
+  // Upstream schema + sample are only interesting when we're actually writing rules.
+  const fieldOptions = useMemo(
+    () => (isConditional ? getUpstreamFieldOptions(sources, nodes, edges) : []),
+    [isConditional, sources, nodes, edges],
+  )
+  const sampleItem = useMemo(
+    () => (isConditional ? getUpstreamSampleItem(sources, nodes, edges) : undefined),
+    [isConditional, sources, nodes, edges],
+  )
+  const highlightedPaths = useMemo(() => {
+    const s = new Set<string>()
+    for (const g of conditionGroups) for (const c of g.conditions ?? []) {
+      const f = (c.field ?? "").trim()
+      if (f) s.add(f)
+    }
+    return s
+  }, [conditionGroups])
 
   const updateRoute = (index: number, patch: Partial<{ name: string; active: boolean }>) => {
     const updated = routes.map((r, i) => {
@@ -961,23 +984,71 @@ export function RouterConfig({ data, onUpdate }: { data: Record<string, unknown>
   }
 
   const removeRoute = (index: number) => {
-    if (routes.length <= 2) return
+    // Conditional mode allows 1-route gate patterns. Radio/checkbox still need ≥ 2.
+    const minRoutes = isConditional ? 1 : 2
+    if (routes.length <= minRoutes) return
+    const removed = routes[index]
     const updated = routes.filter((_, i) => i !== index)
     // If radio mode and we removed the active one, activate first
     if (mode === "radio" && !updated.some((r) => r.active) && updated.length > 0) {
       updated[0] = { ...updated[0], active: true }
     }
-    onUpdate({ routes: updated })
+    // Clean up dangling references to the removed route in condition groups.
+    const nextGroups = isConditional
+      ? conditionGroups.map((g) => ({ ...g, routeIds: (g.routeIds ?? []).filter((id) => id !== removed.id) }))
+      : conditionGroups
+    onUpdate({ routes: updated, conditionGroups: nextGroups })
   }
 
   const switchMode = (newMode: string) => {
-    if (newMode === "radio" && routes.filter((r) => r.active).length > 1) {
+    const next = newMode as RouterNodeData["mode"]
+    if (next === "radio" && routes.filter((r) => r.active).length > 1) {
       const firstActiveIdx = routes.findIndex((r) => r.active)
       const updated = routes.map((r, i) => ({ ...r, active: i === firstActiveIdx }))
-      onUpdate({ mode: newMode, routes: updated })
-    } else {
-      onUpdate({ mode: newMode })
+      onUpdate({ mode: next, routes: updated })
+      return
     }
+    if (next === "conditional" && conditionGroups.length === 0) {
+      // Seed one empty group pre-selecting the first route — a friendlier
+      // first-run than a blank slate.
+      const seeded: RouterConditionGroup = {
+        id: nanoid(),
+        conditions: [{ id: nanoid(), field: "", operator: "=", value: "", valueType: "static", mode: "dropdown" }],
+        conditionLogic: "AND",
+        routeIds: routes[0] ? [routes[0].id] : [],
+      }
+      onUpdate({ mode: next, conditionGroups: [seeded] })
+      return
+    }
+    onUpdate({ mode: next })
+  }
+
+  const addGroup = () => {
+    const newGroup: RouterConditionGroup = {
+      id: nanoid(),
+      conditions: [{ id: nanoid(), field: "", operator: "=", value: "", valueType: "static", mode: "dropdown" }],
+      conditionLogic: "AND",
+      routeIds: routes[0] ? [routes[0].id] : [],
+    }
+    onUpdate({ conditionGroups: [...conditionGroups, newGroup] })
+  }
+
+  const updateGroup = (id: string, patch: Partial<RouterConditionGroup>) => {
+    onUpdate({
+      conditionGroups: conditionGroups.map((g) => (g.id === id ? { ...g, ...patch } : g)),
+    })
+  }
+
+  const removeGroup = (id: string) => {
+    onUpdate({ conditionGroups: conditionGroups.filter((g) => g.id !== id) })
+  }
+
+  const toggleGroupRoute = (groupId: string, routeId: string) => {
+    const group = conditionGroups.find((g) => g.id === groupId)
+    if (!group) return
+    const current = group.routeIds ?? []
+    const next = current.includes(routeId) ? current.filter((id) => id !== routeId) : [...current, routeId]
+    updateGroup(groupId, { routeIds: next })
   }
 
   return (
@@ -989,35 +1060,47 @@ export function RouterConfig({ data, onUpdate }: { data: Record<string, unknown>
           <SelectContent>
             <SelectItem value="radio">Radio (one active)</SelectItem>
             <SelectItem value="checkbox">Checkbox (any combination)</SelectItem>
+            <SelectItem value="conditional">Conditional (rule-based)</SelectItem>
           </SelectContent>
         </Select>
       </div>
+
       <div>
         <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">Routes</Label>
         <div className="flex flex-col gap-2">
           {routes.map((route, i) => (
             <div key={route.id} className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => updateRoute(i, { active: mode === "radio" ? true : !route.active })}
-                className="shrink-0"
-              >
-                {mode === "radio" ? (
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${route.active ? "border-green-500" : "border-muted-foreground/40"}`}>
-                    {route.active && <div className="w-2 h-2 rounded-full bg-green-500" />}
-                  </div>
-                ) : (
-                  <div className={`w-7 h-4 rounded-full relative transition-colors ${route.active ? "bg-green-500" : "bg-muted-foreground/30"}`}>
-                    <div className={`w-3 h-3 rounded-full bg-white absolute top-0.5 transition-all ${route.active ? "right-0.5" : "left-0.5"}`} />
-                  </div>
-                )}
-              </button>
+              {isConditional ? (
+                // Derived from rule evaluation — show a read-only indicator.
+                <div
+                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${(data.activeRoutes ?? []).includes(route.id) ? "border-green-500" : "border-muted-foreground/40"}`}
+                  title="Active state is derived from condition groups at run time"
+                >
+                  {(data.activeRoutes ?? []).includes(route.id) && <div className="w-2 h-2 rounded-full bg-green-500" />}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => updateRoute(i, { active: mode === "radio" ? true : !route.active })}
+                  className="shrink-0"
+                >
+                  {mode === "radio" ? (
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${route.active ? "border-green-500" : "border-muted-foreground/40"}`}>
+                      {route.active && <div className="w-2 h-2 rounded-full bg-green-500" />}
+                    </div>
+                  ) : (
+                    <div className={`w-7 h-4 rounded-full relative transition-colors ${route.active ? "bg-green-500" : "bg-muted-foreground/30"}`}>
+                      <div className={`w-3 h-3 rounded-full bg-white absolute top-0.5 transition-all ${route.active ? "right-0.5" : "left-0.5"}`} />
+                    </div>
+                  )}
+                </button>
+              )}
               <Input
                 value={route.name}
                 onChange={(e) => updateRoute(i, { name: e.target.value })}
                 className="h-8 text-sm flex-1"
               />
-              {routes.length > 2 && (
+              {routes.length > (isConditional ? 1 : 2) && (
                 <button type="button" onClick={() => removeRoute(i)} className="text-muted-foreground hover:text-destructive">
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -1035,6 +1118,117 @@ export function RouterConfig({ data, onUpdate }: { data: Record<string, unknown>
           </button>
         )}
       </div>
+
+      {isConditional && (
+        <div className="flex flex-col gap-3">
+          {sampleItem !== undefined && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">Upstream sample (first item)</Label>
+              <FilterJsonPreview value={sampleItem} highlightedPaths={highlightedPaths} />
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <Label>Condition groups ({conditionGroups.length})</Label>
+            <button
+              type="button"
+              onClick={addGroup}
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" /> Add group
+            </button>
+          </div>
+
+          {conditionGroups.length === 0 && (
+            <p className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
+              No groups — zero routes activate; downstream nodes are skipped.
+            </p>
+          )}
+
+          {conditionGroups.map((group) => {
+            const condLogic = group.conditionLogic ?? "AND"
+            const groupRouteIds = group.routeIds ?? []
+            return (
+              <div key={group.id} className="flex flex-col gap-2 rounded-md border border-border bg-muted/10 p-2">
+                <div className="flex items-center justify-between">
+                  <AndOrToggle
+                    value={condLogic}
+                    onChange={(next) => updateGroup(group.id, { conditionLogic: next })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeGroup(group.id)}
+                    className="text-muted-foreground hover:text-destructive transition-colors"
+                    title="Remove group"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {(group.conditions ?? []).map((cond) => (
+                  <ConditionRowEditor
+                    key={cond.id}
+                    condition={cond}
+                    fieldOptions={fieldOptions}
+                    onUpdate={(patch) =>
+                      updateGroup(group.id, {
+                        conditions: (group.conditions ?? []).map((c) => (c.id === cond.id ? { ...c, ...patch } : c)),
+                      })
+                    }
+                    onRemove={() =>
+                      updateGroup(group.id, {
+                        conditions: (group.conditions ?? []).filter((c) => c.id !== cond.id),
+                      })
+                    }
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateGroup(group.id, {
+                      conditions: [
+                        ...(group.conditions ?? []),
+                        { id: nanoid(), field: "", operator: "=", value: "", valueType: "static", mode: "dropdown" },
+                      ],
+                    })
+                  }
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 self-start"
+                >
+                  <Plus className="w-3 h-3" /> Add condition
+                </button>
+
+                <div className="flex flex-col gap-1">
+                  <Label className="text-[10px]">Activates</Label>
+                  <div className="flex flex-wrap gap-1">
+                    {routes.map((r) => {
+                      const on = groupRouteIds.includes(r.id)
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => toggleGroupRoute(group.id, r.id)}
+                          className={
+                            "text-[10px] px-2 py-0.5 rounded-full border transition-colors " +
+                            (on
+                              ? "border-green-500/50 bg-green-500/15 text-green-400"
+                              : "border-border text-muted-foreground hover:text-foreground")
+                          }
+                        >
+                          {r.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+
+          <p className="text-[10px] text-muted-foreground">
+            Route activations across groups are unioned (deduped). If no group matches, all routes stay inactive and downstream nodes are skipped.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -1414,167 +1608,13 @@ x | not                 boolean negation
 // FilterListConfig
 // ---------------------------------------------------------------------------
 
-const FILTER_OPERATOR_LABELS: Record<FilterListOperator, string> = {
-  ">": "greater than",
-  "<": "less than",
-  ">=": "greater or equal",
-  "<=": "less or equal",
-  "=": "equals",
-  "!=": "not equals",
-  contains: "contains",
-  not_contains: "does not contain",
-  starts_with: "starts with",
-  ends_with: "ends with",
-  regex: "matches regex",
-  exists: "exists",
-  not_exists: "does not exist",
-}
-
-const FILTER_NO_VALUE_OPERATORS: ReadonlySet<FilterListOperator> = new Set(["exists", "not_exists"])
-
-const FILTER_COMPARISON_OPERATORS: ReadonlySet<FilterListOperator> = new Set([">", "<", ">=", "<="])
-
-const FILTER_VARIABLE_TOKENS: ReadonlyArray<{ token: string; label: string }> = [
-  { token: "{{now}}", label: "Current ISO time ({{now}})" },
-  { token: "{{trigger.last_triggered_at}}", label: "Last trigger fire ({{trigger.last_triggered_at}})" },
-]
-
-/** Field names we treat as date/time for the smart value picker. */
-const DATE_FIELD_EXACT = new Set(["timestamp", "created_at", "updated_at", "published_at", "date"])
-const DATE_FIELD_SUFFIX_RE = /(_at|_date|At|Date)$/
-
-// Exported for unit testing — the smart picker is a UI concern, but the
-// detection / parse / build helpers are pure logic and worth covering directly.
-export function isDateTimeField(name: string): boolean {
-  if (!name) return false
-  if (DATE_FIELD_EXACT.has(name.toLowerCase())) return true
-  // Case-sensitive suffix so `createdAt` and `published_date` both qualify,
-  // but normal words ending in "at"/"date" (e.g. `location`) don't.
-  return DATE_FIELD_SUFFIX_RE.test(name)
-}
-
-export type DateValueMode = "since-last-run" | "last-hours" | "last-days" | "last-weeks" | "custom"
-
-/** Parse the stored value back into a (mode, N) pair for the UI. Unknown
- *  tokens + free text both surface as "custom" so power users can edit raw. */
-export function parseDateValueMode(value: string): { mode: DateValueMode; n: number } {
-  if (value === "{{trigger.last_triggered_at}}") return { mode: "since-last-run", n: 0 }
-  const hours = /^\{\{\s*last_N_hours:(\d+)\s*\}\}$/.exec(value)
-  if (hours) return { mode: "last-hours", n: parseInt(hours[1], 10) }
-  const days = /^\{\{\s*last_N_days:(\d+)\s*\}\}$/.exec(value)
-  if (days) return { mode: "last-days", n: parseInt(days[1], 10) }
-  const weeks = /^\{\{\s*last_N_weeks:(\d+)\s*\}\}$/.exec(value)
-  if (weeks) return { mode: "last-weeks", n: parseInt(weeks[1], 10) }
-  return { mode: "custom", n: 0 }
-}
-
-const DATE_MODE_DEFAULT_N: Record<Exclude<DateValueMode, "since-last-run" | "custom">, number> = {
-  "last-hours": 3,
-  "last-days": 1,
-  "last-weeks": 1,
-}
-
-export function buildDateValueToken(mode: DateValueMode, n: number): string {
-  switch (mode) {
-    case "since-last-run":
-      return "{{trigger.last_triggered_at}}"
-    case "last-hours":
-      return `{{last_N_hours:${n}}}`
-    case "last-days":
-      return `{{last_N_days:${n}}}`
-    case "last-weeks":
-      return `{{last_N_weeks:${n}}}`
-    case "custom":
-      return ""
-  }
-}
-
-const DATE_MODE_LABEL: Record<DateValueMode, string> = {
-  "since-last-run": "Since last run",
-  "last-hours": "Last N hours",
-  "last-days": "Last N days",
-  "last-weeks": "Last N weeks",
-  custom: "Custom…",
-}
-
-/** Smart value picker shown when field looks like a date/time and operator
- *  is a comparison. Emits tokens the backend's resolveConditionValue
- *  understands (see inline-executor.ts:resolveRelativeWindowToken). */
-function DateTimeValuePicker({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (nextValue: string, nextValueType: "static" | "variable") => void
-}) {
-  const parsed = parseDateValueMode(value)
-  const showNInput = parsed.mode === "last-hours" || parsed.mode === "last-days" || parsed.mode === "last-weeks"
-  // {{trigger.last_triggered_at}} is resolved server-side from triggerData.
-  // A manual Run in the editor has no trigger context, so the token resolves
-  // to "" and the comparison silently passes (or rejects) every item. Warn so
-  // the user understands the option is trigger/schedule-only.
-  const isSinceLastRun = parsed.mode === "since-last-run"
-
-  return (
-    <div className="flex flex-col gap-1 flex-1 min-w-0">
-      <div className="flex items-center gap-1.5 flex-1 min-w-0">
-      <Select
-        value={parsed.mode}
-        onValueChange={(raw) => {
-          const nextMode = raw as DateValueMode
-          if (nextMode === "custom") {
-            // Clear the token so the Input renders empty; user can type freely.
-            onChange("", "static")
-            return
-          }
-          if (nextMode === "since-last-run") {
-            onChange(buildDateValueToken(nextMode, 0), "variable")
-            return
-          }
-          const n = parsed.n > 0 ? parsed.n : DATE_MODE_DEFAULT_N[nextMode]
-          onChange(buildDateValueToken(nextMode, n), "variable")
-        }}
-      >
-        <SelectTrigger className="h-7 text-xs flex-1 min-w-0" aria-label="Date value mode">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {(Object.keys(DATE_MODE_LABEL) as DateValueMode[]).map((mode) => (
-            <SelectItem key={mode} value={mode} className="text-xs">
-              {DATE_MODE_LABEL[mode]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {showNInput && (
-        <Input
-          type="number"
-          min={1}
-          value={parsed.n || 1}
-          onChange={(e) => {
-            const n = Math.max(1, parseInt(e.target.value, 10) || 1)
-            onChange(buildDateValueToken(parsed.mode, n), "variable")
-          }}
-          className="text-xs h-7 w-16 shrink-0"
-          aria-label="Number of units"
-        />
-      )}
-      </div>
-      {isSinceLastRun && (
-        <p className="text-[10px] text-amber-500/90" role="note">
-          Resolves only on triggered/scheduled runs. A manual Run treats this as empty.
-        </p>
-      )}
-    </div>
-  )
-}
 
 /** Render a JSON value with every key labelled by its dot-path. Keys whose
  *  path appears in `highlightedPaths` are dimmed to gray so the user can see
  *  at a glance which parts of the payload the active filter conditions read.
  *  Arrays collapse to their first element + a length hint — matching the
  *  evaluator's auto-iterate semantics, and keeping the panel compact. */
-function FilterJsonPreview({
+export function FilterJsonPreview({
   value,
   highlightedPaths,
 }: {
@@ -1717,23 +1757,7 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
 
       <div className="flex items-center justify-between">
         <Label>Conditions ({conditions.length})</Label>
-        <div className="flex rounded-md border border-border overflow-hidden">
-          {(["AND", "OR"] as const).map((logicMode) => (
-            <button
-              key={logicMode}
-              type="button"
-              onClick={() => onUpdate({ conditionLogic: logicMode })}
-              className={
-                "px-2.5 py-1 text-[10px] font-medium transition-colors " +
-                (logic === logicMode
-                  ? "bg-foreground text-background"
-                  : "bg-background text-muted-foreground hover:text-foreground")
-              }
-            >
-              {logicMode}
-            </button>
-          ))}
-        </div>
+        <AndOrToggle value={logic} onChange={(next) => onUpdate({ conditionLogic: next })} />
       </div>
 
       {conditions.length === 0 && (
@@ -1743,151 +1767,15 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
       )}
 
       <div className="flex flex-col gap-2">
-        {conditions.map((cond) => {
-          const isNoValue = FILTER_NO_VALUE_OPERATORS.has(cond.operator)
-          const isVariable = cond.valueType === "variable"
-          const condMode = cond.mode ?? "dropdown"
-          const fieldValue = cond.field ?? ""
-          // Custom values fall back to "" so the placeholder shows.
-          const selectValue = fieldValue === ""
-            ? EXTRACT_FIELD_WHOLE
-            : (actorOptions.includes(fieldValue) ? fieldValue : "")
-          return (
-            <div key={cond.id} className="flex flex-col gap-1.5 rounded-md border border-border bg-muted/20 p-2">
-              <div className="flex items-center gap-1.5">
-                {condMode === "dropdown" ? (
-                  <Select
-                    value={selectValue}
-                    onValueChange={(v) => {
-                      if (v === EXTRACT_FIELD_CUSTOM) {
-                        updateCondition(cond.id, { mode: "custom" })
-                      } else if (v === EXTRACT_FIELD_WHOLE) {
-                        updateCondition(cond.id, { field: "" })
-                      } else {
-                        updateCondition(cond.id, { field: v })
-                      }
-                    }}
-                  >
-                    <SelectTrigger aria-label="Field" className="h-7 text-xs min-w-0 flex-1">
-                      <SelectValue placeholder="Select a field..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={EXTRACT_FIELD_WHOLE} className="text-muted-foreground">(whole item)</SelectItem>
-                      {actorOptions.map((opt) => (
-                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                      ))}
-                      <SelectItem value={EXTRACT_FIELD_CUSTOM} className="text-muted-foreground">Custom path…</SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    value={fieldValue}
-                    onChange={(e) => updateCondition(cond.id, { field: e.target.value })}
-                    placeholder="field (blank = whole item)"
-                    className="text-xs h-7 min-w-0 flex-1"
-                  />
-                )}
-                <Select
-                  value={cond.operator}
-                  onValueChange={(v) =>
-                    updateCondition(cond.id, {
-                      operator: v as FilterListOperator,
-                      value: FILTER_NO_VALUE_OPERATORS.has(v as FilterListOperator) ? "" : cond.value,
-                    })
-                  }
-                >
-                  <SelectTrigger className="h-7 text-xs w-[140px] shrink-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.entries(FILTER_OPERATOR_LABELS) as [FilterListOperator, string][]).map(([op, label]) => (
-                      <SelectItem key={op} value={op} className="text-xs">
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <button
-                  type="button"
-                  onClick={() => removeCondition(cond.id)}
-                  className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-                  title="Remove condition"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              {condMode === "custom" && (
-                <button
-                  type="button"
-                  className="text-[11px] text-muted-foreground hover:text-foreground hover:underline text-left self-start"
-                  onClick={() => updateCondition(cond.id, { mode: "dropdown" })}
-                >
-                  ← Back to field list
-                </button>
-              )}
-              {!isNoValue && (() => {
-                const useDatePicker =
-                  isDateTimeField(fieldValue) && FILTER_COMPARISON_OPERATORS.has(cond.operator)
-                if (useDatePicker) {
-                  return (
-                    <DateTimeValuePicker
-                      value={cond.value ?? ""}
-                      onChange={(nextValue, nextValueType) =>
-                        updateCondition(cond.id, { value: nextValue, valueType: nextValueType })
-                      }
-                    />
-                  )
-                }
-                return (
-                  <div className="flex items-center gap-1.5">
-                    {isVariable ? (
-                      <Select
-                        value={cond.value || ""}
-                        onValueChange={(v) => updateCondition(cond.id, { value: v })}
-                      >
-                        <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
-                          <SelectValue placeholder="Select variable..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {FILTER_VARIABLE_TOKENS.map((v) => (
-                            <SelectItem key={v.token} value={v.token} className="text-xs">
-                              {v.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input
-                        value={cond.value ?? ""}
-                        onChange={(e) => updateCondition(cond.id, { value: e.target.value })}
-                        placeholder="value"
-                        className="text-xs h-7 min-w-0 flex-1"
-                      />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateCondition(cond.id, {
-                          valueType: isVariable ? "static" : "variable",
-                          value: "",
-                        })
-                      }
-                      className={
-                        "shrink-0 text-[10px] px-2 py-1 rounded-md border transition-colors " +
-                        (isVariable
-                          ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-400"
-                          : "border-border text-muted-foreground hover:text-foreground")
-                      }
-                      title="Toggle static/variable value"
-                    >
-                      {isVariable ? "var" : "str"}
-                    </button>
-                  </div>
-                )
-              })()}
-            </div>
-          )
-        })}
+        {conditions.map((cond) => (
+          <ConditionRowEditor
+            key={cond.id}
+            condition={cond}
+            fieldOptions={actorOptions}
+            onUpdate={(patch) => updateCondition(cond.id, patch)}
+            onRemove={() => removeCondition(cond.id)}
+          />
+        ))}
         <button
           type="button"
           onClick={addCondition}

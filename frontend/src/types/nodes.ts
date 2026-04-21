@@ -2320,11 +2320,24 @@ export function isTeleportDefaultLabel(label: string, channel: string): boolean 
 
 // --- Router Node Data ---
 
+/** AND/OR condition bundle used by the router's conditional mode.
+ *  When the group matches, every routeId is added to activeRoutes.
+ *  Multiple groups union (deduped) — a route is active iff any group
+ *  that activates it matches. */
+export type RouterConditionGroup = {
+  id: string
+  conditions: FilterListCondition[]
+  conditionLogic: "AND" | "OR"
+  routeIds: string[]
+}
+
 export type RouterNodeData = {
   [key: string]: unknown
   label: string
-  mode: "radio" | "checkbox"
+  mode: "radio" | "checkbox" | "conditional"
   routes: Array<{ id: string; name: string; active: boolean }>
+  /** Only used when mode === "conditional". */
+  conditionGroups?: RouterConditionGroup[]
   // Execution result fields
   activeRoutes?: string[]
   routeOutputs?: Record<string, string | undefined>
@@ -4245,14 +4258,14 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   },
   {
     type: "deduplicate",
-    label: "Deduplicate",
+    label: "Remove Duplicates",
     category: "utility",
     creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     autoExecute: true,
     defaultData: {
-      label: "Deduplicate",
+      label: "Remove Duplicates",
       field: "",
       mode: "dropdown",
     } as DeduplicateNodeData,

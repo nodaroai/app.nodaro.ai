@@ -145,28 +145,66 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Input",
   },
   {
-    type: "web-scrape",
-    label: "Web Scrape",
-    icon: <Globe className="h-4 w-4" />,
-    category: "Input",
-  },
-  {
     type: "reference-audio",
     label: "Reference Audio",
     icon: <Music className="h-4 w-4" />,
     category: "Input",
   },
+  // Triggers
   {
     type: "webhook-trigger" as const,
     label: "Webhook Trigger",
     icon: <Webhook className="h-4 w-4" />,
-    category: "Input",
+    category: "Triggers",
   },
   {
     type: "schedule-trigger" as const,
     label: "Schedule Trigger",
     icon: <Clock className="h-4 w-4" />,
-    category: "Input",
+    category: "Triggers",
+  },
+  {
+    type: "telegram-trigger",
+    label: "Telegram Trigger",
+    icon: <Send className="h-4 w-4" />,
+    category: "Triggers",
+  },
+  // Data
+  {
+    type: "web-scrape",
+    label: "Web Scrape",
+    icon: <Globe className="h-4 w-4" />,
+    category: "Data",
+  },
+  {
+    type: "json-process",
+    label: "JSON Process",
+    icon: <Filter className="h-4 w-4" />,
+    category: "Data",
+  },
+  {
+    type: "extract-field",
+    label: "Extract Field",
+    icon: <Braces className="h-4 w-4" />,
+    category: "Data",
+  },
+  {
+    type: "filter-list",
+    label: "Filter List",
+    icon: <ListFilter className="h-4 w-4" />,
+    category: "Data",
+  },
+  {
+    type: "deduplicate",
+    label: "Remove Duplicates",
+    icon: <CopyMinus className="h-4 w-4" />,
+    category: "Data",
+  },
+  {
+    type: "merge-lists",
+    label: "Merge Lists",
+    icon: <GitMerge className="h-4 w-4" />,
+    category: "Data",
   },
   // Parameter
   {
@@ -697,41 +735,6 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Processing",
     group: "Text",
   },
-  {
-    type: "extract-field",
-    label: "Extract Field",
-    icon: <Braces className="h-4 w-4" />,
-    category: "Processing",
-    group: "Text",
-  },
-  {
-    type: "json-process",
-    label: "JSON Process",
-    icon: <Filter className="h-4 w-4" />,
-    category: "Processing",
-    group: "Text",
-  },
-  {
-    type: "filter-list",
-    label: "Filter List",
-    icon: <ListFilter className="h-4 w-4" />,
-    category: "Processing",
-    group: "Text",
-  },
-  {
-    type: "deduplicate",
-    label: "Deduplicate",
-    icon: <CopyMinus className="h-4 w-4" />,
-    category: "Processing",
-    group: "Text",
-  },
-  {
-    type: "merge-lists",
-    label: "Merge Lists",
-    icon: <GitMerge className="h-4 w-4" />,
-    category: "Processing",
-    group: "Text",
-  },
   // Assets
   {
     type: "character",
@@ -826,14 +829,7 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Output",
     group: "Social Media",
   },
-  {
-    type: "telegram-trigger",
-    label: "Telegram Trigger",
-    icon: <Send className="h-4 w-4" />,
-    category: "Input",
-    group: "Triggers",
-  },
-  // Sub-Workflow
+  // Workflow
   {
     type: "sub-workflow-input",
     label: "Sub-Workflow Input",
@@ -853,25 +849,22 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Workflow",
   },
   {
-    type: "component" as SceneNodeType,
-    label: "Component",
-    icon: <Puzzle className="h-4 w-4" />,
-    category: "Component",
-  },
-  // Utility
-  {
     type: "teleport-send",
     label: "Teleport Send",
     icon: <Send className="h-4 w-4" />,
-    category: "Processing",
-    group: "Text",
+    category: "Workflow",
   },
   {
     type: "teleport-receive",
     label: "Teleport Receive",
     icon: <Download className="h-4 w-4" />,
-    category: "Processing",
-    group: "Text",
+    category: "Workflow",
+  },
+  {
+    type: "component" as SceneNodeType,
+    label: "Component",
+    icon: <Puzzle className="h-4 w-4" />,
+    category: "Component",
   },
   {
     type: "router",
@@ -901,6 +894,18 @@ export const CATEGORIES = [
     label: "INPUT",
     icon: <Download className="h-4 w-4" />,
     description: "Text, Images, Video",
+  },
+  {
+    id: "Triggers",
+    label: "TRIGGERS",
+    icon: <Webhook className="h-4 w-4" />,
+    description: "Webhook, Schedule, Telegram",
+  },
+  {
+    id: "Data",
+    label: "DATA",
+    icon: <Filter className="h-4 w-4" />,
+    description: "Scrape, Filter, Dedupe, Extract",
   },
   {
     id: "Parameter",
@@ -936,7 +941,7 @@ export const CATEGORIES = [
     id: "Workflow",
     label: "WORKFLOW",
     icon: <Workflow className="h-4 w-4" />,
-    description: "Sub-Workflows",
+    description: "Sub-Workflows, Teleport",
   },
   {
     id: "Component",
@@ -949,6 +954,8 @@ export const CATEGORIES = [
 // Category icon colors
 const CATEGORY_COLORS: Record<string, string> = {
   Input: "text-[#007AFF]",
+  Triggers: "text-[#F97316]",
+  Data: "text-[#14B8A6]",
   Parameter: "text-[#6366F1]",
   AI: "text-[#ff0073]",
   Processing: "text-[#475569]",

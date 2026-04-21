@@ -228,7 +228,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "extract-field": "Extract Field",
   "json-process": "JSON Process",
   "filter-list": "Filter List",
-  "deduplicate": "Deduplicate",
+  "deduplicate": "Remove Duplicates",
   "merge-lists": "Merge Lists",
   "preview": "Preview",
   "loop": "Table",
