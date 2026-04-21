@@ -19,7 +19,7 @@ import { buildPayload, type WorkflowSettings } from "./payload-builder.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
 import { resolveFieldMappings, NODE_TEXT_FIELDS } from "./resolve-field-mappings.js"
 
-import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists } from "./inline-executor.js"
+import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
 import { mergeExposedSettings } from "../../../../packages/shared/src/component-types.js"
 import type { ComponentMetadata } from "../../../../packages/shared/src/component-types.js"
@@ -115,6 +115,7 @@ const INLINE_NODES = new Set([
   "filter-list",
   "deduplicate",
   "merge-lists",
+  "sort-list",
 ])
 
 // ---------------------------------------------------------------------------
@@ -226,6 +227,9 @@ async function executeInlineNode(
       break
     case "merge-lists":
       output = executeMergeLists(node, edges, allNodes, nodeStates)
+      break
+    case "sort-list":
+      output = executeSortList(node, edges, allNodes, nodeStates)
       break
     case "composite":
       output = executeComposite(node, edges, allNodes, nodeStates)

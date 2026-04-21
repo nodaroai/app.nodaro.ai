@@ -4,9 +4,11 @@ import { memo, useCallback, useEffect, useMemo } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { GitBranch, ChevronRight } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { RouterNodeData } from "@/types/nodes"
 
 const LETTERS = "ABCDEFGHIJ"
@@ -14,6 +16,7 @@ const LETTERS = "ABCDEFGHIJ"
 function RouterNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as RouterNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const updateNodeInternals = useUpdateNodeInternals()
   const routes = nodeData.routes ?? []
   const mode = nodeData.mode ?? "radio"
@@ -21,6 +24,9 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
   const activeRoutes = nodeData.activeRoutes ?? []
   const routeIds = routes.map((r) => r.id).join(",")
   const spacing = routes.length <= 1 ? 30 : Math.min(30, Math.floor(120 / routes.length))
+  const status = nodeData.executionStatus ?? "idle"
+
+  useAutoExecute(id, data as Record<string, unknown>)
 
   // In conditional mode the "active" state is derived from rule evaluation,
   // so we read the post-execution activeRoutes rather than the stored flags.
@@ -79,9 +85,14 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
         label={nodeData.label}
         icon={<GitBranch className="h-4 w-4" />}
         category="processing"
+        credits={0}
         selected={selected}
+        isRunning={status === "running"}
         hideHeader
         minWidth={200}
+        topToolbarContent={
+          <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runFromHere?.(nid)} runFromHere />
+        }
         handles={handles}
       >
         <div className="flex items-center justify-between px-3 pt-2 pb-1">

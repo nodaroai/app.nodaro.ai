@@ -6,6 +6,7 @@ import { nanoid } from "nanoid"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
@@ -36,6 +37,7 @@ import {
   type RouterConditionGroup,
   type DeduplicateNodeData,
   type MergeListsNodeData,
+  type SortListNodeData,
   type WorkflowNode,
   type WorkflowEdge,
 } from "@/types/nodes"
@@ -417,6 +419,7 @@ const PASS_THROUGH_SCHEMA_TYPES: ReadonlySet<string> = new Set([
   "filter-list",
   "deduplicate",
   "merge-lists",
+  "sort-list",
 ])
 
 /**
@@ -1760,6 +1763,17 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
         <AndOrToggle value={logic} onChange={(next) => onUpdate({ conditionLogic: next })} />
       </div>
 
+      <div className="flex items-center gap-2 pt-1">
+        <Checkbox
+          id={`filter-case-sensitive-${data.label}`}
+          checked={data.caseSensitive ?? true}
+          onCheckedChange={(v) => onUpdate({ caseSensitive: v === true })}
+        />
+        <Label htmlFor={`filter-case-sensitive-${data.label}`} className="text-xs cursor-pointer">
+          Case-sensitive text matching
+        </Label>
+      </div>
+
       {conditions.length === 0 && (
         <p className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
           No conditions — every item passes through. Add one below to filter.
@@ -1916,6 +1930,138 @@ export function MergeListsConfig({ data, onUpdate }: ConfigProps<MergeListsNodeD
       {data.listResults && data.listResults.length > 0 && (
         <div>
           <Label>Preview ({data.listResults.length} items)</Label>
+          <Textarea
+            rows={Math.min(data.listResults.length, 6)}
+            value={data.listResults.map((item, i) => `${i + 1}. ${item}`).join("\n")}
+            readOnly
+            className="text-xs opacity-70"
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// SortListConfig
+// ---------------------------------------------------------------------------
+
+export function SortListConfig({ data, onUpdate, sources, nodes, edges }: ConfigProps<SortListNodeData>) {
+  const mode = data.mode ?? "dropdown"
+  const field = data.field ?? ""
+  const sortType = data.sortType ?? "auto"
+  const direction = data.direction ?? "asc"
+  const actorOptions = useMemo(
+    () => getUpstreamFieldOptions(sources, nodes, edges),
+    [sources, nodes, edges],
+  )
+
+  const setField = (value: string) => onUpdate({ field: value })
+  const setMode = (next: "dropdown" | "custom") => onUpdate({ mode: next })
+
+  const selectValue = field === ""
+    ? EXTRACT_FIELD_WHOLE
+    : (actorOptions.includes(field) ? field : "")
+
+  return (
+    <div className="flex flex-col gap-3">
+      {mode === "dropdown" ? (
+        <div className="flex flex-col gap-1.5">
+          <Label>Sort by field</Label>
+          <Select
+            value={selectValue}
+            onValueChange={(v) => {
+              if (v === EXTRACT_FIELD_CUSTOM) {
+                setMode("custom")
+              } else if (v === EXTRACT_FIELD_WHOLE) {
+                setField("")
+              } else {
+                setField(v)
+              }
+            }}
+          >
+            <SelectTrigger aria-label="Sort by field"><SelectValue placeholder="Select a field..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={EXTRACT_FIELD_WHOLE} className="text-muted-foreground">(whole item)</SelectItem>
+              {actorOptions.map((opt) => (
+                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+              ))}
+              <SelectItem value={EXTRACT_FIELD_CUSTOM} className="text-muted-foreground">Custom path…</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground">
+            {actorOptions.length > 0
+              ? <>Pick (whole item) to sort whole strings, or choose Custom path… for a manual dot-path.</>
+              : <>Connect an upstream node that emits JSON or list data to detect its fields, or choose Custom path… to enter a dot-path manually.</>}
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <Label>Sort by field</Label>
+          <Input
+            value={field}
+            onChange={(e) => setField(e.target.value)}
+            placeholder="e.g., score or created_at (blank = whole item)"
+          />
+          <p className="text-[10px] text-muted-foreground">
+            Dot-notation path. Items are parsed as JSON when the path resolves against them. Leave blank to sort whole items.
+          </p>
+          <button
+            type="button"
+            className="text-[11px] text-muted-foreground hover:text-foreground hover:underline text-left self-start mt-0.5"
+            onClick={() => setMode("dropdown")}
+          >
+            ← Back to field list
+          </button>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <Label>Sort type</Label>
+        <Select value={sortType} onValueChange={(v) => onUpdate({ sortType: v as SortListNodeData["sortType"] })}>
+          <SelectTrigger aria-label="Sort type"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Auto (detect)</SelectItem>
+            <SelectItem value="text">Text</SelectItem>
+            <SelectItem value="number">Number</SelectItem>
+            <SelectItem value="date">Date</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground">
+          Auto tries Number → Date → Text. Pick an explicit type for deterministic ordering.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>Direction</Label>
+        <div className="flex gap-1">
+          <Button
+            type="button"
+            variant={direction === "asc" ? "default" : "outline"}
+            size="sm"
+            onClick={() => onUpdate({ direction: "asc" })}
+            className="flex-1"
+          >
+            ↑ Ascending
+          </Button>
+          <Button
+            type="button"
+            variant={direction === "desc" ? "default" : "outline"}
+            size="sm"
+            onClick={() => onUpdate({ direction: "desc" })}
+            className="flex-1"
+          >
+            ↓ Descending
+          </Button>
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          Missing or invalid values always appear last, regardless of direction.
+        </p>
+      </div>
+
+      {data.listResults && data.listResults.length > 0 && (
+        <div>
+          <Label>Preview ({data.listResults.length} sorted items)</Label>
           <Textarea
             rows={Math.min(data.listResults.length, 6)}
             value={data.listResults.map((item, i) => `${i + 1}. ${item}`).join("\n")}

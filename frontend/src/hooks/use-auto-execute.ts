@@ -3,7 +3,7 @@
  * Debounced at 300ms. Skips on initial mount and workflow load.
  */
 
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { useWorkflowStore, EXECUTION_DATA_KEYS } from "@/hooks/use-workflow-store"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
 
@@ -37,7 +37,10 @@ export function useAutoExecute(nodeId: string, data: Record<string, unknown>): v
   const prevLoadGen = useRef(loadGen)
   const mounted = useRef(false)
 
-  const snapshot = configSnapshot(data)
+  // Memoized on the data reference so canvas pan/zoom (which preserves
+  // data identity) doesn't re-stringify large config objects like Router's
+  // nested conditionGroups on every render.
+  const snapshot = useMemo(() => configSnapshot(data), [data])
 
   useEffect(() => {
     // Skip first render (initial mount)

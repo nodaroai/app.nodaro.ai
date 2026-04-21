@@ -155,6 +155,7 @@ import type {
   RouterNodeData,
   DeduplicateNodeData,
   MergeListsNodeData,
+  SortListNodeData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -201,6 +202,7 @@ import {
   evaluateConditionGroup,
   resolveConditionValue,
 } from "@nodaro-shared/filter-condition";
+import { sortListItems } from "@nodaro-shared/list-sort";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 
 // ---------------------------------------------------------------------------
@@ -4107,11 +4109,12 @@ export function executeNode(
     const items = collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
     const effectiveConditions = (filterData.conditions ?? []).filter((c) => c && c.operator);
     const logic = filterData.conditionLogic === "OR" ? "OR" : "AND";
+    const opts = { caseSensitive: filterData.caseSensitive };
     const filtered = effectiveConditions.length === 0
       ? items
       : items.filter((item) => {
         const parsed = tryParseJson(item);
-        const results = effectiveConditions.map((c) => evaluateCondition(parsed, item, c));
+        const results = effectiveConditions.map((c) => evaluateCondition(parsed, item, c, undefined, opts));
         return logic === "OR" ? results.some(Boolean) : results.every(Boolean);
       });
     updateNodeData(node.id, {
@@ -4183,6 +4186,25 @@ export function executeNode(
       errorMessage: undefined,
     });
     return Promise.resolve(merged[0] ?? "");
+  }
+
+  if (node.type === "sort-list") {
+    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const sortData = node.data as SortListNodeData;
+    const items = collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
+    const sorted = sortListItems(items, {
+      field: sortData.field ?? "",
+      sortType: sortData.sortType ?? "auto",
+      direction: sortData.direction ?? "asc",
+    });
+    updateNodeData(node.id, {
+      listResults: sorted,
+      __listResults: sorted,
+      __listTotal: sorted.length,
+      executionStatus: "completed",
+      errorMessage: undefined,
+    });
+    return Promise.resolve(sorted[0] ?? "");
   }
 
   // Preview — collect upstream values and pass through

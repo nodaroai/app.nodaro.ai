@@ -25,6 +25,7 @@ vi.mock("lucide-react", () => {
     Instagram: I, Youtube: I, Linkedin: I, Twitter: I, Facebook: I, StickyNote: I, UserRound: I, Send: I,
     GitBranch: I, Puzzle: I, MessageSquare: I, Frame: I, ZoomIn: I, Eraser: I, ListMusic: I,
     Globe: I, Braces: I, Filter: I, ListFilter: I, CopyMinus: I, GitMerge: I,
+    ArrowUpDown: I,
   }
 })
 

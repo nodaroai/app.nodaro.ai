@@ -481,7 +481,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     }
     return typeof result === "string" ? result : JSON.stringify(result);
   }
-  if (type === "filter-list" || type === "deduplicate" || type === "merge-lists") {
+  if (type === "filter-list" || type === "deduplicate" || type === "merge-lists" || type === "sort-list") {
     const listResults =
       ((data as { __listResults?: string[] }).__listResults) ??
       ((data as { listResults?: string[] }).listResults);

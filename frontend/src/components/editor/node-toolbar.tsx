@@ -7,7 +7,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, Frame, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge,
+  SlidersHorizontal, Scissors, Frame, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge, ArrowUpDown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -52,6 +52,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "filter-list", label: "Filter List", icon: <ListFilter className="h-4 w-4" />, category: "Data" },
   { type: "deduplicate", label: "Remove Duplicates", icon: <CopyMinus className="h-4 w-4" />, category: "Data" },
   { type: "merge-lists", label: "Merge Lists", icon: <GitMerge className="h-4 w-4" />, category: "Data" },
+  { type: "sort-list", label: "Sort List", icon: <ArrowUpDown className="h-4 w-4" />, category: "Data" },
   // Parameter
   { type: "tone", label: "Tone", icon: <Palette className="h-4 w-4" />, category: "Parameter" },
   { type: "style-guide", label: "Style Guide", icon: <PaintBucket className="h-4 w-4" />, category: "Parameter" },

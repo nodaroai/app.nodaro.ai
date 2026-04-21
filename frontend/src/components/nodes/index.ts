@@ -68,6 +68,7 @@ import { JsonProcessNode } from "./json-process-node";
 import { FilterListNode } from "./filter-list-node";
 import { DeduplicateNode } from "./deduplicate-node";
 import { MergeListsNode } from "./merge-lists-node";
+import { SortListNode } from "./sort-list-node";
 import { VideoComposerNode } from "./video-composer-node";
 import { AfterEffectsNode } from "./after-effects-node";
 import { LottieOverlayNode } from "./lottie-overlay-node";
@@ -219,6 +220,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "filter-list": FilterListNode,
   "deduplicate": DeduplicateNode,
   "merge-lists": MergeListsNode,
+  "sort-list": SortListNode,
   "preview": PreviewNode,
   "sticky-note": StickyNoteNode,
   "router": RouterNode,

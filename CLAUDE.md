@@ -324,9 +324,12 @@ backend/src/
 - [x] Component marketplace preview modal — single click on a component card opens a preview (description + inputs/outputs/exposed settings + media), double click adds directly; popup marketplace shows description in place of creator name
 - [x] Dropped edge "runs" concept (useAllResults/runsExpression) — generatedResults is now a single deterministic ordered flat list
 - [x] JSON Process node (inline 0 CR utility, visual 3-stage pipeline or jq-like expressions; custom evaluator in `packages/shared/json-evaluator.ts` shared by frontend DAG + backend orchestrator)
-- [x] List utilities: Filter List / Deduplicate / Merge Lists (inline 0 CR, operate on `listResults` from upstream; Filter List supports AND/OR conditions with `{{now}}` / `{{trigger.last_triggered_at}}` variables)
+- [x] List utilities: Filter List / Deduplicate / Merge Lists / Sort List (inline 0 CR, operate on `listResults` from upstream; Filter List supports AND/OR conditions with `{{now}}` / `{{trigger.last_triggered_at}}` variables + node-wide `caseSensitive` text-match toggle defaulting off for new nodes; Sort List uses dot-path field with Auto/Text/Number/Date comparison, asc/desc direction, missing-last)
+- [x] Sort List node (inline utility, dot-path field + Auto/Text/Number/Date, asc/desc, missing-last)
+- [x] Filter List case-sensitive toggle (node-wide, default off for new nodes)
+- [x] Router run-button + auto-execute on config changes
 
 ---
 
-*Last updated: 2026-04-20*
-*Version: 1.80.2*
+*Last updated: 2026-04-21*
+*Version: 1.81.0*

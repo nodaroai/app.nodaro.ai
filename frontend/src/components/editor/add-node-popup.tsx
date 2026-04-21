@@ -81,6 +81,7 @@ import {
   ListFilter,
   CopyMinus,
   GitMerge,
+  ArrowUpDown,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -206,6 +207,12 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "merge-lists",
     label: "Merge Lists",
     icon: <GitMerge className="h-4 w-4" />,
+    category: "Data",
+  },
+  {
+    type: "sort-list",
+    label: "Sort List",
+    icon: <ArrowUpDown className="h-4 w-4" />,
     category: "Data",
   },
   // Parameter

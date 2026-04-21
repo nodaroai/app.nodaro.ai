@@ -693,7 +693,7 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return results.length > 0 ? { text: results[0], splitResults: results } : undefined
   }
 
-  if (type === "filter-list" || type === "deduplicate" || type === "merge-lists") {
+  if (type === "filter-list" || type === "deduplicate" || type === "merge-lists" || type === "sort-list") {
     const listResults = data.listResults as string[] | undefined
     if (!listResults || listResults.length === 0) return undefined
     return { text: listResults[0], listResults }
