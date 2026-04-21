@@ -4258,14 +4258,14 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   },
   {
     type: "deduplicate",
-    label: "Deduplicate",
+    label: "Remove Duplicates",
     category: "utility",
     creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     autoExecute: true,
     defaultData: {
-      label: "Deduplicate",
+      label: "Remove Duplicates",
       field: "",
       mode: "dropdown",
     } as DeduplicateNodeData,
