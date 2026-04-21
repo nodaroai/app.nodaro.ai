@@ -465,6 +465,24 @@ describe("executeFilterList — operator semantics", () => {
     })
   })
 
+  /**
+   * User-reported bug: a list node holding a single row whose value is a
+   * JSON-serialized array should feed filter-list per-element, matching the
+   * behavior of web-scrape's structured `output.json` spread.
+   */
+  describe("upstream listResults contains one JSON-array string", () => {
+    it("spreads the embedded array into per-element filtering", () => {
+      const items = [JSON.stringify([
+        { likesCount: 432, url: "a" },
+        { likesCount: 50000, url: "b" },
+        { likesCount: 891, url: "c" },
+      ])]
+      const kept = run(items, { field: "likesCount", operator: ">", value: "20000" })
+      expect(kept).toHaveLength(1)
+      expect(JSON.parse(kept[0]).url).toBe("b")
+    })
+  })
+
   describe("variable substitution: {{trigger.last_triggered_at}}", () => {
     it("resolves last_triggered_at from triggerData (incremental polling pattern)", () => {
       const items = [

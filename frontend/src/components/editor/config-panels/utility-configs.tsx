@@ -1910,8 +1910,36 @@ export function DeduplicateConfig({ data, onUpdate, sources, nodes, edges }: Con
 
 export function MergeListsConfig({ data, onUpdate }: ConfigProps<MergeListsNodeData>) {
   const dedupeOn = data.deduplicate === true
+  const mode = data.mode === "zip" ? "zip" : "concat"
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <Label>Mode</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            variant={mode === "concat" ? "default" : "outline"}
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => onUpdate({ mode: "concat" })}
+          >
+            Concatenate
+          </Button>
+          <Button
+            variant={mode === "zip" ? "default" : "outline"}
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => onUpdate({ mode: "zip" })}
+          >
+            Zip (merge items)
+          </Button>
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          {mode === "concat"
+            ? "Append upstream lists in edge order. Single-value outputs are treated as one-item lists."
+            : "Merge items element-wise. A single-object upstream is injected into every item of a longer list (shorter lists cycle)."}
+        </p>
+      </div>
+
       <div className="flex items-center justify-between">
         <Label>Remove duplicates after merge</Label>
         <Button
@@ -1923,9 +1951,6 @@ export function MergeListsConfig({ data, onUpdate }: ConfigProps<MergeListsNodeD
           {dedupeOn ? "On" : "Off"}
         </Button>
       </div>
-      <p className="text-[10px] text-muted-foreground">
-        All upstream lists are concatenated in edge order. Single-value outputs are treated as a one-item list.
-      </p>
 
       {data.listResults && data.listResults.length > 0 && (
         <div>
