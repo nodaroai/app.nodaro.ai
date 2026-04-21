@@ -100,6 +100,79 @@ describe("resolveConditionValue — trigger + relative-window tokens", () => {
   })
 })
 
+describe("resolveConditionValue — {Node Label} variable refs", () => {
+  it("substitutes a single {Label} ref from the variables map", () => {
+    const vars = new Map([["DateNode", "2026-04-21T00:00:00Z"]])
+    expect(resolveConditionValue("{DateNode}", "static", undefined, vars)).toBe("2026-04-21T00:00:00Z")
+  })
+
+  it("leaves unknown {Label} refs intact (same behavior as resolveNodeRefs)", () => {
+    const vars = new Map([["Foo", "bar"]])
+    expect(resolveConditionValue("{Missing}", "static", undefined, vars)).toBe("{Missing}")
+  })
+
+  it("preserves JSON-literal condition values that happen to contain braces", () => {
+    const vars = new Map([["Foo", "bar"]])
+    expect(resolveConditionValue('{"k":"v"}', "static", undefined, vars)).toBe('{"k":"v"}')
+  })
+
+  it("mixes {Label} refs with {{built-in tokens}} in the same value", () => {
+    const vars = new Map([["DateNode", "2026-04-21T00:00:00Z"]])
+    const out = resolveConditionValue("{DateNode} < {{trigger.last_triggered_at}}", "static", { last_triggered_at: "2026-05-01T00:00:00Z" }, vars)
+    expect(out).toBe("2026-04-21T00:00:00Z < 2026-05-01T00:00:00Z")
+  })
+
+  it("works without variables map (backward compat)", () => {
+    expect(resolveConditionValue("{{now}}", "variable")).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+  })
+
+  it("resolves a variable ref even when valueType is 'static'", () => {
+    const vars = new Map([["X", "42"]])
+    expect(resolveConditionValue("{X}", "static", undefined, vars)).toBe("42")
+  })
+})
+
+describe("evaluateCondition — variables in the condition value", () => {
+  it("threads variables through options and matches against resolved value", () => {
+    const vars = new Map([["Threshold", "100"]])
+    const passed = evaluateCondition(
+      { likes: 150 },
+      "",
+      cond({ field: "likes", operator: ">", value: "{Threshold}" }),
+      undefined,
+      { variables: vars },
+    )
+    expect(passed).toBe(true)
+  })
+
+  it("compares equality against a resolved variable", () => {
+    const vars = new Map([["Expected", "hello"]])
+    const passed = evaluateCondition(
+      { greeting: "hello" },
+      "",
+      cond({ field: "greeting", operator: "=", value: "{Expected}" }),
+      undefined,
+      { variables: vars },
+    )
+    expect(passed).toBe(true)
+  })
+})
+
+describe("evaluateConditionGroup — variables in options", () => {
+  it("passes variables through to evaluateCondition", () => {
+    const vars = new Map([["Min", "10"]])
+    const result = evaluateConditionGroup(
+      { score: 50 },
+      "",
+      [cond({ field: "score", operator: ">", value: "{Min}" })],
+      "AND",
+      undefined,
+      { variables: vars },
+    )
+    expect(result).toBe(true)
+  })
+})
+
 describe("tryParseJson", () => {
   it("parses JSON objects", () => {
     expect(tryParseJson('{"a":1}')).toEqual({ a: 1 })

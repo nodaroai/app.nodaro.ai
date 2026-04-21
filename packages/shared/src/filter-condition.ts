@@ -1,6 +1,7 @@
 /** Pure condition evaluator shared by filter-list and router (conditional mode). */
 
 import { evaluateJsonPath } from "./json-path.js"
+import { resolveNodeRefs } from "./node-refs.js"
 
 export type FilterListOperator =
   | ">" | "<" | ">=" | "<="
@@ -48,6 +49,11 @@ export interface EvaluateConditionOptions {
    *  Non-text operators (`>`, `<`, `>=`, `<=`, `exists`, `not_exists`,
    *  `regex`) are unaffected by this flag. */
   caseSensitive?: boolean
+  /** Label→output map for `{Node Label}` refs inside condition values.
+   *  Populated from a filter-list / router node's `"variables"` target
+   *  handle. Resolved via `resolveNodeRefs` — unknown labels preserve
+   *  the original `{...}` text, so JSON-literal values stay intact. */
+  variables?: ReadonlyMap<string, string>
 }
 
 export function tryParseJson(item: unknown): unknown {
@@ -80,10 +86,15 @@ export function resolveConditionValue(
   raw: string,
   valueType: string | undefined,
   triggerData?: Record<string, unknown>,
+  variables?: ReadonlyMap<string, string>,
 ): string {
-  const hasTemplate = /\{\{/.test(raw)
-  if (valueType !== "variable" && !hasTemplate) return raw
-  return raw.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr) => {
+  let value = raw
+  if (variables && variables.size > 0) {
+    value = resolveNodeRefs(value, variables)
+  }
+  const hasTemplate = /\{\{/.test(value)
+  if (valueType !== "variable" && !hasTemplate) return value
+  return value.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr) => {
     const key = String(expr).trim()
     if (key === "now") return new Date().toISOString()
     if (key === "trigger.last_triggered_at") {
@@ -154,7 +165,7 @@ export function evaluateCondition(
     fieldValue = matches.length > 0 ? matches[0] : undefined
   }
 
-  const targetStr = resolveConditionValue(condition.value ?? "", condition.valueType, triggerData)
+  const targetStr = resolveConditionValue(condition.value ?? "", condition.valueType, triggerData, options?.variables)
   // Default to case-sensitive when the flag is not explicitly set. This
   // preserves existing behavior for Router conditional mode and legacy
   // Filter List nodes that don't carry the new `caseSensitive` field.

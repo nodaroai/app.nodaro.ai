@@ -2,13 +2,14 @@
 
 import { memo, useCallback, useEffect, useMemo } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { GitBranch, ChevronRight } from "lucide-react"
+import { GitBranch, ChevronRight, Variable } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
+import { VARIABLES_HANDLE_ID } from "@nodaro-shared/condition-variables"
 import type { RouterNodeData } from "@/types/nodes"
 
 const LETTERS = "ABCDEFGHIJ"
@@ -58,6 +59,7 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
   const handles = useMemo(() => {
     const h: Array<{ id: string; type: "target" | "source"; position: typeof Position.Left | typeof Position.Right; hideHandle: boolean; customStyle: Record<string, string> }> = [
       { id: "in", type: "target", position: Position.Left, hideHandle: true, customStyle: { top: "calc(100% - 20px)", left: "-29px" } },
+      { id: VARIABLES_HANDLE_ID, type: "target", position: Position.Left, hideHandle: true, customStyle: { top: "20px", left: "-29px" } },
     ]
     routes.forEach((route, i) => {
       h.push({
@@ -144,6 +146,7 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       <HandleIcon icon={<ChevronRight />} color="cyan" side="left" top="calc(100% - 20px)" />
+      <HandleIcon icon={<Variable />} color="orange" side="left" top="20px" label="Variables" />
       {routes.map((route, i) => (
         <HandleIcon
           key={route.id}

@@ -2,13 +2,14 @@
 
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ListFilter, FileText, Braces } from "lucide-react"
+import { ListFilter, FileText, Braces, Variable } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
+import { VARIABLES_HANDLE_ID } from "@nodaro-shared/condition-variables"
 import type { FilterListNodeData } from "@/types/nodes"
 
 function FilterListNodeComponent({ id, data, selected }: NodeProps) {
@@ -47,6 +48,7 @@ function FilterListNodeComponent({ id, data, selected }: NodeProps) {
         }
         handles={[
           { id: "in", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 20px)", left: "-29px" }, hideHandle: true },
+          { id: VARIABLES_HANDLE_ID, type: "target", position: Position.Left, customStyle: { top: "20px", left: "-29px" }, hideHandle: true },
           { id: "out", type: "source", position: Position.Right, customStyle: { top: "20px", right: "-29px" }, hideHandle: true },
         ]}
       >
@@ -75,6 +77,7 @@ function FilterListNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       <HandleIcon icon={<Braces />} color="indigo" side="left" top="calc(100% - 20px)" />
+      <HandleIcon icon={<Variable />} color="orange" side="left" top="20px" label="Variables" />
       <HandleIcon icon={<FileText />} color="steel" top="20px" />
     </div>
   )
