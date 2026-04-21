@@ -31,12 +31,11 @@ interface NodeOption {
 const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Input
   { type: "text-prompt", label: "Text Prompt", icon: <Type className="h-4 w-4" />, category: "Input" },
-  { type: "list", label: "List", icon: <List className="h-4 w-4" />, category: "Input" },
-  { type: "loop", label: "Table", icon: <Repeat className="h-4 w-4" />, category: "Input" },
   { type: "upload-image", label: "Upload Image", icon: <Upload className="h-4 w-4" />, category: "Input" },
   { type: "upload-video", label: "Upload Video", icon: <Video className="h-4 w-4" />, category: "Input" },
   { type: "upload-audio", label: "Upload Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
-  { type: "rss-feed", label: "RSS Feed", icon: <Rss className="h-4 w-4" />, category: "Input" },
+  // Hidden — uncomment to restore in the Add Node UI:
+  // { type: "rss-feed", label: "RSS Feed", icon: <Rss className="h-4 w-4" />, category: "Input" },
   { type: "youtube-video", label: "Video URL", icon: <Video className="h-4 w-4" />, category: "Input" },
   { type: "reference-audio", label: "Reference Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
   // Triggers
@@ -44,8 +43,11 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "schedule-trigger" as const, label: "Schedule Trigger", icon: <Clock className="h-4 w-4" />, category: "Triggers" },
   { type: "telegram-trigger", label: "Telegram Trigger", icon: <Send className="h-4 w-4" />, category: "Triggers" },
   // Data
+  { type: "list", label: "List", icon: <List className="h-4 w-4" />, category: "Data" },
+  { type: "loop", label: "Table", icon: <Repeat className="h-4 w-4" />, category: "Data" },
   { type: "web-scrape", label: "Web Scrape", icon: <Globe className="h-4 w-4" />, category: "Data" },
-  { type: "json-process", label: "JSON Process", icon: <Filter className="h-4 w-4" />, category: "Data" },
+  // Hidden — uncomment to restore in the Add Node UI:
+  // { type: "json-process", label: "JSON Process", icon: <Filter className="h-4 w-4" />, category: "Data" },
   { type: "extract-field", label: "Extract Field", icon: <Braces className="h-4 w-4" />, category: "Data" },
   { type: "filter-list", label: "Filter List", icon: <ListFilter className="h-4 w-4" />, category: "Data" },
   { type: "deduplicate", label: "Remove Duplicates", icon: <CopyMinus className="h-4 w-4" />, category: "Data" },
@@ -163,10 +165,10 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "sub-workflow", label: "Sub-Workflow", icon: <Workflow className="h-4 w-4" />, category: "Workflow" },
   { type: "teleport-send", label: "Teleport Send", icon: <Send className="h-4 w-4" />, category: "Workflow" },
   { type: "teleport-receive", label: "Teleport Receive", icon: <Download className="h-4 w-4" />, category: "Workflow" },
+  { type: "router", label: "Router", icon: <GitBranch className="h-4 w-4" />, category: "Workflow" },
+  { type: "sticky-note", label: "Sticky Note", icon: <StickyNote className="h-4 w-4" />, category: "Workflow" },
   { type: "component" as SceneNodeType, label: "Component", icon: <Puzzle className="h-4 w-4" />, category: "Component" },
-  { type: "router", label: "Router", icon: <GitBranch className="h-4 w-4" />, category: "Processing", group: "Control Flow" },
   { type: "preview", label: "Preview", icon: <Eye className="h-4 w-4" />, category: "Processing", group: "Text" },
-  { type: "sticky-note", label: "Sticky Note", icon: <StickyNote className="h-4 w-4" />, category: "Input" },
 ]
 
 const CATEGORIES = Array.from(new Set(NODE_OPTIONS.map((n) => n.category)))
