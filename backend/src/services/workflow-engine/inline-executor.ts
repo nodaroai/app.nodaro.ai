@@ -15,6 +15,8 @@ import {
   type RouterConditionGroup,
 } from "../../../../packages/shared/src/filter-condition.js"
 import { sortListItems, type SortType, type SortDirection } from "../../../../packages/shared/src/list-sort.js"
+import { spreadJsonArrayIfSingleton } from "../../../../packages/shared/src/generated-results.js"
+import { zipMergeLists } from "../../../../packages/shared/src/list-merge.js"
 
 // Re-export for tests and downstream consumers.
 export type { FilterListCondition }
@@ -171,7 +173,8 @@ export function executeExtractField(
     // Treat the list as a structured array input. Parse each item so object
     // paths like "url" or "authorMeta.name" resolve per-element; non-JSON
     // strings pass through as-is (whole-item mode with empty path still works).
-    value = state.output.listResults.map((item) => tryParseJson(item))
+    const spread = spreadJsonArrayIfSingleton(state.output.listResults)
+    value = spread.map((item) => tryParseJson(item))
   } else {
     const text = state?.output?.text ?? extractSavedTextFallback(src)
     if (typeof text !== "string" || text.length === 0) {
@@ -270,6 +273,57 @@ function extractSavedTextFallback(src: SimpleNode): string | undefined {
  *      are pushed as a single stringified item.
  *   3. `getPrimaryOutput` — fallback to the node's primary text/URL output.
  */
+function collectItemsForEdge(
+  edge: SimpleEdge,
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): string[] {
+  const srcNode = allNodes.find((n) => n.id === edge.source)
+  if (!srcNode) return []
+
+  let output = nodeStates[srcNode.id]?.output
+  if (!output && isSourceNode(srcNode.type)) {
+    output = extractSourceNodeOutput(srcNode)
+  }
+  if (!output) return []
+
+  const items: string[] = []
+  const listResults = output.listResults
+  if (listResults && listResults.length > 0) {
+    for (const item of listResults) {
+      if (item != null) items.push(item)
+    }
+    return items
+  }
+
+  // Structured JSON arrays (web-scrape's `generatedJson`, any future source
+  // that emits `{ json: [...] }`) need to be spread so each element becomes
+  // its own filter-list item. Otherwise getPrimaryOutput would collapse the
+  // whole array into a single stringified blob and per-item conditions
+  // couldn't match. Explicit `json: null` means "no items" — we must not
+  // fall through or getPrimaryOutput would surface the literal "null".
+  if (output.json !== undefined) {
+    const json = output.json
+    if (json !== null) {
+      if (Array.isArray(json)) {
+        for (const element of json) {
+          if (element === undefined || element === null) continue
+          items.push(typeof element === "string" ? element : JSON.stringify(element))
+        }
+      } else if (typeof json === "object") {
+        items.push(JSON.stringify(json))
+      } else {
+        items.push(String(json))
+      }
+    }
+    return items
+  }
+
+  const primary = getPrimaryOutput(output, srcNode.type, edge.sourceHandle)
+  if (primary != null && primary !== "") items.push(primary)
+  return items
+}
+
 function collectUpstreamListItems(
   nodeId: string,
   edges: SimpleEdge[],
@@ -278,53 +332,27 @@ function collectUpstreamListItems(
 ): string[] {
   const incomingEdges = edges.filter((e) => e.target === nodeId)
   const items: string[] = []
-
   for (const edge of incomingEdges) {
-    const srcNode = allNodes.find((n) => n.id === edge.source)
-    if (!srcNode) continue
-
-    let output = nodeStates[srcNode.id]?.output
-    if (!output && isSourceNode(srcNode.type)) {
-      output = extractSourceNodeOutput(srcNode)
-    }
-    if (!output) continue
-
-    const listResults = output.listResults
-    if (listResults && listResults.length > 0) {
-      for (const item of listResults) {
-        if (item != null) items.push(item)
-      }
-      continue
-    }
-
-    // Structured JSON arrays (web-scrape's `generatedJson`, any future source
-    // that emits `{ json: [...] }`) need to be spread so each element becomes
-    // its own filter-list item. Otherwise getPrimaryOutput would collapse the
-    // whole array into a single stringified blob and per-item conditions
-    // couldn't match. Explicit `json: null` means "no items" — we must not
-    // fall through or getPrimaryOutput would surface the literal "null".
-    if (output.json !== undefined) {
-      const json = output.json
-      if (json !== null) {
-        if (Array.isArray(json)) {
-          for (const element of json) {
-            if (element === undefined || element === null) continue
-            items.push(typeof element === "string" ? element : JSON.stringify(element))
-          }
-        } else if (typeof json === "object") {
-          items.push(JSON.stringify(json))
-        } else {
-          items.push(String(json))
-        }
-      }
-      continue
-    }
-
-    const primary = getPrimaryOutput(output, srcNode.type, edge.sourceHandle)
-    if (primary != null && primary !== "") items.push(primary)
+    items.push(...collectItemsForEdge(edge, allNodes, nodeStates))
   }
+  return spreadJsonArrayIfSingleton(items)
+}
 
-  return items
+/**
+ * Per-edge variant: returns one inner list per incoming edge. Used by the
+ * merge-lists "zip" mode, which needs to align items across sources rather
+ * than flatten them.
+ */
+function collectUpstreamListsPerEdge(
+  nodeId: string,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): string[][] {
+  const incomingEdges = edges.filter((e) => e.target === nodeId)
+  return incomingEdges.map((edge) =>
+    spreadJsonArrayIfSingleton(collectItemsForEdge(edge, allNodes, nodeStates)),
+  )
 }
 
 function stringifyListKey(value: unknown): string {
@@ -399,9 +427,16 @@ export function executeDeduplicateList(
 }
 
 /**
- * Execute merge-lists node: concatenate list items from every upstream
- * connection in edge order. Optionally deduplicates by stringified value
- * after merging.
+ * Execute merge-lists node.
+ *
+ * Concat mode (default): append all upstream items in edge order. Optional
+ * deduplicate flag removes duplicate items by stringified value.
+ *
+ * Zip mode: element-wise merge with modulo-wrap. For two lists of objects
+ * the result has `max(len)` items where position i is the object-spread of
+ * each source at index `i % srcLen`. A single-item upstream (e.g. one JSON
+ * object) is thus injected into every element of a longer list. Deduplicate
+ * still applies to the zipped output.
  */
 export function executeMergeLists(
   node: SimpleNode,
@@ -409,8 +444,12 @@ export function executeMergeLists(
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
 ): NodeOutput {
+  const mode = (node.data.mode as string | undefined) === "zip" ? "zip" : "concat"
   const shouldDedupe = node.data.deduplicate === true
-  const items = collectUpstreamListItems(node.id, edges, allNodes, nodeStates)
+
+  const items = mode === "zip"
+    ? zipMergeLists(collectUpstreamListsPerEdge(node.id, edges, allNodes, nodeStates))
+    : collectUpstreamListItems(node.id, edges, allNodes, nodeStates)
 
   if (!shouldDedupe) {
     return { text: items[0] ?? "", listResults: items }

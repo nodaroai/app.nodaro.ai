@@ -36,3 +36,28 @@ export function extractGeneratedJsonAsList(
     typeof item === "string" ? item : JSON.stringify(item),
   )
 }
+
+/**
+ * If a collected item list has a single entry whose contents parse to a
+ * non-empty JSON array, spread the array's elements into separate items.
+ * Mirrors the `output.json` spread in the orchestrator so a list node with
+ * one row holding a JSON array feeds filter-list / deduplicate / sort-list /
+ * merge-lists per-element instead of as one giant stringified blob.
+ */
+export function spreadJsonArrayIfSingleton(items: string[]): string[] {
+  if (items.length !== 1) return items
+  const single = items[0]
+  if (typeof single !== "string") return items
+  const trimmed = single.trim()
+  if (!trimmed.startsWith("[")) return items
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    return items
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) return items
+  return parsed.map((el) =>
+    typeof el === "string" ? el : JSON.stringify(el),
+  )
+}

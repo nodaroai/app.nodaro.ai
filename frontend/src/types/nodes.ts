@@ -2267,6 +2267,10 @@ export type DeduplicateNodeData = {
 export type MergeListsNodeData = {
   [key: string]: unknown
   label: string
+  /** "concat" (default): append all upstream items in edge order.
+   *  "zip": element-wise merge with modulo-wrap — useful for injecting a
+   *  single object into every item of a longer list. */
+  mode?: "concat" | "zip"
   deduplicate: boolean
   listResults?: string[]
   __listResults?: string[]
@@ -4305,6 +4309,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     autoExecute: true,
     defaultData: {
       label: "Merge Lists",
+      mode: "concat",
       deduplicate: false,
     } as MergeListsNodeData,
   },

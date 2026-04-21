@@ -195,6 +195,8 @@ import { buildImagePrompt } from "@nodaro-shared/prompt-builder";
 import type { CharacterDef } from "@nodaro-shared/types";
 import { resolveSeparator } from "@nodaro-shared/text-separators";
 import { evaluateJsonPath, stringifyPathResults } from "@nodaro-shared/json-path";
+import { spreadJsonArrayIfSingleton } from "@nodaro-shared/generated-results";
+import { zipMergeLists } from "@nodaro-shared/list-merge";
 import { evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList } from "@nodaro-shared/json-evaluator";
 import {
   tryParseJson,
@@ -329,6 +331,23 @@ export function buildWebScrapeParams(
 // Helpers for list-processing inline nodes: filter-list, deduplicate, merge-lists
 // ---------------------------------------------------------------------------
 
+function collectItemsForEdgeFrontend(
+  edge: { source: string; target: string; sourceHandle?: string | null },
+  nodes: ReadonlyArray<WorkflowNode>,
+): string[] {
+  const src = nodes.find((n) => n.id === edge.source);
+  if (!src) return [];
+  // extractNodeOutputAsList handles split-text, list, generatedJson arrays
+  // (web-scrape), generatedResults, and __listResults — same coverage as the
+  // backend collector. Mirrors inline-executor.ts:collectItemsForEdge.
+  const listItems = extractNodeOutputAsList(src);
+  if (listItems && listItems.length > 0) {
+    return listItems.filter((item): item is string => item != null);
+  }
+  const primary = extractNodeOutput(src, edge.sourceHandle ?? undefined);
+  return primary != null && primary !== "" ? [primary] : [];
+}
+
 function collectUpstreamListItemsFrontend(
   nodeId: string,
   edges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null }>,
@@ -337,22 +356,19 @@ function collectUpstreamListItemsFrontend(
   const items: string[] = [];
   const incoming = edges.filter((e) => e.target === nodeId);
   for (const edge of incoming) {
-    const src = nodes.find((n) => n.id === edge.source);
-    if (!src) continue;
-    // extractNodeOutputAsList handles split-text, list, generatedJson arrays
-    // (web-scrape), generatedResults, and __listResults — same coverage as the
-    // backend collector. Mirrors inline-executor.ts:collectUpstreamListItems.
-    const listItems = extractNodeOutputAsList(src);
-    if (listItems && listItems.length > 0) {
-      for (const item of listItems) {
-        if (item != null) items.push(item);
-      }
-      continue;
-    }
-    const primary = extractNodeOutput(src, edge.sourceHandle ?? undefined);
-    if (primary != null && primary !== "") items.push(primary);
+    items.push(...collectItemsForEdgeFrontend(edge, nodes));
   }
-  return items;
+  return spreadJsonArrayIfSingleton(items);
+}
+
+function collectUpstreamListsPerEdgeFrontend(
+  nodeId: string,
+  edges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null }>,
+  nodes: ReadonlyArray<WorkflowNode>,
+): string[][] {
+  return edges
+    .filter((e) => e.target === nodeId)
+    .map((edge) => spreadJsonArrayIfSingleton(collectItemsForEdgeFrontend(edge, nodes)));
 }
 
 export function resolveFilterConditionValue(raw: string, valueType: string | undefined): string {
@@ -4005,7 +4021,8 @@ export function executeNode(
     if (value === undefined) {
       const listItems = extractNodeOutputAsList(src);
       if (listItems && listItems.length > 0) {
-        value = listItems.map((item) => tryParseJson(item));
+        const spread = spreadJsonArrayIfSingleton(listItems);
+        value = spread.map((item) => tryParseJson(item));
       }
     }
 
@@ -4165,7 +4182,11 @@ export function executeNode(
   if (node.type === "merge-lists") {
     const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
     const mergeData = node.data as MergeListsNodeData;
-    const items = collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
+    const mode = mergeData.mode === "zip" ? "zip" : "concat";
+
+    const items = mode === "zip"
+      ? zipMergeLists(collectUpstreamListsPerEdgeFrontend(node.id, currentEdges, currentNodes))
+      : collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
 
     let merged = items;
     if (mergeData.deduplicate === true) {

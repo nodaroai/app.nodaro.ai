@@ -179,4 +179,34 @@ describe("executeExtractField — listResults upstream", () => {
     expect(result.extractedText).toBe("")
     expect(result.text).toBe("")
   })
+
+  /**
+   * User-reported bug: a list node with a single row whose value is a JSON
+   * array of objects should let extract-field iterate per element, matching
+   * what json-process does and what web-scrape `output.json: [...]` already did.
+   */
+  it("spreads a single JSON-array item from list upstream into per-element extraction", () => {
+    const list = makeNode("l", "list", {})
+    const extract = makeNode("e", "extract-field", {
+      field: "url",
+      mode: "dropdown",
+      outputType: "list",
+    })
+    const edges: SimpleEdge[] = [
+      { id: "e1", source: "l", target: "e", sourceHandle: null, targetHandle: "in" } as SimpleEdge,
+    ]
+    const jsonArrayItem = JSON.stringify([
+      { url: "one" },
+      { url: "two" },
+      { url: "three" },
+    ])
+    const states: Record<string, NodeExecutionState> = {
+      l: { status: "completed", output: { text: jsonArrayItem, listResults: [jsonArrayItem] } },
+    }
+
+    const result = executeExtractField(extract, edges, [list, extract], states)
+
+    expect(result.listResults).toEqual(["one", "two", "three"])
+    expect(result.extractedText).toBe("one\ntwo\nthree")
+  })
 })
