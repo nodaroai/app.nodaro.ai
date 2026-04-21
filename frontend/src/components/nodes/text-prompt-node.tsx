@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { EditableNodeLabel } from "./editable-node-label"
 import { TagTextarea } from "@/components/editor/config-panels/tag-textarea"
+import { SUNO_LYRICS_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { getUpstreamNodes } from "@/lib/node-refs"
 import { NODE_COLORS, getEffectiveColor } from "@/lib/node-colors"
 import { hasCredits } from "@/lib/edition"
@@ -112,6 +113,9 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
 
     return { hasDownstream: true, downstreamCredits: totalCredits }
   }, [id, nodes, edges])
+
+  const outputTarget: "text" | "voice" | "lyrics" =
+    nodeData.outputTarget === "voice" || nodeData.outputTarget === "lyrics" ? nodeData.outputTarget : "text"
 
   return (
     <div
@@ -221,13 +225,35 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
           onClick={selected ? (e) => e.stopPropagation() : undefined}
           onKeyDown={selected ? (e) => e.stopPropagation() : undefined}
         >
-          <TagTextarea
-            value={localText}
-            onChange={handleTextChange}
-            placeholder="Enter your prompt..."
-            className="!bg-transparent !border-none !shadow-none !ring-0 !outline-none !resize-none"
-            nodeRefs={nodeRefs}
-          />
+          {outputTarget === "lyrics" ? (
+            <TagTextarea
+              value={localText}
+              onChange={handleTextChange}
+              placeholder="Write your lyrics..."
+              className="!bg-transparent !border-none !shadow-none !ring-0 !outline-none !resize-none"
+              tagMode="suno"
+              customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
+              nodeRefs={nodeRefs}
+            />
+          ) : outputTarget === "voice" ? (
+            <TagTextarea
+              value={localText}
+              onChange={handleTextChange}
+              placeholder="Write the spoken text..."
+              className="!bg-transparent !border-none !shadow-none !ring-0 !outline-none !resize-none"
+              tagMode="audio"
+              nodeRefs={nodeRefs}
+            />
+          ) : (
+            <TagTextarea
+              value={localText}
+              onChange={handleTextChange}
+              placeholder="Enter your prompt..."
+              className="!bg-transparent !border-none !shadow-none !ring-0 !outline-none !resize-none"
+              tagMode="none"
+              nodeRefs={nodeRefs}
+            />
+          )}
         </div>
       </div>
 
