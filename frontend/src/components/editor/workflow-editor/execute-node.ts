@@ -166,7 +166,7 @@ import {
 } from "./types";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
-import { resolveNodeInputs, extractNodeOutputAsList, type FrontendResolvedInputs } from "./node-input-resolver";
+import { resolveNodeInputs, extractNodeOutputAsList, resolveSourceThroughConnectedList, type FrontendResolvedInputs } from "./node-input-resolver";
 import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_TEXT_FIELDS } from "./resolve-field-mappings";
@@ -334,8 +334,10 @@ export function buildWebScrapeParams(
 function collectItemsForEdgeFrontend(
   edge: { source: string; target: string; sourceHandle?: string | null },
   nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
 ): string[] {
-  const src = nodes.find((n) => n.id === edge.source);
+  const resolvedEdge = resolveSourceThroughConnectedList(edge, nodes, edges);
+  const src = nodes.find((n) => n.id === resolvedEdge.source);
   if (!src) return [];
   // extractNodeOutputAsList handles split-text, list, generatedJson arrays
   // (web-scrape), generatedResults, and __listResults — same coverage as the
@@ -344,31 +346,31 @@ function collectItemsForEdgeFrontend(
   if (listItems && listItems.length > 0) {
     return listItems.filter((item): item is string => item != null);
   }
-  const primary = extractNodeOutput(src, edge.sourceHandle ?? undefined);
+  const primary = extractNodeOutput(src, resolvedEdge.sourceHandle ?? undefined);
   return primary != null && primary !== "" ? [primary] : [];
 }
 
 function collectUpstreamListItemsFrontend(
   nodeId: string,
-  edges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null }>,
+  edges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
   nodes: ReadonlyArray<WorkflowNode>,
 ): string[] {
   const items: string[] = [];
   const incoming = edges.filter((e) => e.target === nodeId);
   for (const edge of incoming) {
-    items.push(...collectItemsForEdgeFrontend(edge, nodes));
+    items.push(...collectItemsForEdgeFrontend(edge, nodes, edges));
   }
   return spreadJsonArrayIfSingleton(items);
 }
 
 function collectUpstreamListsPerEdgeFrontend(
   nodeId: string,
-  edges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null }>,
+  edges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
   nodes: ReadonlyArray<WorkflowNode>,
 ): string[][] {
   return edges
     .filter((e) => e.target === nodeId)
-    .map((edge) => spreadJsonArrayIfSingleton(collectItemsForEdgeFrontend(edge, nodes)));
+    .map((edge) => spreadJsonArrayIfSingleton(collectItemsForEdgeFrontend(edge, nodes, edges)));
 }
 
 export function resolveFilterConditionValue(raw: string, valueType: string | undefined): string {
@@ -3997,12 +3999,13 @@ export function executeNode(
     const path = (extractData.field ?? "").trim();
 
     // Find the single upstream edge on `in`.
-    const inEdge = currentEdges.find((e) => e.target === node.id && e.targetHandle === "in")
+    const rawInEdge = currentEdges.find((e) => e.target === node.id && e.targetHandle === "in")
       ?? currentEdges.find((e) => e.target === node.id);
-    if (!inEdge) {
+    if (!rawInEdge) {
       updateNodeData(node.id, { extractedText: "", executionStatus: "completed" });
       return Promise.resolve("");
     }
+    const inEdge = resolveSourceThroughConnectedList(rawInEdge, currentNodes, currentEdges);
     const src = currentNodes.find((n) => n.id === inEdge.source);
     if (!src) {
       updateNodeData(node.id, { extractedText: "", executionStatus: "completed" });
@@ -4065,12 +4068,13 @@ export function executeNode(
     } = useWorkflowStore.getState();
     const jpData = node.data as JsonProcessNodeData;
 
-    const inEdge = currentEdges.find((e) => e.target === node.id && e.targetHandle === "in")
+    const rawInEdge = currentEdges.find((e) => e.target === node.id && e.targetHandle === "in")
       ?? currentEdges.find((e) => e.target === node.id);
-    if (!inEdge) {
+    if (!rawInEdge) {
       updateNodeData(node.id, { processedResult: null, executionStatus: "completed" });
       return Promise.resolve("");
     }
+    const inEdge = resolveSourceThroughConnectedList(rawInEdge, currentNodes, currentEdges);
     const src = currentNodes.find((n) => n.id === inEdge.source);
     if (!src) {
       updateNodeData(node.id, { processedResult: null, executionStatus: "completed" });

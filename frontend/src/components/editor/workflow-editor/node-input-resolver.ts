@@ -16,6 +16,8 @@ import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro-shar
 import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
 import { extractAllGeneratedResults, extractGeneratedJsonAsList } from "@nodaro-shared/generated-results";
 import { SOCIAL_POST_NODE_TYPES } from "@nodaro-shared/social-post";
+import { resolveSourceThroughConnectedList } from "@nodaro-shared/list-source-resolver";
+export { resolveSourceThroughConnectedList };
 
 /** Follow teleport chain to find the original non-teleport source node. */
 function resolveTeleportOrigin(node: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode {
