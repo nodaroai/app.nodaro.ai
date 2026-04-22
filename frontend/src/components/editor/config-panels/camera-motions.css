@@ -177,7 +177,7 @@
   top: 55%;
   transform: translate(-50%, -50%);
   width: 18cqw;
-  height: 22cqw;
+  height: 19.5cqw;
   z-index: 3;
   perspective: 120cqw;
   perspective-origin: 50% 40%;
@@ -213,7 +213,7 @@
   transform-style: preserve-3d;
 }
 .cm-subject-head { width: 7cqw; height: 7cqw; }
-.cm-subject-body { width: 10cqw; height: 13cqw; }
+.cm-subject-body { width: 10cqw; height: 10.5cqw; }
 
 /* Face colors — front is bright, back is dark maroon, sides are mid rose. */
 .cm-face {
@@ -228,7 +228,7 @@
   border-radius: 50%;
 }
 .cm-subject-body .cm-face {
-  border-radius: 14% 14% 10% 10% / 14% 14% 8% 8%;
+  border-radius: 14% 14% 0 0 / 14% 14% 0 0;
 }
 
 /* --- HEAD faces --- */
@@ -273,7 +273,7 @@
   width: 4cqw;
   height: 100%;
   margin-left: -2cqw;
-  border-radius: 30% 30% 14% 14% / 10% 10% 6% 6%;
+  border-radius: 30% 30% 0 0 / 10% 10% 0 0;
   background: linear-gradient(to bottom, #95004f 0%, #6f0035 100%);
 }
 .cm-body-left  { transform: rotateY(-90deg) translateZ(5cqw); }
