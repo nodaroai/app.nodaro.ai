@@ -15,11 +15,6 @@ import {
 import { CachedImage } from "@/components/ui/cached-image"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits"
-import {
-  getModels,
-  getFirstModel,
-  type ProviderCategory,
-} from "@/lib/providers-config"
 import { Button } from "@/components/ui/button"
 import { X, Plus, Wand2 } from "lucide-react"
 import { toast } from "sonner"
@@ -42,7 +37,6 @@ import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
 import { Kling3StudioConfig } from "./kling3-studio-config"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
-import { getConnectedProviderModel } from "./helpers"
 import { ConnectedMediaList, getSourceThumbnail } from "./connected-media-list"
 import type { ConfigProps } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
@@ -924,9 +918,6 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
 
 export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToVideoData>) {
   useEffect(() => { prefetchModelCredits(VIDEO_T2V_MODELS.map((m) => m.value)) }, [])
-  const category: ProviderCategory = "video"
-  const models = getModels(category, data.provider)
-  const connectedModel = getConnectedProviderModel(fieldMappings, sources, nodes)
   const allowedDurations = KIE_T2V_DURATIONS[data.provider || "minimax"] || null
 
   if (data.provider === "kling-3.0") {
@@ -938,10 +929,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
           value={data.provider || "minimax"}
-          onValueChange={(v) => {
-            const firstModel = getFirstModel(category, v)
-            onUpdate({ provider: v, model: firstModel })
-          }}
+          onValueChange={(v) => onUpdate({ provider: v })}
         >
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -963,26 +951,6 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           refMap={refMap}
         />
       </MappableField>
-      <div>
-        <Label className="text-xs">Model</Label>
-        {connectedModel ? (
-          <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1.5 truncate">
-            {connectedModel}
-          </p>
-        ) : (
-          <Select
-            value={data.model}
-            onValueChange={(v) => onUpdate({ model: v })}
-          >
-            <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {models.map((m) => (
-                <SelectItem key={m} value={m}>{m}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         {allowedDurations ? (
           <Select

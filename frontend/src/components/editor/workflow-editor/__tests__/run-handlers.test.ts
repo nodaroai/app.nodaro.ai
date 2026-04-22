@@ -1027,8 +1027,12 @@ describe("run handlers reset accumulation at execution start", () => {
     )
   })
 
-  it("handleRunSingleNode resets only the target node, not siblings", async () => {
-    const target = makeAccumulatedExecNode("target", "generate-image")
+  it("handleRunSingleNode preserves generatedResults on the target node (history kept across re-runs)", async () => {
+    const target = makeAccumulatedExecNode("target", "generate-image", {
+      __listResults: ["stale-a", "stale-b"],
+      __listTotal: 2,
+      __listCompleted: 2,
+    })
     const sibling = makeAccumulatedExecNode("sibling", "generate-image")
     mockNodes.splice(0, mockNodes.length, target, sibling)
 
@@ -1036,11 +1040,21 @@ describe("run handlers reset accumulation at execution start", () => {
     const pollRef = { current: new Set<any>() } as any
     await handleRunSingleNode("target", ctx, "p1", vi.fn().mockResolvedValue(undefined), vi.fn(), pollRef)
 
-    // Target cleared; sibling's accumulation untouched.
-    const patchedIds = mockUpdateNodeData.mock.calls
+    // generatedResults / activeResultIndex preserved on target (history intact).
+    const generatedResultPatches = mockUpdateNodeData.mock.calls
       .filter((c: any[]) => c[1]?.generatedResults !== undefined)
       .map((c: any[]) => c[0])
-    expect(patchedIds).toEqual(["target"])
+    expect(generatedResultPatches).toEqual([])
+
+    // But transient list-state fields on the target are still cleared.
+    const listStatePatch = mockUpdateNodeData.mock.calls.find(
+      (c: any[]) => c[0] === "target" && c[1]?.__listResults === undefined && "__listResults" in c[1],
+    )
+    expect(listStatePatch).toBeDefined()
+
+    // Sibling's data is untouched.
+    const siblingPatches = mockUpdateNodeData.mock.calls.filter((c: any[]) => c[0] === "sibling")
+    expect(siblingPatches).toEqual([])
   })
 
   it("handleRunSelected resets only selected executable nodes", async () => {
