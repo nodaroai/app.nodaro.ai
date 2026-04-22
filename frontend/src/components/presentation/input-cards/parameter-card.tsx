@@ -31,6 +31,7 @@ function getValueField(nodeType: SceneNodeType): string {
     case "aspect-ratio": return "aspectRatio"
     case "motion": return "motion"
     case "camera-motion": return "cameraMotion"
+    case "framing": return "framing"
     default: return "value"
   }
 }

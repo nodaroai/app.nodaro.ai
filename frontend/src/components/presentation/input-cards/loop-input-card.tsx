@@ -17,6 +17,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -302,18 +303,14 @@ export function LoopInputCard({
     [columns],
   )
   const sourceLabels = useWorkflowStore(
-    useCallback(
-      (s: { nodes: ReadonlyArray<WorkflowNode> }) => {
-        const map: Record<string, string> = {}
-        for (const id of connectedIds) {
-          const n = s.nodes.find((nd) => nd.id === id)
-          if (n) map[id] = (n.data as Record<string, unknown>).label as string || ""
-        }
-        return map
-      },
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      [connectedIds.join(",")],
-    ),
+    useShallow((s: { nodes: ReadonlyArray<WorkflowNode> }) => {
+      const map: Record<string, string> = {}
+      for (const id of connectedIds) {
+        const n = s.nodes.find((nd) => nd.id === id)
+        if (n) map[id] = (n.data as Record<string, unknown>).label as string || ""
+      }
+      return map
+    }),
   )
 
   const resolved = useMemo(

@@ -48,6 +48,7 @@ import {
   AspectRatioConfig,
   MotionConfig,
   CameraMotionConfig,
+  FramingConfig,
   GenerateScriptConfig,
   QACheckConfig,
   GenerateImageConfig,
@@ -168,6 +169,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "aspect-ratio": "Aspect Ratio",
   "motion": "Motion",
   "camera-motion": "Camera Motion",
+  "framing": "Framing",
   "generate-script": "Generate Script",
   "generate-image": "Generate Image",
   "modify-image": "Modify Image",
@@ -340,6 +342,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "aspect-ratio": return <AspectRatioConfig {...configProps} />
     case "motion": return <MotionConfig {...configProps} />
     case "camera-motion": return <CameraMotionConfig {...configProps} />
+    case "framing": return <FramingConfig {...configProps} />
     case "generate-script": return <GenerateScriptConfig {...configProps} />
     case "generate-image": return <GenerateImageConfig {...configProps} />
     case "modify-image": return <ModifyImageConfig {...configProps} />

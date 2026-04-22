@@ -264,6 +264,12 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Video className="h-4 w-4" />,
     category: "Parameter",
   },
+  {
+    type: "framing",
+    label: "Framing",
+    icon: <Frame className="h-4 w-4" />,
+    category: "Parameter",
+  },
   // AI — Script & Text
   {
     type: "generate-script",

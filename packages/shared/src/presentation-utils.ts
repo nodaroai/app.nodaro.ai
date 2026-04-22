@@ -23,6 +23,7 @@ export const INPUT_NODE_TYPES = new Set([
   "aspect-ratio",
   "motion",
   "camera-motion",
+  "framing",
   "reference-audio",
 ])
 
@@ -57,6 +58,7 @@ const NON_OUTPUT_TYPES = new Set([
   "aspect-ratio",
   "motion",
   "camera-motion",
+  "framing",
   "sticky-note",
   "sub-workflow-input",
   "sub-workflow-output",
@@ -265,6 +267,7 @@ export const INPUT_FIELD_MAP: Record<string, InputFieldSchema> = {
   "scene-count": { key: "count", type: "number" },
   "motion": { key: "motion", type: "select" },
   "camera-motion": { key: "cameraMotion", type: "select" },
+  "framing": { key: "framing", type: "select" },
   "reference-audio": { key: "extractedAudioUrl", type: "audio-url" },
 }
 

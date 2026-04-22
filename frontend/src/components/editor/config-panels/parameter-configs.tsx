@@ -27,8 +27,10 @@ import type {
   AspectRatioData,
   MotionData,
   CameraMotionData,
+  FramingData,
 } from "@/types/nodes"
 import { CameraMotionPicker } from "./camera-motion-picker"
+import { FramingPicker } from "./framing-picker"
 import type { ConfigProps } from "./types"
 
 export function ToneConfig({ data, onUpdate }: ConfigProps<ToneData>) {
@@ -213,6 +215,18 @@ export function CameraMotionConfig({ data, onUpdate }: ConfigProps<CameraMotionD
       <CameraMotionPicker
         value={data.cameraMotion || "static"}
         onValueChange={(v) => onUpdate({ cameraMotion: v })}
+      />
+    </div>
+  )
+}
+
+export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <Label>Framing</Label>
+      <FramingPicker
+        value={data.framing || "medium-shot"}
+        onValueChange={(v) => onUpdate({ framing: v })}
       />
     </div>
   )

@@ -339,6 +339,13 @@ export type CameraMotionData = {
   cameraMotion: string
 }
 
+export type FramingData = {
+  [key: string]: unknown
+  label: string
+  /** Framing id from FRAMINGS catalog (packages/shared/src/framing.ts). */
+  framing: string
+}
+
 // --- AI Node Data ---
 
 export interface SceneImageVersion {
@@ -722,6 +729,9 @@ export type ImageToVideoData = {
   /** Motion id from CAMERA_MOTIONS catalog (packages/shared/src/camera-motions.ts). */
   cameraMotion?: string
   cameraMotionEnabled?: boolean
+  /** Framing id from FRAMINGS catalog (packages/shared/src/framing.ts). */
+  framing?: string
+  framingEnabled?: boolean
   prompt?: string  // Text description of desired motion/animation
   generateAudio?: boolean
   fieldMappings: FieldMappings
@@ -2592,6 +2602,7 @@ export type SceneNodeData =
   | AspectRatioData
   | MotionData
   | CameraMotionData
+  | FramingData
   | GenerateScriptData
   | GenerateImageData
   | ModifyImageData
@@ -2708,6 +2719,7 @@ export type SceneNodeType =
   | "aspect-ratio"
   | "motion"
   | "camera-motion"
+  | "framing"
   | "generate-script"
   | "generate-image"
   | "modify-image"
@@ -3009,6 +3021,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Camera Motion", cameraMotion: "static" },
+  },
+  {
+    type: "framing",
+    label: "Framing",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Framing", framing: "medium-shot" },
   },
   // AI
   {

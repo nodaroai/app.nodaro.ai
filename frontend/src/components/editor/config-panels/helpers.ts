@@ -17,6 +17,7 @@ export const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<strin
   targetLength: ["duration"],
   motion: ["motion"],
   cameraMotion: ["camera-motion"],
+  framing: ["framing"],
   sceneCount: ["scene-count"],
   // Text fields for fieldMappings + {} injection
   lyrics: ["text-prompt"],
@@ -127,6 +128,8 @@ export function extractDisplayValue(data: Record<string, unknown>, nodeType: str
       return (data.motion as string) ?? ""
     case "camera-motion":
       return (data.cameraMotion as string) ?? ""
+    case "framing":
+      return (data.framing as string) ?? ""
     case "reference-audio":
       return (data.videoTitle as string) || (data.extractedAudioUrl as string) ? "Audio ready" : "No audio"
     default:

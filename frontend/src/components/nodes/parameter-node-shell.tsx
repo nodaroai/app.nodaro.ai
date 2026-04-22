@@ -14,6 +14,7 @@ interface ParameterNodeShellProps {
   readonly handleId: string
   readonly selected?: boolean
   readonly children: ReactNode
+  readonly fluidWidth?: boolean
 }
 
 const makeHandles = (id: string) => [
@@ -21,12 +22,12 @@ const makeHandles = (id: string) => [
   { id, type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
 ] as const
 
-export function ParameterNodeShell({ id, label, icon, handleId, selected, children }: ParameterNodeShellProps) {
+export function ParameterNodeShell({ id, label, icon, handleId, selected, children, fluidWidth }: ParameterNodeShellProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const handles = useMemo(() => makeHandles(handleId), [handleId])
 
   return (
-    <div className="relative max-w-[220px]">
+    <div className={fluidWidth ? "relative w-full h-full" : "relative max-w-[220px]"}>
       <EditableNodeLabel
         label={label}
         icon={icon}
@@ -43,7 +44,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
         hideHeader
         handles={handles}
       >
-        <div className="px-3 py-3">
+        <div className={fluidWidth ? "px-3 py-3 flex flex-col gap-2 h-full" : "px-3 py-3"}>
           {children}
         </div>
       </BaseNode>

@@ -149,3 +149,14 @@ export {
   getCameraMotionPromptHint,
 } from "./camera-motions.js"
 export type { CameraMotion, CameraMotionCategory } from "./camera-motions.js"
+
+export {
+  FRAMINGS,
+  FRAMING_IDS,
+  FRAMING_CATEGORY_ORDER,
+  FRAMING_CATEGORY_LABELS,
+  getFraming,
+  getFramingLabel,
+  getFramingPromptHint,
+} from "./framing.js"
+export type { Framing, FramingCategory } from "./framing.js"

@@ -44,7 +44,7 @@ vi.mock("lucide-react", () => {
     List: I, Palette: I, Brush: I, Cpu: I, Hash: I, Clock: I,
     RectangleHorizontal: I, Activity: I, Video: I, ShieldCheck: I,
     Rss: I, Webhook: I, HardDrive: I, Scissors: I, FileText: I,
-    Type: I, ImageIcon: I, Check: I, X: I,
+    Type: I, ImageIcon: I, Check: I, X: I, Frame: I,
   }
 })
 
@@ -100,6 +100,7 @@ import { DurationNode } from "../duration-node"
 import { AspectRatioNode } from "../aspect-ratio-node"
 import { MotionNode } from "../motion-node"
 import { CameraMotionNode } from "../camera-motion-node"
+import { FramingNode } from "../framing-node"
 import { QACheckNode } from "../qa-check-node"
 import { RSSFeedNode } from "../rss-feed-node"
 import { WebhookOutputNode } from "../webhook-output-node"
@@ -195,6 +196,14 @@ const SIMPLE_NODES: SimpleNodeTestConfig[] = [
     expectedCredits: 0,
     defaultData: { label: "Camera Motion", cameraMotion: "pan-left" },
     contentAssertion: { text: "Pan Left" },
+  },
+  {
+    name: "FramingNode",
+    Component: FramingNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Framing", framing: "medium-shot" },
+    contentAssertion: { text: "Medium Shot" },
   },
   {
     name: "QACheckNode",
