@@ -328,8 +328,9 @@ backend/src/
 - [x] Sort List node (inline utility, dot-path field + Auto/Text/Number/Date, asc/desc, missing-last)
 - [x] Filter List case-sensitive toggle (node-wide, default off for new nodes)
 - [x] Router run-button + auto-execute on config changes
+- [x] AVIF/HEIC/HEIF image upload support (accepted end-to-end; HEIC/HEIF transcoded to JPEG at upload time via `sharp()` so thumbnails render in all browsers and providers skip libheif re-decode per call; AVIF stored natively)
 
 ---
 
 *Last updated: 2026-04-22*
-*Version: 1.81.1*
+*Version: 1.82.0*

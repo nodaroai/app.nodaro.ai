@@ -32,7 +32,7 @@ export function detectMediaType(file: File): MediaCategory {
   if (file.type.startsWith("audio/")) return "audio"
   // Fallback based on extension
   const ext = file.name.split(".").pop()?.toLowerCase()
-  if (["png", "jpg", "jpeg", "webp", "gif"].includes(ext ?? "")) return "image"
+  if (["png", "jpg", "jpeg", "webp", "gif", "avif", "heic", "heif"].includes(ext ?? "")) return "image"
   if (["mp4", "webm", "mov", "avi"].includes(ext ?? "")) return "video"
   if (["mp3", "wav", "m4a", "aac"].includes(ext ?? "")) return "audio"
   return "image" // default

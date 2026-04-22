@@ -74,7 +74,7 @@ function isVideoUrl(url: string): boolean {
 
 function isImageUrl(url: string): boolean {
   const lower = url.toLowerCase()
-  return lower.includes(".png") || lower.includes(".jpg") || lower.includes(".jpeg") || lower.includes(".webp") || lower.includes(".gif")
+  return lower.includes(".png") || lower.includes(".jpg") || lower.includes(".jpeg") || lower.includes(".webp") || lower.includes(".gif") || lower.includes(".avif") || lower.includes(".heic") || lower.includes(".heif")
 }
 
 function isAudioUrl(url: string): boolean {

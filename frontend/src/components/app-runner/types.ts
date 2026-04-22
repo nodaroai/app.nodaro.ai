@@ -126,7 +126,7 @@ export function makeSnapshotNodeStates(outputNodes: WorkflowNode[]): Record<stri
 
 export function isMediaUrl(url: string): "image" | "video" | null {
   const lower = url.toLowerCase()
-  if (/\.(jpg|jpeg|png|gif|webp|svg|bmp|avif)(\?|$)/.test(lower)) return "image"
+  if (/\.(jpg|jpeg|png|gif|webp|svg|bmp|avif|heic|heif)(\?|$)/.test(lower)) return "image"
   if (/\.(mp4|webm|mov|avi|mkv)(\?|$)/.test(lower)) return "video"
   return null
 }

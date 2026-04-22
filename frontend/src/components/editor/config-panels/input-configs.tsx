@@ -63,7 +63,7 @@ import { resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-ed
 import { SUNO_LYRICS_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 
 const COLUMN_ACCEPT: Record<string, string> = {
-  "image-url": "image/png,image/jpeg,image/webp,image/gif",
+  "image-url": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/heic,image/heif",
   "video-url": "video/mp4,video/webm,video/quicktime",
   "audio-url": "audio/mpeg,audio/wav,audio/ogg,audio/webm",
 }

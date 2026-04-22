@@ -184,7 +184,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
         >
           <input
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/heic,image/heif"
             onChange={handleFileSelect}
             className="hidden"
             ref={fileInputRef}
