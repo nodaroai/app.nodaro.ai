@@ -60,6 +60,7 @@ import type { ConfigProps } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-editor/node-input-resolver"
+import { SUNO_LYRICS_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 
 const COLUMN_ACCEPT: Record<string, string> = {
   "image-url": "image/png,image/jpeg,image/webp,image/gif",
@@ -75,9 +76,39 @@ function getSourceLabel(
   return (nodes.find((n) => n.id === sourceId)?.data?.label as string) || ""
 }
 
+const OUTPUT_TARGETS: readonly { value: "text" | "voice" | "lyrics"; label: string; hint: string }[] = [
+  { value: "text", label: "Text", hint: "Plain prompt" },
+  { value: "voice", label: "Voice", hint: "Audio tags" },
+  { value: "lyrics", label: "Lyrics", hint: "Suno metatags" },
+]
+
 export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextPromptData>) {
+  const outputTarget: "text" | "voice" | "lyrics" =
+    data.outputTarget === "voice" || data.outputTarget === "lyrics" ? data.outputTarget : "text"
+
   return (
     <div className="flex flex-col gap-3">
+      <div>
+        <Label>Writing for</Label>
+        <div role="radiogroup" aria-label="Output target" className="grid grid-cols-3 gap-1.5 mt-1">
+          {OUTPUT_TARGETS.map((t) => {
+            const checked = outputTarget === t.value
+            return (
+              <button
+                key={t.value}
+                type="button"
+                role="radio"
+                aria-checked={checked}
+                onClick={() => onUpdate({ outputTarget: t.value })}
+                className={`rounded-md border px-2 py-1.5 text-left transition-colors ${checked ? "border-[#ff0073] bg-[#ff0073]/10" : "border-border hover:border-[#ff0073]/50"}`}
+              >
+                <div className="text-xs font-medium">{t.label}</div>
+                <div className="text-[10px] text-muted-foreground">{t.hint}</div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
       <div>
         <div className="flex items-center justify-between mb-1">
           <Label>Prompt Text</Label>
@@ -87,15 +118,41 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
             onAccept={(prompt) => onUpdate({ text: prompt })}
           />
         </div>
-        <TagTextarea
-          rows={5}
-          value={data.text}
-          onChange={(value) => onUpdate({ text: value })}
-          placeholder="Enter your story prompt..."
-          nodeRefs={nodeRefs}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
-        />
+        {outputTarget === "lyrics" ? (
+          <TagTextarea
+            rows={5}
+            value={data.text}
+            onChange={(value) => onUpdate({ text: value })}
+            placeholder="Write your lyrics... (type [ for metatags)"
+            tagMode="suno"
+            customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
+            nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
+          />
+        ) : outputTarget === "voice" ? (
+          <TagTextarea
+            rows={5}
+            value={data.text}
+            onChange={(value) => onUpdate({ text: value })}
+            placeholder="Write the spoken text... (type [ for audio tags)"
+            tagMode="audio"
+            nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
+          />
+        ) : (
+          <TagTextarea
+            rows={5}
+            value={data.text}
+            onChange={(value) => onUpdate({ text: value })}
+            placeholder="Enter your story prompt..."
+            tagMode="none"
+            nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
+          />
+        )}
       </div>
       {!!(data as Record<string, unknown>).presentationInput && (
         <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">

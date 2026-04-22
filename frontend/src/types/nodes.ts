@@ -47,6 +47,7 @@ export type TextPromptData = {
   textStyle?: string
   bold?: boolean
   italic?: boolean
+  outputTarget?: "text" | "voice" | "lyrics"
   alignment?: string
   width?: number
   height?: number

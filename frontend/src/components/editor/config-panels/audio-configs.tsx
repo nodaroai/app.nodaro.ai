@@ -54,6 +54,7 @@ import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
+import { ProviderAudioTagWarning } from "./provider-audio-tag-warning"
 import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
 import { REPLICATE_LIP_SYNC_PROVIDERS } from "@nodaro-shared/model-constants"
 import type { ConfigProps } from "./types"
@@ -94,6 +95,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
           </SelectContent>
         </Select>
       </MappableField>
+      <ProviderAudioTagWarning provider={data.provider} fieldValues={[data.directText]} />
       <ModelDescriptionHint modelId={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")} />
       {textSource === "direct" && (
         <MappableField field="directText" label="Text" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -102,6 +104,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
             value={data.directText || ""}
             onChange={(v) => onUpdate({ directText: v })}
             placeholder="Enter text to convert to speech... (use {} to inject input)"
+            tagMode="audio"
             provider={data.provider}
             nodeRefs={nodeRefs}
             displayMode={variableDisplayMode}
@@ -184,6 +187,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
             if (v.length <= maxPromptLen) onUpdate({ prompt: v })
           }}
           placeholder={isSfx ? "Describe the sound effect (max 450 chars)..." : "Describe the sound effect (e.g. dog barking, rain on window)..."}
+          tagMode="none"
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
@@ -256,6 +260,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }}
           placeholder="Describe the song... (type [ or / for tags)"
           maxLength={3000}
+          tagMode="suno"
           customTags={SUNO_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
@@ -284,6 +289,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           onChange={(v) => { if (v.length <= 3000) onUpdate({ lyrics: v }) }}
           placeholder="Write custom lyrics... (type [ or / for metatags)"
           maxLength={3000}
+          tagMode="suno"
           customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
@@ -297,6 +303,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           onChange={(v) => { if (v.length <= 500) onUpdate({ style: v }) }}
           placeholder="e.g. pop, rock, jazz, lo-fi... (type [ or / for suggestions)"
           maxLength={500}
+          tagMode="suno"
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
@@ -310,6 +317,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }}
           placeholder="Styles to avoid... (type [ or / for suggestions)"
           maxLength={500}
+          tagMode="suno"
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
@@ -373,6 +381,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
           onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }}
           placeholder="Describe the cover style... (type [ or / for tags)"
           maxLength={3000}
+          tagMode="suno"
           customTags={SUNO_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
@@ -404,6 +413,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
           onChange={(v) => { if (v.length <= 3000) onUpdate({ lyrics: v }) }}
           placeholder="Write custom lyrics for the cover... (type [ or / for metatags)"
           maxLength={3000}
+          tagMode="suno"
           customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
@@ -417,6 +427,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
           onChange={(v) => { if (v.length <= 500) onUpdate({ style: v }) }}
           placeholder="e.g. pop, rock, jazz, lo-fi... (type [ or / for suggestions)"
           maxLength={500}
+          tagMode="suno"
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
@@ -430,6 +441,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
           onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }}
           placeholder="Styles to avoid... (type [ or / for suggestions)"
           maxLength={500}
+          tagMode="suno"
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
@@ -470,6 +482,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
           onChange={(v) => { if (v.length <= 5000) onUpdate({ prompt: v }) }}
           placeholder="Describe how the music should continue... (type [ or / for tags)"
           maxLength={5000}
+          tagMode="suno"
           customTags={SUNO_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
@@ -498,6 +511,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
           onChange={(v) => { if (v.length <= 1000) onUpdate({ style: v }) }}
           placeholder="e.g. pop, rock, jazz... (type [ or / for suggestions)"
           maxLength={1000}
+          tagMode="suno"
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
@@ -522,6 +536,7 @@ export function SunoLyricsConfig({ data, onUpdate, sources, fieldMappings, onMap
           onChange={(v) => { if (v.length <= 1000) onUpdate({ prompt: v }) }}
           placeholder="Describe the lyrics you want... (type [ or / for genre/mood suggestions)"
           maxLength={1000}
+          tagMode="suno"
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
@@ -632,10 +647,10 @@ export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMap
         <Input value={data.title ?? ""} maxLength={200} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Song title" />
       </MappableField>
       <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={2} value={data.style ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ style: v }) }} placeholder="e.g. pop, rock, jazz..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
+        <TagTextarea rows={2} value={data.style ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ style: v }) }} placeholder="e.g. pop, rock, jazz..." maxLength={500} tagMode="suno" customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={2} value={data.negativeStyle ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }} placeholder="Styles to avoid..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
+        <TagTextarea rows={2} value={data.negativeStyle ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }} placeholder="Styles to avoid..." maxLength={500} tagMode="suno" customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.vocalGender ?? "auto"} onValueChange={(v) => onUpdate({ vocalGender: v === "auto" ? "" : v })}>
@@ -662,10 +677,10 @@ export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMapping
         <Input type="number" min={0} step={1} value={data.infillEndS ?? ""} onChange={(e) => onUpdate({ infillEndS: e.target.value === "" ? undefined : parseFloat(e.target.value) })} placeholder="30" />
       </MappableField>
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the replacement..." maxLength={3000} customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
+        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the replacement..." maxLength={3000} tagMode="suno" customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="tags" label="Tags (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={2} value={data.tags ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ tags: v }) }} placeholder="Style tags..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
+        <TagTextarea rows={2} value={data.tags ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ tags: v }) }} placeholder="Style tags..." maxLength={500} tagMode="suno" customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="title" label="Title (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input value={data.title ?? ""} maxLength={200} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Song title" />
@@ -757,7 +772,7 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
       </MappableField>
       <ModelDescriptionHint modelId={data.model} />
       <MappableField field="prompt" label="Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the extension..." maxLength={3000} customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
+        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the extension..." maxLength={3000} tagMode="suno" customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="continueAt" label="Continue At (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input type="number" min={0} step={1} value={data.continueAt ?? ""} onChange={(e) => onUpdate({ continueAt: e.target.value === "" ? undefined : parseFloat(e.target.value) })} placeholder="0" />
@@ -770,10 +785,10 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
         <Input value={data.title ?? ""} maxLength={200} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Song title" />
       </MappableField>
       <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={2} value={data.style ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ style: v }) }} placeholder="e.g. pop, rock, jazz..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
+        <TagTextarea rows={2} value={data.style ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ style: v }) }} placeholder="e.g. pop, rock, jazz..." maxLength={500} tagMode="suno" customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={2} value={data.negativeStyle ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }} placeholder="Styles to avoid..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
+        <TagTextarea rows={2} value={data.negativeStyle ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }} placeholder="Styles to avoid..." maxLength={500} tagMode="suno" customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.vocalGender ?? "auto"} onValueChange={(v) => onUpdate({ vocalGender: v === "auto" ? "" : v })}>
@@ -1127,6 +1142,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
               onChange={(v) => updateLine(i, { text: v })}
               placeholder={`Line ${i + 1}... (type [ or / for audio tags)`}
               className="text-sm"
+              tagMode="audio"
               nodeRefs={nodeRefs}
               displayMode={variableDisplayMode}
               refMap={refMap}
@@ -1279,6 +1295,7 @@ export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMap
           value={data.voiceDescription || ""}
           onChange={(v) => onUpdate({ voiceDescription: v })}
           placeholder="Describe the voice you want (e.g. 'A warm, deep male voice with a British accent')"
+          tagMode="none"
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
@@ -1290,6 +1307,7 @@ export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMap
           value={data.text || ""}
           onChange={(v) => onUpdate({ text: v })}
           placeholder="Text to preview the generated voice with..."
+          tagMode="none"
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
@@ -1327,6 +1345,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
           onChange={(v) => { if (v.length <= 1000) onUpdate({ text: v }) }}
           placeholder="Text to preview the generated voice with (min 100 characters, type [ for audio tags)..."
           maxLength={1000}
+          tagMode="audio"
           provider={ttsProvider}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
@@ -1346,6 +1365,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
           </SelectContent>
         </Select>
       </div>
+      <ProviderAudioTagWarning provider={ttsProvider} fieldValues={[data.text]} />
       <div>
         <Label>Loudness: {data.loudness?.toFixed(1) ?? "0.0"}</Label>
         <Input
@@ -1426,6 +1446,7 @@ export function ForcedAlignmentConfig({ data, onUpdate, sources, fieldMappings, 
           value={data.transcript || ""}
           onChange={(v) => onUpdate({ transcript: v })}
           placeholder="Enter the transcript to align with the audio..."
+          tagMode="none"
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
