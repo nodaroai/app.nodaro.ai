@@ -24,7 +24,6 @@
   position: absolute;
   inset: 0;
   transform-origin: 50% 55%;
-  transform-style: preserve-3d;
   backface-visibility: hidden;
 }
 /*
@@ -39,37 +38,13 @@
     radial-gradient(ellipse 120% 60% at 50% 50%, rgba(255, 190, 110, 0.18), transparent 60%),
     linear-gradient(to bottom, #0b3a5e 0%, #1f2c42 55%, #0b1220 100%);
 }
-/*
- * Ground = a real 3D plane tilted on the X-axis so it recedes toward the
- * horizon. Repeating lines perpendicular to the view direction become
- * naturally spaced by perspective — classic vanishing-point cue. Tilt
- * origin is the top edge so the horizon stays pinned at y=60%.
- */
 .cm-ground {
   position: absolute;
   left: -60%;
   right: -60%;
   top: 60%;
-  bottom: -80%;
-  background:
-    /* Cross lines (horizontal in local space → look equally spaced but
-     * appear to bunch toward the horizon after perspective foreshortening). */
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0 calc(8% - 1px),
-      rgba(148, 163, 184, 0.22) calc(8% - 1px) 8%
-    ),
-    /* Rail lines (vertical in local space → after perspective they converge
-     * to the vanishing point at the horizon). Together with the cross lines
-     * this forms a true 3D grid on the floor. */
-    repeating-linear-gradient(
-      to right,
-      transparent 0 calc(8% - 1px),
-      rgba(148, 163, 184, 0.18) calc(8% - 1px) 8%
-    ),
-    linear-gradient(to bottom, #2b3b55 0%, #0c1422 60%);
-  transform: rotateX(70deg);
-  transform-origin: 50% 0;
+  bottom: -60%;
+  background: linear-gradient(to bottom, #233247 0%, #0c1422 100%);
 }
 .cm-horizon {
   position: absolute;
