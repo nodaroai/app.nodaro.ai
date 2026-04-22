@@ -299,10 +299,19 @@ export function PromptHelperDialog({
     setCustomTexts((prev) => ({ ...prev, [category]: text }))
   }
 
+  const canGenerate =
+    !loading &&
+    questions.length > 0 &&
+    questions.some((q) =>
+      q.multi
+        ? (multiSelections[q.category]?.length ?? 0) > 0
+        : !!selections[q.category] && (selections[q.category] !== CUSTOM_VALUE || !!customTexts[q.category])
+    )
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden">
+        <DialogHeader className="shrink-0 px-6 pt-6 pb-3 border-b">
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[#ff0073]" />
             AI Prompt Wizard
@@ -311,24 +320,22 @@ export function PromptHelperDialog({
                 {phase === "review" ? "Step 2 of 3" : "Step 3 of 3"}
               </span>
             )}
-            <button
-              type="button"
-              onClick={() => setShowPreference((p) => !p)}
-              className={`ml-auto p-1 rounded-md transition-colors ${showPreference || userPreference ? "text-[#ff0073] bg-[#ff0073]/10" : "text-muted-foreground hover:text-foreground"}`}
-              title="Wizard preferences"
-            >
-              <Settings className="w-3.5 h-3.5" />
-            </button>
           </DialogTitle>
-        </DialogHeader>
-
-        <div className="flex flex-col gap-3">
-          {/* Context badges */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setShowPreference((p) => !p)}
+            className={`absolute top-4 right-10 p-1 rounded-md transition-colors ${showPreference || userPreference ? "text-[#ff0073] bg-[#ff0073]/10" : "text-muted-foreground hover:text-foreground"}`}
+            title="Wizard preferences"
+          >
+            <Settings className="w-3.5 h-3.5" />
+          </button>
+          <div className="flex items-center gap-1.5 flex-wrap mt-1">
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{effectiveNodeType}</span>
             {provider && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{provider}</span>}
           </div>
+        </DialogHeader>
 
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 flex flex-col gap-3">
           {/* User preference (collapsible) */}
           {showPreference && (
             <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-[#ff0073]/20 bg-[#ff0073]/5">
@@ -409,22 +416,6 @@ export function PromptHelperDialog({
               </div>
 
               <LlmModelSelect feature="prompt-helper" value={llmModel} onChange={handleModelChange} />
-
-              <Button
-                onClick={handleAnalyze}
-                disabled={loading}
-                className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
-              >
-                {loading ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Analyzing...</>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                    Build Prompt
-                    <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditCost} CR</span>
-                  </>
-                )}
-              </Button>
             </>
           )}
 
@@ -521,37 +512,6 @@ export function PromptHelperDialog({
                   )
                 })}
               </div>
-
-              {/* Actions */}
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setPhase("input")}
-                  className="flex-shrink-0"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5 mr-1" />
-                  Re-analyze
-                  <span className="ml-1 text-[10px] opacity-60">{creditCost} CR</span>
-                </Button>
-                <Button
-                  onClick={handleGenerate}
-                  disabled={loading || questions.every((q) =>
-                    q.multi
-                      ? !(multiSelections[q.category]?.length)
-                      : !selections[q.category] || (selections[q.category] === CUSTOM_VALUE && !customTexts[q.category])
-                  )}
-                  className="flex-1 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
-                >
-                  {loading ? (
-                    <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Generating...</>
-                  ) : (
-                    <>
-                      Generate Prompt
-                      <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditCost} CR</span>
-                    </>
-                  )}
-                </Button>
-              </div>
             </>
           )}
 
@@ -587,30 +547,79 @@ export function PromptHelperDialog({
                   </Button>
                 </div>
               )}
-
-              {/* Actions */}
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setPhase("review")}
-                  className="flex-shrink-0"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5 mr-1" />
-                  Back
-                </Button>
-                <Button
-                  onClick={() => handleAccept(false)}
-                  className="flex-1 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
-                >
-                  Use This Prompt
-                </Button>
-              </div>
             </>
           )}
 
           {/* Error display (all phases) */}
           {error && (
             <p className="text-xs text-destructive">{error}</p>
+          )}
+        </div>
+
+        <div className="shrink-0 px-6 py-3 border-t bg-background">
+          {phase === "input" && (
+            <Button
+              onClick={handleAnalyze}
+              disabled={loading}
+              className="w-full bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+            >
+              {loading ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Analyzing...</>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                  Build Prompt
+                  <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditCost} CR</span>
+                </>
+              )}
+            </Button>
+          )}
+
+          {phase === "review" && (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setPhase("input")}
+                className="flex-shrink-0"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 mr-1" />
+                Re-analyze
+                <span className="ml-1 text-[10px] opacity-60">{creditCost} CR</span>
+              </Button>
+              <Button
+                onClick={handleGenerate}
+                disabled={!canGenerate}
+                className="flex-1 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+              >
+                {loading ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Generating...</>
+                ) : (
+                  <>
+                    Generate Prompt
+                    <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditCost} CR</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+
+          {phase === "result" && (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setPhase("review")}
+                className="flex-shrink-0"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 mr-1" />
+                Back
+              </Button>
+              <Button
+                onClick={() => handleAccept(false)}
+                className="flex-1 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+              >
+                Use This Prompt
+              </Button>
+            </div>
           )}
         </div>
       </DialogContent>
