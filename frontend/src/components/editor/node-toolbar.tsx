@@ -62,6 +62,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "aspect-ratio", label: "Aspect Ratio", icon: <RatioIcon className="h-4 w-4" />, category: "Parameter" },
   { type: "motion", label: "Motion", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Parameter" },
   { type: "camera-motion", label: "Camera Motion", icon: <Video className="h-4 w-4" />, category: "Parameter" },
+  { type: "framing", label: "Framing", icon: <Frame className="h-4 w-4" />, category: "Parameter" },
   // AI — Script & Text
   { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI", group: "Script & Text" },
   { type: "llm-chat", label: "LLM Chat", icon: <MessageSquare className="h-4 w-4" />, category: "AI", group: "Script & Text" },

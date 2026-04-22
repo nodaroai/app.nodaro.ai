@@ -331,8 +331,9 @@ backend/src/
 - [x] AVIF/HEIC/HEIF image upload support (accepted end-to-end; HEIC/HEIF transcoded to JPEG at upload time via `sharp()` so thumbnails render in all browsers and providers skip libheif re-decode per call; AVIF stored natively)
 - [x] Camera motion picker expanded to 43 film-industry motions with animated CSS previews (Basic, Pan, Tilt, Zoom, Dolly, Truck, Pedestal, Roll, Orbit & Arc, Crane & Boom, Tracking, Angles & Rigs); shared catalog in `packages/shared/src/camera-motions.ts` drives both picker UI + descriptive prompt-hint injection on frontend DAG and backend orchestrator; used by standalone Camera Motion node and Image-to-Video camera hint section
 - [x] Camera motion picker v2: catalog grows to 50 motions (adds Drone Follow, Dolly Track, Helicopter, Fly Over, Flythrough, Reveal, Rack Focus); subject rendered as true CSS 3D prism (4 face colors each for head+body) so orbit shows back→side→front; floor triangle marker for orbit sells the spatial anchor; parallax-revealing foreground silhouette distinguishes dolly-family from zoom-family; Bird's Eye / Aerial / Follow / Helicopter / Fly Over / Flythrough use custom scene overrides instead of the standard rig; node renders selected motion preview + description below the label; one-shot timing (0–10 hold, 10–70 motion, 70–92 hold, 92–100 fast return) for directional motions
+- [x] Framing node — independent dimension from Camera Motion (motion = HOW camera moves, framing = WHAT camera sees + from which angle). 24-entry catalog in `packages/shared/src/framing.ts` across 4 categories: Shot Size (extreme wide → insert), Angle (eye level / high / low / overhead / worm's), Coverage (single / two-shot / three-shot / OTS / reverse / POV), Composition (rule of thirds / centered / headroom / negative space / leading lines). Static CSS previews (no animations — framing is compositional, not kinetic). `FramingPicker` reuses the `CameraMotionPicker` grid/search pattern. `framingEnabled` + `framing` fields added to Image-to-Video; frontend + backend prompt-hint injection matches the camera-motion pattern.
 
 ---
 
 *Last updated: 2026-04-22*
-*Version: 1.84.0*
+*Version: 1.85.0*

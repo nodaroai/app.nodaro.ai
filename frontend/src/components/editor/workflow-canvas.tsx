@@ -122,6 +122,7 @@ const FIELD_LABELS: Record<string, string> = {
   targetLength: "Duration",
   motion: "Motion",
   cameraMotion: "Camera",
+  framing: "Framing",
   sceneCount: "Scene Count",
   resolution: "Resolution",
 }
@@ -328,6 +329,7 @@ function getMiniMapNodeColor(node: { type?: string }): string {
       nodeType === 'aspect-ratio' ||
       nodeType === 'motion' ||
       nodeType === 'camera-motion' ||
+      nodeType === 'framing' ||
       nodeType === 'voice' ||
       nodeType === 'text') return '#818CF8'
   // Processing nodes - steel grey

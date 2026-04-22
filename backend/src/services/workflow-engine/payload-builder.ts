@@ -12,6 +12,7 @@ import { resolveTemplate, applyTemplate } from "../../../../packages/shared/src/
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 import { getCameraMotionPromptHint } from "../../../../packages/shared/src/camera-motions.js"
+import { getFramingPromptHint } from "../../../../packages/shared/src/framing.js"
 import type { CharacterDef, SceneData } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
 import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-constants.js"
@@ -802,6 +803,10 @@ export function buildPayload(
             if (data.cameraMotionEnabled && data.cameraMotion) {
               const cameraHint = getCameraMotionPromptHint(String(data.cameraMotion))
               if (cameraHint) hints.push(cameraHint)
+            }
+            if (data.framingEnabled && data.framing) {
+              const framingHint = getFramingPromptHint(String(data.framing))
+              if (framingHint) hints.push(framingHint)
             }
             if (hints.length > 0 && p) p = `${p}. ${hints.join(", ")}`
             else if (hints.length > 0) p = hints.join(", ")

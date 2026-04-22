@@ -47,7 +47,6 @@ export const CameraMotionPreview = memo(function CameraMotionPreview({
           <div className="cm-depth-near cm-depth-near-right" />
           <div className="cm-foreground cm-foreground-left" />
           <div className="cm-foreground cm-foreground-right" />
-          <div className="cm-orbit-marker" aria-hidden="true" />
           <div className="cm-subject-group">
             <div className="cm-subject-shadow" />
             <div className="cm-subject">
@@ -63,6 +62,7 @@ export const CameraMotionPreview = memo(function CameraMotionPreview({
                 <div className="cm-face cm-body-left" />
                 <div className="cm-face cm-body-right" />
               </div>
+              <div className="cm-orbit-marker" aria-hidden="true" />
             </div>
           </div>
           {motionId === "pov" && <div className="cm-overlay-pov" />}

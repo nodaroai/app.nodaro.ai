@@ -206,6 +206,7 @@ import {
 } from "@nodaro-shared/filter-condition";
 import { sortListItems } from "@nodaro-shared/list-sort";
 import { getCameraMotionPromptHint } from "@nodaro-shared/camera-motions";
+import { getFramingPromptHint } from "@nodaro-shared/framing";
 import { buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro-shared/condition-variables";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 
@@ -946,12 +947,16 @@ export function executeNode(
     const referenceImageUrls = inputs.referenceImageUrls as string[] | undefined
 
     let prompt = (inputs.prompt ?? resolveTextRefs(i2vData.prompt?.trim() || undefined, refMap)) as string | undefined;
-    // Inject motion/camera hints into prompt when enabled
+    // Inject motion/camera/framing hints into prompt when enabled
     const motionHints: string[] = [];
     if (i2vData.motionEnabled && i2vData.motion) motionHints.push(`${i2vData.motion} motion`);
     if (i2vData.cameraMotionEnabled && i2vData.cameraMotion) {
       const cameraHint = getCameraMotionPromptHint(i2vData.cameraMotion);
       if (cameraHint) motionHints.push(cameraHint);
+    }
+    if (i2vData.framingEnabled && i2vData.framing) {
+      const framingHint = getFramingPromptHint(i2vData.framing);
+      if (framingHint) motionHints.push(framingHint);
     }
     if (motionHints.length > 0 && prompt) prompt = `${prompt}. ${motionHints.join(", ")}`;
     else if (motionHints.length > 0) prompt = motionHints.join(", ");

@@ -38,6 +38,7 @@ import { TagTextarea } from "./tag-textarea"
 import { Kling3StudioConfig } from "./kling3-studio-config"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { CameraMotionPicker } from "./camera-motion-picker"
+import { FramingPicker } from "./framing-picker"
 import { ConnectedMediaList, getSourceThumbnail } from "./connected-media-list"
 import type { ConfigProps } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
@@ -289,6 +290,26 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             <CameraMotionPicker
               value={data.cameraMotion || "static"}
               onValueChange={(v) => onUpdate({ cameraMotion: v })}
+            />
+          </MappableField>
+        )}
+      </div>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="framingEnabled"
+            checked={!!data.framingEnabled}
+            onChange={(e) => onUpdate({ framingEnabled: e.target.checked, ...(!e.target.checked ? { framing: undefined } : {}) })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="framingEnabled" className="text-xs">Framing hint (injected into prompt)</label>
+        </div>
+        {data.framingEnabled && (
+          <MappableField field="framing" label="Framing" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <FramingPicker
+              value={data.framing || "medium-shot"}
+              onValueChange={(v) => onUpdate({ framing: v })}
             />
           </MappableField>
         )}

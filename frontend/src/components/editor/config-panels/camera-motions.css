@@ -124,19 +124,30 @@
  * side, ends small and tucked behind the subject (reads as "behind on the
  * ground"). That's the spatial cue the user asked for.
  */
+/*
+ * Floor triangle — lives INSIDE the subject's 3D transform context. Sits on
+ * the ground behind the subject (translateZ(-3.5cqw) in subject's local
+ * frame). When the subject's Y-rotation animates during orbit, the triangle
+ * rotates with it — so from camera POV:
+ *   - orbit start (subject rotated 180°, back visible): triangle appears in
+ *     FRONT of subject (its local -Z is now +Z in world space)
+ *   - orbit end (subject rotated 360° / 0°, front visible): triangle is
+ *     BEHIND the subject (its local -Z matches world -Z).
+ * That matches the user's spec: triangle is a static world point, only the
+ * camera moves.
+ */
 .cm-orbit-marker {
   display: none;
   position: absolute;
   left: 50%;
-  bottom: 28%;
-  width: 5cqw;
-  height: 3.5cqw;
+  bottom: -0.5cqw;
+  width: 7cqw;
+  height: 4cqw;
   background: linear-gradient(to bottom, #fbbf24 0%, #d97706 100%);
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
   pointer-events: none;
-  z-index: 2;
-  transform: translate(-50%, 0);
+  transform: translateX(-50%) translateZ(-2cqw);
 }
 .cm-depth-ground-dash {
   position: absolute;

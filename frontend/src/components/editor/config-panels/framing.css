@@ -1,0 +1,322 @@
+/* ============================================================================
+   Framing preview styles.
+   Each preview shows a viewport frame with a subject figure sized and
+   positioned to communicate the framing. No animations — framing is a
+   compositional choice, not a motion.
+   ========================================================================== */
+
+.fr-root {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #050a14;
+  container-type: inline-size;
+}
+.fr-viewport {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 120% 60% at 50% 50%, rgba(255, 190, 110, 0.18), transparent 60%),
+    linear-gradient(to bottom, #0b3a5e 0%, #1f2c42 55%, #0b1220 100%);
+}
+.fr-ground {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 60%;
+  bottom: 0;
+  background: linear-gradient(to bottom, #233247 0%, #0c1422 100%);
+}
+.fr-horizon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 60%;
+  height: 1px;
+  background: rgba(148, 163, 184, 0.3);
+}
+
+/* Subject — a simple silhouette. Size/position varies per framing. */
+.fr-subject {
+  position: absolute;
+  left: 50%;
+  bottom: 40%;
+  width: 12cqw;
+  height: 18cqw;
+  transform: translate(-50%, 0);
+}
+.fr-head {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 44%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #ff8fc2 0%, #ff2a89 50%, #b50058 100%);
+  box-shadow: 0 0 10px rgba(255, 0, 115, 0.45), inset -2px -3px 6px rgba(0, 0, 0, 0.2);
+  transform: translateX(-50%);
+}
+.fr-body {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 100%;
+  height: 58%;
+  background: linear-gradient(to right, #780040 0%, #c00064 22%, #ff2a89 50%, #c00064 78%, #780040 100%);
+  border-radius: 14% 14% 8% 8% / 28% 28% 8% 8%;
+  box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.25);
+  transform: translateX(-50%);
+}
+.fr-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -2cqw;
+  width: 80%;
+  height: 3cqw;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55) 0%, transparent 70%);
+  filter: blur(1px);
+  transform: translateX(-50%);
+}
+
+/* Optional second / third subject for coverage framings */
+.fr-subject-2,
+.fr-subject-3 {
+  position: absolute;
+  bottom: 40%;
+  width: 12cqw;
+  height: 18cqw;
+}
+.fr-subject-2 .fr-head { background: radial-gradient(circle at 32% 28%, #7dd3fc 0%, #0ea5e9 50%, #0c4a6e 100%); }
+.fr-subject-2 .fr-body { background: linear-gradient(to right, #0c4a6e 0%, #0369a1 50%, #0c4a6e 100%); }
+.fr-subject-3 .fr-head { background: radial-gradient(circle at 32% 28%, #86efac 0%, #22c55e 50%, #166534 100%); }
+.fr-subject-3 .fr-body { background: linear-gradient(to right, #166534 0%, #15803d 50%, #166534 100%); }
+
+/* Rule-of-thirds / leading-lines overlay */
+.fr-thirds {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent 33.3%, rgba(255, 255, 255, 0.2) 33.3%, rgba(255, 255, 255, 0.2) 33.5%, transparent 33.5%),
+    linear-gradient(90deg, transparent 66.6%, rgba(255, 255, 255, 0.2) 66.6%, rgba(255, 255, 255, 0.2) 66.8%, transparent 66.8%),
+    linear-gradient(0deg,  transparent 33.3%, rgba(255, 255, 255, 0.2) 33.3%, rgba(255, 255, 255, 0.2) 33.5%, transparent 33.5%),
+    linear-gradient(0deg,  transparent 66.6%, rgba(255, 255, 255, 0.2) 66.6%, rgba(255, 255, 255, 0.2) 66.8%, transparent 66.8%);
+}
+.fr-leading-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to top right, transparent 49.5%, rgba(255, 255, 255, 0.2) 49.8%, rgba(255, 255, 255, 0.2) 50.2%, transparent 50.5%),
+    linear-gradient(to top left,  transparent 49.5%, rgba(255, 255, 255, 0.2) 49.8%, rgba(255, 255, 255, 0.2) 50.2%, transparent 50.5%);
+}
+
+/* =================== Shot size =================== */
+.fr-extreme-wide-shot .fr-subject { width: 3cqw; height: 4.5cqw; bottom: 35%; }
+.fr-wide-shot        .fr-subject { width: 7cqw; height: 12cqw; bottom: 38%; }
+.fr-medium-wide-shot .fr-subject { width: 10cqw; height: 17cqw; bottom: 30%; }
+.fr-medium-shot      .fr-subject { width: 14cqw; height: 22cqw; bottom: 18%; }
+.fr-medium-close-up  .fr-subject { width: 20cqw; height: 30cqw; bottom: 8%; }
+.fr-close-up         .fr-subject { width: 34cqw; height: 48cqw; bottom: -6%; }
+.fr-extreme-close-up .fr-subject { width: 55cqw; height: 75cqw; bottom: -20%; }
+.fr-insert           .fr-subject { display: none; }
+.fr-insert .fr-horizon,
+.fr-insert .fr-ground { display: none; }
+.fr-insert .fr-viewport {
+  background: radial-gradient(circle at 50% 50%, #78350f 0%, #451a03 100%);
+}
+.fr-insert::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 35cqw;
+  height: 18cqw;
+  background: linear-gradient(to bottom, #d97706 0%, #78350f 100%);
+  border-radius: 4cqw;
+  transform: translate(-50%, -50%);
+  box-shadow: inset 0 -2cqw 4cqw rgba(0, 0, 0, 0.3);
+}
+
+/* =================== Angle =================== */
+/* Eye level: default — no override */
+
+.fr-high-angle .fr-subject {
+  transform: translate(-50%, 0) perspective(200px) rotateX(20deg) scaleY(0.85);
+  transform-origin: 50% 100%;
+}
+.fr-high-angle .fr-horizon,
+.fr-high-angle .fr-ground { top: 50%; }
+
+.fr-low-angle .fr-subject {
+  transform: translate(-50%, 0) perspective(200px) rotateX(-18deg) scaleY(1.1);
+  transform-origin: 50% 100%;
+  bottom: 20%;
+}
+.fr-low-angle .fr-horizon,
+.fr-low-angle .fr-ground { top: 75%; }
+
+.fr-overhead .fr-viewport {
+  background:
+    repeating-linear-gradient(0deg,  rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 10%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 10%),
+    linear-gradient(135deg, #233247 0%, #1a2538 100%);
+}
+.fr-overhead .fr-horizon,
+.fr-overhead .fr-ground { display: none; }
+.fr-overhead .fr-subject { display: none; }
+.fr-overhead::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: 14cqw;
+  height: 14cqw;
+  background: radial-gradient(circle at 38% 32%, #ff8fc2 0%, #ff2a89 55%, #780040 100%);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 12px rgba(255, 0, 115, 0.4);
+}
+.fr-overhead::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 60%;
+  width: 20cqw;
+  height: 13cqw;
+  background: radial-gradient(ellipse at 50% 35%, #c00064 0%, #780040 60%, #3e001d 100%);
+  border-radius: 45% 45% 50% 50%;
+  transform: translate(-50%, -50%);
+  z-index: -1;
+}
+
+.fr-worms-eye-angle .fr-viewport {
+  background: radial-gradient(ellipse 90% 140% at 50% 120%, #233247 0%, #0b1220 70%);
+}
+.fr-worms-eye-angle .fr-horizon,
+.fr-worms-eye-angle .fr-ground { top: 85%; }
+.fr-worms-eye-angle .fr-subject {
+  width: 18cqw;
+  height: 45cqw;
+  bottom: 15%;
+  transform: translate(-50%, 0) perspective(250px) rotateX(-22deg);
+  transform-origin: 50% 100%;
+}
+
+/* =================== Coverage =================== */
+/* Single: default */
+
+.fr-two-shot .fr-subject { left: 32%; }
+.fr-two-shot .fr-subject-2 {
+  left: 68%;
+  transform: translate(-50%, 0);
+  bottom: 40%;
+  width: 12cqw;
+  height: 18cqw;
+}
+
+.fr-three-shot .fr-subject { left: 22%; width: 9cqw; height: 14cqw; }
+.fr-three-shot .fr-subject-2 {
+  left: 50%;
+  transform: translate(-50%, 0);
+  bottom: 40%;
+  width: 9cqw;
+  height: 14cqw;
+}
+.fr-three-shot .fr-subject-3 {
+  left: 78%;
+  transform: translate(-50%, 0);
+  bottom: 40%;
+  width: 9cqw;
+  height: 14cqw;
+}
+
+.fr-over-the-shoulder-framing .fr-subject { left: 55%; bottom: 25%; width: 16cqw; height: 24cqw; }
+.fr-over-the-shoulder-framing .fr-subject-2 {
+  /* foreground shoulder silhouette */
+  left: 10%;
+  bottom: -10%;
+  width: 28cqw;
+  height: 52cqw;
+}
+.fr-over-the-shoulder-framing .fr-subject-2 .fr-head {
+  background: #020617;
+  box-shadow: none;
+  filter: blur(1px);
+}
+.fr-over-the-shoulder-framing .fr-subject-2 .fr-body {
+  background: #020617;
+  filter: blur(1px);
+}
+
+.fr-reverse-shot .fr-subject { left: 45%; bottom: 25%; width: 16cqw; height: 24cqw; }
+.fr-reverse-shot .fr-subject-2 {
+  /* foreground shoulder on the RIGHT (reverse of OTS) */
+  left: 90%;
+  bottom: -10%;
+  width: 28cqw;
+  height: 52cqw;
+}
+.fr-reverse-shot .fr-subject-2 .fr-head {
+  background: #020617;
+  box-shadow: none;
+  filter: blur(1px);
+}
+.fr-reverse-shot .fr-subject-2 .fr-body {
+  background: #020617;
+  filter: blur(1px);
+}
+
+.fr-pov-framing .fr-subject { display: none; }
+.fr-pov-framing::after {
+  /* hands / weapon foreground */
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28%;
+  background: radial-gradient(ellipse 50% 100% at 50% 100%, #020617 45%, transparent 70%);
+  pointer-events: none;
+}
+.fr-pov-framing::before {
+  content: "";
+  position: absolute;
+  bottom: 15%;
+  left: 50%;
+  width: 18cqw;
+  height: 10cqw;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  transform: translateX(-50%);
+  box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.2);
+}
+
+/* =================== Composition =================== */
+
+.fr-rule-of-thirds { }
+.fr-rule-of-thirds .fr-thirds { display: block; }
+.fr-rule-of-thirds .fr-subject { left: 33%; }
+
+.fr-centered .fr-subject { left: 50%; }
+
+.fr-headroom-tight .fr-subject { bottom: 10%; height: 30cqw; width: 20cqw; }
+.fr-headroom-tight .fr-subject .fr-head { width: 52%; }
+
+.fr-negative-space .fr-subject { left: 80%; }
+
+.fr-leading-lines .fr-subject { left: 50%; }
+.fr-leading-lines .fr-leading-lines-overlay { display: block; }
+
+/* Default: hide overlays */
+.fr-thirds,
+.fr-leading-lines-overlay { display: none; }
+.fr-leading-lines .fr-leading-lines-overlay {
+  display: block;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to top right, transparent 49.5%, rgba(255, 255, 255, 0.2) 49.8%, rgba(255, 255, 255, 0.2) 50.2%, transparent 50.5%),
+    linear-gradient(to top left,  transparent 49.5%, rgba(255, 255, 255, 0.2) 49.8%, rgba(255, 255, 255, 0.2) 50.2%, transparent 50.5%);
+}
