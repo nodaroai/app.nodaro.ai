@@ -85,7 +85,7 @@ export const CameraMotionPicker = memo(function CameraMotionPicker({
                       : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
                   )}
                 >
-                  <CameraMotionPreview motionId={motion.id} />
+                  <CameraMotionPreview motionId={motion.id} className="w-full aspect-square" />
                   <span
                     className={cn(
                       "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center truncate",

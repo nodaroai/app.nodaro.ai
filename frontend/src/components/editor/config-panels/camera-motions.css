@@ -13,6 +13,7 @@
   background: #050a14;
   isolation: isolate;
   perspective: 600px;
+  container-type: inline-size;
 }
 .cm-viewport {
   position: absolute;
@@ -23,28 +24,32 @@
   position: absolute;
   inset: 0;
   transform-origin: 50% 55%;
-  will-change: transform, filter;
   backface-visibility: hidden;
 }
+/*
+ * Background layers are extended well past the scene bounds so that translate
+ * / rotate / scale animations never reveal the underlying black frame at the
+ * edges. The viewport (.cm-viewport) clips everything back to the node box.
+ */
 .cm-sky {
   position: absolute;
-  inset: 0;
+  inset: -60%;
   background:
-    radial-gradient(ellipse 120% 60% at 50% 10%, rgba(255, 190, 110, 0.18), transparent 60%),
+    radial-gradient(ellipse 120% 60% at 50% 50%, rgba(255, 190, 110, 0.18), transparent 60%),
     linear-gradient(to bottom, #0b3a5e 0%, #1f2c42 55%, #0b1220 100%);
 }
 .cm-ground {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: -60%;
+  right: -60%;
   top: 60%;
-  bottom: 0;
+  bottom: -60%;
   background: linear-gradient(to bottom, #233247 0%, #0c1422 100%);
 }
 .cm-horizon {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: -60%;
+  right: -60%;
   top: 60%;
   height: 1px;
   background: rgba(148, 163, 184, 0.35);
@@ -52,13 +57,12 @@
 }
 .cm-depth-far {
   position: absolute;
-  left: -10%;
-  right: -10%;
+  left: -60%;
+  right: -60%;
   top: 51%;
   height: 12%;
   color: #0a1326;
   pointer-events: none;
-  will-change: transform;
 }
 .cm-depth-far svg {
   width: 100%;
@@ -70,13 +74,70 @@
   bottom: 36%;
   width: 3%;
   height: 7%;
-  background: #020617;
+  background: rgba(148, 163, 184, 0.5);
+  box-shadow: 0 0 4px rgba(148, 163, 184, 0.2);
   border-radius: 1px;
-  will-change: transform;
   z-index: 2;
 }
 .cm-depth-near-left { left: 18%; }
 .cm-depth-near-right { right: 20%; bottom: 34%; height: 5%; }
+
+/*
+ * A closer foreground silhouette ("tree"). Its job is to read as an object
+ * that's much nearer to the camera than the subject, so parallax motions
+ * (dolly, push, pull, dolly zoom) can give it an exaggerated scale / slide
+ * while a pure lens zoom leaves it perfectly in lockstep with everything
+ * else. This is the main visual cue that distinguishes "lens" motions from
+ * "camera body" motions.
+ */
+.cm-foreground {
+  position: absolute;
+  bottom: 32%;
+  width: 3.5%;
+  height: 26%;
+  background:
+    radial-gradient(ellipse at 50% 15%, #18243d 0%, #060b19 80%),
+    linear-gradient(to bottom, #0a1328 0%, #020617 100%);
+  border-radius: 40% 40% 2px 2px / 50% 50% 2px 2px;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 4;
+}
+.cm-foreground::after {
+  content: "";
+  position: absolute;
+  left: 40%;
+  bottom: 0;
+  width: 20%;
+  height: 60%;
+  background: linear-gradient(to bottom, #060b19, #020617);
+  transform: translateX(-50%);
+}
+.cm-foreground-left  { left: 4%; }
+.cm-foreground-right { right: 6%; }
+
+/*
+ * Floor marker (flat triangle painted on the ground next to the subject).
+ * Hidden by default; shown only for orbit / arc. As the camera orbits, the
+ * triangle sweeps on an arc around the subject's feet in the frame: starts
+ * big and between camera and subject (reads as "in front"), passes to one
+ * side, ends small and tucked behind the subject (reads as "behind on the
+ * ground"). That's the spatial cue the user asked for.
+ */
+.cm-orbit-marker {
+  display: none;
+  position: absolute;
+  left: 50%;
+  bottom: 28%;
+  width: 5cqw;
+  height: 3.5cqw;
+  background: linear-gradient(to bottom, #fbbf24 0%, #d97706 100%);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+  pointer-events: none;
+  z-index: 2;
+  transform: translate(-50%, 0);
+}
 .cm-depth-ground-dash {
   position: absolute;
   top: 60%;
@@ -90,17 +151,37 @@
   );
   transform: translateY(18%);
   opacity: 0.5;
-  will-change: transform;
 }
+/*
+ * Subject = a true 3D figure composed of two rectangular prisms (head, body).
+ * Each prism has 4 faces (front / back / left / right) with distinct colors
+ * so when the figure rotates on Y (for orbit / arc) you clearly see the back
+ * (dark), then a side profile, then the front (bright), then the other side.
+ *
+ * Sizes are in container-query `cqw` units so depth scales with preview.
+ */
 .cm-subject-group {
   position: absolute;
   left: 50%;
-  top: 53%;
+  top: 55%;
   transform: translate(-50%, -50%);
-  width: 16%;
-  height: 28%;
+  width: 18cqw;
+  height: 22cqw;
   z-index: 3;
-  will-change: transform;
+  perspective: 120cqw;
+  perspective-origin: 50% 40%;
+  transform-style: preserve-3d;
+}
+.cm-subject-shadow {
+  position: absolute;
+  bottom: -1.5cqw;
+  left: 10%;
+  right: 10%;
+  height: 3cqw;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55) 0%, transparent 70%);
+  filter: blur(1px);
+  pointer-events: none;
+  z-index: 0;
 }
 .cm-subject {
   position: absolute;
@@ -109,23 +190,83 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  transform-origin: 50% 100%;
-  will-change: transform;
+  gap: 0.6cqw;
+  transform-style: preserve-3d;
+  transform-origin: 50% 70%;
 }
-.cm-subject-head {
-  width: 40%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: #ff0073;
-  box-shadow: 0 0 8px rgba(255, 0, 115, 0.4);
-}
+
+/* Head and body are both 4-face prisms. */
+.cm-subject-head,
 .cm-subject-body {
-  margin-top: 6%;
-  width: 60%;
-  height: 58%;
-  background: #ff0073;
-  border-radius: 12% 12% 8% 8% / 30% 30% 8% 8%;
+  position: relative;
+  transform-style: preserve-3d;
 }
+.cm-subject-head { width: 7cqw; height: 7cqw; }
+.cm-subject-body { width: 10cqw; height: 13cqw; }
+
+/* Face colors — front is bright, back is dark maroon, sides are mid rose. */
+.cm-face {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+}
+.cm-subject-head .cm-face {
+  border-radius: 50%;
+}
+.cm-subject-body .cm-face {
+  border-radius: 14% 14% 10% 10% / 14% 14% 8% 8%;
+}
+
+/* --- HEAD faces --- */
+.cm-head-front {
+  background: radial-gradient(circle at 32% 28%, #ff8fc2 0%, #ff2a89 50%, #b50058 100%);
+  box-shadow: inset -2px -3px 6px rgba(0, 0, 0, 0.2);
+  transform: translateZ(1.75cqw);
+}
+.cm-head-back {
+  background: radial-gradient(circle at 68% 28%, #7a003a 0%, #4e0024 60%, #2a0013 100%);
+  transform: rotateY(180deg) translateZ(1.75cqw);
+}
+.cm-head-left,
+.cm-head-right {
+  top: 0;
+  left: 50%;
+  width: 3.5cqw;
+  height: 100%;
+  margin-left: -1.75cqw;
+  border-radius: 50% / 50%;
+  background: radial-gradient(ellipse at 50% 30%, #c01370 0%, #8a0050 60%, #4a0028 100%);
+}
+.cm-head-left  { transform: rotateY(-90deg) translateZ(3.5cqw); }
+.cm-head-right { transform: rotateY(90deg)  translateZ(3.5cqw); }
+
+/* --- BODY faces --- */
+.cm-body-front {
+  background:
+    linear-gradient(to right, #c00064 0%, #ff2a89 50%, #c00064 100%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.15), transparent 40%);
+  box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.25);
+  transform: translateZ(2cqw);
+}
+.cm-body-back {
+  background: linear-gradient(to right, #3e001d 0%, #6f0035 50%, #3e001d 100%);
+  transform: rotateY(180deg) translateZ(2cqw);
+}
+.cm-body-left,
+.cm-body-right {
+  top: 0;
+  left: 50%;
+  width: 4cqw;
+  height: 100%;
+  margin-left: -2cqw;
+  border-radius: 30% 30% 14% 14% / 10% 10% 6% 6%;
+  background: linear-gradient(to bottom, #95004f 0%, #6f0035 100%);
+}
+.cm-body-left  { transform: rotateY(-90deg) translateZ(5cqw); }
+.cm-body-right { transform: rotateY(90deg)  translateZ(5cqw); }
 
 /* Overlay decorations for POV / OTS / Snorricam */
 .cm-overlay-pov {
@@ -162,37 +303,57 @@
   z-index: 5;
 }
 
-/* Birds-eye / worms-eye perspective tweaks on the whole scene */
-.cm-motion-birds-eye .cm-scene {
-  transform: perspective(500px) rotateX(70deg) scale(1.05);
-}
-.cm-motion-birds-eye .cm-subject-group {
-  top: 52%;
-  width: 18%;
-  height: 18%;
-}
-.cm-motion-birds-eye .cm-subject-head {
-  width: 55%;
-}
-.cm-motion-birds-eye .cm-subject-body {
-  margin-top: 0;
-  width: 80%;
-  height: 40%;
-  border-radius: 50%;
-}
-.cm-motion-birds-eye .cm-ground {
-  top: 0;
-  background: repeating-linear-gradient(
-      0deg,
-      #1a2538 0 8%,
-      #131b2b 8% 16%
-    ),
-    linear-gradient(to bottom, #233247 0%, #0c1422 100%);
-}
+/*
+ * Bird's Eye — camera directly overhead looking straight down. Replaces the
+ * 3D front-view character rig with a simple top-down silhouette (head +
+ * shoulders) over a full-frame gridded ground plane.
+ */
 .cm-motion-birds-eye .cm-sky,
 .cm-motion-birds-eye .cm-horizon,
-.cm-motion-birds-eye .cm-depth-far { display: none; }
-.cm-motion-birds-eye .cm-scene { animation: cm-kf-zoom-in-small 4s ease-in-out infinite alternate; }
+.cm-motion-birds-eye .cm-depth-far,
+.cm-motion-birds-eye .cm-depth-near,
+.cm-motion-birds-eye .cm-foreground,
+.cm-motion-birds-eye .cm-subject,
+.cm-motion-birds-eye .cm-subject-shadow { display: none; }
+.cm-motion-birds-eye .cm-ground {
+  top: 0;
+  bottom: 0;
+  background:
+    repeating-linear-gradient(0deg,  rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 10%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 10%),
+    linear-gradient(135deg, #233247 0%, #1a2538 100%);
+}
+.cm-motion-birds-eye .cm-subject-group {
+  width: 16cqw;
+  height: 16cqw;
+  perspective: none;
+  transform-style: flat;
+}
+/* Shoulders ellipse (wider, behind head from above) */
+.cm-motion-birds-eye .cm-subject-group::before {
+  content: "";
+  position: absolute;
+  left: 12%;
+  top: 38%;
+  right: 12%;
+  bottom: 0;
+  background: radial-gradient(ellipse at 50% 35%, #c00064 0%, #780040 60%, #3e001d 100%);
+  border-radius: 45% 45% 50% 50%;
+  box-shadow: 0 0 12px rgba(255, 0, 115, 0.25);
+}
+/* Head circle (viewed from directly above) */
+.cm-motion-birds-eye .cm-subject-group::after {
+  content: "";
+  position: absolute;
+  left: 27%;
+  top: 0;
+  width: 46%;
+  height: 55%;
+  background: radial-gradient(circle at 38% 32%, #ff8fc2 0%, #ff2a89 55%, #780040 100%);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(255, 0, 115, 0.4);
+}
+.cm-motion-birds-eye .cm-scene { animation: cm-kf-zoom-in-small 4s ease-in-out infinite; }
 
 .cm-motion-worms-eye .cm-sky {
   background: radial-gradient(ellipse 90% 140% at 50% 120%, #233247 0%, #0b1220 70%);
@@ -209,33 +370,60 @@
 .cm-motion-worms-eye .cm-depth-near-left  { left: 6%; height: 40%; bottom: 15%; width: 4%; }
 .cm-motion-worms-eye .cm-depth-near-right { right: 8%; height: 46%; bottom: 15%; width: 4%; }
 
-/* Aerial wide view */
-.cm-motion-aerial .cm-scene { transform: scale(0.9); }
-.cm-motion-aerial .cm-horizon { top: 45%; }
-.cm-motion-aerial .cm-ground { top: 45%; }
+/*
+ * Aerial — high-altitude drone view. Horizon pushed up, subject shrinks to a
+ * single dot (it's too far away to read as a figure), slow forward drift.
+ */
+.cm-motion-aerial .cm-horizon { top: 42%; }
+.cm-motion-aerial .cm-ground  { top: 42%; }
 .cm-motion-aerial .cm-sky {
-  background: linear-gradient(to bottom, #082f49 0%, #1f2c42 45%, #0f172a 100%);
+  background: linear-gradient(to bottom, #082f49 0%, #1f2c42 42%, #0f172a 100%);
 }
+.cm-motion-aerial .cm-foreground,
+.cm-motion-aerial .cm-subject,
+.cm-motion-aerial .cm-subject-shadow { display: none; }
 .cm-motion-aerial .cm-subject-group {
-  top: 62%;
-  width: 8%;
-  height: 10%;
+  width: 3.5cqw;
+  height: 3.5cqw;
+  top: 64%;
+  perspective: none;
+  transform-style: flat;
 }
-.cm-motion-aerial .cm-subject-head { width: 70%; }
-.cm-motion-aerial .cm-subject-body { height: 50%; margin-top: 4%; }
-.cm-motion-aerial .cm-scene { animation: cm-kf-aerial-drift 8s ease-in-out infinite alternate; }
+.cm-motion-aerial .cm-subject-group::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 40% 40%, #ff8fc2 0%, #ff2a89 45%, #780040 90%);
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(255, 0, 115, 0.45);
+}
+.cm-motion-aerial .cm-scene { animation: cm-kf-aerial-drift 8s ease-in-out infinite; }
 
 /* ==========================================================================
    KEYFRAMES (one per motion family)
    ========================================================================== */
 
+/*
+ * One-shot motions: pause at start, animate start → end, pause at end, then
+ * a fast return to the start before looping. These do NOT use
+ * `animation-direction: alternate` because a zoom-in played in reverse looks
+ * like a zoom-out, a pan-left played in reverse looks like pan-right, etc.
+ *
+ * Timing:
+ *   0-10%   hold at start
+ *   10-70%  main motion (slow, the "shot")
+ *   70-92%  hold at end (reads the final composition)
+ *   92-100% fast return to start (~8% of duration — quick but smooth)
+ */
 @keyframes cm-kf-pan-left {
-  from { transform: translateX(-14%); }
-  to   { transform: translateX(14%); }
+  0%, 10%  { transform: translateX(-16%); }
+  70%, 92% { transform: translateX(16%); }
+  100%     { transform: translateX(-16%); }
 }
 @keyframes cm-kf-pan-right {
-  from { transform: translateX(14%); }
-  to   { transform: translateX(-14%); }
+  0%, 10%  { transform: translateX(16%); }
+  70%, 92% { transform: translateX(-16%); }
+  100%     { transform: translateX(16%); }
 }
 @keyframes cm-kf-whip-pan-left {
   0%, 15% { transform: translateX(0); filter: blur(0); }
@@ -248,24 +436,29 @@
   75%, 100% { transform: translateX(0); filter: blur(0); }
 }
 @keyframes cm-kf-tilt-up {
-  from { transform: translateY(10%); }
-  to   { transform: translateY(-10%); }
+  0%, 10%  { transform: translateY(12%); }
+  70%, 92% { transform: translateY(-12%); }
+  100%     { transform: translateY(12%); }
 }
 @keyframes cm-kf-tilt-down {
-  from { transform: translateY(-10%); }
-  to   { transform: translateY(10%); }
+  0%, 10%  { transform: translateY(-12%); }
+  70%, 92% { transform: translateY(12%); }
+  100%     { transform: translateY(-12%); }
 }
 @keyframes cm-kf-zoom-in {
-  from { transform: scale(1); }
-  to   { transform: scale(1.45); }
+  0%, 10%  { transform: scale(1); }
+  70%, 92% { transform: scale(1.45); }
+  100%     { transform: scale(1); }
 }
 @keyframes cm-kf-zoom-out {
-  from { transform: scale(1.45); }
-  to   { transform: scale(1); }
+  0%, 10%  { transform: scale(1.45); }
+  70%, 92% { transform: scale(1); }
+  100%     { transform: scale(1.45); }
 }
 @keyframes cm-kf-zoom-in-small {
-  from { transform: scale(1); }
-  to   { transform: scale(1.15); }
+  0%, 10%  { transform: scale(1); }
+  70%, 92% { transform: scale(1.15); }
+  100%     { transform: scale(1); }
 }
 @keyframes cm-kf-crash-zoom-in {
   0%, 30% { transform: scale(1); }
@@ -278,75 +471,137 @@
   70%, 100% { transform: scale(1); }
 }
 @keyframes cm-kf-dolly-in-scene {
-  from { transform: scale(1); }
-  to   { transform: scale(1.35); }
+  0%, 10%  { transform: scale(1); }
+  70%, 92% { transform: scale(1.35); }
+  100%     { transform: scale(1); }
 }
 @keyframes cm-kf-dolly-in-depth {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-20%); }
+  0%, 10%  { transform: translateX(0); }
+  70%, 92% { transform: translateX(-20%); }
+  100%     { transform: translateX(0); }
 }
 @keyframes cm-kf-dolly-in-depth-right {
-  from { transform: translateX(0); }
-  to   { transform: translateX(20%); }
+  0%, 10%  { transform: translateX(0); }
+  70%, 92% { transform: translateX(20%); }
+  100%     { transform: translateX(0); }
 }
 @keyframes cm-kf-dolly-out-scene {
-  from { transform: scale(1.35); }
-  to   { transform: scale(1); }
+  0%, 10%  { transform: scale(1.35); }
+  70%, 92% { transform: scale(1); }
+  100%     { transform: scale(1.35); }
 }
 @keyframes cm-kf-dolly-zoom-bg {
-  from { transform: scale(0.85); }
-  to   { transform: scale(1.3); }
+  0%, 10%  { transform: scale(0.85); }
+  70%, 92% { transform: scale(1.3); }
+  100%     { transform: scale(0.85); }
+}
+
+/*
+ * Foreground parallax keyframes — the foreground silhouette exaggerates
+ * scale and slides outward much harder than the scene, so the dolly family
+ * reads as "camera moves through 3D space".
+ */
+@keyframes cm-kf-fg-dolly-in-left {
+  0%, 10%  { transform: translateX(0) scale(1); }
+  70%, 92% { transform: translateX(-18cqw) scale(1.9); }
+  100%     { transform: translateX(0) scale(1); }
+}
+@keyframes cm-kf-fg-dolly-in-right {
+  0%, 10%  { transform: translateX(0) scale(1); }
+  70%, 92% { transform: translateX(18cqw) scale(1.9); }
+  100%     { transform: translateX(0) scale(1); }
+}
+@keyframes cm-kf-fg-dolly-out-left {
+  0%, 10%  { transform: translateX(-18cqw) scale(1.9); }
+  70%, 92% { transform: translateX(0) scale(1); }
+  100%     { transform: translateX(-18cqw) scale(1.9); }
+}
+@keyframes cm-kf-fg-dolly-out-right {
+  0%, 10%  { transform: translateX(18cqw) scale(1.9); }
+  70%, 92% { transform: translateX(0) scale(1); }
+  100%     { transform: translateX(18cqw) scale(1.9); }
 }
 @keyframes cm-kf-truck-left {
-  from { transform: translateX(-18%); }
-  to   { transform: translateX(18%); }
+  0%, 10%  { transform: translateX(-20%); }
+  70%, 92% { transform: translateX(20%); }
+  100%     { transform: translateX(-20%); }
 }
 @keyframes cm-kf-truck-right {
-  from { transform: translateX(18%); }
-  to   { transform: translateX(-18%); }
+  0%, 10%  { transform: translateX(20%); }
+  70%, 92% { transform: translateX(-20%); }
+  100%     { transform: translateX(20%); }
 }
 @keyframes cm-kf-pedestal-up {
-  from { transform: translateY(15%); }
-  to   { transform: translateY(-15%); }
+  0%, 10%  { transform: translateY(16%); }
+  70%, 92% { transform: translateY(-16%); }
+  100%     { transform: translateY(16%); }
 }
 @keyframes cm-kf-pedestal-down {
-  from { transform: translateY(-15%); }
-  to   { transform: translateY(15%); }
+  0%, 10%  { transform: translateY(-16%); }
+  70%, 92% { transform: translateY(16%); }
+  100%     { transform: translateY(-16%); }
 }
 @keyframes cm-kf-roll-left {
-  from { transform: rotate(25deg); }
-  to   { transform: rotate(-25deg); }
+  0%, 10%  { transform: rotate(20deg); }
+  70%, 92% { transform: rotate(-20deg); }
+  100%     { transform: rotate(20deg); }
 }
 @keyframes cm-kf-roll-right {
-  from { transform: rotate(-25deg); }
-  to   { transform: rotate(25deg); }
+  0%, 10%  { transform: rotate(-20deg); }
+  70%, 92% { transform: rotate(20deg); }
+  100%     { transform: rotate(-20deg); }
 }
 @keyframes cm-kf-dutch-angle {
   from, to { transform: rotate(-12deg); }
 }
+/*
+ * For orbit, the subject is stationary in the world — only the camera moves.
+ * From the camera's POV, the background slides across the frame while the
+ * subject stays centered. Combined with the subject's own Y-axis rotation,
+ * this sells "camera circling a stationary subject".
+ *
+ * NOTE: these keyframes animate the background layers, which are extended
+ * past the viewport via `inset: -60%`. Translate % on those elements is
+ * relative to their own (oversized) box, so we use `cqw` (container query
+ * width units) to translate relative to the preview width — predictable and
+ * keeps the layers covering the viewport at the extremes.
+ */
 @keyframes cm-kf-orbit-left {
-  from { transform: translateX(-16%) rotate(-6deg); }
-  to   { transform: translateX(16%) rotate(6deg); }
+  0%, 10%  { transform: translateX(38cqw); }
+  70%, 92% { transform: translateX(-38cqw); }
+  100%     { transform: translateX(38cqw); }
 }
 @keyframes cm-kf-orbit-right {
-  from { transform: translateX(16%) rotate(6deg); }
-  to   { transform: translateX(-16%) rotate(-6deg); }
+  0%, 10%  { transform: translateX(-38cqw); }
+  70%, 92% { transform: translateX(38cqw); }
+  100%     { transform: translateX(-38cqw); }
 }
 @keyframes cm-kf-arc-left {
-  from { transform: translate(-10%, 4%) rotate(-4deg); }
-  to   { transform: translate(10%, -2%) rotate(4deg); }
+  0%, 10%  { transform: translateX(18cqw) rotate(-3deg); }
+  70%, 92% { transform: translateX(-18cqw) rotate(3deg); }
+  100%     { transform: translateX(18cqw) rotate(-3deg); }
 }
 @keyframes cm-kf-arc-right {
-  from { transform: translate(10%, 4%) rotate(4deg); }
-  to   { transform: translate(-10%, -2%) rotate(-4deg); }
+  0%, 10%  { transform: translateX(-18cqw) rotate(3deg); }
+  70%, 92% { transform: translateX(18cqw) rotate(-3deg); }
+  100%     { transform: translateX(-18cqw) rotate(3deg); }
 }
+
+/*
+ * The floor triangle is a fixed world object — no animation of its own.
+ * It sits statically near the subject's feet; the orbit is conveyed by the
+ * background (sky / ground / mountains) sweeping behind it. "Static like
+ * the object, only the camera moves."
+ */
 @keyframes cm-kf-crane-up {
-  from { transform: translateY(12%) scale(1.1); }
-  to   { transform: translateY(-14%) scale(0.9); }
+  0%, 10%  { transform: translateY(14%) scale(1.1); }
+  70%, 92% { transform: translateY(-14%) scale(0.9); }
+  100%     { transform: translateY(14%) scale(1.1); }
 }
 @keyframes cm-kf-crane-down {
-  from { transform: translateY(-14%) scale(0.9); }
-  to   { transform: translateY(12%) scale(1.1); }
+  0%, 10%  { transform: translateY(-14%) scale(0.9); }
+  70%, 92% { transform: translateY(14%) scale(1.1); }
+  100%     { transform: translateY(-14%) scale(0.9); }
 }
 @keyframes cm-kf-handheld {
   0%   { transform: translate(0.8%, -0.6%) rotate(0.6deg); }
@@ -361,20 +616,17 @@
   50%      { transform: translateY(1%) translateX(2%); }
 }
 @keyframes cm-kf-aerial-drift {
-  from { transform: translateX(-8%) scale(0.95); }
-  to   { transform: translateX(8%) scale(1.0); }
+  0%, 10%  { transform: translateX(-10%) scale(0.95); }
+  70%, 92% { transform: translateX(10%) scale(1.0); }
+  100%     { transform: translateX(-10%) scale(0.95); }
 }
+/*
+ * Tracking animates the extended background layers directly, so the
+ * translation uses `cqw` to stay in viewport-relative space.
+ */
 @keyframes cm-kf-tracking-bg {
-  from { transform: translateX(20%); }
-  to   { transform: translateX(-20%); }
-}
-@keyframes cm-kf-follow-depth {
-  from { transform: translateY(-8%) scale(0.95); }
-  to   { transform: translateY(4%) scale(1.1); }
-}
-@keyframes cm-kf-lead-depth {
-  from { transform: translateY(4%) scale(1.1); }
-  to   { transform: translateY(-8%) scale(0.95); }
+  from { transform: translateX(20cqw); }
+  to   { transform: translateX(-20cqw); }
 }
 @keyframes cm-kf-snorricam {
   from { transform: rotate(0); }
@@ -383,6 +635,33 @@
 @keyframes cm-kf-auto-pulse {
   0%, 100% { opacity: 0.45; }
   50%      { opacity: 1; }
+}
+
+/*
+ * Subject Y-axis rotations — used for orbit / arc to sell the "camera is
+ * circling a 3D subject" feel. Orbit does a full back → front sweep (180°)
+ * so the dark back, the side profile, and the bright front are all seen.
+ * Arc does a smaller sweep of ±45°.
+ */
+@keyframes cm-kf-subject-roty-left {
+  0%, 10%  { transform: rotateY(180deg); }   /* back of subject */
+  70%, 92% { transform: rotateY(360deg); }   /* front (360° = 0° visually, via the left profile) */
+  100%     { transform: rotateY(180deg); }   /* fast return to back */
+}
+@keyframes cm-kf-subject-roty-right {
+  0%, 10%  { transform: rotateY(-180deg); }  /* back of subject */
+  70%, 92% { transform: rotateY(-360deg); }  /* front (via right profile) */
+  100%     { transform: rotateY(-180deg); }  /* fast return to back */
+}
+@keyframes cm-kf-subject-roty-arc-left {
+  0%, 10%  { transform: rotateY(45deg); }
+  70%, 92% { transform: rotateY(-45deg); }
+  100%     { transform: rotateY(45deg); }
+}
+@keyframes cm-kf-subject-roty-arc-right {
+  0%, 10%  { transform: rotateY(-45deg); }
+  70%, 92% { transform: rotateY(45deg); }
+  100%     { transform: rotateY(-45deg); }
 }
 
 /* ==========================================================================
@@ -398,100 +677,159 @@
 .cm-motion-handheld  .cm-scene { animation: cm-kf-handheld 1.4s linear infinite; }
 .cm-motion-steadicam .cm-scene { animation: cm-kf-steadicam 3.5s ease-in-out infinite alternate; }
 
+/*
+ * `alternate` is only used for motions whose reverse looks natural
+ * (handheld, steadicam, dutch-angle static offset, auto-pulse, dolly-zoom).
+ * All other motions use plain `infinite`: the keyframes hold at start + end
+ * and the iteration loop snaps back to the start.
+ */
+
 /* Pan */
-.cm-motion-pan-left  .cm-scene { animation: cm-kf-pan-left  4s ease-in-out infinite alternate; }
-.cm-motion-pan-right .cm-scene { animation: cm-kf-pan-right 4s ease-in-out infinite alternate; }
+.cm-motion-pan-left  .cm-scene { animation: cm-kf-pan-left  4s ease-in-out infinite; }
+.cm-motion-pan-right .cm-scene { animation: cm-kf-pan-right 4s ease-in-out infinite; }
 .cm-motion-whip-pan-left  .cm-scene { animation: cm-kf-whip-pan-left  2.2s ease-in-out infinite; }
 .cm-motion-whip-pan-right .cm-scene { animation: cm-kf-whip-pan-right 2.2s ease-in-out infinite; }
 
 /* Tilt */
-.cm-motion-tilt-up   .cm-scene { animation: cm-kf-tilt-up   3.6s ease-in-out infinite alternate; }
-.cm-motion-tilt-down .cm-scene { animation: cm-kf-tilt-down 3.6s ease-in-out infinite alternate; }
+.cm-motion-tilt-up   .cm-scene { animation: cm-kf-tilt-up   3.6s ease-in-out infinite; }
+.cm-motion-tilt-down .cm-scene { animation: cm-kf-tilt-down 3.6s ease-in-out infinite; }
 
 /* Zoom (lens only — animate the whole scene uniformly, no parallax) */
-.cm-motion-zoom-in         .cm-scene { animation: cm-kf-zoom-in  3.5s ease-in-out infinite alternate; }
-.cm-motion-zoom-out        .cm-scene { animation: cm-kf-zoom-out 3.5s ease-in-out infinite alternate; }
+.cm-motion-zoom-in         .cm-scene { animation: cm-kf-zoom-in  3.5s ease-in-out infinite; }
+.cm-motion-zoom-out        .cm-scene { animation: cm-kf-zoom-out 3.5s ease-in-out infinite; }
 .cm-motion-crash-zoom-in   .cm-scene { animation: cm-kf-crash-zoom-in  2s ease-out infinite; }
 .cm-motion-crash-zoom-out  .cm-scene { animation: cm-kf-crash-zoom-out 2s ease-out infinite; }
 
-/* Dolly (camera body moves — parallax: near markers travel farther than the scene) */
-.cm-motion-dolly-in    .cm-scene            { animation: cm-kf-dolly-in-scene  4s ease-in-out infinite alternate; }
-.cm-motion-dolly-in    .cm-depth-near-left  { animation: cm-kf-dolly-in-depth  4s ease-in-out infinite alternate; }
-.cm-motion-dolly-in    .cm-depth-near-right { animation: cm-kf-dolly-in-depth-right 4s ease-in-out infinite alternate; }
-.cm-motion-dolly-out   .cm-scene            { animation: cm-kf-dolly-out-scene 4s ease-in-out infinite alternate; }
-.cm-motion-dolly-out   .cm-depth-near-left  { animation: cm-kf-dolly-in-depth-right 4s ease-in-out infinite alternate; }
-.cm-motion-dolly-out   .cm-depth-near-right { animation: cm-kf-dolly-in-depth 4s ease-in-out infinite alternate; }
-.cm-motion-push-in     .cm-scene            { animation: cm-kf-dolly-in-scene  6s ease-in-out infinite alternate; }
-.cm-motion-pull-out    .cm-scene            { animation: cm-kf-dolly-out-scene 6s ease-in-out infinite alternate; }
+/*
+ * Dolly = camera body physically moves in/out. Parallax is the key visual
+ * cue: the foreground silhouette scales + slides past the camera, while the
+ * distant mountains stay nearly the same size. Zoom, by contrast, has no
+ * parallax — everything scales together because only the lens is changing.
+ */
+.cm-motion-dolly-in    .cm-scene            { animation: cm-kf-dolly-in-scene  4s ease-in-out infinite; }
+.cm-motion-dolly-in    .cm-depth-near-left  { animation: cm-kf-dolly-in-depth  4s ease-in-out infinite; }
+.cm-motion-dolly-in    .cm-depth-near-right { animation: cm-kf-dolly-in-depth-right 4s ease-in-out infinite; }
+.cm-motion-dolly-in    .cm-foreground-left  { animation: cm-kf-fg-dolly-in-left  4s ease-in-out infinite; }
+.cm-motion-dolly-in    .cm-foreground-right { animation: cm-kf-fg-dolly-in-right 4s ease-in-out infinite; }
+.cm-motion-dolly-out   .cm-scene            { animation: cm-kf-dolly-out-scene 4s ease-in-out infinite; }
+.cm-motion-dolly-out   .cm-depth-near-left  { animation: cm-kf-dolly-in-depth-right 4s ease-in-out infinite; }
+.cm-motion-dolly-out   .cm-depth-near-right { animation: cm-kf-dolly-in-depth 4s ease-in-out infinite; }
+.cm-motion-dolly-out   .cm-foreground-left  { animation: cm-kf-fg-dolly-out-left  4s ease-in-out infinite; }
+.cm-motion-dolly-out   .cm-foreground-right { animation: cm-kf-fg-dolly-out-right 4s ease-in-out infinite; }
+.cm-motion-push-in     .cm-scene            { animation: cm-kf-dolly-in-scene  6s ease-in-out infinite; }
+.cm-motion-push-in     .cm-foreground-left  { animation: cm-kf-fg-dolly-in-left  6s ease-in-out infinite; }
+.cm-motion-push-in     .cm-foreground-right { animation: cm-kf-fg-dolly-in-right 6s ease-in-out infinite; }
+.cm-motion-pull-out    .cm-scene            { animation: cm-kf-dolly-out-scene 6s ease-in-out infinite; }
+.cm-motion-pull-out    .cm-foreground-left  { animation: cm-kf-fg-dolly-out-left  6s ease-in-out infinite; }
+.cm-motion-pull-out    .cm-foreground-right { animation: cm-kf-fg-dolly-out-right 6s ease-in-out infinite; }
 
-/* Dolly Zoom — background scales, subject stays the same size */
+/* Dolly Zoom — background scales while subject stays the same size */
 .cm-motion-dolly-zoom  .cm-sky,
 .cm-motion-dolly-zoom  .cm-ground,
 .cm-motion-dolly-zoom  .cm-horizon,
 .cm-motion-dolly-zoom  .cm-depth-far,
-.cm-motion-dolly-zoom  .cm-depth-near { animation: cm-kf-dolly-zoom-bg 4s ease-in-out infinite alternate; }
+.cm-motion-dolly-zoom  .cm-depth-near { animation: cm-kf-dolly-zoom-bg 4s ease-in-out infinite; }
 
 /* Truck */
-.cm-motion-truck-left  .cm-scene { animation: cm-kf-truck-left  3.5s ease-in-out infinite alternate; }
-.cm-motion-truck-right .cm-scene { animation: cm-kf-truck-right 3.5s ease-in-out infinite alternate; }
+.cm-motion-truck-left  .cm-scene { animation: cm-kf-truck-left  3.5s ease-in-out infinite; }
+.cm-motion-truck-right .cm-scene { animation: cm-kf-truck-right 3.5s ease-in-out infinite; }
 .cm-motion-truck-left  .cm-depth-near-left,
-.cm-motion-truck-left  .cm-depth-near-right { animation: cm-kf-truck-left 2.5s ease-in-out infinite alternate; }
+.cm-motion-truck-left  .cm-depth-near-right { animation: cm-kf-truck-left 2.5s ease-in-out infinite; }
 .cm-motion-truck-right .cm-depth-near-left,
-.cm-motion-truck-right .cm-depth-near-right { animation: cm-kf-truck-right 2.5s ease-in-out infinite alternate; }
+.cm-motion-truck-right .cm-depth-near-right { animation: cm-kf-truck-right 2.5s ease-in-out infinite; }
 
 /* Pedestal */
-.cm-motion-pedestal-up   .cm-scene { animation: cm-kf-pedestal-up   3.6s ease-in-out infinite alternate; }
-.cm-motion-pedestal-down .cm-scene { animation: cm-kf-pedestal-down 3.6s ease-in-out infinite alternate; }
+.cm-motion-pedestal-up   .cm-scene { animation: cm-kf-pedestal-up   3.6s ease-in-out infinite; }
+.cm-motion-pedestal-down .cm-scene { animation: cm-kf-pedestal-down 3.6s ease-in-out infinite; }
 
 /* Roll / Dutch */
-.cm-motion-roll-left   .cm-scene { animation: cm-kf-roll-left   3.2s ease-in-out infinite alternate; }
-.cm-motion-roll-right  .cm-scene { animation: cm-kf-roll-right  3.2s ease-in-out infinite alternate; }
+.cm-motion-roll-left   .cm-scene { animation: cm-kf-roll-left   3.2s ease-in-out infinite; }
+.cm-motion-roll-right  .cm-scene { animation: cm-kf-roll-right  3.2s ease-in-out infinite; }
 .cm-motion-dutch-angle .cm-scene { transform: rotate(-12deg); }
 
-/* Orbit / Arc — subject stays centered, background orbits */
+/*
+ * Orbit / Arc — subject stays centered but rotates in 3D (Y-axis) to convey
+ * that the camera is circling it. Background also translates/rotates slightly
+ * to reinforce the spatial circling.
+ */
+/*
+ * Orbit / Arc: hide the in-front foreground trees (they'd pass over the
+ * subject, which is wrong when we're orbiting around the subject). Instead
+ * show the low fence behind the subject. The fence is close to the subject
+ * in world space, so it translates a small amount; the distant sky/ground/
+ * mountains translate the full `cm-kf-orbit-*` amount. That difference is
+ * the parallax that sells "camera circling the subject".
+ */
+.cm-motion-orbit-left  .cm-foreground,
+.cm-motion-orbit-right .cm-foreground,
+.cm-motion-arc-left    .cm-foreground,
+.cm-motion-arc-right   .cm-foreground { display: none; }
+.cm-motion-orbit-left  .cm-orbit-marker,
+.cm-motion-orbit-right .cm-orbit-marker,
+.cm-motion-arc-left    .cm-orbit-marker,
+.cm-motion-arc-right   .cm-orbit-marker { display: block; }
+
 .cm-motion-orbit-left  .cm-sky,
 .cm-motion-orbit-left  .cm-ground,
 .cm-motion-orbit-left  .cm-horizon,
 .cm-motion-orbit-left  .cm-depth-far,
-.cm-motion-orbit-left  .cm-depth-near { animation: cm-kf-orbit-left  4s ease-in-out infinite alternate; }
+.cm-motion-orbit-left  .cm-depth-near { animation: cm-kf-orbit-left  4s ease-in-out infinite; }
+.cm-motion-orbit-left  .cm-subject    { animation: cm-kf-subject-roty-left 4s ease-in-out infinite; }
 .cm-motion-orbit-right .cm-sky,
 .cm-motion-orbit-right .cm-ground,
 .cm-motion-orbit-right .cm-horizon,
 .cm-motion-orbit-right .cm-depth-far,
-.cm-motion-orbit-right .cm-depth-near { animation: cm-kf-orbit-right 4s ease-in-out infinite alternate; }
+.cm-motion-orbit-right .cm-depth-near { animation: cm-kf-orbit-right 4s ease-in-out infinite; }
+.cm-motion-orbit-right .cm-subject    { animation: cm-kf-subject-roty-right 4s ease-in-out infinite; }
 .cm-motion-arc-left  .cm-sky,
 .cm-motion-arc-left  .cm-ground,
 .cm-motion-arc-left  .cm-horizon,
 .cm-motion-arc-left  .cm-depth-far,
-.cm-motion-arc-left  .cm-depth-near { animation: cm-kf-arc-left  4s ease-in-out infinite alternate; }
+.cm-motion-arc-left  .cm-depth-near { animation: cm-kf-arc-left  4s ease-in-out infinite; }
+.cm-motion-arc-left  .cm-subject    { animation: cm-kf-subject-roty-arc-left 4s ease-in-out infinite; }
 .cm-motion-arc-right .cm-sky,
 .cm-motion-arc-right .cm-ground,
 .cm-motion-arc-right .cm-horizon,
 .cm-motion-arc-right .cm-depth-far,
-.cm-motion-arc-right .cm-depth-near { animation: cm-kf-arc-right 4s ease-in-out infinite alternate; }
+.cm-motion-arc-right .cm-depth-near { animation: cm-kf-arc-right 4s ease-in-out infinite; }
+.cm-motion-arc-right .cm-subject    { animation: cm-kf-subject-roty-arc-right 4s ease-in-out infinite; }
 
 /* Crane / Boom */
-.cm-motion-crane-up   .cm-scene { animation: cm-kf-crane-up   4.5s ease-in-out infinite alternate; }
-.cm-motion-crane-down .cm-scene { animation: cm-kf-crane-down 4.5s ease-in-out infinite alternate; }
-.cm-motion-boom-up    .cm-scene { animation: cm-kf-pedestal-up   4s ease-in-out infinite alternate; }
-.cm-motion-boom-down  .cm-scene { animation: cm-kf-pedestal-down 4s ease-in-out infinite alternate; }
+.cm-motion-crane-up   .cm-scene { animation: cm-kf-crane-up   4.5s ease-in-out infinite; }
+.cm-motion-crane-down .cm-scene { animation: cm-kf-crane-down 4.5s ease-in-out infinite; }
+.cm-motion-boom-up    .cm-scene { animation: cm-kf-pedestal-up   4s ease-in-out infinite; }
+.cm-motion-boom-down  .cm-scene { animation: cm-kf-pedestal-down 4s ease-in-out infinite; }
 
 /* Tracking / Follow / Lead — subject stays, background moves */
 .cm-motion-tracking-shot .cm-sky,
 .cm-motion-tracking-shot .cm-ground,
 .cm-motion-tracking-shot .cm-horizon,
 .cm-motion-tracking-shot .cm-depth-far,
-.cm-motion-tracking-shot .cm-depth-near { animation: cm-kf-tracking-bg 3s linear infinite; }
+.cm-motion-tracking-shot .cm-depth-near,
+.cm-motion-tracking-shot .cm-foreground { animation: cm-kf-tracking-bg 3s linear infinite; }
+/*
+ * Follow — camera chases the subject from behind. Subject rotates 180° so we
+ * see their back; the world pushes forward toward the camera (dolly-in on
+ * bg + strong parallax on foreground).
+ */
+.cm-motion-follow .cm-subject { transform: rotateY(180deg); }
 .cm-motion-follow .cm-sky,
 .cm-motion-follow .cm-ground,
 .cm-motion-follow .cm-horizon,
 .cm-motion-follow .cm-depth-far,
-.cm-motion-follow .cm-depth-near { animation: cm-kf-follow-depth 3.5s ease-in-out infinite alternate; }
+.cm-motion-follow .cm-depth-near { animation: cm-kf-dolly-in-scene 3.5s ease-in-out infinite; }
+.cm-motion-follow .cm-foreground-left  { animation: cm-kf-fg-dolly-in-left  3.5s ease-in-out infinite; }
+.cm-motion-follow .cm-foreground-right { animation: cm-kf-fg-dolly-in-right 3.5s ease-in-out infinite; }
+
+/* Lead — camera retreats ahead of the advancing subject. Subject faces the
+ * camera; the world pulls away. */
 .cm-motion-lead .cm-sky,
 .cm-motion-lead .cm-ground,
 .cm-motion-lead .cm-horizon,
 .cm-motion-lead .cm-depth-far,
-.cm-motion-lead .cm-depth-near { animation: cm-kf-lead-depth 3.5s ease-in-out infinite alternate; }
+.cm-motion-lead .cm-depth-near { animation: cm-kf-dolly-out-scene 3.5s ease-in-out infinite; }
+.cm-motion-lead .cm-foreground-left  { animation: cm-kf-fg-dolly-out-left  3.5s ease-in-out infinite; }
+.cm-motion-lead .cm-foreground-right { animation: cm-kf-fg-dolly-out-right 3.5s ease-in-out infinite; }
 
 /* POV / OTS — handheld-like base motion */
 .cm-motion-pov .cm-scene { animation: cm-kf-handheld 1.8s linear infinite; }
@@ -503,6 +841,159 @@
 .cm-motion-snorricam .cm-horizon,
 .cm-motion-snorricam .cm-depth-far,
 .cm-motion-snorricam .cm-depth-near { animation: cm-kf-snorricam 6s linear infinite; transform-origin: 50% 55%; }
+
+/*
+ * Drone Follow — elevated camera tracking subject from above and behind.
+ * Subject shown from back (like Follow) but small (like Aerial), with
+ * forward-push on the world to sell the "flying with the subject" feel.
+ */
+.cm-motion-drone-follow .cm-horizon { top: 46%; }
+.cm-motion-drone-follow .cm-ground  { top: 46%; }
+.cm-motion-drone-follow .cm-foreground { display: none; }
+.cm-motion-drone-follow .cm-subject-group {
+  width: 7cqw;
+  height: 8cqw;
+  top: 70%;
+}
+.cm-motion-drone-follow .cm-subject { transform: rotateY(180deg); }
+.cm-motion-drone-follow .cm-sky,
+.cm-motion-drone-follow .cm-ground,
+.cm-motion-drone-follow .cm-horizon,
+.cm-motion-drone-follow .cm-depth-far,
+.cm-motion-drone-follow .cm-depth-near { animation: cm-kf-dolly-in-scene 3.5s ease-in-out infinite; }
+
+/* Helicopter — high altitude, wide sweeping lateral pass */
+.cm-motion-helicopter .cm-horizon { top: 40%; }
+.cm-motion-helicopter .cm-ground  { top: 40%; }
+.cm-motion-helicopter .cm-foreground,
+.cm-motion-helicopter .cm-subject,
+.cm-motion-helicopter .cm-subject-shadow { display: none; }
+.cm-motion-helicopter .cm-subject-group {
+  width: 2.8cqw;
+  height: 2.8cqw;
+  top: 66%;
+  perspective: none;
+  transform-style: flat;
+}
+.cm-motion-helicopter .cm-subject-group::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, #ff2a89 0%, #780040 60%, transparent 80%);
+  border-radius: 50%;
+}
+.cm-motion-helicopter .cm-sky,
+.cm-motion-helicopter .cm-ground,
+.cm-motion-helicopter .cm-horizon,
+.cm-motion-helicopter .cm-depth-far,
+.cm-motion-helicopter .cm-depth-near { animation: cm-kf-tracking-bg 4s linear infinite; }
+
+/*
+ * Fly Over — low fast aerial pass. The horizon tilts slightly (banking),
+ * the world pushes past the camera hard. No subject (or a tiny dot).
+ */
+.cm-motion-fly-over .cm-horizon { top: 48%; }
+.cm-motion-fly-over .cm-ground  { top: 48%; }
+.cm-motion-fly-over .cm-foreground { display: none; }
+.cm-motion-fly-over .cm-subject,
+.cm-motion-fly-over .cm-subject-shadow { display: none; }
+.cm-motion-fly-over .cm-subject-group {
+  width: 3.2cqw;
+  height: 3.2cqw;
+  top: 70%;
+  perspective: none;
+  transform-style: flat;
+}
+.cm-motion-fly-over .cm-subject-group::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, #ff2a89 0%, #780040 70%, transparent 85%);
+  border-radius: 50%;
+}
+.cm-motion-fly-over .cm-scene { animation: cm-kf-fly-over 2.4s linear infinite; }
+
+@keyframes cm-kf-fly-over {
+  0%   { transform: translateX(40cqw) rotate(-3deg); }
+  100% { transform: translateX(-40cqw) rotate(-3deg); }
+}
+
+/*
+ * Flythrough — strong forward push through the environment. Scene scales
+ * aggressively, foreground rushes past with heavy parallax.
+ */
+.cm-motion-flythrough .cm-sky,
+.cm-motion-flythrough .cm-ground,
+.cm-motion-flythrough .cm-horizon,
+.cm-motion-flythrough .cm-depth-far,
+.cm-motion-flythrough .cm-depth-near { animation: cm-kf-flythrough-bg 3s ease-in-out infinite; }
+.cm-motion-flythrough .cm-foreground-left  { animation: cm-kf-flythrough-fg-left  3s ease-in-out infinite; }
+.cm-motion-flythrough .cm-foreground-right { animation: cm-kf-flythrough-fg-right 3s ease-in-out infinite; }
+.cm-motion-flythrough .cm-subject,
+.cm-motion-flythrough .cm-subject-shadow { display: none; }
+
+@keyframes cm-kf-flythrough-bg {
+  0%   { transform: scale(0.9); }
+  100% { transform: scale(1.7); }
+}
+@keyframes cm-kf-flythrough-fg-left {
+  0%   { transform: translateX(0) scale(1); opacity: 1; }
+  100% { transform: translateX(-30cqw) scale(2.6); opacity: 0; }
+}
+@keyframes cm-kf-flythrough-fg-right {
+  0%   { transform: translateX(0) scale(1); opacity: 1; }
+  100% { transform: translateX(30cqw) scale(2.6); opacity: 0; }
+}
+
+/*
+ * Reveal — combined pedestal-up + tilt-down. Starts tight on ground,
+ * rises to reveal the wider scene.
+ */
+.cm-motion-reveal .cm-scene { animation: cm-kf-reveal 4s ease-in-out infinite; }
+
+@keyframes cm-kf-reveal {
+  0%, 10%  { transform: translateY(18%) scale(1.25); }
+  70%, 92% { transform: translateY(-10%) scale(0.95); }
+  100%     { transform: translateY(18%) scale(1.25); }
+}
+
+/*
+ * Dolly Track — camera moves laterally on a fixed track, strong foreground
+ * parallax (this is what "on a track" sells vs a pan from a tripod).
+ */
+.cm-motion-dolly-track .cm-scene { animation: cm-kf-truck-left 4s ease-in-out infinite; }
+.cm-motion-dolly-track .cm-foreground-left  { animation: cm-kf-dolly-track-fg-left  4s ease-in-out infinite; }
+.cm-motion-dolly-track .cm-foreground-right { animation: cm-kf-dolly-track-fg-right 4s ease-in-out infinite; }
+
+@keyframes cm-kf-dolly-track-fg-left {
+  0%, 10%  { transform: translateX(-30cqw) scale(1.8); }
+  70%, 92% { transform: translateX(30cqw) scale(1.8); }
+  100%     { transform: translateX(-30cqw) scale(1.8); }
+}
+@keyframes cm-kf-dolly-track-fg-right {
+  0%, 10%  { transform: translateX(-30cqw) scale(1.8); }
+  70%, 92% { transform: translateX(30cqw) scale(1.8); }
+  100%     { transform: translateX(-30cqw) scale(1.8); }
+}
+
+/*
+ * Rack Focus — lens-only focus pull. Foreground (tree) is sharp while the
+ * subject is blurred, then focus racks: foreground blurs, subject sharpens.
+ * No camera movement.
+ */
+.cm-motion-rack-focus .cm-subject        { animation: cm-kf-rack-subject 4s ease-in-out infinite; }
+.cm-motion-rack-focus .cm-foreground     { animation: cm-kf-rack-foreground 4s ease-in-out infinite; }
+
+@keyframes cm-kf-rack-subject {
+  0%, 20%  { filter: blur(3px); }
+  50%, 70% { filter: blur(0); }
+  90%, 100% { filter: blur(3px); }
+}
+@keyframes cm-kf-rack-foreground {
+  0%, 20%  { filter: blur(0); }
+  50%, 70% { filter: blur(3px); }
+  90%, 100% { filter: blur(0); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .cm-root *,

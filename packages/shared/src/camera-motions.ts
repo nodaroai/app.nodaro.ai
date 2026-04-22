@@ -310,6 +310,20 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     description: "Move ahead of advancing subject",
     promptHint: "lead shot, camera moves backward ahead of the advancing subject",
   },
+  {
+    id: "drone-follow",
+    label: "Drone Follow",
+    category: "tracking",
+    description: "Elevated drone tracking subject",
+    promptHint: "aerial drone follow shot, elevated camera smoothly tracking the subject from above and behind",
+  },
+  {
+    id: "dolly-track",
+    label: "Dolly Track",
+    category: "tracking",
+    description: "Dolly on parallel track alongside subject",
+    promptHint: "dolly on a parallel track alongside the subject, smooth lateral tracking with strong foreground parallax",
+  },
 
   // Special angles / rigs
   {
@@ -348,11 +362,46 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     promptHint: "aerial drone shot, high altitude slow forward movement over the landscape",
   },
   {
+    id: "helicopter",
+    label: "Helicopter",
+    category: "special",
+    description: "Wide high-altitude sweeping aerial",
+    promptHint: "helicopter shot, high altitude wide sweeping aerial pass with strong lateral movement",
+  },
+  {
+    id: "fly-over",
+    label: "Fly Over",
+    category: "special",
+    description: "Low fast aerial pass over the scene",
+    promptHint: "fly over shot, low altitude drone passing quickly over the scene with strong forward motion",
+  },
+  {
+    id: "flythrough",
+    label: "Flythrough",
+    category: "special",
+    description: "Camera flies through space",
+    promptHint: "flythrough shot, camera moving forward through the environment, weaving through obstacles",
+  },
+  {
+    id: "reveal",
+    label: "Reveal",
+    category: "special",
+    description: "Gradually reveal wider scene",
+    promptHint: "reveal shot, camera rises and tilts to gradually reveal the subject and wider scene",
+  },
+  {
     id: "snorricam",
     label: "Snorricam",
     category: "special",
     description: "Body-mounted camera (subject locked to frame)",
     promptHint: "snorricam body-mounted shot, subject locked in frame while the world moves around them",
+  },
+  {
+    id: "rack-focus",
+    label: "Rack Focus",
+    category: "special",
+    description: "Pull focus between foreground and background",
+    promptHint: "rack focus, lens focus shifts from a foreground subject to a background subject (or vice versa), the unfocused plane blurs",
   },
 ]
 
