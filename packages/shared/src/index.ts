@@ -138,3 +138,14 @@ export {
 
 export { sortListItems } from "./list-sort.js"
 export type { SortType, SortDirection, SortListOptions } from "./list-sort.js"
+
+export {
+  CAMERA_MOTIONS,
+  CAMERA_MOTION_IDS,
+  CAMERA_MOTION_CATEGORY_ORDER,
+  CAMERA_MOTION_CATEGORY_LABELS,
+  getCameraMotion,
+  getCameraMotionLabel,
+  getCameraMotionPromptHint,
+} from "./camera-motions.js"
+export type { CameraMotion, CameraMotionCategory } from "./camera-motions.js"

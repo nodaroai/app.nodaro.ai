@@ -335,7 +335,8 @@ export type MotionData = {
 export type CameraMotionData = {
   [key: string]: unknown
   label: string
-  cameraMotion: "static" | "pan-left" | "pan-right" | "zoom-in" | "zoom-out"
+  /** Motion id from CAMERA_MOTIONS catalog (packages/shared/src/camera-motions.ts). */
+  cameraMotion: string
 }
 
 // --- AI Node Data ---
@@ -718,7 +719,8 @@ export type ImageToVideoData = {
   duration: number
   motion?: "subtle" | "moderate" | "dynamic"
   motionEnabled?: boolean
-  cameraMotion?: "static" | "pan-left" | "pan-right" | "zoom-in" | "zoom-out"
+  /** Motion id from CAMERA_MOTIONS catalog (packages/shared/src/camera-motions.ts). */
+  cameraMotion?: string
   cameraMotionEnabled?: boolean
   prompt?: string  // Text description of desired motion/animation
   generateAudio?: boolean

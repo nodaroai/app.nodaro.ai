@@ -1,0 +1,514 @@
+/* ============================================================================
+   Camera motion preview styles.
+   One base "scene" (sky + horizon + ground + parallax depth + subject).
+   Each motion id maps to an animation class (.cm-motion-<id>) that drives
+   different layers via transforms. All animations loop infinitely so the
+   picker shows every option in motion simultaneously.
+   ========================================================================== */
+
+.cm-root {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #050a14;
+  isolation: isolate;
+  perspective: 600px;
+}
+.cm-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.cm-scene {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 55%;
+  will-change: transform, filter;
+  backface-visibility: hidden;
+}
+.cm-sky {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 120% 60% at 50% 10%, rgba(255, 190, 110, 0.18), transparent 60%),
+    linear-gradient(to bottom, #0b3a5e 0%, #1f2c42 55%, #0b1220 100%);
+}
+.cm-ground {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 60%;
+  bottom: 0;
+  background: linear-gradient(to bottom, #233247 0%, #0c1422 100%);
+}
+.cm-horizon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 60%;
+  height: 1px;
+  background: rgba(148, 163, 184, 0.35);
+  box-shadow: 0 0 12px rgba(148, 163, 184, 0.15);
+}
+.cm-depth-far {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  top: 51%;
+  height: 12%;
+  color: #0a1326;
+  pointer-events: none;
+  will-change: transform;
+}
+.cm-depth-far svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.cm-depth-near {
+  position: absolute;
+  bottom: 36%;
+  width: 3%;
+  height: 7%;
+  background: #020617;
+  border-radius: 1px;
+  will-change: transform;
+  z-index: 2;
+}
+.cm-depth-near-left { left: 18%; }
+.cm-depth-near-right { right: 20%; bottom: 34%; height: 5%; }
+.cm-depth-ground-dash {
+  position: absolute;
+  top: 60%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-image: repeating-linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0.2) 0 6%,
+    transparent 6% 12%
+  );
+  transform: translateY(18%);
+  opacity: 0.5;
+  will-change: transform;
+}
+.cm-subject-group {
+  position: absolute;
+  left: 50%;
+  top: 53%;
+  transform: translate(-50%, -50%);
+  width: 16%;
+  height: 28%;
+  z-index: 3;
+  will-change: transform;
+}
+.cm-subject {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  transform-origin: 50% 100%;
+  will-change: transform;
+}
+.cm-subject-head {
+  width: 40%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #ff0073;
+  box-shadow: 0 0 8px rgba(255, 0, 115, 0.4);
+}
+.cm-subject-body {
+  margin-top: 6%;
+  width: 60%;
+  height: 58%;
+  background: #ff0073;
+  border-radius: 12% 12% 8% 8% / 30% 30% 8% 8%;
+}
+
+/* Overlay decorations for POV / OTS / Snorricam */
+.cm-overlay-pov {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28%;
+  background: radial-gradient(ellipse 50% 100% at 50% 100%, #020617 45%, transparent 70%);
+  pointer-events: none;
+  z-index: 5;
+}
+.cm-overlay-pov::before,
+.cm-overlay-pov::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 22%;
+  height: 55%;
+  background: #111827;
+  border-radius: 60% 60% 20% 20%;
+}
+.cm-overlay-pov::before { left: 22%; transform: rotate(-8deg); }
+.cm-overlay-pov::after  { right: 22%; transform: rotate(8deg); }
+
+.cm-overlay-ots {
+  position: absolute;
+  right: -5%;
+  bottom: -5%;
+  width: 55%;
+  height: 85%;
+  background: radial-gradient(ellipse 65% 100% at 100% 100%, #020617 55%, transparent 75%);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Birds-eye / worms-eye perspective tweaks on the whole scene */
+.cm-motion-birds-eye .cm-scene {
+  transform: perspective(500px) rotateX(70deg) scale(1.05);
+}
+.cm-motion-birds-eye .cm-subject-group {
+  top: 52%;
+  width: 18%;
+  height: 18%;
+}
+.cm-motion-birds-eye .cm-subject-head {
+  width: 55%;
+}
+.cm-motion-birds-eye .cm-subject-body {
+  margin-top: 0;
+  width: 80%;
+  height: 40%;
+  border-radius: 50%;
+}
+.cm-motion-birds-eye .cm-ground {
+  top: 0;
+  background: repeating-linear-gradient(
+      0deg,
+      #1a2538 0 8%,
+      #131b2b 8% 16%
+    ),
+    linear-gradient(to bottom, #233247 0%, #0c1422 100%);
+}
+.cm-motion-birds-eye .cm-sky,
+.cm-motion-birds-eye .cm-horizon,
+.cm-motion-birds-eye .cm-depth-far { display: none; }
+.cm-motion-birds-eye .cm-scene { animation: cm-kf-zoom-in-small 4s ease-in-out infinite alternate; }
+
+.cm-motion-worms-eye .cm-sky {
+  background: radial-gradient(ellipse 90% 140% at 50% 120%, #233247 0%, #0b1220 70%);
+}
+.cm-motion-worms-eye .cm-horizon { top: 85%; }
+.cm-motion-worms-eye .cm-ground { top: 85%; }
+.cm-motion-worms-eye .cm-subject-group {
+  top: 46%;
+  width: 22%;
+  height: 62%;
+  transform: translate(-50%, -50%) perspective(200px) rotateX(-15deg);
+}
+.cm-motion-worms-eye .cm-depth-far { display: none; }
+.cm-motion-worms-eye .cm-depth-near-left  { left: 6%; height: 40%; bottom: 15%; width: 4%; }
+.cm-motion-worms-eye .cm-depth-near-right { right: 8%; height: 46%; bottom: 15%; width: 4%; }
+
+/* Aerial wide view */
+.cm-motion-aerial .cm-scene { transform: scale(0.9); }
+.cm-motion-aerial .cm-horizon { top: 45%; }
+.cm-motion-aerial .cm-ground { top: 45%; }
+.cm-motion-aerial .cm-sky {
+  background: linear-gradient(to bottom, #082f49 0%, #1f2c42 45%, #0f172a 100%);
+}
+.cm-motion-aerial .cm-subject-group {
+  top: 62%;
+  width: 8%;
+  height: 10%;
+}
+.cm-motion-aerial .cm-subject-head { width: 70%; }
+.cm-motion-aerial .cm-subject-body { height: 50%; margin-top: 4%; }
+.cm-motion-aerial .cm-scene { animation: cm-kf-aerial-drift 8s ease-in-out infinite alternate; }
+
+/* ==========================================================================
+   KEYFRAMES (one per motion family)
+   ========================================================================== */
+
+@keyframes cm-kf-pan-left {
+  from { transform: translateX(-14%); }
+  to   { transform: translateX(14%); }
+}
+@keyframes cm-kf-pan-right {
+  from { transform: translateX(14%); }
+  to   { transform: translateX(-14%); }
+}
+@keyframes cm-kf-whip-pan-left {
+  0%, 15% { transform: translateX(0); filter: blur(0); }
+  35%, 55% { transform: translateX(35%); filter: blur(4px); }
+  75%, 100% { transform: translateX(0); filter: blur(0); }
+}
+@keyframes cm-kf-whip-pan-right {
+  0%, 15% { transform: translateX(0); filter: blur(0); }
+  35%, 55% { transform: translateX(-35%); filter: blur(4px); }
+  75%, 100% { transform: translateX(0); filter: blur(0); }
+}
+@keyframes cm-kf-tilt-up {
+  from { transform: translateY(10%); }
+  to   { transform: translateY(-10%); }
+}
+@keyframes cm-kf-tilt-down {
+  from { transform: translateY(-10%); }
+  to   { transform: translateY(10%); }
+}
+@keyframes cm-kf-zoom-in {
+  from { transform: scale(1); }
+  to   { transform: scale(1.45); }
+}
+@keyframes cm-kf-zoom-out {
+  from { transform: scale(1.45); }
+  to   { transform: scale(1); }
+}
+@keyframes cm-kf-zoom-in-small {
+  from { transform: scale(1); }
+  to   { transform: scale(1.15); }
+}
+@keyframes cm-kf-crash-zoom-in {
+  0%, 30% { transform: scale(1); }
+  55% { transform: scale(1.7); }
+  70%, 100% { transform: scale(1.7); }
+}
+@keyframes cm-kf-crash-zoom-out {
+  0%, 30% { transform: scale(1.7); }
+  55% { transform: scale(1); }
+  70%, 100% { transform: scale(1); }
+}
+@keyframes cm-kf-dolly-in-scene {
+  from { transform: scale(1); }
+  to   { transform: scale(1.35); }
+}
+@keyframes cm-kf-dolly-in-depth {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-20%); }
+}
+@keyframes cm-kf-dolly-in-depth-right {
+  from { transform: translateX(0); }
+  to   { transform: translateX(20%); }
+}
+@keyframes cm-kf-dolly-out-scene {
+  from { transform: scale(1.35); }
+  to   { transform: scale(1); }
+}
+@keyframes cm-kf-dolly-zoom-bg {
+  from { transform: scale(0.85); }
+  to   { transform: scale(1.3); }
+}
+@keyframes cm-kf-truck-left {
+  from { transform: translateX(-18%); }
+  to   { transform: translateX(18%); }
+}
+@keyframes cm-kf-truck-right {
+  from { transform: translateX(18%); }
+  to   { transform: translateX(-18%); }
+}
+@keyframes cm-kf-pedestal-up {
+  from { transform: translateY(15%); }
+  to   { transform: translateY(-15%); }
+}
+@keyframes cm-kf-pedestal-down {
+  from { transform: translateY(-15%); }
+  to   { transform: translateY(15%); }
+}
+@keyframes cm-kf-roll-left {
+  from { transform: rotate(25deg); }
+  to   { transform: rotate(-25deg); }
+}
+@keyframes cm-kf-roll-right {
+  from { transform: rotate(-25deg); }
+  to   { transform: rotate(25deg); }
+}
+@keyframes cm-kf-dutch-angle {
+  from, to { transform: rotate(-12deg); }
+}
+@keyframes cm-kf-orbit-left {
+  from { transform: translateX(-16%) rotate(-6deg); }
+  to   { transform: translateX(16%) rotate(6deg); }
+}
+@keyframes cm-kf-orbit-right {
+  from { transform: translateX(16%) rotate(6deg); }
+  to   { transform: translateX(-16%) rotate(-6deg); }
+}
+@keyframes cm-kf-arc-left {
+  from { transform: translate(-10%, 4%) rotate(-4deg); }
+  to   { transform: translate(10%, -2%) rotate(4deg); }
+}
+@keyframes cm-kf-arc-right {
+  from { transform: translate(10%, 4%) rotate(4deg); }
+  to   { transform: translate(-10%, -2%) rotate(-4deg); }
+}
+@keyframes cm-kf-crane-up {
+  from { transform: translateY(12%) scale(1.1); }
+  to   { transform: translateY(-14%) scale(0.9); }
+}
+@keyframes cm-kf-crane-down {
+  from { transform: translateY(-14%) scale(0.9); }
+  to   { transform: translateY(12%) scale(1.1); }
+}
+@keyframes cm-kf-handheld {
+  0%   { transform: translate(0.8%, -0.6%) rotate(0.6deg); }
+  20%  { transform: translate(-1.2%, 0.4%) rotate(-0.8deg); }
+  40%  { transform: translate(0.6%, 1%) rotate(0.4deg); }
+  60%  { transform: translate(-0.4%, -0.8%) rotate(-0.4deg); }
+  80%  { transform: translate(1%, 0.6%) rotate(0.6deg); }
+  100% { transform: translate(0.8%, -0.6%) rotate(0.6deg); }
+}
+@keyframes cm-kf-steadicam {
+  0%, 100% { transform: translateY(-1%) translateX(-2%); }
+  50%      { transform: translateY(1%) translateX(2%); }
+}
+@keyframes cm-kf-aerial-drift {
+  from { transform: translateX(-8%) scale(0.95); }
+  to   { transform: translateX(8%) scale(1.0); }
+}
+@keyframes cm-kf-tracking-bg {
+  from { transform: translateX(20%); }
+  to   { transform: translateX(-20%); }
+}
+@keyframes cm-kf-follow-depth {
+  from { transform: translateY(-8%) scale(0.95); }
+  to   { transform: translateY(4%) scale(1.1); }
+}
+@keyframes cm-kf-lead-depth {
+  from { transform: translateY(4%) scale(1.1); }
+  to   { transform: translateY(-8%) scale(0.95); }
+}
+@keyframes cm-kf-snorricam {
+  from { transform: rotate(0); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes cm-kf-auto-pulse {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 1; }
+}
+
+/* ==========================================================================
+   PER-MOTION RULES
+   ========================================================================== */
+
+/* Static and Auto: no animation on scene. Auto shows a pulsing indicator */
+.cm-motion-static  .cm-scene {}
+.cm-motion-auto    .cm-scene {}
+.cm-motion-auto    .cm-subject-group { animation: cm-kf-auto-pulse 1.6s ease-in-out infinite; }
+
+/* Handheld / Steadicam */
+.cm-motion-handheld  .cm-scene { animation: cm-kf-handheld 1.4s linear infinite; }
+.cm-motion-steadicam .cm-scene { animation: cm-kf-steadicam 3.5s ease-in-out infinite alternate; }
+
+/* Pan */
+.cm-motion-pan-left  .cm-scene { animation: cm-kf-pan-left  4s ease-in-out infinite alternate; }
+.cm-motion-pan-right .cm-scene { animation: cm-kf-pan-right 4s ease-in-out infinite alternate; }
+.cm-motion-whip-pan-left  .cm-scene { animation: cm-kf-whip-pan-left  2.2s ease-in-out infinite; }
+.cm-motion-whip-pan-right .cm-scene { animation: cm-kf-whip-pan-right 2.2s ease-in-out infinite; }
+
+/* Tilt */
+.cm-motion-tilt-up   .cm-scene { animation: cm-kf-tilt-up   3.6s ease-in-out infinite alternate; }
+.cm-motion-tilt-down .cm-scene { animation: cm-kf-tilt-down 3.6s ease-in-out infinite alternate; }
+
+/* Zoom (lens only — animate the whole scene uniformly, no parallax) */
+.cm-motion-zoom-in         .cm-scene { animation: cm-kf-zoom-in  3.5s ease-in-out infinite alternate; }
+.cm-motion-zoom-out        .cm-scene { animation: cm-kf-zoom-out 3.5s ease-in-out infinite alternate; }
+.cm-motion-crash-zoom-in   .cm-scene { animation: cm-kf-crash-zoom-in  2s ease-out infinite; }
+.cm-motion-crash-zoom-out  .cm-scene { animation: cm-kf-crash-zoom-out 2s ease-out infinite; }
+
+/* Dolly (camera body moves — parallax: near markers travel farther than the scene) */
+.cm-motion-dolly-in    .cm-scene            { animation: cm-kf-dolly-in-scene  4s ease-in-out infinite alternate; }
+.cm-motion-dolly-in    .cm-depth-near-left  { animation: cm-kf-dolly-in-depth  4s ease-in-out infinite alternate; }
+.cm-motion-dolly-in    .cm-depth-near-right { animation: cm-kf-dolly-in-depth-right 4s ease-in-out infinite alternate; }
+.cm-motion-dolly-out   .cm-scene            { animation: cm-kf-dolly-out-scene 4s ease-in-out infinite alternate; }
+.cm-motion-dolly-out   .cm-depth-near-left  { animation: cm-kf-dolly-in-depth-right 4s ease-in-out infinite alternate; }
+.cm-motion-dolly-out   .cm-depth-near-right { animation: cm-kf-dolly-in-depth 4s ease-in-out infinite alternate; }
+.cm-motion-push-in     .cm-scene            { animation: cm-kf-dolly-in-scene  6s ease-in-out infinite alternate; }
+.cm-motion-pull-out    .cm-scene            { animation: cm-kf-dolly-out-scene 6s ease-in-out infinite alternate; }
+
+/* Dolly Zoom — background scales, subject stays the same size */
+.cm-motion-dolly-zoom  .cm-sky,
+.cm-motion-dolly-zoom  .cm-ground,
+.cm-motion-dolly-zoom  .cm-horizon,
+.cm-motion-dolly-zoom  .cm-depth-far,
+.cm-motion-dolly-zoom  .cm-depth-near { animation: cm-kf-dolly-zoom-bg 4s ease-in-out infinite alternate; }
+
+/* Truck */
+.cm-motion-truck-left  .cm-scene { animation: cm-kf-truck-left  3.5s ease-in-out infinite alternate; }
+.cm-motion-truck-right .cm-scene { animation: cm-kf-truck-right 3.5s ease-in-out infinite alternate; }
+.cm-motion-truck-left  .cm-depth-near-left,
+.cm-motion-truck-left  .cm-depth-near-right { animation: cm-kf-truck-left 2.5s ease-in-out infinite alternate; }
+.cm-motion-truck-right .cm-depth-near-left,
+.cm-motion-truck-right .cm-depth-near-right { animation: cm-kf-truck-right 2.5s ease-in-out infinite alternate; }
+
+/* Pedestal */
+.cm-motion-pedestal-up   .cm-scene { animation: cm-kf-pedestal-up   3.6s ease-in-out infinite alternate; }
+.cm-motion-pedestal-down .cm-scene { animation: cm-kf-pedestal-down 3.6s ease-in-out infinite alternate; }
+
+/* Roll / Dutch */
+.cm-motion-roll-left   .cm-scene { animation: cm-kf-roll-left   3.2s ease-in-out infinite alternate; }
+.cm-motion-roll-right  .cm-scene { animation: cm-kf-roll-right  3.2s ease-in-out infinite alternate; }
+.cm-motion-dutch-angle .cm-scene { transform: rotate(-12deg); }
+
+/* Orbit / Arc — subject stays centered, background orbits */
+.cm-motion-orbit-left  .cm-sky,
+.cm-motion-orbit-left  .cm-ground,
+.cm-motion-orbit-left  .cm-horizon,
+.cm-motion-orbit-left  .cm-depth-far,
+.cm-motion-orbit-left  .cm-depth-near { animation: cm-kf-orbit-left  4s ease-in-out infinite alternate; }
+.cm-motion-orbit-right .cm-sky,
+.cm-motion-orbit-right .cm-ground,
+.cm-motion-orbit-right .cm-horizon,
+.cm-motion-orbit-right .cm-depth-far,
+.cm-motion-orbit-right .cm-depth-near { animation: cm-kf-orbit-right 4s ease-in-out infinite alternate; }
+.cm-motion-arc-left  .cm-sky,
+.cm-motion-arc-left  .cm-ground,
+.cm-motion-arc-left  .cm-horizon,
+.cm-motion-arc-left  .cm-depth-far,
+.cm-motion-arc-left  .cm-depth-near { animation: cm-kf-arc-left  4s ease-in-out infinite alternate; }
+.cm-motion-arc-right .cm-sky,
+.cm-motion-arc-right .cm-ground,
+.cm-motion-arc-right .cm-horizon,
+.cm-motion-arc-right .cm-depth-far,
+.cm-motion-arc-right .cm-depth-near { animation: cm-kf-arc-right 4s ease-in-out infinite alternate; }
+
+/* Crane / Boom */
+.cm-motion-crane-up   .cm-scene { animation: cm-kf-crane-up   4.5s ease-in-out infinite alternate; }
+.cm-motion-crane-down .cm-scene { animation: cm-kf-crane-down 4.5s ease-in-out infinite alternate; }
+.cm-motion-boom-up    .cm-scene { animation: cm-kf-pedestal-up   4s ease-in-out infinite alternate; }
+.cm-motion-boom-down  .cm-scene { animation: cm-kf-pedestal-down 4s ease-in-out infinite alternate; }
+
+/* Tracking / Follow / Lead — subject stays, background moves */
+.cm-motion-tracking-shot .cm-sky,
+.cm-motion-tracking-shot .cm-ground,
+.cm-motion-tracking-shot .cm-horizon,
+.cm-motion-tracking-shot .cm-depth-far,
+.cm-motion-tracking-shot .cm-depth-near { animation: cm-kf-tracking-bg 3s linear infinite; }
+.cm-motion-follow .cm-sky,
+.cm-motion-follow .cm-ground,
+.cm-motion-follow .cm-horizon,
+.cm-motion-follow .cm-depth-far,
+.cm-motion-follow .cm-depth-near { animation: cm-kf-follow-depth 3.5s ease-in-out infinite alternate; }
+.cm-motion-lead .cm-sky,
+.cm-motion-lead .cm-ground,
+.cm-motion-lead .cm-horizon,
+.cm-motion-lead .cm-depth-far,
+.cm-motion-lead .cm-depth-near { animation: cm-kf-lead-depth 3.5s ease-in-out infinite alternate; }
+
+/* POV / OTS — handheld-like base motion */
+.cm-motion-pov .cm-scene { animation: cm-kf-handheld 1.8s linear infinite; }
+.cm-motion-over-the-shoulder .cm-scene { animation: cm-kf-steadicam 4s ease-in-out infinite alternate; }
+
+/* Snorricam — subject locked, world spins */
+.cm-motion-snorricam .cm-sky,
+.cm-motion-snorricam .cm-ground,
+.cm-motion-snorricam .cm-horizon,
+.cm-motion-snorricam .cm-depth-far,
+.cm-motion-snorricam .cm-depth-near { animation: cm-kf-snorricam 6s linear infinite; transform-origin: 50% 55%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-root *,
+  .cm-root *::before,
+  .cm-root *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

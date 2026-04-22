@@ -205,6 +205,7 @@ import {
   resolveConditionValue,
 } from "@nodaro-shared/filter-condition";
 import { sortListItems } from "@nodaro-shared/list-sort";
+import { getCameraMotionPromptHint } from "@nodaro-shared/camera-motions";
 import { buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro-shared/condition-variables";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 
@@ -948,7 +949,10 @@ export function executeNode(
     // Inject motion/camera hints into prompt when enabled
     const motionHints: string[] = [];
     if (i2vData.motionEnabled && i2vData.motion) motionHints.push(`${i2vData.motion} motion`);
-    if (i2vData.cameraMotionEnabled && i2vData.cameraMotion && i2vData.cameraMotion !== "static") motionHints.push(`camera: ${i2vData.cameraMotion.replace("-", " ")}`);
+    if (i2vData.cameraMotionEnabled && i2vData.cameraMotion) {
+      const cameraHint = getCameraMotionPromptHint(i2vData.cameraMotion);
+      if (cameraHint) motionHints.push(cameraHint);
+    }
     if (motionHints.length > 0 && prompt) prompt = `${prompt}. ${motionHints.join(", ")}`;
     else if (motionHints.length > 0) prompt = motionHints.join(", ");
     const kling3Mode = (i2vData as Record<string, unknown>).kling3Mode as

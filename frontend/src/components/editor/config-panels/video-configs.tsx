@@ -37,6 +37,7 @@ import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
 import { Kling3StudioConfig } from "./kling3-studio-config"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
+import { CameraMotionPicker } from "./camera-motion-picker"
 import { ConnectedMediaList, getSourceThumbnail } from "./connected-media-list"
 import type { ConfigProps } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
@@ -285,19 +286,10 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         </div>
         {data.cameraMotionEnabled && (
           <MappableField field="cameraMotion" label="Camera Motion" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <Select
+            <CameraMotionPicker
               value={data.cameraMotion || "static"}
-              onValueChange={(v) => onUpdate({ cameraMotion: v as ImageToVideoData["cameraMotion"] })}
-            >
-              <SelectTrigger aria-label="Camera Motion"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="static">Static</SelectItem>
-                <SelectItem value="pan-left">Pan Left</SelectItem>
-                <SelectItem value="pan-right">Pan Right</SelectItem>
-                <SelectItem value="zoom-in">Zoom In</SelectItem>
-                <SelectItem value="zoom-out">Zoom Out</SelectItem>
-              </SelectContent>
-            </Select>
+              onValueChange={(v) => onUpdate({ cameraMotion: v })}
+            />
           </MappableField>
         )}
       </div>
