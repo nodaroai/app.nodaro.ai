@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useState, useEffect, useRef, useCallback } from "react"
-import { Position, type NodeProps } from "@xyflow/react"
+import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Type, Settings, Link, Scissors } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
@@ -87,6 +87,13 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
   }
 
+  // Re-register handles with React Flow when Seedance 2 toggles ref handles on/off
+  const isSeedance2 = isSeedance2Provider(provider)
+  const updateNodeInternals = useUpdateNodeInternals()
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [id, isSeedance2, updateNodeInternals])
+
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>
     <EditableNodeLabel
@@ -153,7 +160,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-        ...(isSeedance2Provider(provider) ? [
+        ...(isSeedance2 ? [
           { id: "reference-images", type: "target" as const, position: Position.Left, top: 'calc(100% - 160px)', customStyle: { top: 'calc(100% - 160px)', left: '-29px' }, hideHandle: true, label: `Ref images ×${SEEDANCE_2_REF_LIMITS.images}` },
           { id: "reference-videos", type: "target" as const, position: Position.Left, top: 'calc(100% - 120px)', customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, hideHandle: true, label: `Ref videos ×${SEEDANCE_2_REF_LIMITS.videos}` },
           { id: "reference-audio",  type: "target" as const, position: Position.Left, top: 'calc(100% - 85px)',  customStyle: { top: 'calc(100% - 85px)',  left: '-29px' }, hideHandle: true, label: `Ref audio ×${SEEDANCE_2_REF_LIMITS.audio}` },
