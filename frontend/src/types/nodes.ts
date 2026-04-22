@@ -784,7 +784,6 @@ export type TextToVideoData = {
   label: string
   prompt: string
   provider: TextToVideoProvider
-  model: string
   duration: number
   aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "21:9" | "adaptive"
   negativePrompt: string
