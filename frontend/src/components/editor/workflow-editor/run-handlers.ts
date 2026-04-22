@@ -78,14 +78,22 @@ type ListLoopColumn = {
  * while the new run is still populating. `activeResultIndex` is reset to 0
  * to stay consistent with the emptied `generatedResults`.
  */
-const ACCUMULATION_FIELDS_TO_CLEAR: ReadonlyArray<string> = [
+const HISTORY_FIELDS: ReadonlyArray<string> = [
   "generatedResults",
   "activeResultIndex",
+]
+
+const LIST_STATE_FIELDS: ReadonlyArray<string> = [
   "__listResults",
   "__listTotal",
   "__listCompleted",
   "__listInputs",
   "listResults",
+]
+
+const ACCUMULATION_FIELDS_TO_CLEAR: ReadonlyArray<string> = [
+  ...HISTORY_FIELDS,
+  ...LIST_STATE_FIELDS,
 ]
 
 /**
@@ -96,14 +104,23 @@ const ACCUMULATION_FIELDS_TO_CLEAR: ReadonlyArray<string> = [
  * Each cleared field is only patched when present, so fresh nodes with no
  * prior state don't take a pointless store write (and don't register as
  * dirty for the auto-save).
+ *
+ * `options.preserveHistory` keeps `generatedResults` and `activeResultIndex`
+ * intact — used by single-node re-runs so the node's own history browser
+ * accumulates new takes instead of wiping prior results. Transient list-state
+ * fields are still cleared to avoid stale list badges.
  */
-export function resetNodeAccumulation(nodes: ReadonlyArray<WorkflowNode>): void {
+export function resetNodeAccumulation(
+  nodes: ReadonlyArray<WorkflowNode>,
+  options: { preserveHistory?: boolean } = {},
+): void {
   const { updateNodeData } = useWorkflowStore.getState()
+  const fields = options.preserveHistory ? LIST_STATE_FIELDS : ACCUMULATION_FIELDS_TO_CLEAR
   for (const node of nodes) {
     if (!isExecutableNode(node)) continue
     const data = node.data as Record<string, unknown>
     const patch: Record<string, unknown> = {}
-    for (const key of ACCUMULATION_FIELDS_TO_CLEAR) {
+    for (const key of fields) {
       if (data[key] === undefined) continue
       if (key === "generatedResults") {
         if (Array.isArray(data[key]) && (data[key] as unknown[]).length === 0) continue
@@ -284,7 +301,7 @@ export async function handleRunSingleNode(
   }
 
   clearConnectedListRows(nodes);
-  resetNodeAccumulation([node]);
+  resetNodeAccumulation([node], { preserveHistory: true });
 
   if (projectId) {
     await save(projectId);
