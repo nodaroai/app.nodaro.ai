@@ -2,7 +2,7 @@
 
 import { memo, useState, useMemo, useEffect, useRef, useCallback, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { Position, type NodeProps } from "@xyflow/react"
+import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, Images, Volume2, Maximize2, Download, Settings, LayoutGrid, Expand, Link, Scissors } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
@@ -236,6 +236,12 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     ] : []),
     { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: `${videoTop}px`, right: '-29px' }, hideHandle: true },
   ], [startFrameTop, endFrameTop, audioTop, referencesTop, refVideosTop, refAudioTop, videoTop, activeUrl, showConfig, showEndFrame, showStartFrame, showReferences, isSeedance2])
+
+  // Re-register handles with React Flow when they change — edges to new handles render unreliably otherwise
+  const updateNodeInternals = useUpdateNodeInternals()
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [id, handles.length, updateNodeInternals])
 
   const hasSeedance2Ref = isSeedance2 && edges.some((e) => e.target === id && (e.targetHandle === "reference-videos" || e.targetHandle === "reference-audio"))
   const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo || (showReferences && referencesConnectionCount > 0) || hasSeedance2Ref

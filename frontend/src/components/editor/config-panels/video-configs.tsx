@@ -30,7 +30,7 @@ import type {
   GeneratedScriptResult,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS } from "./model-options"
-import { isSeedance2Provider } from "@nodaro-shared/model-constants"
+import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS } from "@nodaro-shared/model-constants"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
@@ -919,6 +919,22 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
 export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToVideoData>) {
   useEffect(() => { prefetchModelCredits(VIDEO_T2V_MODELS.map((m) => m.value)) }, [])
   const allowedDurations = KIE_T2V_DURATIONS[data.provider || "minimax"] || null
+  const isSeedance2 = isSeedance2Provider(data.provider)
+
+  const connectedRefImages = useMemo(() => {
+    return sources.filter((s) => s.targetHandle === "reference-images").map((s) => ({
+      id: s.id, type: s.type, label: s.label, imageUrl: getSourceThumbnail(s),
+    }))
+  }, [sources])
+
+  const connectedRefVideos = useMemo(
+    () => sources.filter((s) => s.targetHandle === "reference-videos"),
+    [sources],
+  )
+  const connectedRefAudio = useMemo(
+    () => sources.filter((s) => s.targetHandle === "reference-audio"),
+    [sources],
+  )
 
   if (data.provider === "kling-3.0") {
     return <Kling3StudioConfig data={data as unknown as ImageToVideoData} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} />
@@ -1023,8 +1039,48 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </div>
       )}
 
-      {isSeedance2Provider(data.provider) && (
+      {isSeedance2 && (
         <>
+          {connectedRefImages.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Reference Images ({connectedRefImages.length}/{SEEDANCE_2_REF_LIMITS.images})</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {connectedRefImages.map((img) => (
+                  <div key={img.id} className="relative w-12 h-12 rounded border border-border overflow-hidden">
+                    {img.imageUrl ? (
+                      <img src={img.imageUrl} alt={img.label} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-muted flex items-center justify-center text-[8px] text-muted-foreground">No img</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {connectedRefVideos.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Reference Videos ({connectedRefVideos.length}/{SEEDANCE_2_REF_LIMITS.videos})</Label>
+              <div className="flex flex-col gap-1">
+                {connectedRefVideos.map((s) => (
+                  <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
+                    {s.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {connectedRefAudio.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Reference Audio ({connectedRefAudio.length}/{SEEDANCE_2_REF_LIMITS.audio})</Label>
+              <div className="flex flex-col gap-1">
+                {connectedRefAudio.map((s) => (
+                  <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
+                    {s.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div>
             <Label className="text-xs">Resolution</Label>
             <Select
@@ -1073,11 +1129,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 
       <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <AspectRatioSelector
-          options={
-            isSeedance2Provider(data.provider)
-              ? SEEDANCE_2_VIDEO_RATIOS
-              : VIDEO_RATIOS
-          }
+          options={isSeedance2 ? SEEDANCE_2_VIDEO_RATIOS : VIDEO_RATIOS}
           value={data.aspectRatio}
           onValueChange={(v) => onUpdate({ aspectRatio: v as TextToVideoData["aspectRatio"] })}
         />
