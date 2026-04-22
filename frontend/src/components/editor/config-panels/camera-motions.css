@@ -177,7 +177,7 @@
   top: 55%;
   transform: translate(-50%, -50%);
   width: 18cqw;
-  height: 20.5cqw;
+  height: 19.5cqw;
   z-index: 3;
   perspective: 120cqw;
   perspective-origin: 50% 40%;
@@ -213,7 +213,7 @@
   transform-style: preserve-3d;
 }
 .cm-subject-head { width: 7cqw; height: 7cqw; }
-.cm-subject-body { width: 10cqw; height: 11.5cqw; }
+.cm-subject-body { width: 10cqw; height: 10.5cqw; }
 
 /* Face colors — front is bright, back is dark maroon, sides are mid rose. */
 .cm-face {
