@@ -63,7 +63,7 @@
   width: 100%;
   height: 58%;
   background: linear-gradient(to right, #780040 0%, #c00064 22%, #ff2a89 50%, #c00064 78%, #780040 100%);
-  border-radius: 14% 14% 8% 8% / 28% 28% 8% 8%;
+  border-radius: 14% 14% 0 0 / 28% 28% 0 0;
   box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.25);
   transform: translateX(-50%);
 }

@@ -228,7 +228,7 @@
   border-radius: 50%;
 }
 .cm-subject-body .cm-face {
-  border-radius: 14% 14% 10% 10% / 14% 14% 8% 8%;
+  border-radius: 14% 14% 0 0 / 14% 14% 0 0;
 }
 
 /* --- HEAD faces --- */
@@ -273,7 +273,7 @@
   width: 4cqw;
   height: 100%;
   margin-left: -2cqw;
-  border-radius: 30% 30% 14% 14% / 10% 10% 6% 6%;
+  border-radius: 30% 30% 0 0 / 10% 10% 0 0;
   background: linear-gradient(to bottom, #95004f 0%, #6f0035 100%);
 }
 .cm-body-left  { transform: rotateY(-90deg) translateZ(5cqw); }
