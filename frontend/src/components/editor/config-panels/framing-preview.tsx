@@ -60,7 +60,7 @@ export const FramingPreview = memo(function FramingPreview({
             <div className="fr-shadow" />
           </div>
         )}
-        <div className="fr-thirds" />
+        <div className="fr-thirds-overlay" />
         <div className="fr-leading-lines-overlay" />
       </div>
     </div>

@@ -91,21 +91,28 @@
 .fr-subject-3 .fr-head { background: radial-gradient(circle at 32% 28%, #86efac 0%, #22c55e 50%, #166534 100%); }
 .fr-subject-3 .fr-body { background: linear-gradient(to right, #166534 0%, #15803d 50%, #166534 100%); }
 
-/* Rule-of-thirds / leading-lines overlay */
-.fr-thirds {
+/*
+ * Rule-of-thirds + leading-lines overlays. Scoped under the per-framing
+ * class on the root (`.fr-rule-of-thirds` / `.fr-leading-lines`) below;
+ * hidden by default. The overlay elements themselves have the neutral
+ * class names `.fr-thirds-overlay` / `.fr-leading-lines-overlay` so they
+ * can't collide with the root's motion-id class.
+ */
+.fr-thirds-overlay,
+.fr-leading-lines-overlay {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  display: none;
+}
+.fr-thirds-overlay {
   background:
     linear-gradient(90deg, transparent 33.3%, rgba(255, 255, 255, 0.2) 33.3%, rgba(255, 255, 255, 0.2) 33.5%, transparent 33.5%),
     linear-gradient(90deg, transparent 66.6%, rgba(255, 255, 255, 0.2) 66.6%, rgba(255, 255, 255, 0.2) 66.8%, transparent 66.8%),
     linear-gradient(0deg,  transparent 33.3%, rgba(255, 255, 255, 0.2) 33.3%, rgba(255, 255, 255, 0.2) 33.5%, transparent 33.5%),
     linear-gradient(0deg,  transparent 66.6%, rgba(255, 255, 255, 0.2) 66.6%, rgba(255, 255, 255, 0.2) 66.8%, transparent 66.8%);
 }
-.fr-leading-lines {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+.fr-leading-lines-overlay {
   background:
     linear-gradient(to top right, transparent 49.5%, rgba(255, 255, 255, 0.2) 49.8%, rgba(255, 255, 255, 0.2) 50.2%, transparent 50.5%),
     linear-gradient(to top left,  transparent 49.5%, rgba(255, 255, 255, 0.2) 49.8%, rgba(255, 255, 255, 0.2) 50.2%, transparent 50.5%);
@@ -294,29 +301,15 @@
 
 /* =================== Composition =================== */
 
-.fr-rule-of-thirds { }
-.fr-rule-of-thirds .fr-thirds { display: block; }
-.fr-rule-of-thirds .fr-subject { left: 33%; }
+.fr-rule-of-thirds .fr-thirds-overlay         { display: block; }
+.fr-rule-of-thirds .fr-subject                { left: 33%; }
 
-.fr-centered .fr-subject { left: 50%; }
+.fr-centered .fr-subject                      { left: 50%; }
 
-.fr-headroom-tight .fr-subject { bottom: 10%; height: 30cqw; width: 20cqw; }
-.fr-headroom-tight .fr-subject .fr-head { width: 52%; }
+.fr-headroom-tight .fr-subject                { bottom: 10%; height: 30cqw; width: 20cqw; }
+.fr-headroom-tight .fr-subject .fr-head       { width: 52%; }
 
-.fr-negative-space .fr-subject { left: 80%; }
+.fr-negative-space .fr-subject                { left: 80%; }
 
-.fr-leading-lines .fr-subject { left: 50%; }
-.fr-leading-lines .fr-leading-lines-overlay { display: block; }
-
-/* Default: hide overlays */
-.fr-thirds,
-.fr-leading-lines-overlay { display: none; }
-.fr-leading-lines .fr-leading-lines-overlay {
-  display: block;
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(to top right, transparent 49.5%, rgba(255, 255, 255, 0.2) 49.8%, rgba(255, 255, 255, 0.2) 50.2%, transparent 50.5%),
-    linear-gradient(to top left,  transparent 49.5%, rgba(255, 255, 255, 0.2) 49.8%, rgba(255, 255, 255, 0.2) 50.2%, transparent 50.5%);
-}
+.fr-leading-lines .fr-subject                 { left: 50%; }
+.fr-leading-lines .fr-leading-lines-overlay   { display: block; }
