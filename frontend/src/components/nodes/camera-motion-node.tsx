@@ -3,6 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Video } from "lucide-react"
+import { getCameraMotionLabel } from "@nodaro-shared/camera-motions"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { CameraMotionData } from "@/types/nodes"
 
@@ -12,7 +13,7 @@ function CameraMotionNodeComponent({ id, data, selected }: NodeProps) {
   return (
     <ParameterNodeShell id={id} label={nodeData.label} icon={<Video />} handleId="out" selected={selected}>
       <p className="text-muted-foreground text-xs">
-        {nodeData.cameraMotion}
+        {getCameraMotionLabel(nodeData.cameraMotion)}
       </p>
     </ParameterNodeShell>
   )

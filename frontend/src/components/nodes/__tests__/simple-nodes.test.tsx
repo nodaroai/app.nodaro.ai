@@ -194,7 +194,7 @@ const SIMPLE_NODES: SimpleNodeTestConfig[] = [
     expectedCategory: "parameter",
     expectedCredits: 0,
     defaultData: { label: "Camera Motion", cameraMotion: "pan-left" },
-    contentAssertion: { text: "pan-left" },
+    contentAssertion: { text: "Pan Left" },
   },
   {
     name: "QACheckNode",

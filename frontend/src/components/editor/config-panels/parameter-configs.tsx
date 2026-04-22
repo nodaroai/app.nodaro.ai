@@ -28,6 +28,7 @@ import type {
   MotionData,
   CameraMotionData,
 } from "@/types/nodes"
+import { CameraMotionPicker } from "./camera-motion-picker"
 import type { ConfigProps } from "./types"
 
 export function ToneConfig({ data, onUpdate }: ConfigProps<ToneData>) {
@@ -208,22 +209,11 @@ export function MotionConfig({ data, onUpdate }: ConfigProps<MotionData>) {
 export function CameraMotionConfig({ data, onUpdate }: ConfigProps<CameraMotionData>) {
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <Label>Camera Motion</Label>
-        <Select
-          value={data.cameraMotion}
-          onValueChange={(v) => onUpdate({ cameraMotion: v as CameraMotionData["cameraMotion"] })}
-        >
-          <SelectTrigger aria-label="Camera motion"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="static">Static</SelectItem>
-            <SelectItem value="pan-left">Pan Left</SelectItem>
-            <SelectItem value="pan-right">Pan Right</SelectItem>
-            <SelectItem value="zoom-in">Zoom In</SelectItem>
-            <SelectItem value="zoom-out">Zoom Out</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <Label>Camera Motion</Label>
+      <CameraMotionPicker
+        value={data.cameraMotion || "static"}
+        onValueChange={(v) => onUpdate({ cameraMotion: v })}
+      />
     </div>
   )
 }
