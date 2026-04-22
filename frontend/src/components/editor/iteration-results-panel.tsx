@@ -52,7 +52,7 @@ async function downloadFile(url: string, filename: string) {
 }
 
 function getFileExtension(url: string, mediaType: "image" | "video" | "audio" | "text"): string {
-  const match = url.match(/\.(png|jpg|jpeg|webp|gif|mp4|mov|webm|mp3|wav|ogg)(\?|$)/i)
+  const match = url.match(/\.(png|jpg|jpeg|webp|gif|avif|heic|heif|mp4|mov|webm|mp3|wav|ogg)(\?|$)/i)
   if (match) return match[1].toLowerCase()
   switch (mediaType) {
     case "image": return "png"

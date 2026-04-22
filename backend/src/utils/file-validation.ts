@@ -12,6 +12,9 @@ const ALLOWED_MIME_TYPES: Record<string, ReadonlyArray<string>> = {
     "image/jpeg",
     "image/webp",
     "image/gif",
+    "image/avif",
+    "image/heic",
+    "image/heif",
   ],
   video: [
     "video/mp4",
@@ -97,6 +100,9 @@ export function getExtensionFromMime(mimeType: string): string {
     "image/jpeg": "jpg",
     "image/webp": "webp",
     "image/gif": "gif",
+    "image/avif": "avif",
+    "image/heic": "heic",
+    "image/heif": "heif",
     "video/mp4": "mp4",
     "video/webm": "webm",
     "video/quicktime": "mov",
@@ -147,7 +153,7 @@ export function validateFile(
   if (!ALL_ALLOWED_TYPES.has(mimeType)) {
     return {
       valid: false,
-      error: `Unsupported file type: ${mimeType}. Accepted types: images (png, jpg, webp, gif), videos (mp4, webm, mov, avi), audio (mp3, wav, m4a, aac, ogg)`,
+      error: `Unsupported file type: ${mimeType}. Accepted types: images (png, jpg, webp, gif, avif, heic, heif), videos (mp4, webm, mov, avi), audio (mp3, wav, m4a, aac, ogg)`,
     }
   }
 

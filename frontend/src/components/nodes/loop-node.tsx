@@ -807,14 +807,14 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     <div className="relative" style={{ maxWidth: `${nodeWidth}px` }}>
       <input
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
+        accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/heic,image/heif"
         onChange={handleCellFileSelect}
         className="hidden"
         ref={hiddenFileRef}
       />
       <input
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
+        accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/heic,image/heif"
         multiple
         onChange={(e) => {
           const files = Array.from(e.target.files ?? [])

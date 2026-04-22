@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import multipart from "@fastify/multipart"
 import { randomUUID } from "node:crypto"
+import sharp from "sharp"
 import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
@@ -37,6 +38,9 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/png",
   "image/jpeg",
   "image/webp",
+  "image/avif",
+  "image/heic",
+  "image/heif",
 ])
 
 // New endpoint supports up to 500 MB (for video), legacy stays at 50 MB
@@ -107,7 +111,8 @@ export async function uploadRoutes(app: FastifyInstance) {
       })
     }
 
-    const buffer = await data.toBuffer()
+    let buffer = await data.toBuffer()
+    let mimeTypeFinal = mimeType
     const originalFilename = data.filename
 
     // Parse optional fields from multipart form
@@ -132,6 +137,20 @@ export async function uploadRoutes(app: FastifyInstance) {
 
     const category = validation.category as FileCategory
 
+    // HEIC/HEIF render only in Safari and cost libheif decodes per provider
+    // call; transcode once to JPEG so thumbnails work everywhere and providers
+    // skip re-decode.
+    if (mimeType === "image/heic" || mimeType === "image/heif") {
+      try {
+        buffer = await sharp(buffer).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
+        mimeTypeFinal = "image/jpeg"
+      } catch (err) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: `Failed to decode ${mimeType} image: ${(err as Error).message}` },
+        })
+      }
+    }
+
     // Step 2: Check storage quota (cloud edition)
     if (userId) {
       const quota = await checkStorageQuota(userId, buffer.length)
@@ -150,10 +169,10 @@ export async function uploadRoutes(app: FastifyInstance) {
     }
 
     // Step 3: Upload original file to R2
-    const ext = getExtensionFromMime(mimeType)
+    const ext = getExtensionFromMime(mimeTypeFinal)
     const fileId = randomUUID()
     const r2Key = `uploads/${category}s/${fileId}.${ext}`
-    const publicUrl = await uploadBufferToS3(buffer, r2Key, mimeType)
+    const publicUrl = await uploadBufferToS3(buffer, r2Key, mimeTypeFinal)
 
     // Step 4: Generate thumbnail & extract metadata
     let thumbnailUrl: string | null = null
@@ -164,7 +183,7 @@ export async function uploadRoutes(app: FastifyInstance) {
         const result = await processImage(buffer)
         metadata = result.metadata
         const thumbKey = `uploads/${category}s/${fileId}_thumb.${ext}`
-        thumbnailUrl = await uploadBufferToS3(result.thumbnail, thumbKey, mimeType)
+        thumbnailUrl = await uploadBufferToS3(result.thumbnail, thumbKey, mimeTypeFinal)
       } else if (category === "video") {
         const result = await processVideo(buffer)
         metadata = result.metadata
@@ -191,7 +210,7 @@ export async function uploadRoutes(app: FastifyInstance) {
           user_id: userId,
           type: category,
           filename: displayFilename,
-          mime_type: mimeType,
+          mime_type: mimeTypeFinal,
           size_bytes: buffer.length,
           r2_key: r2Key,
           r2_url: publicUrl,
@@ -222,7 +241,7 @@ export async function uploadRoutes(app: FastifyInstance) {
         assetId,
         category,
         filename: filenameOverride ?? originalFilename,
-        mimeType,
+        mimeType: mimeTypeFinal,
         sizeBytes: buffer.length,
         metadata,
         r2Key,
@@ -274,11 +293,12 @@ export async function uploadRoutes(app: FastifyInstance) {
 
     if (!ALLOWED_IMAGE_TYPES.has(file.mimetype)) {
       return reply.status(400).send({
-        error: { code: "validation_error", message: `Unsupported image type: ${file.mimetype}. Accepted: png, jpeg, webp` },
+        error: { code: "validation_error", message: `Unsupported image type: ${file.mimetype}. Accepted: png, jpeg, webp, avif, heic, heif` },
       })
     }
 
-    const buffer = await file.toBuffer()
+    let buffer = await file.toBuffer()
+    let mime = file.mimetype
 
     if (buffer.length > LEGACY_MAX_FILE_SIZE) {
       return reply.status(400).send({
@@ -286,11 +306,22 @@ export async function uploadRoutes(app: FastifyInstance) {
       })
     }
 
-    const MIME_TO_EXT: Record<string, string> = { "image/png": "png", "image/webp": "webp" }
-    const ext = MIME_TO_EXT[file.mimetype] ?? "jpg"
+    if (mime === "image/heic" || mime === "image/heif") {
+      try {
+        buffer = await sharp(buffer).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
+        mime = "image/jpeg"
+      } catch (err) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: `Failed to decode ${file.mimetype} image: ${(err as Error).message}` },
+        })
+      }
+    }
+
+    const MIME_TO_EXT: Record<string, string> = { "image/png": "png", "image/webp": "webp", "image/avif": "avif" }
+    const ext = MIME_TO_EXT[mime] ?? "jpg"
     const key = `uploads/${randomUUID()}.${ext}`
 
-    const publicUrl = await uploadBufferToS3(buffer, key, file.mimetype)
+    const publicUrl = await uploadBufferToS3(buffer, key, mime)
 
     return { url: publicUrl }
   })

@@ -7,6 +7,9 @@ describe("detectCategory", () => {
     expect(detectCategory("image/jpeg")).toBe("image")
     expect(detectCategory("image/webp")).toBe("image")
     expect(detectCategory("image/gif")).toBe("image")
+    expect(detectCategory("image/avif")).toBe("image")
+    expect(detectCategory("image/heic")).toBe("image")
+    expect(detectCategory("image/heif")).toBe("image")
   })
 
   it("detects video types", () => {
@@ -34,6 +37,8 @@ describe("getExtensionFromMime", () => {
   it("maps common types to extensions", () => {
     expect(getExtensionFromMime("image/png")).toBe("png")
     expect(getExtensionFromMime("image/jpeg")).toBe("jpg")
+    expect(getExtensionFromMime("image/avif")).toBe("avif")
+    expect(getExtensionFromMime("image/heic")).toBe("heic")
     expect(getExtensionFromMime("video/mp4")).toBe("mp4")
     expect(getExtensionFromMime("audio/mpeg")).toBe("mp3")
     expect(getExtensionFromMime("video/quicktime")).toBe("mov")
