@@ -35,15 +35,11 @@ import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, IMAGE_EDIT_MODELS, MODIFY_IMAGE_MOD
 import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
-import { InlineFramingField } from "./inline-framing-field"
-import { InlineLensField } from "./inline-lens-field"
-import { InlineCameraFormatField } from "./inline-camera-format-field"
-import { InlineLightingField } from "./inline-lighting-field"
-import { InlineColorLookField } from "./inline-color-look-field"
-import { InlineAtmosphereField } from "./inline-atmosphere-field"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { ReferenceImageList } from "./reference-image-list"
 import { ConnectedMediaList } from "./connected-media-list"
+import { FinalPromptPreview } from "./final-prompt-preview"
+import { ConnectedCinematographySources } from "./connected-cinematography-sources"
 import type { ConfigProps } from "./types"
 import type { SelectedAsset } from "../asset-selection-modal"
 
@@ -58,7 +54,7 @@ const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
 }
 const DEFAULT_REF_IMAGE_MAX = 4
 
-export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<GenerateImageData>) {
+export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateImageData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
   const currentProvider = data.provider || "nano-banana-pro"
   const supportsRefImage = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(currentProvider)
@@ -121,7 +117,6 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const addNode = useWorkflowStore((s) => s.addNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
-  const nodes = useWorkflowStore((s) => s.nodes)
   const attachedIds = data.characterDefinitionIds ?? []
   const attachedChars = allCharDefs.filter((c) => attachedIds.includes(c.id))
 
@@ -186,6 +181,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
 
   return (
     <div className="flex flex-col gap-3">
+      <FinalPromptPreview userPrompt={data.prompt} style={data.style} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       {/* Provider — primary decision, determines which model-specific fields appear below */}
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
@@ -213,12 +209,6 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
           refMap={refMap}
         />
       </MappableField>
-      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={isCustomStyle ? "__custom__" : (data.style || "__none__")}
@@ -502,11 +492,13 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
       )}
 
       <MediaEditorModal editor={genImgMediaEditor} />
+
+      <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
     </div>
   )
 }
 
-export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<EditImageData>) {
+export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<EditImageData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(IMAGE_EDIT_MODELS.map((m) => m.value)) }, [])
   const isNanoBananaEdit = data.provider === "nano-banana-edit"
   const showUpscaleFactor = data.provider === "topaz-image-upscale"
@@ -521,7 +513,6 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const addNode = useWorkflowStore((s) => s.addNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
-  const nodes = useWorkflowStore((s) => s.nodes)
   const attachedIds = data.characterDefinitionIds ?? []
   const attachedChars = allCharDefs.filter((c) => attachedIds.includes(c.id))
 
@@ -559,6 +550,7 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
 
   return (
     <div className="flex flex-col gap-3">
+      <FinalPromptPreview userPrompt={data.prompt} style={data.style} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       <MappableField field="provider" label="Operation" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
           value={data.provider || "recraft-upscale"}
@@ -587,12 +579,6 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
             />
           </MappableField>
 
-          <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-          <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-          <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-          <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-          <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-          <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
 
           {/* Connected upstream images with ordering */}
           {sources.filter((s) => IMAGE_SOURCE_TYPES.has(s.type)).length > 0 && (
@@ -832,11 +818,13 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
           />
         </Suspense>
       )}
+
+      <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
     </div>
   )
 }
 
-export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ImageToImageData>) {
+export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageToImageData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(IMAGE_I2I_MODELS.map((m) => m.value)) }, [])
   const currentProvider = data.provider || "nano-banana"
   const supportsRefImage = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(currentProvider)
@@ -890,7 +878,6 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const addNode = useWorkflowStore((s) => s.addNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
-  const nodes = useWorkflowStore((s) => s.nodes)
   const attachedIds = data.characterDefinitionIds ?? []
   const attachedChars = allCharDefs.filter((c) => attachedIds.includes(c.id))
 
@@ -945,6 +932,7 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
 
   return (
     <div className="flex flex-col gap-3">
+      <FinalPromptPreview userPrompt={data.prompt} style={data.style} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
           value={data.provider || "nano-banana"}
@@ -970,12 +958,6 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
           refMap={refMap}
         />
       </MappableField>
-      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={isCustomStyle ? "__custom__" : (data.style || "__none__")}
@@ -1335,11 +1317,13 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
       )}
 
       <MediaEditorModal editor={i2iMediaEditor} />
+
+      <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
     </div>
   )
 }
 
-export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ModifyImageData>) {
+export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ModifyImageData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(MODIFY_IMAGE_MODELS.map((m) => m.value)) }, [])
   const currentProvider = data.provider || "nano-banana"
   const isNanoBananaEdit = currentProvider === "nano-banana-edit"
@@ -1392,7 +1376,6 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const addNode = useWorkflowStore((s) => s.addNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
-  const nodes = useWorkflowStore((s) => s.nodes)
   const attachedIds = data.characterDefinitionIds ?? []
   const attachedChars = allCharDefs.filter((c) => attachedIds.includes(c.id))
 
@@ -1446,6 +1429,7 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
 
   return (
     <div className="flex flex-col gap-3">
+      <FinalPromptPreview userPrompt={data.prompt} style={data.style} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
           value={data.provider || "nano-banana"}
@@ -1470,12 +1454,6 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
           refMap={refMap}
         />
       </MappableField>
-      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={isCustomStyle ? "__custom__" : (data.style || "__none__")}
@@ -1835,6 +1813,8 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
       )}
 
       <MediaEditorModal editor={modifyMediaEditor} />
+
+      <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
     </div>
   )
 }

@@ -35,7 +35,8 @@ function collectEnabled(data: TemporalData): EnabledEntry[] {
 function TemporalNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as TemporalData
   const enabled = collectEnabled(nodeData)
-  const maxItemsPerRow = Math.max(1, Math.min(4, nodeData.maxItemsPerRow ?? 1))
+  const maxItemsPerRow = Math.max(1, Math.min(4, nodeData.maxItemsPerRow ?? 2))
+  const gridColumns = Math.max(1, Math.min(maxItemsPerRow, enabled.length))
 
   return (
     <ParameterNodeShell
@@ -50,7 +51,7 @@ function TemporalNodeComponent({ id, data, selected }: NodeProps) {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: `repeat(${maxItemsPerRow}, minmax(0, 1fr))`,
+            gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`,
             columnGap: "0.5rem",
             rowGap: "1.25rem",
           }}

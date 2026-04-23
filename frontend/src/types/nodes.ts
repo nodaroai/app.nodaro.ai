@@ -652,30 +652,6 @@ export type GenerateImageData = {
   style: string
   aspectRatio: string
   negativePrompt: string
-  /** Per-category framing selections (multi-category model). See
-   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
-  shotSize?: string
-  angle?: string
-  coverage?: string
-  composition?: string
-  vantage?: string
-  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
-  lens?: string
-  lensEnabled?: boolean
-  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
-  cameraFormat?: string
-  cameraFormatEnabled?: boolean
-  /** Per-category lighting selections (multi-category model). See
-   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
-  timeOfDay?: string
-  lightingStyle?: string
-  lightingDirection?: string
-  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
-  colorLook?: string
-  colorLookEnabled?: boolean
-  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
-  atmosphere?: string
-  atmosphereEnabled?: boolean
   resolution?: string
   quality?: string
   seed?: number
@@ -709,30 +685,6 @@ export type EditImageData = {
   aspectRatio?: string
   negativePrompt?: string
   style?: string
-  /** Per-category framing selections (multi-category model). See
-   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
-  shotSize?: string
-  angle?: string
-  coverage?: string
-  composition?: string
-  vantage?: string
-  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
-  lens?: string
-  lensEnabled?: boolean
-  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
-  cameraFormat?: string
-  cameraFormatEnabled?: boolean
-  /** Per-category lighting selections (multi-category model). See
-   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
-  timeOfDay?: string
-  lightingStyle?: string
-  lightingDirection?: string
-  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
-  colorLook?: string
-  colorLookEnabled?: boolean
-  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
-  atmosphere?: string
-  atmosphereEnabled?: boolean
   seed?: number
   characterDefinitionIds?: readonly string[]
   connectedMediaOrder?: readonly string[]
@@ -760,30 +712,6 @@ export type ImageToImageData = {
   resolution?: string
   quality?: string
   negativePrompt?: string
-  /** Per-category framing selections (multi-category model). See
-   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
-  shotSize?: string
-  angle?: string
-  coverage?: string
-  composition?: string
-  vantage?: string
-  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
-  lens?: string
-  lensEnabled?: boolean
-  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
-  cameraFormat?: string
-  cameraFormatEnabled?: boolean
-  /** Per-category lighting selections (multi-category model). See
-   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
-  timeOfDay?: string
-  lightingStyle?: string
-  lightingDirection?: string
-  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
-  colorLook?: string
-  colorLookEnabled?: boolean
-  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
-  atmosphere?: string
-  atmosphereEnabled?: boolean
   seed?: number
   renderingSpeed?: string
   guidanceScale?: number
@@ -813,30 +741,6 @@ export type ModifyImageData = {
   resolution?: string
   quality?: string
   negativePrompt?: string
-  /** Per-category framing selections (multi-category model). See
-   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
-  shotSize?: string
-  angle?: string
-  coverage?: string
-  composition?: string
-  vantage?: string
-  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
-  lens?: string
-  lensEnabled?: boolean
-  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
-  cameraFormat?: string
-  cameraFormatEnabled?: boolean
-  /** Per-category lighting selections (multi-category model). See
-   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
-  timeOfDay?: string
-  lightingStyle?: string
-  lightingDirection?: string
-  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
-  colorLook?: string
-  colorLookEnabled?: boolean
-  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
-  atmosphere?: string
-  atmosphereEnabled?: boolean
   seed?: number
   renderingSpeed?: string
   guidanceScale?: number
@@ -891,40 +795,8 @@ export type ImageToVideoData = {
   duration: number
   motion?: "subtle" | "moderate" | "dynamic"
   motionEnabled?: boolean
-  /** Motion id from CAMERA_MOTIONS catalog (packages/shared/src/camera-motions.ts). */
-  cameraMotion?: string
-  cameraMotionEnabled?: boolean
-  /** Per-category framing selections (multi-category model). See
-   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
-  shotSize?: string
-  angle?: string
-  coverage?: string
-  composition?: string
-  vantage?: string
-  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
-  lens?: string
-  lensEnabled?: boolean
-  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
-  cameraFormat?: string
-  cameraFormatEnabled?: boolean
-  /** Per-category lighting selections (multi-category model). See
-   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
-  timeOfDay?: string
-  lightingStyle?: string
-  lightingDirection?: string
-  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
-  colorLook?: string
-  colorLookEnabled?: boolean
-  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
-  atmosphere?: string
-  atmosphereEnabled?: boolean
-  /** Per-category temporal selections (multi-category model). See
-   * `TEMPORAL_FIELD_BY_CATEGORY` in `packages/shared/src/temporal.ts`. */
-  temporalSpeed?: string
-  temporalFreeze?: string
-  temporalDirection?: string
-  temporalShutter?: string
   prompt?: string  // Text description of desired motion/animation
+  negativePrompt?: string
   generateAudio?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -991,39 +863,6 @@ export type TextToVideoData = {
   duration: number
   aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "21:9" | "adaptive"
   negativePrompt: string
-  /** Motion id from CAMERA_MOTIONS catalog (packages/shared/src/camera-motions.ts). */
-  cameraMotion?: string
-  cameraMotionEnabled?: boolean
-  /** Per-category framing selections (multi-category model). See
-   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
-  shotSize?: string
-  angle?: string
-  coverage?: string
-  composition?: string
-  vantage?: string
-  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
-  lens?: string
-  lensEnabled?: boolean
-  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
-  cameraFormat?: string
-  cameraFormatEnabled?: boolean
-  /** Per-category lighting selections (multi-category model). See
-   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
-  timeOfDay?: string
-  lightingStyle?: string
-  lightingDirection?: string
-  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
-  colorLook?: string
-  colorLookEnabled?: boolean
-  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
-  atmosphere?: string
-  atmosphereEnabled?: boolean
-  /** Per-category temporal selections (multi-category model). See
-   * `TEMPORAL_FIELD_BY_CATEGORY` in `packages/shared/src/temporal.ts`. */
-  temporalSpeed?: string
-  temporalFreeze?: string
-  temporalDirection?: string
-  temporalShutter?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1050,39 +889,7 @@ export type VideoToVideoData = {
   prompt: string
   provider: VideoToVideoProvider
   duration: number
-  /** Motion id from CAMERA_MOTIONS catalog (packages/shared/src/camera-motions.ts). */
-  cameraMotion?: string
-  cameraMotionEnabled?: boolean
-  /** Per-category framing selections (multi-category model). See
-   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
-  shotSize?: string
-  angle?: string
-  coverage?: string
-  composition?: string
-  vantage?: string
-  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
-  lens?: string
-  lensEnabled?: boolean
-  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
-  cameraFormat?: string
-  cameraFormatEnabled?: boolean
-  /** Per-category lighting selections (multi-category model). See
-   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
-  timeOfDay?: string
-  lightingStyle?: string
-  lightingDirection?: string
-  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
-  colorLook?: string
-  colorLookEnabled?: boolean
-  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
-  atmosphere?: string
-  atmosphereEnabled?: boolean
-  /** Per-category temporal selections (multi-category model). See
-   * `TEMPORAL_FIELD_BY_CATEGORY` in `packages/shared/src/temporal.ts`. */
-  temporalSpeed?: string
-  temporalFreeze?: string
-  temporalDirection?: string
-  temporalShutter?: string
+  negativePrompt?: string
   fieldMappings: FieldMappings
   // Wan / Wan Flash params
   v2vDuration?: "5" | "10"
@@ -1153,39 +960,6 @@ export type SpeechToVideoData = {
   inferenceSteps?: number
   guidanceScale?: number
   shift?: number
-  /** Motion id from CAMERA_MOTIONS catalog (packages/shared/src/camera-motions.ts). */
-  cameraMotion?: string
-  cameraMotionEnabled?: boolean
-  /** Per-category framing selections (multi-category model). See
-   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
-  shotSize?: string
-  angle?: string
-  coverage?: string
-  composition?: string
-  vantage?: string
-  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
-  lens?: string
-  lensEnabled?: boolean
-  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
-  cameraFormat?: string
-  cameraFormatEnabled?: boolean
-  /** Per-category lighting selections (multi-category model). See
-   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
-  timeOfDay?: string
-  lightingStyle?: string
-  lightingDirection?: string
-  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
-  colorLook?: string
-  colorLookEnabled?: boolean
-  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
-  atmosphere?: string
-  atmosphereEnabled?: boolean
-  /** Per-category temporal selections (multi-category model). See
-   * `TEMPORAL_FIELD_BY_CATEGORY` in `packages/shared/src/temporal.ts`. */
-  temporalSpeed?: string
-  temporalFreeze?: string
-  temporalDirection?: string
-  temporalShutter?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1244,42 +1018,10 @@ export type ExtendVideoData = {
   label: string
   provider: ExtendVideoProvider
   prompt: string
+  negativePrompt?: string
   model?: "fast" | "quality"      // VEO only
   seeds?: number                   // VEO only
   quality?: "720p" | "1080p"      // Runway only
-  /** Motion id from CAMERA_MOTIONS catalog (packages/shared/src/camera-motions.ts). */
-  cameraMotion?: string
-  cameraMotionEnabled?: boolean
-  /** Per-category framing selections (multi-category model). See
-   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
-  shotSize?: string
-  angle?: string
-  coverage?: string
-  composition?: string
-  vantage?: string
-  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
-  lens?: string
-  lensEnabled?: boolean
-  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
-  cameraFormat?: string
-  cameraFormatEnabled?: boolean
-  /** Per-category lighting selections (multi-category model). See
-   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
-  timeOfDay?: string
-  lightingStyle?: string
-  lightingDirection?: string
-  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
-  colorLook?: string
-  colorLookEnabled?: boolean
-  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
-  atmosphere?: string
-  atmosphereEnabled?: boolean
-  /** Per-category temporal selections (multi-category model). See
-   * `TEMPORAL_FIELD_BY_CATEGORY` in `packages/shared/src/temporal.ts`. */
-  temporalSpeed?: string
-  temporalFreeze?: string
-  temporalDirection?: string
-  temporalShutter?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

@@ -252,7 +252,7 @@ export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: Con
 }
 
 export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
-  const maxItemsPerRow = data.maxItemsPerRow ?? 1
+  const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
     <div className="flex flex-col gap-3">
       <PromptInjectionPreview hints={buildFramingHints(data)} />
@@ -317,7 +317,7 @@ export function CameraFormatConfig({ data, onUpdate }: ConfigProps<CameraFormatD
 }
 
 export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
-  const maxItemsPerRow = data.maxItemsPerRow ?? 1
+  const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
     <div className="flex flex-col gap-3">
       <PromptInjectionPreview hints={buildLightingHints(data)} />
@@ -380,7 +380,7 @@ export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>
 }
 
 export function TemporalConfig({ data, onUpdate }: ConfigProps<TemporalData>) {
-  const maxItemsPerRow = data.maxItemsPerRow ?? 1
+  const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
     <div className="flex flex-col gap-3">
       <PromptInjectionPreview hints={buildTemporalHints(data)} />

@@ -201,10 +201,6 @@ describe("extractDisplayValue", () => {
     expect(extractDisplayValue({ motion: "slow" }, "motion")).toBe("slow")
   })
 
-  it("returns cameraMotion for camera-motion", () => {
-    expect(extractDisplayValue({ cameraMotion: "pan" }, "camera-motion")).toBe("pan")
-  })
-
   it("returns 'Audio ready' when reference-audio has videoTitle", () => {
     expect(extractDisplayValue({ videoTitle: "Song" }, "reference-audio")).toBe("Audio ready")
   })

@@ -205,15 +205,8 @@ import {
   resolveConditionValue,
 } from "@nodaro-shared/filter-condition";
 import { sortListItems } from "@nodaro-shared/list-sort";
-import { composeCameraMotionHintFromConnections } from "@nodaro-shared/camera-motions";
-import { buildFramingHints } from "@nodaro-shared/framing";
-import { getLensPromptHint } from "@nodaro-shared/lens";
-import { getCameraFormatPromptHint } from "@nodaro-shared/camera-format";
-import { buildLightingHints } from "@nodaro-shared/lighting";
-import { getColorLookPromptHint } from "@nodaro-shared/color-look";
-import { getAtmospherePromptHint } from "@nodaro-shared/atmosphere";
-import { buildTemporalHints } from "@nodaro-shared/temporal";
 import { buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro-shared/condition-variables";
+import { collectCinematographyHints } from "@/lib/cinematography-hints";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 
 // ---------------------------------------------------------------------------
@@ -256,100 +249,8 @@ function resolveUpstreamKieTaskId(nodeId: string, nodeData: Record<string, unkno
   return undefined;
 }
 
-// ---------------------------------------------------------------------------
-// Camera-motion v2 (graph-aware) — collect prompt hints from connected
-// parameter nodes via the source camera-motion node's startState/endState
-// input handles.
-// ---------------------------------------------------------------------------
-
-/**
- * Extract a prompt-hint string from a parameter-style node by dispatching on
- * its type. Returns the empty string for unsupported node types so the caller
- * can simply filter them out. Multi-category nodes (framing, lighting) join
- * their hints with `, ` so the camera-motion composer can chain them with
- * neighbour nodes via " and ".
- */
-function getNodePromptHint(node: WorkflowNode | undefined): string {
-  if (!node) return "";
-  const data = node.data as Record<string, unknown>;
-  switch (node.type) {
-    case "framing": {
-      // Aggregate per-category framing hints (and legacy `framing` fallback).
-      const hints = buildFramingHints(data);
-      return hints.join(", ");
-    }
-    case "lighting": {
-      const hints = buildLightingHints(data);
-      return hints.join(", ");
-    }
-    case "lens":
-      return getLensPromptHint(typeof data.lens === "string" ? data.lens : "");
-    case "camera-format":
-      return getCameraFormatPromptHint(typeof data.cameraFormat === "string" ? data.cameraFormat : "");
-    case "color-look":
-      return getColorLookPromptHint(typeof data.colorLook === "string" ? data.colorLook : "");
-    case "atmosphere":
-      return getAtmospherePromptHint(typeof data.atmosphere === "string" ? data.atmosphere : "");
-    case "temporal": {
-      const hints = buildTemporalHints(data);
-      return hints.join(", ");
-    }
-    case "tone":
-      // Tone field is a free-text description string.
-      return typeof data.tone === "string" ? data.tone.trim() : "";
-    case "text-prompt":
-      return typeof data.text === "string" ? data.text.trim() : "";
-    default:
-      return "";
-  }
-}
-
-/**
- * For a video-gen consumer that has `cameraMotionEnabled && cameraMotion`,
- * locate the upstream camera-motion node (via fieldMappings if present) and
- * walk its startState / endState input edges to collect prompt hints from
- * each connected parameter node. Falls back to the bare motion hint when the
- * camera-motion field is set inline (no mapping → no edges to walk).
- */
-function buildCameraMotionHintForConsumer(
-  consumerNodeId: string,
-  consumerData: Record<string, unknown>,
-  nodes: ReadonlyArray<WorkflowNode>,
-  edges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
-): string {
-  if (!consumerData.cameraMotionEnabled || !consumerData.cameraMotion) return "";
-  const motionId = String(consumerData.cameraMotion);
-
-  // Resolve the source camera-motion node id. Two paths:
-  //   1. fieldMappings.cameraMotion.sourceNodeId points at it directly
-  //   2. otherwise the field is literal-only — there is no source node and
-  //      hence no start/end connections to walk.
-  const fm = consumerData.fieldMappings as Record<string, { sourceNodeId?: string }> | undefined;
-  const sourceNodeId = fm?.cameraMotion?.sourceNodeId;
-
-  if (!sourceNodeId) {
-    // Literal/inline camera-motion: just the bare motion hint.
-    return composeCameraMotionHintFromConnections(motionId, [], []);
-  }
-
-  const startHints: string[] = [];
-  const endHints: string[] = [];
-  for (const edge of edges) {
-    if (edge.target !== sourceNodeId) continue;
-    const srcNode = nodes.find((n) => n.id === edge.source);
-    if (!srcNode) continue;
-    const hint = getNodePromptHint(srcNode);
-    if (!hint) continue;
-    if (edge.targetHandle === "startState") startHints.push(hint);
-    else if (edge.targetHandle === "endState") endHints.push(hint);
-  }
-
-  // Avoid double-injecting the consumer's own targeting on `consumerNodeId`
-  // — only the source camera-motion node's incoming edges matter here.
-  void consumerNodeId;
-
-  return composeCameraMotionHintFromConnections(motionId, startHints, endHints);
-}
+// Cinematography hint aggregation lives in `@/lib/cinematography-hints` —
+// both the DAG executor and UI preview components import it from there.
 
 /**
  * Alias for pollJobWithNodeUpdate to match original codebase naming.
@@ -650,34 +551,11 @@ export function executeNode(
       return Promise.reject(new Error("No prompt"));
     }
     {
-      const framingHints = buildFramingHints(imgData);
-      if (framingHints.length > 0) {
-        const joined = framingHints.join(", ");
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      if (cinematographyHints.length > 0) {
+        const joined = cinematographyHints.join(", ");
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
-    }
-    if (imgData.lensEnabled && imgData.lens) {
-      const lensHint = getLensPromptHint(imgData.lens);
-      if (lensHint) prompt = prompt ? `${prompt}. ${lensHint}` : lensHint;
-    }
-    if (imgData.cameraFormatEnabled && imgData.cameraFormat) {
-      const cfHint = getCameraFormatPromptHint(imgData.cameraFormat);
-      if (cfHint) prompt = prompt ? `${prompt}. ${cfHint}` : cfHint;
-    }
-    {
-      const lightingHints = buildLightingHints(imgData);
-      if (lightingHints.length > 0) {
-        const joined = lightingHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
-      }
-    }
-    if (imgData.colorLookEnabled && imgData.colorLook) {
-      const colorLookHint = getColorLookPromptHint(imgData.colorLook);
-      if (colorLookHint) prompt = prompt ? `${prompt}. ${colorLookHint}` : colorLookHint;
-    }
-    if (imgData.atmosphereEnabled && imgData.atmosphere) {
-      const atmosphereHint = getAtmospherePromptHint(imgData.atmosphere);
-      if (atmosphereHint) prompt = prompt ? `${prompt}. ${atmosphereHint}` : atmosphereHint;
     }
 
     const result = buildImagePrompt({
@@ -757,34 +635,11 @@ export function executeNode(
       }
     }
     {
-      const framingHints = buildFramingHints(editData);
-      if (framingHints.length > 0) {
-        const joined = framingHints.join(", ");
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      if (cinematographyHints.length > 0) {
+        const joined = cinematographyHints.join(", ");
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
-    }
-    if (editData.lensEnabled && editData.lens) {
-      const lensHint = getLensPromptHint(editData.lens);
-      if (lensHint) prompt = prompt ? `${prompt}. ${lensHint}` : lensHint;
-    }
-    if (editData.cameraFormatEnabled && editData.cameraFormat) {
-      const cfHint = getCameraFormatPromptHint(editData.cameraFormat);
-      if (cfHint) prompt = prompt ? `${prompt}. ${cfHint}` : cfHint;
-    }
-    {
-      const lightingHints = buildLightingHints(editData);
-      if (lightingHints.length > 0) {
-        const joined = lightingHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
-      }
-    }
-    if (editData.colorLookEnabled && editData.colorLook) {
-      const colorLookHint = getColorLookPromptHint(editData.colorLook);
-      if (colorLookHint) prompt = prompt ? `${prompt}. ${colorLookHint}` : colorLookHint;
-    }
-    if (editData.atmosphereEnabled && editData.atmosphere) {
-      const atmosphereHint = getAtmospherePromptHint(editData.atmosphere);
-      if (atmosphereHint) prompt = prompt ? `${prompt}. ${atmosphereHint}` : atmosphereHint;
     }
 
     // Collect reference images for nano-banana-edit
@@ -844,34 +699,11 @@ export function executeNode(
     const provider = i2iData.provider || "nano-banana";
 
     {
-      const framingHints = buildFramingHints(i2iData);
-      if (framingHints.length > 0) {
-        const joined = framingHints.join(", ");
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      if (cinematographyHints.length > 0) {
+        const joined = cinematographyHints.join(", ");
         rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
       }
-    }
-    if (i2iData.lensEnabled && i2iData.lens) {
-      const lensHint = getLensPromptHint(i2iData.lens);
-      if (lensHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${lensHint}` : lensHint;
-    }
-    if (i2iData.cameraFormatEnabled && i2iData.cameraFormat) {
-      const cfHint = getCameraFormatPromptHint(i2iData.cameraFormat);
-      if (cfHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${cfHint}` : cfHint;
-    }
-    {
-      const lightingHints = buildLightingHints(i2iData);
-      if (lightingHints.length > 0) {
-        const joined = lightingHints.join(", ");
-        rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
-      }
-    }
-    if (i2iData.colorLookEnabled && i2iData.colorLook) {
-      const colorLookHint = getColorLookPromptHint(i2iData.colorLook);
-      if (colorLookHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${colorLookHint}` : colorLookHint;
-    }
-    if (i2iData.atmosphereEnabled && i2iData.atmosphere) {
-      const atmosphereHint = getAtmospherePromptHint(i2iData.atmosphere);
-      if (atmosphereHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${atmosphereHint}` : atmosphereHint;
     }
 
     // Collect reference images from connected nodes + character assets
@@ -976,34 +808,11 @@ export function executeNode(
     const provider = modData.provider || "nano-banana";
 
     {
-      const framingHints = buildFramingHints(modData);
-      if (framingHints.length > 0) {
-        const joined = framingHints.join(", ");
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      if (cinematographyHints.length > 0) {
+        const joined = cinematographyHints.join(", ");
         rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
       }
-    }
-    if (modData.lensEnabled && modData.lens) {
-      const lensHint = getLensPromptHint(modData.lens);
-      if (lensHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${lensHint}` : lensHint;
-    }
-    if (modData.cameraFormatEnabled && modData.cameraFormat) {
-      const cfHint = getCameraFormatPromptHint(modData.cameraFormat);
-      if (cfHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${cfHint}` : cfHint;
-    }
-    {
-      const lightingHints = buildLightingHints(modData);
-      if (lightingHints.length > 0) {
-        const joined = lightingHints.join(", ");
-        rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
-      }
-    }
-    if (modData.colorLookEnabled && modData.colorLook) {
-      const colorLookHint = getColorLookPromptHint(modData.colorLook);
-      if (colorLookHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${colorLookHint}` : colorLookHint;
-    }
-    if (modData.atmosphereEnabled && modData.atmosphere) {
-      const atmosphereHint = getAtmospherePromptHint(modData.atmosphere);
-      if (atmosphereHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${atmosphereHint}` : atmosphereHint;
     }
 
     // Collect reference images from connected nodes + character assets
@@ -1170,39 +979,11 @@ export function executeNode(
     const referenceImageUrls = inputs.referenceImageUrls as string[] | undefined
 
     let prompt = (inputs.prompt ?? resolveTextRefs(i2vData.prompt?.trim() || undefined, refMap)) as string | undefined;
-    // Inject motion/camera/framing/lens hints into prompt when enabled
+    // Inject motion + cinematography hints into prompt
     const motionHints: string[] = [];
     if (i2vData.motionEnabled && i2vData.motion) motionHints.push(`${i2vData.motion} motion`);
-    const i2vCameraHint = buildCameraMotionHintForConsumer(node.id, i2vData as Record<string, unknown>, nodes, edges);
-    if (i2vCameraHint) motionHints.push(i2vCameraHint);
-    {
-      const framingHints = buildFramingHints(i2vData);
-      for (const h of framingHints) motionHints.push(h);
-    }
-    if (i2vData.lensEnabled && i2vData.lens) {
-      const lensHint = getLensPromptHint(i2vData.lens);
-      if (lensHint) motionHints.push(lensHint);
-    }
-    if (i2vData.cameraFormatEnabled && i2vData.cameraFormat) {
-      const cfHint = getCameraFormatPromptHint(i2vData.cameraFormat);
-      if (cfHint) motionHints.push(cfHint);
-    }
-    {
-      const lightingHints = buildLightingHints(i2vData);
-      for (const h of lightingHints) motionHints.push(h);
-    }
-    if (i2vData.colorLookEnabled && i2vData.colorLook) {
-      const colorLookHint = getColorLookPromptHint(i2vData.colorLook);
-      if (colorLookHint) motionHints.push(colorLookHint);
-    }
-    if (i2vData.atmosphereEnabled && i2vData.atmosphere) {
-      const atmosphereHint = getAtmospherePromptHint(i2vData.atmosphere);
-      if (atmosphereHint) motionHints.push(atmosphereHint);
-    }
-    {
-      const temporalHints = buildTemporalHints(i2vData);
-      for (const h of temporalHints) motionHints.push(h);
-    }
+    const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+    for (const h of cinematographyHints) motionHints.push(h);
     if (motionHints.length > 0 && prompt) prompt = `${prompt}. ${motionHints.join(", ")}`;
     else if (motionHints.length > 0) prompt = motionHints.join(", ");
     const kling3Mode = (i2vData as Record<string, unknown>).kling3Mode as
@@ -1267,43 +1048,9 @@ export function executeNode(
       typeof v2vData.prompt === "string" ? v2vData.prompt.trim() : undefined;
     let prompt = inputPrompt ?? dataPrompt;
     {
-      const framingHints = buildFramingHints(v2vData);
-      if (framingHints.length > 0) {
-        const joined = framingHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
-      }
-    }
-    const v2vCameraHint = buildCameraMotionHintForConsumer(node.id, v2vData as Record<string, unknown>, nodes, edges);
-    if (v2vCameraHint) {
-      prompt = prompt ? `${prompt}. ${v2vCameraHint}` : v2vCameraHint;
-    }
-    if (v2vData.lensEnabled && v2vData.lens) {
-      const lensHint = getLensPromptHint(v2vData.lens);
-      if (lensHint) prompt = prompt ? `${prompt}. ${lensHint}` : lensHint;
-    }
-    if (v2vData.cameraFormatEnabled && v2vData.cameraFormat) {
-      const cfHint = getCameraFormatPromptHint(v2vData.cameraFormat);
-      if (cfHint) prompt = prompt ? `${prompt}. ${cfHint}` : cfHint;
-    }
-    {
-      const lightingHints = buildLightingHints(v2vData);
-      if (lightingHints.length > 0) {
-        const joined = lightingHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
-      }
-    }
-    if (v2vData.colorLookEnabled && v2vData.colorLook) {
-      const colorLookHint = getColorLookPromptHint(v2vData.colorLook);
-      if (colorLookHint) prompt = prompt ? `${prompt}. ${colorLookHint}` : colorLookHint;
-    }
-    if (v2vData.atmosphereEnabled && v2vData.atmosphere) {
-      const atmosphereHint = getAtmospherePromptHint(v2vData.atmosphere);
-      if (atmosphereHint) prompt = prompt ? `${prompt}. ${atmosphereHint}` : atmosphereHint;
-    }
-    {
-      const temporalHints = buildTemporalHints(v2vData);
-      if (temporalHints.length > 0) {
-        const joined = temporalHints.join(", ");
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      if (cinematographyHints.length > 0) {
+        const joined = cinematographyHints.join(", ");
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
     }
@@ -1338,43 +1085,9 @@ export function executeNode(
       return Promise.reject(new Error("No prompt"));
     }
     {
-      const framingHints = buildFramingHints(t2vData);
-      if (framingHints.length > 0) {
-        const joined = framingHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
-      }
-    }
-    const t2vCameraHint = buildCameraMotionHintForConsumer(node.id, t2vData as Record<string, unknown>, nodes, edges);
-    if (t2vCameraHint) {
-      prompt = prompt ? `${prompt}. ${t2vCameraHint}` : t2vCameraHint;
-    }
-    if (t2vData.lensEnabled && t2vData.lens) {
-      const lensHint = getLensPromptHint(t2vData.lens);
-      if (lensHint) prompt = prompt ? `${prompt}. ${lensHint}` : lensHint;
-    }
-    if (t2vData.cameraFormatEnabled && t2vData.cameraFormat) {
-      const cfHint = getCameraFormatPromptHint(t2vData.cameraFormat);
-      if (cfHint) prompt = prompt ? `${prompt}. ${cfHint}` : cfHint;
-    }
-    {
-      const lightingHints = buildLightingHints(t2vData);
-      if (lightingHints.length > 0) {
-        const joined = lightingHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
-      }
-    }
-    if (t2vData.colorLookEnabled && t2vData.colorLook) {
-      const colorLookHint = getColorLookPromptHint(t2vData.colorLook);
-      if (colorLookHint) prompt = prompt ? `${prompt}. ${colorLookHint}` : colorLookHint;
-    }
-    if (t2vData.atmosphereEnabled && t2vData.atmosphere) {
-      const atmosphereHint = getAtmospherePromptHint(t2vData.atmosphere);
-      if (atmosphereHint) prompt = prompt ? `${prompt}. ${atmosphereHint}` : atmosphereHint;
-    }
-    {
-      const temporalHints = buildTemporalHints(t2vData);
-      if (temporalHints.length > 0) {
-        const joined = temporalHints.join(", ");
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      if (cinematographyHints.length > 0) {
+        const joined = cinematographyHints.join(", ");
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
     }
@@ -2900,43 +2613,9 @@ export function executeNode(
       return Promise.reject(new Error("No prompt"));
     }
     {
-      const framingHints = buildFramingHints(s2vData);
-      if (framingHints.length > 0) {
-        const joined = framingHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
-      }
-    }
-    const s2vCameraHint = buildCameraMotionHintForConsumer(node.id, s2vData as Record<string, unknown>, nodes, edges);
-    if (s2vCameraHint) {
-      prompt = prompt ? `${prompt}. ${s2vCameraHint}` : s2vCameraHint;
-    }
-    if (s2vData.lensEnabled && s2vData.lens) {
-      const lensHint = getLensPromptHint(s2vData.lens);
-      if (lensHint) prompt = prompt ? `${prompt}. ${lensHint}` : lensHint;
-    }
-    if (s2vData.cameraFormatEnabled && s2vData.cameraFormat) {
-      const cfHint = getCameraFormatPromptHint(s2vData.cameraFormat);
-      if (cfHint) prompt = prompt ? `${prompt}. ${cfHint}` : cfHint;
-    }
-    {
-      const lightingHints = buildLightingHints(s2vData);
-      if (lightingHints.length > 0) {
-        const joined = lightingHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
-      }
-    }
-    if (s2vData.colorLookEnabled && s2vData.colorLook) {
-      const colorLookHint = getColorLookPromptHint(s2vData.colorLook);
-      if (colorLookHint) prompt = prompt ? `${prompt}. ${colorLookHint}` : colorLookHint;
-    }
-    if (s2vData.atmosphereEnabled && s2vData.atmosphere) {
-      const atmosphereHint = getAtmospherePromptHint(s2vData.atmosphere);
-      if (atmosphereHint) prompt = prompt ? `${prompt}. ${atmosphereHint}` : atmosphereHint;
-    }
-    {
-      const temporalHints = buildTemporalHints(s2vData);
-      if (temporalHints.length > 0) {
-        const joined = temporalHints.join(", ");
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      if (cinematographyHints.length > 0) {
+        const joined = cinematographyHints.join(", ");
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
     }
@@ -3052,43 +2731,9 @@ export function executeNode(
     }
 
     {
-      const framingHints = buildFramingHints(evData);
-      if (framingHints.length > 0) {
-        const joined = framingHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
-      }
-    }
-    const evCameraHint = buildCameraMotionHintForConsumer(node.id, evData as Record<string, unknown>, nodes, edges);
-    if (evCameraHint) {
-      prompt = prompt ? `${prompt}. ${evCameraHint}` : evCameraHint;
-    }
-    if (evData.lensEnabled && evData.lens) {
-      const lensHint = getLensPromptHint(evData.lens);
-      if (lensHint) prompt = prompt ? `${prompt}. ${lensHint}` : lensHint;
-    }
-    if (evData.cameraFormatEnabled && evData.cameraFormat) {
-      const cfHint = getCameraFormatPromptHint(evData.cameraFormat);
-      if (cfHint) prompt = prompt ? `${prompt}. ${cfHint}` : cfHint;
-    }
-    {
-      const lightingHints = buildLightingHints(evData);
-      if (lightingHints.length > 0) {
-        const joined = lightingHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
-      }
-    }
-    if (evData.colorLookEnabled && evData.colorLook) {
-      const colorLookHint = getColorLookPromptHint(evData.colorLook);
-      if (colorLookHint) prompt = prompt ? `${prompt}. ${colorLookHint}` : colorLookHint;
-    }
-    if (evData.atmosphereEnabled && evData.atmosphere) {
-      const atmosphereHint = getAtmospherePromptHint(evData.atmosphere);
-      if (atmosphereHint) prompt = prompt ? `${prompt}. ${atmosphereHint}` : atmosphereHint;
-    }
-    {
-      const temporalHints = buildTemporalHints(evData);
-      if (temporalHints.length > 0) {
-        const joined = temporalHints.join(", ");
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      if (cinematographyHints.length > 0) {
+        const joined = cinematographyHints.join(", ");
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
     }

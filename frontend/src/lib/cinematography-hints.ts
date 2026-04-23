@@ -77,3 +77,41 @@ export function composeCameraMotionHintForNode(
   }
   return composeCameraMotionHintFromConnections(motionId, startHints, endHints)
 }
+
+/**
+ * Walk a consumer node's `cinematography` target handle and aggregate one
+ * prompt-hint string per connected source. Camera-motion sources are composed
+ * via their own startState/endState walk (they produce the full structured
+ * "beginning with X, ending with Y" sentence); all other parameter nodes
+ * dispatch through {@link getNodePromptHint}.
+ *
+ * Returns an array of non-empty hint strings — the caller decides how to join
+ * and append them onto the user prompt. Used by:
+ *  - the frontend DAG executor (appends to each AI gen node's prompt),
+ *  - the backend workflow-engine payload builder (same),
+ *  - the FinalPromptPreview + ConnectedCinematographySources UI components.
+ */
+export function collectCinematographyHints(
+  consumerNodeId: string,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+): string[] {
+  const hints: string[] = []
+  for (const edge of edges) {
+    if (edge.target !== consumerNodeId) continue
+    if (edge.targetHandle !== "cinematography") continue
+    const srcNode = nodes.find((n) => n.id === edge.source)
+    if (!srcNode) continue
+
+    if (srcNode.type === "camera-motion") {
+      const motionId = (srcNode.data as Record<string, unknown>).cameraMotion as string | undefined
+      const composed = composeCameraMotionHintForNode(motionId, srcNode.id, nodes, edges)
+      if (composed) hints.push(composed)
+      continue
+    }
+
+    const hint = getNodePromptHint(srcNode)
+    if (hint) hints.push(hint)
+  }
+  return hints
+}
