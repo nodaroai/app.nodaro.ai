@@ -513,7 +513,7 @@ describe("generate-image", () => {
       "a cat",
       expect.anything(),
       undefined,
-      undefined,
+      "nano-banana-pro",
       undefined,
       undefined,
       undefined,
@@ -539,7 +539,7 @@ describe("generate-image", () => {
       "override prompt",
       expect.anything(),
       undefined,
-      undefined,
+      "nano-banana-pro",
       undefined,
       undefined,
       undefined,
@@ -773,8 +773,13 @@ describe("text-to-video", () => {
       "n1",
       "a sunset",
       expect.anything(),
-      undefined,
-      expect.objectContaining({ duration: undefined, aspectRatio: undefined }),
+      "seedance-2-fast",
+      expect.objectContaining({
+        duration: undefined,
+        aspectRatio: undefined,
+        resolution: "720p",
+        generateAudio: true,
+      }),
     )
   })
 })

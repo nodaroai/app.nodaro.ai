@@ -480,7 +480,7 @@ export function executeNode(
 
   if (node.type === "generate-image") {
     const imgData = node.data as GenerateImageData;
-    const providerKey = imgData.provider || "nano-banana";
+    const providerKey = imgData.provider || "nano-banana-pro";
 
     // Build a map of all available reference images by ID
     const refUrlMap = new Map<string, string>();
@@ -575,7 +575,7 @@ export function executeNode(
       result.prompt,
       ctx,
       result.referenceImageUrls,
-      imgData.provider || undefined,
+      providerKey,
       imgData.aspectRatio || undefined,
       imgData.resolution || undefined,
       imgData.quality || undefined,
@@ -1091,7 +1091,7 @@ export function executeNode(
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
     }
-    const t2vProvider = t2vData.provider || undefined;
+    const t2vProvider = t2vData.provider || "seedance-2-fast";
     const t2vRaw = t2vData as Record<string, unknown>;
     const isKlingVariant =
       t2vProvider === "kling" ||

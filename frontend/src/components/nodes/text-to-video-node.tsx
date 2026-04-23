@@ -38,7 +38,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
-  const provider = nodeData.provider ?? "minimax"
+  const provider = nodeData.provider ?? "seedance-2-fast"
   const credits = useModelCredits(provider, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
   const videoRef = useRef<HTMLVideoElement>(null)
   const playState = nodeData.videoPlayState ?? "loop"

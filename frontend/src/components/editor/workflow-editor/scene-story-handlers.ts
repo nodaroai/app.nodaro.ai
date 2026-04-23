@@ -460,7 +460,7 @@ export function handleExpandStoryboard(
       data: {
         label: `Scene ${scene.sceneNumber} Image`,
         prompt: scene.imagePrompt,
-        provider: "nano-banana",
+        provider: "nano-banana-pro",
         model: "gemini-2.5-flash-image",
         style: "",
         aspectRatio: "16:9",

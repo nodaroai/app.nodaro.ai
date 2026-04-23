@@ -1,168 +1,897 @@
 /* ============================================================================
    Lens preview styles.
-   Each preview shows a viewport with a subject silhouette sized and styled
-   to communicate the focal length character: wide lenses show small subjects
-   in lots of environment, telephoto lenses show large compressed subjects,
-   special optics (fisheye, anamorphic, tilt-shift, macro, shallow DOF) get
-   a distinct treatment. No animations — lens is an optical choice.
+   Lens previews use an oversized lens with a minimal near/far image inside the
+   glass. The scene layer remains available for compact contextual previews.
    ========================================================================== */
 
 .lens-preview {
+  --lens-subject-width: 24%;
+  --lens-subject-bottom: 28%;
+  --lens-subject-left: 50%;
+  --lens-subject-transform: translateX(-50%);
+  --lens-subject-filter: none;
+  --lens-front-accent: rgba(91, 210, 255, 0.55);
+  --lens-node-lens-size: 88cqw;
+  --lens-front-glass-size: 72%;
+  --lens-front-glass-scale-x: 1;
+  --lens-front-glass-scale-y: 1;
+  --lens-front-glass-radius: 50%;
+  --lens-front-highlight-opacity: 0.75;
+  --lens-image-edge-opacity: 0.12;
+  --lens-image-edge-width: 14%;
+  --lens-image-near-size: 21%;
+  --lens-image-near-blur: 0;
+  --lens-image-far-size: 12%;
+  --lens-image-far-blur: 0;
+  --lens-image-bokeh-opacity: 0;
+  --lens-image-bokeh-blur: 1.5px;
+  --lens-image-bokeh-scale: 1;
+  --lens-bg-scale: 1;
+  --lens-bg-blur: 0;
+  --lens-range-opacity: 0.48;
+  --lens-focus-opacity: 0.22;
+  --lens-focus-width: 38%;
+  --lens-bokeh-opacity: 0;
+  --lens-vignette-opacity: 0.22;
+  --lens-distortion-opacity: 0;
+  --lens-ground-top: 60%;
+  --lens-rail-left-rotation: -23deg;
+  --lens-rail-right-rotation: 23deg;
+
   position: relative;
-  background: linear-gradient(135deg, #0b3a5e 0%, #1f2c42 55%, #0b1220 100%);
-  border-radius: 8px;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 8px;
+  background: #07101d;
+  container-type: inline-size;
 }
 
 .lens-preview__frame {
   position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
+  background: linear-gradient(150deg, #0b3a4f 0%, #17243a 48%, #101322 100%);
+  transform-origin: 50% 50%;
+}
+
+.lens-preview__frame::before,
+.lens-preview__frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  pointer-events: none;
+}
+
+.lens-preview__frame::before {
+  opacity: var(--lens-vignette-opacity);
+  background: radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, 0.74) 100%);
+}
+
+.lens-preview__frame::after {
+  opacity: var(--lens-distortion-opacity);
+  background:
+    radial-gradient(ellipse 88% 74% at 50% 51%, transparent 52%, rgba(33, 213, 255, 0.2) 53%, transparent 55%),
+    radial-gradient(ellipse 70% 58% at 50% 51%, transparent 58%, rgba(255, 255, 255, 0.18) 59%, transparent 61%);
+  mix-blend-mode: screen;
+}
+
+.lens-preview__sky {
+  position: absolute;
+  inset: 0 0 var(--lens-ground-top);
+  background: linear-gradient(180deg, rgba(12, 75, 100, 0.18), rgba(11, 18, 32, 0));
+}
+
+.lens-preview__backdrop {
+  position: absolute;
+  left: 50%;
+  bottom: 39%;
+  height: 18%;
+  border-radius: 999px 999px 0 0;
+  filter: blur(var(--lens-bg-blur));
+  opacity: 0.9;
+  transform: translateX(-50%) scaleX(var(--lens-bg-scale));
+  transform-origin: 50% 100%;
+}
+
+.lens-preview__backdrop--far {
+  width: 78%;
+  bottom: 44%;
+  background:
+    linear-gradient(135deg, transparent 0 18%, rgba(78, 137, 150, 0.52) 18% 31%, transparent 31% 38%, rgba(44, 104, 124, 0.54) 38% 53%, transparent 53% 61%, rgba(70, 134, 117, 0.5) 61% 75%, transparent 75%),
+    linear-gradient(180deg, rgba(91, 151, 163, 0.28), rgba(12, 28, 43, 0.12));
+}
+
+.lens-preview__backdrop--near {
+  width: 94%;
+  height: 16%;
+  bottom: 37%;
+  background:
+    linear-gradient(135deg, transparent 0 10%, rgba(21, 85, 96, 0.72) 10% 24%, transparent 24% 34%, rgba(58, 96, 86, 0.76) 34% 50%, transparent 50% 62%, rgba(25, 95, 111, 0.68) 62% 78%, transparent 78%),
+    linear-gradient(180deg, rgba(40, 117, 119, 0.25), rgba(7, 16, 29, 0.2));
+}
+
+.lens-preview__horizon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--lens-ground-top);
+  height: 1px;
+  background: rgba(177, 205, 213, 0.28);
+}
+
+.lens-preview__ground {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--lens-ground-top);
+  bottom: 0;
+  overflow: hidden;
+  background: linear-gradient(180deg, #273445 0%, #101827 100%);
+}
+
+.lens-preview__rail {
+  position: absolute;
+  top: -6%;
+  left: 50%;
+  width: 1px;
+  height: 150%;
+  opacity: 0.55;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(244, 183, 98, 0.42), transparent);
+  transform-origin: 50% 0;
+}
+
+.lens-preview__rail--left {
+  transform: rotate(var(--lens-rail-left-rotation));
+}
+
+.lens-preview__rail--right {
+  transform: rotate(var(--lens-rail-right-rotation));
+}
+
+.lens-preview__range {
+  position: absolute;
+  left: 50%;
+  height: 1px;
+  border-radius: 999px;
+  opacity: var(--lens-range-opacity);
+  background: linear-gradient(90deg, transparent, rgba(255, 214, 148, 0.5), transparent);
+  transform: translateX(-50%);
+}
+
+.lens-preview__range--far {
+  top: 18%;
+  width: 28%;
+}
+
+.lens-preview__range--mid {
+  top: 43%;
+  width: 52%;
+}
+
+.lens-preview__range--near {
+  top: 73%;
+  width: 86%;
+}
+
+.lens-preview__focus-plane {
+  position: absolute;
+  left: 50%;
+  bottom: 22%;
+  z-index: 4;
+  width: var(--lens-focus-width);
+  height: 11%;
+  border-radius: 50%;
+  opacity: var(--lens-focus-opacity);
+  background: radial-gradient(ellipse at center, rgba(255, 201, 108, 0.55), transparent 68%);
+  filter: blur(1px);
+  transform: translateX(-50%);
 }
 
 .lens-preview__subject {
-  position: relative;
-  background: radial-gradient(ellipse at 35% 30%, #ff8fc2 0%, #ff2a89 55%, #780040 100%);
-  border-radius: 50% 50% 8px 8px / 60% 60% 8px 8px;
-  width: 38%;
-  aspect-ratio: 1 / 1.4;
-  box-shadow: 0 0 12px rgba(255, 0, 115, 0.35);
-  transform-origin: center center;
+  position: absolute;
+  left: var(--lens-subject-left);
+  bottom: var(--lens-subject-bottom);
+  z-index: 8;
+  width: var(--lens-subject-width);
+  aspect-ratio: 0.56;
+  filter: var(--lens-subject-filter);
+  transform: var(--lens-subject-transform);
+  transform-origin: 50% 100%;
 }
 
-/* ===== Wide / ultra-wide: small subject, lots of environment ===== */
-.lens-preview--ultra-wide-14mm .lens-preview__subject {
-  width: 18%;
-}
-.lens-preview--ultra-wide-14mm .lens-preview__frame::before {
+.lens-preview__subject::before,
+.lens-preview__subject::after {
   content: "";
   position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at center, transparent 30%, rgba(0, 0, 0, 0.45) 100%);
-  pointer-events: none;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
-.lens-preview--wide-24mm .lens-preview__subject {
-  width: 26%;
-}
-
-/* ===== Standard / Normal: natural medium ===== */
-.lens-preview--standard-35mm .lens-preview__subject {
-  width: 33%;
-}
-
-.lens-preview--normal-50mm .lens-preview__subject {
-  width: 38%;
-}
-
-/* ===== Portrait: larger with subtle bokeh ring ===== */
-.lens-preview--portrait-85mm .lens-preview__subject {
-  width: 50%;
-}
-.lens-preview--portrait-85mm .lens-preview__frame::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 35% 50% at center, transparent 55%, rgba(0, 0, 0, 0.5) 100%);
-  pointer-events: none;
-}
-
-/* ===== Telephoto: heavy compression ===== */
-.lens-preview--telephoto-135mm .lens-preview__subject {
-  width: 60%;
-}
-.lens-preview--telephoto-135mm .lens-preview__frame::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 30% 45% at center, transparent 55%, rgba(0, 0, 0, 0.6) 100%);
-  pointer-events: none;
-}
-
-.lens-preview--super-telephoto-400mm .lens-preview__subject {
-  width: 75%;
-}
-.lens-preview--super-telephoto-400mm .lens-preview__frame::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 25% 40% at center, transparent 50%, rgba(0, 0, 0, 0.7) 100%);
-  pointer-events: none;
-}
-
-/* ===== Fisheye: hemispherical distortion ===== */
-.lens-preview--fisheye .lens-preview__subject {
-  width: 45%;
-  border-radius: 50%;
-  transform: scale(1.2, 0.85);
-}
-.lens-preview--fisheye .lens-preview__frame::before {
-  content: "";
-  position: absolute;
-  inset: -20%;
-  border-radius: 50%;
-  box-shadow: inset 0 0 60px 20px rgba(0, 0, 0, 0.65);
-  pointer-events: none;
-}
-
-/* ===== Anamorphic: widescreen letterbox ===== */
-.lens-preview--anamorphic .lens-preview__frame::before,
-.lens-preview--anamorphic .lens-preview__frame::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 16%;
-  background: #000;
-  pointer-events: none;
-}
-.lens-preview--anamorphic .lens-preview__frame::before {
+.lens-preview__subject::before {
   top: 0;
-}
-.lens-preview--anamorphic .lens-preview__frame::after {
-  bottom: 0;
-}
-
-/* ===== Macro: subject huge ===== */
-.lens-preview--macro .lens-preview__subject {
-  width: 85%;
+  width: 46%;
   aspect-ratio: 1;
   border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #ffbad2 0%, #ff3f98 48%, #7e003e 100%);
+  box-shadow:
+    0 0 10px rgba(255, 63, 152, 0.42),
+    inset -2px -3px 6px rgba(0, 0, 0, 0.2);
 }
 
-/* ===== Tilt-shift: miniature, blur top + bottom ===== */
-.lens-preview--tilt-shift .lens-preview__subject {
-  width: 30%;
+.lens-preview__subject::after {
+  bottom: 0;
+  width: 100%;
+  height: 62%;
+  border-radius: 36% 36% 8% 8% / 42% 42% 10% 10%;
+  background: linear-gradient(90deg, #6d0039 0%, #c01469 26%, #ff3f98 52%, #a80054 100%);
+  box-shadow:
+    0 10px 16px rgba(0, 0, 0, 0.28),
+    inset 0 -8px 12px rgba(0, 0, 0, 0.22);
 }
-.lens-preview--tilt-shift .lens-preview__frame::before,
-.lens-preview--tilt-shift .lens-preview__frame::after {
-  content: "";
+
+.lens-preview__bokeh {
+  position: absolute;
+  z-index: 3;
+  border-radius: 50%;
+  opacity: var(--lens-bokeh-opacity);
+  background: radial-gradient(circle at 50% 50%, rgba(125, 211, 252, 0.34), rgba(244, 114, 182, 0.14) 55%, transparent 70%);
+  filter: blur(0.4px);
+}
+
+.lens-preview__bokeh--a {
+  top: 22%;
+  right: 15%;
+  width: 14%;
+  aspect-ratio: 1;
+}
+
+.lens-preview__bokeh--b {
+  top: 47%;
+  left: 15%;
+  width: 10%;
+  aspect-ratio: 1;
+}
+
+.lens-preview__bokeh--c {
+  right: 32%;
+  bottom: 24%;
+  width: 7%;
+  aspect-ratio: 1;
+}
+
+.lens-preview__tilt-band,
+.lens-preview__letterbox,
+.lens-preview__flare,
+.lens-preview__lens-badge {
+  display: none;
+}
+
+.lens-preview__tilt-band {
   position: absolute;
   left: 0;
   right: 0;
-  height: 35%;
+  z-index: 11;
+  height: 34%;
   backdrop-filter: blur(4px);
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(3, 7, 18, 0.2);
   pointer-events: none;
 }
-.lens-preview--tilt-shift .lens-preview__frame::before {
+
+.lens-preview__tilt-band--top {
   top: 0;
 }
-.lens-preview--tilt-shift .lens-preview__frame::after {
+
+.lens-preview__tilt-band--bottom {
   bottom: 0;
 }
 
-/* ===== Shallow DOF: in-focus center, blurred edges ===== */
-.lens-preview--shallow-dof .lens-preview__frame::before {
+.lens-preview__letterbox {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 12;
+  height: 16%;
+  background: #020309;
+  pointer-events: none;
+}
+
+.lens-preview__letterbox--top {
+  top: 0;
+}
+
+.lens-preview__letterbox--bottom {
+  bottom: 0;
+}
+
+.lens-preview__flare {
+  position: absolute;
+  left: -12%;
+  top: 48%;
+  z-index: 13;
+  width: 124%;
+  height: 2px;
+  opacity: 0.78;
+  background: linear-gradient(90deg, transparent 0%, rgba(45, 212, 255, 0.4) 36%, rgba(255, 228, 155, 0.95) 50%, rgba(255, 75, 155, 0.34) 64%, transparent 100%);
+  box-shadow: 0 0 10px rgba(87, 210, 255, 0.42);
+  pointer-events: none;
+}
+
+.lens-preview__lens-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 16;
+  width: var(--lens-node-lens-size);
+  aspect-ratio: 1;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 0 33%, rgba(255, 255, 255, 0.1) 34% 35%, transparent 36%),
+    repeating-radial-gradient(circle, rgba(255, 255, 255, 0.07) 0 1px, transparent 2px 8px),
+    radial-gradient(circle at 50% 50%, #2a3448 0 43%, #050812 44% 57%, #3d4a60 58% 65%, #070910 66% 78%, #1f2737 79% 87%, #05070d 88%);
+  box-shadow:
+    0 18px 34px rgba(0, 0, 0, 0.48),
+    0 0 0 2px rgba(255, 255, 255, 0.18),
+    0 0 24px var(--lens-front-accent),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.08),
+    inset 0 0 28px rgba(0, 0, 0, 0.55);
+  transform: translate(-50%, -50%);
+}
+
+.lens-preview__lens-badge::before,
+.lens-preview__lens-badge::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+}
+
+.lens-preview__lens-badge::before {
+  inset: 7%;
+  border: 1px solid rgba(188, 213, 232, 0.2);
+  box-shadow:
+    inset 0 0 16px rgba(0, 0, 0, 0.42),
+    0 0 18px rgba(91, 210, 255, 0.18);
+}
+
+.lens-preview__lens-badge::after {
+  inset: 16%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: radial-gradient(circle at center, rgba(6, 10, 19, 0.58) 0 64%, transparent 65%);
+}
+
+.lens-preview__lens-glass {
+  position: absolute;
+  z-index: 2;
+  width: var(--lens-front-glass-size);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--lens-front-glass-radius);
+  background: linear-gradient(180deg, #0d6583 0 48%, #22334a 49% 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 0 18px rgba(0, 0, 0, 0.84),
+    0 0 20px rgba(91, 210, 255, 0.2);
+  transform: scale(var(--lens-front-glass-scale-x), var(--lens-front-glass-scale-y));
+}
+
+.lens-preview__lens-glass::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse 30% 40% at center, transparent 50%, rgba(0, 0, 0, 0.7) 100%);
+  z-index: 10;
+  border-radius: inherit;
+  background: radial-gradient(circle at center, transparent 0 54%, rgba(0, 0, 0, 0.58) 100%);
   pointer-events: none;
+}
+
+.lens-preview__image-sky,
+.lens-preview__image-ground,
+.lens-preview__image-edge,
+.lens-preview__image-far,
+.lens-preview__image-near,
+.lens-preview__image-bokeh,
+.lens-preview__image-flare {
+  position: absolute;
+  pointer-events: none;
+}
+
+.lens-preview__image-sky {
+  inset: 0 0 49%;
+  background: linear-gradient(180deg, #0b6e88 0%, #123453 100%);
+}
+
+.lens-preview__image-ground {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 52%;
+  background: linear-gradient(180deg, #2b3d54 0%, #101827 100%);
+}
+
+.lens-preview__image-ground::before,
+.lens-preview__image-ground::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: 130%;
+  opacity: 0.38;
+  background: linear-gradient(180deg, rgba(255, 232, 184, 0.7), transparent);
+  transform-origin: 50% 0;
+}
+
+.lens-preview__image-ground::before {
+  transform: rotate(-22deg);
+}
+
+.lens-preview__image-ground::after {
+  transform: rotate(22deg);
+}
+
+.lens-preview__image-edge {
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  width: var(--lens-image-edge-width);
+  opacity: var(--lens-image-edge-opacity);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.42), transparent);
+  filter: blur(0.3px);
+}
+
+.lens-preview__image-edge--left {
+  left: 0;
+  border-radius: 50% 0 0 50%;
+  transform: skewY(-16deg);
+}
+
+.lens-preview__image-edge--right {
+  right: 0;
+  border-radius: 0 50% 50% 0;
+  transform: skewY(16deg) scaleX(-1);
+}
+
+.lens-preview__image-far {
+  left: 64%;
+  top: 31%;
+  z-index: 3;
+  width: var(--lens-image-far-size);
+  aspect-ratio: 0.56;
+  filter: blur(var(--lens-image-far-blur));
+  transform: translateX(-50%);
+}
+
+.lens-preview__image-far::before,
+.lens-preview__image-far::after,
+.lens-preview__image-near::before,
+.lens-preview__image-near::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.lens-preview__image-far::before {
+  top: 0;
+  width: 62%;
+  height: 100%;
+  border-radius: 999px 999px 12% 12% / 28% 28% 12% 12%;
+  background: linear-gradient(180deg, #7dd3fc 0%, #0ea5e9 100%);
+}
+
+.lens-preview__image-far::after {
+  display: none;
+}
+
+.lens-preview__image-near {
+  left: 31%;
+  bottom: 17%;
+  z-index: 5;
+  width: var(--lens-image-near-size);
+  aspect-ratio: 0.58;
+  filter: blur(var(--lens-image-near-blur));
+  transform: translateX(-50%);
+}
+
+.lens-preview__image-near::before {
+  top: 0;
+  width: 50%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #ff8fc2;
+  box-shadow: 0 0 10px rgba(255, 63, 152, 0.42);
+}
+
+.lens-preview__image-near::after {
+  bottom: 0;
+  width: 100%;
+  height: 64%;
+  border-radius: 40% 40% 10% 10%;
+  background: #d71978;
+}
+
+.lens-preview__image-bokeh {
+  z-index: 2;
+  width: calc(10% * var(--lens-image-bokeh-scale));
+  aspect-ratio: 1;
+  border-radius: 50%;
+  opacity: var(--lens-image-bokeh-opacity);
+  background: radial-gradient(circle at 50% 50%, rgba(125, 211, 252, 0.38), rgba(244, 114, 182, 0.16) 58%, transparent 72%);
+  filter: blur(var(--lens-image-bokeh-blur));
+}
+
+.lens-preview__image-bokeh--a {
+  right: 16%;
+  top: 57%;
+}
+
+.lens-preview__image-bokeh--b {
+  left: 17%;
+  top: 64%;
+  width: calc(7% * var(--lens-image-bokeh-scale));
+}
+
+.lens-preview__image-flare {
+  display: none;
+  left: -8%;
+  top: 49%;
+  z-index: 9;
+  width: 116%;
+  height: 2px;
+  opacity: 0.78;
+  background: linear-gradient(90deg, transparent 0%, rgba(45, 212, 255, 0.46) 34%, rgba(255, 228, 155, 0.82) 50%, rgba(255, 75, 155, 0.32) 66%, transparent 100%);
+  box-shadow: 0 0 8px rgba(87, 210, 255, 0.32);
+}
+
+.lens-preview__lens-highlight {
+  display: none;
+}
+
+/* Wide lenses: open field, smaller subject, stronger perspective. */
+.lens-preview--ultra-wide-14mm {
+  --lens-subject-width: 12%;
+  --lens-front-glass-size: 76%;
+  --lens-front-accent: rgba(56, 189, 248, 0.62);
+  --lens-image-edge-opacity: 0.68;
+  --lens-image-edge-width: 25%;
+  --lens-image-near-size: 31%;
+  --lens-image-far-size: 7%;
+  --lens-image-bokeh-opacity: 0;
+  --lens-image-bokeh-blur: 0.6px;
+  --lens-subject-bottom: 33%;
+  --lens-bg-scale: 0.78;
+  --lens-range-opacity: 0.68;
+  --lens-focus-opacity: 0.12;
+  --lens-focus-width: 22%;
+  --lens-distortion-opacity: 0.76;
+  --lens-vignette-opacity: 0.42;
+  --lens-rail-left-rotation: -34deg;
+  --lens-rail-right-rotation: 34deg;
+}
+
+.lens-preview--ultra-wide-14mm .lens-preview__frame {
+  transform: scale(1.06);
+}
+
+.lens-preview--wide-24mm {
+  --lens-subject-width: 17%;
+  --lens-front-glass-size: 74%;
+  --lens-front-accent: rgba(96, 165, 250, 0.58);
+  --lens-image-edge-opacity: 0.42;
+  --lens-image-edge-width: 19%;
+  --lens-image-near-size: 26%;
+  --lens-image-far-size: 9%;
+  --lens-image-bokeh-opacity: 0;
+  --lens-subject-bottom: 31%;
+  --lens-bg-scale: 0.88;
+  --lens-range-opacity: 0.58;
+  --lens-focus-opacity: 0.16;
+  --lens-focus-width: 28%;
+  --lens-rail-left-rotation: -28deg;
+  --lens-rail-right-rotation: 28deg;
+}
+
+/* Standard and normal lenses: balanced, natural perspective. */
+.lens-preview--standard-35mm {
+  --lens-subject-width: 21%;
+  --lens-front-glass-size: 72%;
+  --lens-image-edge-opacity: 0.16;
+  --lens-image-near-size: 22%;
+  --lens-image-far-size: 12%;
+  --lens-subject-bottom: 29%;
+  --lens-bg-scale: 0.96;
+  --lens-focus-width: 33%;
+}
+
+.lens-preview--normal-50mm {
+  --lens-subject-width: 24%;
+  --lens-front-glass-size: 72%;
+  --lens-image-edge-opacity: 0.12;
+  --lens-image-near-size: 21%;
+  --lens-image-far-size: 12%;
+  --lens-subject-bottom: 28%;
+  --lens-focus-width: 38%;
+}
+
+/* Long lenses: larger subject, flatter background, more separation. */
+.lens-preview--portrait-85mm {
+  --lens-subject-width: 32%;
+  --lens-front-glass-size: 70%;
+  --lens-front-accent: rgba(244, 114, 182, 0.5);
+  --lens-image-edge-opacity: 0.06;
+  --lens-image-near-size: 24%;
+  --lens-image-far-size: 18%;
+  --lens-image-far-blur: 1.4px;
+  --lens-image-bokeh-opacity: 0.55;
+  --lens-image-bokeh-blur: 3px;
+  --lens-image-bokeh-scale: 1.35;
+  --lens-subject-bottom: 23%;
+  --lens-bg-scale: 1.12;
+  --lens-bg-blur: 0.7px;
+  --lens-range-opacity: 0.32;
+  --lens-focus-opacity: 0.38;
+  --lens-focus-width: 49%;
+  --lens-bokeh-opacity: 0.44;
+  --lens-vignette-opacity: 0.38;
+  --lens-rail-left-rotation: -16deg;
+  --lens-rail-right-rotation: 16deg;
+}
+
+.lens-preview--telephoto-135mm {
+  --lens-subject-width: 42%;
+  --lens-front-glass-size: 68%;
+  --lens-front-accent: rgba(147, 197, 253, 0.5);
+  --lens-image-edge-opacity: 0.03;
+  --lens-image-near-size: 27%;
+  --lens-image-far-size: 23%;
+  --lens-image-far-blur: 2.4px;
+  --lens-image-bokeh-opacity: 0.72;
+  --lens-image-bokeh-blur: 4px;
+  --lens-image-bokeh-scale: 1.8;
+  --lens-subject-bottom: 17%;
+  --lens-bg-scale: 1.26;
+  --lens-bg-blur: 1px;
+  --lens-range-opacity: 0.22;
+  --lens-focus-opacity: 0.44;
+  --lens-focus-width: 62%;
+  --lens-bokeh-opacity: 0.5;
+  --lens-vignette-opacity: 0.48;
+  --lens-rail-left-rotation: -10deg;
+  --lens-rail-right-rotation: 10deg;
+}
+
+.lens-preview--super-telephoto-400mm {
+  --lens-subject-width: 57%;
+  --lens-front-glass-size: 66%;
+  --lens-front-accent: rgba(191, 219, 254, 0.45);
+  --lens-image-edge-opacity: 0;
+  --lens-image-near-size: 31%;
+  --lens-image-far-size: 30%;
+  --lens-image-far-blur: 3.4px;
+  --lens-image-bokeh-opacity: 0.84;
+  --lens-image-bokeh-blur: 5px;
+  --lens-image-bokeh-scale: 2.3;
+  --lens-subject-bottom: 8%;
+  --lens-bg-scale: 1.48;
+  --lens-bg-blur: 1.4px;
+  --lens-range-opacity: 0.14;
+  --lens-focus-opacity: 0.52;
+  --lens-focus-width: 76%;
+  --lens-bokeh-opacity: 0.62;
+  --lens-vignette-opacity: 0.62;
+  --lens-rail-left-rotation: -5deg;
+  --lens-rail-right-rotation: 5deg;
+}
+
+/* Fisheye: circular distortion and bulged subject. */
+.lens-preview--fisheye {
+  --lens-subject-width: 31%;
+  --lens-front-glass-size: 78%;
+  --lens-front-glass-scale-x: 1.08;
+  --lens-front-glass-scale-y: 1.08;
+  --lens-front-accent: rgba(34, 211, 238, 0.62);
+  --lens-image-edge-opacity: 0.78;
+  --lens-image-edge-width: 28%;
+  --lens-image-near-size: 30%;
+  --lens-image-far-size: 9%;
+  --lens-image-bokeh-opacity: 0;
+  --lens-subject-bottom: 25%;
+  --lens-bg-scale: 0.72;
+  --lens-distortion-opacity: 1;
+  --lens-vignette-opacity: 0.56;
+  --lens-focus-width: 48%;
+  --lens-rail-left-rotation: -42deg;
+  --lens-rail-right-rotation: 42deg;
+}
+
+.lens-preview--fisheye .lens-preview__subject {
+  aspect-ratio: 1;
+  transform: translateX(-50%) scale(1.32, 0.84);
+}
+
+.lens-preview--fisheye .lens-preview__subject::before {
+  width: 54%;
+}
+
+.lens-preview--fisheye .lens-preview__subject::after {
+  height: 58%;
+  border-radius: 50%;
+}
+
+/* Anamorphic: letterbox, oval bokeh, horizontal flare. */
+.lens-preview--anamorphic {
+  --lens-subject-width: 28%;
+  --lens-front-glass-size: 76%;
+  --lens-front-glass-scale-x: 1.24;
+  --lens-front-glass-scale-y: 0.78;
+  --lens-front-glass-radius: 50%;
+  --lens-front-accent: rgba(45, 212, 191, 0.58);
+  --lens-image-edge-opacity: 0.16;
+  --lens-image-near-size: 22%;
+  --lens-image-far-size: 15%;
+  --lens-image-bokeh-opacity: 0.58;
+  --lens-image-bokeh-blur: 2.4px;
+  --lens-image-bokeh-scale: 1.9;
+  --lens-subject-bottom: 24%;
+  --lens-bg-scale: 1.08;
+  --lens-bokeh-opacity: 0.5;
+  --lens-focus-width: 46%;
+  --lens-vignette-opacity: 0.34;
+}
+
+.lens-preview--anamorphic .lens-preview__letterbox,
+.lens-preview--anamorphic .lens-preview__flare {
+  display: block;
+}
+
+.lens-preview--anamorphic .lens-preview__bokeh {
+  transform: scaleX(1.85);
+}
+
+/* Macro: a magnified surface replaces the scene subject. */
+.lens-preview--macro {
+  --lens-front-glass-size: 78%;
+  --lens-front-accent: rgba(251, 191, 36, 0.5);
+  --lens-image-edge-opacity: 0.08;
+  --lens-image-near-size: 64%;
+  --lens-image-near-blur: 0;
+  --lens-image-far-size: 8%;
+  --lens-image-far-blur: 4px;
+  --lens-image-bokeh-opacity: 0;
+  --lens-bokeh-opacity: 0;
+  --lens-vignette-opacity: 0.5;
+  --lens-range-opacity: 0;
+  --lens-focus-opacity: 0.62;
+  --lens-focus-width: 72%;
+}
+
+.lens-preview--macro .lens-preview__sky,
+.lens-preview--macro .lens-preview__backdrop,
+.lens-preview--macro .lens-preview__horizon,
+.lens-preview--macro .lens-preview__ground {
+  display: none;
+}
+
+.lens-preview--macro .lens-preview__frame {
+  background:
+    radial-gradient(circle at 42% 38%, rgba(255, 244, 173, 0.92) 0 4%, transparent 5% 11%, rgba(255, 172, 80, 0.28) 12% 19%, transparent 20%),
+    radial-gradient(circle at 68% 61%, rgba(247, 147, 73, 0.72) 0 7%, transparent 8% 18%),
+    radial-gradient(circle at 28% 68%, rgba(253, 226, 112, 0.58) 0 5%, transparent 6% 16%),
+    linear-gradient(140deg, #573317 0%, #a65923 50%, #34190f 100%);
+}
+
+.lens-preview--macro .lens-preview__subject {
+  left: 50%;
+  top: 50%;
+  bottom: auto;
+  width: 82%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 37% 34%, rgba(255, 255, 255, 0.7) 0 5%, transparent 6% 15%),
+    radial-gradient(circle at 63% 61%, rgba(58, 30, 15, 0.42) 0 8%, transparent 9% 22%),
+    repeating-radial-gradient(circle at 46% 45%, rgba(255, 237, 168, 0.34) 0 2px, rgba(117, 54, 23, 0.2) 3px 5px);
+  box-shadow:
+    inset 0 0 28px rgba(0, 0, 0, 0.48),
+    0 0 22px rgba(255, 179, 88, 0.28);
+  transform: translate(-50%, -50%);
+}
+
+.lens-preview--macro .lens-preview__subject::before,
+.lens-preview--macro .lens-preview__subject::after {
+  display: none;
+}
+
+/* Tilt-shift: small subject and narrow focus strip. */
+.lens-preview--tilt-shift {
+  --lens-subject-width: 15%;
+  --lens-front-glass-size: 70%;
+  --lens-front-highlight-opacity: 0.52;
+  --lens-image-edge-opacity: 0.12;
+  --lens-image-near-size: 17%;
+  --lens-image-far-size: 9%;
+  --lens-image-far-blur: 1.4px;
+  --lens-subject-bottom: 36%;
+  --lens-bg-scale: 0.92;
+  --lens-range-opacity: 0.42;
+  --lens-focus-opacity: 0.42;
+  --lens-focus-width: 30%;
+}
+
+.lens-preview--tilt-shift .lens-preview__tilt-band {
+  display: block;
+}
+
+.lens-preview--tilt-shift .lens-preview__frame {
+  filter: saturate(1.22);
+}
+
+/* Shallow DOF: natural framing with pronounced defocused edges. */
+.lens-preview--shallow-dof {
+  --lens-subject-width: 34%;
+  --lens-front-glass-size: 70%;
+  --lens-front-accent: rgba(248, 113, 113, 0.42);
+  --lens-image-edge-opacity: 0.04;
+  --lens-image-near-size: 26%;
+  --lens-image-far-size: 18%;
+  --lens-image-far-blur: 3px;
+  --lens-image-bokeh-opacity: 0.88;
+  --lens-image-bokeh-blur: 5px;
+  --lens-image-bokeh-scale: 2;
+  --lens-subject-bottom: 21%;
+  --lens-bg-scale: 1.12;
+  --lens-bg-blur: 1.5px;
+  --lens-bokeh-opacity: 0.72;
+  --lens-focus-opacity: 0.56;
+  --lens-focus-width: 54%;
+  --lens-vignette-opacity: 0.58;
+}
+
+.lens-preview--shallow-dof .lens-preview__sky,
+.lens-preview--shallow-dof .lens-preview__ground {
+  filter: blur(0.8px);
+}
+
+/* Node card variant: oversized cropped lens with a minimal near/far image. */
+.lens-preview--hybrid .lens-preview__frame {
+  filter: none;
+  background: #050711;
+  transform: none;
+}
+
+.lens-preview--hybrid .lens-preview__frame::before,
+.lens-preview--hybrid .lens-preview__frame::after {
+  display: none;
+}
+
+.lens-preview--hybrid .lens-preview__sky,
+.lens-preview--hybrid .lens-preview__backdrop,
+.lens-preview--hybrid .lens-preview__horizon,
+.lens-preview--hybrid .lens-preview__ground,
+.lens-preview--hybrid .lens-preview__focus-plane,
+.lens-preview--hybrid .lens-preview__bokeh,
+.lens-preview--hybrid .lens-preview__subject,
+.lens-preview--hybrid .lens-preview__tilt-band,
+.lens-preview--hybrid .lens-preview__letterbox,
+.lens-preview--hybrid .lens-preview__flare {
+  display: none;
+}
+
+.lens-preview--hybrid .lens-preview__lens-badge {
+  display: flex;
+}
+
+.lens-preview--hybrid.lens-preview--anamorphic .lens-preview__image-flare {
+  display: block;
+}
+
+.lens-preview--hybrid.lens-preview--macro .lens-preview__lens-glass {
+  background:
+    repeating-radial-gradient(circle at 48% 48%, rgba(255, 231, 151, 0.34) 0 2px, rgba(117, 54, 23, 0.2) 3px 6px),
+    linear-gradient(140deg, rgba(161, 98, 7, 0.42), rgba(7, 11, 22, 0.92) 68%);
 }

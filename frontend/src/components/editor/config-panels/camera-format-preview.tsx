@@ -10,10 +10,9 @@ interface CameraFormatPreviewProps {
 }
 
 /**
- * Static preview for a single camera/film-stock choice. Renders a frame +
- * subject styled to communicate the capture-medium character (grain, color
- * cast, distortion, scanlines, letterbox, etc.). Mostly static — VHS and
- * security-cam get a subtle animated scanline.
+ * Static preview for a single camera/film-stock choice. The base scene stays
+ * simple while format-specific layers communicate capture medium: gate/perfs,
+ * grain, aspect crop, tape scanlines, instant-film border, phone frame, etc.
  */
 export const CameraFormatPreview = memo(function CameraFormatPreview({
   cameraFormatId,
@@ -29,7 +28,23 @@ export const CameraFormatPreview = memo(function CameraFormatPreview({
       )}
     >
       <div className="camera-format-preview__frame">
-        <div className="camera-format-preview__subject" />
+        <div className="camera-format-preview__image">
+          <div className="camera-format-preview__sky" />
+          <div className="camera-format-preview__ground" />
+          <div className="camera-format-preview__horizon" />
+          <div className="camera-format-preview__distant-block camera-format-preview__distant-block--left" />
+          <div className="camera-format-preview__distant-block camera-format-preview__distant-block--right" />
+          <div className="camera-format-preview__subject" />
+        </div>
+        <div className="camera-format-preview__gate camera-format-preview__gate--left" />
+        <div className="camera-format-preview__gate camera-format-preview__gate--right" />
+        <div className="camera-format-preview__letterbox camera-format-preview__letterbox--top" />
+        <div className="camera-format-preview__letterbox camera-format-preview__letterbox--bottom" />
+        <div className="camera-format-preview__phone-frame" />
+        <div className="camera-format-preview__timestamp" />
+        <div className="camera-format-preview__scan" />
+        <div className="camera-format-preview__grain" />
+        <div className="camera-format-preview__damage" />
       </div>
     </div>
   )

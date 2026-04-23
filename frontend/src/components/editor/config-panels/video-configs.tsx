@@ -899,8 +899,9 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
 
 export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToVideoData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(VIDEO_T2V_MODELS.map((m) => m.value)) }, [])
-  const allowedDurations = KIE_T2V_DURATIONS[data.provider || "minimax"] || null
-  const isSeedance2 = isSeedance2Provider(data.provider)
+  const currentProvider = data.provider || "seedance-2-fast"
+  const allowedDurations = KIE_T2V_DURATIONS[currentProvider] || null
+  const isSeedance2 = isSeedance2Provider(currentProvider)
 
   const connectedRefImages = useMemo(() => {
     return sources.filter((s) => s.targetHandle === "reference-images").map((s) => ({
@@ -926,7 +927,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
       <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
-          value={data.provider || "minimax"}
+          value={currentProvider}
           onValueChange={(v) => onUpdate({ provider: v })}
         >
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
@@ -937,8 +938,8 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           </SelectContent>
         </Select>
       </MappableField>
-      <ModelDescriptionHint modelId={data.provider} />
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="text-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
+      <ModelDescriptionHint modelId={currentProvider} />
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="text-to-video" currentPrompt={data.prompt || ""} provider={currentProvider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
           rows={3}
           value={data.prompt}
