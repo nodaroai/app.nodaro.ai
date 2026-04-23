@@ -7,6 +7,8 @@ import { getAtmospherePromptHint } from "@nodaro-shared/atmosphere"
 import { getStylePromptHint } from "@nodaro-shared/style"
 import { getSettingPromptHint } from "@nodaro-shared/setting"
 import { buildPersonHints } from "@nodaro-shared/person"
+import { buildMoodHints } from "@nodaro-shared/mood"
+import { buildPoseHints } from "@nodaro-shared/pose"
 import { buildTemporalHints } from "@nodaro-shared/temporal"
 import { composeCameraMotionHintFromConnections } from "@nodaro-shared/camera-motions"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
@@ -43,6 +45,14 @@ export function getNodePromptHint(node: WorkflowNode | undefined): string {
       return getSettingPromptHint(typeof data.setting === "string" ? data.setting : "")
     case "person": {
       const hints = buildPersonHints(data)
+      return hints.join(", ")
+    }
+    case "mood": {
+      const hints = buildMoodHints(data)
+      return hints.join(", ")
+    }
+    case "pose": {
+      const hints = buildPoseHints(data)
       return hints.join(", ")
     }
     case "temporal": {

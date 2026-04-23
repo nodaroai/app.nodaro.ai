@@ -462,6 +462,35 @@ export interface PersonData {
   maxItemsPerRow?: number
 }
 
+/** Standalone Mood parameter node data. Emotional-state hint appended to
+ * downstream gen prompts ("happy", "melancholy", "fierce"). Single-pick
+ * with optional pre/post free-text fields. See `packages/shared/src/mood.ts`. */
+export interface MoodData {
+  [key: string]: unknown
+  label: string
+  /** Mood id from MOODS catalog. */
+  mood: string
+  /** Free-text prepended before the mood hint. */
+  preText?: string
+  /** Free-text appended after the mood hint. */
+  postText?: string
+}
+
+/** Standalone Pose parameter node data. Posture + action hint appended to
+ * downstream gen prompts ("standing upright", "mid-run", "fighting stance").
+ * Single-pick with optional pre/post free-text fields. See
+ * `packages/shared/src/pose.ts`. */
+export interface PoseData {
+  [key: string]: unknown
+  label: string
+  /** Pose id from POSES catalog. */
+  pose: string
+  /** Free-text prepended before the pose hint. */
+  preText?: string
+  /** Free-text appended after the pose hint. */
+  postText?: string
+}
+
 /** Standalone Temporal parameter node data. */
 export interface TemporalData {
   [key: string]: unknown
@@ -2739,6 +2768,8 @@ export type SceneNodeData =
   | StyleData
   | SettingData
   | PersonData
+  | MoodData
+  | PoseData
   | TemporalData
   | GenerateScriptData
   | GenerateImageData
@@ -2865,6 +2896,8 @@ export type SceneNodeType =
   | "style"
   | "setting"
   | "person"
+  | "mood"
+  | "pose"
   | "temporal"
   | "generate-script"
   | "generate-image"
@@ -3248,6 +3281,24 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Person", type: "woman", age: "age-30s", maxItemsPerRow: 2 },
+  },
+  {
+    type: "mood",
+    label: "Mood",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Mood", mood: "calm" },
+  },
+  {
+    type: "pose",
+    label: "Pose",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Pose", pose: "standing-upright" },
   },
   {
     type: "temporal",

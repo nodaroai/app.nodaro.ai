@@ -88,6 +88,7 @@ import {
   CopyMinus,
   GitMerge,
   ArrowUpDown,
+  PersonStanding,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -333,6 +334,20 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <UserRound className="h-4 w-4" />,
     category: "Cinematography",
     keywords: ["subject", "character", "people", "human", "gender", "age", "ethnicity", "hair", "skin", "eyes", "build", "man", "woman", "child", "beard", "mustache"],
+  },
+  {
+    type: "mood",
+    label: "Mood",
+    icon: <Smile className="h-4 w-4" />,
+    category: "Cinematography",
+    keywords: ["emotion", "expression", "feeling", "happy", "sad", "angry", "serene", "fierce", "brooding", "confident", "melancholy", "mysterious"],
+  },
+  {
+    type: "pose",
+    label: "Pose",
+    icon: <PersonStanding className="h-4 w-4" />,
+    category: "Cinematography",
+    keywords: ["pose", "posture", "action", "stance", "standing", "sitting", "running", "walking", "dancing", "jumping", "fighting", "body", "position"],
   },
   {
     type: "temporal",

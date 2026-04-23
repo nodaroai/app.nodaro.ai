@@ -23,6 +23,8 @@ import { AtmosphereNode } from "./atmosphere-node";
 import { StyleNode } from "./style-node";
 import { SettingNode } from "./setting-node";
 import { PersonNode } from "./person-node";
+import { MoodNode } from "./mood-node";
+import { PoseNode } from "./pose-node";
 import { TemporalNode } from "./temporal-node";
 import { ReferenceAudioNode } from "./reference-audio-node";
 import { GenerateScriptNode } from "./generate-script-node";
@@ -150,6 +152,8 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "style": StyleNode,
   "setting": SettingNode,
   "person": PersonNode,
+  "mood": MoodNode,
+  "pose": PoseNode,
   "temporal": TemporalNode,
   "reference-audio": ReferenceAudioNode,
   // AI
