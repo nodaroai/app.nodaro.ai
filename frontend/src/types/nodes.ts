@@ -451,6 +451,10 @@ export interface PersonData {
   facialHair?: string
   /** Distinctive feature (glasses, freckles, tattoos, scar, dimples, piercing). */
   distinctiveFeature?: string
+  /** Free-text prepended before the dimension compound. */
+  preText?: string
+  /** Free-text appended after the dimension compound. */
+  postText?: string
   /** Grid columns when displaying multiple enabled dimensions in the node
    * card. Default 2. Range 1-4. */
   maxItemsPerRow?: number

@@ -243,6 +243,13 @@ export interface PersonValue {
   eyeColor?: string
   facialHair?: string
   distinctiveFeature?: string
+  /** Free-text appended BEFORE the dimension compound. Use when you want
+   * context/framing to come first (e.g. "wet-haired" or "covered in paint"). */
+  preText?: string
+  /** Free-text appended AFTER the dimension compound. Use for extra
+   * specifics that dimensions can't capture (e.g. "wearing a leather
+   * jacket", "with a silver necklace"). */
+  postText?: string
 }
 
 const personById = new Map<string, Person>(PEOPLE.map((p) => [p.id, p]))
@@ -284,6 +291,10 @@ export function buildPersonHints(
   data: Record<string, unknown> & PersonValue,
 ): string[] {
   const hints: string[] = []
+
+  const pre = typeof data.preText === "string" ? data.preText.trim() : ""
+  if (pre) hints.push(pre)
+
   for (const dimension of PERSON_DIMENSION_ORDER) {
     const field = PERSON_FIELD_BY_DIMENSION[dimension]
     const id = data[field]
@@ -291,5 +302,9 @@ export function buildPersonHints(
     const hint = getPersonPromptHint(id)
     if (hint) hints.push(hint)
   }
+
+  const post = typeof data.postText === "string" ? data.postText.trim() : ""
+  if (post) hints.push(post)
+
   return hints
 }
