@@ -34,6 +34,7 @@ import type {
   ColorLookData,
   AtmosphereData,
   StyleData,
+  SettingData,
   TemporalData,
 } from "@/types/nodes"
 import { CameraMotionPicker } from "./camera-motion-picker"
@@ -44,6 +45,7 @@ import { LightingPicker } from "./lighting-picker"
 import { ColorLookPicker } from "./color-look-picker"
 import { AtmospherePicker } from "./atmosphere-picker"
 import { StylePicker } from "./style-picker"
+import { SettingPicker } from "./setting-picker"
 import { TemporalPicker } from "./temporal-picker"
 import { PromptInjectionPreview } from "./prompt-injection-preview"
 import { composeCameraMotionHintForNode } from "@/lib/cinematography-hints"
@@ -54,6 +56,7 @@ import { buildLightingHints } from "@nodaro-shared/lighting"
 import { getColorLookPromptHint } from "@nodaro-shared/color-look"
 import { getAtmospherePromptHint } from "@nodaro-shared/atmosphere"
 import { getStylePromptHint } from "@nodaro-shared/style"
+import { getSettingPromptHint } from "@nodaro-shared/setting"
 import { buildTemporalHints } from "@nodaro-shared/temporal"
 import type { ConfigProps } from "./types"
 
@@ -390,6 +393,19 @@ export function StyleConfig({ data, onUpdate }: ConfigProps<StyleData>) {
       <StylePicker
         value={data.style || "cinematic"}
         onValueChange={(v) => onUpdate({ style: v })}
+      />
+    </div>
+  )
+}
+
+export function SettingConfig({ data, onUpdate }: ConfigProps<SettingData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getSettingPromptHint(data.setting)]} />
+      <Label>Setting</Label>
+      <SettingPicker
+        value={data.setting || "forest"}
+        onValueChange={(v) => onUpdate({ setting: v })}
       />
     </div>
   )

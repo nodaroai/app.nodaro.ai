@@ -411,6 +411,17 @@ export interface StyleData {
   style: string
 }
 
+/** Standalone Setting parameter node data. Place/environment hint appended
+ * to downstream gen prompts (coffee shop, forest clearing, cyberpunk alley).
+ * Distinct from the Location entity node — Setting is pure prompt text,
+ * Location entity generates a reference image. */
+export interface SettingData {
+  [key: string]: unknown
+  label: string
+  /** Setting id from SETTINGS catalog (packages/shared/src/setting.ts). */
+  setting: string
+}
+
 /** Standalone Temporal parameter node data. */
 export interface TemporalData {
   [key: string]: unknown
@@ -2686,6 +2697,7 @@ export type SceneNodeData =
   | ColorLookData
   | AtmosphereData
   | StyleData
+  | SettingData
   | TemporalData
   | GenerateScriptData
   | GenerateImageData
@@ -2810,6 +2822,7 @@ export type SceneNodeType =
   | "color-look"
   | "atmosphere"
   | "style"
+  | "setting"
   | "temporal"
   | "generate-script"
   | "generate-image"
@@ -3175,6 +3188,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Style", style: "cinematic" },
+  },
+  {
+    type: "setting",
+    label: "Setting",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Setting", setting: "forest" },
   },
   {
     type: "temporal",

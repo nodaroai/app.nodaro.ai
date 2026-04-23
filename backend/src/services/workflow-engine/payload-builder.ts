@@ -19,6 +19,7 @@ import { buildLightingHints } from "../../../../packages/shared/src/lighting.js"
 import { getColorLookPromptHint } from "../../../../packages/shared/src/color-look.js"
 import { getAtmospherePromptHint } from "../../../../packages/shared/src/atmosphere.js"
 import { getStylePromptHint } from "../../../../packages/shared/src/style.js"
+import { getSettingPromptHint } from "../../../../packages/shared/src/setting.js"
 import { buildTemporalHints } from "../../../../packages/shared/src/temporal.js"
 import type { CharacterDef, SceneData } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
@@ -353,6 +354,8 @@ function getNodePromptHint(node: SimpleNode | undefined): string {
       return getAtmospherePromptHint(typeof data.atmosphere === "string" ? data.atmosphere : "")
     case "style":
       return getStylePromptHint(typeof data.style === "string" ? data.style : "")
+    case "setting":
+      return getSettingPromptHint(typeof data.setting === "string" ? data.setting : "")
     case "temporal": {
       const hints = buildTemporalHints(data)
       return hints.join(", ")
@@ -424,18 +427,25 @@ function hasConnectedStyleNode(
  *
  * Mirror of the frontend executor (execute-node.ts:collectCinematographyHints).
  */
+/** Video-only cinematography dims; callers targeting still-image consumers
+ *  pass these via `options.excludeTypes` to strip incoherent hints. */
+const STILL_IMAGE_EXCLUDE_TYPES: ReadonlySet<string> = new Set(["camera-motion", "temporal"])
+
 function collectCinematographyHints(
   consumerNodeId: string,
   ctx: PayloadBuildContext | undefined,
+  options?: { excludeTypes?: ReadonlySet<string> },
 ): string[] {
   const hints: string[] = []
   const nodes = ctx?.nodes ?? []
   const edges = ctx?.edges ?? []
+  const exclude = options?.excludeTypes
   for (const edge of edges) {
     if (edge.target !== consumerNodeId) continue
     if (edge.targetHandle !== "cinematography") continue
     const srcNode = nodes.find((n) => n.id === edge.source)
     if (!srcNode) continue
+    if (exclude?.has(srcNode.type ?? "")) continue
 
     if (srcNode.type === "camera-motion") {
       const motionId = (srcNode.data as Record<string, unknown>).cameraMotion as string | undefined
@@ -544,7 +554,7 @@ export function buildPayload(
         || resolveRefs(data.prompt as string | undefined, refMap)
         || ""
       {
-        const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+        const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
         if (cinematographyHints.length > 0) {
           const joined = cinematographyHints.join(", ")
           rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
@@ -635,7 +645,7 @@ export function buildPayload(
         }
       }
       {
-        const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+        const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
         if (cinematographyHints.length > 0) {
           const joined = cinematographyHints.join(", ")
           editPrompt = editPrompt ? `${editPrompt}. ${joined}` : joined
@@ -709,7 +719,7 @@ export function buildPayload(
         || resolveRefs(data.prompt as string | undefined, refMap)
         || ""
       {
-        const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+        const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
         if (cinematographyHints.length > 0) {
           const joined = cinematographyHints.join(", ")
           rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
@@ -804,7 +814,7 @@ export function buildPayload(
           }
         }
         {
-          const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+          const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
           if (cinematographyHints.length > 0) {
             const joined = cinematographyHints.join(", ")
             editPrompt = editPrompt ? `${editPrompt}. ${joined}` : joined
@@ -873,7 +883,7 @@ export function buildPayload(
           || resolveRefs(data.prompt as string | undefined, refMap)
           || ""
         {
-          const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+          const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
           if (cinematographyHints.length > 0) {
             const joined = cinematographyHints.join(", ")
             rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
@@ -1954,14 +1964,20 @@ export function buildPayload(
     case "location": {
       const provider = (data.provider as string) ?? "nano-banana"
       const name = (data.name as string | undefined) ?? ""
+      const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
+      const cineSuffix = cinematographyHints.length > 0 ? cinematographyHints.join(", ") : ""
+      const baseDescription = (data.description as string | undefined) ?? ""
+      const augmentedDescription = cineSuffix
+        ? (baseDescription ? `${baseDescription}. ${cineSuffix}` : cineSuffix)
+        : (baseDescription || undefined)
       const entityPrompt = name
         ? buildLocationPrompt({
             name,
-            description: data.description as string | undefined,
+            description: augmentedDescription,
             category: data.category as string | undefined,
             style: data.style as string | undefined,
           })
-        : resolveRefs(data.description as string | undefined, refMap)
+        : resolveRefs(augmentedDescription, refMap)
           ?? resolveRefs(data.prompt as string | undefined, refMap)
       return {
         jobName: "generate-location",

@@ -21,6 +21,7 @@ import { LightingNode } from "./lighting-node";
 import { ColorLookNode } from "./color-look-node";
 import { AtmosphereNode } from "./atmosphere-node";
 import { StyleNode } from "./style-node";
+import { SettingNode } from "./setting-node";
 import { TemporalNode } from "./temporal-node";
 import { ReferenceAudioNode } from "./reference-audio-node";
 import { GenerateScriptNode } from "./generate-script-node";
@@ -146,6 +147,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "color-look": ColorLookNode,
   "atmosphere": AtmosphereNode,
   "style": StyleNode,
+  "setting": SettingNode,
   "temporal": TemporalNode,
   "reference-audio": ReferenceAudioNode,
   // AI

@@ -32,6 +32,7 @@ import {
   SwatchBook,
   CloudFog,
   Brush,
+  Mountain,
   Globe,
   HardDrive,
   Webhook,
@@ -318,6 +319,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Brush className="h-4 w-4" />,
     category: "Cinematography",
     keywords: ["anime", "oil painting", "watercolor", "cinematic", "photorealistic", "comic", "pixel art", "pop art", "noir", "illustration", "rendering"],
+  },
+  {
+    type: "setting",
+    label: "Setting",
+    icon: <Mountain className="h-4 w-4" />,
+    category: "Cinematography",
+    keywords: ["place", "environment", "location", "scene", "forest", "cafe", "alley", "cathedral", "desert", "cyberpunk", "fantasy", "indoor", "urban", "nature"],
   },
   {
     type: "temporal",

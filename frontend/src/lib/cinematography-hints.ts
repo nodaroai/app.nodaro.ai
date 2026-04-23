@@ -5,6 +5,7 @@ import { getCameraFormatPromptHint } from "@nodaro-shared/camera-format"
 import { getColorLookPromptHint } from "@nodaro-shared/color-look"
 import { getAtmospherePromptHint } from "@nodaro-shared/atmosphere"
 import { getStylePromptHint } from "@nodaro-shared/style"
+import { getSettingPromptHint } from "@nodaro-shared/setting"
 import { buildTemporalHints } from "@nodaro-shared/temporal"
 import { composeCameraMotionHintFromConnections } from "@nodaro-shared/camera-motions"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
@@ -37,6 +38,8 @@ export function getNodePromptHint(node: WorkflowNode | undefined): string {
       return getAtmospherePromptHint(typeof data.atmosphere === "string" ? data.atmosphere : "")
     case "style":
       return getStylePromptHint(typeof data.style === "string" ? data.style : "")
+    case "setting":
+      return getSettingPromptHint(typeof data.setting === "string" ? data.setting : "")
     case "temporal": {
       const hints = buildTemporalHints(data)
       return hints.join(", ")
@@ -94,17 +97,26 @@ export function composeCameraMotionHintForNode(
  *  - the backend workflow-engine payload builder (same),
  *  - the FinalPromptPreview + ConnectedCinematographySources UI components.
  */
+/** Video-only cinematography dims. Still-image consumers (generate-image,
+ *  edit-image, image-to-image, Location entity reference-image gen) pass
+ *  these via `options.excludeTypes` to `collectCinematographyHints` so a
+ *  stray Motion/Temporal connection doesn't inject incoherent hints. */
+export const STILL_IMAGE_EXCLUDE_TYPES: ReadonlySet<string> = new Set(["camera-motion", "temporal"])
+
 export function collectCinematographyHints(
   consumerNodeId: string,
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
+  options?: { excludeTypes?: ReadonlySet<string> },
 ): string[] {
   const hints: string[] = []
+  const exclude = options?.excludeTypes
   for (const edge of edges) {
     if (edge.target !== consumerNodeId) continue
     if (edge.targetHandle !== "cinematography") continue
     const srcNode = nodes.find((n) => n.id === edge.source)
     if (!srcNode) continue
+    if (exclude?.has(srcNode.type ?? "")) continue
 
     if (srcNode.type === "camera-motion") {
       const motionId = (srcNode.data as Record<string, unknown>).cameraMotion as string | undefined
