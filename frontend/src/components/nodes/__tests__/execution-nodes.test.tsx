@@ -17,6 +17,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
     useStore: vi.fn(() => 1),
     useNodeId: vi.fn(() => "test-node"),
     useReactFlow: vi.fn(() => ({ getNodes: vi.fn(() => []), getEdges: vi.fn(() => []), setNodes: vi.fn(), setEdges: vi.fn() })),
+    useUpdateNodeInternals: vi.fn(() => () => {}),
   }
 })
 
