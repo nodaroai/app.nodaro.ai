@@ -328,6 +328,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["place", "environment", "location", "scene", "forest", "cafe", "alley", "cathedral", "desert", "cyberpunk", "fantasy", "indoor", "urban", "nature"],
   },
   {
+    type: "person",
+    label: "Person",
+    icon: <UserRound className="h-4 w-4" />,
+    category: "Cinematography",
+    keywords: ["subject", "character", "people", "human", "gender", "age", "ethnicity", "hair", "skin", "eyes", "build", "man", "woman", "child", "beard", "mustache"],
+  },
+  {
     type: "temporal",
     label: "Temporal",
     icon: <Clock className="h-4 w-4" />,

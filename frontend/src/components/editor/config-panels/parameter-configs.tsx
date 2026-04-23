@@ -35,6 +35,7 @@ import type {
   AtmosphereData,
   StyleData,
   SettingData,
+  PersonData,
   TemporalData,
 } from "@/types/nodes"
 import { CameraMotionPicker } from "./camera-motion-picker"
@@ -46,6 +47,7 @@ import { ColorLookPicker } from "./color-look-picker"
 import { AtmospherePicker } from "./atmosphere-picker"
 import { StylePicker } from "./style-picker"
 import { SettingPicker } from "./setting-picker"
+import { PersonPicker } from "./person-picker"
 import { TemporalPicker } from "./temporal-picker"
 import { PromptInjectionPreview } from "./prompt-injection-preview"
 import { composeCameraMotionHintForNode } from "@/lib/cinematography-hints"
@@ -57,6 +59,7 @@ import { getColorLookPromptHint } from "@nodaro-shared/color-look"
 import { getAtmospherePromptHint } from "@nodaro-shared/atmosphere"
 import { getStylePromptHint } from "@nodaro-shared/style"
 import { getSettingPromptHint } from "@nodaro-shared/setting"
+import { buildPersonHints } from "@nodaro-shared/person"
 import { buildTemporalHints } from "@nodaro-shared/temporal"
 import type { ConfigProps } from "./types"
 
@@ -407,6 +410,50 @@ export function SettingConfig({ data, onUpdate }: ConfigProps<SettingData>) {
         value={data.setting || "forest"}
         onValueChange={(v) => onUpdate({ setting: v })}
       />
+    </div>
+  )
+}
+
+export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
+  const maxItemsPerRow = data.maxItemsPerRow ?? 2
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={buildPersonHints(data)} />
+      <Label>Person</Label>
+      <PersonPicker
+        value={{
+          type: data.type,
+          age: data.age,
+          ethnicity: data.ethnicity,
+          build: data.build,
+          hairColor: data.hairColor,
+          hairStyle: data.hairStyle,
+          skinTone: data.skinTone,
+          eyeColor: data.eyeColor,
+          facialHair: data.facialHair,
+          distinctiveFeature: data.distinctiveFeature,
+        }}
+        onChange={(patch) => onUpdate(patch)}
+      />
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <Label htmlFor="person-max-items-per-row" className="text-xs text-muted-foreground">
+          Items per row (node card)
+        </Label>
+        <input
+          id="person-max-items-per-row"
+          type="number"
+          min={1}
+          max={4}
+          value={maxItemsPerRow}
+          onChange={(e) => {
+            const n = Number(e.target.value)
+            if (!Number.isFinite(n)) return
+            const clamped = Math.max(1, Math.min(4, Math.round(n)))
+            onUpdate({ maxItemsPerRow: clamped })
+          }}
+          className="w-16 h-7 rounded-md border border-input bg-background px-2 text-xs text-right"
+        />
+      </div>
     </div>
   )
 }
