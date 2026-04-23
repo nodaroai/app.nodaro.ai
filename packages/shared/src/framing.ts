@@ -191,6 +191,13 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     description: "Through subject's eyes",
     promptHint: "POV framing, scene viewed through the subject's own eyes, first person perspective",
   },
+  {
+    id: "selfie-framing",
+    label: "Selfie",
+    category: "coverage",
+    description: "Arm's-length self-portrait",
+    promptHint: "selfie framing, subject holding the camera at arm's length to frame themselves, slightly high angle from above, phone-camera perspective with the subject's face and upper body dominant in frame, arm or phone edge sometimes visible",
+  },
 
   // Composition (where the subject sits in the frame)
   {

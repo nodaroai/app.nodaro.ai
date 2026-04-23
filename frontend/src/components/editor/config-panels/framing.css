@@ -347,6 +347,31 @@
   box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.2);
 }
 
+/* Selfie — subject fills frame at arm's length, slight phone-hold hint */
+.fr-selfie-framing .fr-subject {
+  left: 48%;
+  bottom: 8%;
+  width: 48cqw;
+  height: 68cqw;
+}
+.fr-selfie-framing .fr-subject .fr-head { width: 55%; }
+.fr-selfie-framing::after {
+  /* Phone edge creeping in from bottom-right (arm holding it off-screen) */
+  content: "";
+  position: absolute;
+  right: -3%;
+  bottom: -3%;
+  width: 24%;
+  height: 20%;
+  background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 60%, #000 100%);
+  border-radius: 10% 2% 0 0;
+  transform: rotate(-10deg);
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.1),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
 /* =================== Composition =================== */
 
 .fr-rule-of-thirds .fr-thirds-overlay         { display: block; }
