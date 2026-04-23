@@ -82,6 +82,20 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     description: "Detail shot of an object",
     promptHint: "insert shot, tight on a specific object or detail relevant to the scene",
   },
+  {
+    id: "macro",
+    label: "Macro",
+    category: "shot-size",
+    description: "Extreme close detail of a small subject",
+    promptHint: "macro shot, extreme close-up of fine detail filling the frame, magnifying small subject features",
+  },
+  {
+    id: "full-shot",
+    label: "Full Shot",
+    category: "shot-size",
+    description: "Whole body head-to-toe in frame",
+    promptHint: "full shot, the subject's entire body framed head to toe with minimal headroom and footroom",
+  },
 
   // Angle (camera height / orientation)
   {
@@ -118,6 +132,20 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "angle",
     description: "Extreme low angle from the ground",
     promptHint: "worm's eye view, extreme low angle from ground level looking up",
+  },
+  {
+    id: "dutch-angle",
+    label: "Dutch Angle",
+    category: "angle",
+    description: "Tilted canted horizon",
+    promptHint: "Dutch angle shot, the camera rolled so the horizon is canted, conveying tension or unease",
+  },
+  {
+    id: "birds-eye",
+    label: "Bird's Eye",
+    category: "angle",
+    description: "High aerial overhead view",
+    promptHint: "bird's eye view, high aerial perspective looking down on the scene from far above",
   },
 
   // Coverage (dialog / multi-subject framing)
