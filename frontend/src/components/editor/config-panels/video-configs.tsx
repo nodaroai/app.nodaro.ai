@@ -38,19 +38,13 @@ import { TagTextarea } from "./tag-textarea"
 import { Kling3StudioConfig } from "./kling3-studio-config"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { CameraMotionPicker } from "./camera-motion-picker"
-import { InlineCameraMotionField } from "./inline-camera-motion-field"
-import { InlineFramingField } from "./inline-framing-field"
-import { InlineLensField } from "./inline-lens-field"
-import { InlineCameraFormatField } from "./inline-camera-format-field"
-import { InlineLightingField } from "./inline-lighting-field"
-import { InlineColorLookField } from "./inline-color-look-field"
-import { InlineAtmosphereField } from "./inline-atmosphere-field"
-import { InlineTemporalField } from "./inline-temporal-field"
 import { ConnectedMediaList, getSourceThumbnail } from "./connected-media-list"
+import { FinalPromptPreview } from "./final-prompt-preview"
+import { ConnectedCinematographySources } from "./connected-cinematography-sources"
 import type { ConfigProps } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
 
-export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, onUpdateNode, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ImageToVideoData>) {
+export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
@@ -98,6 +92,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
 
   return (
     <div className="flex flex-col gap-3">
+      <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       {connectedImages.length > 0 && (
         <ConnectedMediaList
           sources={sources}
@@ -281,14 +276,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           </MappableField>
         )}
       </div>
-      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineCameraMotionField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineTemporalField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
 
       {data.provider === "kling" && (
         <div className="flex items-center gap-2 px-1">
@@ -602,11 +589,13 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           onClose={() => setLightboxImage(null)}
         />
       )}
+
+      <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
     </div>
   )
 }
 
-export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<VideoToVideoData>) {
+export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VideoToVideoData> & { nodeId?: string }) {
   const provider = data.provider || "wan"
   const isWan = provider === "wan" || provider === "wan-flash"
   const isWanFlash = provider === "wan-flash"
@@ -614,6 +603,7 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
 
   return (
     <div className="flex flex-col gap-3">
+      <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
           value={provider}
@@ -641,14 +631,6 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         />
       </MappableField>
 
-      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineCameraMotionField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineTemporalField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
 
       {/* Wan / Wan Flash: Duration & Resolution */}
       {isWan && (
@@ -727,6 +709,8 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           </MappableField>
         </>
       )}
+
+      <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
     </div>
   )
 }
@@ -913,7 +897,7 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
-export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToVideoData>) {
+export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToVideoData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(VIDEO_T2V_MODELS.map((m) => m.value)) }, [])
   const allowedDurations = KIE_T2V_DURATIONS[data.provider || "minimax"] || null
   const isSeedance2 = isSeedance2Provider(data.provider)
@@ -939,6 +923,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 
   return (
     <div className="flex flex-col gap-3">
+      <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
           value={data.provider || "minimax"}
@@ -964,14 +949,6 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           refMap={refMap}
         />
       </MappableField>
-      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineCameraMotionField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineTemporalField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         {allowedDurations ? (
           <Select
@@ -1150,13 +1127,16 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           refMap={refMap}
         />
       </MappableField>
+
+      <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
     </div>
   )
 }
 
-export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ExtendVideoData>) {
+export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ExtendVideoData> & { nodeId?: string }) {
   return (
     <div className="flex flex-col gap-3">
+      <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
           value={data.provider || "veo-extend"}
@@ -1182,14 +1162,6 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         />
       </MappableField>
 
-      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineCameraMotionField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineTemporalField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
 
       {data.provider === "veo-extend" && (
         <div>
@@ -1241,17 +1213,20 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
       <p className="text-xs text-muted-foreground px-1">
         Extends a VEO or Runway video with a new prompt. Connect an upstream Image to Video or Text to Video node that produces a kieTaskId.
       </p>
+
+      <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
     </div>
   )
 }
 
 
-export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SpeechToVideoData>) {
+export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<SpeechToVideoData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(["speech-to-video", "speech-to-video:580p", "speech-to-video:720p"]) }, [])
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   return (
     <div className="flex flex-col gap-3">
+      <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       {/* Resolution */}
       <div className="flex flex-col gap-1.5">
         <Label className="text-xs text-muted-foreground">Resolution</Label>
@@ -1286,14 +1261,6 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
         />
       </div>
 
-      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineCameraMotionField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
-      <InlineTemporalField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
 
       {/* Negative Prompt */}
       <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1393,6 +1360,8 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
       <p className="text-xs text-muted-foreground px-1">
         Generates a talking video from an image and audio using Wan 2.2 Speech-to-Video. Connect a portrait image, speech audio, and prompt.
       </p>
+
+      <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
     </div>
   )
 }

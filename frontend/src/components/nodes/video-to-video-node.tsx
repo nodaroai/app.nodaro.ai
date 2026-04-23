@@ -2,7 +2,8 @@
 
 import { memo, useState, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Link, Settings, Scissors } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Link, Settings, Scissors, Aperture } from "lucide-react"
+import { HandleIcon } from "./handle-icon"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -149,6 +150,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "cinematography", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
@@ -299,6 +301,9 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       )}
     </div>
+
+    {/* Cinematography input handle icon */}
+    <HandleIcon icon={<Aperture />} color="indigo" side="left" top="calc(100% - 50px)" label="Cinematography" />
 
     {/* Video output handle icon */}
     <div

@@ -2,7 +2,8 @@
 
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Wand2, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, ImageIcon, Link, Pencil } from "lucide-react"
+import { Wand2, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, ImageIcon, Link, Pencil, Aperture } from "lucide-react"
+import { HandleIcon } from "./handle-icon"
 import { NodeJobProgress } from "./node-job-progress"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
@@ -103,6 +104,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "image", type: "target", position: Position.Left, top: "calc(100% - 20px)", customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "cinematography", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
         { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
@@ -212,6 +214,8 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       )}
     </div>
+    {/* Cinematography input handle icon */}
+    <HandleIcon icon={<Aperture />} color="indigo" side="left" top="calc(100% - 50px)" label="Cinematography" />
     {/* Output handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"

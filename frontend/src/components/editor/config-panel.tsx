@@ -362,17 +362,17 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "atmosphere": return <AtmosphereConfig {...configProps} />
     case "temporal": return <TemporalConfig {...configProps} />
     case "generate-script": return <GenerateScriptConfig {...configProps} />
-    case "generate-image": return <GenerateImageConfig {...configProps} />
-    case "modify-image": return <ModifyImageConfig {...configProps} />
+    case "generate-image": return <GenerateImageConfig {...configProps} nodeId={selectedNodeId} />
+    case "modify-image": return <ModifyImageConfig {...configProps} nodeId={selectedNodeId} />
     case "upscale-image": return <UpscaleImageConfig {...configProps} />
     case "remove-background": return <RemoveBackgroundConfig {...configProps} />
     case "image-to-video": return (nodeData as ImageToVideoData).provider === "kling-3.0"
       ? <Suspense fallback={null}><Kling3StudioConfig {...configProps} /></Suspense>
-      : <ImageToVideoConfig {...configProps} onUpdateNode={updateNodeData} />
-    case "video-to-video": return <VideoToVideoConfig {...configProps} />
+      : <ImageToVideoConfig {...configProps} onUpdateNode={updateNodeData} nodeId={selectedNodeId} />
+    case "video-to-video": return <VideoToVideoConfig {...configProps} nodeId={selectedNodeId} />
     case "text-to-video": return (
       <>
-        <TextToVideoConfig {...configProps} />
+        <TextToVideoConfig {...configProps} nodeId={selectedNodeId} />
         {(nodeData as TextToVideoData).provider === "kling-3.0" && (
           <Button variant="outline" className="w-full mt-2" onClick={onExpandDirector}>
             <Maximize2 className="w-4 h-4 mr-2" />
@@ -406,14 +406,14 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "suno-convert-wav": return <SunoConvertWavConfig {...configProps} />
     case "suno-upload-extend": return <SunoUploadExtendConfig {...configProps} />
     case "lip-sync": return <LipSyncConfig {...configProps} />
-    case "speech-to-video": return <SpeechToVideoConfig {...configProps} />
+    case "speech-to-video": return <SpeechToVideoConfig {...configProps} nodeId={selectedNodeId} />
     case "motion-transfer": return <MotionTransferConfig {...configProps} />
     case "transcribe": return <TranscribeConfig {...configProps} />
     case "image-to-text": return <ImageToTextConfig {...configProps} />
     case "llm-chat": return <LLMChatConfig {...configProps} />
     case "ai-writer": return <AIWriterConfig {...configProps} />
     case "video-upscale": return <VideoUpscaleConfig {...configProps} />
-    case "extend-video": return <ExtendVideoConfig {...configProps} />
+    case "extend-video": return <ExtendVideoConfig {...configProps} nodeId={selectedNodeId} />
     case "combine-videos": return <CombineVideosConfig {...configProps} />
     case "merge-video-audio": return <MergeVideoAudioConfig {...configProps} />
     case "add-captions": return <AddCaptionsConfig {...configProps} />

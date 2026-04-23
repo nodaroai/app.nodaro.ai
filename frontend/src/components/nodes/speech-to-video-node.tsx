@@ -2,7 +2,8 @@
 
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { MessageSquare, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, LayoutGrid, Expand, Download, Type, Link, Settings, Scissors } from "lucide-react"
+import { MessageSquare, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, LayoutGrid, Expand, Download, Type, Link, Settings, Scissors, Aperture } from "lucide-react"
+import { HandleIcon } from "./handle-icon"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -234,6 +235,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
+        { id: "cinematography", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 110px)', left: '-29px' }, hideHandle: true },
         { id: "image", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 80px)', left: '-29px' }, hideHandle: true },
         { id: "audio", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
         { id: "prompt", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
@@ -352,6 +354,9 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
       </div>
       )}
     </BaseNode>
+
+    {/* cinematography input handle icon */}
+    <HandleIcon icon={<Aperture />} color="indigo" side="left" top="calc(100% - 110px)" label="Cinematography" />
 
     {/* image input handle icon */}
     <div

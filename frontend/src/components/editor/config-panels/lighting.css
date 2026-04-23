@@ -323,3 +323,54 @@
   background: linear-gradient(105deg, #fff8e0 0%, #d8b890 50%, #604838 100%);
   box-shadow: -8px 0 14px rgba(255, 240, 200, 0.4);
 }
+
+/* === Reference-parity styles === */
+
+/* Natural — available ambient daylight, balanced and unstaged */
+.lighting-preview--natural {
+  background: linear-gradient(180deg, #cfd8d8 0%, #88928c 60%, #2a2e2a 100%);
+}
+.lighting-preview--natural .lighting-preview__subject {
+  background: linear-gradient(170deg, #f0ece0 0%, #b8a890 55%, #4c4640 100%);
+  box-shadow: 0 8px 12px rgba(160, 160, 150, 0.35);
+}
+
+/* Volumetric — visible god-ray shafts cutting through haze */
+.lighting-preview--volumetric {
+  background: linear-gradient(160deg, #2c2418 0%, #14100a 60%, #050402 100%);
+}
+.lighting-preview--volumetric .lighting-preview__subject {
+  background: linear-gradient(170deg, #f0d090 0%, #a07840 50%, #1a1208 100%);
+}
+.lighting-preview--volumetric .lighting-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(160deg, transparent 28%, rgba(255, 220, 150, 0.32) 32%, transparent 38%),
+    linear-gradient(160deg, transparent 50%, rgba(255, 220, 150, 0.22) 54%, transparent 60%),
+    linear-gradient(160deg, transparent 70%, rgba(255, 220, 150, 0.18) 74%, transparent 80%);
+  pointer-events: none;
+}
+
+/* Noir — high-contrast B&W with venetian-blind slat shadows */
+.lighting-preview--noir {
+  background: linear-gradient(180deg, #383838 0%, #181818 60%, #050505 100%);
+}
+.lighting-preview--noir .lighting-preview__subject {
+  background: linear-gradient(170deg, #f8f8f8 0%, #707070 40%, #0a0a0a 100%);
+  filter: grayscale(1) contrast(1.4);
+}
+.lighting-preview--noir .lighting-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.55) 0px,
+    rgba(0, 0, 0, 0.55) 6px,
+    transparent 6px,
+    transparent 16px
+  );
+  pointer-events: none;
+}

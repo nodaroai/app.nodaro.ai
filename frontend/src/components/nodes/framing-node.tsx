@@ -35,7 +35,10 @@ function collectEnabled(data: FramingData): EnabledEntry[] {
 function FramingNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as FramingData
   const enabled = collectEnabled(nodeData)
-  const maxItemsPerRow = Math.max(1, Math.min(5, nodeData.maxItemsPerRow ?? 1))
+  const maxItemsPerRow = Math.max(1, Math.min(5, nodeData.maxItemsPerRow ?? 2))
+  // Cap grid columns to the actual number of enabled entries — a lone
+  // selection fills the row instead of sitting at half-width.
+  const gridColumns = Math.max(1, Math.min(maxItemsPerRow, enabled.length))
 
   return (
     <ParameterNodeShell
@@ -50,7 +53,7 @@ function FramingNodeComponent({ id, data, selected }: NodeProps) {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: `repeat(${maxItemsPerRow}, minmax(0, 1fr))`,
+            gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`,
             columnGap: "0.5rem",
             rowGap: "1.25rem",
           }}

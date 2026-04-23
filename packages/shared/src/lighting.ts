@@ -46,6 +46,9 @@ export const LIGHTINGS: ReadonlyArray<Lighting> = [
   { id: "ring-light",        label: "Ring Light",        category: "style", description: "Beauty/vlog ring catchlight",  promptHint: "ring light setup, even frontal illumination with the unmistakable circular catchlight in the eyes typical of beauty and vlog content" },
   { id: "phone-screen-glow", label: "Phone Screen Glow", category: "style", description: "Cool screen underlight",       promptHint: "phone screen glow lighting, cool blue underlighting from a phone screen casting upward onto the subject's face" },
   { id: "selfie-natural",    label: "Selfie Natural",    category: "style", description: "Window-light selfie",          promptHint: "window-light selfie aesthetic, soft natural daylight from a single window with casual handheld framing" },
+  { id: "natural",           label: "Natural",           category: "style", description: "Available ambient light",       promptHint: "natural lighting, available ambient light with no artificial setup, organic and unpolished" },
+  { id: "volumetric",        label: "Volumetric",        category: "style", description: "Visible light beams in haze",  promptHint: "volumetric lighting, visible god-ray light beams cutting through hazy atmosphere with strong directional shafts" },
+  { id: "noir",              label: "Noir",              category: "style", description: "High-contrast B&W film noir",  promptHint: "film noir lighting, high-contrast black-and-white aesthetic with hard chiaroscuro shadows, venetian-blind slat shadows, and crushed deep blacks" },
 
   // Direction (6)
   { id: "front",         label: "Front",         category: "direction",   description: "Light from camera direction",  promptHint: "front lighting, light coming from the camera direction, flat even illumination across the subject" },

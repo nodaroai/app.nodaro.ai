@@ -2,7 +2,8 @@
 
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Film, Loader2, AlertCircle, X, Clapperboard } from "lucide-react"
+import { Film, Loader2, AlertCircle, X, Clapperboard, Aperture } from "lucide-react"
+import { HandleIcon } from "./handle-icon"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -69,6 +70,7 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
         }
         handles={[
           { id: "in", type: "target", position: Position.Top, customStyle: { top: '-29px', left: '50%' }, hideHandle: true },
+          { id: "cinematography", type: "target", position: Position.Left, customStyle: { top: 'calc(50% - 14px)', left: '-29px' }, hideHandle: true },
           { id: "video", type: "source", position: Position.Bottom, customStyle: { bottom: '-29px', left: '50%' }, hideHandle: true },
         ]}
       >
@@ -199,6 +201,8 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
       >
         <Clapperboard className="w-3.5 h-3.5 text-white" />
       </div>
+      {/* Cinematography input handle icon */}
+      <HandleIcon icon={<Aperture />} color="indigo" side="left" top="50%" label="Cinematography" />
       {/* Video output handle icon */}
       <div
         className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"

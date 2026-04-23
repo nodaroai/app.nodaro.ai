@@ -2,7 +2,8 @@
 
 import { memo, useState, useEffect, useRef, useCallback } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Type, Settings, Link, Scissors } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Type, Settings, Link, Scissors, Aperture } from "lucide-react"
+import { HandleIcon } from "./handle-icon"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -160,6 +161,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
+        { id: "cinematography", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
         ...(isSeedance2 ? [
           { id: "reference-images", type: "target" as const, position: Position.Left, top: 'calc(100% - 160px)', customStyle: { top: 'calc(100% - 160px)', left: '-29px' }, hideHandle: true, label: `Ref images ×${SEEDANCE_2_REF_LIMITS.images}` },
           { id: "reference-videos", type: "target" as const, position: Position.Left, top: 'calc(100% - 120px)', customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, hideHandle: true, label: `Ref videos ×${SEEDANCE_2_REF_LIMITS.videos}` },
@@ -313,6 +315,9 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
       )}
     </div>
 
+
+    {/* Cinematography input handle icon */}
+    <HandleIcon icon={<Aperture />} color="indigo" side="left" top="calc(100% - 20px)" label="Cinematography" />
 
     {/* Video output handle icon */}
     <div

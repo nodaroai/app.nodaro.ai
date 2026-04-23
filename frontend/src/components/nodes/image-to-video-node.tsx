@@ -3,7 +3,8 @@
 import { memo, useState, useMemo, useEffect, useRef, useCallback, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, Images, Volume2, Maximize2, Download, Settings, LayoutGrid, Expand, Link, Scissors } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, Images, Volume2, Maximize2, Download, Settings, LayoutGrid, Expand, Link, Scissors, Aperture } from "lucide-react"
+import { HandleIcon } from "./handle-icon"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -150,6 +151,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const referencesTop = 445 * 0.70
 
   const resultHeight = videoDimensions?.height ?? 445
+  const cinematographyTop = 445 * 0.07
   const startFrameTop = 445 * 0.157
   const endFrameTop = 445 * 0.36
   const audioTop = 445 * 0.53
@@ -226,6 +228,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const refAudioTop = 445 * 0.92
 
   const handles = useMemo(() => [
+    { id: "cinematography", type: "target" as const, position: Position.Left, customStyle: { top: `${cinematographyTop}px`, left: '-29px' }, hideHandle: true },
     ...(showStartFrame ? [{ id: "startFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${startFrameTop}px`, left: '-29px' }, hideHandle: true }] : []),
     ...((showEndFrame && showStartFrame) ? [{ id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${endFrameTop}px`, left: '-29px' }, hideHandle: true }] : []),
     { id: "audio", type: "target" as const, position: Position.Left, customStyle: { top: `${audioTop}px`, left: '-29px' }, hideHandle: true },
@@ -235,7 +238,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       { id: "reference-audio", type: "target" as const, position: Position.Left, top: `${refAudioTop}px`, customStyle: { top: `${refAudioTop}px`, left: '-29px' }, hideHandle: true, label: `Ref audio ×${SEEDANCE_2_REF_LIMITS.audio}` },
     ] : []),
     { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: `${videoTop}px`, right: '-29px' }, hideHandle: true },
-  ], [startFrameTop, endFrameTop, audioTop, referencesTop, refVideosTop, refAudioTop, videoTop, activeUrl, showConfig, showEndFrame, showStartFrame, showReferences, isSeedance2])
+  ], [cinematographyTop, startFrameTop, endFrameTop, audioTop, referencesTop, refVideosTop, refAudioTop, videoTop, activeUrl, showConfig, showEndFrame, showStartFrame, showReferences, isSeedance2])
 
   // Re-register handles with React Flow when they change — edges to new handles render unreliably otherwise
   const updateNodeInternals = useUpdateNodeInternals()
@@ -711,6 +714,9 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
     )}
+
+    {/* cinematography input handle icon */}
+    <HandleIcon icon={<Aperture />} color="indigo" side="left" top={`${cinematographyTop}px`} label="Cinematography" />
 
     {/* video output handle icon */}
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
