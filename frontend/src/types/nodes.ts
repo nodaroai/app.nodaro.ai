@@ -445,6 +445,8 @@ export interface PersonData {
   hairStyle?: string
   /** Skin tone. */
   skinTone?: string
+  /** Skin texture / quality (smooth, wrinkled, goosebumps, dewy, glistening, weathered). */
+  skinTexture?: string
   /** Eye color. */
   eyeColor?: string
   /** Facial hair style (clean-shaven, stubble, full-beard). */

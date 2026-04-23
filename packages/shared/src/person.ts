@@ -40,6 +40,7 @@ export type PersonDimension =
   | "hair-color"
   | "hair-style"
   | "skin-tone"
+  | "skin-texture"
   | "eye-color"
   | "facial-hair"
   | "distinctive-features"
@@ -172,6 +173,14 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "face-short-beard",  label: "Short Beard",  dimension: "facial-hair", description: "Short trimmed beard", promptHint: "a short trimmed beard" },
   { id: "face-full-beard",   label: "Full Beard",   dimension: "facial-hair", description: "Thick full beard",  promptHint: "a full beard" },
 
+  // -------------------- Skin Texture --------------------
+  { id: "texture-smooth",     label: "Smooth",      dimension: "skin-texture", description: "Flawless, silky smooth skin", promptHint: "with flawless, silky smooth skin" },
+  { id: "texture-wrinkled",   label: "Wrinkled",    dimension: "skin-texture", description: "Aged, deeply lined skin",     promptHint: "with deep wrinkles and aged skin texture" },
+  { id: "texture-goosebumps", label: "Goosebumps",  dimension: "skin-texture", description: "Raised goosebumps on skin",   promptHint: "with goosebumps raised on the skin" },
+  { id: "texture-dewy",       label: "Dewy",        dimension: "skin-texture", description: "Glowing, dewy fresh skin",    promptHint: "with dewy, glowing skin and a fresh sheen" },
+  { id: "texture-glistening", label: "Glistening",  dimension: "skin-texture", description: "Sweat or oil sheen",          promptHint: "with glistening skin, sweat or oil catching the light" },
+  { id: "texture-weathered",  label: "Weathered",   dimension: "skin-texture", description: "Sun-aged rough skin",         promptHint: "with weathered, sun-worn rough skin" },
+
   // -------------------- Distinctive Features --------------------
   { id: "feature-glasses",   label: "Glasses",      dimension: "distinctive-features", description: "Wears glasses",        promptHint: "wearing glasses" },
   { id: "feature-freckles",  label: "Freckles",     dimension: "distinctive-features", description: "Visible freckles",     promptHint: "with freckles" },
@@ -189,6 +198,7 @@ export const PERSON_DIMENSION_ORDER: ReadonlyArray<PersonDimension> = [
   "hair-style",
   "hair-color",
   "skin-tone",
+  "skin-texture",
   "eye-color",
   "facial-hair",
   "distinctive-features",
@@ -202,6 +212,7 @@ export const PERSON_DIMENSION_LABELS: Readonly<Record<PersonDimension, string>> 
   "hair-color": "Hair Color",
   "hair-style": "Hair Style",
   "skin-tone": "Skin Tone",
+  "skin-texture": "Skin Texture",
   "eye-color": "Eye Color",
   "facial-hair": "Facial Hair",
   "distinctive-features": "Distinctive Features",
@@ -214,7 +225,7 @@ export const PERSON_DIMENSION_LABELS: Readonly<Record<PersonDimension, string>> 
  */
 export const PERSON_FIELD_BY_DIMENSION: Record<
   PersonDimension,
-  "type" | "age" | "ethnicity" | "build" | "hairColor" | "hairStyle" | "skinTone" | "eyeColor" | "facialHair" | "distinctiveFeature"
+  "type" | "age" | "ethnicity" | "build" | "hairColor" | "hairStyle" | "skinTone" | "skinTexture" | "eyeColor" | "facialHair" | "distinctiveFeature"
 > = {
   type: "type",
   age: "age",
@@ -223,6 +234,7 @@ export const PERSON_FIELD_BY_DIMENSION: Record<
   "hair-color": "hairColor",
   "hair-style": "hairStyle",
   "skin-tone": "skinTone",
+  "skin-texture": "skinTexture",
   "eye-color": "eyeColor",
   "facial-hair": "facialHair",
   "distinctive-features": "distinctiveFeature",
@@ -240,6 +252,7 @@ export interface PersonValue {
   hairColor?: string
   hairStyle?: string
   skinTone?: string
+  skinTexture?: string
   eyeColor?: string
   facialHair?: string
   distinctiveFeature?: string

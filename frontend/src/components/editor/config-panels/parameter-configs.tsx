@@ -455,6 +455,7 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
           hairColor: data.hairColor,
           hairStyle: data.hairStyle,
           skinTone: data.skinTone,
+          skinTexture: data.skinTexture,
           eyeColor: data.eyeColor,
           facialHair: data.facialHair,
           distinctiveFeature: data.distinctiveFeature,
