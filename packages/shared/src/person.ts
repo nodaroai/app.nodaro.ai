@@ -66,6 +66,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "elegant-woman",     label: "Elegant Woman",      dimension: "type", description: "Poised, refined woman",         promptHint: "an elegant, poised woman" },
   { id: "rugged-man",        label: "Rugged Man",         dimension: "type", description: "Weathered, rugged man",         promptHint: "a rugged, weathered man" },
   { id: "graceful-woman",    label: "Graceful Woman",     dimension: "type", description: "Gentle, graceful woman",        promptHint: "a graceful woman" },
+  { id: "baddie",            label: "Baddie",             dimension: "type", description: "Confident, trendy, styled woman", promptHint: "a baddie — a confident, trendy woman with styled makeup and a fashion-forward look" },
   { id: "tough-guy",         label: "Tough Guy",          dimension: "type", description: "Hardened, tough man",           promptHint: "a tough, hardened man" },
   { id: "wise-elder",        label: "Wise Elder",         dimension: "type", description: "Aged, knowing elder",           promptHint: "a wise elder" },
   { id: "mysterious-figure", label: "Mysterious Figure",  dimension: "type", description: "Enigmatic figure",              promptHint: "a mysterious figure" },
