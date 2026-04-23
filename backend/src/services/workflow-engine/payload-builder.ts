@@ -20,6 +20,7 @@ import { getColorLookPromptHint } from "../../../../packages/shared/src/color-lo
 import { getAtmospherePromptHint } from "../../../../packages/shared/src/atmosphere.js"
 import { getStylePromptHint } from "../../../../packages/shared/src/style.js"
 import { getSettingPromptHint } from "../../../../packages/shared/src/setting.js"
+import { buildPersonHints } from "../../../../packages/shared/src/person.js"
 import { buildTemporalHints } from "../../../../packages/shared/src/temporal.js"
 import type { CharacterDef, SceneData } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
@@ -356,6 +357,10 @@ function getNodePromptHint(node: SimpleNode | undefined): string {
       return getStylePromptHint(typeof data.style === "string" ? data.style : "")
     case "setting":
       return getSettingPromptHint(typeof data.setting === "string" ? data.setting : "")
+    case "person": {
+      const hints = buildPersonHints(data)
+      return hints.join(", ")
+    }
     case "temporal": {
       const hints = buildTemporalHints(data)
       return hints.join(", ")

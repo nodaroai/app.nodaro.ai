@@ -422,6 +422,40 @@ export interface SettingData {
   setting: string
 }
 
+/** Standalone Person parameter node data. Subject-appearance compound hint
+ * appended to downstream gen prompts. Multi-dimension: each of 9 orthogonal
+ * fields is optional. Non-empty fields are joined as comma-separated
+ * fragments ("a beautiful woman, in their 30s, East Asian, slim build,
+ * long wavy hair, brown hair, fair skin, green eyes"). Applies to both
+ * image and video consumers. See `packages/shared/src/person.ts`. */
+export interface PersonData {
+  [key: string]: unknown
+  label: string
+  /** Primary subject descriptor (Man, Beautiful Woman, Rugged Man, etc.). */
+  type?: string
+  /** Age range (20s, 30s, teen, elderly). */
+  age?: string
+  /** Ethnicity / cultural descriptor. */
+  ethnicity?: string
+  /** Body silhouette + height combined (slim, athletic, tall-lean). */
+  build?: string
+  /** Hair color (brown, blonde, gray, dyed). */
+  hairColor?: string
+  /** Hair length + texture combined (long wavy, short curly, braids). */
+  hairStyle?: string
+  /** Skin tone. */
+  skinTone?: string
+  /** Eye color. */
+  eyeColor?: string
+  /** Facial hair style (clean-shaven, stubble, full-beard). */
+  facialHair?: string
+  /** Distinctive feature (glasses, freckles, tattoos, scar, dimples, piercing). */
+  distinctiveFeature?: string
+  /** Grid columns when displaying multiple enabled dimensions in the node
+   * card. Default 2. Range 1-4. */
+  maxItemsPerRow?: number
+}
+
 /** Standalone Temporal parameter node data. */
 export interface TemporalData {
   [key: string]: unknown
@@ -2698,6 +2732,7 @@ export type SceneNodeData =
   | AtmosphereData
   | StyleData
   | SettingData
+  | PersonData
   | TemporalData
   | GenerateScriptData
   | GenerateImageData
@@ -2823,6 +2858,7 @@ export type SceneNodeType =
   | "atmosphere"
   | "style"
   | "setting"
+  | "person"
   | "temporal"
   | "generate-script"
   | "generate-image"
@@ -3197,6 +3233,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Setting", setting: "forest" },
+  },
+  {
+    type: "person",
+    label: "Person",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Person", type: "woman", age: "age-30s", maxItemsPerRow: 2 },
   },
   {
     type: "temporal",

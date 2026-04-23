@@ -71,6 +71,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "atmosphere", label: "Atmosphere", icon: <CloudFog className="h-4 w-4" />, category: "Cinematography", keywords: ["weather", "fog", "rain", "snow", "smoke", "god rays", "particles", "shot"] },
   { type: "style", label: "Style", icon: <Brush className="h-4 w-4" />, category: "Cinematography", keywords: ["anime", "oil painting", "watercolor", "cinematic", "photorealistic", "comic", "pixel art", "pop art", "noir", "illustration", "rendering"] },
   { type: "setting", label: "Setting", icon: <Mountain className="h-4 w-4" />, category: "Cinematography", keywords: ["place", "environment", "location", "scene", "forest", "cafe", "alley", "cathedral", "desert", "cyberpunk", "fantasy", "indoor", "urban", "nature"] },
+  { type: "person", label: "Person", icon: <UserRound className="h-4 w-4" />, category: "Cinematography", keywords: ["subject", "character", "people", "human", "gender", "age", "ethnicity", "hair", "skin", "eyes", "build", "man", "woman", "child", "beard", "mustache"] },
   { type: "temporal", label: "Temporal", icon: <Clock className="h-4 w-4" />, category: "Cinematography", keywords: ["time", "speed", "slow motion", "freeze", "bullet time", "shutter", "shot"] },
   // AI — Script & Text
   { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI", group: "Script & Text" },

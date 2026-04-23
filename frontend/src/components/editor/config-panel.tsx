@@ -56,6 +56,7 @@ import {
   AtmosphereConfig,
   StyleConfig,
   SettingConfig,
+  PersonConfig,
   TemporalConfig,
   GenerateScriptConfig,
   QACheckConfig,
@@ -185,6 +186,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "atmosphere": "Atmosphere",
   "style": "Style",
   "setting": "Setting",
+  "person": "Person",
   "temporal": "Temporal",
   "generate-script": "Generate Script",
   "generate-image": "Generate Image",
@@ -366,6 +368,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "atmosphere": return <AtmosphereConfig {...configProps} />
     case "style": return <StyleConfig {...configProps} />
     case "setting": return <SettingConfig {...configProps} />
+    case "person": return <PersonConfig {...configProps} />
     case "temporal": return <TemporalConfig {...configProps} />
     case "generate-script": return <GenerateScriptConfig {...configProps} />
     case "generate-image": return <GenerateImageConfig {...configProps} nodeId={selectedNodeId} />
