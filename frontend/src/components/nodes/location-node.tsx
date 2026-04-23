@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { MapPin, Loader2, AlertCircle, X, ImageIcon, Maximize2, ChevronDown, ChevronRight, Type, Download, Link, Pencil } from "lucide-react"
+import { MapPin, Loader2, AlertCircle, X, ImageIcon, Maximize2, ChevronDown, ChevronRight, Type, Download, Link, Pencil, Aperture } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -86,6 +86,7 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "cinematography", type: "target", position: Position.Left, customStyle: { top: '20px', left: '-29px' }, hideHandle: true },
         { id: "locationRef", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
@@ -293,6 +294,8 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       )}
     </HandleIcon>
+    {/* Cinematography input handle icon */}
+    <HandleIcon icon={<Aperture />} color="indigo" side="left" top="20px" label="Cinematography" />
     {/* Output handle icon */}
     <HandleIcon icon={<MapPin />} color="pink" side="right" top="20px" />
 

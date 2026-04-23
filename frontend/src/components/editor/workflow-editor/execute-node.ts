@@ -206,7 +206,7 @@ import {
 } from "@nodaro-shared/filter-condition";
 import { sortListItems } from "@nodaro-shared/list-sort";
 import { buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro-shared/condition-variables";
-import { collectCinematographyHints, hasConnectedStyleNode } from "@/lib/cinematography-hints";
+import { collectCinematographyHints, hasConnectedStyleNode, STILL_IMAGE_EXCLUDE_TYPES } from "@/lib/cinematography-hints";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 
 // ---------------------------------------------------------------------------
@@ -551,7 +551,7 @@ export function executeNode(
       return Promise.reject(new Error("No prompt"));
     }
     {
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES });
       if (cinematographyHints.length > 0) {
         const joined = cinematographyHints.join(", ");
         prompt = prompt ? `${prompt}. ${joined}` : joined;
@@ -635,7 +635,7 @@ export function executeNode(
       }
     }
     {
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES });
       if (cinematographyHints.length > 0) {
         const joined = cinematographyHints.join(", ");
         prompt = prompt ? `${prompt}. ${joined}` : joined;
@@ -699,7 +699,7 @@ export function executeNode(
     const provider = i2iData.provider || "nano-banana";
 
     {
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES });
       if (cinematographyHints.length > 0) {
         const joined = cinematographyHints.join(", ");
         rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
@@ -808,7 +808,7 @@ export function executeNode(
     const provider = modData.provider || "nano-banana";
 
     {
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES });
       if (cinematographyHints.length > 0) {
         const joined = cinematographyHints.join(", ");
         rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
@@ -3804,7 +3804,18 @@ export function executeNode(
       toast.error(`Node "${locData.label}": no location name set`);
       return Promise.reject(new Error("No location name"));
     }
-    return runLocationGeneration(node.id, locData, ctx);
+    const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, {
+      excludeTypes: STILL_IMAGE_EXCLUDE_TYPES,
+    });
+    const augmentedData = cinematographyHints.length > 0
+      ? {
+          ...locData,
+          description: locData.description
+            ? `${locData.description}. ${cinematographyHints.join(", ")}`
+            : cinematographyHints.join(", "),
+        }
+      : locData;
+    return runLocationGeneration(node.id, augmentedData, ctx);
   }
 
   if (node.type === "scene") {

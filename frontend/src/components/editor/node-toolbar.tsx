@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import {
   Type, List, BookOpen, ImageIcon, Film, Merge, Plus, X,
-  Upload, Video, Rss, Palette, PaintBucket, Server, Brush,
+  Upload, Video, Rss, Palette, PaintBucket, Server, Brush, Mountain,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
   SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge, ArrowUpDown,
@@ -70,6 +70,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "color-look", label: "Color / Look", icon: <SwatchBook className="h-4 w-4" />, category: "Cinematography", keywords: ["color", "grade", "palette", "lut", "kodak", "fuji", "teal orange", "shot"] },
   { type: "atmosphere", label: "Atmosphere", icon: <CloudFog className="h-4 w-4" />, category: "Cinematography", keywords: ["weather", "fog", "rain", "snow", "smoke", "god rays", "particles", "shot"] },
   { type: "style", label: "Style", icon: <Brush className="h-4 w-4" />, category: "Cinematography", keywords: ["anime", "oil painting", "watercolor", "cinematic", "photorealistic", "comic", "pixel art", "pop art", "noir", "illustration", "rendering"] },
+  { type: "setting", label: "Setting", icon: <Mountain className="h-4 w-4" />, category: "Cinematography", keywords: ["place", "environment", "location", "scene", "forest", "cafe", "alley", "cathedral", "desert", "cyberpunk", "fantasy", "indoor", "urban", "nature"] },
   { type: "temporal", label: "Temporal", icon: <Clock className="h-4 w-4" />, category: "Cinematography", keywords: ["time", "speed", "slow motion", "freeze", "bullet time", "shutter", "shot"] },
   // AI — Script & Text
   { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI", group: "Script & Text" },
