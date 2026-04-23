@@ -419,6 +419,32 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
   return (
     <div className="flex flex-col gap-3">
       <PromptInjectionPreview hints={buildPersonHints(data)} />
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="person-pre-text" className="text-xs text-muted-foreground">
+          Custom text (before)
+        </Label>
+        <Textarea
+          id="person-pre-text"
+          value={data.preText ?? ""}
+          onChange={(e) => onUpdate({ preText: e.target.value })}
+          placeholder="e.g. wet-haired, covered in paint"
+          rows={2}
+          className="text-xs resize-none"
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="person-post-text" className="text-xs text-muted-foreground">
+          Custom text (after)
+        </Label>
+        <Textarea
+          id="person-post-text"
+          value={data.postText ?? ""}
+          onChange={(e) => onUpdate({ postText: e.target.value })}
+          placeholder="e.g. wearing a leather jacket, with a silver necklace"
+          rows={2}
+          className="text-xs resize-none"
+        />
+      </div>
       <Label>Person</Label>
       <PersonPicker
         value={{
