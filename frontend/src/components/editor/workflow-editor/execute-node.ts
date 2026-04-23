@@ -206,7 +206,7 @@ import {
 } from "@nodaro-shared/filter-condition";
 import { sortListItems } from "@nodaro-shared/list-sort";
 import { buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro-shared/condition-variables";
-import { collectCinematographyHints } from "@/lib/cinematography-hints";
+import { collectCinematographyHints, hasConnectedStyleNode } from "@/lib/cinematography-hints";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 
 // ---------------------------------------------------------------------------
@@ -561,7 +561,7 @@ export function executeNode(
     const result = buildImagePrompt({
       prompt,
       provider: providerKey,
-      style: imgData.style,
+      style: hasConnectedStyleNode(node.id, nodes, edges) ? undefined : imgData.style,
       negativePrompt: imgData.negativePrompt,
       characterDefs: charDefs as CharacterDef[],
       userTemplates: useWorkflowStore.getState().userPromptTemplates,
@@ -650,7 +650,7 @@ export function executeNode(
       targetResolution: editData.targetResolution,
       aspectRatio: editData.aspectRatio,
       negativePrompt: editData.negativePrompt,
-      style: editData.style,
+      style: hasConnectedStyleNode(node.id, nodes, edges) ? undefined : editData.style,
       seed: editData.seed,
       referenceImageUrls: editRefUrls.length > 0 ? editRefUrls : undefined,
     });
@@ -725,7 +725,7 @@ export function executeNode(
     const result = buildImagePrompt({
       prompt: rawPrompt,
       provider,
-      style: i2iData.style,
+      style: hasConnectedStyleNode(node.id, nodes, edges) ? undefined : i2iData.style,
       negativePrompt: i2iData.negativePrompt,
       characterDefs: charDefs as CharacterDef[],
       userTemplates: useWorkflowStore.getState().userPromptTemplates,
@@ -831,10 +831,11 @@ export function executeNode(
     ];
 
     // Build prompt with style + character descriptions
+    const styleBypass = hasConnectedStyleNode(node.id, nodes, edges);
     const result = buildImagePrompt({
       prompt: rawPrompt,
       provider,
-      style: modData.style,
+      style: styleBypass ? undefined : modData.style,
       negativePrompt: modData.negativePrompt,
       characterDefs: charDefs as CharacterDef[],
       userTemplates: useWorkflowStore.getState().userPromptTemplates,
@@ -871,7 +872,7 @@ export function executeNode(
         renderingSpeed: modData.renderingSpeed,
         guidanceScale: modData.guidanceScale,
         maskUrl,
-        style: modData.style,
+        style: styleBypass ? undefined : modData.style,
       },
     );
   }

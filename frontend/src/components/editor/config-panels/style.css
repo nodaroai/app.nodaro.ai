@@ -1,0 +1,1037 @@
+/* ============================================================================
+   Style preview tiles.
+   Each preview is a static "mini-artwork" evoking the rendering style itself
+   (anime cel shading, oil-painting brush strokes, pixel grid, pop-art halftone,
+   watercolor washes, film noir venetian blinds, etc.). No animations — style
+   is a compositional/rendering choice, not a kinetic effect; the picker shows
+   many tiles at once and animation would compete with the atmosphere/camera-
+   motion tiles elsewhere in the editor.
+
+   Each tile draws the same "sun over hills" reference scene in the target
+   style so the user can directly compare how the same content is rendered
+   across styles.
+   ========================================================================== */
+
+.style-preview {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111;
+  isolation: isolate;
+  container-type: inline-size;
+}
+
+.style-preview__scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* Default reference scene: sky gradient + hill silhouettes + sun */
+.style-preview__sky {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #f9c37a 0%, #f28a5f 50%, #6d4273 100%);
+}
+.style-preview__sun {
+  position: absolute;
+  width: 28%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff7c2 0%, #ffc857 60%, #ff8b3e 100%);
+  top: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  box-shadow: 0 0 20px rgba(255, 200, 87, 0.6);
+}
+.style-preview__hills {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  bottom: 0;
+  height: 55%;
+}
+.style-preview__hills::before,
+.style-preview__hills::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: -10%;
+  right: -10%;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+}
+.style-preview__hills::before {
+  background: #4a2e5c;
+  height: 75%;
+  transform: translateX(-15%) scaleX(1.4);
+}
+.style-preview__hills::after {
+  background: #2a1a3d;
+  height: 55%;
+  transform: translateX(20%) scaleX(1.3);
+}
+
+/* ============================================================================
+   Per-style overlays
+   ========================================================================== */
+
+/* ===== 3D Render: clean CGI gradient + sharp rim light ===== */
+.style-preview--3d-render .style-preview__sky {
+  background: linear-gradient(180deg, #dce4f0 0%, #9ab0ce 50%, #4a5f85 100%);
+}
+.style-preview--3d-render .style-preview__sun {
+  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #e8f2ff 40%, #88a8d8 100%);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3), inset 4px 4px 8px rgba(255, 255, 255, 0.5);
+}
+.style-preview--3d-render .style-preview__hills::before {
+  background: linear-gradient(180deg, #8aa8c8 0%, #4d6a8c 100%);
+}
+.style-preview--3d-render .style-preview__hills::after {
+  background: linear-gradient(180deg, #6382a3 0%, #2f4a6b 100%);
+}
+
+/* ===== Anime: cel-shaded flat colors + hard line ===== */
+.style-preview--anime .style-preview__sky {
+  background: linear-gradient(180deg, #ffd6a5 0%, #ff9b7a 40%, #6a6ea5 100%);
+}
+.style-preview--anime .style-preview__sun {
+  background: #fffcf0;
+  box-shadow: 0 0 0 2px #ff8850, 0 0 0 3px #000;
+}
+.style-preview--anime .style-preview__hills::before {
+  background: #7a5aa8;
+  box-shadow: inset 0 3px 0 #c8a0e8, 0 -1px 0 #000;
+}
+.style-preview--anime .style-preview__hills::after {
+  background: #4a3570;
+  box-shadow: inset 0 3px 0 #8a6ac0, 0 -1px 0 #000;
+}
+
+/* ===== Children's Book: warm crayon-y textures ===== */
+.style-preview--children-book .style-preview__sky {
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 30%, rgba(255, 230, 180, 0.9) 0%, transparent 70%),
+    linear-gradient(180deg, #ffe8a8 0%, #ffc190 60%, #c98c70 100%);
+}
+.style-preview--children-book .style-preview__sun {
+  background: radial-gradient(circle, #fff5c4 0%, #ffd675 70%, #ffad50 100%);
+  filter: blur(0.5px);
+}
+.style-preview--children-book .style-preview__hills::before {
+  background: #a8c488;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+}
+.style-preview--children-book .style-preview__hills::after {
+  background: #6e9458;
+}
+
+/* ===== Cinematic: letterbox + cinematic teal/orange grade ===== */
+.style-preview--cinematic .style-preview__sky {
+  background: linear-gradient(180deg, #ff9b50 0%, #c36840 35%, #1a4354 100%);
+}
+.style-preview--cinematic .style-preview__sun {
+  background: radial-gradient(circle, #ffc060 0%, #ff7830 60%, #aa3b15 100%);
+}
+.style-preview--cinematic .style-preview__hills::before {
+  background: #0f3540;
+}
+.style-preview--cinematic .style-preview__hills::after {
+  background: #061d26;
+}
+.style-preview--cinematic::before,
+.style-preview--cinematic::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 12%;
+  background: #000;
+  z-index: 5;
+}
+.style-preview--cinematic::before { top: 0; }
+.style-preview--cinematic::after  { bottom: 0; }
+
+/* ===== Comic Book: halftone dots + hard inked outline ===== */
+.style-preview--comic-book .style-preview__sky {
+  background:
+    radial-gradient(circle, rgba(0,0,0,0.28) 1px, transparent 1.5px) 0 0/5px 5px,
+    linear-gradient(180deg, #ffd44a 0%, #ff863a 100%);
+}
+.style-preview--comic-book .style-preview__sun {
+  background: #ff4a4a;
+  box-shadow: 0 0 0 2px #000;
+}
+.style-preview--comic-book .style-preview__hills::before {
+  background:
+    radial-gradient(circle, rgba(0,0,0,0.4) 1px, transparent 1.5px) 0 0/6px 6px,
+    #2a6fd4;
+  box-shadow: inset 0 0 0 2px #000;
+}
+.style-preview--comic-book .style-preview__hills::after {
+  background:
+    radial-gradient(circle, rgba(0,0,0,0.5) 1px, transparent 1.5px) 0 0/5px 5px,
+    #0e3e8a;
+  box-shadow: inset 0 0 0 2px #000;
+}
+
+/* ===== Digital Art: vibrant polished gradients ===== */
+.style-preview--digital-art .style-preview__sky {
+  background: linear-gradient(180deg, #ff6ec7 0%, #a06bff 50%, #3c44a0 100%);
+}
+.style-preview--digital-art .style-preview__sun {
+  background: radial-gradient(circle, #fff 0%, #ffe08c 40%, #ff6ec7 100%);
+  box-shadow: 0 0 24px rgba(255, 110, 199, 0.6);
+}
+.style-preview--digital-art .style-preview__hills::before {
+  background: linear-gradient(180deg, #6848c4 0%, #2e1d60 100%);
+}
+.style-preview--digital-art .style-preview__hills::after {
+  background: linear-gradient(180deg, #3a2076 0%, #0f0830 100%);
+}
+
+/* ===== Fantasy: epic painterly color + glow ===== */
+.style-preview--fantasy .style-preview__sky {
+  background:
+    radial-gradient(ellipse 50% 40% at 50% 40%, rgba(255, 210, 120, 0.55) 0%, transparent 70%),
+    linear-gradient(180deg, #f1a85c 0%, #8b4a8a 50%, #2a2560 100%);
+}
+.style-preview--fantasy .style-preview__sun {
+  background: radial-gradient(circle, #fff4b0 0%, #ffca55 50%, #d88030 100%);
+  box-shadow: 0 0 30px rgba(255, 210, 120, 0.7);
+}
+.style-preview--fantasy .style-preview__hills::before {
+  background: linear-gradient(180deg, #5a3780 0%, #2b164a 100%);
+}
+.style-preview--fantasy .style-preview__hills::after {
+  background: linear-gradient(180deg, #2a1648 0%, #0a0325 100%);
+}
+
+/* ===== Minimalist: flat pastel planes, no texture ===== */
+.style-preview--minimalist .style-preview__sky {
+  background: #ece4d6;
+}
+.style-preview--minimalist .style-preview__sun {
+  background: #ffb3a7;
+  box-shadow: none;
+  width: 22%;
+}
+.style-preview--minimalist .style-preview__hills::before {
+  background: #c8bba5;
+  border-radius: 0;
+  height: 45%;
+  clip-path: polygon(0 100%, 0 40%, 100% 70%, 100% 100%);
+  transform: none;
+}
+.style-preview--minimalist .style-preview__hills::after {
+  display: none;
+}
+
+/* ===== Noir: high-contrast B&W + venetian blinds ===== */
+.style-preview--noir .style-preview__sky {
+  background: linear-gradient(180deg, #2a2a2a 0%, #0a0a0a 100%);
+}
+.style-preview--noir .style-preview__sun {
+  background: #e8e8e8;
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.35);
+}
+.style-preview--noir .style-preview__hills::before {
+  background: #1a1a1a;
+}
+.style-preview--noir .style-preview__hills::after {
+  background: #050505;
+}
+.style-preview--noir .style-preview__scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.45) 0px,
+    rgba(0, 0, 0, 0.45) 4px,
+    transparent 4px,
+    transparent 12px
+  );
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* ===== Oil Painting: thick brush streaks via layered radial gradients ===== */
+.style-preview--oil-painting .style-preview__sky {
+  background:
+    radial-gradient(ellipse 8px 2px at 15% 25%, rgba(255, 180, 100, 0.55), transparent 70%),
+    radial-gradient(ellipse 10px 2px at 35% 35%, rgba(200, 100, 140, 0.45), transparent 70%),
+    radial-gradient(ellipse 12px 2px at 60% 20%, rgba(255, 210, 140, 0.55), transparent 70%),
+    radial-gradient(ellipse 9px 2px at 80% 40%, rgba(200, 130, 100, 0.5), transparent 70%),
+    linear-gradient(180deg, #e89f5b 0%, #9a4f6a 50%, #3c2f4d 100%);
+}
+.style-preview--oil-painting .style-preview__sun {
+  background: radial-gradient(circle, #ffeaa0 0%, #ffb25a 70%, #d46a2a 100%);
+  filter: blur(0.6px);
+}
+.style-preview--oil-painting .style-preview__hills::before {
+  background:
+    radial-gradient(ellipse 12px 2px at 30% 20%, rgba(140, 90, 160, 0.6), transparent 70%),
+    radial-gradient(ellipse 10px 2px at 70% 35%, rgba(90, 50, 110, 0.55), transparent 70%),
+    linear-gradient(180deg, #6b4486 0%, #3a224f 100%);
+}
+.style-preview--oil-painting .style-preview__hills::after {
+  background:
+    radial-gradient(ellipse 10px 2px at 50% 25%, rgba(70, 40, 90, 0.6), transparent 70%),
+    linear-gradient(180deg, #3c2055 0%, #1a0c28 100%);
+}
+
+/* ===== Pencil Sketch: grayscale crosshatch ===== */
+.style-preview--pencil-sketch .style-preview__sky {
+  background:
+    repeating-linear-gradient(45deg, rgba(80, 80, 80, 0.18) 0, rgba(80, 80, 80, 0.18) 1px, transparent 1px, transparent 4px),
+    #e8e4dc;
+}
+.style-preview--pencil-sketch .style-preview__sun {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #3a3a3a;
+}
+.style-preview--pencil-sketch .style-preview__hills::before {
+  background:
+    repeating-linear-gradient(-45deg, rgba(40, 40, 40, 0.35) 0, rgba(40, 40, 40, 0.35) 1px, transparent 1px, transparent 3px),
+    #c0b8ac;
+  box-shadow: inset 0 0 0 1px #4a4a4a;
+}
+.style-preview--pencil-sketch .style-preview__hills::after {
+  background:
+    repeating-linear-gradient(45deg, rgba(20, 20, 20, 0.5) 0, rgba(20, 20, 20, 0.5) 1px, transparent 1px, transparent 2px),
+    #8a8278;
+  box-shadow: inset 0 0 0 1px #2a2a2a;
+}
+
+/* ===== Photorealistic: natural gradient + fine sky nuance ===== */
+.style-preview--photorealistic .style-preview__sky {
+  background: linear-gradient(180deg, #a8c8e8 0%, #e8b888 45%, #c06448 70%, #5a3a50 100%);
+}
+.style-preview--photorealistic .style-preview__sun {
+  background: radial-gradient(circle, #fff3c8 0%, #ffd080 50%, #f07830 100%);
+  box-shadow: 0 0 18px rgba(255, 208, 128, 0.45);
+}
+.style-preview--photorealistic .style-preview__hills::before {
+  background: linear-gradient(180deg, #3e5344 0%, #1a2720 100%);
+}
+.style-preview--photorealistic .style-preview__hills::after {
+  background: linear-gradient(180deg, #25332a 0%, #0a120d 100%);
+}
+
+/* ===== Pixel Art: hard pixel grid (via tight repeating gradients) ===== */
+.style-preview--pixel-art .style-preview__scene {
+  image-rendering: pixelated;
+}
+.style-preview--pixel-art .style-preview__sky {
+  background:
+    repeating-linear-gradient(90deg, rgba(0,0,0,0.08) 0 2px, transparent 2px 8px),
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.08) 0 2px, transparent 2px 8px),
+    linear-gradient(180deg, #f9a85a 0%, #c8527a 50%, #3e3470 100%);
+}
+.style-preview--pixel-art .style-preview__sun {
+  background: #ffe060;
+  border-radius: 0;
+  clip-path: polygon(
+    25% 0, 75% 0, 100% 25%, 100% 75%, 75% 100%, 25% 100%, 0 75%, 0 25%
+  );
+  box-shadow: 0 0 0 2px #ffa030;
+}
+.style-preview--pixel-art .style-preview__hills::before {
+  background:
+    repeating-linear-gradient(90deg, rgba(0,0,0,0.1) 0 2px, transparent 2px 8px),
+    #4e3874;
+  border-radius: 0;
+  clip-path: polygon(0 100%, 0 40%, 20% 40%, 20% 25%, 50% 25%, 50% 40%, 80% 40%, 80% 55%, 100% 55%, 100% 100%);
+  transform: none;
+}
+.style-preview--pixel-art .style-preview__hills::after {
+  display: none;
+}
+
+/* ===== Pop Art: bold flat colors + large dots ===== */
+.style-preview--pop-art .style-preview__sky {
+  background:
+    radial-gradient(circle, rgba(0,0,0,0.35) 2px, transparent 3px) 0 0/10px 10px,
+    #ffd400;
+}
+.style-preview--pop-art .style-preview__sun {
+  background: #ff2d6c;
+  box-shadow: 0 0 0 3px #000;
+}
+.style-preview--pop-art .style-preview__hills::before {
+  background:
+    radial-gradient(circle, rgba(0,0,0,0.4) 2px, transparent 3px) 0 0/10px 10px,
+    #00a8d4;
+  box-shadow: inset 0 0 0 3px #000;
+}
+.style-preview--pop-art .style-preview__hills::after {
+  background: #001c4a;
+  box-shadow: inset 0 0 0 3px #000;
+}
+
+/* ===== Retro / Vintage: faded warm muted tones + vignette ===== */
+.style-preview--retro-vintage .style-preview__sky {
+  background: linear-gradient(180deg, #d8bfa1 0%, #c49a7b 50%, #6e4c4f 100%);
+  filter: saturate(0.75);
+}
+.style-preview--retro-vintage .style-preview__sun {
+  background: radial-gradient(circle, #fbe6b2 0%, #e4b278 70%, #b47c4e 100%);
+  filter: saturate(0.75);
+}
+.style-preview--retro-vintage .style-preview__hills::before {
+  background: #7a5c58;
+}
+.style-preview--retro-vintage .style-preview__hills::after {
+  background: #4a3534;
+}
+.style-preview--retro-vintage .style-preview__scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.45) 100%);
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* ===== Watercolor: soft bleeding washes ===== */
+.style-preview--watercolor .style-preview__sky {
+  background:
+    radial-gradient(ellipse 45% 55% at 25% 35%, rgba(255, 170, 130, 0.55) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 40% at 70% 45%, rgba(140, 150, 200, 0.5) 0%, transparent 75%),
+    radial-gradient(ellipse 50% 40% at 50% 20%, rgba(255, 210, 180, 0.6) 0%, transparent 70%),
+    linear-gradient(180deg, #fce3d1 0%, #ead6dc 50%, #b0b2c8 100%);
+  filter: blur(0.6px);
+}
+.style-preview--watercolor .style-preview__sun {
+  background: radial-gradient(circle, rgba(255, 230, 180, 0.9) 0%, rgba(255, 185, 130, 0.5) 60%, transparent 100%);
+  filter: blur(1.5px);
+}
+.style-preview--watercolor .style-preview__hills::before {
+  background:
+    radial-gradient(ellipse 60% 60% at 40% 30%, rgba(150, 130, 180, 0.75) 0%, transparent 70%),
+    linear-gradient(180deg, rgba(130, 110, 160, 0.7) 0%, rgba(80, 65, 110, 0.5) 100%);
+  filter: blur(1px);
+}
+.style-preview--watercolor .style-preview__hills::after {
+  background:
+    radial-gradient(ellipse 60% 60% at 50% 30%, rgba(90, 75, 125, 0.75) 0%, transparent 70%),
+    linear-gradient(180deg, rgba(70, 55, 100, 0.65) 0%, rgba(35, 25, 60, 0.55) 100%);
+  filter: blur(1.5px);
+}
+
+/* ===== Concept Art: painterly moody cinematic ===== */
+.style-preview--concept-art .style-preview__sky {
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 30%, rgba(255, 200, 130, 0.6) 0%, transparent 70%),
+    linear-gradient(180deg, #d78a4a 0%, #6a4168 45%, #1e1c3a 100%);
+}
+.style-preview--concept-art .style-preview__sun {
+  background: radial-gradient(circle, #fff4c0 0%, #ffc06a 50%, #9e4a2e 100%);
+  box-shadow: 0 0 35px rgba(255, 200, 130, 0.6);
+  filter: blur(0.4px);
+}
+.style-preview--concept-art .style-preview__hills::before {
+  background: linear-gradient(180deg, #4c3a5a 0%, #1a1024 100%);
+  filter: blur(0.5px);
+}
+.style-preview--concept-art .style-preview__hills::after {
+  background: linear-gradient(180deg, #1d1630 0%, #050510 100%);
+}
+
+/* ===== Impressionism: dabbed brush strokes ===== */
+.style-preview--impressionism .style-preview__sky {
+  background:
+    radial-gradient(circle 3px at 15% 20%, rgba(255, 190, 140, 0.8), transparent 80%),
+    radial-gradient(circle 3px at 28% 35%, rgba(200, 150, 180, 0.8), transparent 80%),
+    radial-gradient(circle 3px at 42% 15%, rgba(255, 220, 170, 0.8), transparent 80%),
+    radial-gradient(circle 3px at 58% 30%, rgba(180, 170, 210, 0.8), transparent 80%),
+    radial-gradient(circle 3px at 72% 20%, rgba(255, 200, 160, 0.8), transparent 80%),
+    radial-gradient(circle 3px at 85% 35%, rgba(200, 180, 220, 0.8), transparent 80%),
+    linear-gradient(180deg, #f7d6a8 0%, #e0a8bc 50%, #a8b0d0 100%);
+}
+.style-preview--impressionism .style-preview__sun {
+  background: radial-gradient(circle, #fff3c0 0%, #ffcc88 70%, transparent 100%);
+  filter: blur(1px);
+}
+.style-preview--impressionism .style-preview__hills::before {
+  background:
+    radial-gradient(circle 3px at 20% 25%, rgba(180, 140, 180, 0.9), transparent 80%),
+    radial-gradient(circle 3px at 50% 35%, rgba(160, 120, 170, 0.9), transparent 80%),
+    radial-gradient(circle 3px at 75% 25%, rgba(200, 150, 190, 0.9), transparent 80%),
+    linear-gradient(180deg, #9a7ba8 0%, #5a4570 100%);
+  filter: blur(0.3px);
+}
+.style-preview--impressionism .style-preview__hills::after {
+  background:
+    radial-gradient(circle 3px at 30% 30%, rgba(110, 85, 130, 0.9), transparent 80%),
+    radial-gradient(circle 3px at 65% 40%, rgba(90, 65, 110, 0.9), transparent 80%),
+    linear-gradient(180deg, #5a4075 0%, #1d1230 100%);
+}
+
+/* ===== Surrealism: warped dreamscape with melting forms ===== */
+.style-preview--surrealism .style-preview__sky {
+  background:
+    radial-gradient(ellipse 70% 50% at 30% 40%, rgba(255, 180, 230, 0.65) 0%, transparent 70%),
+    linear-gradient(180deg, #e88bc0 0%, #8a6ac8 50%, #304a8e 100%);
+}
+.style-preview--surrealism .style-preview__sun {
+  background: radial-gradient(circle, #ffffff 0%, #ffd4b0 40%, transparent 80%);
+  border-radius: 45% 55% 30% 70% / 60% 40% 60% 40%;
+  box-shadow: 0 0 30px rgba(255, 180, 200, 0.7), inset -10px -5px 20px rgba(160, 80, 140, 0.4);
+  transform: translateX(-50%) rotate(-8deg);
+}
+.style-preview--surrealism .style-preview__hills::before {
+  background: linear-gradient(180deg, #c06cc0 0%, #4a1e6c 100%);
+  border-radius: 50% 20% 0 0 / 120% 60% 0 0;
+}
+.style-preview--surrealism .style-preview__hills::after {
+  background: linear-gradient(180deg, #6a2080 0%, #100530 100%);
+  border-radius: 10% 50% 0 0 / 40% 110% 0 0;
+}
+
+/* ===== Cyberpunk: neon magenta/cyan grid + glow ===== */
+.style-preview--cyberpunk .style-preview__sky {
+  background: linear-gradient(180deg, #0a0018 0%, #2a0648 40%, #08002e 100%);
+}
+.style-preview--cyberpunk .style-preview__sun {
+  background: radial-gradient(circle, #00f0ff 0%, #ff00a8 60%, #4a006c 100%);
+  box-shadow: 0 0 30px rgba(255, 0, 168, 0.7), 0 0 60px rgba(0, 240, 255, 0.5);
+}
+.style-preview--cyberpunk .style-preview__hills::before {
+  background:
+    linear-gradient(90deg, transparent 0%, transparent calc(50% - 1px), rgba(255, 0, 168, 0.9) 50%, transparent calc(50% + 1px)) 0 0/14px 100%,
+    linear-gradient(0deg, transparent 0%, transparent calc(50% - 1px), rgba(255, 0, 168, 0.9) 50%, transparent calc(50% + 1px)) 0 0/100% 12px,
+    linear-gradient(180deg, #40003a 0%, #0a000e 100%);
+  box-shadow: inset 0 2px 0 rgba(0, 240, 255, 0.9);
+}
+.style-preview--cyberpunk .style-preview__hills::after {
+  background:
+    linear-gradient(90deg, transparent 0%, transparent calc(50% - 1px), rgba(0, 240, 255, 0.75) 50%, transparent calc(50% + 1px)) 0 0/18px 100%,
+    linear-gradient(180deg, #18002a 0%, #04000a 100%);
+  box-shadow: inset 0 2px 0 rgba(255, 0, 168, 0.75);
+}
+
+/* ===== Steampunk: brass/copper sepia + gears ===== */
+.style-preview--steampunk .style-preview__sky {
+  background: linear-gradient(180deg, #c18850 0%, #8a5a2a 55%, #3d2510 100%);
+  filter: sepia(0.3);
+}
+.style-preview--steampunk .style-preview__sun {
+  background: radial-gradient(circle at 35% 35%, #ffe0a0 0%, #d48838 50%, #5a2f10 100%);
+  box-shadow: 0 0 0 2px #8a5218, inset 4px 4px 8px rgba(255, 220, 160, 0.4);
+}
+.style-preview--steampunk .style-preview__hills::before {
+  background: linear-gradient(180deg, #7a4818 0%, #3a2008 100%);
+  box-shadow:
+    inset 0 0 0 1px #5a3412,
+    inset 0 -5px 12px rgba(20, 10, 0, 0.7);
+}
+.style-preview--steampunk .style-preview__hills::after {
+  background: linear-gradient(180deg, #4c2e0c 0%, #1a0e04 100%);
+  box-shadow: inset 0 0 0 1px #2e1a08;
+}
+.style-preview--steampunk .style-preview__scene::after {
+  content: "";
+  position: absolute;
+  right: 5%;
+  bottom: 10%;
+  width: 18%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 35%, rgba(200, 140, 70, 0.85) 36%, rgba(200, 140, 70, 0.85) 48%, transparent 49%);
+  border: 2px solid rgba(200, 140, 70, 0.85);
+  box-sizing: border-box;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* ===== Vaporwave: pastel pink/teal 80s grid ===== */
+.style-preview--vaporwave .style-preview__sky {
+  background: linear-gradient(180deg, #ff6ec7 0%, #ff9cd9 45%, #66e0ff 100%);
+}
+.style-preview--vaporwave .style-preview__sun {
+  background: linear-gradient(180deg, #fff5a0 0%, #ff9c6c 45%, #ff2a86 100%);
+  clip-path: polygon(0 0, 100% 0, 100% 45%, 80% 45%, 80% 55%, 100% 55%, 100% 65%, 70% 65%, 70% 75%, 100% 75%, 100% 85%, 60% 85%, 60% 100%, 0 100%);
+  box-shadow: 0 0 30px rgba(255, 110, 199, 0.7);
+}
+.style-preview--vaporwave .style-preview__hills {
+  background:
+    linear-gradient(90deg, transparent 0%, transparent calc(50% - 1px), rgba(0, 240, 255, 0.9) 50%, transparent calc(50% + 1px)) 0 0/14px 100%,
+    linear-gradient(180deg, transparent 0%, transparent 15%, rgba(0, 240, 255, 0.9) 16%, transparent 17%, transparent 35%, rgba(0, 240, 255, 0.9) 36%, transparent 37%, transparent 60%, rgba(0, 240, 255, 0.9) 61%, transparent 62%),
+    linear-gradient(180deg, #2a0a5c 0%, #500080 100%);
+}
+.style-preview--vaporwave .style-preview__hills::before,
+.style-preview--vaporwave .style-preview__hills::after {
+  display: none;
+}
+
+/* ===== Low Poly: faceted triangle geometry ===== */
+.style-preview--low-poly .style-preview__sky {
+  background:
+    linear-gradient(135deg, #ff9a5c 0%, #ff9a5c 50%, #e06a8c 50%, #e06a8c 100%);
+}
+.style-preview--low-poly .style-preview__sky::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(45deg, transparent 0%, transparent 50%, rgba(255, 180, 120, 0.5) 50%, rgba(255, 180, 120, 0.5) 100%);
+}
+.style-preview--low-poly .style-preview__sun {
+  background: #ffe070;
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 75%, 0 75%);
+  box-shadow: none;
+  aspect-ratio: 1;
+}
+.style-preview--low-poly .style-preview__hills {
+  background: none;
+}
+.style-preview--low-poly .style-preview__hills::before {
+  background: #5a3f8c;
+  border-radius: 0;
+  clip-path: polygon(0 100%, 0 60%, 25% 30%, 50% 55%, 70% 25%, 100% 50%, 100% 100%);
+  transform: none;
+  height: 75%;
+}
+.style-preview--low-poly .style-preview__hills::after {
+  background: #2a1f4c;
+  border-radius: 0;
+  clip-path: polygon(0 100%, 10% 75%, 35% 60%, 55% 80%, 80% 65%, 100% 85%, 100% 100%);
+  transform: none;
+  height: 50%;
+}
+
+/* ===== Ink Wash / Sumi-e: gestural black strokes on rice paper ===== */
+.style-preview--ink-wash .style-preview__sky {
+  background: #f3ead4;
+}
+.style-preview--ink-wash .style-preview__sun {
+  background: transparent;
+  border: 2px solid rgba(40, 20, 10, 0.85);
+  box-shadow: inset 0 0 6px rgba(40, 20, 10, 0.3);
+}
+.style-preview--ink-wash .style-preview__hills::before {
+  background:
+    radial-gradient(ellipse 40% 50% at 30% 40%, rgba(20, 10, 0, 0.65) 0%, transparent 80%),
+    radial-gradient(ellipse 50% 40% at 75% 50%, rgba(20, 10, 0, 0.55) 0%, transparent 80%),
+    linear-gradient(180deg, rgba(60, 40, 20, 0.3) 0%, rgba(20, 10, 0, 0.55) 100%);
+  filter: blur(0.8px);
+}
+.style-preview--ink-wash .style-preview__hills::after {
+  background:
+    radial-gradient(ellipse 60% 60% at 50% 40%, rgba(0, 0, 0, 0.85) 0%, transparent 75%),
+    linear-gradient(180deg, rgba(20, 10, 0, 0.7) 0%, rgba(0, 0, 0, 0.9) 100%);
+  filter: blur(0.5px);
+}
+
+/* ===== Isometric: 3/4 axonometric clean geometry ===== */
+.style-preview--isometric .style-preview__sky {
+  background: #92d8f0;
+}
+.style-preview--isometric .style-preview__sun {
+  background: #ffe560;
+  border-radius: 0;
+  clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  box-shadow: none;
+  width: 22%;
+}
+.style-preview--isometric .style-preview__hills {
+  background: none;
+}
+.style-preview--isometric .style-preview__hills::before {
+  background:
+    linear-gradient(135deg, #78c878 0%, #78c878 50%, #4a9a4a 50%, #4a9a4a 100%);
+  border-radius: 0;
+  clip-path: polygon(30% 30%, 70% 30%, 90% 60%, 50% 85%, 10% 60%);
+  transform: none;
+  height: 70%;
+  left: 5%;
+  right: 5%;
+  bottom: 5%;
+}
+.style-preview--isometric .style-preview__hills::after {
+  background: #386a38;
+  border-radius: 0;
+  clip-path: polygon(10% 60%, 50% 85%, 50% 100%, 10% 100%);
+  transform: none;
+  height: 40%;
+  left: 5%;
+  right: 5%;
+  bottom: 0;
+}
+
+/* ===== Flat Vector: solid colors, simple geometry ===== */
+.style-preview--flat-vector .style-preview__sky {
+  background: linear-gradient(180deg, #8ac8ee 0%, #c4e0f4 100%);
+}
+.style-preview--flat-vector .style-preview__sun {
+  background: #ffca3a;
+  box-shadow: none;
+}
+.style-preview--flat-vector .style-preview__hills::before {
+  background: #7cc67c;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+}
+.style-preview--flat-vector .style-preview__hills::after {
+  background: #3fa67a;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+}
+
+/* ===== Ukiyo-e: Japanese woodblock flat planes ===== */
+.style-preview--ukiyo-e .style-preview__sky {
+  background: linear-gradient(180deg, #eec38e 0%, #d89070 60%, #a55a50 100%);
+}
+.style-preview--ukiyo-e .style-preview__sun {
+  background: #d44040;
+  box-shadow: 0 0 0 2px #2a1a1a;
+}
+.style-preview--ukiyo-e .style-preview__hills::before {
+  background: #2a558a;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  box-shadow: 0 -2px 0 #1a2a4a, inset 0 8px 0 #4a78b0;
+}
+.style-preview--ukiyo-e .style-preview__hills::after {
+  background: #152d56;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  box-shadow: 0 -2px 0 #0a1a35, inset 0 6px 0 #2a4878;
+}
+
+/* ===== Graffiti: spray-paint urban texture ===== */
+.style-preview--graffiti .style-preview__sky {
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255, 70, 150, 0.45) 0%, transparent 30%),
+    radial-gradient(circle at 75% 45%, rgba(80, 220, 255, 0.4) 0%, transparent 30%),
+    repeating-linear-gradient(135deg, rgba(30, 20, 10, 0.12) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, #1a1a1a 0%, #3a3a3a 100%);
+}
+.style-preview--graffiti .style-preview__sun {
+  background:
+    radial-gradient(circle, #ffe040 0%, #ff8a2a 60%, transparent 100%);
+  filter: contrast(1.1);
+}
+.style-preview--graffiti .style-preview__sun::after {
+  content: "";
+  position: absolute;
+  inset: -15%;
+  background: radial-gradient(circle, rgba(255, 224, 64, 0.3) 0%, transparent 60%);
+  filter: blur(4px);
+}
+.style-preview--graffiti .style-preview__hills::before {
+  background:
+    radial-gradient(circle at 30% 40%, rgba(0, 255, 130, 0.85) 0%, transparent 40%),
+    radial-gradient(circle at 70% 50%, rgba(255, 70, 150, 0.85) 0%, transparent 40%),
+    #2a2010;
+  filter: contrast(1.2);
+}
+.style-preview--graffiti .style-preview__hills::after {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 224, 64, 0.8) 0%, transparent 45%),
+    #1a1008;
+}
+
+/* ===== Claymation: tactile rounded plasticine ===== */
+.style-preview--claymation .style-preview__sky {
+  background: linear-gradient(180deg, #f4c58a 0%, #e69870 55%, #9a6248 100%);
+  filter: saturate(0.85);
+}
+.style-preview--claymation .style-preview__sun {
+  background: radial-gradient(circle at 30% 30%, #fff8c4 0%, #f5c65a 50%, #d08030 100%);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.4),
+    inset -4px -6px 10px rgba(170, 80, 30, 0.5),
+    inset 3px 3px 6px rgba(255, 245, 200, 0.6);
+}
+.style-preview--claymation .style-preview__hills::before {
+  background: #a0745a;
+  border-radius: 60% 55% 0 0 / 100% 90% 0 0;
+  box-shadow:
+    inset -4px -8px 14px rgba(40, 20, 10, 0.55),
+    inset 4px 6px 10px rgba(220, 180, 140, 0.5);
+}
+.style-preview--claymation .style-preview__hills::after {
+  background: #5e3a28;
+  border-radius: 55% 60% 0 0 / 100% 90% 0 0;
+  box-shadow:
+    inset -3px -6px 12px rgba(20, 10, 0, 0.7),
+    inset 3px 4px 8px rgba(150, 100, 70, 0.5);
+}
+
+/* ===== Glitch Art: RGB channel shift + scanline tear ===== */
+.style-preview--glitch-art .style-preview__sky {
+  background: linear-gradient(180deg, #1a0a2e 0%, #3a1060 50%, #0a0018 100%);
+}
+.style-preview--glitch-art .style-preview__sky::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #ff6090 0%, transparent 100%);
+  mix-blend-mode: screen;
+  transform: translateX(-3px);
+  opacity: 0.55;
+}
+.style-preview--glitch-art .style-preview__sky::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #30e0ff 0%, transparent 100%);
+  mix-blend-mode: screen;
+  transform: translateX(3px);
+  opacity: 0.55;
+}
+.style-preview--glitch-art .style-preview__sun {
+  background: radial-gradient(circle, #fff8c0 0%, #ffcf5a 70%, #ff7828 100%);
+  box-shadow: -4px 0 0 rgba(255, 60, 120, 0.8), 4px 0 0 rgba(60, 220, 255, 0.8);
+}
+.style-preview--glitch-art .style-preview__hills::before {
+  background: linear-gradient(180deg, #5a2078 0%, #20042e 100%);
+  box-shadow: -3px 0 0 rgba(255, 60, 120, 0.7), 3px 0 0 rgba(60, 220, 255, 0.7);
+}
+.style-preview--glitch-art .style-preview__hills::after {
+  background: linear-gradient(180deg, #30083a 0%, #05000a 100%);
+  box-shadow: -2px 0 0 rgba(255, 60, 120, 0.7), 2px 0 0 rgba(60, 220, 255, 0.7);
+}
+.style-preview--glitch-art .style-preview__scene {
+  overflow: hidden;
+}
+.style-preview--glitch-art .style-preview__scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, transparent 0px, transparent 5px, rgba(255, 255, 255, 0.08) 5px, rgba(255, 255, 255, 0.08) 6px),
+    linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.6) 42%, transparent 44%, transparent 65%, rgba(255, 60, 120, 0.35) 66%, transparent 68%);
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* ===== Blueprint: white line work on cyan-blue ===== */
+.style-preview--blueprint .style-preview__sky {
+  background: #0e3a82;
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 9px, rgba(255, 255, 255, 0.08) 9px 10px),
+    repeating-linear-gradient(90deg, transparent 0 9px, rgba(255, 255, 255, 0.08) 9px 10px);
+}
+.style-preview--blueprint .style-preview__sun {
+  background: transparent;
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    inset 0 0 0 5px transparent,
+    0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+.style-preview--blueprint .style-preview__sun::before {
+  content: "";
+  position: absolute;
+  inset: 30%;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+}
+.style-preview--blueprint .style-preview__hills {
+  background: none;
+}
+.style-preview--blueprint .style-preview__hills::before,
+.style-preview--blueprint .style-preview__hills::after {
+  background: transparent;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.95);
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* ===== Stained Glass: leaded colored panels ===== */
+.style-preview--stained-glass {
+  background: #0a0a12;
+}
+.style-preview--stained-glass .style-preview__sky,
+.style-preview--stained-glass .style-preview__sun,
+.style-preview--stained-glass .style-preview__hills {
+  display: none;
+}
+.style-preview--stained-glass .style-preview__scene::before {
+  content: "";
+  position: absolute;
+  inset: 4%;
+  background:
+    conic-gradient(from 0deg at 30% 35%, #ff5a3a 0deg 60deg, #ffc440 60deg 130deg, #3a8cff 130deg 210deg, #8a30c0 210deg 290deg, #28a860 290deg 360deg),
+    linear-gradient(135deg, #ff5a3a 0%, #ffc440 30%, #3a8cff 55%, #8a30c0 80%, #28a860 100%);
+  filter: saturate(1.3) brightness(1.1);
+  clip-path: polygon(
+    0% 25%, 20% 0%, 50% 0%, 50% 30%, 30% 50%, 50% 65%, 70% 45%, 100% 30%, 100% 70%, 80% 100%, 50% 85%, 20% 100%, 0% 75%
+  );
+  z-index: 2;
+}
+.style-preview--stained-glass .style-preview__scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, transparent 48%, #000 49%, #000 51%, transparent 52%),
+    linear-gradient(45deg, transparent 48%, #000 49%, #000 51%, transparent 52%),
+    linear-gradient(0deg, transparent 48%, #000 49%, #000 51%, transparent 52%),
+    linear-gradient(90deg, transparent 48%, #000 49%, #000 51%, transparent 52%);
+  background-size: 36% 36%, 36% 36%, 100% 24%, 24% 100%;
+  background-position: 20% 30%, 65% 70%, center, center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  z-index: 3;
+  mix-blend-mode: multiply;
+  opacity: 0.85;
+}
+
+/* ===== Chalkboard: white/colored chalk on slate ===== */
+.style-preview--chalkboard .style-preview__sky {
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.015) 0 2px, transparent 2px 6px),
+    #1e2a22;
+}
+.style-preview--chalkboard .style-preview__sun {
+  background: transparent;
+  border: 2px dashed rgba(255, 240, 200, 0.85);
+  box-shadow: inset 0 0 8px rgba(255, 240, 200, 0.2);
+  filter: blur(0.3px);
+}
+.style-preview--chalkboard .style-preview__hills::before {
+  background: transparent;
+  border-top: 2px solid rgba(255, 255, 255, 0.75);
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  box-shadow:
+    inset 0 1px 0 rgba(180, 220, 255, 0.35),
+    inset 0 -10px 18px rgba(255, 255, 255, 0.08);
+  filter: blur(0.2px);
+}
+.style-preview--chalkboard .style-preview__hills::after {
+  background: transparent;
+  border-top: 2px dotted rgba(200, 255, 200, 0.75);
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  box-shadow: inset 0 -8px 16px rgba(255, 255, 255, 0.05);
+  filter: blur(0.2px);
+}
+
+/* ===== Paper Cutout: layered cut paper with drop shadows ===== */
+.style-preview--paper-cutout .style-preview__sky {
+  background: #f5e6c8;
+  box-shadow: inset 0 -3px 6px rgba(160, 120, 80, 0.18);
+}
+.style-preview--paper-cutout .style-preview__sun {
+  background: #ffb84a;
+  box-shadow:
+    0 2px 0 rgba(160, 90, 20, 0.25),
+    0 4px 10px rgba(160, 90, 20, 0.35);
+}
+.style-preview--paper-cutout .style-preview__hills::before {
+  background: #5aa850;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  box-shadow:
+    0 -3px 0 rgba(40, 80, 30, 0.3),
+    0 -4px 10px rgba(40, 80, 30, 0.4);
+}
+.style-preview--paper-cutout .style-preview__hills::after {
+  background: #2f6e44;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  box-shadow:
+    0 -3px 0 rgba(20, 50, 20, 0.35),
+    0 -5px 12px rgba(20, 50, 20, 0.5);
+}
+
+/* ===== Illuminated Manuscript: gold leaf + decorative border ===== */
+.style-preview--illuminated {
+  background: #3a0c0c;
+  padding: 8px;
+  box-sizing: border-box;
+}
+.style-preview--illuminated::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 3px solid #d4a13a;
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 0 1px #6c3f0a,
+    inset 0 0 0 5px rgba(212, 161, 58, 0.25),
+    0 0 8px rgba(212, 161, 58, 0.35);
+  pointer-events: none;
+  z-index: 4;
+}
+.style-preview--illuminated .style-preview__sky {
+  background: linear-gradient(180deg, #f2d098 0%, #c98848 100%);
+  filter: sepia(0.35);
+}
+.style-preview--illuminated .style-preview__sun {
+  background: radial-gradient(circle at 35% 35%, #fff4c0 0%, #d4a13a 55%, #8a5a1e 100%);
+  box-shadow:
+    0 0 0 2px #6c3f0a,
+    0 0 12px rgba(212, 161, 58, 0.8),
+    inset 2px 2px 4px rgba(255, 245, 200, 0.6);
+}
+.style-preview--illuminated .style-preview__hills::before {
+  background: linear-gradient(180deg, #8a3030 0%, #4a1a1a 100%);
+  box-shadow: inset 0 1px 0 #d4a13a, inset 0 -2px 4px rgba(0, 0, 0, 0.45);
+}
+.style-preview--illuminated .style-preview__hills::after {
+  background: linear-gradient(180deg, #3a1515 0%, #1a0808 100%);
+  box-shadow: inset 0 1px 0 #d4a13a;
+}
+
+/* ===== Pixar 3D: polished CG with soft subsurface + key light ===== */
+.style-preview--pixar-3d .style-preview__sky {
+  background: linear-gradient(180deg, #a8d4ee 0%, #ffc88e 70%, #f08e68 100%);
+}
+.style-preview--pixar-3d .style-preview__sun {
+  background: radial-gradient(circle at 32% 30%, #ffffff 0%, #fff4c0 30%, #ffb060 70%, #c66438 100%);
+  box-shadow:
+    0 0 24px rgba(255, 200, 140, 0.7),
+    inset -8px -6px 14px rgba(180, 90, 40, 0.5),
+    inset 4px 3px 8px rgba(255, 250, 220, 0.55);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+}
+.style-preview--pixar-3d .style-preview__hills::before {
+  background: radial-gradient(ellipse at 35% 20%, #c8e88a 0%, #7ab84a 55%, #3a6a28 100%);
+  box-shadow:
+    inset -8px -10px 20px rgba(20, 40, 10, 0.55),
+    inset 5px 4px 12px rgba(220, 250, 180, 0.35);
+}
+.style-preview--pixar-3d .style-preview__hills::after {
+  background: radial-gradient(ellipse at 55% 25%, #6a9a48 0%, #3a5a2a 55%, #101808 100%);
+  box-shadow:
+    inset -6px -8px 16px rgba(0, 0, 0, 0.55),
+    inset 4px 3px 10px rgba(180, 220, 140, 0.25);
+}
+
+/* ===== ASCII Art: monochrome green terminal characters ===== */
+.style-preview--ascii-art {
+  background: #050a05;
+}
+.style-preview--ascii-art .style-preview__sky,
+.style-preview--ascii-art .style-preview__sun,
+.style-preview--ascii-art .style-preview__hills {
+  display: none;
+}
+.style-preview--ascii-art .style-preview__scene::before {
+  content: ".....................:::::::::::::::::::::.....................:::::::::::::::::::::::::::::::....::::::::::::####@@@@@@####:::::::::::........::::::::::::::::::::######@@@@@@@@######::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::....:::::::::::::::::::::::::::::::::::::::::::::::::::..........:::::::::::::::::::::::::::::::::::::::..................:::::::::::::::::::::::::::%%%%%%%%%%%%%:::::::::::::::::::%%%%%%%%%%%%%%%%%%%%%%:::::::::::::%%%%%%%%%%%%%%%%%%%%%%%%%%%%%::::::%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%##############%%%%%%%%%%%%%%%%%%%%%%%%##########################%%%%%%%%%%%%%%%%%########################################%%%%##############";
+  position: absolute;
+  inset: 0;
+  color: #40ff40;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 5.5cqw;
+  line-height: 1.05;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  overflow: hidden;
+  word-break: break-all;
+  white-space: break-spaces;
+  padding: 2.5%;
+  text-shadow: 0 0 3px rgba(64, 255, 64, 0.55);
+  background: none;
+  z-index: 2;
+}
+.style-preview--ascii-art .style-preview__scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.35) 0 1px, transparent 1px 2px);
+  pointer-events: none;
+  z-index: 3;
+}

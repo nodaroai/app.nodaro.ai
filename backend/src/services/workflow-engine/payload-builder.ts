@@ -18,6 +18,7 @@ import { getCameraFormatPromptHint } from "../../../../packages/shared/src/camer
 import { buildLightingHints } from "../../../../packages/shared/src/lighting.js"
 import { getColorLookPromptHint } from "../../../../packages/shared/src/color-look.js"
 import { getAtmospherePromptHint } from "../../../../packages/shared/src/atmosphere.js"
+import { getStylePromptHint } from "../../../../packages/shared/src/style.js"
 import { buildTemporalHints } from "../../../../packages/shared/src/temporal.js"
 import type { CharacterDef, SceneData } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
@@ -350,6 +351,8 @@ function getNodePromptHint(node: SimpleNode | undefined): string {
       return getColorLookPromptHint(typeof data.colorLook === "string" ? data.colorLook : "")
     case "atmosphere":
       return getAtmospherePromptHint(typeof data.atmosphere === "string" ? data.atmosphere : "")
+    case "style":
+      return getStylePromptHint(typeof data.style === "string" ? data.style : "")
     case "temporal": {
       const hints = buildTemporalHints(data)
       return hints.join(", ")
@@ -389,6 +392,28 @@ function composeCameraMotionHintForNode(
     else if (edge.targetHandle === "endState") endHints.push(hint)
   }
   return composeCameraMotionHintFromConnections(motionId, startHints, endHints)
+}
+
+/**
+ * True when the consumer node has a connected Style parameter node on its
+ * `cinematography` handle. Mirror of the frontend `hasConnectedStyleNode`.
+ * Used to bypass the inline `style` field on image payloads — when a Style
+ * node is wired, its richer promptHint is already appended via cinematography
+ * hints, so we skip the thin inline `Style: <id>` append.
+ */
+function hasConnectedStyleNode(
+  consumerNodeId: string,
+  ctx: PayloadBuildContext | undefined,
+): boolean {
+  const nodes = ctx?.nodes ?? []
+  const edges = ctx?.edges ?? []
+  for (const edge of edges) {
+    if (edge.target !== consumerNodeId) continue
+    if (edge.targetHandle !== "cinematography") continue
+    const srcNode = nodes.find((n) => n.id === edge.source)
+    if (srcNode?.type === "style") return true
+  }
+  return false
 }
 
 /**
@@ -527,10 +552,11 @@ export function buildPayload(
       }
 
       // Use shared prompt builder (single source of truth with frontend)
+      const styleBypass = hasConnectedStyleNode(node.id, buildCtx)
       const result = buildImagePrompt({
         prompt: rawPrompt,
         provider,
-        style: typeof data.style === "string" ? data.style : undefined,
+        style: styleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
         negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
         characterDefs: charDefs as CharacterDef[],
         userTemplates: settings?.userPromptTemplates,
@@ -630,7 +656,7 @@ export function buildPayload(
           targetResolution,
           aspectRatio: data.aspectRatio,
           negativePrompt: data.negativePrompt,
-          style: data.style,
+          style: hasConnectedStyleNode(node.id, buildCtx) ? undefined : data.style,
           seed: data.seed,
           referenceImageUrls: editRefUrls,
           usageLogId,
@@ -691,10 +717,11 @@ export function buildPayload(
       }
 
       // Build prompt with style + character descriptions (same as generate-image)
+      const i2iStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
       const i2iResult = buildImagePrompt({
         prompt: rawPrompt,
         provider,
-        style: typeof data.style === "string" ? data.style : undefined,
+        style: i2iStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
         negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
         characterDefs: charDefs as CharacterDef[],
         userTemplates: settings?.userPromptTemplates,
@@ -795,7 +822,7 @@ export function buildPayload(
             provider,
             aspectRatio: data.aspectRatio,
             negativePrompt: data.negativePrompt,
-            style: data.style,
+            style: hasConnectedStyleNode(node.id, buildCtx) ? undefined : data.style,
             seed: data.seed,
             referenceImageUrls: editRefUrls,
             usageLogId,
@@ -853,10 +880,11 @@ export function buildPayload(
           }
         }
 
+        const modStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
         const i2iResult = buildImagePrompt({
           prompt: rawPrompt,
           provider,
-          style: typeof data.style === "string" ? data.style : undefined,
+          style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
           negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
           characterDefs: charDefs as CharacterDef[],
           userTemplates: settings?.userPromptTemplates,

@@ -4,7 +4,8 @@ import { useMemo, useState } from "react"
 import { Check, Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import { collectCinematographyHints } from "@/lib/cinematography-hints"
+import { collectCinematographyHints, hasConnectedStyleNode } from "@/lib/cinematography-hints"
+import { getStylePromptHint } from "@nodaro-shared/style"
 
 interface FinalPromptPreviewProps {
   /** User's prompt text (from `data.prompt` or equivalent). */
@@ -43,7 +44,18 @@ export function FinalPromptPreview({
 }: FinalPromptPreviewProps) {
   const { composed, cineHints, trimmedNegative, copyText } = useMemo(() => {
     const trimmedUser = (userPrompt ?? "").trim()
-    const trimmedStyle = (style ?? "").trim()
+    // Bypass inline style entirely when a Style node is wired — mirrors the
+    // runtime bypass in execute-node.ts and payload-builder.ts so the preview
+    // matches what the provider actually receives.
+    const styleBypass = hasConnectedStyleNode(consumerNodeId, nodes, edges)
+    const rawStyle = (style ?? "").trim()
+    const trimmedStyle = styleBypass ? "" : rawStyle
+    // Upgrade the inline style from its bare id to the catalog's richer
+    // promptHint when the id is a known preset; fall back to the raw text for
+    // custom free-text styles. Matches buildImagePrompt.
+    const styleText = trimmedStyle
+      ? (getStylePromptHint(trimmedStyle) || trimmedStyle)
+      : ""
     const neg = (negativePrompt ?? "").trim()
     const hints = consumerNodeId
       ? collectCinematographyHints(consumerNodeId, nodes, edges)
@@ -53,7 +65,7 @@ export function FinalPromptPreview({
     if (trimmedUser) baseParts.push(trimmedUser)
     if (hints.length > 0) baseParts.push(hints.join(", "))
     let promptText = baseParts.join(". ")
-    if (trimmedStyle) promptText += (promptText ? "\n" : "") + `Style: ${trimmedStyle}`
+    if (styleText) promptText += (promptText ? "\n" : "") + `Style: ${styleText}`
 
     const copyLines: string[] = []
     if (promptText) copyLines.push(promptText)

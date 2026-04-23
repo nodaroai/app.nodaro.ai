@@ -6,6 +6,7 @@
 
 import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
 import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT } from "./model-constants.js"
+import { getStylePromptHint } from "./style.js"
 import type { CharacterDef, SceneData } from "./types.js"
 
 export interface BuildImagePromptConfig {
@@ -83,10 +84,13 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
     })
   }
 
-  // Append style
+  // Append style — if the inline `style` is a known STYLES catalog id, inject
+  // the richer promptHint; otherwise fall back to the raw text (covers custom
+  // free-text styles that don't match a preset).
   const styleText = style?.trim()
   if (styleText) {
-    prompt += `\nStyle: ${styleText}`
+    const richHint = getStylePromptHint(styleText)
+    prompt += `\nStyle: ${richHint || styleText}`
   }
 
   // Handle negative prompt: native support vs prompt-appended

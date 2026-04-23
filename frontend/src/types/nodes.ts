@@ -400,6 +400,17 @@ export interface AtmosphereData {
   atmosphere: string
 }
 
+/** Standalone Style parameter node data. */
+export interface StyleData {
+  [key: string]: unknown
+  label: string
+  /** Style id from STYLES catalog (packages/shared/src/style.ts). The inline
+   * Style dropdown in image config panels derives its options from the same
+   * catalog (via IMAGE_STYLE_PRESETS in model-options.ts), so both surfaces
+   * resolve to the same promptHint at execution time. */
+  style: string
+}
+
 /** Standalone Temporal parameter node data. */
 export interface TemporalData {
   [key: string]: unknown
@@ -2674,6 +2685,7 @@ export type SceneNodeData =
   | LightingData
   | ColorLookData
   | AtmosphereData
+  | StyleData
   | TemporalData
   | GenerateScriptData
   | GenerateImageData
@@ -2797,6 +2809,7 @@ export type SceneNodeType =
   | "lighting"
   | "color-look"
   | "atmosphere"
+  | "style"
   | "temporal"
   | "generate-script"
   | "generate-image"
@@ -3153,6 +3166,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Atmosphere", atmosphere: "clear" },
+  },
+  {
+    type: "style",
+    label: "Style",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Style", style: "cinematic" },
   },
   {
     type: "temporal",

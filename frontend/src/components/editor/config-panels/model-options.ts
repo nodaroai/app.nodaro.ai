@@ -382,26 +382,13 @@ export {
   RENDERING_SPEED_SUPPORT,
   GUIDANCE_SCALE_SUPPORT,
 } from "@nodaro-shared/model-constants"
+import { STYLES } from "@nodaro-shared/style"
 
-// Predefined style presets for image generation
-export const IMAGE_STYLE_PRESETS = [
-  { value: "3d-render", label: "3D Render" },
-  { value: "anime", label: "Anime" },
-  { value: "children-book", label: "Children's Book" },
-  { value: "cinematic", label: "Cinematic" },
-  { value: "comic-book", label: "Comic Book" },
-  { value: "digital-art", label: "Digital Art" },
-  { value: "fantasy", label: "Fantasy" },
-  { value: "minimalist", label: "Minimalist" },
-  { value: "noir", label: "Noir" },
-  { value: "oil-painting", label: "Oil Painting" },
-  { value: "pencil-sketch", label: "Pencil Sketch" },
-  { value: "photorealistic", label: "Photorealistic" },
-  { value: "pixel-art", label: "Pixel Art" },
-  { value: "pop-art", label: "Pop Art" },
-  { value: "retro-vintage", label: "Retro / Vintage" },
-  { value: "watercolor", label: "Watercolor" },
-] as const
+/** Inline Style dropdown options for image config panels. Derived from the
+ *  canonical STYLES catalog so the dropdown and the standalone Style node
+ *  stay in sync — both resolve to the same promptHint at execution time. */
+export const IMAGE_STYLE_PRESETS: ReadonlyArray<{ value: string; label: string }> =
+  STYLES.map((s) => ({ value: s.id, label: s.label }))
 
 // Providers that support start + end frame (2 images -> video)
 export const PROVIDERS_WITH_END_FRAME: string[] = [

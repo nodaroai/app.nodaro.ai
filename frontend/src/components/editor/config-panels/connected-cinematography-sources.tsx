@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, type ReactNode } from "react"
-import { Frame, Aperture, Film, Lightbulb, SwatchBook, CloudFog, Clock, Video, SlidersHorizontal, Palette, type LucideIcon } from "lucide-react"
+import { Frame, Aperture, Film, Lightbulb, SwatchBook, CloudFog, Clock, Video, SlidersHorizontal, Palette, Brush, type LucideIcon } from "lucide-react"
 import { getCameraMotion, getCameraMotionLabel } from "@nodaro-shared/camera-motions"
 import { getFraming, FRAMING_FIELD_BY_CATEGORY, FRAMING_CATEGORY_LABELS } from "@nodaro-shared/framing"
 import { getLighting, LIGHTING_FIELD_BY_CATEGORY, LIGHTING_CATEGORY_LABELS } from "@nodaro-shared/lighting"
@@ -9,6 +9,7 @@ import { getLens, getLensLabel } from "@nodaro-shared/lens"
 import { getCameraFormat, getCameraFormatLabel } from "@nodaro-shared/camera-format"
 import { getColorLook, getColorLookLabel } from "@nodaro-shared/color-look"
 import { getAtmosphere, getAtmosphereLabel } from "@nodaro-shared/atmosphere"
+import { getStyle, getStyleLabel } from "@nodaro-shared/style"
 import { getTemporal, TEMPORAL_FIELD_BY_CATEGORY, TEMPORAL_CATEGORY_LABELS } from "@nodaro-shared/temporal"
 import { FramingPreview } from "./framing-preview"
 import { LightingPreview } from "./lighting-preview"
@@ -16,6 +17,7 @@ import { LensPreview } from "./lens-preview"
 import { CameraFormatPreview } from "./camera-format-preview"
 import { ColorLookPreview } from "./color-look-preview"
 import { AtmospherePreview } from "./atmosphere-preview"
+import { StylePreview } from "./style-preview"
 import { TemporalPreview } from "./temporal-preview"
 import { CameraMotionPreview } from "./camera-motion-preview"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
@@ -171,6 +173,20 @@ function collectSources(
           title: `${srcNodeLabel}: ${getAtmosphereLabel(id)}`,
           description: entry.description,
           preview: <AtmospherePreview atmosphereId={id} className="w-full aspect-[16/9]" />,
+        })
+        break
+      }
+      case "style": {
+        const id = data.style as string | undefined
+        if (!id) continue
+        const entry = getStyle(id)
+        if (!entry) continue
+        entries.push({
+          key: src.id,
+          icon: Brush,
+          title: `${srcNodeLabel}: ${getStyleLabel(id)}`,
+          description: entry.description,
+          preview: <StylePreview styleId={id} className="w-full aspect-[16/9]" />,
         })
         break
       }

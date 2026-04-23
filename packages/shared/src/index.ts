@@ -220,6 +220,15 @@ export {
 export type { Atmosphere } from "./atmosphere.js"
 
 export {
+  STYLES,
+  STYLE_IDS,
+  getStyle,
+  getStyleLabel,
+  getStylePromptHint,
+} from "./style.js"
+export type { Style } from "./style.js"
+
+export {
   TEMPORALS,
   TEMPORAL_IDS,
   TEMPORAL_CATEGORY_ORDER,
