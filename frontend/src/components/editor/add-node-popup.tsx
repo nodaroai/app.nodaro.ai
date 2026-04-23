@@ -31,6 +31,7 @@ import {
   Lightbulb,
   SwatchBook,
   CloudFog,
+  Brush,
   Globe,
   HardDrive,
   Webhook,
@@ -310,6 +311,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <CloudFog className="h-4 w-4" />,
     category: "Cinematography",
     keywords: ["weather", "fog", "rain", "snow", "smoke", "god rays", "particles", "shot"],
+  },
+  {
+    type: "style",
+    label: "Style",
+    icon: <Brush className="h-4 w-4" />,
+    category: "Cinematography",
+    keywords: ["anime", "oil painting", "watercolor", "cinematic", "photorealistic", "comic", "pixel art", "pop art", "noir", "illustration", "rendering"],
   },
   {
     type: "temporal",

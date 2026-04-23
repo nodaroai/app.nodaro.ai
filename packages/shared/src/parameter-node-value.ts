@@ -21,6 +21,7 @@ export const PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
   "lighting",
   "color-look",
   "atmosphere",
+  "style",
   "temporal",
   "scene-count",
   "duration",
@@ -70,6 +71,8 @@ export function getParameterValue(
       return trim(data.colorLook)
     case "atmosphere":
       return trim(data.atmosphere)
+    case "style":
+      return trim(data.style)
     case "temporal":
       // Multi-category: return the first set per-category value (used for
       // single-string field-mapping resolution; full hint composition goes

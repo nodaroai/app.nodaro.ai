@@ -40,6 +40,7 @@ import { ReferenceImageList } from "./reference-image-list"
 import { ConnectedMediaList } from "./connected-media-list"
 import { FinalPromptPreview } from "./final-prompt-preview"
 import { ConnectedCinematographySources } from "./connected-cinematography-sources"
+import { hasConnectedStyleNode } from "@/lib/cinematography-hints"
 import type { ConfigProps } from "./types"
 import type { SelectedAsset } from "../asset-selection-modal"
 
@@ -96,6 +97,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
   const [isCustomStyle, setIsCustomStyle] = useState(
     () => !!data.style && !IMAGE_STYLE_PRESETS.some((p) => p.value === data.style)
   )
+  const styleNodeConnected = hasConnectedStyleNode(nodeId, nodes, edges ?? [])
   const [showAssetLibrary, setShowAssetLibrary] = useState(false)
   const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
   const refImageInputRef = useRef<HTMLInputElement>(null)
@@ -224,6 +226,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
               onUpdate({ style: v })
             }
           }}
+          disabled={styleNodeConnected}
         >
           <SelectTrigger aria-label="Style"><SelectValue placeholder="No style" /></SelectTrigger>
           <SelectContent>
@@ -234,7 +237,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
             <SelectItem value="__custom__">Custom...</SelectItem>
           </SelectContent>
         </Select>
-        {isCustomStyle && (
+        {isCustomStyle && !styleNodeConnected && (
           <Input
             className="mt-1.5"
             value={data.style}
@@ -243,7 +246,11 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
             autoFocus
           />
         )}
-        <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as style guidance</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5">
+          {styleNodeConnected
+            ? "Bypassed — using connected Style node"
+            : "Appended to prompt as style guidance"}
+        </p>
       </MappableField>
       <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
@@ -507,6 +514,7 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
   const [isCustomStyle, setIsCustomStyle] = useState(
     () => !!data.style && !IMAGE_STYLE_PRESETS.some((p) => p.value === data.style)
   )
+  const styleNodeConnected = hasConnectedStyleNode(nodeId, nodes, edges ?? [])
   const [showAssetLibrary, setShowAssetLibrary] = useState(false)
   const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
@@ -607,6 +615,7 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
                   onUpdate({ style: v })
                 }
               }}
+              disabled={styleNodeConnected}
             >
               <SelectTrigger aria-label="Style"><SelectValue placeholder="No style" /></SelectTrigger>
               <SelectContent>
@@ -617,7 +626,7 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
                 <SelectItem value="__custom__">Custom...</SelectItem>
               </SelectContent>
             </Select>
-            {isCustomStyle && (
+            {isCustomStyle && !styleNodeConnected && (
               <Input
                 className="mt-1.5"
                 value={data.style ?? ""}
@@ -626,7 +635,11 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
                 autoFocus
               />
             )}
-            <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as style guidance</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              {styleNodeConnected
+                ? "Bypassed — using connected Style node"
+                : "Appended to prompt as style guidance"}
+            </p>
           </MappableField>
           <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <TagTextarea
@@ -859,6 +872,7 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
   const [isCustomStyle, setIsCustomStyle] = useState(
     () => !!data.style && !IMAGE_STYLE_PRESETS.some((p) => p.value === data.style)
   )
+  const styleNodeConnected = hasConnectedStyleNode(nodeId, nodes, edges ?? [])
   const [showAssetLibrary, setShowAssetLibrary] = useState(false)
   const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
   const refImageInputRef = useRef<HTMLInputElement>(null)
@@ -973,6 +987,7 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
               onUpdate({ style: v })
             }
           }}
+          disabled={styleNodeConnected}
         >
           <SelectTrigger aria-label="Style"><SelectValue placeholder="No style" /></SelectTrigger>
           <SelectContent>
@@ -983,7 +998,7 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
             <SelectItem value="__custom__">Custom...</SelectItem>
           </SelectContent>
         </Select>
-        {isCustomStyle && (
+        {isCustomStyle && !styleNodeConnected && (
           <Input
             className="mt-1.5"
             value={data.style ?? ""}
@@ -992,7 +1007,11 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
             autoFocus
           />
         )}
-        <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as style guidance</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5">
+          {styleNodeConnected
+            ? "Bypassed — using connected Style node"
+            : "Appended to prompt as style guidance"}
+        </p>
       </MappableField>
       <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
@@ -1357,6 +1376,7 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
   const [isCustomStyle, setIsCustomStyle] = useState(
     () => !!data.style && !IMAGE_STYLE_PRESETS.some((p) => p.value === data.style)
   )
+  const styleNodeConnected = hasConnectedStyleNode(nodeId, nodes, edges ?? [])
   const [showAssetLibrary, setShowAssetLibrary] = useState(false)
   const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
   const refImageInputRef = useRef<HTMLInputElement>(null)
@@ -1469,6 +1489,7 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
               onUpdate({ style: v })
             }
           }}
+          disabled={styleNodeConnected}
         >
           <SelectTrigger aria-label="Style"><SelectValue placeholder="No style" /></SelectTrigger>
           <SelectContent>
@@ -1479,7 +1500,7 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
             <SelectItem value="__custom__">Custom...</SelectItem>
           </SelectContent>
         </Select>
-        {isCustomStyle && (
+        {isCustomStyle && !styleNodeConnected && (
           <Input
             className="mt-1.5"
             value={data.style ?? ""}
@@ -1488,7 +1509,11 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
             autoFocus
           />
         )}
-        <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as style guidance</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5">
+          {styleNodeConnected
+            ? "Bypassed — using connected Style node"
+            : "Appended to prompt as style guidance"}
+        </p>
       </MappableField>
       <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea

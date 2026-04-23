@@ -54,6 +54,7 @@ import {
   LightingConfig,
   ColorLookConfig,
   AtmosphereConfig,
+  StyleConfig,
   TemporalConfig,
   GenerateScriptConfig,
   QACheckConfig,
@@ -181,6 +182,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "lighting": "Lighting",
   "color-look": "Color / Look",
   "atmosphere": "Atmosphere",
+  "style": "Style",
   "temporal": "Temporal",
   "generate-script": "Generate Script",
   "generate-image": "Generate Image",
@@ -360,6 +362,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "lighting": return <LightingConfig {...configProps} />
     case "color-look": return <ColorLookConfig {...configProps} />
     case "atmosphere": return <AtmosphereConfig {...configProps} />
+    case "style": return <StyleConfig {...configProps} />
     case "temporal": return <TemporalConfig {...configProps} />
     case "generate-script": return <GenerateScriptConfig {...configProps} />
     case "generate-image": return <GenerateImageConfig {...configProps} nodeId={selectedNodeId} />

@@ -4,6 +4,7 @@ import { getLensPromptHint } from "@nodaro-shared/lens"
 import { getCameraFormatPromptHint } from "@nodaro-shared/camera-format"
 import { getColorLookPromptHint } from "@nodaro-shared/color-look"
 import { getAtmospherePromptHint } from "@nodaro-shared/atmosphere"
+import { getStylePromptHint } from "@nodaro-shared/style"
 import { buildTemporalHints } from "@nodaro-shared/temporal"
 import { composeCameraMotionHintFromConnections } from "@nodaro-shared/camera-motions"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
@@ -34,6 +35,8 @@ export function getNodePromptHint(node: WorkflowNode | undefined): string {
       return getColorLookPromptHint(typeof data.colorLook === "string" ? data.colorLook : "")
     case "atmosphere":
       return getAtmospherePromptHint(typeof data.atmosphere === "string" ? data.atmosphere : "")
+    case "style":
+      return getStylePromptHint(typeof data.style === "string" ? data.style : "")
     case "temporal": {
       const hints = buildTemporalHints(data)
       return hints.join(", ")
@@ -114,4 +117,25 @@ export function collectCinematographyHints(
     if (hint) hints.push(hint)
   }
   return hints
+}
+
+/**
+ * True when the consumer node has a connected Style parameter node on its
+ * `cinematography` handle. Used to bypass the inline Style dropdown in image
+ * config panels — when the user wires a Style node, the node's richer
+ * promptHint takes over and the inline field is disabled.
+ */
+export function hasConnectedStyleNode(
+  consumerNodeId: string | undefined,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+): boolean {
+  if (!consumerNodeId) return false
+  for (const edge of edges) {
+    if (edge.target !== consumerNodeId) continue
+    if (edge.targetHandle !== "cinematography") continue
+    const srcNode = nodes.find((n) => n.id === edge.source)
+    if (srcNode?.type === "style") return true
+  }
+  return false
 }
