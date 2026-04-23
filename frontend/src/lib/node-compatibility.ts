@@ -63,6 +63,8 @@ export interface NodeOption {
   readonly category: string
   readonly group?: string
   readonly adminOnly?: boolean
+  /** Optional alternative search terms surfaced by the popup's filter (in addition to label / type / category). */
+  readonly keywords?: readonly string[]
 }
 
 export interface CompatibleNodes {

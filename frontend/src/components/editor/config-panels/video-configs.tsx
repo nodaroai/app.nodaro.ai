@@ -38,7 +38,14 @@ import { TagTextarea } from "./tag-textarea"
 import { Kling3StudioConfig } from "./kling3-studio-config"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { CameraMotionPicker } from "./camera-motion-picker"
-import { FramingPicker } from "./framing-picker"
+import { InlineCameraMotionField } from "./inline-camera-motion-field"
+import { InlineFramingField } from "./inline-framing-field"
+import { InlineLensField } from "./inline-lens-field"
+import { InlineCameraFormatField } from "./inline-camera-format-field"
+import { InlineLightingField } from "./inline-lighting-field"
+import { InlineColorLookField } from "./inline-color-look-field"
+import { InlineAtmosphereField } from "./inline-atmosphere-field"
+import { InlineTemporalField } from "./inline-temporal-field"
 import { ConnectedMediaList, getSourceThumbnail } from "./connected-media-list"
 import type { ConfigProps } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
@@ -274,46 +281,14 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           </MappableField>
         )}
       </div>
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 px-1">
-          <input
-            type="checkbox"
-            id="cameraMotionEnabled"
-            checked={!!data.cameraMotionEnabled}
-            onChange={(e) => onUpdate({ cameraMotionEnabled: e.target.checked, ...(!e.target.checked ? { cameraMotion: undefined } : {}) })}
-            className="rounded border-muted-foreground/40"
-          />
-          <label htmlFor="cameraMotionEnabled" className="text-xs">Camera motion hint (injected into prompt)</label>
-        </div>
-        {data.cameraMotionEnabled && (
-          <MappableField field="cameraMotion" label="Camera Motion" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <CameraMotionPicker
-              value={data.cameraMotion || "static"}
-              onValueChange={(v) => onUpdate({ cameraMotion: v })}
-            />
-          </MappableField>
-        )}
-      </div>
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 px-1">
-          <input
-            type="checkbox"
-            id="framingEnabled"
-            checked={!!data.framingEnabled}
-            onChange={(e) => onUpdate({ framingEnabled: e.target.checked, ...(!e.target.checked ? { framing: undefined } : {}) })}
-            className="rounded border-muted-foreground/40"
-          />
-          <label htmlFor="framingEnabled" className="text-xs">Framing hint (injected into prompt)</label>
-        </div>
-        {data.framingEnabled && (
-          <MappableField field="framing" label="Framing" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <FramingPicker
-              value={data.framing || "medium-shot"}
-              onValueChange={(v) => onUpdate({ framing: v })}
-            />
-          </MappableField>
-        )}
-      </div>
+      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineCameraMotionField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineTemporalField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
 
       {data.provider === "kling" && (
         <div className="flex items-center gap-2 px-1">
@@ -666,6 +641,15 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         />
       </MappableField>
 
+      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineCameraMotionField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineTemporalField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+
       {/* Wan / Wan Flash: Duration & Resolution */}
       {isWan && (
         <>
@@ -980,6 +964,14 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           refMap={refMap}
         />
       </MappableField>
+      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineCameraMotionField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineTemporalField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         {allowedDurations ? (
           <Select
@@ -1190,6 +1182,15 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         />
       </MappableField>
 
+      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineCameraMotionField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineTemporalField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+
       {data.provider === "veo-extend" && (
         <div>
           <Label className="text-xs">Model</Label>
@@ -1284,6 +1285,15 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
           className="min-h-[80px] text-sm"
         />
       </div>
+
+      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineCameraMotionField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineTemporalField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
 
       {/* Negative Prompt */}
       <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>

@@ -17,7 +17,7 @@ import { CreditsService } from "../../billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
 import { buildPayload, type WorkflowSettings } from "./payload-builder.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
-import { resolveFieldMappings, NODE_TEXT_FIELDS } from "./resolve-field-mappings.js"
+import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings.js"
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
@@ -154,14 +154,14 @@ export async function executeNode(
   }
 
   // --- Field mapping resolution + {} injection (centralized) ---
-  const textFields = NODE_TEXT_FIELDS[node.type]
-  if (textFields?.length) {
+  const mappableFields = NODE_MAPPABLE_FIELDS[node.type]
+  if (mappableFields?.length) {
     const resolvedData = resolveFieldMappings(
       node.data,
       nodeStates,
       allNodes,
       resolvedInputs.prompt,
-      textFields,
+      mappableFields,
     )
     node = { ...node, data: resolvedData }
   }

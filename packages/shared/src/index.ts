@@ -147,16 +147,92 @@ export {
   getCameraMotion,
   getCameraMotionLabel,
   getCameraMotionPromptHint,
+  composeCameraMotionHintFromConnections,
 } from "./camera-motions.js"
-export type { CameraMotion, CameraMotionCategory } from "./camera-motions.js"
+export type {
+  CameraMotion,
+  CameraMotionCategory,
+} from "./camera-motions.js"
 
 export {
   FRAMINGS,
   FRAMING_IDS,
   FRAMING_CATEGORY_ORDER,
   FRAMING_CATEGORY_LABELS,
+  FRAMING_FIELD_BY_CATEGORY,
   getFraming,
   getFramingLabel,
   getFramingPromptHint,
+  isVantageFraming,
+  buildFramingHints,
 } from "./framing.js"
-export type { Framing, FramingCategory } from "./framing.js"
+export type { Framing, FramingCategory, FramingValue } from "./framing.js"
+
+export {
+  LENSES,
+  LENS_IDS,
+  getLens,
+  getLensLabel,
+  getLensPromptHint,
+} from "./lens.js"
+export type { Lens } from "./lens.js"
+
+export {
+  CAMERA_FORMATS,
+  CAMERA_FORMAT_IDS,
+  getCameraFormat,
+  getCameraFormatLabel,
+  getCameraFormatPromptHint,
+} from "./camera-format.js"
+export type { CameraFormat } from "./camera-format.js"
+
+export {
+  LIGHTINGS,
+  LIGHTING_IDS,
+  LIGHTING_CATEGORY_ORDER,
+  LIGHTING_CATEGORY_LABELS,
+  LIGHTING_FIELD_BY_CATEGORY,
+  getLighting,
+  getLightingLabel,
+  getLightingPromptHint,
+  buildLightingHints,
+} from "./lighting.js"
+export type { Lighting, LightingCategory, LightingValue } from "./lighting.js"
+
+export {
+  COLOR_LOOKS,
+  COLOR_LOOK_IDS,
+  COLOR_LOOK_CATEGORY_ORDER,
+  COLOR_LOOK_CATEGORY_LABELS,
+  getColorLook,
+  getColorLookLabel,
+  getColorLookPromptHint,
+} from "./color-look.js"
+export type { ColorLook, ColorLookCategory } from "./color-look.js"
+
+export {
+  ATMOSPHERES,
+  ATMOSPHERE_IDS,
+  getAtmosphere,
+  getAtmosphereLabel,
+  getAtmospherePromptHint,
+} from "./atmosphere.js"
+export type { Atmosphere } from "./atmosphere.js"
+
+export {
+  TEMPORALS,
+  TEMPORAL_IDS,
+  TEMPORAL_CATEGORY_ORDER,
+  TEMPORAL_CATEGORY_LABELS,
+  TEMPORAL_FIELD_BY_CATEGORY,
+  getTemporal,
+  getTemporalLabel,
+  getTemporalPromptHint,
+  buildTemporalHints,
+} from "./temporal.js"
+export type { Temporal, TemporalCategory, TemporalValue } from "./temporal.js"
+
+export {
+  PARAMETER_NODE_TYPES,
+  getParameterValue,
+} from "./parameter-node-value.js"

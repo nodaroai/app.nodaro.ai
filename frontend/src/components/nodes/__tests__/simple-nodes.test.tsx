@@ -44,7 +44,7 @@ vi.mock("lucide-react", () => {
     List: I, Palette: I, Brush: I, Cpu: I, Hash: I, Clock: I,
     RectangleHorizontal: I, Activity: I, Video: I, ShieldCheck: I,
     Rss: I, Webhook: I, HardDrive: I, Scissors: I, FileText: I,
-    Type: I, ImageIcon: I, Check: I, X: I, Frame: I,
+    Type: I, ImageIcon: I, Check: I, X: I, Frame: I, Aperture: I, Film: I, Lightbulb: I, SwatchBook: I, CloudFog: I, Sparkles: I,
   }
 })
 
@@ -101,6 +101,12 @@ import { AspectRatioNode } from "../aspect-ratio-node"
 import { MotionNode } from "../motion-node"
 import { CameraMotionNode } from "../camera-motion-node"
 import { FramingNode } from "../framing-node"
+import { LensNode } from "../lens-node"
+import { CameraFormatNode } from "../camera-format-node"
+import { LightingNode } from "../lighting-node"
+import { ColorLookNode } from "../color-look-node"
+import { AtmosphereNode } from "../atmosphere-node"
+import { TemporalNode } from "../temporal-node"
 import { QACheckNode } from "../qa-check-node"
 import { RSSFeedNode } from "../rss-feed-node"
 import { WebhookOutputNode } from "../webhook-output-node"
@@ -202,8 +208,56 @@ const SIMPLE_NODES: SimpleNodeTestConfig[] = [
     Component: FramingNode,
     expectedCategory: "parameter",
     expectedCredits: 0,
-    defaultData: { label: "Framing", framing: "medium-shot" },
+    defaultData: { label: "Framing", shotSize: "medium-shot" },
     contentAssertion: { text: "Medium Shot" },
+  },
+  {
+    name: "LensNode",
+    Component: LensNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Lens", lens: "normal-50mm" },
+    contentAssertion: { text: "Normal (50mm)" },
+  },
+  {
+    name: "CameraFormatNode",
+    Component: CameraFormatNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Camera / Film Stock", cameraFormat: "35mm-film" },
+    contentAssertion: { text: "35mm Film" },
+  },
+  {
+    name: "LightingNode",
+    Component: LightingNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Lighting", timeOfDay: "noon" },
+    contentAssertion: { text: "Noon" },
+  },
+  {
+    name: "ColorLookNode",
+    Component: ColorLookNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Color / Look", colorLook: "warm" },
+    contentAssertion: { text: "Warm" },
+  },
+  {
+    name: "AtmosphereNode",
+    Component: AtmosphereNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Atmosphere", atmosphere: "clear" },
+    contentAssertion: { text: "Clear" },
+  },
+  {
+    name: "TemporalNode",
+    Component: TemporalNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Temporal", temporalSpeed: "real-time" },
+    contentAssertion: { text: "Real-time" },
   },
   {
     name: "QACheckNode",

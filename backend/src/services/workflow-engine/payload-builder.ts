@@ -11,8 +11,14 @@ import { buildImagePrompt, buildScenePrompt } from "../../../../packages/shared/
 import { resolveTemplate, applyTemplate } from "../../../../packages/shared/src/prompt-templates.js"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
-import { getCameraMotionPromptHint } from "../../../../packages/shared/src/camera-motions.js"
-import { getFramingPromptHint } from "../../../../packages/shared/src/framing.js"
+import { composeCameraMotionHintFromConnections } from "../../../../packages/shared/src/camera-motions.js"
+import { buildFramingHints } from "../../../../packages/shared/src/framing.js"
+import { getLensPromptHint } from "../../../../packages/shared/src/lens.js"
+import { getCameraFormatPromptHint } from "../../../../packages/shared/src/camera-format.js"
+import { buildLightingHints } from "../../../../packages/shared/src/lighting.js"
+import { getColorLookPromptHint } from "../../../../packages/shared/src/color-look.js"
+import { getAtmospherePromptHint } from "../../../../packages/shared/src/atmosphere.js"
+import { buildTemporalHints } from "../../../../packages/shared/src/temporal.js"
 import type { CharacterDef, SceneData } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
 import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-constants.js"
@@ -308,6 +314,93 @@ function resolveRefs(text: string | undefined, refMap: Map<string, string>): str
   return resolveNodeRefs(text, refMap)
 }
 
+// ---------------------------------------------------------------------------
+// Camera-motion v2 (graph-aware) — collect prompt hints from connected
+// parameter nodes via the source camera-motion node's startState/endState
+// input handles. Mirror of the frontend executor (execute-node.ts).
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract a prompt-hint string from a parameter-style node by dispatching on
+ * its type. Returns the empty string for unsupported node types so the caller
+ * can simply filter them out. Multi-category nodes (framing, lighting) join
+ * their hints with `, ` so the camera-motion composer can chain them with
+ * neighbour nodes via " and ".
+ *
+ * Backend parameter nodes don't execute, so values come straight from the
+ * node's data record.
+ */
+function getNodePromptHint(node: SimpleNode | undefined): string {
+  if (!node) return ""
+  const data = node.data as Record<string, unknown>
+  switch (node.type) {
+    case "framing": {
+      const hints = buildFramingHints(data)
+      return hints.join(", ")
+    }
+    case "lighting": {
+      const hints = buildLightingHints(data)
+      return hints.join(", ")
+    }
+    case "lens":
+      return getLensPromptHint(typeof data.lens === "string" ? data.lens : "")
+    case "camera-format":
+      return getCameraFormatPromptHint(typeof data.cameraFormat === "string" ? data.cameraFormat : "")
+    case "color-look":
+      return getColorLookPromptHint(typeof data.colorLook === "string" ? data.colorLook : "")
+    case "atmosphere":
+      return getAtmospherePromptHint(typeof data.atmosphere === "string" ? data.atmosphere : "")
+    case "temporal": {
+      const hints = buildTemporalHints(data)
+      return hints.join(", ")
+    }
+    case "tone":
+      return typeof data.tone === "string" ? data.tone.trim() : ""
+    case "text-prompt":
+      return typeof data.text === "string" ? data.text.trim() : ""
+    default:
+      return ""
+  }
+}
+
+/**
+ * For a video-gen consumer that has `cameraMotionEnabled && cameraMotion`,
+ * locate the upstream camera-motion node (via fieldMappings if present) and
+ * walk its startState / endState input edges to collect prompt hints from
+ * each connected parameter node. Falls back to the bare motion hint when the
+ * camera-motion field is set inline (no mapping → no edges to walk).
+ */
+function buildCameraMotionHintForConsumer(
+  consumerData: Record<string, unknown>,
+  ctx: PayloadBuildContext | undefined,
+): string {
+  if (!consumerData.cameraMotionEnabled || !consumerData.cameraMotion) return ""
+  const motionId = String(consumerData.cameraMotion)
+
+  const fm = consumerData.fieldMappings as Record<string, { sourceNodeId?: string }> | undefined
+  const sourceNodeId = fm?.cameraMotion?.sourceNodeId
+
+  if (!sourceNodeId || !ctx?.nodes || !ctx?.edges) {
+    return composeCameraMotionHintFromConnections(motionId, [], [])
+  }
+
+  const nodes = ctx.nodes
+  const edges = ctx.edges
+  const startHints: string[] = []
+  const endHints: string[] = []
+  for (const edge of edges) {
+    if (edge.target !== sourceNodeId) continue
+    const srcNode = nodes.find((n) => n.id === edge.source)
+    if (!srcNode) continue
+    const hint = getNodePromptHint(srcNode)
+    if (!hint) continue
+    if (edge.targetHandle === "startState") startHints.push(hint)
+    else if (edge.targetHandle === "endState") endHints.push(hint)
+  }
+
+  return composeCameraMotionHintFromConnections(motionId, startHints, endHints)
+}
+
 export function buildPayload(
   node: SimpleNode,
   jobId: string,
@@ -398,9 +491,39 @@ export function buildPayload(
         ? collectAncestorRefs(node.id, buildCtx.nodes, buildCtx.edges, buildCtx.nodeStates)
         : []
 
-      const rawPrompt = resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
+      let rawPrompt = resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
         || resolveRefs(data.prompt as string | undefined, refMap)
         || ""
+      {
+        const framingHints = buildFramingHints(data)
+        if (framingHints.length > 0) {
+          const joined = framingHints.join(", ")
+          rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
+        }
+      }
+      if (data.lensEnabled && data.lens) {
+        const lensHint = getLensPromptHint(String(data.lens))
+        if (lensHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${lensHint}` : lensHint
+      }
+      if (data.cameraFormatEnabled && data.cameraFormat) {
+        const cfHint = getCameraFormatPromptHint(String(data.cameraFormat))
+        if (cfHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${cfHint}` : cfHint
+      }
+      {
+        const lightingHints = buildLightingHints(data)
+        if (lightingHints.length > 0) {
+          const joined = lightingHints.join(", ")
+          rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
+        }
+      }
+      if (data.colorLookEnabled && data.colorLook) {
+        const colorLookHint = getColorLookPromptHint(String(data.colorLook))
+        if (colorLookHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${colorLookHint}` : colorLookHint
+      }
+      if (data.atmosphereEnabled && data.atmosphere) {
+        const atmosphereHint = getAtmospherePromptHint(String(data.atmosphere))
+        if (atmosphereHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${atmosphereHint}` : atmosphereHint
+      }
 
       // Use shared prompt builder (single source of truth with frontend)
       const result = buildImagePrompt({
@@ -484,6 +607,36 @@ export function buildPayload(
           editPrompt = `${editPrompt}\n\nContext: ${descriptions}`
         }
       }
+      {
+        const framingHints = buildFramingHints(data)
+        if (framingHints.length > 0) {
+          const joined = framingHints.join(", ")
+          editPrompt = editPrompt ? `${editPrompt}. ${joined}` : joined
+        }
+      }
+      if (data.lensEnabled && data.lens) {
+        const lensHint = getLensPromptHint(String(data.lens))
+        if (lensHint) editPrompt = editPrompt ? `${editPrompt}. ${lensHint}` : lensHint
+      }
+      if (data.cameraFormatEnabled && data.cameraFormat) {
+        const cfHint = getCameraFormatPromptHint(String(data.cameraFormat))
+        if (cfHint) editPrompt = editPrompt ? `${editPrompt}. ${cfHint}` : cfHint
+      }
+      {
+        const lightingHints = buildLightingHints(data)
+        if (lightingHints.length > 0) {
+          const joined = lightingHints.join(", ")
+          editPrompt = editPrompt ? `${editPrompt}. ${joined}` : joined
+        }
+      }
+      if (data.colorLookEnabled && data.colorLook) {
+        const colorLookHint = getColorLookPromptHint(String(data.colorLook))
+        if (colorLookHint) editPrompt = editPrompt ? `${editPrompt}. ${colorLookHint}` : colorLookHint
+      }
+      if (data.atmosphereEnabled && data.atmosphere) {
+        const atmosphereHint = getAtmospherePromptHint(String(data.atmosphere))
+        if (atmosphereHint) editPrompt = editPrompt ? `${editPrompt}. ${atmosphereHint}` : atmosphereHint
+      }
 
       const targetResolution = data.targetResolution as string | undefined
       return {
@@ -548,9 +701,39 @@ export function buildPayload(
         ...charRefUrls,
       ]
 
-      const rawPrompt = resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
+      let rawPrompt = resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
         || resolveRefs(data.prompt as string | undefined, refMap)
         || ""
+      {
+        const framingHints = buildFramingHints(data)
+        if (framingHints.length > 0) {
+          const joined = framingHints.join(", ")
+          rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
+        }
+      }
+      if (data.lensEnabled && data.lens) {
+        const lensHint = getLensPromptHint(String(data.lens))
+        if (lensHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${lensHint}` : lensHint
+      }
+      if (data.cameraFormatEnabled && data.cameraFormat) {
+        const cfHint = getCameraFormatPromptHint(String(data.cameraFormat))
+        if (cfHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${cfHint}` : cfHint
+      }
+      {
+        const lightingHints = buildLightingHints(data)
+        if (lightingHints.length > 0) {
+          const joined = lightingHints.join(", ")
+          rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
+        }
+      }
+      if (data.colorLookEnabled && data.colorLook) {
+        const colorLookHint = getColorLookPromptHint(String(data.colorLook))
+        if (colorLookHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${colorLookHint}` : colorLookHint
+      }
+      if (data.atmosphereEnabled && data.atmosphere) {
+        const atmosphereHint = getAtmospherePromptHint(String(data.atmosphere))
+        if (atmosphereHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${atmosphereHint}` : atmosphereHint
+      }
 
       // Build prompt with style + character descriptions (same as generate-image)
       const i2iResult = buildImagePrompt({
@@ -638,6 +821,36 @@ export function buildPayload(
             editPrompt = `${editPrompt}\n\nContext: ${descriptions}`
           }
         }
+        {
+          const framingHints = buildFramingHints(data)
+          if (framingHints.length > 0) {
+            const joined = framingHints.join(", ")
+            editPrompt = editPrompt ? `${editPrompt}. ${joined}` : joined
+          }
+        }
+        if (data.lensEnabled && data.lens) {
+          const lensHint = getLensPromptHint(String(data.lens))
+          if (lensHint) editPrompt = editPrompt ? `${editPrompt}. ${lensHint}` : lensHint
+        }
+        if (data.cameraFormatEnabled && data.cameraFormat) {
+          const cfHint = getCameraFormatPromptHint(String(data.cameraFormat))
+          if (cfHint) editPrompt = editPrompt ? `${editPrompt}. ${cfHint}` : cfHint
+        }
+        {
+          const lightingHints = buildLightingHints(data)
+          if (lightingHints.length > 0) {
+            const joined = lightingHints.join(", ")
+            editPrompt = editPrompt ? `${editPrompt}. ${joined}` : joined
+          }
+        }
+        if (data.colorLookEnabled && data.colorLook) {
+          const colorLookHint = getColorLookPromptHint(String(data.colorLook))
+          if (colorLookHint) editPrompt = editPrompt ? `${editPrompt}. ${colorLookHint}` : colorLookHint
+        }
+        if (data.atmosphereEnabled && data.atmosphere) {
+          const atmosphereHint = getAtmospherePromptHint(String(data.atmosphere))
+          if (atmosphereHint) editPrompt = editPrompt ? `${editPrompt}. ${atmosphereHint}` : atmosphereHint
+        }
 
         return {
           jobName: "edit-image",
@@ -697,9 +910,39 @@ export function buildPayload(
           ...charRefUrls,
         ]
 
-        const rawPrompt = resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
+        let rawPrompt = resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
           || resolveRefs(data.prompt as string | undefined, refMap)
           || ""
+        {
+          const framingHints = buildFramingHints(data)
+          if (framingHints.length > 0) {
+            const joined = framingHints.join(", ")
+            rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
+          }
+        }
+        if (data.lensEnabled && data.lens) {
+          const lensHint = getLensPromptHint(String(data.lens))
+          if (lensHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${lensHint}` : lensHint
+        }
+        if (data.cameraFormatEnabled && data.cameraFormat) {
+          const cfHint = getCameraFormatPromptHint(String(data.cameraFormat))
+          if (cfHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${cfHint}` : cfHint
+        }
+        {
+          const lightingHints = buildLightingHints(data)
+          if (lightingHints.length > 0) {
+            const joined = lightingHints.join(", ")
+            rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
+          }
+        }
+        if (data.colorLookEnabled && data.colorLook) {
+          const colorLookHint = getColorLookPromptHint(String(data.colorLook))
+          if (colorLookHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${colorLookHint}` : colorLookHint
+        }
+        if (data.atmosphereEnabled && data.atmosphere) {
+          const atmosphereHint = getAtmospherePromptHint(String(data.atmosphere))
+          if (atmosphereHint) rawPrompt = rawPrompt ? `${rawPrompt}. ${atmosphereHint}` : atmosphereHint
+        }
 
         const i2iResult = buildImagePrompt({
           prompt: rawPrompt,
@@ -800,13 +1043,35 @@ export function buildPayload(
             let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.motionPrompt as string | undefined, refMap)
             const hints: string[] = []
             if (data.motionEnabled && data.motion) hints.push(`${data.motion} motion`)
-            if (data.cameraMotionEnabled && data.cameraMotion) {
-              const cameraHint = getCameraMotionPromptHint(String(data.cameraMotion))
-              if (cameraHint) hints.push(cameraHint)
+            const cameraHint = buildCameraMotionHintForConsumer(data, buildCtx)
+            if (cameraHint) hints.push(cameraHint)
+            {
+              const framingHints = buildFramingHints(data)
+              for (const h of framingHints) hints.push(h)
             }
-            if (data.framingEnabled && data.framing) {
-              const framingHint = getFramingPromptHint(String(data.framing))
-              if (framingHint) hints.push(framingHint)
+            if (data.lensEnabled && data.lens) {
+              const lensHint = getLensPromptHint(String(data.lens))
+              if (lensHint) hints.push(lensHint)
+            }
+            if (data.cameraFormatEnabled && data.cameraFormat) {
+              const cfHint = getCameraFormatPromptHint(String(data.cameraFormat))
+              if (cfHint) hints.push(cfHint)
+            }
+            {
+              const lightingHints = buildLightingHints(data)
+              for (const h of lightingHints) hints.push(h)
+            }
+            if (data.colorLookEnabled && data.colorLook) {
+              const colorLookHint = getColorLookPromptHint(String(data.colorLook))
+              if (colorLookHint) hints.push(colorLookHint)
+            }
+            if (data.atmosphereEnabled && data.atmosphere) {
+              const atmosphereHint = getAtmospherePromptHint(String(data.atmosphere))
+              if (atmosphereHint) hints.push(atmosphereHint)
+            }
+            {
+              const temporalHints = buildTemporalHints(data)
+              for (const h of temporalHints) hints.push(h)
             }
             if (hints.length > 0 && p) p = `${p}. ${hints.join(", ")}`
             else if (hints.length > 0) p = hints.join(", ")
@@ -857,7 +1122,49 @@ export function buildPayload(
         ),
         payload: {
           jobId,
-          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+          prompt: (() => {
+            let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
+            {
+              const framingHints = buildFramingHints(data)
+              if (framingHints.length > 0) {
+                const joined = framingHints.join(", ")
+                p = p ? `${p}. ${joined}` : joined
+              }
+            }
+            const cameraHint = buildCameraMotionHintForConsumer(data, buildCtx)
+            if (cameraHint) p = p ? `${p}. ${cameraHint}` : cameraHint
+            if (data.lensEnabled && data.lens) {
+              const lensHint = getLensPromptHint(String(data.lens))
+              if (lensHint) p = p ? `${p}. ${lensHint}` : lensHint
+            }
+            if (data.cameraFormatEnabled && data.cameraFormat) {
+              const cfHint = getCameraFormatPromptHint(String(data.cameraFormat))
+              if (cfHint) p = p ? `${p}. ${cfHint}` : cfHint
+            }
+            {
+              const lightingHints = buildLightingHints(data)
+              if (lightingHints.length > 0) {
+                const joined = lightingHints.join(", ")
+                p = p ? `${p}. ${joined}` : joined
+              }
+            }
+            if (data.colorLookEnabled && data.colorLook) {
+              const colorLookHint = getColorLookPromptHint(String(data.colorLook))
+              if (colorLookHint) p = p ? `${p}. ${colorLookHint}` : colorLookHint
+            }
+            if (data.atmosphereEnabled && data.atmosphere) {
+              const atmosphereHint = getAtmospherePromptHint(String(data.atmosphere))
+              if (atmosphereHint) p = p ? `${p}. ${atmosphereHint}` : atmosphereHint
+            }
+            {
+              const temporalHints = buildTemporalHints(data)
+              if (temporalHints.length > 0) {
+                const joined = temporalHints.join(", ")
+                p = p ? `${p}. ${joined}` : joined
+              }
+            }
+            return p
+          })(),
           provider,
           duration: data.duration,
           mode: data.mode ?? data.kling3Mode,
@@ -891,7 +1198,49 @@ export function buildPayload(
         payload: {
           jobId,
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+          prompt: (() => {
+            let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
+            {
+              const framingHints = buildFramingHints(data)
+              if (framingHints.length > 0) {
+                const joined = framingHints.join(", ")
+                p = p ? `${p}. ${joined}` : joined
+              }
+            }
+            const cameraHint = buildCameraMotionHintForConsumer(data, buildCtx)
+            if (cameraHint) p = p ? `${p}. ${cameraHint}` : cameraHint
+            if (data.lensEnabled && data.lens) {
+              const lensHint = getLensPromptHint(String(data.lens))
+              if (lensHint) p = p ? `${p}. ${lensHint}` : lensHint
+            }
+            if (data.cameraFormatEnabled && data.cameraFormat) {
+              const cfHint = getCameraFormatPromptHint(String(data.cameraFormat))
+              if (cfHint) p = p ? `${p}. ${cfHint}` : cfHint
+            }
+            {
+              const lightingHints = buildLightingHints(data)
+              if (lightingHints.length > 0) {
+                const joined = lightingHints.join(", ")
+                p = p ? `${p}. ${joined}` : joined
+              }
+            }
+            if (data.colorLookEnabled && data.colorLook) {
+              const colorLookHint = getColorLookPromptHint(String(data.colorLook))
+              if (colorLookHint) p = p ? `${p}. ${colorLookHint}` : colorLookHint
+            }
+            if (data.atmosphereEnabled && data.atmosphere) {
+              const atmosphereHint = getAtmospherePromptHint(String(data.atmosphere))
+              if (atmosphereHint) p = p ? `${p}. ${atmosphereHint}` : atmosphereHint
+            }
+            {
+              const temporalHints = buildTemporalHints(data)
+              if (temporalHints.length > 0) {
+                const joined = temporalHints.join(", ")
+                p = p ? `${p}. ${joined}` : joined
+              }
+            }
+            return p
+          })(),
           provider: v2vProvider,
           duration: data.v2vDuration as string | undefined,
           resolution: data.v2vResolution as string | undefined,
@@ -956,7 +1305,49 @@ export function buildPayload(
           jobId,
           imageUrl: resolvedInputs.imageUrl || data.imageUrl,
           audioUrl: resolvedInputs.audioUrl || data.audioUrl,
-          prompt: resolvedInputs.prompt || data.prompt,
+          prompt: (() => {
+            let p = (resolvedInputs.prompt || data.prompt) as string | undefined
+            {
+              const framingHints = buildFramingHints(data)
+              if (framingHints.length > 0) {
+                const joined = framingHints.join(", ")
+                p = p ? `${p}. ${joined}` : joined
+              }
+            }
+            const cameraHint = buildCameraMotionHintForConsumer(data, buildCtx)
+            if (cameraHint) p = p ? `${p}. ${cameraHint}` : cameraHint
+            if (data.lensEnabled && data.lens) {
+              const lensHint = getLensPromptHint(String(data.lens))
+              if (lensHint) p = p ? `${p}. ${lensHint}` : lensHint
+            }
+            if (data.cameraFormatEnabled && data.cameraFormat) {
+              const cfHint = getCameraFormatPromptHint(String(data.cameraFormat))
+              if (cfHint) p = p ? `${p}. ${cfHint}` : cfHint
+            }
+            {
+              const lightingHints = buildLightingHints(data)
+              if (lightingHints.length > 0) {
+                const joined = lightingHints.join(", ")
+                p = p ? `${p}. ${joined}` : joined
+              }
+            }
+            if (data.colorLookEnabled && data.colorLook) {
+              const colorLookHint = getColorLookPromptHint(String(data.colorLook))
+              if (colorLookHint) p = p ? `${p}. ${colorLookHint}` : colorLookHint
+            }
+            if (data.atmosphereEnabled && data.atmosphere) {
+              const atmosphereHint = getAtmospherePromptHint(String(data.atmosphere))
+              if (atmosphereHint) p = p ? `${p}. ${atmosphereHint}` : atmosphereHint
+            }
+            {
+              const temporalHints = buildTemporalHints(data)
+              if (temporalHints.length > 0) {
+                const joined = temporalHints.join(", ")
+                p = p ? `${p}. ${joined}` : joined
+              }
+            }
+            return p
+          })(),
           resolution: s2vResolution,
           negativePrompt: data.negativePrompt,
           seed: data.seed,
@@ -1026,7 +1417,49 @@ export function buildPayload(
         payload: {
           jobId,
           kieTaskId: resolvedInputs.kieTaskId || data.kieTaskId,
-          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+          prompt: (() => {
+            let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
+            {
+              const framingHints = buildFramingHints(data)
+              if (framingHints.length > 0) {
+                const joined = framingHints.join(", ")
+                p = p ? `${p}. ${joined}` : joined
+              }
+            }
+            const cameraHint = buildCameraMotionHintForConsumer(data, buildCtx)
+            if (cameraHint) p = p ? `${p}. ${cameraHint}` : cameraHint
+            if (data.lensEnabled && data.lens) {
+              const lensHint = getLensPromptHint(String(data.lens))
+              if (lensHint) p = p ? `${p}. ${lensHint}` : lensHint
+            }
+            if (data.cameraFormatEnabled && data.cameraFormat) {
+              const cfHint = getCameraFormatPromptHint(String(data.cameraFormat))
+              if (cfHint) p = p ? `${p}. ${cfHint}` : cfHint
+            }
+            {
+              const lightingHints = buildLightingHints(data)
+              if (lightingHints.length > 0) {
+                const joined = lightingHints.join(", ")
+                p = p ? `${p}. ${joined}` : joined
+              }
+            }
+            if (data.colorLookEnabled && data.colorLook) {
+              const colorLookHint = getColorLookPromptHint(String(data.colorLook))
+              if (colorLookHint) p = p ? `${p}. ${colorLookHint}` : colorLookHint
+            }
+            if (data.atmosphereEnabled && data.atmosphere) {
+              const atmosphereHint = getAtmospherePromptHint(String(data.atmosphere))
+              if (atmosphereHint) p = p ? `${p}. ${atmosphereHint}` : atmosphereHint
+            }
+            {
+              const temporalHints = buildTemporalHints(data)
+              if (temporalHints.length > 0) {
+                const joined = temporalHints.join(", ")
+                p = p ? `${p}. ${joined}` : joined
+              }
+            }
+            return p
+          })(),
           provider: evProvider,
           model: evProvider === "veo-extend" ? (data.model ?? "fast") : undefined,
           quality: evProvider === "runway-extend" ? (data.quality ?? "720p") : undefined,

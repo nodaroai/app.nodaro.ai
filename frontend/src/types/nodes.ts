@@ -342,8 +342,77 @@ export type CameraMotionData = {
 export type FramingData = {
   [key: string]: unknown
   label: string
-  /** Framing id from FRAMINGS catalog (packages/shared/src/framing.ts). */
-  framing: string
+  /** Per-category framing selections (multi-category model). One id per
+   * enabled category. See `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
+  shotSize?: string
+  angle?: string
+  coverage?: string
+  composition?: string
+  vantage?: string
+  /** Grid columns when displaying multiple enabled categories in the node
+   * card. Default (render-time) = 1 (vertical stack). Range 1-5. */
+  maxItemsPerRow?: number
+}
+
+/** Standalone Lens parameter node data. */
+export interface LensData {
+  [key: string]: unknown
+  label: string
+  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
+  lens: string
+}
+
+/** Standalone Camera / Film Stock parameter node data. */
+export interface CameraFormatData {
+  [key: string]: unknown
+  label: string
+  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
+  cameraFormat: string
+}
+
+/** Standalone Lighting parameter node data. */
+export interface LightingData {
+  [key: string]: unknown
+  label: string
+  /** Per-category lighting selections (multi-category model). One id per
+   * enabled category. See `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
+  timeOfDay?: string
+  lightingStyle?: string
+  lightingDirection?: string
+  /** Grid columns when displaying multiple enabled categories in the node
+   * card. Default (render-time) = 1 (vertical stack). Range 1-3. */
+  maxItemsPerRow?: number
+}
+
+/** Standalone Color/Look parameter node data. */
+export interface ColorLookData {
+  [key: string]: unknown
+  label: string
+  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
+  colorLook: string
+}
+
+/** Standalone Atmosphere parameter node data. */
+export interface AtmosphereData {
+  [key: string]: unknown
+  label: string
+  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
+  atmosphere: string
+}
+
+/** Standalone Temporal parameter node data. */
+export interface TemporalData {
+  [key: string]: unknown
+  label: string
+  /** Per-category temporal selections (multi-category model). One id per
+   * enabled category. See `TEMPORAL_FIELD_BY_CATEGORY` in `packages/shared/src/temporal.ts`. */
+  temporalSpeed?: string
+  temporalFreeze?: string
+  temporalDirection?: string
+  temporalShutter?: string
+  /** Grid columns when displaying multiple enabled categories in the node
+   * card. Default (render-time) = 1 (vertical stack). Range 1-4. */
+  maxItemsPerRow?: number
 }
 
 // --- AI Node Data ---
@@ -583,6 +652,30 @@ export type GenerateImageData = {
   style: string
   aspectRatio: string
   negativePrompt: string
+  /** Per-category framing selections (multi-category model). See
+   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
+  shotSize?: string
+  angle?: string
+  coverage?: string
+  composition?: string
+  vantage?: string
+  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
+  lens?: string
+  lensEnabled?: boolean
+  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
+  cameraFormat?: string
+  cameraFormatEnabled?: boolean
+  /** Per-category lighting selections (multi-category model). See
+   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
+  timeOfDay?: string
+  lightingStyle?: string
+  lightingDirection?: string
+  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
+  colorLook?: string
+  colorLookEnabled?: boolean
+  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
+  atmosphere?: string
+  atmosphereEnabled?: boolean
   resolution?: string
   quality?: string
   seed?: number
@@ -616,6 +709,30 @@ export type EditImageData = {
   aspectRatio?: string
   negativePrompt?: string
   style?: string
+  /** Per-category framing selections (multi-category model). See
+   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
+  shotSize?: string
+  angle?: string
+  coverage?: string
+  composition?: string
+  vantage?: string
+  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
+  lens?: string
+  lensEnabled?: boolean
+  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
+  cameraFormat?: string
+  cameraFormatEnabled?: boolean
+  /** Per-category lighting selections (multi-category model). See
+   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
+  timeOfDay?: string
+  lightingStyle?: string
+  lightingDirection?: string
+  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
+  colorLook?: string
+  colorLookEnabled?: boolean
+  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
+  atmosphere?: string
+  atmosphereEnabled?: boolean
   seed?: number
   characterDefinitionIds?: readonly string[]
   connectedMediaOrder?: readonly string[]
@@ -643,6 +760,30 @@ export type ImageToImageData = {
   resolution?: string
   quality?: string
   negativePrompt?: string
+  /** Per-category framing selections (multi-category model). See
+   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
+  shotSize?: string
+  angle?: string
+  coverage?: string
+  composition?: string
+  vantage?: string
+  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
+  lens?: string
+  lensEnabled?: boolean
+  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
+  cameraFormat?: string
+  cameraFormatEnabled?: boolean
+  /** Per-category lighting selections (multi-category model). See
+   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
+  timeOfDay?: string
+  lightingStyle?: string
+  lightingDirection?: string
+  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
+  colorLook?: string
+  colorLookEnabled?: boolean
+  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
+  atmosphere?: string
+  atmosphereEnabled?: boolean
   seed?: number
   renderingSpeed?: string
   guidanceScale?: number
@@ -672,6 +813,30 @@ export type ModifyImageData = {
   resolution?: string
   quality?: string
   negativePrompt?: string
+  /** Per-category framing selections (multi-category model). See
+   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
+  shotSize?: string
+  angle?: string
+  coverage?: string
+  composition?: string
+  vantage?: string
+  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
+  lens?: string
+  lensEnabled?: boolean
+  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
+  cameraFormat?: string
+  cameraFormatEnabled?: boolean
+  /** Per-category lighting selections (multi-category model). See
+   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
+  timeOfDay?: string
+  lightingStyle?: string
+  lightingDirection?: string
+  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
+  colorLook?: string
+  colorLookEnabled?: boolean
+  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
+  atmosphere?: string
+  atmosphereEnabled?: boolean
   seed?: number
   renderingSpeed?: string
   guidanceScale?: number
@@ -729,9 +894,36 @@ export type ImageToVideoData = {
   /** Motion id from CAMERA_MOTIONS catalog (packages/shared/src/camera-motions.ts). */
   cameraMotion?: string
   cameraMotionEnabled?: boolean
-  /** Framing id from FRAMINGS catalog (packages/shared/src/framing.ts). */
-  framing?: string
-  framingEnabled?: boolean
+  /** Per-category framing selections (multi-category model). See
+   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
+  shotSize?: string
+  angle?: string
+  coverage?: string
+  composition?: string
+  vantage?: string
+  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
+  lens?: string
+  lensEnabled?: boolean
+  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
+  cameraFormat?: string
+  cameraFormatEnabled?: boolean
+  /** Per-category lighting selections (multi-category model). See
+   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
+  timeOfDay?: string
+  lightingStyle?: string
+  lightingDirection?: string
+  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
+  colorLook?: string
+  colorLookEnabled?: boolean
+  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
+  atmosphere?: string
+  atmosphereEnabled?: boolean
+  /** Per-category temporal selections (multi-category model). See
+   * `TEMPORAL_FIELD_BY_CATEGORY` in `packages/shared/src/temporal.ts`. */
+  temporalSpeed?: string
+  temporalFreeze?: string
+  temporalDirection?: string
+  temporalShutter?: string
   prompt?: string  // Text description of desired motion/animation
   generateAudio?: boolean
   fieldMappings: FieldMappings
@@ -799,6 +991,39 @@ export type TextToVideoData = {
   duration: number
   aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "21:9" | "adaptive"
   negativePrompt: string
+  /** Motion id from CAMERA_MOTIONS catalog (packages/shared/src/camera-motions.ts). */
+  cameraMotion?: string
+  cameraMotionEnabled?: boolean
+  /** Per-category framing selections (multi-category model). See
+   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
+  shotSize?: string
+  angle?: string
+  coverage?: string
+  composition?: string
+  vantage?: string
+  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
+  lens?: string
+  lensEnabled?: boolean
+  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
+  cameraFormat?: string
+  cameraFormatEnabled?: boolean
+  /** Per-category lighting selections (multi-category model). See
+   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
+  timeOfDay?: string
+  lightingStyle?: string
+  lightingDirection?: string
+  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
+  colorLook?: string
+  colorLookEnabled?: boolean
+  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
+  atmosphere?: string
+  atmosphereEnabled?: boolean
+  /** Per-category temporal selections (multi-category model). See
+   * `TEMPORAL_FIELD_BY_CATEGORY` in `packages/shared/src/temporal.ts`. */
+  temporalSpeed?: string
+  temporalFreeze?: string
+  temporalDirection?: string
+  temporalShutter?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -825,6 +1050,39 @@ export type VideoToVideoData = {
   prompt: string
   provider: VideoToVideoProvider
   duration: number
+  /** Motion id from CAMERA_MOTIONS catalog (packages/shared/src/camera-motions.ts). */
+  cameraMotion?: string
+  cameraMotionEnabled?: boolean
+  /** Per-category framing selections (multi-category model). See
+   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
+  shotSize?: string
+  angle?: string
+  coverage?: string
+  composition?: string
+  vantage?: string
+  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
+  lens?: string
+  lensEnabled?: boolean
+  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
+  cameraFormat?: string
+  cameraFormatEnabled?: boolean
+  /** Per-category lighting selections (multi-category model). See
+   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
+  timeOfDay?: string
+  lightingStyle?: string
+  lightingDirection?: string
+  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
+  colorLook?: string
+  colorLookEnabled?: boolean
+  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
+  atmosphere?: string
+  atmosphereEnabled?: boolean
+  /** Per-category temporal selections (multi-category model). See
+   * `TEMPORAL_FIELD_BY_CATEGORY` in `packages/shared/src/temporal.ts`. */
+  temporalSpeed?: string
+  temporalFreeze?: string
+  temporalDirection?: string
+  temporalShutter?: string
   fieldMappings: FieldMappings
   // Wan / Wan Flash params
   v2vDuration?: "5" | "10"
@@ -895,6 +1153,39 @@ export type SpeechToVideoData = {
   inferenceSteps?: number
   guidanceScale?: number
   shift?: number
+  /** Motion id from CAMERA_MOTIONS catalog (packages/shared/src/camera-motions.ts). */
+  cameraMotion?: string
+  cameraMotionEnabled?: boolean
+  /** Per-category framing selections (multi-category model). See
+   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
+  shotSize?: string
+  angle?: string
+  coverage?: string
+  composition?: string
+  vantage?: string
+  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
+  lens?: string
+  lensEnabled?: boolean
+  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
+  cameraFormat?: string
+  cameraFormatEnabled?: boolean
+  /** Per-category lighting selections (multi-category model). See
+   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
+  timeOfDay?: string
+  lightingStyle?: string
+  lightingDirection?: string
+  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
+  colorLook?: string
+  colorLookEnabled?: boolean
+  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
+  atmosphere?: string
+  atmosphereEnabled?: boolean
+  /** Per-category temporal selections (multi-category model). See
+   * `TEMPORAL_FIELD_BY_CATEGORY` in `packages/shared/src/temporal.ts`. */
+  temporalSpeed?: string
+  temporalFreeze?: string
+  temporalDirection?: string
+  temporalShutter?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -956,6 +1247,39 @@ export type ExtendVideoData = {
   model?: "fast" | "quality"      // VEO only
   seeds?: number                   // VEO only
   quality?: "720p" | "1080p"      // Runway only
+  /** Motion id from CAMERA_MOTIONS catalog (packages/shared/src/camera-motions.ts). */
+  cameraMotion?: string
+  cameraMotionEnabled?: boolean
+  /** Per-category framing selections (multi-category model). See
+   * `FRAMING_FIELD_BY_CATEGORY` in `packages/shared/src/framing.ts`. */
+  shotSize?: string
+  angle?: string
+  coverage?: string
+  composition?: string
+  vantage?: string
+  /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
+  lens?: string
+  lensEnabled?: boolean
+  /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
+  cameraFormat?: string
+  cameraFormatEnabled?: boolean
+  /** Per-category lighting selections (multi-category model). See
+   * `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
+  timeOfDay?: string
+  lightingStyle?: string
+  lightingDirection?: string
+  /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
+  colorLook?: string
+  colorLookEnabled?: boolean
+  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
+  atmosphere?: string
+  atmosphereEnabled?: boolean
+  /** Per-category temporal selections (multi-category model). See
+   * `TEMPORAL_FIELD_BY_CATEGORY` in `packages/shared/src/temporal.ts`. */
+  temporalSpeed?: string
+  temporalFreeze?: string
+  temporalDirection?: string
+  temporalShutter?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -2603,6 +2927,12 @@ export type SceneNodeData =
   | MotionData
   | CameraMotionData
   | FramingData
+  | LensData
+  | CameraFormatData
+  | LightingData
+  | ColorLookData
+  | AtmosphereData
+  | TemporalData
   | GenerateScriptData
   | GenerateImageData
   | ModifyImageData
@@ -2720,6 +3050,12 @@ export type SceneNodeType =
   | "motion"
   | "camera-motion"
   | "framing"
+  | "lens"
+  | "camera-format"
+  | "lighting"
+  | "color-look"
+  | "atmosphere"
+  | "temporal"
   | "generate-script"
   | "generate-image"
   | "modify-image"
@@ -3029,7 +3365,61 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
-    defaultData: { label: "Framing", framing: "medium-shot" },
+    defaultData: { label: "Framing", shotSize: "wide-shot" },
+  },
+  {
+    type: "lens",
+    label: "Lens",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Lens", lens: "normal-50mm" },
+  },
+  {
+    type: "camera-format",
+    label: "Camera / Film Stock",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Camera / Film Stock", cameraFormat: "35mm-film" },
+  },
+  {
+    type: "lighting",
+    label: "Lighting",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Lighting", timeOfDay: "noon" },
+  },
+  {
+    type: "color-look",
+    label: "Color / Look",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Color / Look", colorLook: "warm" },
+  },
+  {
+    type: "atmosphere",
+    label: "Atmosphere",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Atmosphere", atmosphere: "clear" },
+  },
+  {
+    type: "temporal",
+    label: "Temporal",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Temporal", temporalSpeed: "real-time" },
   },
   // AI
   {

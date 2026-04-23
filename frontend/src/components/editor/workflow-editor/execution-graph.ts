@@ -2,6 +2,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro-shared/ancestor-refs";
 import { isExpandedClone } from "@nodaro-shared/clone-utils";
+import { PARAMETER_NODE_TYPES, getParameterValue } from "@nodaro-shared/parameter-node-value";
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -587,6 +588,12 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   if (type === "router") {
     if (!sourceHandle) return (data.result as string | undefined)
     return (data.routeOutputs as Record<string, string | undefined> | undefined)?.[sourceHandle]
+  }
+  // Parameter nodes (framing, camera-motion, motion, tone, scene-count, etc.)
+  // carry values directly in data — no execution, no state. Delegate to the
+  // shared accessor so fieldMappings on non-text fields resolve correctly.
+  if (type && PARAMETER_NODE_TYPES.has(type)) {
+    return getParameterValue(data, type);
   }
   return undefined;
 }

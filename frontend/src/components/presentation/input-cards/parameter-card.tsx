@@ -32,6 +32,12 @@ function getValueField(nodeType: SceneNodeType): string {
     case "motion": return "motion"
     case "camera-motion": return "cameraMotion"
     case "framing": return "framing"
+    case "lens": return "lens"
+    case "camera-format": return "cameraFormat"
+    case "lighting": return "lighting"
+    case "color-look": return "colorLook"
+    case "atmosphere": return "atmosphere"
+    case "temporal": return "temporal"
     default: return "value"
   }
 }

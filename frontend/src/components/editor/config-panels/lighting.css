@@ -1,0 +1,325 @@
+/* ============================================================================
+   Lighting preview styles.
+   Each preview shows a viewport with a subject silhouette, tinted and
+   shadowed to communicate the lighting character:
+     - time-of-day: tints the background to the appropriate hour
+     - style: varies shadow shape on the subject (split, Rembrandt, silhouette)
+     - direction: places a bright spot on the appropriate side of the subject
+   No animations — lighting is a setup, not a motion.
+   ========================================================================== */
+
+.lighting-preview {
+  position: relative;
+  background: linear-gradient(135deg, #2a3344 0%, #1d2433 60%, #0e1320 100%);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lighting-preview__frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lighting-preview__subject {
+  position: relative;
+  background: radial-gradient(ellipse at 35% 30%, #e8e0d2 0%, #b8a890 55%, #4a3a28 100%);
+  border-radius: 50% 50% 8px 8px / 60% 60% 8px 8px;
+  width: 38%;
+  aspect-ratio: 1 / 1.4;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.35);
+  transform-origin: center center;
+}
+
+/* ============================================================================
+   TIME OF DAY
+   ========================================================================== */
+
+/* Sunrise — warm low sun, long horizontal shadow */
+.lighting-preview--sunrise {
+  background: linear-gradient(180deg, #f5b078 0%, #d97a45 55%, #5a2818 100%);
+}
+.lighting-preview--sunrise .lighting-preview__subject {
+  background: radial-gradient(ellipse at 25% 40%, #fff0d0 0%, #c08858 55%, #2a1408 100%);
+  box-shadow: 18px 6px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Golden hour — saturated golden glow */
+.lighting-preview--golden-hour {
+  background: linear-gradient(180deg, #ffb070 0%, #d97840 55%, #6a2a10 100%);
+}
+.lighting-preview--golden-hour .lighting-preview__subject {
+  background: radial-gradient(ellipse at 30% 35%, #ffe8b0 0%, #d99848 55%, #3a1c08 100%);
+  box-shadow: 12px 4px 14px rgba(80, 30, 0, 0.5);
+}
+
+/* Noon — harsh overhead, hard shadow under subject */
+.lighting-preview--noon {
+  background: linear-gradient(180deg, #b8d8e8 0%, #6896b8 70%, #2a4868 100%);
+}
+.lighting-preview--noon .lighting-preview__subject {
+  background: radial-gradient(ellipse at 50% 15%, #ffffff 0%, #b8a890 55%, #1a1410 100%);
+  box-shadow: 0 18px 8px -8px rgba(0, 0, 0, 0.55);
+}
+
+/* Overcast — soft, flat, low contrast diffused light */
+.lighting-preview--overcast {
+  background: linear-gradient(180deg, #d8dce0 0%, #a8b0b8 60%, #686e76 100%);
+}
+.lighting-preview--overcast .lighting-preview__subject {
+  background: radial-gradient(ellipse at 50% 40%, #d8d4cc 0%, #989088 55%, #383430 100%);
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.18);
+}
+
+/* Blue hour — cool dusk twilight */
+.lighting-preview--blue-hour {
+  background: linear-gradient(180deg, #5878a8 0%, #2a4878 60%, #0a1830 100%);
+}
+.lighting-preview--blue-hour .lighting-preview__subject {
+  background: radial-gradient(ellipse at 35% 30%, #b8c8e0 0%, #5878a0 55%, #102040 100%);
+  box-shadow: 0 8px 12px rgba(0, 10, 30, 0.5);
+}
+
+/* Night — deep dark, minimal ambient */
+.lighting-preview--night {
+  background: linear-gradient(180deg, #18203a 0%, #0a1228 60%, #02060f 100%);
+}
+.lighting-preview--night .lighting-preview__subject {
+  background: radial-gradient(ellipse at 35% 30%, #687288 0%, #283848 55%, #060c14 100%);
+  box-shadow: 0 0 14px rgba(80, 100, 140, 0.25);
+}
+
+/* Moonlight — cool blue ambient with rim highlight */
+.lighting-preview--moonlight {
+  background: linear-gradient(180deg, #2a3858 0%, #142038 60%, #04081a 100%);
+}
+.lighting-preview--moonlight .lighting-preview__subject {
+  background: radial-gradient(ellipse at 30% 30%, #c8d8f0 0%, #5878a0 55%, #0a1428 100%);
+  box-shadow: 0 0 18px rgba(160, 200, 255, 0.35);
+}
+
+/* Neon Night — saturated magenta + cyan glow */
+.lighting-preview--neon-night {
+  background: linear-gradient(135deg, #2a0838 0%, #100628 55%, #02020a 100%);
+}
+.lighting-preview--neon-night .lighting-preview__subject {
+  background: radial-gradient(ellipse at 30% 30%, #ff80d8 0%, #b04098 55%, #1a0820 100%);
+  box-shadow:
+    -10px 0 18px rgba(255, 0, 180, 0.6),
+    10px 0 18px rgba(0, 220, 255, 0.6);
+}
+
+/* ============================================================================
+   STYLE
+   ========================================================================== */
+
+/* Three-point — balanced highlight on key side, soft fill on shadow side */
+.lighting-preview--three-point .lighting-preview__subject {
+  background:
+    radial-gradient(ellipse at 25% 30%, #ffffff 0%, transparent 35%),
+    radial-gradient(ellipse at 75% 35%, rgba(255, 255, 255, 0.35) 0%, transparent 40%),
+    radial-gradient(ellipse at 35% 30%, #d8c8b0 0%, #786858 55%, #1a1410 100%);
+  box-shadow:
+    -12px 0 14px rgba(255, 240, 200, 0.4),
+    8px 0 12px rgba(255, 255, 255, 0.2);
+}
+
+/* Rembrandt — characteristic triangle of light on shadow-side cheek */
+.lighting-preview--rembrandt {
+  background: linear-gradient(135deg, #1a1820 0%, #0a0810 60%, #020208 100%);
+}
+.lighting-preview--rembrandt .lighting-preview__subject {
+  background:
+    radial-gradient(ellipse at 22% 25%, #fff2d8 0%, transparent 45%),
+    radial-gradient(circle at 65% 50%, rgba(255, 220, 160, 0.7) 0%, transparent 12%),
+    radial-gradient(ellipse at 35% 35%, #4a3828 0%, #1a1208 55%, #050200 100%);
+}
+
+/* Chiaroscuro — strong dark/light split */
+.lighting-preview--chiaroscuro {
+  background: linear-gradient(90deg, #0a0608 0%, #08060a 50%, #20181a 100%);
+}
+.lighting-preview--chiaroscuro .lighting-preview__subject {
+  background:
+    radial-gradient(ellipse at 18% 20%, #ffe8c8 0%, transparent 35%),
+    radial-gradient(ellipse at 35% 30%, #2a1a10 0%, #0a0408 55%, #000000 100%);
+  box-shadow: -16px -4px 18px rgba(255, 220, 160, 0.45);
+}
+
+/* Silhouette — pure dark subject, bright background */
+.lighting-preview--silhouette {
+  background: radial-gradient(ellipse at 50% 45%, #ffd498 0%, #d87830 50%, #58200a 100%);
+}
+.lighting-preview--silhouette .lighting-preview__subject {
+  background: #050208;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.5);
+}
+
+/* High-key — bright, low contrast */
+.lighting-preview--high-key {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f0eb 60%, #d8d2c8 100%);
+}
+.lighting-preview--high-key .lighting-preview__subject {
+  background: radial-gradient(ellipse at 50% 40%, #ffffff 0%, #e8e0d4 60%, #a8a098 100%);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Low-key — dark, high contrast, single-side highlight */
+.lighting-preview--low-key {
+  background: linear-gradient(135deg, #0a0608 0%, #050204 60%, #000000 100%);
+}
+.lighting-preview--low-key .lighting-preview__subject {
+  background: radial-gradient(ellipse at 22% 22%, #f8e8c8 0%, #38281a 35%, #02010a 100%);
+  box-shadow: -10px 0 16px rgba(255, 220, 180, 0.35);
+}
+
+/* Split — half lit, half deep shadow (vertical split through subject) */
+.lighting-preview--split {
+  background: linear-gradient(90deg, #2a2418 0%, #0a0608 50%, #04020a 100%);
+}
+.lighting-preview--split .lighting-preview__subject {
+  background:
+    linear-gradient(90deg, #f0d8a8 0%, #b89868 49%, #050208 51%, #02010a 100%);
+  box-shadow: -12px 0 14px rgba(255, 220, 160, 0.35);
+}
+
+/* Hard — sharp-edged shadow */
+.lighting-preview--hard {
+  background: linear-gradient(135deg, #181820 0%, #0a0a14 60%, #020208 100%);
+}
+.lighting-preview--hard .lighting-preview__subject {
+  background:
+    linear-gradient(105deg, #ffffff 0%, #d8c8a8 38%, #181008 42%, #050208 100%);
+  box-shadow: -8px 4px 0 rgba(0, 0, 0, 0.45);
+}
+
+/* Soft — diffused, gentle wraparound */
+.lighting-preview--soft {
+  background: linear-gradient(135deg, #d8d4cc 0%, #b0a89c 60%, #685c4c 100%);
+}
+.lighting-preview--soft .lighting-preview__subject {
+  background: radial-gradient(ellipse at 35% 30%, #fff0d8 0%, #c8b898 55%, #483c30 100%);
+  box-shadow: 0 0 22px rgba(255, 240, 200, 0.5);
+}
+
+/* Practical — visible warm glow source spots in the scene */
+.lighting-preview--practical {
+  background:
+    radial-gradient(circle at 12% 30%, rgba(255, 200, 110, 0.55) 0%, transparent 28%),
+    radial-gradient(circle at 88% 75%, rgba(255, 180, 90, 0.5) 0%, transparent 28%),
+    linear-gradient(135deg, #1a1410 0%, #0a0608 60%, #020108 100%);
+}
+.lighting-preview--practical .lighting-preview__subject {
+  background: radial-gradient(ellipse at 25% 35%, #ffe8b8 0%, #a07848 55%, #1a0e08 100%);
+  box-shadow:
+    -10px 0 14px rgba(255, 200, 120, 0.4),
+    10px 4px 12px rgba(255, 180, 90, 0.35);
+}
+
+/* ============================================================================
+   DIRECTION
+   ========================================================================== */
+
+/* Front — flat even illumination from camera direction */
+.lighting-preview--front {
+  background: linear-gradient(180deg, #2a3040 0%, #161c2a 60%, #060a14 100%);
+}
+.lighting-preview--front .lighting-preview__subject {
+  background: radial-gradient(ellipse at 50% 40%, #f8e8c8 0%, #b89868 55%, #2a1c0a 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+/* Side — strong directional from screen-left */
+.lighting-preview--side {
+  background: linear-gradient(135deg, #1a1820 0%, #0a0810 60%, #02020a 100%);
+}
+.lighting-preview--side .lighting-preview__subject {
+  background:
+    linear-gradient(90deg, #fff2d0 0%, #b89868 35%, #281a08 80%, #050208 100%);
+  box-shadow: -14px 0 18px rgba(255, 220, 160, 0.45);
+}
+
+/* Back / Rim — subject dark with bright rim around silhouette */
+.lighting-preview--back-rim {
+  background: radial-gradient(ellipse at 50% 40%, #886848 0%, #2a1808 50%, #02010a 100%);
+}
+.lighting-preview--back-rim .lighting-preview__subject {
+  background: #050208;
+  box-shadow:
+    0 0 0 2px rgba(255, 220, 160, 0.85),
+    0 0 18px rgba(255, 200, 120, 0.5);
+}
+
+/* Top / Overhead — bright at top, deep shadow below */
+.lighting-preview--top-overhead {
+  background: linear-gradient(180deg, #4a4838 0%, #1a1810 60%, #050408 100%);
+}
+.lighting-preview--top-overhead .lighting-preview__subject {
+  background:
+    linear-gradient(180deg, #fff2c8 0%, #a08458 35%, #181008 75%, #050208 100%);
+  box-shadow: 0 -10px 16px rgba(255, 220, 160, 0.4);
+}
+
+/* Under / Uplight — bright at bottom, theatrical unsettling */
+.lighting-preview--under-uplight {
+  background: linear-gradient(0deg, #382818 0%, #14100a 60%, #050204 100%);
+}
+.lighting-preview--under-uplight .lighting-preview__subject {
+  background:
+    linear-gradient(0deg, #fff0c8 0%, #a87848 35%, #181208 80%, #050208 100%);
+  box-shadow: 0 14px 18px rgba(255, 200, 120, 0.5);
+}
+
+/* Window — soft directional from one side, faint window-pane shadow */
+.lighting-preview--window {
+  background: linear-gradient(90deg, #d8d2c0 0%, #383028 60%, #0a0808 100%);
+}
+.lighting-preview--window .lighting-preview__subject {
+  background:
+    linear-gradient(95deg, #fff5d8 0%, #b89868 50%, #2a1c0a 100%);
+  box-shadow: -12px 0 16px rgba(255, 240, 200, 0.5);
+}
+.lighting-preview--window .lighting-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(255, 245, 210, 0.18) 0%, transparent 28%),
+    linear-gradient(90deg, transparent 12%, rgba(0, 0, 0, 0.35) 13%, rgba(0, 0, 0, 0.35) 14%, transparent 15%);
+  pointer-events: none;
+}
+
+/* === Modern social-video styles === */
+
+/* Ring Light — even frontal light + circular catchlight ring around subject */
+.lighting-preview--ring-light {
+  background: radial-gradient(circle at 50% 50%, #fff8e8 0%, #d8b888 60%, #38281c 100%);
+}
+.lighting-preview--ring-light .lighting-preview__subject {
+  background: radial-gradient(ellipse at 50% 35%, #fff8e8 0%, #e0c098 55%, #786040 100%);
+  box-shadow: 0 0 0 3px rgba(255, 245, 220, 0.5), 0 0 0 6px rgba(255, 245, 220, 0.25);
+}
+
+/* Phone Screen Glow — cool blue underlight */
+.lighting-preview--phone-screen-glow {
+  background: linear-gradient(0deg, #4080e8 0%, #1a2848 50%, #050810 100%);
+}
+.lighting-preview--phone-screen-glow .lighting-preview__subject {
+  background: linear-gradient(0deg, #c8e0ff 0%, #5078b8 30%, #1a1c28 70%, #060810 100%);
+  box-shadow: 0 14px 18px rgba(80, 140, 240, 0.55);
+}
+
+/* Selfie Natural — soft window-light selfie aesthetic */
+.lighting-preview--selfie-natural {
+  background: linear-gradient(115deg, #f5e8c8 0%, #b8a890 50%, #383028 100%);
+}
+.lighting-preview--selfie-natural .lighting-preview__subject {
+  background: linear-gradient(105deg, #fff8e0 0%, #d8b890 50%, #604838 100%);
+  box-shadow: -8px 0 14px rgba(255, 240, 200, 0.4);
+}

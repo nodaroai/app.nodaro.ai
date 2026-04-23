@@ -1,27 +1,36 @@
 "use client"
 
-import { memo, useMemo, useState } from "react"
+import { memo, useId, useMemo, useState } from "react"
 import { Search } from "lucide-react"
 import {
   FRAMINGS,
   FRAMING_CATEGORY_ORDER,
   FRAMING_CATEGORY_LABELS,
+  FRAMING_FIELD_BY_CATEGORY,
   type Framing,
   type FramingCategory,
+  type FramingValue,
 } from "@nodaro-shared/framing"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { FramingPreview } from "./framing-preview"
 
 interface FramingPickerProps {
-  readonly value: string
-  readonly onValueChange: (framingId: string) => void
+  readonly value: FramingValue
+  readonly onChange: (patch: Partial<FramingValue>) => void
   readonly className?: string
 }
 
+/**
+ * Multi-category framing picker: each of the 5 framing dimensions (shot-size,
+ * angle, coverage, composition, vantage) is an independent checkbox section.
+ * User can enable any combination of categories and pick one entry per
+ * enabled category. A real shot combines entries from multiple categories
+ * (e.g. "Wide Shot + Low Angle + Rule of Thirds").
+ */
 export const FramingPicker = memo(function FramingPicker({
   value,
-  onValueChange,
+  onChange,
   className,
 }: FramingPickerProps) {
   const [query, setQuery] = useState("")
@@ -37,10 +46,13 @@ export const FramingPicker = memo(function FramingPicker({
       list.push(framing)
       byCategory.set(framing.category, list)
     }
-    return FRAMING_CATEGORY_ORDER
-      .map((cat) => ({ category: cat, framings: byCategory.get(cat) ?? [] }))
-      .filter((section) => section.framings.length > 0)
+    return FRAMING_CATEGORY_ORDER.map((cat) => ({
+      category: cat,
+      framings: byCategory.get(cat) ?? [],
+    }))
   }, [query])
+
+  const anyVisible = grouped.some((s) => s.framings.length > 0)
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
@@ -55,50 +67,119 @@ export const FramingPicker = memo(function FramingPicker({
         />
       </div>
 
-      {grouped.length === 0 && (
+      {!anyVisible && query && (
         <div className="text-xs text-muted-foreground text-center py-4">
           No framings match "{query}"
         </div>
       )}
 
-      {grouped.map(({ category, framings }) => (
-        <div key={category} className="flex flex-col gap-1.5">
-          <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground px-0.5">
-            {FRAMING_CATEGORY_LABELS[category]}
-          </div>
-          <div role="radiogroup" aria-label={FRAMING_CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
-            {framings.map((framing) => {
-              const selected = framing.id === value
-              return (
-                <button
-                  key={framing.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  title={framing.description}
-                  onClick={() => onValueChange(framing.id)}
-                  className={cn(
-                    "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
-                    selected
-                      ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
-                      : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
-                  )}
-                >
-                  <FramingPreview framingId={framing.id} className="w-full aspect-square" />
-                  <span
-                    className={cn(
-                      "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center truncate",
-                      selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
-                    )}
-                  >
-                    {framing.label}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      ))}
+      {grouped.map(({ category, framings }) => {
+        const field = FRAMING_FIELD_BY_CATEGORY[category]
+        const current = value[field]
+        const checked = current !== undefined && current !== ""
+        // Hide the whole section when searching filters everything out AND
+        // the category is also empty of matches, to keep the search UX tight.
+        // When there's no active query, always show every category section.
+        if (query && framings.length === 0) return null
+        return (
+          <CategorySection
+            key={category}
+            category={category}
+            framings={framings}
+            field={field}
+            checked={checked}
+            current={current}
+            onToggle={(next) => {
+              if (next) {
+                // Enabling: auto-pick the first entry in this category as default.
+                // Use the full catalog (unfiltered by search) so toggling while
+                // searching doesn't silently fail when no matches are in scope.
+                const first = FRAMINGS.find((f) => f.category === category)?.id
+                if (first) onChange({ [field]: first })
+              } else {
+                // Disabling: clear the selection for this category.
+                onChange({ [field]: undefined })
+              }
+            }}
+            onPick={(id) => onChange({ [field]: id })}
+            // Clicking an entry implicitly enables the section (since `value[field]`
+            // becoming non-undefined makes `checked` true on the next render).
+          />
+        )
+      })}
     </div>
   )
 })
+
+interface CategorySectionProps {
+  readonly category: FramingCategory
+  readonly framings: ReadonlyArray<Framing>
+  readonly field: "shotSize" | "angle" | "coverage" | "composition" | "vantage"
+  readonly checked: boolean
+  readonly current: string | undefined
+  readonly onToggle: (next: boolean) => void
+  readonly onPick: (id: string) => void
+}
+
+function CategorySection({
+  category,
+  framings,
+  field,
+  checked,
+  current,
+  onToggle,
+  onPick,
+}: CategorySectionProps) {
+  const id = useId()
+  const label = FRAMING_CATEGORY_LABELS[category]
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2 px-0.5">
+        <input
+          type="checkbox"
+          id={`${id}-${field}`}
+          checked={checked}
+          onChange={(e) => onToggle(e.target.checked)}
+          className="rounded border-muted-foreground/40"
+        />
+        <label
+          htmlFor={`${id}-${field}`}
+          className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground select-none cursor-pointer"
+        >
+          {label}
+        </label>
+      </div>
+      <div role="radiogroup" aria-label={label} className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}>
+        {framings.map((framing) => {
+          const selected = checked && framing.id === current
+          return (
+            <button
+              key={framing.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              title={checked ? framing.description : `${framing.description} (click to enable ${label})`}
+              onClick={() => onPick(framing.id)}
+              className={cn(
+                "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
+                selected
+                  ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
+                  : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
+              )}
+            >
+              <FramingPreview framingId={framing.id} className="w-full aspect-square" />
+              <span
+                className={cn(
+                  "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center truncate",
+                  selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
+                )}
+              >
+                {framing.label}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}

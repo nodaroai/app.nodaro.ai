@@ -1,0 +1,292 @@
+/* ============================================================================
+   Camera / Film stock preview styles.
+   Each preview shows a viewport styled to communicate the capture-medium
+   character: film stocks get grain + color cast, vintage formats get
+   distortion / scanlines / sepia, modern digital looks clean. Mostly static —
+   VHS + security-cam get a subtle animated scanline as their defining trait.
+   ========================================================================== */
+
+.camera-format-preview {
+  position: relative;
+  background: linear-gradient(135deg, #2a3344 0%, #1d2433 60%, #0e1320 100%);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-format-preview__frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-format-preview__subject {
+  position: relative;
+  background: radial-gradient(ellipse at 35% 30%, #ffd6a8 0%, #ff9d3d 55%, #5a2a00 100%);
+  border-radius: 50% 50% 8px 8px / 60% 60% 8px 8px;
+  width: 38%;
+  aspect-ratio: 1 / 1.4;
+  box-shadow: 0 0 12px rgba(255, 157, 61, 0.35);
+  transform-origin: center center;
+}
+
+/* ===== 35mm Film: subtle grain + warm tint ===== */
+.camera-format-preview--35mm-film .camera-format-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, rgba(255, 200, 140, 0.08) 0%, transparent 70%),
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.02) 0px,
+      rgba(255, 255, 255, 0.02) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+  pointer-events: none;
+}
+
+/* ===== 16mm Film: heavier grain ===== */
+.camera-format-preview--16mm-film .camera-format-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, rgba(220, 200, 170, 0.08) 0%, transparent 60%),
+    repeating-linear-gradient(
+      30deg,
+      rgba(255, 255, 255, 0.05) 0px,
+      rgba(255, 255, 255, 0.05) 1px,
+      transparent 1px,
+      transparent 2px
+    ),
+    repeating-linear-gradient(
+      135deg,
+      rgba(0, 0, 0, 0.05) 0px,
+      rgba(0, 0, 0, 0.05) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  pointer-events: none;
+}
+
+/* ===== Super 8: warm yellow cast + heavy grain + vignette ===== */
+.camera-format-preview--super-8 {
+  background: linear-gradient(135deg, #6a4520 0%, #4a3010 60%, #2a1800 100%);
+}
+.camera-format-preview--super-8 .camera-format-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 35%, rgba(0, 0, 0, 0.55) 100%),
+    repeating-linear-gradient(
+      75deg,
+      rgba(255, 220, 150, 0.06) 0px,
+      rgba(255, 220, 150, 0.06) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+  pointer-events: none;
+}
+.camera-format-preview--super-8 .camera-format-preview__subject {
+  filter: sepia(0.4) saturate(1.1);
+}
+
+/* ===== IMAX 70mm: clean, sharp, slight depth ===== */
+.camera-format-preview--imax-70mm {
+  background: linear-gradient(135deg, #2c4860 0%, #1a2a3c 60%, #0a141e 100%);
+}
+.camera-format-preview--imax-70mm .camera-format-preview__subject {
+  width: 44%;
+  box-shadow:
+    0 0 20px rgba(255, 200, 140, 0.5),
+    0 0 4px rgba(255, 255, 255, 0.3) inset;
+}
+.camera-format-preview--imax-70mm .camera-format-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.04) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+/* ===== Anamorphic Scope: top + bottom letterbox bars ===== */
+.camera-format-preview--anamorphic-scope .camera-format-preview__frame::before,
+.camera-format-preview--anamorphic-scope .camera-format-preview__frame::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 16%;
+  background: #000;
+  pointer-events: none;
+}
+.camera-format-preview--anamorphic-scope .camera-format-preview__frame::before {
+  top: 0;
+}
+.camera-format-preview--anamorphic-scope .camera-format-preview__frame::after {
+  bottom: 0;
+}
+
+/* ===== Arri Alexa: clean modern digital ===== */
+.camera-format-preview--arri-alexa {
+  background: linear-gradient(135deg, #364a5e 0%, #1f2c3a 60%, #0d1420 100%);
+}
+.camera-format-preview--arri-alexa .camera-format-preview__subject {
+  box-shadow: 0 0 16px rgba(255, 200, 150, 0.4);
+}
+
+/* ===== DSLR: clean digital with shallow DOF hint ===== */
+.camera-format-preview--dslr .camera-format-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 38% 50% at center, transparent 55%, rgba(0, 0, 0, 0.5) 100%);
+  pointer-events: none;
+}
+
+/* ===== VHS: animated horizontal scanlines + slight color shift ===== */
+.camera-format-preview--vhs {
+  background: linear-gradient(135deg, #1a2438 0%, #0e1626 60%, #050a14 100%);
+}
+.camera-format-preview--vhs .camera-format-preview__subject {
+  filter: saturate(1.4) hue-rotate(-10deg);
+  box-shadow:
+    -2px 0 0 rgba(255, 0, 100, 0.4),
+    2px 0 0 rgba(0, 200, 255, 0.4);
+}
+.camera-format-preview--vhs .camera-format-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.18) 0px,
+    rgba(0, 0, 0, 0.18) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+}
+.camera-format-preview--vhs .camera-format-preview__frame::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 8%;
+  background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.18) 50%, transparent 100%);
+  animation: vhs-scan 4s linear infinite;
+  pointer-events: none;
+}
+@keyframes vhs-scan {
+  0% { top: -10%; }
+  100% { top: 110%; }
+}
+
+/* ===== Camcorder: soft blur + slight desaturation ===== */
+.camera-format-preview--camcorder .camera-format-preview__subject {
+  filter: blur(1px) saturate(0.8);
+}
+.camera-format-preview--camcorder .camera-format-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.35) 100%);
+  pointer-events: none;
+}
+
+/* ===== Polaroid: square aspect with thicker bottom white border ===== */
+.camera-format-preview--polaroid {
+  background: #f5f1e8;
+  padding: 6% 6% 22% 6%;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 0 transparent;
+}
+.camera-format-preview--polaroid .camera-format-preview__frame {
+  background: linear-gradient(135deg, #6c5a44 0%, #3c2e1e 60%, #1c1408 100%);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.camera-format-preview--polaroid .camera-format-preview__subject {
+  width: 50%;
+  filter: sepia(0.25) saturate(1.05);
+}
+
+/* ===== Security cam: monochrome + scanline + corner timestamp box ===== */
+.camera-format-preview--security-cam {
+  background: linear-gradient(135deg, #25272a 0%, #16181b 60%, #08090b 100%);
+}
+.camera-format-preview--security-cam .camera-format-preview__subject {
+  filter: grayscale(0.95) brightness(0.85);
+}
+.camera-format-preview--security-cam .camera-format-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.25) 0px,
+    rgba(0, 0, 0, 0.25) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+}
+.camera-format-preview--security-cam .camera-format-preview__frame::after {
+  content: "REC 00:14";
+  position: absolute;
+  top: 6%;
+  right: 8%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 7px;
+  font-weight: 700;
+  color: #ff4040;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+/* ===== B&W Film: grayscale gradient ===== */
+.camera-format-preview--bw-film {
+  background: linear-gradient(135deg, #555 0%, #2a2a2a 60%, #0a0a0a 100%);
+}
+.camera-format-preview--bw-film .camera-format-preview__subject {
+  filter: grayscale(1) contrast(1.15);
+  background: radial-gradient(ellipse at 35% 30%, #f0f0f0 0%, #888 55%, #181818 100%);
+}
+.camera-format-preview--bw-film .camera-format-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    60deg,
+    rgba(255, 255, 255, 0.03) 0px,
+    rgba(255, 255, 255, 0.03) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+}
+
+/* iPhone — modern computational phone look: HDR-lifted highlights, sharp clarity, slight cool cast */
+.camera-format-preview--iphone {
+  background: linear-gradient(135deg, #5ca8e8 0%, #2c587c 50%, #0e1a30 100%);
+}
+.camera-format-preview--iphone .camera-format-preview__subject {
+  background: radial-gradient(ellipse at 35% 30%, #ffffff 0%, #c8d8e8 45%, #2a3040 100%);
+  filter: contrast(1.1) saturate(1.15);
+}
+.camera-format-preview--iphone .camera-format-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.18) 0%, transparent 60%);
+  pointer-events: none;
+}

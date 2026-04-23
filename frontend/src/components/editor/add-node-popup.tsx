@@ -27,6 +27,10 @@ import {
   SlidersHorizontal,
   Scissors,
   Frame,
+  Aperture,
+  Lightbulb,
+  SwatchBook,
+  CloudFog,
   Globe,
   HardDrive,
   Webhook,
@@ -262,13 +266,57 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "camera-motion",
     label: "Camera Motion",
     icon: <Video className="h-4 w-4" />,
-    category: "Parameter",
+    category: "Cinematography",
+    keywords: ["camera", "shot", "movement", "orbit", "pan", "tilt", "dolly", "crane", "zoom"],
   },
   {
     type: "framing",
     label: "Framing",
     icon: <Frame className="h-4 w-4" />,
-    category: "Parameter",
+    category: "Cinematography",
+    keywords: ["camera", "shot", "composition", "close-up", "wide", "angle", "vantage"],
+  },
+  {
+    type: "lens",
+    label: "Lens",
+    icon: <Aperture className="h-4 w-4" />,
+    category: "Cinematography",
+    keywords: ["camera", "optics", "focal length", "bokeh", "depth of field", "anamorphic", "fisheye"],
+  },
+  {
+    type: "camera-format",
+    label: "Camera / Film Stock",
+    icon: <Film className="h-4 w-4" />,
+    category: "Cinematography",
+    keywords: ["camera", "film", "35mm", "super 8", "vhs", "imax", "stock", "format"],
+  },
+  {
+    type: "lighting",
+    label: "Lighting",
+    icon: <Lightbulb className="h-4 w-4" />,
+    category: "Cinematography",
+    keywords: ["light", "rembrandt", "chiaroscuro", "golden hour", "key", "rim", "shot"],
+  },
+  {
+    type: "color-look",
+    label: "Color / Look",
+    icon: <SwatchBook className="h-4 w-4" />,
+    category: "Cinematography",
+    keywords: ["color", "grade", "palette", "lut", "kodak", "fuji", "teal orange", "shot"],
+  },
+  {
+    type: "atmosphere",
+    label: "Atmosphere",
+    icon: <CloudFog className="h-4 w-4" />,
+    category: "Cinematography",
+    keywords: ["weather", "fog", "rain", "snow", "smoke", "god rays", "particles", "shot"],
+  },
+  {
+    type: "temporal",
+    label: "Temporal",
+    icon: <Clock className="h-4 w-4" />,
+    category: "Cinematography",
+    keywords: ["time", "speed", "slow motion", "freeze", "bullet time", "shutter", "shot"],
   },
   // AI — Script & Text
   {
@@ -928,6 +976,12 @@ export const CATEGORIES = [
     description: "Tone, Style, Duration",
   },
   {
+    id: "Cinematography",
+    label: "CINEMATOGRAPHY",
+    icon: <Aperture className="h-4 w-4" />,
+    description: "Camera Motion, Framing, Lens, Lighting, Color, Atmosphere, Temporal",
+  },
+  {
     id: "AI",
     label: "AI",
     icon: <BookOpen className="h-4 w-4" />,
@@ -1083,7 +1137,8 @@ export function AddNodePopup({
       (node) =>
         node.label.toLowerCase().includes(query) ||
         node.type.toLowerCase().includes(query) ||
-        node.category.toLowerCase().includes(query),
+        node.category.toLowerCase().includes(query) ||
+        (node.keywords?.some((kw) => kw.toLowerCase().includes(query)) ?? false),
     );
   }, [searchQuery, effectivePool]);
 

@@ -1006,6 +1006,39 @@
   90%, 100% { filter: blur(0); }
 }
 
+/* Modern / social-video animations */
+.cm-motion-handheld-vlog .cm-scene { animation: cm-kf-handheld 2.2s linear infinite; }
+.cm-motion-pov-walk .cm-scene      { animation: cm-kf-pov-walk 0.9s ease-in-out infinite; }
+.cm-motion-velocity-edit .cm-scene { animation: cm-kf-velocity-edit 2.4s cubic-bezier(.68,-0.4,.32,1.4) infinite; }
+.cm-motion-match-cut-zoom .cm-scene { animation: cm-kf-crash-zoom-in 1.1s ease-in infinite; }
+.cm-motion-screen-tap .cm-scene    { animation: cm-kf-screen-tap 1.6s ease-out infinite; }
+.cm-motion-phone-flip .cm-scene    { animation: cm-kf-phone-flip 2.4s ease-in-out infinite; }
+
+@keyframes cm-kf-pov-walk {
+  0%   { transform: translate3d(0,    0,   0)   scale(1); }
+  25%  { transform: translate3d(-1.5%, 1%,  0)  scale(1.02); }
+  50%  { transform: translate3d(0,    -1%, 0)   scale(1.04); }
+  75%  { transform: translate3d(1.5%, 1%,  0)   scale(1.02); }
+  100% { transform: translate3d(0,    0,   0)   scale(1); }
+}
+@keyframes cm-kf-velocity-edit {
+  0%   { transform: scale(1); }
+  20%  { transform: scale(1.02); }
+  50%  { transform: scale(1.45); }
+  80%  { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+@keyframes cm-kf-screen-tap {
+  0%, 70%   { transform: scale(1); opacity: 1; }
+  85%       { transform: scale(0.92); opacity: 0.65; }
+  100%      { transform: scale(1); opacity: 1; }
+}
+@keyframes cm-kf-phone-flip {
+  0%, 30%   { transform: perspective(800px) rotateY(0deg); }
+  50%       { transform: perspective(800px) rotateY(180deg); }
+  70%, 100% { transform: perspective(800px) rotateY(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cm-root *,
   .cm-root *::before,

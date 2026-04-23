@@ -7,7 +7,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, Frame, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge, ArrowUpDown,
+  SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge, ArrowUpDown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -26,6 +26,7 @@ interface NodeOption {
   readonly category: string
   readonly group?: string
   readonly adminOnly?: boolean
+  readonly keywords?: readonly string[]
 }
 
 const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
@@ -61,8 +62,14 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "duration", label: "Duration", icon: <Clock className="h-4 w-4" />, category: "Parameter" },
   { type: "aspect-ratio", label: "Aspect Ratio", icon: <RatioIcon className="h-4 w-4" />, category: "Parameter" },
   { type: "motion", label: "Motion", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Parameter" },
-  { type: "camera-motion", label: "Camera Motion", icon: <Video className="h-4 w-4" />, category: "Parameter" },
-  { type: "framing", label: "Framing", icon: <Frame className="h-4 w-4" />, category: "Parameter" },
+  { type: "camera-motion", label: "Camera Motion", icon: <Video className="h-4 w-4" />, category: "Cinematography", keywords: ["camera", "shot", "movement", "orbit", "pan", "tilt", "dolly", "crane", "zoom"] },
+  { type: "framing", label: "Framing", icon: <Frame className="h-4 w-4" />, category: "Cinematography", keywords: ["camera", "shot", "composition", "close-up", "wide", "angle", "vantage"] },
+  { type: "lens", label: "Lens", icon: <Aperture className="h-4 w-4" />, category: "Cinematography", keywords: ["camera", "optics", "focal length", "bokeh", "depth of field", "anamorphic", "fisheye"] },
+  { type: "camera-format", label: "Camera / Film Stock", icon: <Film className="h-4 w-4" />, category: "Cinematography", keywords: ["camera", "film", "35mm", "super 8", "vhs", "imax", "stock", "format"] },
+  { type: "lighting", label: "Lighting", icon: <Lightbulb className="h-4 w-4" />, category: "Cinematography", keywords: ["light", "rembrandt", "chiaroscuro", "golden hour", "key", "rim", "shot"] },
+  { type: "color-look", label: "Color / Look", icon: <SwatchBook className="h-4 w-4" />, category: "Cinematography", keywords: ["color", "grade", "palette", "lut", "kodak", "fuji", "teal orange", "shot"] },
+  { type: "atmosphere", label: "Atmosphere", icon: <CloudFog className="h-4 w-4" />, category: "Cinematography", keywords: ["weather", "fog", "rain", "snow", "smoke", "god rays", "particles", "shot"] },
+  { type: "temporal", label: "Temporal", icon: <Clock className="h-4 w-4" />, category: "Cinematography", keywords: ["time", "speed", "slow motion", "freeze", "bullet time", "shutter", "shot"] },
   // AI — Script & Text
   { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI", group: "Script & Text" },
   { type: "llm-chat", label: "LLM Chat", icon: <MessageSquare className="h-4 w-4" />, category: "AI", group: "Script & Text" },
