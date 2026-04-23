@@ -185,7 +185,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
       {/* Provider — primary decision, determines which model-specific fields appear below */}
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
-          value={data.provider || "nano-banana"}
+          value={currentProvider}
           onValueChange={(v) => onUpdate({ provider: v as GenerateImageData["provider"] })}
         >
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
@@ -196,9 +196,9 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
           </SelectContent>
         </Select>
       </MappableField>
-      <ModelDescriptionHint modelId={data.provider} />
+      <ModelDescriptionHint modelId={currentProvider} />
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="generate-image" currentPrompt={data.prompt || ""} provider={data.provider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="generate-image" currentPrompt={data.prompt || ""} provider={currentProvider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
           rows={3}
           value={data.prompt}

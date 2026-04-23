@@ -18,7 +18,7 @@ function LensNodeComponent({ id, data, selected }: NodeProps) {
       <p className="text-foreground text-sm font-medium">
         {getLensLabel(lensId)}
       </p>
-      <LensPreview lensId={lensId} className="w-full aspect-[16/9]" />
+      <LensPreview lensId={lensId} variant="hybrid" className="w-full aspect-[16/9]" />
       {description && (
         <p className="text-muted-foreground text-[11px] leading-snug">
           {description}

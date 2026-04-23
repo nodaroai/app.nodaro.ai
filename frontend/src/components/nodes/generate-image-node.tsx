@@ -66,7 +66,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
     return () => { cancelled = true }
   }, [activeUrl])
   const creditModelId = buildCreditModelIdentifier(
-    nodeData.provider ?? "nano-banana",
+    nodeData.provider ?? "nano-banana-pro",
     nodeData as unknown as Record<string, unknown>,
   )
   const credits = useModelCredits(creditModelId, 1)
