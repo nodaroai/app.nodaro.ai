@@ -1,0 +1,286 @@
+/* ============================================================================
+   Atmosphere preview styles.
+   Each preview shows environmental elements — rain, fog, god rays, dust,
+   bokeh particles — layered over a subject silhouette. Animations are SUBTLE:
+   the picker shows ~10 tiles simultaneously, so keyframes are slow (3-8s) and
+   movements small to avoid CPU burn and visual noise.
+   ========================================================================== */
+
+.atmosphere-preview {
+  position: relative;
+  background: linear-gradient(180deg, #19314b 0%, #1a2838 55%, #0c1520 100%);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.atmosphere-preview__frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.atmosphere-preview__subject {
+  position: relative;
+  background: radial-gradient(ellipse at 35% 30%, #ff8fc2 0%, #ff2a89 55%, #780040 100%);
+  border-radius: 50% 50% 8px 8px / 60% 60% 8px 8px;
+  width: 38%;
+  aspect-ratio: 1 / 1.4;
+  box-shadow: 0 0 12px rgba(255, 0, 115, 0.35);
+  z-index: 1;
+}
+
+/* ===== Clear: no effect, static ===== */
+.atmosphere-preview--clear {
+  background: linear-gradient(180deg, #2a5ba8 0%, #4a82c8 60%, #6ea3d6 100%);
+}
+
+/* ===== Overcast: slow-drifting gray cloud blur ===== */
+.atmosphere-preview--overcast {
+  background: linear-gradient(180deg, #55606a 0%, #6d7882 55%, #414951 100%);
+}
+.atmosphere-preview--overcast .atmosphere-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  background:
+    radial-gradient(ellipse 60% 30% at 30% 35%, rgba(255, 255, 255, 0.28) 0%, transparent 70%),
+    radial-gradient(ellipse 55% 28% at 70% 45%, rgba(255, 255, 255, 0.22) 0%, transparent 70%);
+  filter: blur(4px);
+  animation: atmosphere-overcast-drift 8s linear infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes atmosphere-overcast-drift {
+  0%   { transform: translateX(-6%); }
+  100% { transform: translateX(6%); }
+}
+
+/* ===== Fog / Mist: slow-drifting translucent layer ===== */
+.atmosphere-preview--fog-mist .atmosphere-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(220, 230, 240, 0.55) 40%, rgba(220, 230, 240, 0.35) 60%, transparent 100%);
+  filter: blur(3px);
+  animation: atmosphere-fog-drift 7s linear infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes atmosphere-fog-drift {
+  0%   { transform: translateX(-40%); }
+  100% { transform: translateX(40%); }
+}
+
+/* ===== Light Rain: sparse diagonal streaks ===== */
+.atmosphere-preview--light-rain .atmosphere-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background-image: repeating-linear-gradient(
+    105deg,
+    transparent 0px,
+    transparent 14px,
+    rgba(200, 220, 240, 0.55) 14px,
+    rgba(200, 220, 240, 0.55) 15px
+  );
+  animation: atmosphere-rain-fall 1.6s linear infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes atmosphere-rain-fall {
+  0%   { transform: translate(0, 0); }
+  100% { transform: translate(-20px, 60px); }
+}
+
+/* ===== Heavy Rain: denser + faster streaks ===== */
+.atmosphere-preview--heavy-rain {
+  background: linear-gradient(180deg, #0f1d2c 0%, #152637 55%, #06101a 100%);
+}
+.atmosphere-preview--heavy-rain .atmosphere-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background-image: repeating-linear-gradient(
+    105deg,
+    transparent 0px,
+    transparent 6px,
+    rgba(200, 220, 240, 0.75) 6px,
+    rgba(200, 220, 240, 0.75) 8px
+  );
+  animation: atmosphere-rain-fall-heavy 0.8s linear infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes atmosphere-rain-fall-heavy {
+  0%   { transform: translate(0, 0); }
+  100% { transform: translate(-12px, 40px); }
+}
+
+/* ===== Snow: drifting flakes via box-shadow dots ===== */
+.atmosphere-preview--snow {
+  background: linear-gradient(180deg, #2e4968 0%, #3b5777 55%, #1e2e45 100%);
+}
+.atmosphere-preview--snow .atmosphere-preview__frame::before {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: 10%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: white;
+  box-shadow:
+    10px 8px 0 white,
+    30px 20px 0 white,
+    55px 5px 0 white,
+    80px 25px 0 white,
+    20px 40px 0 white,
+    45px 60px 0 white,
+    70px 50px 0 white,
+    95px 75px 0 white,
+    15px 80px 0 white,
+    60px 90px 0 white,
+    90px 15px 0 white,
+    40px 10px 0 white;
+  animation: atmosphere-snow-fall 4s linear infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes atmosphere-snow-fall {
+  0%   { transform: translateY(-10%); opacity: 0.9; }
+  100% { transform: translateY(110%); opacity: 0.9; }
+}
+
+/* ===== Dust: slow-drifting small particles ===== */
+.atmosphere-preview--dust {
+  background: linear-gradient(180deg, #6e5a3b 0%, #8a7451 55%, #4a3b25 100%);
+}
+.atmosphere-preview--dust .atmosphere-preview__frame::before {
+  content: "";
+  position: absolute;
+  top: 10%;
+  left: 5%;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: rgba(230, 210, 170, 0.85);
+  box-shadow:
+    15px 10px 0 rgba(230, 210, 170, 0.7),
+    35px 25px 0 rgba(230, 210, 170, 0.55),
+    55px 15px 0 rgba(230, 210, 170, 0.75),
+    75px 30px 0 rgba(230, 210, 170, 0.5),
+    20px 50px 0 rgba(230, 210, 170, 0.7),
+    50px 60px 0 rgba(230, 210, 170, 0.55),
+    80px 55px 0 rgba(230, 210, 170, 0.65),
+    25px 75px 0 rgba(230, 210, 170, 0.5),
+    60px 80px 0 rgba(230, 210, 170, 0.7);
+  animation: atmosphere-dust-drift 6s ease-in-out infinite alternate;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes atmosphere-dust-drift {
+  0%   { transform: translate(-3%, 0); }
+  100% { transform: translate(3%, -4%); }
+}
+
+/* ===== God Rays: rotating sun shafts ===== */
+.atmosphere-preview--god-rays {
+  background: linear-gradient(180deg, #1f2f4a 0%, #2a3f5f 55%, #111a2b 100%);
+}
+.atmosphere-preview--god-rays .atmosphere-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  background:
+    conic-gradient(
+      from 0deg at 50% 50%,
+      transparent 0deg,
+      rgba(255, 220, 140, 0.28) 10deg,
+      transparent 20deg,
+      transparent 50deg,
+      rgba(255, 220, 140, 0.22) 60deg,
+      transparent 70deg,
+      transparent 110deg,
+      rgba(255, 220, 140, 0.28) 120deg,
+      transparent 130deg,
+      transparent 170deg,
+      rgba(255, 220, 140, 0.22) 180deg,
+      transparent 190deg,
+      transparent 230deg,
+      rgba(255, 220, 140, 0.28) 240deg,
+      transparent 250deg,
+      transparent 290deg,
+      rgba(255, 220, 140, 0.22) 300deg,
+      transparent 310deg,
+      transparent 360deg
+    );
+  animation: atmosphere-god-rays-rotate 18s linear infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes atmosphere-god-rays-rotate {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ===== Smoke: slow volumetric drift ===== */
+.atmosphere-preview--smoke {
+  background: linear-gradient(180deg, #2a2a2e 0%, #3a3a3f 55%, #141417 100%);
+}
+.atmosphere-preview--smoke .atmosphere-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: -15%;
+  background:
+    radial-gradient(ellipse 50% 30% at 25% 60%, rgba(200, 200, 210, 0.45) 0%, transparent 70%),
+    radial-gradient(ellipse 45% 32% at 70% 40%, rgba(180, 180, 190, 0.4) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 28% at 55% 75%, rgba(210, 210, 220, 0.35) 0%, transparent 70%);
+  filter: blur(3px);
+  animation: atmosphere-smoke-drift 8s ease-in-out infinite alternate;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes atmosphere-smoke-drift {
+  0%   { transform: translate(-5%, 3%) scale(1); }
+  100% { transform: translate(5%, -3%) scale(1.08); }
+}
+
+/* ===== Bokeh Particles: pulsing + drifting glowing dots ===== */
+.atmosphere-preview--bokeh-particles {
+  background: linear-gradient(180deg, #0f1424 0%, #161c36 55%, #05081a 100%);
+}
+.atmosphere-preview--bokeh-particles .atmosphere-preview__frame::before {
+  content: "";
+  position: absolute;
+  top: 15%;
+  left: 10%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 220, 180, 0.9);
+  box-shadow:
+    20px 15px 0 2px rgba(255, 220, 180, 0.55),
+    45px 5px 0 1px rgba(255, 220, 180, 0.75),
+    65px 25px 0 3px rgba(255, 220, 180, 0.45),
+    85px 10px 0 1px rgba(255, 220, 180, 0.7),
+    15px 45px 0 2px rgba(255, 220, 180, 0.6),
+    40px 55px 0 1px rgba(255, 220, 180, 0.75),
+    70px 50px 0 3px rgba(255, 220, 180, 0.5),
+    25px 70px 0 1px rgba(255, 220, 180, 0.7),
+    55px 80px 0 2px rgba(255, 220, 180, 0.55);
+  filter: blur(1.5px);
+  animation: atmosphere-bokeh-pulse 5s ease-in-out infinite alternate;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes atmosphere-bokeh-pulse {
+  0%   { transform: translate(-2%, 0); opacity: 0.7; }
+  100% { transform: translate(2%, -3%); opacity: 1; }
+}

@@ -14,6 +14,7 @@ export type FramingCategory =
   | "angle"
   | "coverage"
   | "composition"
+  | "vantage"
 
 export interface Framing {
   readonly id: string
@@ -199,6 +200,50 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     description: "Lines draw eye to subject",
     promptHint: "leading lines composition, environmental lines converge toward the subject to draw the viewer's eye",
   },
+
+  // Vantage (horizontal camera direction — azimuth around subject)
+  {
+    id: "front-on",
+    label: "Front-on",
+    category: "vantage",
+    description: "Subject facing camera",
+    promptHint: "front-on shot, subject facing the camera directly",
+  },
+  {
+    id: "three-quarter-front",
+    label: "Three-Quarter Front",
+    category: "vantage",
+    description: "Slightly off-axis from front",
+    promptHint: "three-quarter view of the subject, camera slightly off-axis from the front",
+  },
+  {
+    id: "profile-left",
+    label: "Profile Left",
+    category: "vantage",
+    description: "Side view, subject's left",
+    promptHint: "profile shot from the subject's left side",
+  },
+  {
+    id: "profile-right",
+    label: "Profile Right",
+    category: "vantage",
+    description: "Side view, subject's right",
+    promptHint: "profile shot from the subject's right side",
+  },
+  {
+    id: "three-quarter-back",
+    label: "Three-Quarter Back",
+    category: "vantage",
+    description: "Off-axis from behind",
+    promptHint: "three-quarter view from behind, camera angled off-axis from the rear",
+  },
+  {
+    id: "behind",
+    label: "Behind",
+    category: "vantage",
+    description: "Direct rear view",
+    promptHint: "shot from directly behind the subject, looking at their back",
+  },
 ]
 
 export const FRAMING_CATEGORY_ORDER: ReadonlyArray<FramingCategory> = [
@@ -206,6 +251,7 @@ export const FRAMING_CATEGORY_ORDER: ReadonlyArray<FramingCategory> = [
   "angle",
   "coverage",
   "composition",
+  "vantage",
 ]
 
 export const FRAMING_CATEGORY_LABELS: Record<FramingCategory, string> = {
@@ -213,6 +259,7 @@ export const FRAMING_CATEGORY_LABELS: Record<FramingCategory, string> = {
   angle: "Angle",
   coverage: "Coverage",
   composition: "Composition",
+  vantage: "Vantage",
 }
 
 const framingById = new Map<string, Framing>(FRAMINGS.map((f) => [f.id, f]))
@@ -234,3 +281,72 @@ export function getFramingPromptHint(id: string | undefined | null): string {
 }
 
 export const FRAMING_IDS: ReadonlyArray<string> = FRAMINGS.map((f) => f.id)
+
+export function isVantageFraming(id: string | undefined | null): boolean {
+  return getFraming(id)?.category === "vantage"
+}
+
+/**
+ * Maps each FramingCategory to the consumer data field name that holds the
+ * selected entry id for that category. Multi-category framing: a consumer
+ * (image/video) can independently set a value in each of the 5 dimensions.
+ */
+export const FRAMING_FIELD_BY_CATEGORY: Record<
+  FramingCategory,
+  "shotSize" | "angle" | "coverage" | "composition" | "vantage"
+> = {
+  "shot-size": "shotSize",
+  angle: "angle",
+  coverage: "coverage",
+  composition: "composition",
+  vantage: "vantage",
+}
+
+/**
+ * Shape of the per-category framing fields on FramingData and all 9 consumer
+ * data types. All fields optional — user may set zero, one, or all categories.
+ */
+export interface FramingValue {
+  shotSize?: string
+  angle?: string
+  coverage?: string
+  composition?: string
+  vantage?: string
+}
+
+/**
+ * Aggregate all enabled per-category framing prompt hints from a consumer's
+ * data, in canonical category order (shot-size, angle, coverage, composition,
+ * vantage).
+ *
+ * Accepts a loosely typed record (the helper is shared between strongly typed
+ * frontend node data and the backend's `Record<string, unknown>` workflow
+ * data). Non-string values are ignored.
+ *
+ * @param data the consumer data record (must include optional shotSize / angle
+ *   / coverage / composition / vantage fields)
+ * @param skipVantage when true, skip the vantage hint (used by video consumers
+ *   where camera-motion v2 already declares spatial positioning — keeps the
+ *   pre-existing conflict-resolution behavior identical).
+ */
+export function buildFramingHints(
+  data: Record<string, unknown> & {
+    shotSize?: unknown
+    angle?: unknown
+    coverage?: unknown
+    composition?: unknown
+    vantage?: unknown
+  },
+  skipVantage = false,
+): string[] {
+  const hints: string[] = []
+  for (const category of FRAMING_CATEGORY_ORDER) {
+    if (category === "vantage" && skipVantage) continue
+    const field = FRAMING_FIELD_BY_CATEGORY[category]
+    const id = data[field]
+    if (typeof id !== "string" || id.length === 0) continue
+    const hint = getFramingPromptHint(id)
+    if (hint) hints.push(hint)
+  }
+  return hints
+}

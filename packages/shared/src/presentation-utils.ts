@@ -24,6 +24,12 @@ export const INPUT_NODE_TYPES = new Set([
   "motion",
   "camera-motion",
   "framing",
+  "lens",
+  "camera-format",
+  "lighting",
+  "color-look",
+  "atmosphere",
+  "temporal",
   "reference-audio",
 ])
 
@@ -59,6 +65,12 @@ const NON_OUTPUT_TYPES = new Set([
   "motion",
   "camera-motion",
   "framing",
+  "lens",
+  "camera-format",
+  "lighting",
+  "color-look",
+  "atmosphere",
+  "temporal",
   "sticky-note",
   "sub-workflow-input",
   "sub-workflow-output",
@@ -267,7 +279,17 @@ export const INPUT_FIELD_MAP: Record<string, InputFieldSchema> = {
   "scene-count": { key: "count", type: "number" },
   "motion": { key: "motion", type: "select" },
   "camera-motion": { key: "cameraMotion", type: "select" },
-  "framing": { key: "framing", type: "select" },
+  // Multi-category framing/lighting nodes don't have a single value field.
+  // For presentation-mode override purposes we pick the first per-category
+  // field as a representative key (shotSize for framing, timeOfDay for
+  // lighting). Future: add per-category override schema entries.
+  "framing": { key: "shotSize", type: "select" },
+  "lens": { key: "lens", type: "select" },
+  "camera-format": { key: "cameraFormat", type: "select" },
+  "lighting": { key: "timeOfDay", type: "select" },
+  "color-look": { key: "colorLook", type: "select" },
+  "atmosphere": { key: "atmosphere", type: "select" },
+  "temporal": { key: "temporalSpeed", type: "select" },
   "reference-audio": { key: "extractedAudioUrl", type: "audio-url" },
 }
 

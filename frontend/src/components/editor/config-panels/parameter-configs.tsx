@@ -28,9 +28,30 @@ import type {
   MotionData,
   CameraMotionData,
   FramingData,
+  LensData,
+  CameraFormatData,
+  LightingData,
+  ColorLookData,
+  AtmosphereData,
+  TemporalData,
 } from "@/types/nodes"
 import { CameraMotionPicker } from "./camera-motion-picker"
 import { FramingPicker } from "./framing-picker"
+import { LensPicker } from "./lens-picker"
+import { CameraFormatPicker } from "./camera-format-picker"
+import { LightingPicker } from "./lighting-picker"
+import { ColorLookPicker } from "./color-look-picker"
+import { AtmospherePicker } from "./atmosphere-picker"
+import { TemporalPicker } from "./temporal-picker"
+import { PromptInjectionPreview } from "./prompt-injection-preview"
+import { composeCameraMotionHintForNode } from "@/lib/cinematography-hints"
+import { buildFramingHints } from "@nodaro-shared/framing"
+import { getLensPromptHint } from "@nodaro-shared/lens"
+import { getCameraFormatPromptHint } from "@nodaro-shared/camera-format"
+import { buildLightingHints } from "@nodaro-shared/lighting"
+import { getColorLookPromptHint } from "@nodaro-shared/color-look"
+import { getAtmospherePromptHint } from "@nodaro-shared/atmosphere"
+import { buildTemporalHints } from "@nodaro-shared/temporal"
 import type { ConfigProps } from "./types"
 
 export function ToneConfig({ data, onUpdate }: ConfigProps<ToneData>) {
@@ -208,9 +229,19 @@ export function MotionConfig({ data, onUpdate }: ConfigProps<MotionData>) {
   )
 }
 
-export function CameraMotionConfig({ data, onUpdate }: ConfigProps<CameraMotionData>) {
+export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: ConfigProps<CameraMotionData> & { nodeId?: string }) {
+  const composed = composeCameraMotionHintForNode(
+    data.cameraMotion,
+    nodeId,
+    nodes,
+    edges ?? [],
+  )
   return (
     <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={composed} />
+      <p className="text-[10px] text-muted-foreground italic px-0.5">
+        Connect parameter nodes to startState / endState input handles to add "beginning with…" / "ending with…" clauses to this preview.
+      </p>
       <Label>Camera Motion</Label>
       <CameraMotionPicker
         value={data.cameraMotion || "static"}
@@ -221,13 +252,167 @@ export function CameraMotionConfig({ data, onUpdate }: ConfigProps<CameraMotionD
 }
 
 export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
+  const maxItemsPerRow = data.maxItemsPerRow ?? 1
   return (
     <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={buildFramingHints(data)} />
       <Label>Framing</Label>
       <FramingPicker
-        value={data.framing || "medium-shot"}
-        onValueChange={(v) => onUpdate({ framing: v })}
+        value={{
+          shotSize: data.shotSize,
+          angle: data.angle,
+          coverage: data.coverage,
+          composition: data.composition,
+          vantage: data.vantage,
+        }}
+        onChange={(patch) => onUpdate(patch)}
       />
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <Label htmlFor="framing-max-items-per-row" className="text-xs text-muted-foreground">
+          Items per row (node card)
+        </Label>
+        <input
+          id="framing-max-items-per-row"
+          type="number"
+          min={1}
+          max={5}
+          value={maxItemsPerRow}
+          onChange={(e) => {
+            const next = Number.parseInt(e.target.value, 10)
+            if (!Number.isFinite(next)) return
+            const clamped = Math.max(1, Math.min(5, next))
+            onUpdate({ maxItemsPerRow: clamped })
+          }}
+          className="w-16 h-8 rounded-md border border-input bg-transparent px-2 text-xs text-right"
+        />
+      </div>
+    </div>
+  )
+}
+
+export function LensConfig({ data, onUpdate }: ConfigProps<LensData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getLensPromptHint(data.lens)]} />
+      <Label>Lens</Label>
+      <LensPicker
+        value={data.lens || "normal-50mm"}
+        onValueChange={(v) => onUpdate({ lens: v })}
+      />
+    </div>
+  )
+}
+
+export function CameraFormatConfig({ data, onUpdate }: ConfigProps<CameraFormatData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getCameraFormatPromptHint(data.cameraFormat)]} />
+      <Label>Camera / Film</Label>
+      <CameraFormatPicker
+        value={data.cameraFormat || "35mm-film"}
+        onValueChange={(v) => onUpdate({ cameraFormat: v })}
+      />
+    </div>
+  )
+}
+
+export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
+  const maxItemsPerRow = data.maxItemsPerRow ?? 1
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={buildLightingHints(data)} />
+      <Label>Lighting</Label>
+      <LightingPicker
+        value={{
+          timeOfDay: data.timeOfDay,
+          lightingStyle: data.lightingStyle,
+          lightingDirection: data.lightingDirection,
+        }}
+        onChange={(patch) => onUpdate(patch)}
+      />
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <Label htmlFor="lighting-max-items-per-row" className="text-xs text-muted-foreground">
+          Items per row (node card)
+        </Label>
+        <input
+          id="lighting-max-items-per-row"
+          type="number"
+          min={1}
+          max={3}
+          value={maxItemsPerRow}
+          onChange={(e) => {
+            const next = Number.parseInt(e.target.value, 10)
+            if (!Number.isFinite(next)) return
+            const clamped = Math.max(1, Math.min(3, next))
+            onUpdate({ maxItemsPerRow: clamped })
+          }}
+          className="w-16 h-8 rounded-md border border-input bg-transparent px-2 text-xs text-right"
+        />
+      </div>
+    </div>
+  )
+}
+
+export function ColorLookConfig({ data, onUpdate }: ConfigProps<ColorLookData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getColorLookPromptHint(data.colorLook)]} />
+      <Label>Color / Look</Label>
+      <ColorLookPicker
+        value={data.colorLook || "warm"}
+        onValueChange={(v) => onUpdate({ colorLook: v })}
+      />
+    </div>
+  )
+}
+
+export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getAtmospherePromptHint(data.atmosphere)]} />
+      <Label>Atmosphere</Label>
+      <AtmospherePicker
+        value={data.atmosphere || "clear"}
+        onValueChange={(v) => onUpdate({ atmosphere: v })}
+      />
+    </div>
+  )
+}
+
+export function TemporalConfig({ data, onUpdate }: ConfigProps<TemporalData>) {
+  const maxItemsPerRow = data.maxItemsPerRow ?? 1
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={buildTemporalHints(data)} />
+      <Label>Temporal</Label>
+      <TemporalPicker
+        value={{
+          temporalSpeed: data.temporalSpeed,
+          temporalFreeze: data.temporalFreeze,
+          temporalDirection: data.temporalDirection,
+          temporalShutter: data.temporalShutter,
+        }}
+        onChange={(patch) => onUpdate(patch)}
+      />
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <Label htmlFor="temporal-max-items-per-row" className="text-xs text-muted-foreground">
+          Items per row (node card)
+        </Label>
+        <input
+          id="temporal-max-items-per-row"
+          type="number"
+          min={1}
+          max={4}
+          value={maxItemsPerRow}
+          onChange={(e) => {
+            const next = Number.parseInt(e.target.value, 10)
+            if (!Number.isFinite(next)) return
+            const clamped = Math.max(1, Math.min(4, next))
+            onUpdate({ maxItemsPerRow: clamped })
+          }}
+          className="w-16 h-8 rounded-md border border-input bg-transparent px-2 text-xs text-right"
+        />
+      </div>
     </div>
   )
 }

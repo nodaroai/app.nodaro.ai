@@ -35,6 +35,12 @@ import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, IMAGE_EDIT_MODELS, MODIFY_IMAGE_MOD
 import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
+import { InlineFramingField } from "./inline-framing-field"
+import { InlineLensField } from "./inline-lens-field"
+import { InlineCameraFormatField } from "./inline-camera-format-field"
+import { InlineLightingField } from "./inline-lighting-field"
+import { InlineColorLookField } from "./inline-color-look-field"
+import { InlineAtmosphereField } from "./inline-atmosphere-field"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { ReferenceImageList } from "./reference-image-list"
 import { ConnectedMediaList } from "./connected-media-list"
@@ -207,6 +213,12 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
           refMap={refMap}
         />
       </MappableField>
+      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={isCustomStyle ? "__custom__" : (data.style || "__none__")}
@@ -574,6 +586,13 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
               refMap={refMap}
             />
           </MappableField>
+
+          <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+          <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+          <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+          <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+          <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+          <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
 
           {/* Connected upstream images with ordering */}
           {sources.filter((s) => IMAGE_SOURCE_TYPES.has(s.type)).length > 0 && (
@@ -951,6 +970,12 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
           refMap={refMap}
         />
       </MappableField>
+      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={isCustomStyle ? "__custom__" : (data.style || "__none__")}
@@ -1445,6 +1470,12 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
           refMap={refMap}
         />
       </MappableField>
+      <InlineFramingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLensField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineCameraFormatField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineLightingField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineColorLookField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      <InlineAtmosphereField data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={isCustomStyle ? "__custom__" : (data.style || "__none__")}

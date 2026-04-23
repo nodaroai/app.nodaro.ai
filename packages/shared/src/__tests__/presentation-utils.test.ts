@@ -50,7 +50,14 @@ describe("INPUT_NODE_TYPES", () => {
     "aspect-ratio",
     "motion",
     "camera-motion",
+    "framing",
     "reference-audio",
+    "lens",
+    "camera-format",
+    "lighting",
+    "color-look",
+    "atmosphere",
+    "temporal",
   ]
 
   it("contains all expected types", () => {

@@ -17,7 +17,10 @@ export const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<strin
   targetLength: ["duration"],
   motion: ["motion"],
   cameraMotion: ["camera-motion"],
-  framing: ["framing"],
+  lens: ["lens"],
+  cameraFormat: ["camera-format"],
+  colorLook: ["color-look"],
+  atmosphere: ["atmosphere"],
   sceneCount: ["scene-count"],
   // Text fields for fieldMappings + {} injection
   lyrics: ["text-prompt"],
@@ -128,8 +131,47 @@ export function extractDisplayValue(data: Record<string, unknown>, nodeType: str
       return (data.motion as string) ?? ""
     case "camera-motion":
       return (data.cameraMotion as string) ?? ""
-    case "framing":
-      return (data.framing as string) ?? ""
+    case "framing": {
+      // Multi-category: surface the first set per-category value as a label.
+      const f = data as Record<string, unknown>
+      return (
+        (f.shotSize as string) ||
+        (f.angle as string) ||
+        (f.coverage as string) ||
+        (f.composition as string) ||
+        (f.vantage as string) ||
+        ""
+      )
+    }
+    case "lens":
+      return (data.lens as string) ?? ""
+    case "camera-format":
+      return (data.cameraFormat as string) ?? ""
+    case "lighting": {
+      // Multi-category: surface the first set per-category value as a label.
+      const l = data as Record<string, unknown>
+      return (
+        (l.timeOfDay as string) ||
+        (l.lightingStyle as string) ||
+        (l.lightingDirection as string) ||
+        ""
+      )
+    }
+    case "color-look":
+      return (data.colorLook as string) ?? ""
+    case "atmosphere":
+      return (data.atmosphere as string) ?? ""
+    case "temporal": {
+      // Multi-category: surface the first set per-category value as a label.
+      const t = data as Record<string, unknown>
+      return (
+        (t.temporalSpeed as string) ||
+        (t.temporalFreeze as string) ||
+        (t.temporalDirection as string) ||
+        (t.temporalShutter as string) ||
+        ""
+      )
+    }
     case "reference-audio":
       return (data.videoTitle as string) || (data.extractedAudioUrl as string) ? "Audio ready" : "No audio"
     default:

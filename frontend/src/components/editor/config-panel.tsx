@@ -49,6 +49,12 @@ import {
   MotionConfig,
   CameraMotionConfig,
   FramingConfig,
+  LensConfig,
+  CameraFormatConfig,
+  LightingConfig,
+  ColorLookConfig,
+  AtmosphereConfig,
+  TemporalConfig,
   GenerateScriptConfig,
   QACheckConfig,
   GenerateImageConfig,
@@ -170,6 +176,12 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "motion": "Motion",
   "camera-motion": "Camera Motion",
   "framing": "Framing",
+  "lens": "Lens",
+  "camera-format": "Camera / Film Stock",
+  "lighting": "Lighting",
+  "color-look": "Color / Look",
+  "atmosphere": "Atmosphere",
+  "temporal": "Temporal",
   "generate-script": "Generate Script",
   "generate-image": "Generate Image",
   "modify-image": "Modify Image",
@@ -341,8 +353,14 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "duration": return <DurationConfig {...configProps} />
     case "aspect-ratio": return <AspectRatioConfig {...configProps} />
     case "motion": return <MotionConfig {...configProps} />
-    case "camera-motion": return <CameraMotionConfig {...configProps} />
+    case "camera-motion": return <CameraMotionConfig {...configProps} nodeId={selectedNodeId} />
     case "framing": return <FramingConfig {...configProps} />
+    case "lens": return <LensConfig {...configProps} />
+    case "camera-format": return <CameraFormatConfig {...configProps} />
+    case "lighting": return <LightingConfig {...configProps} />
+    case "color-look": return <ColorLookConfig {...configProps} />
+    case "atmosphere": return <AtmosphereConfig {...configProps} />
+    case "temporal": return <TemporalConfig {...configProps} />
     case "generate-script": return <GenerateScriptConfig {...configProps} />
     case "generate-image": return <GenerateImageConfig {...configProps} />
     case "modify-image": return <ModifyImageConfig {...configProps} />

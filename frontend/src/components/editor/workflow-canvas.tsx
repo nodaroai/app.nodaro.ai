@@ -330,6 +330,12 @@ function getMiniMapNodeColor(node: { type?: string }): string {
       nodeType === 'motion' ||
       nodeType === 'camera-motion' ||
       nodeType === 'framing' ||
+      nodeType === 'lens' ||
+      nodeType === 'camera-format' ||
+      nodeType === 'lighting' ||
+      nodeType === 'color-look' ||
+      nodeType === 'atmosphere' ||
+      nodeType === 'temporal' ||
       nodeType === 'voice' ||
       nodeType === 'text') return '#818CF8'
   // Processing nodes - steel grey

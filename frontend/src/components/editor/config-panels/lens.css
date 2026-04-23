@@ -1,0 +1,168 @@
+/* ============================================================================
+   Lens preview styles.
+   Each preview shows a viewport with a subject silhouette sized and styled
+   to communicate the focal length character: wide lenses show small subjects
+   in lots of environment, telephoto lenses show large compressed subjects,
+   special optics (fisheye, anamorphic, tilt-shift, macro, shallow DOF) get
+   a distinct treatment. No animations — lens is an optical choice.
+   ========================================================================== */
+
+.lens-preview {
+  position: relative;
+  background: linear-gradient(135deg, #0b3a5e 0%, #1f2c42 55%, #0b1220 100%);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lens-preview__frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lens-preview__subject {
+  position: relative;
+  background: radial-gradient(ellipse at 35% 30%, #ff8fc2 0%, #ff2a89 55%, #780040 100%);
+  border-radius: 50% 50% 8px 8px / 60% 60% 8px 8px;
+  width: 38%;
+  aspect-ratio: 1 / 1.4;
+  box-shadow: 0 0 12px rgba(255, 0, 115, 0.35);
+  transform-origin: center center;
+}
+
+/* ===== Wide / ultra-wide: small subject, lots of environment ===== */
+.lens-preview--ultra-wide-14mm .lens-preview__subject {
+  width: 18%;
+}
+.lens-preview--ultra-wide-14mm .lens-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(0, 0, 0, 0.45) 100%);
+  pointer-events: none;
+}
+
+.lens-preview--wide-24mm .lens-preview__subject {
+  width: 26%;
+}
+
+/* ===== Standard / Normal: natural medium ===== */
+.lens-preview--standard-35mm .lens-preview__subject {
+  width: 33%;
+}
+
+.lens-preview--normal-50mm .lens-preview__subject {
+  width: 38%;
+}
+
+/* ===== Portrait: larger with subtle bokeh ring ===== */
+.lens-preview--portrait-85mm .lens-preview__subject {
+  width: 50%;
+}
+.lens-preview--portrait-85mm .lens-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 35% 50% at center, transparent 55%, rgba(0, 0, 0, 0.5) 100%);
+  pointer-events: none;
+}
+
+/* ===== Telephoto: heavy compression ===== */
+.lens-preview--telephoto-135mm .lens-preview__subject {
+  width: 60%;
+}
+.lens-preview--telephoto-135mm .lens-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 30% 45% at center, transparent 55%, rgba(0, 0, 0, 0.6) 100%);
+  pointer-events: none;
+}
+
+.lens-preview--super-telephoto-400mm .lens-preview__subject {
+  width: 75%;
+}
+.lens-preview--super-telephoto-400mm .lens-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 25% 40% at center, transparent 50%, rgba(0, 0, 0, 0.7) 100%);
+  pointer-events: none;
+}
+
+/* ===== Fisheye: hemispherical distortion ===== */
+.lens-preview--fisheye .lens-preview__subject {
+  width: 45%;
+  border-radius: 50%;
+  transform: scale(1.2, 0.85);
+}
+.lens-preview--fisheye .lens-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  border-radius: 50%;
+  box-shadow: inset 0 0 60px 20px rgba(0, 0, 0, 0.65);
+  pointer-events: none;
+}
+
+/* ===== Anamorphic: widescreen letterbox ===== */
+.lens-preview--anamorphic .lens-preview__frame::before,
+.lens-preview--anamorphic .lens-preview__frame::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 16%;
+  background: #000;
+  pointer-events: none;
+}
+.lens-preview--anamorphic .lens-preview__frame::before {
+  top: 0;
+}
+.lens-preview--anamorphic .lens-preview__frame::after {
+  bottom: 0;
+}
+
+/* ===== Macro: subject huge ===== */
+.lens-preview--macro .lens-preview__subject {
+  width: 85%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+/* ===== Tilt-shift: miniature, blur top + bottom ===== */
+.lens-preview--tilt-shift .lens-preview__subject {
+  width: 30%;
+}
+.lens-preview--tilt-shift .lens-preview__frame::before,
+.lens-preview--tilt-shift .lens-preview__frame::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 35%;
+  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
+.lens-preview--tilt-shift .lens-preview__frame::before {
+  top: 0;
+}
+.lens-preview--tilt-shift .lens-preview__frame::after {
+  bottom: 0;
+}
+
+/* ===== Shallow DOF: in-focus center, blurred edges ===== */
+.lens-preview--shallow-dof .lens-preview__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 30% 40% at center, transparent 50%, rgba(0, 0, 0, 0.7) 100%);
+  pointer-events: none;
+}

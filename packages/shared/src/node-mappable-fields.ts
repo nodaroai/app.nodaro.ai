@@ -1,16 +1,17 @@
 /**
- * Per-node-type list of text field names eligible for fieldMappings
- * resolution and {} injection. Only string fields that appear in
- * config panels as user-editable text inputs.
+ * Per-node-type list of field names eligible for fieldMappings resolution.
+ * Text fields also participate in {} injection when the resolver sees a
+ * string value containing {} markers; non-text fields just receive the
+ * mapped source's value verbatim.
  */
-export const NODE_TEXT_FIELDS: Readonly<Record<string, readonly string[]>> = {
-  "generate-image":      ["prompt", "style", "negativePrompt"],
-  "edit-image":          ["prompt", "style", "negativePrompt"],
-  "image-to-image":      ["prompt", "style", "negativePrompt"],
-  "modify-image":        ["prompt", "style", "negativePrompt"],
-  "text-to-video":       ["prompt", "negativePrompt"],
-  "image-to-video":      ["prompt"],
-  "video-to-video":      ["prompt"],
+export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> = {
+  "generate-image":      ["prompt", "style", "negativePrompt", "lens", "cameraFormat", "colorLook", "atmosphere"],
+  "edit-image":          ["prompt", "style", "negativePrompt", "lens", "cameraFormat", "colorLook", "atmosphere"],
+  "image-to-image":      ["prompt", "style", "negativePrompt", "lens", "cameraFormat", "colorLook", "atmosphere"],
+  "modify-image":        ["prompt", "style", "negativePrompt", "lens", "cameraFormat", "colorLook", "atmosphere"],
+  "text-to-video":       ["prompt", "negativePrompt", "cameraMotion", "lens", "cameraFormat", "colorLook", "atmosphere"],
+  "image-to-video":      ["prompt", "cameraMotion", "lens", "cameraFormat", "colorLook", "atmosphere"],
+  "video-to-video":      ["prompt", "cameraMotion", "lens", "cameraFormat", "colorLook", "atmosphere"],
   "text-to-speech":      ["directText"],
   "lip-sync":            ["prompt"],
   "generate-music":      ["prompt", "lyrics", "genre", "mood"],
@@ -34,8 +35,8 @@ export const NODE_TEXT_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "3d-title":            ["titlePrompt"],
   "motion-graphics":     ["motionPrompt"],
   "generate-script":     ["styleGuide"],
-  "speech-to-video":     ["prompt", "negativePrompt"],
-  "extend-video":        ["prompt"],
+  "speech-to-video":     ["prompt", "negativePrompt", "cameraMotion", "lens", "cameraFormat", "colorLook", "atmosphere"],
+  "extend-video":        ["prompt", "cameraMotion", "lens", "cameraFormat", "colorLook", "atmosphere"],
   "motion-transfer":     ["prompt"],
   "image-to-text":       ["customPrompt"],
   "instagram-post":      ["caption", "title"],

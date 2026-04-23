@@ -125,15 +125,15 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     id: "crash-zoom-in",
     label: "Crash Zoom In",
     category: "zoom",
-    description: "Very fast dramatic zoom in",
-    promptHint: "fast crash zoom in, sudden dramatic zoom toward subject",
+    description: "Snappy whip-style zoom in",
+    promptHint: "fast crash zoom in, snappy whip-style sudden dramatic zoom toward subject",
   },
   {
     id: "crash-zoom-out",
     label: "Crash Zoom Out",
     category: "zoom",
-    description: "Very fast dramatic zoom out",
-    promptHint: "fast crash zoom out, sudden dramatic pull back",
+    description: "Snappy whip-style zoom out",
+    promptHint: "fast crash zoom out, snappy whip-style sudden dramatic pull back",
   },
 
   // Dolly — physical forward/back
@@ -403,6 +403,50 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     description: "Pull focus between foreground and background",
     promptHint: "rack focus, lens focus shifts from a foreground subject to a background subject (or vice versa), the unfocused plane blurs",
   },
+
+  // Modern / social-video vocabulary
+  {
+    id: "handheld-vlog",
+    label: "Handheld Vlog",
+    category: "default",
+    description: "Casual vlog-style handheld",
+    promptHint: "casual handheld vlog-style camera, slight wandering and natural shake, talking-to-camera framing",
+  },
+  {
+    id: "pov-walk",
+    label: "POV Walk",
+    category: "tracking",
+    description: "First-person walking POV",
+    promptHint: "first-person POV walking camera, GoPro-style head-mounted perspective with natural footstep movement",
+  },
+  {
+    id: "velocity-edit",
+    label: "Velocity Edit",
+    category: "special",
+    description: "TikTok speed-ramp pacing",
+    promptHint: "rapid speed-ramped camera move with characteristic TikTok velocity-edit pacing, dynamic acceleration into and out of the shot",
+  },
+  {
+    id: "match-cut-zoom",
+    label: "Match Cut Zoom",
+    category: "zoom",
+    description: "Beat-timed zoom for cuts",
+    promptHint: "rapid zoom timed to a beat, suggesting a match cut to the next shot",
+  },
+  {
+    id: "screen-tap",
+    label: "Screen Tap",
+    category: "special",
+    description: "On-screen finger-tap transition",
+    promptHint: "camera transition triggered by an on-screen finger tap, TikTok-native pacing with snap to the next subject",
+  },
+  {
+    id: "phone-flip",
+    label: "Phone Flip",
+    category: "special",
+    description: "Front/rear camera flip",
+    promptHint: "camera-flip transition where the phone visibly rotates between the front and rear sensors, brief blur during the swap",
+  },
 ]
 
 export const CAMERA_MOTION_CATEGORY_ORDER: ReadonlyArray<CameraMotionCategory> = [
@@ -458,3 +502,37 @@ export function getCameraMotionPromptHint(id: string | undefined | null): string
 }
 
 export const CAMERA_MOTION_IDS: ReadonlyArray<string> = CAMERA_MOTIONS.map((m) => m.id)
+
+// ---------------------------------------------------------------------------
+// Graph-aware composer — start/end input handles
+// ---------------------------------------------------------------------------
+
+/**
+ * Compose a structural prompt-hint sentence from a camera-motion id plus
+ * arrays of start-state and end-state promptHints (collected by walking
+ * the source camera-motion node's startState / endState input handles
+ * upstream to find connected parameter nodes).
+ *
+ * - No connected nodes → bare motion promptHint.
+ * - Start only → "<motion>, beginning with <start hints joined>".
+ * - End only → "<motion>, ending with <end hints joined>".
+ * - Both → "<motion>, beginning with <start>, ending with <end>".
+ *
+ * Hints within each side are joined with " and " for grammatical flow.
+ * If multiple nodes are connected (e.g. Framing + Lighting + Tone), all
+ * three contribute their hint to the clause.
+ */
+export function composeCameraMotionHintFromConnections(
+  motionId: string | undefined,
+  startHints: ReadonlyArray<string>,
+  endHints: ReadonlyArray<string>,
+): string {
+  const base = getCameraMotionPromptHint(motionId)
+  if (!base) return ""
+  const parts: string[] = [base]
+  const startClause = startHints.filter((h) => h && h.length > 0).join(" and ")
+  const endClause = endHints.filter((h) => h && h.length > 0).join(" and ")
+  if (startClause) parts.push(`beginning with ${startClause}`)
+  if (endClause) parts.push(`ending with ${endClause}`)
+  return parts.join(", ")
+}

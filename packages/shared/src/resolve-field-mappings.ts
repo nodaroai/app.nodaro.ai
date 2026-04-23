@@ -17,13 +17,13 @@ import { injectUpstream } from "./inject-upstream.js"
 export function resolveFieldMappings(
   data: Record<string, unknown>,
   upstreamText: string | undefined,
-  textFieldNames: ReadonlyArray<string>,
+  mappableFieldNames: ReadonlyArray<string>,
   getSourceOutput: (sourceNodeId: string) => string | undefined,
 ): Record<string, unknown> {
   const fm = data.fieldMappings as Record<string, { sourceNodeId: string }> | undefined
   const resolved = { ...data }
 
-  for (const field of textFieldNames) {
+  for (const field of mappableFieldNames) {
     const mapping = fm?.[field]
 
     if (mapping?.sourceNodeId) {
