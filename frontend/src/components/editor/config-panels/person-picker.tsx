@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useId, useMemo, useState } from "react"
+import { memo, useId, useMemo, useState, type JSX } from "react"
 import { Search } from "lucide-react"
 import {
   PEOPLE,
@@ -15,7 +15,16 @@ import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { ColorSwatch } from "./color-swatch"
 import { getPersonSwatch } from "./color-swatches"
-import { BuildIcon, FacialHairIcon } from "./small-silhouette-icons"
+import {
+  BuildIcon,
+  FacialHairIcon,
+  FaceShapeIcon,
+  JawlineIcon,
+  EyeShapeIcon,
+  NoseIcon,
+  LipsIcon,
+  BodyProportionsIcon,
+} from "./small-silhouette-icons"
 
 interface PersonPickerProps {
   readonly value: PersonValue
@@ -152,8 +161,15 @@ function DimensionSection({
         {entries.map((entry) => {
           const selected = checked && entry.id === current
           const swatch = getPersonSwatch(entry.id)
-          const buildIcon = dimension === "build" ? <BuildIcon buildId={entry.id} className="size-6" /> : null
-          const facialIcon = dimension === "facial-hair" ? <FacialHairIcon facialHairId={entry.id} className="size-6" /> : null
+          let icon: JSX.Element | null = null
+          if (dimension === "build") icon = <BuildIcon buildId={entry.id} className="size-6" />
+          else if (dimension === "facial-hair") icon = <FacialHairIcon facialHairId={entry.id} className="size-6" />
+          else if (dimension === "face-shape") icon = <FaceShapeIcon id={entry.id} className="size-6" />
+          else if (dimension === "jawline") icon = <JawlineIcon id={entry.id} className="size-6" />
+          else if (dimension === "eye-shape") icon = <EyeShapeIcon id={entry.id} className="size-6" />
+          else if (dimension === "nose") icon = <NoseIcon id={entry.id} className="size-6" />
+          else if (dimension === "lips") icon = <LipsIcon id={entry.id} className="size-6" />
+          else if (dimension === "body-proportions") icon = <BodyProportionsIcon id={entry.id} className="size-6" />
           return (
             <button
               key={entry.id}
@@ -170,8 +186,7 @@ function DimensionSection({
               )}
             >
               {swatch && <ColorSwatch value={swatch} className="size-5" />}
-              {buildIcon}
-              {facialIcon}
+              {icon}
               <span
                 className={cn(
                   "text-[11px] font-medium leading-tight truncate max-w-full",

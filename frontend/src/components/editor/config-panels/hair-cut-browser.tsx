@@ -18,10 +18,12 @@ export const HairCutBrowser = memo(function HairCutBrowser({
   value,
   onChange,
   className,
+  variant = "full",
 }: {
   readonly value: string | undefined
   readonly onChange: (id: string | undefined) => void
   readonly className?: string
+  readonly variant?: "full" | "compact"
 }) {
   const entries = useMemo<ReadonlyArray<Styling>>(
     () => STYLINGS.filter((s) => s.dimension === "hair-cut"),
@@ -40,6 +42,8 @@ export const HairCutBrowser = memo(function HairCutBrowser({
         <HairIcon hairCutId={entry.id} className="size-full" />
       )}
       className={className}
+      triggerVariant={variant}
+      triggerLabel="Pick by look"
     />
   )
 })

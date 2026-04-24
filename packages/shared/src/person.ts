@@ -37,6 +37,12 @@ export type PersonDimension =
   | "age"
   | "ethnicity"
   | "build"
+  | "body-proportions"
+  | "face-shape"
+  | "jawline"
+  | "eye-shape"
+  | "nose"
+  | "lips"
   | "hair-color"
   | "hair-base"
   | "eyebrows"
@@ -92,18 +98,37 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "age-elderly",  label: "Elderly",      dimension: "age", description: "70 and older",            promptHint: "elderly, in their 70s or older" },
 
   // -------------------- Ethnicity --------------------
-  { id: "east-asian",      label: "East Asian",      dimension: "ethnicity", description: "East Asian features",      promptHint: "East Asian" },
-  { id: "south-asian",     label: "South Asian",     dimension: "ethnicity", description: "South Asian features",     promptHint: "South Asian" },
-  { id: "southeast-asian", label: "Southeast Asian", dimension: "ethnicity", description: "Southeast Asian features", promptHint: "Southeast Asian" },
-  { id: "middle-eastern",  label: "Middle Eastern",  dimension: "ethnicity", description: "Middle Eastern features",  promptHint: "Middle Eastern" },
-  { id: "african",         label: "African",         dimension: "ethnicity", description: "African features",                  promptHint: "of African descent" },
-  { id: "nordic",          label: "Nordic",          dimension: "ethnicity", description: "Scandinavian / Northern European",  promptHint: "of Nordic Scandinavian descent" },
-  { id: "celtic",          label: "Celtic",          dimension: "ethnicity", description: "British / Irish features",          promptHint: "of Celtic British descent" },
-  { id: "mediterranean",   label: "Mediterranean",   dimension: "ethnicity", description: "Southern European features",        promptHint: "of Mediterranean descent" },
-  { id: "slavic",          label: "Slavic",          dimension: "ethnicity", description: "Eastern European features",         promptHint: "of Slavic Eastern European descent" },
-  { id: "latin-american",  label: "Latin American",  dimension: "ethnicity", description: "Latin American features",           promptHint: "Latin American" },
-  { id: "indigenous",      label: "Indigenous",      dimension: "ethnicity", description: "Indigenous features",      promptHint: "Indigenous" },
-  { id: "mixed",           label: "Mixed",           dimension: "ethnicity", description: "Mixed heritage",           promptHint: "of mixed heritage" },
+  // East / South / Southeast Asian
+  { id: "east-asian",         label: "East Asian",         dimension: "ethnicity", description: "East Asian features (broad)",       promptHint: "East Asian" },
+  { id: "mongolian-tibetan",  label: "Mongolian / Tibetan", dimension: "ethnicity", description: "Mongolian / Tibetan features",     promptHint: "of Mongolian or Tibetan descent" },
+  { id: "south-asian",        label: "South Asian / Indian", dimension: "ethnicity", description: "Indian / Pakistani / Bangladeshi / Sri Lankan", promptHint: "South Asian" },
+  { id: "southeast-asian",    label: "Southeast Asian",    dimension: "ethnicity", description: "Thai / Vietnamese / Indonesian / Khmer", promptHint: "Southeast Asian" },
+  { id: "filipino",           label: "Filipino",           dimension: "ethnicity", description: "Filipino features (Asian + Spanish heritage)", promptHint: "Filipino" },
+  // Middle East / North Africa
+  { id: "middle-eastern",     label: "Middle Eastern",     dimension: "ethnicity", description: "Arab / Levantine features",         promptHint: "Middle Eastern" },
+  { id: "persian",            label: "Persian / Iranian",  dimension: "ethnicity", description: "Indo-Iranian features",             promptHint: "of Persian Iranian descent" },
+  { id: "berber-amazigh",     label: "Berber / Amazigh",   dimension: "ethnicity", description: "North African Berber / Amazigh",    promptHint: "of Berber Amazigh North African descent" },
+  // African breakouts
+  { id: "african",            label: "African (general)",  dimension: "ethnicity", description: "Sub-Saharan African (broad)",       promptHint: "of African descent" },
+  { id: "west-african",       label: "West African",       dimension: "ethnicity", description: "Yoruba / Igbo / Akan / Wolof",     promptHint: "of West African descent" },
+  { id: "east-african",       label: "East African",       dimension: "ethnicity", description: "Somali / Ethiopian / Swahili",     promptHint: "of East African descent" },
+  { id: "central-african",    label: "Central African",    dimension: "ethnicity", description: "Bantu / Congolese / Angolan",       promptHint: "of Central African descent" },
+  { id: "southern-african",   label: "Southern African",   dimension: "ethnicity", description: "Zulu / Xhosa / Sotho",              promptHint: "of Southern African descent" },
+  { id: "afro-caribbean",     label: "Afro-Caribbean",     dimension: "ethnicity", description: "African + European + Indigenous heritage", promptHint: "of Afro-Caribbean descent" },
+  // European
+  { id: "nordic",             label: "Nordic",             dimension: "ethnicity", description: "Scandinavian / Northern European",  promptHint: "of Nordic Scandinavian descent" },
+  { id: "celtic",             label: "Celtic",             dimension: "ethnicity", description: "British / Irish features",          promptHint: "of Celtic British descent" },
+  { id: "mediterranean",      label: "Mediterranean",      dimension: "ethnicity", description: "Southern European features",        promptHint: "of Mediterranean descent" },
+  { id: "slavic",             label: "Slavic",             dimension: "ethnicity", description: "Eastern European features",         promptHint: "of Slavic Eastern European descent" },
+  // Americas
+  { id: "latin-american",     label: "Latin American",     dimension: "ethnicity", description: "Latin American (broad mestizo)",   promptHint: "Latin American" },
+  { id: "native-american",    label: "Native American",    dimension: "ethnicity", description: "Native American / First Nations",   promptHint: "Native American" },
+  // Indigenous (split from old generic "Indigenous")
+  { id: "aboriginal-australian", label: "Aboriginal Australian", dimension: "ethnicity", description: "Aboriginal Australian / Torres Strait", promptHint: "Aboriginal Australian" },
+  { id: "pacific-islander",   label: "Pacific Islander",   dimension: "ethnicity", description: "Polynesian / Maori / Samoan / Hawaiian", promptHint: "Pacific Islander" },
+  { id: "inuit",              label: "Inuit / Arctic",     dimension: "ethnicity", description: "Inuit / Yupik / Aleut",             promptHint: "of Inuit Arctic descent" },
+  // Mixed
+  { id: "mixed",              label: "Mixed",              dimension: "ethnicity", description: "Mixed heritage",                    promptHint: "of mixed heritage" },
 
   // -------------------- Build (silhouette + height) --------------------
   { id: "petite",        label: "Petite",         dimension: "build", description: "Short and small-framed", promptHint: "petite" },
@@ -114,6 +139,61 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "curvy",         label: "Curvy",          dimension: "build", description: "Curvy figure",           promptHint: "curvy figure" },
   { id: "heavy-set",     label: "Heavy-set",      dimension: "build", description: "Large, heavy-set",       promptHint: "heavy-set build" },
   { id: "tall-lean",     label: "Tall & Lean",    dimension: "build", description: "Tall, lean frame",       promptHint: "tall and lean" },
+
+  // -------------------- Body Proportions (ratio, distinct from Build's silhouette+size) --------------------
+  { id: "proportions-balanced",     label: "Balanced",       dimension: "body-proportions", description: "Even legs-to-torso ratio",   promptHint: "balanced body proportions, even legs-to-torso ratio" },
+  { id: "proportions-long-legged",  label: "Long-Legged",    dimension: "body-proportions", description: "Notably long legs",           promptHint: "long legs in proportion to a shorter torso" },
+  { id: "proportions-short-legged", label: "Short-Legged",   dimension: "body-proportions", description: "Shorter legs, longer torso",  promptHint: "shorter legs in proportion to a longer torso" },
+  { id: "proportions-long-torso",   label: "Long Torso",     dimension: "body-proportions", description: "Notably long torso",          promptHint: "a notably long torso" },
+  { id: "proportions-hourglass",    label: "Hourglass",      dimension: "body-proportions", description: "Defined waist, balanced bust + hips", promptHint: "an hourglass figure with a defined waist and balanced bust and hips" },
+  { id: "proportions-pear",         label: "Pear",           dimension: "body-proportions", description: "Wider hips than shoulders",   promptHint: "a pear-shaped figure with hips wider than shoulders" },
+  { id: "proportions-apple",        label: "Apple",          dimension: "body-proportions", description: "Fuller midsection",           promptHint: "an apple-shaped figure carrying weight in the midsection" },
+  { id: "proportions-inverted",     label: "Inverted Triangle", dimension: "body-proportions", description: "Broad shoulders, narrow hips", promptHint: "an inverted triangle figure with broad shoulders and narrow hips" },
+
+  // -------------------- Face Shape --------------------
+  { id: "face-oval",       label: "Oval",       dimension: "face-shape", description: "Slightly longer than wide, soft curves",     promptHint: "an oval face shape" },
+  { id: "face-round",      label: "Round",      dimension: "face-shape", description: "Soft circular face",                         promptHint: "a round face shape" },
+  { id: "face-square",     label: "Square",     dimension: "face-shape", description: "Strong jaw, equal width forehead and jaw",   promptHint: "a square face shape with a strong jaw" },
+  { id: "face-heart",      label: "Heart",      dimension: "face-shape", description: "Wider forehead, pointed chin",               promptHint: "a heart-shaped face with a wide forehead and pointed chin" },
+  { id: "face-diamond",    label: "Diamond",    dimension: "face-shape", description: "Narrow forehead and chin, wide cheekbones",  promptHint: "a diamond face shape with a narrow forehead and chin and wide cheekbones" },
+  { id: "face-oblong",     label: "Oblong",     dimension: "face-shape", description: "Long and narrow",                            promptHint: "an oblong face shape, long and narrow" },
+  { id: "face-triangular", label: "Triangular", dimension: "face-shape", description: "Narrow forehead, wide jaw",                  promptHint: "a triangular face shape with a narrow forehead and wide jaw" },
+
+  // -------------------- Jawline --------------------
+  { id: "jaw-strong",  label: "Strong",  dimension: "jawline", description: "Sharp, defined jawline",     promptHint: "a strong, sharply defined jawline" },
+  { id: "jaw-soft",    label: "Soft",    dimension: "jawline", description: "Soft, rounded jaw",          promptHint: "a soft rounded jawline" },
+  { id: "jaw-pointed", label: "Pointed", dimension: "jawline", description: "Pointed chin, narrow jaw",   promptHint: "a pointed chin with a narrow jawline" },
+  { id: "jaw-wide",    label: "Wide",    dimension: "jawline", description: "Wide, broad jaw",            promptHint: "a wide broad jaw" },
+  { id: "jaw-double",  label: "Double Chin", dimension: "jawline", description: "Visible double chin",    promptHint: "a visible double chin" },
+
+  // -------------------- Eye Shape --------------------
+  { id: "eye-almond",      label: "Almond",     dimension: "eye-shape", description: "Almond-shaped, slightly upturned",  promptHint: "almond-shaped eyes" },
+  { id: "eye-round",       label: "Round",      dimension: "eye-shape", description: "Wide, round eyes",                  promptHint: "wide round eyes" },
+  { id: "eye-hooded",      label: "Hooded",     dimension: "eye-shape", description: "Upper lid partially covers crease", promptHint: "hooded eyes with the upper lid partially covering the crease" },
+  { id: "eye-monolid",     label: "Monolid",    dimension: "eye-shape", description: "No visible crease, smooth lid",     promptHint: "monolid eyes with no visible crease" },
+  { id: "eye-deep-set",    label: "Deep-set",   dimension: "eye-shape", description: "Set deeper into the socket",        promptHint: "deep-set eyes" },
+  { id: "eye-downturned",  label: "Downturned", dimension: "eye-shape", description: "Outer corners angle down",          promptHint: "downturned eyes with outer corners angled down" },
+  { id: "eye-upturned",    label: "Upturned",   dimension: "eye-shape", description: "Outer corners lift up",             promptHint: "upturned eyes with outer corners lifted" },
+  { id: "eye-wide-set",    label: "Wide-set",   dimension: "eye-shape", description: "Eyes spaced widely apart",          promptHint: "wide-set eyes" },
+  { id: "eye-close-set",   label: "Close-set",  dimension: "eye-shape", description: "Eyes set close together",           promptHint: "close-set eyes" },
+
+  // -------------------- Nose --------------------
+  { id: "nose-straight",  label: "Straight",  dimension: "nose", description: "Straight bridge",                 promptHint: "a straight nose" },
+  { id: "nose-aquiline",  label: "Aquiline",  dimension: "nose", description: "Curved hooked bridge",            promptHint: "an aquiline nose with a curved bridge" },
+  { id: "nose-roman",     label: "Roman",     dimension: "nose", description: "Prominent bridge with slight bump", promptHint: "a Roman nose with a prominent bridge" },
+  { id: "nose-snub",      label: "Snub",      dimension: "nose", description: "Short, slightly upturned",        promptHint: "a snub nose, short and slightly upturned" },
+  { id: "nose-button",    label: "Button",    dimension: "nose", description: "Small, rounded tip",              promptHint: "a small button nose with a rounded tip" },
+  { id: "nose-broad",     label: "Broad",     dimension: "nose", description: "Wide nostrils, broad bridge",     promptHint: "a broad nose with wide nostrils" },
+  { id: "nose-narrow",    label: "Narrow",    dimension: "nose", description: "Thin, narrow",                    promptHint: "a narrow thin nose" },
+  { id: "nose-hooked",    label: "Hooked",    dimension: "nose", description: "Strongly curved hooked tip",      promptHint: "a hooked nose with a strongly curved tip" },
+
+  // -------------------- Lips --------------------
+  { id: "lips-thin",       label: "Thin",        dimension: "lips", description: "Thin lips",                         promptHint: "thin lips" },
+  { id: "lips-medium",     label: "Medium",      dimension: "lips", description: "Average fullness",                  promptHint: "medium lips of average fullness" },
+  { id: "lips-full",       label: "Full",        dimension: "lips", description: "Full plump lips",                   promptHint: "full plump lips" },
+  { id: "lips-wide",       label: "Wide",        dimension: "lips", description: "Wide mouth shape",                  promptHint: "a wide mouth" },
+  { id: "lips-cupids-bow", label: "Cupid's Bow", dimension: "lips", description: "Pronounced cupid's bow on upper lip", promptHint: "a pronounced cupid's bow on the upper lip" },
+  { id: "lips-small",      label: "Small",       dimension: "lips", description: "Petite mouth",                      promptHint: "a small petite mouth" },
 
   // -------------------- Hair Color --------------------
   // Blonde family (light → warm → cool)
@@ -226,13 +306,24 @@ export const PEOPLE: ReadonlyArray<Person> = [
 ] as const
 
 export const PERSON_DIMENSION_ORDER: ReadonlyArray<PersonDimension> = [
+  // Identity
   "type",
   "age",
   "ethnicity",
+  // Body
   "build",
+  "body-proportions",
+  // Face structure
+  "face-shape",
+  "jawline",
+  "eye-shape",
+  "nose",
+  "lips",
+  // Hair
   "hair-base",
   "hair-color",
   "eyebrows",
+  // Skin & eyes
   "skin-tone",
   "skin-texture",
   "eye-color",
@@ -245,6 +336,12 @@ export const PERSON_DIMENSION_LABELS: Readonly<Record<PersonDimension, string>> 
   age: "Age",
   ethnicity: "Ethnicity",
   build: "Build",
+  "body-proportions": "Body Proportions",
+  "face-shape": "Face Shape",
+  jawline: "Jawline",
+  "eye-shape": "Eye Shape",
+  nose: "Nose",
+  lips: "Lips",
   "hair-color": "Hair Color",
   "hair-base": "Hair (Texture & Length)",
   eyebrows: "Eyebrows",
@@ -262,12 +359,21 @@ export const PERSON_DIMENSION_LABELS: Readonly<Record<PersonDimension, string>> 
  */
 export const PERSON_FIELD_BY_DIMENSION: Record<
   PersonDimension,
-  "type" | "age" | "ethnicity" | "build" | "hairColor" | "hairBase" | "eyebrows" | "skinTone" | "skinTexture" | "eyeColor" | "facialHair" | "distinctiveFeature"
+  | "type" | "age" | "ethnicity" | "build" | "bodyProportions"
+  | "faceShape" | "jawline" | "eyeShape" | "nose" | "lips"
+  | "hairColor" | "hairBase" | "eyebrows"
+  | "skinTone" | "skinTexture" | "eyeColor" | "facialHair" | "distinctiveFeature"
 > = {
   type: "type",
   age: "age",
   ethnicity: "ethnicity",
   build: "build",
+  "body-proportions": "bodyProportions",
+  "face-shape": "faceShape",
+  jawline: "jawline",
+  "eye-shape": "eyeShape",
+  nose: "nose",
+  lips: "lips",
   "hair-color": "hairColor",
   "hair-base": "hairBase",
   eyebrows: "eyebrows",
@@ -287,6 +393,19 @@ export interface PersonValue {
   age?: string
   ethnicity?: string
   build?: string
+  /** Body shape ratio (long-legged, hourglass, pear…). Independent from
+   *  Build, which describes silhouette + size. */
+  bodyProportions?: string
+  /** Face silhouette (oval, round, square, heart…). */
+  faceShape?: string
+  /** Jaw shape (strong, soft, pointed, wide). */
+  jawline?: string
+  /** Eye shape (almond, hooded, monolid, deep-set…). */
+  eyeShape?: string
+  /** Nose shape (straight, aquiline, snub, broad…). */
+  nose?: string
+  /** Lip fullness / shape (thin, full, wide, cupid's bow…). */
+  lips?: string
   hairColor?: string
   /** Natural hair texture + length (texture×length combos). The actual cut
    *  / styling choice (bob, wolf cut, braids…) lives in Styling.hair-cut. */
