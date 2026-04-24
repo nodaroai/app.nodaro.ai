@@ -24,14 +24,27 @@ function makeNode<T extends Record<string, unknown>>(type: string, data: T): Wor
 }
 
 describe("extractNodeOutput — parameter nodes", () => {
-  it("returns first set per-category framing id for framing nodes (multi-category)", () => {
-    expect(extractNodeOutput(makeNode("framing", { shotSize: "close-up" }))).toBe("close-up")
+  // Parameter nodes now emit their FULL prompt hint (not the bare picker id)
+  // so text consumers (Combine Text, LLM Chat, gen nodes' prompt handle) see
+  // the same rich clause that the cinematography handle would inject.
+  // Field-mapping resolution bypasses extractNodeOutput and reads
+  // getParameterValue directly when it needs the bare id.
+  it("returns rich prompt hint for framing nodes (multi-category)", () => {
+    const out = extractNodeOutput(makeNode("framing", { shotSize: "close-up" }))
+    expect(out).toBeDefined()
+    // buildFramingHints emits a descriptive clause for `close-up`
+    expect(out!.toLowerCase()).toContain("close")
   })
-  it("returns cameraMotion id for camera-motion nodes", () => {
-    expect(extractNodeOutput(makeNode("camera-motion", { cameraMotion: "orbit-right" }))).toBe("orbit-right")
+  it("returns rich motion hint for camera-motion nodes", () => {
+    const out = extractNodeOutput(makeNode("camera-motion", { cameraMotion: "orbit-right" }))
+    expect(out).toBeDefined()
+    // composeCameraMotionHintFromConnections returns the motion's prompt hint
+    expect(out!.toLowerCase()).toContain("orbit")
   })
-  it("returns motion value for motion nodes", () => {
-    expect(extractNodeOutput(makeNode("motion", { motion: "moderate" }))).toBe("moderate")
+  it("returns undefined for legacy motion nodes (no hint generator)", () => {
+    // Legacy `motion` dim isn't in getParameterPromptHint. Field mappings
+    // still read the bare value via getParameterValue.
+    expect(extractNodeOutput(makeNode("motion", { motion: "moderate" }))).toBeUndefined()
   })
   it("returns tone value for tone nodes", () => {
     expect(extractNodeOutput(makeNode("tone", { tone: "dramatic" }))).toBe("dramatic")
