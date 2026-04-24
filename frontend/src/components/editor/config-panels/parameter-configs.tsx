@@ -38,6 +38,7 @@ import type {
   PersonData,
   MoodData,
   PoseData,
+  StylingData,
   TemporalData,
 } from "@/types/nodes"
 import { CameraMotionPicker } from "./camera-motion-picker"
@@ -52,6 +53,7 @@ import { SettingPicker } from "./setting-picker"
 import { PersonPicker } from "./person-picker"
 import { MoodPicker } from "./mood-picker"
 import { PosePicker } from "./pose-picker"
+import { StylingPicker } from "./styling-picker"
 import { TemporalPicker } from "./temporal-picker"
 import { PromptInjectionPreview } from "./prompt-injection-preview"
 import { composeCameraMotionHintForNode } from "@/lib/cinematography-hints"
@@ -66,6 +68,7 @@ import { getSettingPromptHint } from "@nodaro-shared/setting"
 import { buildPersonHints } from "@nodaro-shared/person"
 import { buildMoodHints } from "@nodaro-shared/mood"
 import { buildPoseHints } from "@nodaro-shared/pose"
+import { buildStylingHints } from "@nodaro-shared/styling"
 import { buildTemporalHints } from "@nodaro-shared/temporal"
 import type { ConfigProps } from "./types"
 
@@ -565,6 +568,72 @@ export function PoseConfig({ data, onUpdate }: ConfigProps<PoseData>) {
         value={data.pose || "standing-upright"}
         onValueChange={(v) => onUpdate({ pose: v })}
       />
+    </div>
+  )
+}
+
+export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
+  const maxItemsPerRow = data.maxItemsPerRow ?? 2
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={buildStylingHints(data)} />
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="styling-pre-text" className="text-xs text-muted-foreground">
+          Custom text (before)
+        </Label>
+        <Textarea
+          id="styling-pre-text"
+          value={data.preText ?? ""}
+          onChange={(e) => onUpdate({ preText: e.target.value })}
+          placeholder="e.g. freshly retouched, magazine-cover quality"
+          rows={2}
+          className="text-xs resize-none"
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="styling-post-text" className="text-xs text-muted-foreground">
+          Custom text (after)
+        </Label>
+        <Textarea
+          id="styling-post-text"
+          value={data.postText ?? ""}
+          onChange={(e) => onUpdate({ postText: e.target.value })}
+          placeholder="e.g. with a ruby tennis bracelet, with rose-gold rings"
+          rows={2}
+          className="text-xs resize-none"
+        />
+      </div>
+      <Label>Styling</Label>
+      <StylingPicker
+        value={{
+          makeup: data.makeup,
+          eyewear: data.eyewear,
+          headwear: data.headwear,
+          jewelry: data.jewelry,
+          nails: data.nails,
+          facePaint: data.facePaint,
+        }}
+        onChange={(patch) => onUpdate(patch)}
+      />
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <Label htmlFor="styling-max-items-per-row" className="text-xs text-muted-foreground">
+          Items per row (node card)
+        </Label>
+        <input
+          id="styling-max-items-per-row"
+          type="number"
+          min={1}
+          max={4}
+          value={maxItemsPerRow}
+          onChange={(e) => {
+            const n = Number(e.target.value)
+            if (!Number.isFinite(n)) return
+            const clamped = Math.max(1, Math.min(4, Math.round(n)))
+            onUpdate({ maxItemsPerRow: clamped })
+          }}
+          className="w-16 h-7 rounded-md border border-input bg-background px-2 text-xs text-right"
+        />
+      </div>
     </div>
   )
 }

@@ -9,6 +9,7 @@ import { getSettingPromptHint } from "@nodaro-shared/setting"
 import { buildPersonHints } from "@nodaro-shared/person"
 import { buildMoodHints } from "@nodaro-shared/mood"
 import { buildPoseHints } from "@nodaro-shared/pose"
+import { buildStylingHints } from "@nodaro-shared/styling"
 import { buildTemporalHints } from "@nodaro-shared/temporal"
 import { composeCameraMotionHintFromConnections } from "@nodaro-shared/camera-motions"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
@@ -53,6 +54,10 @@ export function getNodePromptHint(node: WorkflowNode | undefined): string {
     }
     case "pose": {
       const hints = buildPoseHints(data)
+      return hints.join(", ")
+    }
+    case "styling": {
+      const hints = buildStylingHints(data)
       return hints.join(", ")
     }
     case "temporal": {

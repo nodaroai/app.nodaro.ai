@@ -462,6 +462,25 @@ export interface PersonData {
   maxItemsPerRow?: number
 }
 
+/** Standalone Styling parameter node data. Beauty + accessories compound
+ * hint appended to downstream gen prompts. Multi-dimension: 6 orthogonal
+ * fields covering makeup, eyewear, headwear, jewelry, nails, face paint.
+ * Distinct from clothing (future Wardrobe node). Applies to both image
+ * and video consumers. See `packages/shared/src/styling.ts`. */
+export interface StylingData {
+  [key: string]: unknown
+  label: string
+  makeup?: string
+  eyewear?: string
+  headwear?: string
+  jewelry?: string
+  nails?: string
+  facePaint?: string
+  preText?: string
+  postText?: string
+  maxItemsPerRow?: number
+}
+
 /** Standalone Mood parameter node data. Emotional-state hint appended to
  * downstream gen prompts ("happy", "melancholy", "fierce"). Single-pick
  * with optional pre/post free-text fields. See `packages/shared/src/mood.ts`. */
@@ -2770,6 +2789,7 @@ export type SceneNodeData =
   | PersonData
   | MoodData
   | PoseData
+  | StylingData
   | TemporalData
   | GenerateScriptData
   | GenerateImageData
@@ -2898,6 +2918,7 @@ export type SceneNodeType =
   | "person"
   | "mood"
   | "pose"
+  | "styling"
   | "temporal"
   | "generate-script"
   | "generate-image"
@@ -3299,6 +3320,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Pose", pose: "standing-upright" },
+  },
+  {
+    type: "styling",
+    label: "Styling",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Styling", makeup: "makeup-natural", maxItemsPerRow: 2 },
   },
   {
     type: "temporal",

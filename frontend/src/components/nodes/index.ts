@@ -25,6 +25,7 @@ import { SettingNode } from "./setting-node";
 import { PersonNode } from "./person-node";
 import { MoodNode } from "./mood-node";
 import { PoseNode } from "./pose-node";
+import { StylingNode } from "./styling-node";
 import { TemporalNode } from "./temporal-node";
 import { ReferenceAudioNode } from "./reference-audio-node";
 import { GenerateScriptNode } from "./generate-script-node";
@@ -154,6 +155,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "person": PersonNode,
   "mood": MoodNode,
   "pose": PoseNode,
+  "styling": StylingNode,
   "temporal": TemporalNode,
   "reference-audio": ReferenceAudioNode,
   // AI
