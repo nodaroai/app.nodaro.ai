@@ -1298,16 +1298,31 @@ export function AddNodePopup({
 
   if (!open && !componentBrowserOpen) return null;
 
+  // Viewport-aware clamp so the popup's scrollable body is always reachable.
+  // Previously the raw mouse `position` leaked the popup below the viewport
+  // bottom, cutting off the node list at the fold.
+  const POPUP_W = 288 // w-72
+  const POPUP_H_ESTIMATE = 500 // header ≈ 60 + search ≈ 60 + max-h-80 (320) + footer slack
+  const MARGIN = 8
+  const viewportW = typeof window !== "undefined" ? window.innerWidth : 1920
+  const viewportH = typeof window !== "undefined" ? window.innerHeight : 1080
   const popupStyle = position
-    ? { left: position.x, top: position.y }
-    : { left: 70, top: "50%", transform: "translateY(-50%)" };
+    ? (() => {
+        const desiredLeft = position.x
+        const desiredTop = position.y
+        const left = Math.max(MARGIN, Math.min(desiredLeft, viewportW - POPUP_W - MARGIN))
+        const top = Math.max(MARGIN, Math.min(desiredTop, viewportH - POPUP_H_ESTIMATE - MARGIN))
+        const maxHeight = `${viewportH - top - MARGIN}px`
+        return { left, top, maxHeight }
+      })()
+    : { left: 70, top: "50%", transform: "translateY(-50%)", maxHeight: `${viewportH - 2 * MARGIN}px` };
 
   return (
     <>
     {open && !componentBrowserOpen && <div
       ref={popupRef}
       className={cn(
-        "fixed z-[100] w-72",
+        "fixed z-[100] w-72 flex flex-col",
         "bg-white dark:bg-[#1E1E1E]",
         "border border-[#E2E8F0] dark:border-[#2D2D2D]",
         "rounded-xl shadow-xl",
@@ -1364,8 +1379,9 @@ export function AddNodePopup({
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-h-80 overflow-y-auto py-2">
+      {/* Content — flex-1 so it fills whatever space remains within the
+          viewport-clamped outer popup (header + search above are fixed). */}
+      <div className="flex-1 min-h-0 overflow-y-auto py-2">
         {searchQuery.trim() ? (
           // Search results
           filteredNodes.length > 0 ? (

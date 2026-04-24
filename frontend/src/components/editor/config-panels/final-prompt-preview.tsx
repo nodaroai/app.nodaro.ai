@@ -5,6 +5,7 @@ import { Check, Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { collectCinematographyHints, hasConnectedStyleNode } from "@/lib/cinematography-hints"
+import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs"
 import { getStylePromptHint } from "@nodaro-shared/style"
 
 interface FinalPromptPreviewProps {
@@ -43,7 +44,13 @@ export function FinalPromptPreview({
   className,
 }: FinalPromptPreviewProps) {
   const { composed, cineHints, trimmedNegative, copyText } = useMemo(() => {
-    const trimmedUser = (userPrompt ?? "").trim()
+    // Resolve {Node Label} variable refs so the preview shows the actual
+    // upstream value, not the literal placeholder. Mirrors the runtime
+    // resolution in execute-node.ts (calls resolveTextRefs on inputs.prompt
+    // before sending to the provider).
+    const refMap = consumerNodeId ? buildNodeRefMap(consumerNodeId, nodes, edges) : new Map<string, string>()
+    const rawUser = (userPrompt ?? "").trim()
+    const trimmedUser = (resolveTextRefs(rawUser, refMap) ?? rawUser).trim()
     // Bypass inline style entirely when a Style node is wired — mirrors the
     // runtime bypass in execute-node.ts and payload-builder.ts so the preview
     // matches what the provider actually receives.
@@ -56,7 +63,8 @@ export function FinalPromptPreview({
     const styleText = trimmedStyle
       ? (getStylePromptHint(trimmedStyle) || trimmedStyle)
       : ""
-    const neg = (negativePrompt ?? "").trim()
+    const rawNeg = (negativePrompt ?? "").trim()
+    const neg = (resolveTextRefs(rawNeg, refMap) ?? rawNeg).trim()
     const hints = consumerNodeId
       ? collectCinematographyHints(consumerNodeId, nodes, edges)
       : []

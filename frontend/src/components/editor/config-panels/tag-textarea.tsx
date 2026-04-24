@@ -80,7 +80,7 @@ export function TagTextarea(props: TagTextareaProps) {
   const [filterText, setFilterText] = useState("")
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [warning, setWarning] = useState<string | null>(null)
-  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const dropdownRef = useRef<HTMLDivElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -134,15 +134,36 @@ export function TagTextarea(props: TagTextareaProps) {
     setDropdownPos(null)
   }, [])
 
-  // Compute dropdown position relative to viewport when showing
+  // Compute dropdown position relative to viewport. Flips above the textarea
+  // when there isn't enough room below, and caps the height so the list is
+  // always scrollable within view — previously opened below only and got
+  // clipped off-screen near the bottom of the config panel.
   const updateDropdownPos = useCallback(() => {
     if (!wrapperRef.current) return
     const rect = wrapperRef.current.getBoundingClientRect()
-    setDropdownPos({
-      top: rect.bottom + 4,
-      left: rect.left,
-      width: rect.width,
-    })
+    const vh = window.innerHeight
+    const MARGIN = 8
+    const IDEAL_MAX_H = 256 // matches `max-h-64`
+    const spaceBelow = Math.max(0, vh - rect.bottom - MARGIN)
+    const spaceAbove = Math.max(0, rect.top - MARGIN)
+    // Prefer below, but flip if there's more room above and below is tight.
+    const flipUp = spaceBelow < 160 && spaceAbove > spaceBelow
+    if (flipUp) {
+      const maxHeight = Math.min(IDEAL_MAX_H, spaceAbove)
+      setDropdownPos({
+        top: rect.top - maxHeight - 4,
+        left: rect.left,
+        width: rect.width,
+        maxHeight,
+      })
+    } else {
+      setDropdownPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+        maxHeight: Math.min(IDEAL_MAX_H, spaceBelow),
+      })
+    }
   }, [])
 
   const insertTag = useCallback((tag: string) => {
@@ -321,29 +342,49 @@ export function TagTextarea(props: TagTextareaProps) {
         position: "fixed",
         top: dropdownPos.top,
         left: dropdownPos.left,
-        width: dropdownPos.width,
+        minWidth: Math.max(dropdownPos.width, 200),
+        maxHeight: dropdownPos.maxHeight,
       }}
-      className="z-[9999] max-h-52 overflow-y-auto rounded-md border border-border bg-popover shadow-md"
+      className="z-[9999] overflow-y-auto rounded-lg border border-border bg-popover shadow-lg py-1"
     >
       {Array.from(groupedFiltered.entries()).map(([category, items]) => (
         <div key={category}>
-          <div className="sticky top-0 bg-muted px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+          <div className="sticky top-0 bg-muted/80 backdrop-blur-sm px-2.5 py-1 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/50">
             {category}
           </div>
           {items.map((item) => {
             const idx = filtered.indexOf(item)
+            const isSelected = idx === selectedIndex
+            const isNodeRef = category !== "Audio Tags" && category !== "Suno"
             return (
               <button
                 key={item.tag}
                 type="button"
                 data-index={idx}
-                className={`w-full text-left px-3 py-1.5 text-xs cursor-pointer transition-colors ${idx === selectedIndex ? "bg-accent text-accent-foreground" : "hover:bg-muted"}`}
+                className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
+                  isSelected
+                    ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                    : "hover:bg-muted text-foreground"
+                }`}
                 onMouseDown={(e) => {
                   e.preventDefault()
                   insertTag(item.tag)
                 }}
               >
-                <span className="font-mono text-[11px]">{item.tag}</span>
+                {isNodeRef && (
+                  <span
+                    className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 ${
+                      isSelected
+                        ? "border-sky-400/60 bg-sky-500/20 text-sky-700 dark:text-sky-200"
+                        : "border-sky-400/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                    }`}
+                  >
+                    {item.tag}
+                  </span>
+                )}
+                {!isNodeRef && (
+                  <span className="font-mono text-[11px]">{item.tag}</span>
+                )}
               </button>
             )
           })}

@@ -146,25 +146,63 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "hair-dyed",        label: "Colorful",     dimension: "hair-color", description: "Dyed vibrant colors",       promptHint: "vibrantly dyed colorful hair" },
 
   // -------------------- Hair Style (length + texture) --------------------
-  { id: "style-pixie",         label: "Pixie",        dimension: "hair-style", description: "Short, cropped pixie cut",  promptHint: "a short pixie cut" },
-  { id: "style-short",         label: "Short",        dimension: "hair-style", description: "Short hair",                promptHint: "short hair" },
-  { id: "style-bob",           label: "Bob",          dimension: "hair-style", description: "Chin-length bob cut",       promptHint: "a chin-length bob cut" },
-  { id: "style-medium",        label: "Medium",       dimension: "hair-style", description: "Shoulder-length hair",      promptHint: "medium-length hair" },
-  { id: "style-long-straight", label: "Long Straight", dimension: "hair-style", description: "Long straight hair",       promptHint: "long straight hair" },
-  { id: "style-long-wavy",     label: "Long Wavy",    dimension: "hair-style", description: "Long wavy hair",            promptHint: "long wavy hair" },
-  { id: "style-long-curly",    label: "Long Curly",   dimension: "hair-style", description: "Long curly hair",           promptHint: "long curly hair" },
-  { id: "style-short-curly",   label: "Short Curly",  dimension: "hair-style", description: "Short curly hair",          promptHint: "short curly hair" },
-  { id: "style-afro",          label: "Afro",         dimension: "hair-style", description: "Rounded afro",              promptHint: "an afro" },
-  { id: "style-braids",        label: "Braids / Locs", dimension: "hair-style", description: "Braids or dreadlocks",       promptHint: "hair in braids" },
-  { id: "style-cornrows",      label: "Cornrows",     dimension: "hair-style", description: "Braided cornrow pattern",     promptHint: "hair in tight cornrows" },
-  { id: "style-ponytail",      label: "Ponytail",     dimension: "hair-style", description: "Pulled-back ponytail",        promptHint: "hair in a ponytail" },
-  { id: "style-bun",           label: "Bun",          dimension: "hair-style", description: "Hair in a bun",               promptHint: "hair in a bun" },
-  { id: "style-buzz-cut",      label: "Buzz Cut",     dimension: "hair-style", description: "Very short buzz cut",         promptHint: "a buzz cut" },
-  { id: "style-undercut",      label: "Undercut",     dimension: "hair-style", description: "Short sides, longer top",     promptHint: "an undercut with short sides and longer hair on top" },
-  { id: "style-shaved",        label: "Shaved / Bald", dimension: "hair-style", description: "Shaved head or bald",        promptHint: "a shaved head" },
-  { id: "style-bangs",         label: "Bangs",        dimension: "hair-style", description: "Hair across forehead",        promptHint: "hair with bangs across the forehead" },
-  { id: "style-side-swept",    label: "Side-Swept",   dimension: "hair-style", description: "Falls across face over one eye", promptHint: "hair side-swept across the face with strands falling over one eye" },
-  { id: "style-slicked-back",  label: "Slicked Back", dimension: "hair-style", description: "Pulled back, polished",       promptHint: "hair slicked back with a polished finish" },
+  // ---- Short cuts ----
+  { id: "style-pixie",           label: "Pixie",           dimension: "hair-style", description: "Short, cropped pixie cut",         promptHint: "a short pixie cut" },
+  { id: "style-buzz-cut",        label: "Buzz Cut",        dimension: "hair-style", description: "Very short buzz cut",              promptHint: "a buzz cut" },
+  { id: "style-crew-cut",        label: "Crew Cut",        dimension: "hair-style", description: "Short, tapered classic crew cut",  promptHint: "a short tapered crew cut" },
+  { id: "style-shaved",          label: "Shaved / Bald",   dimension: "hair-style", description: "Shaved head or bald",              promptHint: "a shaved head" },
+  { id: "style-undercut",        label: "Undercut",        dimension: "hair-style", description: "Short sides, longer top",          promptHint: "an undercut with short sides and longer hair on top" },
+  { id: "style-faux-hawk",       label: "Faux Hawk",       dimension: "hair-style", description: "Center strip raised, sides faded", promptHint: "a faux hawk with a raised center strip and faded sides" },
+  { id: "style-mohawk",          label: "Mohawk",          dimension: "hair-style", description: "Shaved sides, tall center strip",  promptHint: "a mohawk with shaved sides and a tall center strip" },
+  { id: "style-pompadour",       label: "Pompadour",       dimension: "hair-style", description: "Swept up and back volume in front", promptHint: "a pompadour with hair swept up and back from the forehead" },
+  { id: "style-short",           label: "Short",           dimension: "hair-style", description: "Short hair (generic)",             promptHint: "short hair" },
+  { id: "style-short-curly",     label: "Short Curly",     dimension: "hair-style", description: "Short curly hair",                 promptHint: "short curly hair" },
+
+  // ---- Bob family (short to long) ----
+  { id: "style-micro-bob",       label: "Micro Bob",       dimension: "hair-style", description: "Very short, ear-length bob",       promptHint: "a very short ear-length bob cut" },
+  { id: "style-french-bob",      label: "French Bob",      dimension: "hair-style", description: "Jaw-length blunt bob, often with bangs", promptHint: "a jaw-length blunt French bob with soft bangs" },
+  { id: "style-bob",             label: "Bob",             dimension: "hair-style", description: "Chin-length bob cut",              promptHint: "a chin-length bob cut" },
+  { id: "style-lob",             label: "Lob",             dimension: "hair-style", description: "Long bob, collarbone-length",      promptHint: "a long bob cut falling to the collarbone" },
+
+  // ---- Medium & long ----
+  { id: "style-medium",          label: "Medium",          dimension: "hair-style", description: "Shoulder-length hair",             promptHint: "medium-length hair" },
+  { id: "style-long-straight",   label: "Long Straight",   dimension: "hair-style", description: "Long straight hair",               promptHint: "long straight hair" },
+  { id: "style-long-wavy",       label: "Long Wavy",       dimension: "hair-style", description: "Long wavy hair",                   promptHint: "long wavy hair" },
+  { id: "style-long-curly",      label: "Long Curly",      dimension: "hair-style", description: "Long curly hair",                  promptHint: "long curly hair" },
+  { id: "style-afro",            label: "Afro",            dimension: "hair-style", description: "Rounded afro",                     promptHint: "an afro" },
+  { id: "style-mullet",          label: "Mullet",          dimension: "hair-style", description: "Short on top and sides, long in back", promptHint: "a mullet with short top and long back" },
+  { id: "style-wolf-cut",        label: "Wolf Cut",        dimension: "hair-style", description: "Shaggy layered mullet with fringe", promptHint: "a wolf cut with shaggy choppy layers and a wispy fringe" },
+
+  // ---- Bangs / fringe ----
+  { id: "style-bangs",           label: "Blunt Bangs",     dimension: "hair-style", description: "Straight bangs across forehead",   promptHint: "hair with blunt bangs across the forehead" },
+  { id: "style-curtain-bangs",   label: "Curtain Bangs",   dimension: "hair-style", description: "Center-parted face-framing bangs", promptHint: "long hair with center-parted curtain bangs framing the face" },
+  { id: "style-wispy-bangs",     label: "Wispy Bangs",     dimension: "hair-style", description: "Thin, piecey, airy fringe",        promptHint: "hair with thin wispy piecey bangs" },
+  { id: "style-side-swept",      label: "Side-Swept",      dimension: "hair-style", description: "Falls across face over one eye",   promptHint: "hair side-swept across the face with strands falling over one eye" },
+
+  // ---- Pulled back / updos ----
+  { id: "style-slicked-back",    label: "Slicked Back",    dimension: "hair-style", description: "Pulled straight back, polished",   promptHint: "hair slicked straight back with a polished finish" },
+  { id: "style-bardot-tendrils", label: "Bardot Tendrils", dimension: "hair-style", description: "Pulled back with face-framing strands", promptHint: "hair pulled back with thin face-framing tendrils falling loose at the temples" },
+  { id: "style-ponytail",        label: "Ponytail (Low)",  dimension: "hair-style", description: "Low pulled-back ponytail",         promptHint: "hair in a low pulled-back ponytail" },
+  { id: "style-high-ponytail",   label: "High Ponytail",   dimension: "hair-style", description: "Ponytail tied high on the crown",  promptHint: "hair in a high ponytail tied at the crown" },
+  { id: "style-half-up",         label: "Half-Up Half-Down", dimension: "hair-style", description: "Top pulled back, rest flows down", promptHint: "hair in a half-up half-down style, top pulled back with the rest flowing down" },
+  { id: "style-bun",             label: "Bun",             dimension: "hair-style", description: "Classic low or mid bun",           promptHint: "hair in a bun" },
+  { id: "style-top-knot",        label: "Top Knot",        dimension: "hair-style", description: "Bun tied high on the crown",       promptHint: "hair in a top knot on the crown" },
+  { id: "style-space-buns",      label: "Space Buns",      dimension: "hair-style", description: "Two symmetric buns either side",   promptHint: "hair in two symmetric space buns" },
+
+  // ---- Braids ----
+  { id: "style-braids",          label: "Braids",          dimension: "hair-style", description: "Multiple loose woven braids",      promptHint: "hair styled in multiple loose braids" },
+  { id: "style-single-braid",    label: "Single Braid",    dimension: "hair-style", description: "One long braid down the back",     promptHint: "hair in a single long braid down the back" },
+  { id: "style-two-braids",      label: "Two Braids",      dimension: "hair-style", description: "Pigtail braids either side",       promptHint: "hair in two pigtail braids" },
+  { id: "style-french-braid",    label: "French Braid",    dimension: "hair-style", description: "Woven flat against the scalp",     promptHint: "hair in a French braid woven flat against the scalp" },
+  { id: "style-dutch-braid",     label: "Dutch Braid",     dimension: "hair-style", description: "Inverted raised French braid",     promptHint: "hair in a raised Dutch braid" },
+  { id: "style-fishtail-braid",  label: "Fishtail Braid",  dimension: "hair-style", description: "Fine two-strand weave",            promptHint: "hair in a fishtail braid" },
+  { id: "style-box-braids",      label: "Box Braids",      dimension: "hair-style", description: "Individual sectioned braids",      promptHint: "hair in sectioned box braids" },
+  { id: "style-crown-braid",     label: "Crown Braid",     dimension: "hair-style", description: "Braid wrapped around the head",    promptHint: "hair in a crown braid wrapped around the head" },
+  { id: "style-cornrows",        label: "Cornrows",        dimension: "hair-style", description: "Braided cornrow pattern",          promptHint: "hair in tight cornrows" },
+
+  // ---- Locs / dreadlocks ----
+  { id: "style-dreadlocks",      label: "Dreadlocks",      dimension: "hair-style", description: "Matted rope-like locs",            promptHint: "hair in dreadlocks" },
+  { id: "style-sisterlocks",     label: "Sisterlocks",     dimension: "hair-style", description: "Thin, neatly sectioned micro-locs", promptHint: "hair in thin neat sisterlocks" },
 
   // -------------------- Skin Tone --------------------
   { id: "skin-very-fair", label: "Very Fair", dimension: "skin-tone", description: "Very fair / pale skin", promptHint: "very fair pale skin" },

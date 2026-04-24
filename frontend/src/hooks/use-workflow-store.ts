@@ -18,6 +18,7 @@ import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems } from "@nod
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
+import { MAIN_TEXT_HANDLE, TEXT_PRODUCING_SOURCE_TYPES } from "@/lib/main-text-handle"
 
 /**
  * Migrate legacy image node types to the new split types.
@@ -777,6 +778,40 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
                 }
               : n,
           )
+        }
+      }
+
+      // Auto-fill {SourceLabel} on the target's main text field when it's
+      // empty at connect time. Makes `{Label}` injection discoverable —
+      // one drag, and the user sees the placeholder they can edit/wrap.
+      // Skipped when the field already has text (no overwrite, ever), the
+      // field is already mapped via the dropdown (don't bury an active
+      // mapping behind a literal `{Label}` the user can't see), or the
+      // source doesn't produce text (no `{Upload Image}` leaks).
+      const targetMain = newNodes.find((n) => n.id === connection.target)
+      const sourceMain = newNodes.find((n) => n.id === connection.source)
+      if (targetMain && sourceMain) {
+        const mappings = MAIN_TEXT_HANDLE[targetMain.type ?? ""]
+        const srcType = sourceMain.type ?? ""
+        const matched = mappings?.find((m) => m.handle === connection.targetHandle)
+        if (matched && TEXT_PRODUCING_SOURCE_TYPES.has(srcType)) {
+          const targetData = targetMain.data as Record<string, unknown>
+          const current = targetData[matched.field]
+          const hasText = typeof current === "string" && current.trim().length > 0
+          const fm = targetData.fieldMappings as Record<string, { sourceNodeId: string }> | undefined
+          const alreadyMapped = !!fm?.[matched.field]?.sourceNodeId
+          if (!hasText && !alreadyMapped) {
+            const srcData = sourceMain.data as Record<string, unknown>
+            const srcLabel =
+              (typeof srcData.label === "string" && srcData.label.trim()) ||
+              srcType ||
+              "Source"
+            newNodes = newNodes.map((n) =>
+              n.id === targetMain.id
+                ? { ...n, data: { ...n.data, [matched.field]: `{${srcLabel}}` } }
+                : n,
+            )
+          }
         }
       }
 

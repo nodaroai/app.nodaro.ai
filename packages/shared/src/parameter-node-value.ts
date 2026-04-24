@@ -22,6 +22,11 @@ export const PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
   "color-look",
   "atmosphere",
   "style",
+  "setting",
+  "person",
+  "mood",
+  "pose",
+  "styling",
   "temporal",
   "scene-count",
   "duration",
@@ -73,6 +78,42 @@ export function getParameterValue(
       return trim(data.atmosphere)
     case "style":
       return trim(data.style)
+    case "setting":
+      return trim(data.setting)
+    case "person":
+      // Multi-dimension: return the first set per-dimension value (used for
+      // single-string field-mapping resolution; full hint composition goes
+      // through buildPersonHints in the executors).
+      return (
+        trim(data.type) ??
+        trim(data.age) ??
+        trim(data.ethnicity) ??
+        trim(data.build) ??
+        trim(data.hairColor) ??
+        trim(data.hairStyle) ??
+        trim(data.skinTone) ??
+        trim(data.skinTexture) ??
+        trim(data.eyeColor) ??
+        trim(data.facialHair) ??
+        trim(data.distinctiveFeature)
+      )
+    case "mood":
+      return trim(data.mood)
+    case "pose":
+      return trim(data.pose)
+    case "styling":
+      // Multi-dimension: return the first set per-dimension value (used for
+      // single-string field-mapping resolution; full hint composition goes
+      // through buildStylingHints in the executors).
+      return (
+        trim(data.makeup) ??
+        trim(data.eyewear) ??
+        trim(data.headwear) ??
+        trim(data.hairTreatment) ??
+        trim(data.jewelry) ??
+        trim(data.nails) ??
+        trim(data.facePaint)
+      )
     case "temporal":
       // Multi-category: return the first set per-category value (used for
       // single-string field-mapping resolution; full hint composition goes
