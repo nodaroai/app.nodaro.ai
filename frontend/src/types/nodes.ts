@@ -2174,6 +2174,12 @@ export type ObjectNodeData = {
   createdAt: string
   // Only meaningful when category === "animal" — references an entry in packages/shared/src/animals.ts
   animalId?: string
+  // Only meaningful when category === "vehicle" — references an entry in packages/shared/src/vehicles.ts
+  vehicleId?: string
+  // Only meaningful when category === "furniture" — references an entry in packages/shared/src/furniture.ts
+  furnitureId?: string
+  // Only meaningful when category === "weapon" — references an entry in packages/shared/src/weapons.ts
+  weaponId?: string
   executionStatus: "idle" | "running" | "completed" | "failed"
   currentJobProgress?: number
   errorMessage?: string

@@ -45,6 +45,12 @@ import { MappableField } from "./mappable-field"
 import { prefetchModelCredits, useModelCredits } from "@/hooks/use-model-credits"
 import { AnimalPicker } from "./animal-picker"
 import { getAnimal } from "@nodaro-shared/animals"
+import { VehiclePicker } from "./vehicle-picker"
+import { getVehicle } from "@nodaro-shared/vehicles"
+import { FurniturePicker } from "./furniture-picker"
+import { getFurniture } from "@nodaro-shared/furniture"
+import { WeaponPicker } from "./weapon-picker"
+import { getWeapon } from "@nodaro-shared/weapons"
 import type { ConfigProps } from "./types"
 
 export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<CharacterNodeData>) {
@@ -565,6 +571,9 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
   }
 
   const selectedAnimal = getAnimal(data.animalId)
+  const selectedVehicle = getVehicle(data.vehicleId)
+  const selectedFurniture = getFurniture(data.furnitureId)
+  const selectedWeapon = getWeapon(data.weaponId)
 
   function handlePickAnimal(animalId: string, animal: { label: string; description: string }) {
     onUpdate({
@@ -574,14 +583,39 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
     })
   }
 
+  function handlePickVehicle(vehicleId: string, vehicle: { label: string; description: string }) {
+    onUpdate({
+      vehicleId,
+      objectName: vehicle.label,
+      description: vehicle.description,
+    })
+  }
+
+  function handlePickFurniture(furnitureId: string, furniture: { label: string; description: string }) {
+    onUpdate({
+      furnitureId,
+      objectName: furniture.label,
+      description: furniture.description,
+    })
+  }
+
+  function handlePickWeapon(weaponId: string, weapon: { label: string; description: string }) {
+    onUpdate({
+      weaponId,
+      objectName: weapon.label,
+      description: weapon.description,
+    })
+  }
+
   function handleCategoryChange(next: ObjectNodeData["category"]) {
-    // Clear animalId when leaving the Animal category so it doesn't silently
-    // travel with unrelated objects.
-    if (next !== "animal" && data.animalId) {
-      onUpdate({ category: next, animalId: undefined })
-    } else {
-      onUpdate({ category: next })
-    }
+    // Clear sibling picker IDs when leaving their category so stale selections
+    // don't silently travel with unrelated objects.
+    const patch: Partial<ObjectNodeData> = { category: next }
+    if (next !== "animal" && data.animalId) patch.animalId = undefined
+    if (next !== "vehicle" && data.vehicleId) patch.vehicleId = undefined
+    if (next !== "furniture" && data.furnitureId) patch.furnitureId = undefined
+    if (next !== "weapon" && data.weaponId) patch.weaponId = undefined
+    onUpdate(patch)
   }
 
   return (
@@ -623,6 +657,57 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
             )}
           </div>
           <AnimalPicker value={data.animalId ?? ""} onValueChange={handlePickAnimal} />
+          <p className="text-[10px] text-muted-foreground">
+            Picking auto-fills the name and description. Edit above to fine-tune.
+          </p>
+        </div>
+      )}
+
+      {data.category === "vehicle" && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs">Pick a vehicle</Label>
+            {selectedVehicle && (
+              <span className="text-[10px] text-muted-foreground">
+                Selected: <span className="text-foreground font-medium">{selectedVehicle.label}</span>
+              </span>
+            )}
+          </div>
+          <VehiclePicker value={data.vehicleId ?? ""} onValueChange={handlePickVehicle} />
+          <p className="text-[10px] text-muted-foreground">
+            Picking auto-fills the name and description. Edit above to fine-tune.
+          </p>
+        </div>
+      )}
+
+      {data.category === "furniture" && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs">Pick a furniture piece</Label>
+            {selectedFurniture && (
+              <span className="text-[10px] text-muted-foreground">
+                Selected: <span className="text-foreground font-medium">{selectedFurniture.label}</span>
+              </span>
+            )}
+          </div>
+          <FurniturePicker value={data.furnitureId ?? ""} onValueChange={handlePickFurniture} />
+          <p className="text-[10px] text-muted-foreground">
+            Picking auto-fills the name and description. Edit above to fine-tune.
+          </p>
+        </div>
+      )}
+
+      {data.category === "weapon" && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs">Pick a weapon</Label>
+            {selectedWeapon && (
+              <span className="text-[10px] text-muted-foreground">
+                Selected: <span className="text-foreground font-medium">{selectedWeapon.label}</span>
+              </span>
+            )}
+          </div>
+          <WeaponPicker value={data.weaponId ?? ""} onValueChange={handlePickWeapon} />
           <p className="text-[10px] text-muted-foreground">
             Picking auto-fills the name and description. Edit above to fine-tune.
           </p>
