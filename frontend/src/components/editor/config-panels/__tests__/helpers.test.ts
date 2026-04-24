@@ -61,10 +61,15 @@ describe("getCompatibleSources", () => {
   const providerSource = makeSource({ id: "s2", type: "provider", providerCategory: "image" })
   const styleSource = makeSource({ id: "s3", type: "style-guide" })
 
-  it("filters sources by compatible type", () => {
+  it("filters sources by compatible type (text sources, provider excluded)", () => {
+    // `prompt` now accepts all text-producing source types (text-prompt,
+    // llm-chat, style-guide, parameter nodes, etc.) — the whitelist was
+    // previously over-narrow (`text-prompt` only), hiding the dropdown
+    // whenever any other text source was wired. Provider source still
+    // excluded because it's not text.
     const result = getCompatibleSources("prompt", [textSource, providerSource, styleSource])
-    expect(result).toHaveLength(1)
-    expect(result[0].id).toBe("s1")
+    expect(result.map((r) => r.id).sort()).toEqual(["s1", "s3"])
+    expect(result.find((r) => r.type === "provider")).toBeUndefined()
   })
 
   it("returns all sources when field has no type restriction", () => {

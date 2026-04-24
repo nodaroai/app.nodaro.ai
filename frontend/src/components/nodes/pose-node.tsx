@@ -5,6 +5,7 @@ import type { NodeProps } from "@xyflow/react"
 import { PersonStanding } from "lucide-react"
 import { getPose, getPoseLabel } from "@nodaro-shared/pose"
 import { ParameterNodeShell } from "./parameter-node-shell"
+import { PoseIcon } from "@/components/editor/config-panels/pose-icon"
 import type { PoseData } from "@/types/nodes"
 
 function PoseNodeComponent({ id, data, selected }: NodeProps) {
@@ -14,14 +15,19 @@ function PoseNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <ParameterNodeShell id={id} label={nodeData.label} icon={<PersonStanding />} handleId="out" selected={selected} fluidWidth>
-      <p className="text-foreground text-sm font-medium">
-        {getPoseLabel(poseId)}
-      </p>
-      {description && (
-        <p className="text-muted-foreground text-[11px] leading-snug">
-          {description}
-        </p>
-      )}
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="flex-1 min-w-0">
+          <p className="text-foreground text-sm font-medium truncate">
+            {getPoseLabel(poseId)}
+          </p>
+          {description && (
+            <p className="text-muted-foreground text-[11px] leading-snug">
+              {description}
+            </p>
+          )}
+        </div>
+        <PoseIcon poseId={poseId} className="size-9 shrink-0 text-gray-600 dark:text-[#94A3B8]" />
+      </div>
     </ParameterNodeShell>
   )
 }

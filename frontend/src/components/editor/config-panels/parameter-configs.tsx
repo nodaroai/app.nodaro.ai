@@ -51,8 +51,11 @@ import { AtmospherePicker } from "./atmosphere-picker"
 import { StylePicker } from "./style-picker"
 import { SettingPicker } from "./setting-picker"
 import { PersonPicker } from "./person-picker"
-import { MoodPicker } from "./mood-picker"
-import { PoseBrowser } from "./pose-browser"
+import { MOODS } from "@nodaro-shared/mood"
+import { MoodEmoji } from "./mood-emoji"
+import { DimensionTileGrid } from "./dimension-tile-grid"
+import { POSES } from "@nodaro-shared/pose"
+import { PoseIcon } from "./pose-icon"
 import { StylingPicker } from "./styling-picker"
 import { TemporalPicker } from "./temporal-picker"
 import { PromptInjectionPreview } from "./prompt-injection-preview"
@@ -532,9 +535,16 @@ export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
         />
       </div>
       <Label>Mood</Label>
-      <MoodPicker
+      {/* Mood is a single-dimension node — render the inline tile grid with
+          emoji faces. Each entry shows the matching expression so users pick
+          by face rather than by parsing similar-sounding labels. */}
+      <DimensionTileGrid
+        entries={MOODS}
         value={data.mood || "calm"}
-        onValueChange={(v) => onUpdate({ mood: v })}
+        onChange={(v) => onUpdate({ mood: v ?? "calm" })}
+        renderIcon={(entry) => <MoodEmoji moodId={entry.id} className="size-full" />}
+        searchPlaceholder="Search moods"
+        gridClassName="grid grid-cols-3 gap-2"
       />
     </div>
   )
@@ -571,9 +581,15 @@ export function PoseConfig({ data, onUpdate }: ConfigProps<PoseData>) {
         />
       </div>
       <Label>Pose</Label>
-      <PoseBrowser
+      {/* Pose is a single-dimension node so the picker IS the whole node —
+          render the tile grid inline instead of behind a modal trigger. */}
+      <DimensionTileGrid
+        entries={POSES}
         value={data.pose || "standing-upright"}
         onChange={(v) => onUpdate({ pose: v ?? "standing-upright" })}
+        renderIcon={(entry) => <PoseIcon poseId={entry.id} className="size-full" />}
+        searchPlaceholder="Search poses"
+        gridClassName="grid grid-cols-3 gap-2"
       />
     </div>
   )

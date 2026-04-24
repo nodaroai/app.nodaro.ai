@@ -27,6 +27,7 @@ vi.mock("lucide-react", () => {
     Globe: I, Braces: I, Filter: I, ListFilter: I, CopyMinus: I, GitMerge: I,
     ArrowUpDown: I,
     Aperture: I, Lightbulb: I, SwatchBook: I, CloudFog: I, Brush: I,
+    Mountain: I, PersonStanding: I, Gem: I,
   }
 })
 

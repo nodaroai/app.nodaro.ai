@@ -44,6 +44,7 @@ vi.mock("lucide-react", () => {
     MessageCircle: Icon,
     Send: Icon,
     Expand: Icon,
+    Aperture: Icon,
   }
 })
 
