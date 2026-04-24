@@ -545,7 +545,13 @@ export function executeNode(
       ? collectAncestorRefs(node.id, nodes, edges)
       : [];
 
-    let prompt = overridePrompt || inputs.prompt || resolveTextRefs(imgData.prompt?.trim(), refMap);
+    // Manual field wins when set — the MappableField dropdown's "Manual"
+    // label must actually mean manual. `inputs.prompt` is only used as a
+    // fallback when the user hasn't typed anything. fieldMappings resolution
+    // (upstream dropdown pick) already ran earlier, so if the user selected
+    // a source, `imgData.prompt` holds that source's output.
+    const manualImgPrompt = resolveTextRefs(imgData.prompt?.trim(), refMap);
+    let prompt = overridePrompt || manualImgPrompt || inputs.prompt;
     if (!prompt) {
       toast.error(`Node "${imgData.label}": no prompt found`);
       return Promise.reject(new Error("No prompt"));
@@ -621,8 +627,9 @@ export function executeNode(
     }
     const provider = editData.provider || "recraft-upscale";
 
-    // Upstream text-prompt can override edit instruction (matches backend)
-    let prompt = inputs.prompt || editData.prompt || undefined;
+    // Manual wins — user's instruction wins over an upstream text source.
+    const manualEditPrompt = resolveTextRefs(editData.prompt?.trim(), refMap);
+    let prompt = manualEditPrompt || inputs.prompt || undefined;
     if (provider === "nano-banana-edit" && prompt) {
       const charIds = editData.characterDefinitionIds ?? [];
       const allCharDefs = useWorkflowStore.getState().characterDefinitions;
@@ -979,7 +986,8 @@ export function executeNode(
 
     const referenceImageUrls = inputs.referenceImageUrls as string[] | undefined
 
-    let prompt = (inputs.prompt ?? resolveTextRefs(i2vData.prompt?.trim() || undefined, refMap)) as string | undefined;
+    // Manual wins — see gen-image note above.
+    let prompt = (resolveTextRefs(i2vData.prompt?.trim() || undefined, refMap) ?? inputs.prompt) as string | undefined;
     // Inject motion + cinematography hints into prompt
     const motionHints: string[] = [];
     if (i2vData.motionEnabled && i2vData.motion) motionHints.push(`${i2vData.motion} motion`);
@@ -1045,9 +1053,12 @@ export function executeNode(
     const v2vData = node.data as VideoToVideoData;
     const inputPrompt =
       typeof inputs.prompt === "string" ? inputs.prompt : undefined;
-    const dataPrompt =
-      typeof v2vData.prompt === "string" ? v2vData.prompt.trim() : undefined;
-    let prompt = inputPrompt ?? dataPrompt;
+    const dataPrompt = resolveTextRefs(
+      typeof v2vData.prompt === "string" ? v2vData.prompt.trim() : undefined,
+      refMap,
+    );
+    // Manual wins — see gen-image note above.
+    let prompt = dataPrompt || inputPrompt;
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
@@ -1077,10 +1088,11 @@ export function executeNode(
 
   if (node.type === "text-to-video") {
     const t2vData = node.data as TextToVideoData;
+    // Manual wins — see gen-image note above.
     let prompt =
       overridePrompt ??
-      (typeof inputs.prompt === "string" ? inputs.prompt : undefined) ??
-      resolveTextRefs(t2vData.prompt?.trim(), refMap);
+      resolveTextRefs(t2vData.prompt?.trim(), refMap) ??
+      (typeof inputs.prompt === "string" ? inputs.prompt : undefined);
     if (!prompt) {
       toast.error(`Node "${t2vData.label}": no prompt found`);
       return Promise.reject(new Error("No prompt"));
@@ -1185,10 +1197,11 @@ export function executeNode(
   }
 
   if (node.type === "generate-music") {
+    // Manual wins — see gen-image note above.
     const prompt =
       overridePrompt ??
-      inputs.prompt ??
-      resolveTextRefs((node.data as GenerateMusicData).prompt?.trim(), refMap);
+      resolveTextRefs((node.data as GenerateMusicData).prompt?.trim(), refMap) ??
+      inputs.prompt;
     if (!prompt) {
       toast.error(
         `Node "${(node.data as GenerateMusicData).label}": no prompt found`,
@@ -1219,10 +1232,11 @@ export function executeNode(
   }
 
   if (node.type === "text-to-audio") {
+    // Manual wins — see gen-image note above.
     const prompt =
       overridePrompt ??
-      inputs.prompt ??
-      resolveTextRefs((node.data as TextToAudioData).prompt?.trim(), refMap);
+      resolveTextRefs((node.data as TextToAudioData).prompt?.trim(), refMap) ??
+      inputs.prompt;
     if (!prompt) {
       toast.error(
         `Node "${(node.data as TextToAudioData).label}": no prompt found`,
@@ -2247,13 +2261,20 @@ export function executeNode(
     const chatData = node.data as LLMChatData;
     const { updateNodeData } = useWorkflowStore.getState();
 
-    const systemPrompt =
-      typeof inputs.systemPrompt === "string" && inputs.systemPrompt.trim()
-        ? inputs.systemPrompt
-        : chatData.systemPrompt;
+    // Manual wins over upstream on both fields — matches the dropdown's "Manual"
+    // default: unless the user explicitly maps a source (fieldMappings), their
+    // typed text is the source of truth. resolveTextRefs handles inline
+    // `{Label}` refs so `{Framing}` in the textarea becomes the framing hint.
+    const rawSystemPrompt = chatData.systemPrompt?.trim()
+      ? chatData.systemPrompt
+      : (typeof inputs.systemPrompt === "string" && inputs.systemPrompt.trim() ? inputs.systemPrompt : "");
+    const systemPrompt = resolveTextRefs(rawSystemPrompt, refMap) ?? rawSystemPrompt;
 
-    const listValue = overridePrompt || (typeof inputs.prompt === "string" && inputs.prompt.trim() ? inputs.prompt : undefined)
-    const userInput = listValue || chatData.userInput;
+    const listValue = overridePrompt || (typeof inputs.prompt === "string" && inputs.prompt.trim() ? inputs.prompt : undefined);
+    const rawUserInput = chatData.userInput?.trim()
+      ? chatData.userInput
+      : (listValue ?? "");
+    const userInput = resolveTextRefs(rawUserInput, refMap) ?? rawUserInput;
 
     if (!userInput?.trim()) {
       toast.error(`Node "${chatData.label}": no user prompt provided`);
@@ -2365,11 +2386,15 @@ export function executeNode(
       return Promise.resolve("");
     }
 
+    // Manual wins — see gen-image note above. {} refs in userInput resolve
+    // so "{Framing}" etc. is replaced with the connected source's output.
+    const manualWriterInput = resolveTextRefs(writerData.userInput?.trim(), refMap);
     const userInput =
       overridePrompt ||
+      manualWriterInput ||
       (typeof inputs.prompt === "string" && inputs.prompt.trim()
         ? inputs.prompt
-        : writerData.userInput);
+        : "");
 
     if (!userInput?.trim()) {
       toast.error(`Node "${writerData.label}": no input provided`);
@@ -2598,8 +2623,9 @@ export function executeNode(
       audioUrl = inputs.audioUrl;
     }
 
+    // Manual wins — see gen-image note above.
     let prompt =
-      overridePrompt || inputs.prompt || s2vData.prompt || "";
+      overridePrompt || resolveTextRefs(s2vData.prompt?.trim(), refMap) || inputs.prompt || "";
 
     if (!imageUrl) {
       toast.error(`Node "${s2vData.label}": no image input found`);
@@ -2722,7 +2748,8 @@ export function executeNode(
 
   if (node.type === "extend-video") {
     const evData = node.data as unknown as ExtendVideoData;
-    let prompt = overridePrompt ?? inputs.prompt ?? resolveTextRefs(evData.prompt, refMap);
+    // Manual wins — see gen-image note above.
+    let prompt = overridePrompt ?? resolveTextRefs(evData.prompt, refMap) ?? inputs.prompt;
 
     const kieTaskId = resolveUpstreamKieTaskId(node.id, evData as unknown as Record<string, unknown>);
 

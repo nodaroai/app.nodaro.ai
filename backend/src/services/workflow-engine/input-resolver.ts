@@ -19,6 +19,7 @@ import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 import { resolveIndex, selectListItems, type SelectorFields } from "../../../../packages/shared/src/edge-range.js"
 import { splitByLoopDelimiter } from "../../../../packages/shared/src/loop-delimiter.js"
 import { SOCIAL_POST_NODE_TYPES } from "../../../../packages/shared/src/social-post.js"
+import { PARAMETER_NODE_TYPES } from "../../../../packages/shared/src/parameter-node-value.js"
 
 /**
  * Resolve a node's primary output from execution state or source node data.
@@ -183,6 +184,13 @@ export function resolveNodeInputs(
         output = getNodeOutput(sourceNode, edge.sourceHandle, nodeStates, triggerData)
       }
     }
+
+    // Parameter nodes (framing, camera-motion, person, mood, etc.) are
+    // additive enhancements — payload-builder's `collectCinematographyHints`
+    // appends their hint to the prompt. Short-circuit the edge here so we
+    // don't overwrite `inputs.prompt` with the parameter hint, which would
+    // silently erase the consumer's manual prompt.
+    if (!output && PARAMETER_NODE_TYPES.has(sourceNode.type)) continue
 
     if (!output) continue
 

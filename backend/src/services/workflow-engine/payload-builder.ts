@@ -12,19 +12,7 @@ import { resolveTemplate, applyTemplate } from "../../../../packages/shared/src/
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 import { composeCameraMotionHintFromConnections } from "../../../../packages/shared/src/camera-motions.js"
-import { buildFramingHints } from "../../../../packages/shared/src/framing.js"
-import { getLensPromptHint } from "../../../../packages/shared/src/lens.js"
-import { getCameraFormatPromptHint } from "../../../../packages/shared/src/camera-format.js"
-import { buildLightingHints } from "../../../../packages/shared/src/lighting.js"
-import { getColorLookPromptHint } from "../../../../packages/shared/src/color-look.js"
-import { getAtmospherePromptHint } from "../../../../packages/shared/src/atmosphere.js"
-import { getStylePromptHint } from "../../../../packages/shared/src/style.js"
-import { getSettingPromptHint } from "../../../../packages/shared/src/setting.js"
-import { buildPersonHints } from "../../../../packages/shared/src/person.js"
-import { buildMoodHints } from "../../../../packages/shared/src/mood.js"
-import { buildPoseHints } from "../../../../packages/shared/src/pose.js"
-import { buildStylingHints } from "../../../../packages/shared/src/styling.js"
-import { buildTemporalHints } from "../../../../packages/shared/src/temporal.js"
+import { getParameterPromptHint } from "../../../../packages/shared/src/parameter-prompt-hint.js"
 import type { CharacterDef, SceneData } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
 import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-constants.js"
@@ -327,66 +315,16 @@ function resolveRefs(text: string | undefined, refMap: Map<string, string>): str
 // ---------------------------------------------------------------------------
 
 /**
- * Extract a prompt-hint string from a parameter-style node by dispatching on
- * its type. Returns the empty string for unsupported node types so the caller
- * can simply filter them out. Multi-category nodes (framing, lighting) join
- * their hints with `, ` so the camera-motion composer can chain them with
- * neighbour nodes via " and ".
+ * Extract a prompt-hint string from a parameter-style node by dispatching to
+ * the shared `getParameterPromptHint`. Backend parameter nodes don't execute,
+ * so values come straight from the node's data record.
  *
- * Backend parameter nodes don't execute, so values come straight from the
- * node's data record.
+ * The shared dispatcher is the single source of truth shared with the frontend
+ * DAG executor — keep both call sites lined up by editing it instead of this
+ * one-line wrapper.
  */
 function getNodePromptHint(node: SimpleNode | undefined): string {
-  if (!node) return ""
-  const data = node.data as Record<string, unknown>
-  switch (node.type) {
-    case "framing": {
-      const hints = buildFramingHints(data)
-      return hints.join(", ")
-    }
-    case "lighting": {
-      const hints = buildLightingHints(data)
-      return hints.join(", ")
-    }
-    case "lens":
-      return getLensPromptHint(typeof data.lens === "string" ? data.lens : "")
-    case "camera-format":
-      return getCameraFormatPromptHint(typeof data.cameraFormat === "string" ? data.cameraFormat : "")
-    case "color-look":
-      return getColorLookPromptHint(typeof data.colorLook === "string" ? data.colorLook : "")
-    case "atmosphere":
-      return getAtmospherePromptHint(typeof data.atmosphere === "string" ? data.atmosphere : "")
-    case "style":
-      return getStylePromptHint(typeof data.style === "string" ? data.style : "")
-    case "setting":
-      return getSettingPromptHint(typeof data.setting === "string" ? data.setting : "")
-    case "person": {
-      const hints = buildPersonHints(data)
-      return hints.join(", ")
-    }
-    case "mood": {
-      const hints = buildMoodHints(data)
-      return hints.join(", ")
-    }
-    case "pose": {
-      const hints = buildPoseHints(data)
-      return hints.join(", ")
-    }
-    case "styling": {
-      const hints = buildStylingHints(data)
-      return hints.join(", ")
-    }
-    case "temporal": {
-      const hints = buildTemporalHints(data)
-      return hints.join(", ")
-    }
-    case "tone":
-      return typeof data.tone === "string" ? data.tone.trim() : ""
-    case "text-prompt":
-      return typeof data.text === "string" ? data.text.trim() : ""
-    default:
-      return ""
-  }
+  return getParameterPromptHint(node)
 }
 
 /**

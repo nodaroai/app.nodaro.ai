@@ -12,6 +12,7 @@ import type {
 } from "@/types/nodes";
 import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
+import { PARAMETER_NODE_TYPES } from "@nodaro-shared/parameter-node-value";
 import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro-shared/edge-range";
 import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
 import { extractAllGeneratedResults, extractGeneratedJsonAsList } from "@nodaro-shared/generated-results";
@@ -845,6 +846,13 @@ export function resolveNodeInputs(
       }
     } else if (src.type === "text-prompt") {
       inputs.prompt = output;
+    } else if (src.type && PARAMETER_NODE_TYPES.has(src.type)) {
+      // Parameter nodes (framing, camera-motion, person, mood, pose, styling,
+      // setting, style, etc.) are additive enhancements — they append to the
+      // manual prompt via `collectCinematographyHints` in the executor, so we
+      // don't overwrite `inputs.prompt` here. Without this guard, wiring a
+      // parameter into a node's prompt handle silently erased the user's
+      // manual text.
     } else if (src.type === "list" && !(src.data as Record<string, unknown>).columns) {
       // Legacy list format — newline-separated items string, text-only routing.
       // Modern list nodes with columns fall through to the column-typed branch

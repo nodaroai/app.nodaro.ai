@@ -2,7 +2,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro-shared/ancestor-refs";
 import { isExpandedClone } from "@nodaro-shared/clone-utils";
-import { PARAMETER_NODE_TYPES, getParameterValue } from "@nodaro-shared/parameter-node-value";
+import { PARAMETER_NODE_TYPES } from "@nodaro-shared/parameter-node-value";
+import { getParameterPromptHint } from "@nodaro-shared/parameter-prompt-hint";
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -589,11 +590,17 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     if (!sourceHandle) return (data.result as string | undefined)
     return (data.routeOutputs as Record<string, string | undefined> | undefined)?.[sourceHandle]
   }
-  // Parameter nodes (framing, camera-motion, motion, tone, scene-count, etc.)
-  // carry values directly in data — no execution, no state. Delegate to the
-  // shared accessor so fieldMappings on non-text fields resolve correctly.
+  // Parameter nodes (framing, camera-motion, person, mood, pose, styling,
+  // tone, etc.) carry values directly in data — no execution, no state.
+  // Return the FULL prompt hint so consumers feeding the value into a text
+  // input (Text Prompt, LLM Chat, Combine Text, AI generation prompt handles)
+  // see the rich descriptive clause that the cinematography handle injects.
+  // Field-mapping resolution bypasses this in `resolve-field-mappings.ts` to
+  // keep getting the bare picker value for non-text mapped fields.
   if (type && PARAMETER_NODE_TYPES.has(type)) {
-    return getParameterValue(data, type);
+    const { nodes, edges } = useWorkflowStore.getState();
+    const hint = getParameterPromptHint(node, { nodes, edges });
+    return hint || undefined;
   }
   return undefined;
 }

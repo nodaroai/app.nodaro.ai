@@ -85,8 +85,15 @@ function SelectTrigger({
 function SelectContent({
   className,
   children,
-  position = "item-aligned",
+  // `popper` flips above the trigger when there isn't room below and respects
+  // viewport edges via Radix's built-in collision detection. `item-aligned`
+  // (Radix's default) tries to anchor the selected item under the trigger and
+  // gets clipped near the viewport bottom — that's the cut-off dropdowns the
+  // user reported. Defaulting to popper fixes it globally for every Select.
+  position = "popper",
   align = "center",
+  sideOffset = 4,
+  collisionPadding = 8,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   return (
@@ -101,6 +108,8 @@ function SelectContent({
         )}
         position={position}
         align={align}
+        sideOffset={sideOffset}
+        collisionPadding={collisionPadding}
         {...props}
       >
         <SelectScrollUpButton />

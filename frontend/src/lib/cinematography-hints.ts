@@ -1,17 +1,5 @@
-import { buildFramingHints } from "@nodaro-shared/framing"
-import { buildLightingHints } from "@nodaro-shared/lighting"
-import { getLensPromptHint } from "@nodaro-shared/lens"
-import { getCameraFormatPromptHint } from "@nodaro-shared/camera-format"
-import { getColorLookPromptHint } from "@nodaro-shared/color-look"
-import { getAtmospherePromptHint } from "@nodaro-shared/atmosphere"
-import { getStylePromptHint } from "@nodaro-shared/style"
-import { getSettingPromptHint } from "@nodaro-shared/setting"
-import { buildPersonHints } from "@nodaro-shared/person"
-import { buildMoodHints } from "@nodaro-shared/mood"
-import { buildPoseHints } from "@nodaro-shared/pose"
-import { buildStylingHints } from "@nodaro-shared/styling"
-import { buildTemporalHints } from "@nodaro-shared/temporal"
 import { composeCameraMotionHintFromConnections } from "@nodaro-shared/camera-motions"
+import { getParameterPromptHint } from "@nodaro-shared/parameter-prompt-hint"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 /**
@@ -19,58 +7,14 @@ import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
  * both the frontend DAG executor (when injecting camera-motion's start/end
  * clauses into a consumer's prompt) and the camera-motion config panel
  * preview (so users can see exactly what the connected nodes will contribute).
+ *
+ * Single source of truth lives in `@nodaro-shared/parameter-prompt-hint` so
+ * the frontend DAG executor and backend orchestrator emit identical text.
+ * Camera-motion is composed by `composeCameraMotionHintForNode` below; this
+ * dispatcher only needs the static-text (data-only) variant.
  */
 export function getNodePromptHint(node: WorkflowNode | undefined): string {
-  if (!node) return ""
-  const data = node.data as Record<string, unknown>
-  switch (node.type) {
-    case "framing": {
-      const hints = buildFramingHints(data)
-      return hints.join(", ")
-    }
-    case "lighting": {
-      const hints = buildLightingHints(data)
-      return hints.join(", ")
-    }
-    case "lens":
-      return getLensPromptHint(typeof data.lens === "string" ? data.lens : "")
-    case "camera-format":
-      return getCameraFormatPromptHint(typeof data.cameraFormat === "string" ? data.cameraFormat : "")
-    case "color-look":
-      return getColorLookPromptHint(typeof data.colorLook === "string" ? data.colorLook : "")
-    case "atmosphere":
-      return getAtmospherePromptHint(typeof data.atmosphere === "string" ? data.atmosphere : "")
-    case "style":
-      return getStylePromptHint(typeof data.style === "string" ? data.style : "")
-    case "setting":
-      return getSettingPromptHint(typeof data.setting === "string" ? data.setting : "")
-    case "person": {
-      const hints = buildPersonHints(data)
-      return hints.join(", ")
-    }
-    case "mood": {
-      const hints = buildMoodHints(data)
-      return hints.join(", ")
-    }
-    case "pose": {
-      const hints = buildPoseHints(data)
-      return hints.join(", ")
-    }
-    case "styling": {
-      const hints = buildStylingHints(data)
-      return hints.join(", ")
-    }
-    case "temporal": {
-      const hints = buildTemporalHints(data)
-      return hints.join(", ")
-    }
-    case "tone":
-      return typeof data.tone === "string" ? data.tone.trim() : ""
-    case "text-prompt":
-      return typeof data.text === "string" ? data.text.trim() : ""
-    default:
-      return ""
-  }
+  return getParameterPromptHint(node)
 }
 
 /**
