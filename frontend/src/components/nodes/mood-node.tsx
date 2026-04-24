@@ -5,6 +5,7 @@ import type { NodeProps } from "@xyflow/react"
 import { Smile } from "lucide-react"
 import { getMood, getMoodLabel } from "@nodaro-shared/mood"
 import { ParameterNodeShell } from "./parameter-node-shell"
+import { MoodEmoji } from "@/components/editor/config-panels/mood-emoji"
 import type { MoodData } from "@/types/nodes"
 
 function MoodNodeComponent({ id, data, selected }: NodeProps) {
@@ -14,14 +15,19 @@ function MoodNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <ParameterNodeShell id={id} label={nodeData.label} icon={<Smile />} handleId="out" selected={selected} fluidWidth>
-      <p className="text-foreground text-sm font-medium">
-        {getMoodLabel(moodId)}
-      </p>
-      {description && (
-        <p className="text-muted-foreground text-[11px] leading-snug">
-          {description}
-        </p>
-      )}
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="flex-1 min-w-0">
+          <p className="text-foreground text-sm font-medium truncate">
+            {getMoodLabel(moodId)}
+          </p>
+          {description && (
+            <p className="text-muted-foreground text-[11px] leading-snug">
+              {description}
+            </p>
+          )}
+        </div>
+        <MoodEmoji moodId={moodId} className="size-8 shrink-0" />
+      </div>
     </ParameterNodeShell>
   )
 }

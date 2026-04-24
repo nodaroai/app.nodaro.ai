@@ -125,6 +125,147 @@ interface DimensionSectionProps {
   readonly onPick: (id: string) => void
 }
 
+function renderEntryIcon(dimension: PersonDimension, entry: Person): JSX.Element | null {
+  if (dimension === "build") return <BuildIcon buildId={entry.id} className="size-6" />
+  if (dimension === "facial-hair") return <FacialHairIcon facialHairId={entry.id} className="size-6" />
+  if (dimension === "face-shape") return <FaceShapeIcon id={entry.id} className="size-6" />
+  if (dimension === "jawline") return <JawlineIcon id={entry.id} className="size-6" />
+  if (dimension === "eye-shape") return <EyeShapeIcon id={entry.id} className="size-6" />
+  if (dimension === "nose") return <NoseIcon id={entry.id} className="size-6" />
+  if (dimension === "lips") return <LipsIcon id={entry.id} className="size-6" />
+  if (dimension === "body-proportions") return <BodyProportionsIcon id={entry.id} className="size-6" />
+  return null
+}
+
+function EntryChip({
+  dimension,
+  entry,
+  selected,
+  enabled,
+  label,
+  onPick,
+}: {
+  readonly dimension: PersonDimension
+  readonly entry: Person
+  readonly selected: boolean
+  readonly enabled: boolean
+  readonly label: string
+  readonly onPick: (id: string) => void
+}) {
+  const swatch = getPersonSwatch(entry.id)
+  const icon = renderEntryIcon(dimension, entry)
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      title={enabled ? entry.description : `${entry.description} (click to enable ${label})`}
+      onClick={() => onPick(entry.id)}
+      className={cn(
+        "flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden",
+        selected
+          ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
+          : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
+      )}
+    >
+      {swatch && <ColorSwatch value={swatch} className="size-5" />}
+      {icon}
+      <span
+        className={cn(
+          "text-[11px] font-medium leading-tight truncate max-w-full",
+          selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+        )}
+      >
+        {entry.shortLabel ?? entry.label}
+      </span>
+    </button>
+  )
+}
+
+function GroupedEntryGrid({
+  dimension,
+  entries,
+  checked,
+  current,
+  label,
+  onPick,
+}: {
+  readonly dimension: PersonDimension
+  readonly entries: ReadonlyArray<Person>
+  readonly checked: boolean
+  readonly current: string | undefined
+  readonly label: string
+  readonly onPick: (id: string) => void
+}) {
+  // Build ordered group list preserving catalog order.
+  const groupOrder: string[] = []
+  const byGroup = new Map<string, Person[]>()
+  for (const e of entries) {
+    const g = e.group ?? "Other"
+    if (!byGroup.has(g)) {
+      groupOrder.push(g)
+      byGroup.set(g, [])
+    }
+    byGroup.get(g)!.push(e)
+  }
+
+  // The group containing the current pick starts open; other groups closed.
+  const activeGroup = current ? entries.find((e) => e.id === current)?.group ?? undefined : undefined
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(activeGroup ? [activeGroup] : []))
+  const toggleGroup = (g: string) => setOpenGroups((prev) => {
+    const next = new Set(prev)
+    if (next.has(g)) next.delete(g)
+    else next.add(g)
+    return next
+  })
+
+  return (
+    <div role="radiogroup" aria-label={label} className={cn("flex flex-col gap-1 transition-opacity", !checked && "opacity-40")}>
+      {groupOrder.map((group) => {
+        const list = byGroup.get(group)!
+        const isOpen = openGroups.has(group)
+        const hasCurrent = list.some((e) => e.id === current)
+        return (
+          <div key={group} className="rounded-md border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
+            <button
+              type="button"
+              onClick={() => toggleGroup(group)}
+              className={cn(
+                "w-full flex items-center justify-between gap-2 px-2 py-1.5 text-[11px] font-medium transition-colors",
+                hasCurrent
+                  ? "bg-[#ff0073]/8 text-[#ff0073]"
+                  : "bg-gray-50 dark:bg-[#161616] text-gray-700 dark:text-[#E2E8F0] hover:bg-gray-100 dark:hover:bg-[#1a1a1a]",
+              )}
+              aria-expanded={isOpen}
+            >
+              <span className="truncate text-left flex-1">{group}</span>
+              <span className="text-[10px] text-muted-foreground shrink-0">
+                {list.length}{hasCurrent ? " · selected" : ""}
+              </span>
+              <span className="text-muted-foreground shrink-0">{isOpen ? "▾" : "▸"}</span>
+            </button>
+            {isOpen && (
+              <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-white dark:bg-[#0f0f0f]">
+                {list.map((entry) => (
+                  <EntryChip
+                    key={entry.id}
+                    dimension={dimension}
+                    entry={entry}
+                    selected={checked && entry.id === current}
+                    enabled={checked}
+                    label={label}
+                    onPick={onPick}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function DimensionSection({
   dimension,
   entries,
@@ -136,6 +277,10 @@ function DimensionSection({
 }: DimensionSectionProps) {
   const id = useId()
   const label = PERSON_DIMENSION_LABELS[dimension]
+  // Ethnicity has 39 entries across 6 groups — render as collapsible two-level
+  // picker (region header → specific entries inside). Other dims stay as flat
+  // chip grids since their entry counts are small enough.
+  const useGrouped = dimension === "ethnicity"
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2 px-0.5">
@@ -153,52 +298,34 @@ function DimensionSection({
           {label}
         </label>
       </div>
-      <div
-        role="radiogroup"
-        aria-label={label}
-        className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}
-      >
-        {entries.map((entry) => {
-          const selected = checked && entry.id === current
-          const swatch = getPersonSwatch(entry.id)
-          let icon: JSX.Element | null = null
-          if (dimension === "build") icon = <BuildIcon buildId={entry.id} className="size-6" />
-          else if (dimension === "facial-hair") icon = <FacialHairIcon facialHairId={entry.id} className="size-6" />
-          else if (dimension === "face-shape") icon = <FaceShapeIcon id={entry.id} className="size-6" />
-          else if (dimension === "jawline") icon = <JawlineIcon id={entry.id} className="size-6" />
-          else if (dimension === "eye-shape") icon = <EyeShapeIcon id={entry.id} className="size-6" />
-          else if (dimension === "nose") icon = <NoseIcon id={entry.id} className="size-6" />
-          else if (dimension === "lips") icon = <LipsIcon id={entry.id} className="size-6" />
-          else if (dimension === "body-proportions") icon = <BodyProportionsIcon id={entry.id} className="size-6" />
-          return (
-            <button
+      {useGrouped ? (
+        <GroupedEntryGrid
+          dimension={dimension}
+          entries={entries}
+          checked={checked}
+          current={current}
+          label={label}
+          onPick={onPick}
+        />
+      ) : (
+        <div
+          role="radiogroup"
+          aria-label={label}
+          className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}
+        >
+          {entries.map((entry) => (
+            <EntryChip
               key={entry.id}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              title={checked ? entry.description : `${entry.description} (click to enable ${label})`}
-              onClick={() => onPick(entry.id)}
-              className={cn(
-                "flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden",
-                selected
-                  ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
-                  : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
-              )}
-            >
-              {swatch && <ColorSwatch value={swatch} className="size-5" />}
-              {icon}
-              <span
-                className={cn(
-                  "text-[11px] font-medium leading-tight truncate max-w-full",
-                  selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
-                )}
-              >
-                {entry.label}
-              </span>
-            </button>
-          )
-        })}
-      </div>
+              dimension={dimension}
+              entry={entry}
+              selected={checked && entry.id === current}
+              enabled={checked}
+              label={label}
+              onPick={onPick}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

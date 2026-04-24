@@ -552,16 +552,20 @@ export function executeNode(
     // a source, `imgData.prompt` holds that source's output.
     const manualImgPrompt = resolveTextRefs(imgData.prompt?.trim(), refMap);
     let prompt = overridePrompt || manualImgPrompt || inputs.prompt;
-    if (!prompt) {
-      toast.error(`Node "${imgData.label}": no prompt found`);
-      return Promise.reject(new Error("No prompt"));
-    }
+    // Fold cinematography hints BEFORE the empty check — a Person / Framing /
+    // Style node wired to the `cinematography` handle is a perfectly valid
+    // prompt source on its own. Requiring a manual prompt in that case would
+    // force users to type filler.
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES });
       if (cinematographyHints.length > 0) {
         const joined = cinematographyHints.join(", ");
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
+    }
+    if (!prompt) {
+      toast.error(`Node "${imgData.label}": no prompt — type one or connect a cinematography source`);
+      return Promise.reject(new Error("No prompt"));
     }
 
     const result = buildImagePrompt({
@@ -1093,16 +1097,16 @@ export function executeNode(
       overridePrompt ??
       resolveTextRefs(t2vData.prompt?.trim(), refMap) ??
       (typeof inputs.prompt === "string" ? inputs.prompt : undefined);
-    if (!prompt) {
-      toast.error(`Node "${t2vData.label}": no prompt found`);
-      return Promise.reject(new Error("No prompt"));
-    }
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
         const joined = cinematographyHints.join(", ");
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
+    }
+    if (!prompt) {
+      toast.error(`Node "${t2vData.label}": no prompt — type one or connect a cinematography source`);
+      return Promise.reject(new Error("No prompt"));
     }
     const t2vProvider = t2vData.provider || "seedance-2-fast";
     const t2vRaw = t2vData as Record<string, unknown>;

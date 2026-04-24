@@ -58,6 +58,15 @@ export interface Person {
   readonly dimension: PersonDimension
   readonly description: string
   readonly promptHint: string
+  /** Optional sub-grouping within a dimension. Used by the picker to render
+   *  two-level selection (e.g. ethnicity grouped by region → specific). */
+  readonly group?: string
+  /** Optional shorter label for the picker chip. When a dimension renders
+   *  with group headers (e.g. ethnicity), the group name already supplies
+   *  context — so a chip under the "Asian" header shows "East (any)"
+   *  instead of the redundant "East Asian (any)". Node cards + tooltips
+   *  keep the full `label` / `description`. */
+  readonly shortLabel?: string
 }
 
 export const PEOPLE: ReadonlyArray<Person> = [
@@ -98,37 +107,59 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "age-elderly",  label: "Elderly",      dimension: "age", description: "70 and older",            promptHint: "elderly, in their 70s or older" },
 
   // -------------------- Ethnicity --------------------
-  // East / South / Southeast Asian
-  { id: "east-asian",         label: "East Asian",         dimension: "ethnicity", description: "East Asian features (broad)",       promptHint: "East Asian" },
-  { id: "mongolian-tibetan",  label: "Mongolian / Tibetan", dimension: "ethnicity", description: "Mongolian / Tibetan features",     promptHint: "of Mongolian or Tibetan descent" },
-  { id: "south-asian",        label: "South Asian / Indian", dimension: "ethnicity", description: "Indian / Pakistani / Bangladeshi / Sri Lankan", promptHint: "South Asian" },
-  { id: "southeast-asian",    label: "Southeast Asian",    dimension: "ethnicity", description: "Thai / Vietnamese / Indonesian / Khmer", promptHint: "Southeast Asian" },
-  { id: "filipino",           label: "Filipino",           dimension: "ethnicity", description: "Filipino features (Asian + Spanish heritage)", promptHint: "Filipino" },
-  // Middle East / North Africa
-  { id: "middle-eastern",     label: "Middle Eastern",     dimension: "ethnicity", description: "Arab / Levantine features",         promptHint: "Middle Eastern" },
-  { id: "persian",            label: "Persian / Iranian",  dimension: "ethnicity", description: "Indo-Iranian features",             promptHint: "of Persian Iranian descent" },
-  { id: "berber-amazigh",     label: "Berber / Amazigh",   dimension: "ethnicity", description: "North African Berber / Amazigh",    promptHint: "of Berber Amazigh North African descent" },
-  // African breakouts
-  { id: "african",            label: "African (general)",  dimension: "ethnicity", description: "Sub-Saharan African (broad)",       promptHint: "of African descent" },
-  { id: "west-african",       label: "West African",       dimension: "ethnicity", description: "Yoruba / Igbo / Akan / Wolof",     promptHint: "of West African descent" },
-  { id: "east-african",       label: "East African",       dimension: "ethnicity", description: "Somali / Ethiopian / Swahili",     promptHint: "of East African descent" },
-  { id: "central-african",    label: "Central African",    dimension: "ethnicity", description: "Bantu / Congolese / Angolan",       promptHint: "of Central African descent" },
-  { id: "southern-african",   label: "Southern African",   dimension: "ethnicity", description: "Zulu / Xhosa / Sotho",              promptHint: "of Southern African descent" },
-  { id: "afro-caribbean",     label: "Afro-Caribbean",     dimension: "ethnicity", description: "African + European + Indigenous heritage", promptHint: "of Afro-Caribbean descent" },
+  // Asian (generic + East / South / Southeast breakouts + national-level splits)
+  { id: "asian-any",          label: "Asian (any)",         shortLabel: "any",              group: "Asian", dimension: "ethnicity", description: "Any Asian — unspecified region", promptHint: "of Asian descent" },
+  { id: "east-asian",         label: "East Asian (any)",    shortLabel: "East (any)",       group: "Asian", dimension: "ethnicity", description: "East Asian features (broad)",   promptHint: "East Asian" },
+  { id: "chinese",            label: "Chinese",             group: "Asian", dimension: "ethnicity", description: "Han Chinese features",          promptHint: "of Chinese descent" },
+  { id: "japanese",           label: "Japanese",            group: "Asian", dimension: "ethnicity", description: "Japanese features",             promptHint: "of Japanese descent" },
+  { id: "korean",             label: "Korean",              group: "Asian", dimension: "ethnicity", description: "Korean features",               promptHint: "of Korean descent" },
+  { id: "mongolian-tibetan",  label: "Mongolian / Tibetan", shortLabel: "Mongol / Tibetan", group: "Asian", dimension: "ethnicity", description: "Mongolian / Tibetan features", promptHint: "of Mongolian or Tibetan descent" },
+  { id: "south-asian",        label: "South Asian / Indian", shortLabel: "South / Indian", group: "Asian", dimension: "ethnicity", description: "Indian / Pakistani / Bangladeshi / Sri Lankan", promptHint: "South Asian" },
+  { id: "southeast-asian",    label: "Southeast Asian (any)", shortLabel: "Southeast (any)", group: "Asian", dimension: "ethnicity", description: "Southeast Asian (broad)",    promptHint: "Southeast Asian" },
+  { id: "thai",               label: "Thai",                group: "Asian", dimension: "ethnicity", description: "Thai features",                 promptHint: "of Thai descent" },
+  { id: "vietnamese",         label: "Vietnamese",          group: "Asian", dimension: "ethnicity", description: "Vietnamese features",           promptHint: "of Vietnamese descent" },
+  { id: "indonesian-malay",   label: "Indonesian / Malay",  shortLabel: "Indo / Malay",     group: "Asian", dimension: "ethnicity", description: "Indonesian / Malay features",   promptHint: "of Indonesian or Malay descent" },
+  { id: "khmer",              label: "Khmer / Cambodian",   shortLabel: "Khmer",            group: "Asian", dimension: "ethnicity", description: "Khmer / Cambodian features",    promptHint: "of Khmer Cambodian descent" },
+  { id: "filipino",           label: "Filipino",            group: "Asian", dimension: "ethnicity", description: "Filipino features (Asian + Spanish heritage)", promptHint: "Filipino" },
+  // Middle East & North Africa
+  { id: "mena-any",           label: "Middle Eastern / N. African (any)", shortLabel: "any", group: "Middle East & N. Africa", dimension: "ethnicity", description: "Any MENA — unspecified", promptHint: "of Middle Eastern or North African descent" },
+  { id: "middle-eastern",     label: "Middle Eastern (Arab)", shortLabel: "Arab",           group: "Middle East & N. Africa", dimension: "ethnicity", description: "Arab / Levantine / Gulf features", promptHint: "Middle Eastern" },
+  { id: "turkish",            label: "Turkish",             group: "Middle East & N. Africa", dimension: "ethnicity", description: "Anatolian Turkish features",        promptHint: "of Turkish descent" },
+  { id: "persian",            label: "Persian / Iranian",   shortLabel: "Persian",          group: "Middle East & N. Africa", dimension: "ethnicity", description: "Indo-Iranian features",             promptHint: "of Persian Iranian descent" },
+  // African
+  { id: "african",            label: "African (any)",       shortLabel: "any",              group: "African", dimension: "ethnicity", description: "Any Sub-Saharan African — unspecified region", promptHint: "of African descent" },
+  { id: "west-african",       label: "West African",        shortLabel: "West",             group: "African", dimension: "ethnicity", description: "Yoruba / Igbo / Akan / Wolof",     promptHint: "of West African descent" },
+  { id: "east-african",       label: "East African",        shortLabel: "East",             group: "African", dimension: "ethnicity", description: "Somali / Ethiopian / Swahili",     promptHint: "of East African descent" },
+  { id: "central-african",    label: "Central African",     shortLabel: "Central",          group: "African", dimension: "ethnicity", description: "Bantu / Congolese / Angolan",       promptHint: "of Central African descent" },
+  { id: "southern-african",   label: "Southern African",    shortLabel: "Southern",         group: "African", dimension: "ethnicity", description: "Zulu / Xhosa / Sotho",              promptHint: "of Southern African descent" },
+  { id: "afro-caribbean",     label: "Afro-Caribbean",      group: "African", dimension: "ethnicity", description: "Anglophone Caribbean (Jamaica / Trinidad / Barbados)", promptHint: "of Afro-Caribbean descent" },
   // European
-  { id: "nordic",             label: "Nordic",             dimension: "ethnicity", description: "Scandinavian / Northern European",  promptHint: "of Nordic Scandinavian descent" },
-  { id: "celtic",             label: "Celtic",             dimension: "ethnicity", description: "British / Irish features",          promptHint: "of Celtic British descent" },
-  { id: "mediterranean",      label: "Mediterranean",      dimension: "ethnicity", description: "Southern European features",        promptHint: "of Mediterranean descent" },
-  { id: "slavic",             label: "Slavic",             dimension: "ethnicity", description: "Eastern European features",         promptHint: "of Slavic Eastern European descent" },
-  // Americas
-  { id: "latin-american",     label: "Latin American",     dimension: "ethnicity", description: "Latin American (broad mestizo)",   promptHint: "Latin American" },
-  { id: "native-american",    label: "Native American",    dimension: "ethnicity", description: "Native American / First Nations",   promptHint: "Native American" },
-  // Indigenous (split from old generic "Indigenous")
-  { id: "aboriginal-australian", label: "Aboriginal Australian", dimension: "ethnicity", description: "Aboriginal Australian / Torres Strait", promptHint: "Aboriginal Australian" },
-  { id: "pacific-islander",   label: "Pacific Islander",   dimension: "ethnicity", description: "Polynesian / Maori / Samoan / Hawaiian", promptHint: "Pacific Islander" },
-  { id: "inuit",              label: "Inuit / Arctic",     dimension: "ethnicity", description: "Inuit / Yupik / Aleut",             promptHint: "of Inuit Arctic descent" },
-  // Mixed
-  { id: "mixed",              label: "Mixed",              dimension: "ethnicity", description: "Mixed heritage",                    promptHint: "of mixed heritage" },
+  { id: "european-any",       label: "European (any)",      shortLabel: "any",              group: "European", dimension: "ethnicity", description: "Any European — unspecified region", promptHint: "of European descent" },
+  { id: "nordic",             label: "Nordic",              group: "European", dimension: "ethnicity", description: "Scandinavian / Northern European",  promptHint: "of Nordic Scandinavian descent" },
+  { id: "celtic",             label: "Celtic",              group: "European", dimension: "ethnicity", description: "British / Irish features",          promptHint: "of Celtic British descent" },
+  { id: "mediterranean",      label: "Mediterranean",       shortLabel: "Mediter.",         group: "European", dimension: "ethnicity", description: "Southern European (broad)",         promptHint: "of Mediterranean descent" },
+  { id: "slavic",             label: "Slavic",              group: "European", dimension: "ethnicity", description: "Eastern European features",         promptHint: "of Slavic Eastern European descent" },
+  { id: "italian",            label: "Italian",             group: "European", dimension: "ethnicity", description: "Italian features",                  promptHint: "of Italian descent" },
+  { id: "iberian",            label: "Iberian (Spanish / Portuguese)", shortLabel: "Iberian", group: "European", dimension: "ethnicity", description: "Spanish / Portuguese with Celtiberian + Moorish heritage", promptHint: "of Iberian Spanish or Portuguese descent" },
+  { id: "french",             label: "French",              group: "European", dimension: "ethnicity", description: "French features (varies north to south)", promptHint: "of French descent" },
+  { id: "germanic",           label: "Germanic",            group: "European", dimension: "ethnicity", description: "German / Austrian / Dutch / Swiss-German", promptHint: "of Germanic descent" },
+  { id: "greek",              label: "Greek",               group: "European", dimension: "ethnicity", description: "Greek features",                    promptHint: "of Greek descent" },
+  { id: "baltic",             label: "Baltic",              group: "European", dimension: "ethnicity", description: "Lithuanian / Latvian / Estonian",   promptHint: "of Baltic descent" },
+  // Latin American
+  { id: "latin-american",     label: "Latin American (any)", shortLabel: "any",             group: "Latin American", dimension: "ethnicity", description: "Any Latin American — unspecified region", promptHint: "Latin American" },
+  { id: "mexican-mesoamerican", label: "Mexican / Mesoamerican", shortLabel: "Mexican",     group: "Latin American", dimension: "ethnicity", description: "Mexican / Guatemalan / Central American Mestizo", promptHint: "of Mexican or Mesoamerican heritage" },
+  { id: "caribbean-latino",   label: "Caribbean Latin",     shortLabel: "Caribbean",        group: "Latin American", dimension: "ethnicity", description: "Cuban / Dominican / Puerto Rican",  promptHint: "of Caribbean Latin heritage" },
+  { id: "brazilian",          label: "Brazilian",           group: "Latin American", dimension: "ethnicity", description: "Brazilian (Portuguese + African + Indigenous)", promptHint: "of Brazilian heritage" },
+  { id: "andean-indigenous",  label: "Andean / Indigenous Latin", shortLabel: "Andean",     group: "Latin American", dimension: "ethnicity", description: "Quechua / Aymara / Maya / Nahua", promptHint: "of Andean or Indigenous Latin American heritage" },
+  { id: "southern-cone",      label: "Southern Cone European", shortLabel: "Southern Cone", group: "Latin American", dimension: "ethnicity", description: "Argentinian / Uruguayan / Chilean (largely European descent)", promptHint: "of Southern Cone European descent" },
+  // Indigenous
+  { id: "indigenous-any",     label: "Indigenous (any)",    shortLabel: "any",              group: "Indigenous", dimension: "ethnicity", description: "Any Indigenous — unspecified group", promptHint: "of Indigenous descent" },
+  { id: "native-american",    label: "Native American",     shortLabel: "Native American",  group: "Indigenous", dimension: "ethnicity", description: "Native American / First Nations",   promptHint: "Native American" },
+  { id: "aboriginal-australian", label: "Aboriginal Australian", shortLabel: "Aboriginal",  group: "Indigenous", dimension: "ethnicity", description: "Aboriginal Australian / Torres Strait", promptHint: "Aboriginal Australian" },
+  { id: "pacific-islander",   label: "Pacific Islander",    shortLabel: "Pacific Isl.",     group: "Indigenous", dimension: "ethnicity", description: "Polynesian / Maori / Samoan / Hawaiian", promptHint: "Pacific Islander" },
+  { id: "inuit",              label: "Inuit / Arctic",      shortLabel: "Inuit",            group: "Indigenous", dimension: "ethnicity", description: "Inuit / Yupik / Aleut",             promptHint: "of Inuit Arctic descent" },
+  // Other
+  { id: "mixed",              label: "Mixed",              group: "Other", dimension: "ethnicity", description: "Mixed heritage",                    promptHint: "of mixed heritage" },
 
   // -------------------- Build (silhouette + height) --------------------
   { id: "petite",        label: "Petite",         dimension: "build", description: "Short and small-framed", promptHint: "petite" },
