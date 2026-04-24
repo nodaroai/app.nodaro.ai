@@ -10,7 +10,7 @@ import { buildObjectPrompt } from "../../../packages/shared/src/entity-prompts.j
 const generateObjectBody = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
-  category: z.enum(["furniture", "vehicle", "weapon", "food", "clothing", "electronics", "nature", "tool", "other"]).optional(),
+  category: z.enum(["furniture", "vehicle", "weapon", "food", "clothing", "electronics", "nature", "tool", "animal", "other"]).optional(),
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
   provider: z.string().optional().default("nano-banana"),

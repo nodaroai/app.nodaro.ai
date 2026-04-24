@@ -43,6 +43,8 @@ import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { prefetchModelCredits, useModelCredits } from "@/hooks/use-model-credits"
+import { AnimalPicker } from "./animal-picker"
+import { getAnimal } from "@nodaro-shared/animals"
 import type { ConfigProps } from "./types"
 
 export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<CharacterNodeData>) {
@@ -562,6 +564,26 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
     generateAsset(selectedNodeId, assetType)
   }
 
+  const selectedAnimal = getAnimal(data.animalId)
+
+  function handlePickAnimal(animalId: string, animal: { label: string; description: string }) {
+    onUpdate({
+      animalId,
+      objectName: animal.label,
+      description: animal.description,
+    })
+  }
+
+  function handleCategoryChange(next: ObjectNodeData["category"]) {
+    // Clear animalId when leaving the Animal category so it doesn't silently
+    // travel with unrelated objects.
+    if (next !== "animal" && data.animalId) {
+      onUpdate({ category: next, animalId: undefined })
+    } else {
+      onUpdate({ category: next })
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="objectName" label="Object Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -573,7 +595,7 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
       </MappableField>
       <div>
         <Label htmlFor="obj-category">Category</Label>
-        <Select value={data.category} onValueChange={(v) => onUpdate({ category: v as ObjectNodeData["category"] })}>
+        <Select value={data.category} onValueChange={(v) => handleCategoryChange(v as ObjectNodeData["category"])}>
           <SelectTrigger id="obj-category"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="furniture">Furniture</SelectItem>
@@ -584,10 +606,28 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
             <SelectItem value="electronics">Electronics</SelectItem>
             <SelectItem value="nature">Nature</SelectItem>
             <SelectItem value="tool">Tool</SelectItem>
+            <SelectItem value="animal">Animal</SelectItem>
             <SelectItem value="other">Other</SelectItem>
           </SelectContent>
         </Select>
       </div>
+
+      {data.category === "animal" && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs">Pick an animal</Label>
+            {selectedAnimal && (
+              <span className="text-[10px] text-muted-foreground">
+                Selected: <span className="text-foreground font-medium">{selectedAnimal.label}</span>
+              </span>
+            )}
+          </div>
+          <AnimalPicker value={data.animalId ?? ""} onValueChange={handlePickAnimal} />
+          <p className="text-[10px] text-muted-foreground">
+            Picking auto-fills the name and description. Edit above to fine-tune.
+          </p>
+        </div>
+      )}
       <div>
         <Label htmlFor="obj-style">Style</Label>
         <Select value={data.style} onValueChange={(v) => onUpdate({ style: v as ObjectNodeData["style"] })}>

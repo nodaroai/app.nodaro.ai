@@ -2166,12 +2166,14 @@ export type ObjectNodeData = {
   objectDbId: string
   objectName: string
   description: string
-  category: "furniture" | "vehicle" | "weapon" | "food" | "clothing" | "electronics" | "nature" | "tool" | "other"
+  category: "furniture" | "vehicle" | "weapon" | "food" | "clothing" | "electronics" | "nature" | "tool" | "animal" | "other"
   style: "realistic" | "anime" | "3d-pixar" | "illustration"
   provider?: string
   sourceImageUrl: string
   projectId: string
   createdAt: string
+  // Only meaningful when category === "animal" — references an entry in packages/shared/src/animals.ts
+  animalId?: string
   executionStatus: "idle" | "running" | "completed" | "failed"
   currentJobProgress?: number
   errorMessage?: string
