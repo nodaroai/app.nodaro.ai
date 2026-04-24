@@ -117,76 +117,76 @@ function DimensionSection({
 }: DimensionSectionProps) {
   const id = useId()
   const label = STYLING_DIMENSION_LABELS[dimension]
-  // Hair-cut has 45 entries — use the modal browser so the list doesn't
-  // dominate the config panel.
-  const useBrowser = dimension === "hair-cut"
+  const isHairCut = dimension === "hair-cut"
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2 px-0.5">
-        <input
-          type="checkbox"
-          id={`${id}-${field}`}
-          checked={checked}
-          onChange={(e) => onToggle(e.target.checked)}
-          className="rounded border-muted-foreground/40"
-        />
-        <label
-          htmlFor={`${id}-${field}`}
-          className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground select-none cursor-pointer"
-        >
-          {label}
-        </label>
-      </div>
-      {useBrowser ? (
-        <div className={cn("transition-opacity", !checked && "opacity-40")}>
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id={`${id}-${field}`}
+            checked={checked}
+            onChange={(e) => onToggle(e.target.checked)}
+            className="rounded border-muted-foreground/40"
+          />
+          <label
+            htmlFor={`${id}-${field}`}
+            className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground select-none cursor-pointer"
+          >
+            {label}
+          </label>
+        </div>
+        {/* Hair Cut has 45 entries — even as a chip grid it's a lot. The
+            "Pick by look" pill opens the modal with silhouettes so users
+            can browse visually without losing the inline chip list. */}
+        {isHairCut && (
           <HairCutBrowser
+            variant="compact"
             value={checked ? current : undefined}
             onChange={(id) => {
               if (id) onPick(id)
-              else onToggle(false)
             }}
           />
-        </div>
-      ) : (
-        <div
-          role="radiogroup"
-          aria-label={label}
-          className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}
-        >
-          {entries.map((entry) => {
-            const selected = checked && entry.id === current
-            const eyewearIcon = dimension === "eyewear" ? <EyewearIcon eyewearId={entry.id} className="size-6" /> : null
-            const headwearIcon = dimension === "headwear" ? <HeadwearIcon headwearId={entry.id} className="size-6" /> : null
-            return (
-              <button
-                key={entry.id}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                title={checked ? entry.description : `${entry.description} (click to enable ${label})`}
-                onClick={() => onPick(entry.id)}
+        )}
+      </div>
+      <div
+        role="radiogroup"
+        aria-label={label}
+        className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}
+      >
+        {entries.map((entry) => {
+          const selected = checked && entry.id === current
+          const eyewearIcon = dimension === "eyewear" ? <EyewearIcon eyewearId={entry.id} className="size-6" /> : null
+          const headwearIcon = dimension === "headwear" ? <HeadwearIcon headwearId={entry.id} className="size-6" /> : null
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              title={checked ? entry.description : `${entry.description} (click to enable ${label})`}
+              onClick={() => onPick(entry.id)}
+              className={cn(
+                "flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden",
+                selected
+                  ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
+                  : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
+              )}
+            >
+              {eyewearIcon}
+              {headwearIcon}
+              <span
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden",
-                  selected
-                    ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
-                    : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
+                  "text-[11px] font-medium leading-tight truncate max-w-full",
+                  selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               >
-                {eyewearIcon}
-                {headwearIcon}
-                <span
-                  className={cn(
-                    "text-[11px] font-medium leading-tight truncate max-w-full",
-                    selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
-                  )}
-                >
-                  {entry.label}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      )}
+                {entry.label}
+              </span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

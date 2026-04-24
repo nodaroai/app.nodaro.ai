@@ -439,6 +439,18 @@ export interface PersonData {
   ethnicity?: string
   /** Body silhouette + height combined (slim, athletic, tall-lean). */
   build?: string
+  /** Body shape ratio (long-legged, hourglass, pear). Independent from Build. */
+  bodyProportions?: string
+  /** Face silhouette (oval, round, square, heart, diamond, oblong, triangular). */
+  faceShape?: string
+  /** Jaw shape (strong, soft, pointed, wide, double-chin). */
+  jawline?: string
+  /** Eye shape (almond, hooded, monolid, deep-set, downturned, upturned…). */
+  eyeShape?: string
+  /** Nose shape (straight, aquiline, snub, broad, narrow, hooked…). */
+  nose?: string
+  /** Lip shape (thin, medium, full, wide, cupid's bow, small). */
+  lips?: string
   /** Hair color (brown, blonde, gray, dyed). */
   hairColor?: string
   /** Natural hair texture + length (short straight, long curly, afro…). The

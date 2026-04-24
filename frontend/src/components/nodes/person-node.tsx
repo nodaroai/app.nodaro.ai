@@ -12,6 +12,7 @@ import {
   type PersonDimension,
 } from "@nodaro-shared/person"
 import { ParameterNodeShell } from "./parameter-node-shell"
+import { getPersonEntryIcon } from "./person-styling-icon"
 import type { PersonData } from "@/types/nodes"
 
 interface EnabledEntry {
@@ -57,14 +58,27 @@ function PersonNodeComponent({ id, data, selected }: NodeProps) {
         >
           {enabled.map(({ dimension, entryId }) => {
             const entry = getPerson(entryId)
+            const icon = getPersonEntryIcon(dimension, entryId)
             return (
-              <div key={dimension} className="flex flex-col gap-0.5">
-                <p className="text-muted-foreground text-[10px] uppercase tracking-wider">
-                  {PERSON_DIMENSION_LABELS[dimension]}
-                </p>
-                <p className="text-foreground text-sm font-medium leading-tight">
-                  {getPersonLabel(entryId)}
-                </p>
+              <div key={dimension} className="flex flex-col gap-0.5 min-w-0">
+                {/* Top row holds the dim label + entry name; the icon sits on
+                    the right and vertically centers against those two lines.
+                    The description (if any) breaks below at full width. */}
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                    <p className="text-muted-foreground text-[10px] uppercase tracking-wider truncate">
+                      {PERSON_DIMENSION_LABELS[dimension]}
+                    </p>
+                    <p className="text-foreground text-sm font-medium leading-tight truncate">
+                      {getPersonLabel(entryId)}
+                    </p>
+                  </div>
+                  {icon && (
+                    <div className="shrink-0 flex items-center justify-center">
+                      {icon}
+                    </div>
+                  )}
+                </div>
                 {entry?.description && (
                   <p className="text-muted-foreground text-[10.5px] leading-snug">
                     {entry.description}

@@ -1,7 +1,7 @@
 "use client"
 
 import { type ReactNode, memo, useMemo, useState } from "react"
-import { ChevronDown, Search } from "lucide-react"
+import { ChevronDown, Search, Sparkles } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -38,6 +38,8 @@ export const DimensionModalBrowser = memo(function DimensionModalBrowser({
   renderIcon,
   fallbackIcon,
   className,
+  triggerVariant = "full",
+  triggerLabel = "Pick by look",
 }: {
   readonly entries: ReadonlyArray<DimensionEntry>
   readonly value: string | undefined
@@ -47,6 +49,12 @@ export const DimensionModalBrowser = memo(function DimensionModalBrowser({
   readonly renderIcon: (entry: DimensionEntry, isSelected: boolean) => ReactNode
   readonly fallbackIcon?: ReactNode
   readonly className?: string
+  /** `full` = wide pill showing the current selection (icon + label + chevron),
+   *  used as the standalone picker. `compact` = small accent button for
+   *  embedding alongside a chip grid as a "Pick by look" affordance. */
+  readonly triggerVariant?: "full" | "compact"
+  /** Label for the compact trigger. Ignored in `full` variant. */
+  readonly triggerLabel?: string
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -72,27 +80,40 @@ export const DimensionModalBrowser = memo(function DimensionModalBrowser({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] px-2.5 py-2 text-left hover:border-gray-300 dark:hover:border-[#3D3D3D] transition-colors w-full min-w-0",
-            className,
-          )}
-        >
-          {selected ? (
-            <div className="size-7 shrink-0 flex items-center justify-center text-gray-700 dark:text-[#E2E8F0]">
-              {renderIcon(selected, false)}
-            </div>
-          ) : (
-            <div className="size-7 shrink-0 flex items-center justify-center text-muted-foreground">
-              {fallbackIcon}
-            </div>
-          )}
-          <span className="flex-1 truncate text-xs text-gray-700 dark:text-[#E2E8F0]">
-            {displayLabel}
-          </span>
-          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-        </button>
+        {triggerVariant === "compact" ? (
+          <button
+            type="button"
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:bg-[#ff0073]/5 hover:border-[#ff0073]/40 hover:text-[#ff0073] transition-colors text-[10px] font-medium px-1.5 py-0.5 text-gray-600 dark:text-[#94A3B8]",
+              className,
+            )}
+          >
+            <Sparkles className="size-2.5 shrink-0" />
+            {triggerLabel}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={cn(
+              "flex items-center gap-2 rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] px-2.5 py-2 text-left hover:border-gray-300 dark:hover:border-[#3D3D3D] transition-colors w-full min-w-0",
+              className,
+            )}
+          >
+            {selected ? (
+              <div className="size-7 shrink-0 flex items-center justify-center text-gray-700 dark:text-[#E2E8F0]">
+                {renderIcon(selected, false)}
+              </div>
+            ) : (
+              <div className="size-7 shrink-0 flex items-center justify-center text-muted-foreground">
+                {fallbackIcon}
+              </div>
+            )}
+            <span className="flex-1 truncate text-xs text-gray-700 dark:text-[#E2E8F0]">
+              {displayLabel}
+            </span>
+            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+          </button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col gap-3 p-4">
         <DialogHeader>
