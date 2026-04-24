@@ -52,7 +52,7 @@ import { StylePicker } from "./style-picker"
 import { SettingPicker } from "./setting-picker"
 import { PersonPicker } from "./person-picker"
 import { MoodPicker } from "./mood-picker"
-import { PosePicker } from "./pose-picker"
+import { PoseBrowser } from "./pose-browser"
 import { StylingPicker } from "./styling-picker"
 import { TemporalPicker } from "./temporal-picker"
 import { PromptInjectionPreview } from "./prompt-injection-preview"
@@ -462,7 +462,8 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
           ethnicity: data.ethnicity,
           build: data.build,
           hairColor: data.hairColor,
-          hairStyle: data.hairStyle,
+          hairBase: data.hairBase,
+          eyebrows: data.eyebrows,
           skinTone: data.skinTone,
           skinTexture: data.skinTexture,
           eyeColor: data.eyeColor,
@@ -564,9 +565,9 @@ export function PoseConfig({ data, onUpdate }: ConfigProps<PoseData>) {
         />
       </div>
       <Label>Pose</Label>
-      <PosePicker
+      <PoseBrowser
         value={data.pose || "standing-upright"}
-        onValueChange={(v) => onUpdate({ pose: v })}
+        onChange={(v) => onUpdate({ pose: v ?? "standing-upright" })}
       />
     </div>
   )
@@ -609,6 +610,7 @@ export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
           makeup: data.makeup,
           eyewear: data.eyewear,
           headwear: data.headwear,
+          hairCut: data.hairCut,
           hairTreatment: data.hairTreatment,
           jewelry: data.jewelry,
           nails: data.nails,

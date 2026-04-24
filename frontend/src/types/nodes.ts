@@ -441,8 +441,11 @@ export interface PersonData {
   build?: string
   /** Hair color (brown, blonde, gray, dyed). */
   hairColor?: string
-  /** Hair length + texture combined (long wavy, short curly, braids). */
-  hairStyle?: string
+  /** Natural hair texture + length (short straight, long curly, afro…). The
+   *  styled cut (bob, wolf cut, braids…) lives in Styling.hairCut. */
+  hairBase?: string
+  /** Eyebrow shape / style (natural, thick, pencil, arched, microbladed…). */
+  eyebrows?: string
   /** Skin tone. */
   skinTone?: string
   /** Skin texture / quality (smooth, wrinkled, goosebumps, dewy, glistening, weathered). */
@@ -473,6 +476,9 @@ export interface StylingData {
   makeup?: string
   eyewear?: string
   headwear?: string
+  /** Hair cut / style (bob, wolf cut, braids, ponytail, dreadlocks…).
+   *  Pairs with Person.hairBase (natural texture + length). */
+  hairCut?: string
   /** Hair treatment (babylights, balayage, ombré, highlights, rooted). */
   hairTreatment?: string
   jewelry?: string
