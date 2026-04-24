@@ -609,6 +609,7 @@ export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
           makeup: data.makeup,
           eyewear: data.eyewear,
           headwear: data.headwear,
+          hairTreatment: data.hairTreatment,
           jewelry: data.jewelry,
           nails: data.nails,
           facePaint: data.facePaint,

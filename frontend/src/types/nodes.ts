@@ -473,6 +473,8 @@ export interface StylingData {
   makeup?: string
   eyewear?: string
   headwear?: string
+  /** Hair treatment (babylights, balayage, ombré, highlights, rooted). */
+  hairTreatment?: string
   jewelry?: string
   nails?: string
   facePaint?: string

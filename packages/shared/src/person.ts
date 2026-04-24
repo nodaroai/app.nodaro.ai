@@ -115,17 +115,35 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "tall-lean",     label: "Tall & Lean",    dimension: "build", description: "Tall, lean frame",       promptHint: "tall and lean" },
 
   // -------------------- Hair Color --------------------
-  { id: "hair-blonde",      label: "Blonde",       dimension: "hair-color", description: "Blonde hair",        promptHint: "blonde hair" },
-  { id: "hair-light-brown", label: "Light Brown",  dimension: "hair-color", description: "Light brown hair",   promptHint: "light brown hair" },
-  { id: "hair-brown",       label: "Brown",        dimension: "hair-color", description: "Brown hair",         promptHint: "brown hair" },
-  { id: "hair-dark-brown",  label: "Dark Brown",   dimension: "hair-color", description: "Dark brown hair",    promptHint: "dark brown hair" },
-  { id: "hair-black",       label: "Black",        dimension: "hair-color", description: "Black hair",         promptHint: "black hair" },
-  { id: "hair-red",         label: "Red",          dimension: "hair-color", description: "Red hair",           promptHint: "red hair" },
-  { id: "hair-auburn",      label: "Auburn",       dimension: "hair-color", description: "Auburn hair",        promptHint: "auburn hair" },
-  { id: "hair-gray",        label: "Gray",         dimension: "hair-color", description: "Gray hair",                promptHint: "gray hair" },
+  // Blonde family (light → warm → cool)
+  { id: "hair-platinum",    label: "Platinum",     dimension: "hair-color", description: "Very pale, icy platinum",   promptHint: "platinum blonde hair, very pale and icy" },
+  { id: "hair-creamy",      label: "Creamy",       dimension: "hair-color", description: "Warm creamy / vanilla blonde", promptHint: "creamy vanilla blonde hair" },
+  { id: "hair-blonde",      label: "Blonde",       dimension: "hair-color", description: "Classic blonde hair",       promptHint: "blonde hair" },
+  { id: "hair-honey",       label: "Honey",        dimension: "hair-color", description: "Warm honey-gold blonde",    promptHint: "honey-gold blonde hair with warm golden tones" },
+  { id: "hair-strawberry",  label: "Strawberry Blonde", dimension: "hair-color", description: "Blonde with pinkish-red tone", promptHint: "strawberry blonde hair with a pinkish-red tint" },
+  { id: "hair-ash-blonde",  label: "Ash Blonde",   dimension: "hair-color", description: "Cool, ashy blonde",         promptHint: "ash blonde hair with cool, muted tones" },
+  // Red / warm family
+  { id: "hair-ginger",      label: "Ginger",       dimension: "hair-color", description: "Bright ginger (reddish-orange)", promptHint: "bright ginger hair, reddish-orange" },
+  { id: "hair-copper",      label: "Copper",       dimension: "hair-color", description: "Vibrant copper orange-red", promptHint: "vibrant copper hair with orange-red metallic shine" },
+  { id: "hair-red",         label: "Red",          dimension: "hair-color", description: "Classic red hair",          promptHint: "red hair" },
+  { id: "hair-auburn",      label: "Auburn",       dimension: "hair-color", description: "Rich reddish-brown",        promptHint: "auburn hair, rich reddish-brown" },
+  { id: "hair-burgundy",    label: "Burgundy",     dimension: "hair-color", description: "Dark wine-red",             promptHint: "burgundy hair, deep wine-red" },
+  // Brown family (light → dark)
+  { id: "hair-light-brown", label: "Light Brown",  dimension: "hair-color", description: "Light brown hair",          promptHint: "light brown hair" },
+  { id: "hair-caramel",     label: "Caramel",      dimension: "hair-color", description: "Warm caramel brown",        promptHint: "caramel brown hair with warm golden undertones" },
+  { id: "hair-brown",       label: "Brown",        dimension: "hair-color", description: "Medium brown hair",         promptHint: "brown hair" },
+  { id: "hair-chestnut",    label: "Chestnut",     dimension: "hair-color", description: "Warm reddish-brown chestnut", promptHint: "chestnut brown hair with warm reddish undertones" },
+  { id: "hair-chocolate",   label: "Chocolate",    dimension: "hair-color", description: "Rich dark chocolate brown",  promptHint: "rich chocolate brown hair" },
+  { id: "hair-dark-brown",  label: "Dark Brown",   dimension: "hair-color", description: "Dark brown hair",           promptHint: "dark brown hair" },
+  // Black family
+  { id: "hair-black",       label: "Black",        dimension: "hair-color", description: "Classic black hair",        promptHint: "black hair" },
+  { id: "hair-jet-black",   label: "Jet Black",    dimension: "hair-color", description: "Deep black with blue undertones", promptHint: "jet black hair with deep blue-black undertones and glossy shine" },
+  // Gray / neutral
+  { id: "hair-gray",        label: "Gray",         dimension: "hair-color", description: "Gray hair",                 promptHint: "gray hair" },
   { id: "hair-salt-pepper", label: "Salt & Pepper", dimension: "hair-color", description: "Mixed black and gray hair", promptHint: "salt-and-pepper hair" },
-  { id: "hair-white",       label: "White",        dimension: "hair-color", description: "White hair",               promptHint: "white hair" },
-  { id: "hair-dyed",        label: "Colorful",     dimension: "hair-color", description: "Dyed colorful hair", promptHint: "vibrantly dyed colorful hair" },
+  { id: "hair-white",       label: "White",        dimension: "hair-color", description: "White hair",                promptHint: "white hair" },
+  // Dyed
+  { id: "hair-dyed",        label: "Colorful",     dimension: "hair-color", description: "Dyed vibrant colors",       promptHint: "vibrantly dyed colorful hair" },
 
   // -------------------- Hair Style (length + texture) --------------------
   { id: "style-pixie",         label: "Pixie",        dimension: "hair-style", description: "Short, cropped pixie cut",  promptHint: "a short pixie cut" },
