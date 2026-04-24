@@ -28,6 +28,10 @@ export const PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
   "pose",
   "styling",
   "temporal",
+  "material",
+  "animal",
+  "vehicle",
+  "weapon",
   "scene-count",
   "duration",
   "aspect-ratio",
@@ -80,6 +84,14 @@ export function getParameterValue(
       return trim(data.style)
     case "setting":
       return trim(data.setting)
+    case "material":
+      return trim(data.material)
+    case "animal":
+      return trim(data.animal)
+    case "vehicle":
+      return trim(data.vehicle)
+    case "weapon":
+      return trim(data.weapon)
     case "person":
       // Multi-dimension: return the first set per-dimension value (used for
       // single-string field-mapping resolution; full hint composition goes
@@ -120,7 +132,8 @@ export function getParameterValue(
         trim(data.headwear) ??
         trim(data.jewelry) ??
         trim(data.nails) ??
-        trim(data.facePaint)
+        trim(data.facePaint) ??
+        trim(data.fabric)
       )
     case "temporal":
       // Multi-category: return the first set per-category value (used for

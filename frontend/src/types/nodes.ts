@@ -496,6 +496,10 @@ export interface StylingData {
   jewelry?: string
   nails?: string
   facePaint?: string
+  /** Clothing fabric / material (silk, leather, denim, velvet…). Overlaps
+   *  vocabulary with the Material node in the Object category — Fabric uses
+   *  "wearing X" grammar, Material uses "made of X". */
+  fabric?: string
   preText?: string
   postText?: string
   maxItemsPerRow?: number
@@ -528,6 +532,50 @@ export interface PoseData {
   preText?: string
   /** Free-text appended after the pose hint. */
   postText?: string
+}
+
+/** Standalone Material parameter node data. Universal "what something is
+ * made of" hint using `"made of X"` grammar — works on subjects, objects, or
+ * surfaces. See `packages/shared/src/materials.ts`. Part of the Object
+ * category along with Animal / Vehicle / Weapon. */
+export interface MaterialData {
+  [key: string]: unknown
+  label: string
+  /** Material id from MATERIALS catalog. */
+  material: string
+}
+
+/** Standalone Animal parameter node data. Reuses the catalog from the
+ * Object entity's Animal sub-category. Emits a descriptive hint for
+ * downstream gen prompts ("featuring a golden retriever…"). See
+ * `packages/shared/src/animals.ts`. */
+export interface AnimalData {
+  [key: string]: unknown
+  label: string
+  /** Animal id from ANIMALS catalog. */
+  animal: string
+}
+
+/** Standalone Vehicle parameter node data. Reuses the catalog from the
+ * Object entity's Vehicle sub-category. Emits a descriptive hint for
+ * downstream gen prompts ("featuring a muscle car…"). See
+ * `packages/shared/src/vehicles.ts`. */
+export interface VehicleData {
+  [key: string]: unknown
+  label: string
+  /** Vehicle id from VEHICLES catalog. */
+  vehicle: string
+}
+
+/** Standalone Weapon parameter node data. Reuses the catalog from the
+ * Object entity's Weapon sub-category. Emits a descriptive hint for
+ * downstream gen prompts ("with a katana…"). See
+ * `packages/shared/src/weapons.ts`. */
+export interface WeaponData {
+  [key: string]: unknown
+  label: string
+  /** Weapon id from WEAPONS catalog. */
+  weapon: string
 }
 
 /** Standalone Temporal parameter node data. */
@@ -2818,6 +2866,10 @@ export type SceneNodeData =
   | MoodData
   | PoseData
   | StylingData
+  | MaterialData
+  | AnimalData
+  | VehicleData
+  | WeaponData
   | TemporalData
   | GenerateScriptData
   | GenerateImageData
@@ -2947,6 +2999,10 @@ export type SceneNodeType =
   | "mood"
   | "pose"
   | "styling"
+  | "material"
+  | "animal"
+  | "vehicle"
+  | "weapon"
   | "temporal"
   | "generate-script"
   | "generate-image"
@@ -3357,6 +3413,42 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Styling", makeup: "makeup-natural", maxItemsPerRow: 2 },
+  },
+  {
+    type: "material",
+    label: "Material",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Material", material: "silk" },
+  },
+  {
+    type: "animal",
+    label: "Animal",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Animal", animal: "dog-golden-retriever" },
+  },
+  {
+    type: "vehicle",
+    label: "Vehicle",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Vehicle", vehicle: "sedan" },
+  },
+  {
+    type: "weapon",
+    label: "Weapon",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Weapon", weapon: "katana" },
   },
   {
     type: "temporal",

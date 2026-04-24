@@ -9,8 +9,8 @@ import {
 } from "../scraper-actors.js"
 
 describe("scraper-actors", () => {
-  it("exposes 4 curated actor ids", () => {
-    expect(SCRAPER_ACTOR_IDS).toEqual(["content-crawler", "google-search", "instagram", "tiktok"])
+  it("exposes 5 curated actor ids", () => {
+    expect(SCRAPER_ACTOR_IDS).toEqual(["content-crawler", "google-search", "instagram", "tiktok", "rss"])
   })
 
   it("returns flat credit id for google-search", () => {

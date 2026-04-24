@@ -31,6 +31,10 @@ import { buildPoseHints } from "./pose.js"
 import { buildStylingHints } from "./styling.js"
 import { buildTemporalHints } from "./temporal.js"
 import { composeCameraMotionHintFromConnections } from "./camera-motions.js"
+import { getMaterialPromptHint } from "./materials.js"
+import { getAnimal } from "./animals.js"
+import { getVehicle } from "./vehicles.js"
+import { getWeapon } from "./weapons.js"
 
 export interface HintNodeLike {
   readonly id: string
@@ -103,6 +107,20 @@ export function getParameterPromptHint(
       return getStylePromptHint(asStr(data.style))
     case "setting":
       return getSettingPromptHint(asStr(data.setting))
+    case "material":
+      return getMaterialPromptHint(asStr(data.material))
+    case "animal": {
+      const animal = getAnimal(asStr(data.animal))
+      return animal ? `featuring a ${animal.label.toLowerCase()}, ${animal.description}` : ""
+    }
+    case "vehicle": {
+      const vehicle = getVehicle(asStr(data.vehicle))
+      return vehicle ? `featuring a ${vehicle.label.toLowerCase()}, ${vehicle.description}` : ""
+    }
+    case "weapon": {
+      const weapon = getWeapon(asStr(data.weapon))
+      return weapon ? `with a ${weapon.label.toLowerCase()}, ${weapon.description}` : ""
+    }
     case "person":
       return buildPersonHints(data).join(", ")
     case "mood":

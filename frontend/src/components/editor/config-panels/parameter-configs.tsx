@@ -39,6 +39,10 @@ import type {
   MoodData,
   PoseData,
   StylingData,
+  MaterialData,
+  AnimalData,
+  VehicleData,
+  WeaponData,
   TemporalData,
 } from "@/types/nodes"
 import { CameraMotionPicker } from "./camera-motion-picker"
@@ -58,6 +62,10 @@ import { POSES } from "@nodaro-shared/pose"
 import { PoseIcon } from "./pose-icon"
 import { StylingPicker } from "./styling-picker"
 import { TemporalPicker } from "./temporal-picker"
+import { MaterialPicker } from "./material-picker"
+import { AnimalPicker } from "./animal-picker"
+import { VehiclePicker } from "./vehicle-picker"
+import { WeaponPicker } from "./weapon-picker"
 import { PromptInjectionPreview } from "./prompt-injection-preview"
 import { composeCameraMotionHintForNode } from "@/lib/cinematography-hints"
 import { buildFramingHints } from "@nodaro-shared/framing"
@@ -73,6 +81,10 @@ import { buildMoodHints } from "@nodaro-shared/mood"
 import { buildPoseHints } from "@nodaro-shared/pose"
 import { buildStylingHints } from "@nodaro-shared/styling"
 import { buildTemporalHints } from "@nodaro-shared/temporal"
+import { getMaterialPromptHint } from "@nodaro-shared/materials"
+import { getAnimal } from "@nodaro-shared/animals"
+import { getVehicle } from "@nodaro-shared/vehicles"
+import { getWeapon } from "@nodaro-shared/weapons"
 import type { ConfigProps } from "./types"
 
 export function ToneConfig({ data, onUpdate }: ConfigProps<ToneData>) {
@@ -637,6 +649,7 @@ export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
           jewelry: data.jewelry,
           nails: data.nails,
           facePaint: data.facePaint,
+          fabric: data.fabric,
         }}
         onChange={(patch) => onUpdate(patch)}
       />
@@ -697,6 +710,64 @@ export function TemporalConfig({ data, onUpdate }: ConfigProps<TemporalData>) {
           className="w-16 h-8 rounded-md border border-input bg-transparent px-2 text-xs text-right"
         />
       </div>
+    </div>
+  )
+}
+
+export function MaterialConfig({ data, onUpdate }: ConfigProps<MaterialData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getMaterialPromptHint(data.material)]} />
+      <Label>Material</Label>
+      <MaterialPicker
+        value={data.material || "silk"}
+        onValueChange={(v) => onUpdate({ material: v })}
+      />
+    </div>
+  )
+}
+
+export function AnimalConfig({ data, onUpdate }: ConfigProps<AnimalData>) {
+  const animal = getAnimal(data.animal)
+  const hint = animal ? `featuring a ${animal.label.toLowerCase()}, ${animal.description}` : ""
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[hint]} />
+      <Label>Animal</Label>
+      <AnimalPicker
+        value={data.animal || "dog-golden-retriever"}
+        onValueChange={(v) => onUpdate({ animal: v })}
+      />
+    </div>
+  )
+}
+
+export function VehicleConfig({ data, onUpdate }: ConfigProps<VehicleData>) {
+  const vehicle = getVehicle(data.vehicle)
+  const hint = vehicle ? `featuring a ${vehicle.label.toLowerCase()}, ${vehicle.description}` : ""
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[hint]} />
+      <Label>Vehicle</Label>
+      <VehiclePicker
+        value={data.vehicle || "sedan"}
+        onValueChange={(v) => onUpdate({ vehicle: v })}
+      />
+    </div>
+  )
+}
+
+export function WeaponConfig({ data, onUpdate }: ConfigProps<WeaponData>) {
+  const weapon = getWeapon(data.weapon)
+  const hint = weapon ? `with a ${weapon.label.toLowerCase()}, ${weapon.description}` : ""
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[hint]} />
+      <Label>Weapon</Label>
+      <WeaponPicker
+        value={data.weapon || "katana"}
+        onValueChange={(v) => onUpdate({ weapon: v })}
+      />
     </div>
   )
 }
