@@ -35,6 +35,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   electronics: "Electronics",
   nature: "Nature",
   tool: "Tool",
+  animal: "Animal",
   other: "Other",
 }
 
