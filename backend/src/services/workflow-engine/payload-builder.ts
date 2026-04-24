@@ -15,6 +15,7 @@ import { composeCameraMotionHintFromConnections } from "../../../../packages/sha
 import { getParameterPromptHint } from "../../../../packages/shared/src/parameter-prompt-hint.js"
 import type { CharacterDef, SceneData } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
+import { isSeedance2Provider } from "../../../../packages/shared/src/model-constants.js"
 import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-constants.js"
 import { buildLlmCreditIdentifier } from "../../../../packages/shared/src/llm-models.js"
 import {
@@ -961,8 +962,12 @@ export function buildPayload(
           generateAudio: data.generateAudio,
           negativePrompt: data.negativePrompt,
           cfgScale: data.cfgScale,
-          aspectRatio: data.aspectRatio,
-          resolution: data.resolution,
+          // Seedance 2 config pickers render defaults in the UI without
+          // persisting them to data until the user explicitly picks, so
+          // untouched nodes submitted aspectRatio / resolution undefined.
+          // Fill the defaults here so the request matches the UI.
+          aspectRatio: (data.aspectRatio as string | undefined) ?? (isSeedance2Provider(provider) ? "16:9" : undefined),
+          resolution: (data.resolution as string | undefined) ?? (isSeedance2Provider(provider) ? "720p" : undefined),
           seed: data.seed,
           cameraFixed: data.cameraFixed,
           multiShot: data.multiShot,
@@ -1014,7 +1019,8 @@ export function buildPayload(
           duration: data.duration,
           mode: data.mode ?? data.kling3Mode,
           sound: data.sound ?? data.kling3Sound,
-          aspectRatio: data.aspectRatio,
+          // See i2v note above — Seedance 2 UI default fallbacks.
+          aspectRatio: (data.aspectRatio as string | undefined) ?? (isSeedance2Provider(provider) ? "16:9" : undefined),
           negativePrompt: data.negativePrompt,
           cfgScale: data.cfgScale,
           multiShot: data.multiShot,
@@ -1022,7 +1028,7 @@ export function buildPayload(
           elements: data.elements,
           removeWatermark: data.removeWatermark,
           seed: data.seed,
-          resolution: data.resolution,
+          resolution: (data.resolution as string | undefined) ?? (isSeedance2Provider(provider) ? "720p" : undefined),
           generateAudio: data.generateAudio,
           referenceImageUrls: resolvedInputs.referenceImageUrls,
           referenceVideoUrls: resolvedInputs.referenceVideoUrls,

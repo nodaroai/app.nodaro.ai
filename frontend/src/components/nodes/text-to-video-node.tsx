@@ -163,9 +163,11 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
         { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
         { id: "cinematography", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
         ...(isSeedance2 ? [
-          { id: "reference-images", type: "target" as const, position: Position.Left, top: 'calc(100% - 160px)', customStyle: { top: 'calc(100% - 160px)', left: '-29px' }, hideHandle: true, label: `Ref images ×${SEEDANCE_2_REF_LIMITS.images}` },
-          { id: "reference-videos", type: "target" as const, position: Position.Left, top: 'calc(100% - 120px)', customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, hideHandle: true, label: `Ref videos ×${SEEDANCE_2_REF_LIMITS.videos}` },
-          { id: "reference-audio",  type: "target" as const, position: Position.Left, top: 'calc(100% - 85px)',  customStyle: { top: 'calc(100% - 85px)',  left: '-29px' }, hideHandle: true, label: `Ref audio ×${SEEDANCE_2_REF_LIMITS.audio}` },
+          // Reference-image/video/audio handles — per-type capacity (×N) is
+          // shown in the config panel's model box now, not inline on the node.
+          { id: "reference-images", type: "target" as const, position: Position.Left, top: 'calc(100% - 160px)', customStyle: { top: 'calc(100% - 160px)', left: '-29px' }, hideHandle: true },
+          { id: "reference-videos", type: "target" as const, position: Position.Left, top: 'calc(100% - 120px)', customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, hideHandle: true },
+          { id: "reference-audio",  type: "target" as const, position: Position.Left, top: 'calc(100% - 85px)',  customStyle: { top: 'calc(100% - 85px)',  left: '-29px' }, hideHandle: true },
         ] : []),
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}

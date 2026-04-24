@@ -13,6 +13,25 @@ interface FilerobotEditorModalProps {
 
 const ALL_TABS = [TABS.ADJUST, TABS.ANNOTATE, TABS.FILTERS, TABS.FINETUNE, TABS.RESIZE]
 
+/** Aspect-ratio presets the user can pick from when cropping inside the
+ *  Filerobot editor. Without these, the crop tool defaults to "Custom" only
+ *  and the ratio-selector row is empty — matching the bug report ("I cannot
+ *  change the ratio when cropping"). Mirrors the presets the MediaEditor
+ *  upload flow shows. `ratio: 0` is Filerobot's convention for "original". */
+const CROP_PRESETS = [
+  { titleKey: "Original", descriptionKey: "Source ratio", ratio: 0 },
+  { titleKey: "Freeform", descriptionKey: "Any", ratio: "custom" as const },
+  { titleKey: "Square", descriptionKey: "1:1", ratio: 1 },
+  { titleKey: "Portrait", descriptionKey: "3:4", ratio: 3 / 4 },
+  { titleKey: "Landscape", descriptionKey: "4:3", ratio: 4 / 3 },
+  { titleKey: "Widescreen", descriptionKey: "16:9", ratio: 16 / 9 },
+  { titleKey: "Vertical", descriptionKey: "9:16", ratio: 9 / 16 },
+  { titleKey: "Cinematic", descriptionKey: "21:9", ratio: 21 / 9 },
+  { titleKey: "Classic", descriptionKey: "3:2", ratio: 3 / 2 },
+  { titleKey: "Tall", descriptionKey: "2:3", ratio: 2 / 3 },
+  { titleKey: "Ultra-wide", descriptionKey: "2.39:1", ratio: 2.39 },
+]
+
 /** Build Filerobot palette using the actual @scaleflex/ui Color enum keys */
 function buildTheme(isDark: boolean) {
   const common = {
@@ -279,6 +298,10 @@ export function FilerobotEditorModal({
             useBackendTranslations={false}
             defaultSavedImageType="png"
             showBackButton={false}
+            Crop={{
+              presetsItems: CROP_PRESETS,
+              autoResize: true,
+            }}
             {...(loadedDesignState ? { loadableDesignState: loadedDesignState as Record<string, unknown> } : {})}
           />
         )}

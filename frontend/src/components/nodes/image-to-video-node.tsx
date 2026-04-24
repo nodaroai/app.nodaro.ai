@@ -234,8 +234,10 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     { id: "audio", type: "target" as const, position: Position.Left, customStyle: { top: `${audioTop}px`, left: '-29px' }, hideHandle: true },
     ...(showReferences ? [{ id: "references", type: "target" as const, position: Position.Left, customStyle: { top: `${referencesTop}px`, left: '-29px' }, hideHandle: true }] : []),
     ...(isSeedance2 ? [
-      { id: "reference-videos", type: "target" as const, position: Position.Left, top: `${refVideosTop}px`, customStyle: { top: `${refVideosTop}px`, left: '-29px' }, hideHandle: true, label: `Ref videos ×${SEEDANCE_2_REF_LIMITS.videos}` },
-      { id: "reference-audio", type: "target" as const, position: Position.Left, top: `${refAudioTop}px`, customStyle: { top: `${refAudioTop}px`, left: '-29px' }, hideHandle: true, label: `Ref audio ×${SEEDANCE_2_REF_LIMITS.audio}` },
+      // Ref-video/ref-audio handles — capacity limit (×N) is now shown in
+      // the config panel's model box, not inline on the node.
+      { id: "reference-videos", type: "target" as const, position: Position.Left, top: `${refVideosTop}px`, customStyle: { top: `${refVideosTop}px`, left: '-29px' }, hideHandle: true },
+      { id: "reference-audio", type: "target" as const, position: Position.Left, top: `${refAudioTop}px`, customStyle: { top: `${refAudioTop}px`, left: '-29px' }, hideHandle: true },
     ] : []),
     { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: `${videoTop}px`, right: '-29px' }, hideHandle: true },
   ], [cinematographyTop, startFrameTop, endFrameTop, audioTop, referencesTop, refVideosTop, refAudioTop, videoTop, activeUrl, showConfig, showEndFrame, showStartFrame, showReferences, isSeedance2])

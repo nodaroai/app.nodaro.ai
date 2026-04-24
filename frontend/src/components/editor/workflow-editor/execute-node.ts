@@ -1012,6 +1012,14 @@ export function executeNode(
       | undefined;
     const referenceVideoUrls = inputs.referenceVideoUrls as string[] | undefined
     const referenceAudioUrls = inputs.referenceAudioUrls as string[] | undefined
+    // Seedance 2 accepts aspect_ratio + resolution in every request. Pickers
+    // render a default ("16:9" / "720p") even when `data.aspectRatio` is
+    // undefined — which meant submissions from an untouched node dropped
+    // both fields silently. Send explicit defaults so the value the user
+    // SEES in the picker always matches what KIE receives.
+    const isSeedance2I2V = isSeedance2Provider(nodeProvider ?? "")
+    const effectiveAspectRatio = i2vData.aspectRatio ?? (isSeedance2I2V ? "16:9" : undefined)
+    const effectiveResolution = i2vData.resolution ?? (isSeedance2I2V ? "720p" : undefined)
     return runVideoGeneration(
       node.id,
       startFrameUrl ?? "",
@@ -1024,13 +1032,13 @@ export function executeNode(
       prompt,
       kling3Mode,
       kling3Sound,
-      i2vData.aspectRatio,
+      effectiveAspectRatio,
       i2vData.multiShot,
       i2vData.shots,
       i2vData.elements,
       i2vNegativePrompt,
       i2vCfgScale,
-      i2vData.resolution,
+      effectiveResolution,
       i2vData.grokMode,
       i2vData.videoSize,
       i2vData.seed,
@@ -1129,6 +1137,11 @@ export function executeNode(
           nsfwChecker: t2vRaw.nsfwChecker as boolean | undefined,
         }
       : {};
+    // Pickers show "16:9" / "720p" as defaults but don't persist them to
+    // data until the user actively picks — so an untouched Seedance 2 node
+    // silently submits without aspectRatio/resolution. Fill the defaults
+    // explicitly so the request matches what the user sees.
+    const effectiveT2vAspect = (t2vData.aspectRatio as string | undefined) ?? (isSeedance2T2V ? "16:9" : undefined)
     const t2vOptions = isKlingVariant
       ? {
           duration: t2vData.duration,
@@ -1136,7 +1149,7 @@ export function executeNode(
           sound: t2vRaw.kling3Sound as boolean | undefined,
           negativePrompt: t2vData.negativePrompt || undefined,
           cfgScale: t2vRaw.cfgScale as number | undefined,
-          aspectRatio: t2vData.aspectRatio as string | undefined,
+          aspectRatio: effectiveT2vAspect,
           multiShot: t2vRaw.multiShot as boolean | undefined,
           shots: t2vRaw.shots as
             | Array<{ prompt: string; duration: number }>
@@ -1152,7 +1165,7 @@ export function executeNode(
         }
       : {
           duration: t2vData.duration,
-          aspectRatio: t2vData.aspectRatio as string | undefined,
+          aspectRatio: effectiveT2vAspect,
           negativePrompt: t2vData.negativePrompt || undefined,
           seed: t2vRaw.seed as number | undefined,
           ...seedance2Extras,
