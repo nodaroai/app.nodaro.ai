@@ -21,6 +21,7 @@ export type StylingDimension =
   | "makeup"
   | "eyewear"
   | "headwear"
+  | "hair-treatment"
   | "jewelry"
   | "nails"
   | "face-paint"
@@ -63,6 +64,15 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "headwear-helmet",       label: "Helmet",        dimension: "headwear", description: "Protective helmet",       promptHint: "wearing a helmet" },
   { id: "headwear-veil",         label: "Veil",          dimension: "headwear", description: "Veil draped over face/hair", promptHint: "wearing a veil draped over the head" },
 
+  // -------------------- Hair Treatment (salon coloring techniques) --------------------
+  { id: "treatment-babylights",  label: "Babylights",    dimension: "hair-treatment", description: "Ultra-fine, delicate highlights", promptHint: "with babylights — ultra-fine, delicate highlights that mimic natural sun-kissed hair" },
+  { id: "treatment-balayage",    label: "Balayage",      dimension: "hair-treatment", description: "Hand-painted highlights",         promptHint: "with balayage — hand-painted highlights with a soft, sun-kissed gradient" },
+  { id: "treatment-ombre",       label: "Ombré",         dimension: "hair-treatment", description: "Gradient dark roots to light ends", promptHint: "with ombré — a smooth gradient from dark roots to lighter ends" },
+  { id: "treatment-sombre",      label: "Sombré",        dimension: "hair-treatment", description: "Subtle soft ombré",               promptHint: "with sombré — a subtle, soft ombré gradient" },
+  { id: "treatment-highlights",  label: "Highlights",    dimension: "hair-treatment", description: "Classic foil highlights",         promptHint: "with highlights — lighter streaks throughout the hair" },
+  { id: "treatment-lowlights",   label: "Lowlights",     dimension: "hair-treatment", description: "Darker shade streaks",            promptHint: "with lowlights — darker streaks woven through for dimension" },
+  { id: "treatment-rooted",      label: "Rooted",        dimension: "hair-treatment", description: "Visible root regrowth look",      promptHint: "with a rooted look — visible darker roots blending into lighter lengths" },
+
   // -------------------- Jewelry --------------------
   { id: "jewelry-subtle",     label: "Subtle",     dimension: "jewelry", description: "Minimal, delicate jewelry", promptHint: "wearing subtle, minimal jewelry" },
   { id: "jewelry-statement",  label: "Statement",  dimension: "jewelry", description: "Bold statement piece",      promptHint: "wearing a bold statement jewelry piece" },
@@ -91,6 +101,7 @@ export const STYLING_DIMENSION_ORDER: ReadonlyArray<StylingDimension> = [
   "makeup",
   "eyewear",
   "headwear",
+  "hair-treatment",
   "jewelry",
   "nails",
   "face-paint",
@@ -100,6 +111,7 @@ export const STYLING_DIMENSION_LABELS: Readonly<Record<StylingDimension, string>
   makeup: "Makeup",
   eyewear: "Eyewear",
   headwear: "Headwear",
+  "hair-treatment": "Hair Treatment",
   jewelry: "Jewelry",
   nails: "Nails",
   "face-paint": "Face Paint",
@@ -107,11 +119,12 @@ export const STYLING_DIMENSION_LABELS: Readonly<Record<StylingDimension, string>
 
 export const STYLING_FIELD_BY_DIMENSION: Record<
   StylingDimension,
-  "makeup" | "eyewear" | "headwear" | "jewelry" | "nails" | "facePaint"
+  "makeup" | "eyewear" | "headwear" | "hairTreatment" | "jewelry" | "nails" | "facePaint"
 > = {
   makeup: "makeup",
   eyewear: "eyewear",
   headwear: "headwear",
+  "hair-treatment": "hairTreatment",
   jewelry: "jewelry",
   nails: "nails",
   "face-paint": "facePaint",
@@ -121,6 +134,7 @@ export interface StylingValue {
   makeup?: string
   eyewear?: string
   headwear?: string
+  hairTreatment?: string
   jewelry?: string
   nails?: string
   facePaint?: string
