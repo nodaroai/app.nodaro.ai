@@ -153,13 +153,24 @@ describe("buildImagePrompt", () => {
   })
 
   describe("style appending", () => {
-    it("appends style on a new line", () => {
+    it("expands a known STYLES catalog id into its richer promptHint", () => {
       const result = buildImagePrompt({
         prompt: "A sunset over mountains",
         provider: "flux",
         style: "cinematic",
       })
-      expect(result.prompt).toBe("A sunset over mountains\nStyle: cinematic")
+      expect(result.prompt).toBe(
+        "A sunset over mountains\nStyle: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field",
+      )
+    })
+
+    it("falls back to the raw text when style is not a catalog id", () => {
+      const result = buildImagePrompt({
+        prompt: "A sunset over mountains",
+        provider: "flux",
+        style: "my custom style",
+      })
+      expect(result.prompt).toBe("A sunset over mountains\nStyle: my custom style")
     })
 
     it("ignores whitespace-only style", () => {
@@ -253,20 +264,20 @@ describe("buildImagePrompt", () => {
       const result = buildImagePrompt({
         prompt: "A sunset",
         provider: "flux",
-        style: "cinematic",
+        style: "my custom style",
         negativePrompt: "blurry",
       })
-      expect(result.prompt).toBe("A sunset\nStyle: cinematic\nAvoid: blurry")
+      expect(result.prompt).toBe("A sunset\nStyle: my custom style\nAvoid: blurry")
     })
 
     it("combines style with native negative prompt", () => {
       const result = buildImagePrompt({
         prompt: "A sunset",
         provider: "imagen4",
-        style: "cinematic",
+        style: "my custom style",
         negativePrompt: "blurry",
       })
-      expect(result.prompt).toBe("A sunset\nStyle: cinematic")
+      expect(result.prompt).toBe("A sunset\nStyle: my custom style")
       expect(result.nativeNegativePrompt).toBe("blurry")
     })
   })

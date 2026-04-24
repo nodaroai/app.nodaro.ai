@@ -1,16 +1,20 @@
 /**
  * Canonical catalog of Styling / beauty + accessories choices.
  *
- * Multi-dimension parameter node like Person and Framing. Covers things
- * that are *applied to or worn on* the body but aren't clothing (which
- * belongs to a future Wardrobe node).
+ * Multi-dimension parameter node like Person and Framing:
  *
- *   1. makeup      — None implied when not enabled. Natural, glamour, smoky, goth…
- *   2. eyewear     — Sunglasses (general / aviators / cat-eye / round), fashion glasses…
- *   3. headwear    — Hats (beanie, baseball cap, fedora…), headbands, hoods, crowns
- *   4. jewelry     — Subtle, statement, gold, silver, layered, pearl
- *   5. nails       — Polished, red, dark, long acrylic, French tips
- *   6. face-paint  — Subtle, dramatic, costume, tribal markings
+ *   1. makeup         — Natural, glamour, smoky, goth, bold lips, editorial, dewy…
+ *   2. hair-cut       — Pixie, bob, buzz cut, pompadour, dreadlocks, braids (45 entries)
+ *   3. hair-treatment — Wet look, gelled back, disheveled, braided, ponytail…
+ *   4. eyewear        — Sunglasses (aviators / cat-eye / round), fashion glasses…
+ *   5. headwear       — Hats (beanie, cap, fedora…), headbands, hoods, crowns
+ *   6. jewelry        — Subtle, statement, gold, silver, layered, pearl
+ *   7. nails          — Polished, red, dark, long acrylic, French tips
+ *   8. face-paint     — Subtle, dramatic, costume, tribal markings
+ *   9. fabric         — Clothing fabric (silk, leather, denim, velvet…) phrased
+ *                       as "wearing X". Overlaps vocabulary with the universal
+ *                       Material node in the Object category, but Fabric is
+ *                       clothing-specific and scoped to the Subject workflow.
  *
  * Each dimension is mutually exclusive within itself; all are optional.
  * Applies to BOTH image and video consumers. Includes pre/post free-text
@@ -26,6 +30,7 @@ export type StylingDimension =
   | "jewelry"
   | "nails"
   | "face-paint"
+  | "fabric"
 
 export interface Styling {
   readonly id: string
@@ -152,6 +157,27 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "face-paint-costume",  label: "Costume Paint",     dimension: "face-paint", description: "Cosplay / theatrical paint",       promptHint: "with theatrical costume face paint" },
   { id: "face-paint-tribal",   label: "Tribal Markings",   dimension: "face-paint", description: "Tribal-inspired face markings",    promptHint: "with tribal-inspired face markings" },
   { id: "face-paint-warpaint", label: "War Paint",         dimension: "face-paint", description: "Warrior war paint streaks",        promptHint: "with warrior war paint streaked across the face" },
+
+  // -------------------- Fabric (clothing material) --------------------
+  // Clothing-specific fabrics, phrased as "wearing X". Overlaps in vocabulary
+  // with the universal Material node in the Object category, but Material uses
+  // "made of X" grammar (works on any object/surface/body). Fabric reads
+  // natively when the subject is already assumed to be wearing something.
+  { id: "fabric-silk",     label: "Silk",     dimension: "fabric", description: "Smooth glossy silk garments",   promptHint: "wearing smooth glossy silk with a subtle sheen and fluid drape" },
+  { id: "fabric-cotton",   label: "Cotton",   dimension: "fabric", description: "Soft matte cotton",             promptHint: "wearing soft matte cotton with a natural woven texture" },
+  { id: "fabric-denim",    label: "Denim",    dimension: "fabric", description: "Heavy indigo denim",            promptHint: "wearing heavy indigo denim with visible diagonal weave and worn edges" },
+  { id: "fabric-leather",  label: "Leather",  dimension: "fabric", description: "Rich supple leather",           promptHint: "wearing rich supple leather with a soft satin sheen and natural grain" },
+  { id: "fabric-velvet",   label: "Velvet",   dimension: "fabric", description: "Plush velvet",                  promptHint: "wearing plush velvet with a deep soft nap and rich saturated color" },
+  { id: "fabric-satin",    label: "Satin",    dimension: "fabric", description: "Glossy satin",                  promptHint: "wearing glossy satin with a lustrous mirror-like surface and fluid folds" },
+  { id: "fabric-lace",     label: "Lace",     dimension: "fabric", description: "Delicate patterned lace",       promptHint: "wearing delicate patterned lace with intricate floral openwork" },
+  { id: "fabric-wool",     label: "Wool",     dimension: "fabric", description: "Warm woven wool",               promptHint: "wearing warm woven wool with a soft matte surface and visible fibers" },
+  { id: "fabric-linen",    label: "Linen",    dimension: "fabric", description: "Natural textured linen",        promptHint: "wearing natural linen with a loose open weave, slight slubs and an airy drape" },
+  { id: "fabric-tweed",    label: "Tweed",    dimension: "fabric", description: "Rustic woven tweed",            promptHint: "wearing rustic tweed with a flecked multi-color woven texture and a heritage feel" },
+  { id: "fabric-cashmere", label: "Cashmere", dimension: "fabric", description: "Luxurious soft cashmere",       promptHint: "wearing luxurious cashmere with an ultra-soft matte texture" },
+  { id: "fabric-chiffon",  label: "Chiffon",  dimension: "fabric", description: "Sheer flowing chiffon",         promptHint: "wearing sheer chiffon with a lightweight floating drape and soft translucent layers" },
+  { id: "fabric-fur",      label: "Fur",      dimension: "fabric", description: "Thick plush fur",               promptHint: "wearing thick plush fur with long dense strands and natural variation" },
+  { id: "fabric-sequins",  label: "Sequins",  dimension: "fabric", description: "Sparkling sequin fabric",       promptHint: "wearing sparkling sequined fabric catching light with countless tiny reflective facets" },
+  { id: "fabric-latex",    label: "Latex",    dimension: "fabric", description: "Glossy latex",                  promptHint: "wearing glossy latex with a high-shine liquid look clinging to the body" },
 ] as const
 
 export const STYLING_DIMENSION_ORDER: ReadonlyArray<StylingDimension> = [
@@ -163,6 +189,7 @@ export const STYLING_DIMENSION_ORDER: ReadonlyArray<StylingDimension> = [
   "jewelry",
   "nails",
   "face-paint",
+  "fabric",
 ]
 
 export const STYLING_DIMENSION_LABELS: Readonly<Record<StylingDimension, string>> = {
@@ -174,11 +201,12 @@ export const STYLING_DIMENSION_LABELS: Readonly<Record<StylingDimension, string>
   jewelry: "Jewelry",
   nails: "Nails",
   "face-paint": "Face Paint",
+  fabric: "Fabric",
 }
 
 export const STYLING_FIELD_BY_DIMENSION: Record<
   StylingDimension,
-  "makeup" | "eyewear" | "headwear" | "hairCut" | "hairTreatment" | "jewelry" | "nails" | "facePaint"
+  "makeup" | "eyewear" | "headwear" | "hairCut" | "hairTreatment" | "jewelry" | "nails" | "facePaint" | "fabric"
 > = {
   makeup: "makeup",
   eyewear: "eyewear",
@@ -188,6 +216,7 @@ export const STYLING_FIELD_BY_DIMENSION: Record<
   jewelry: "jewelry",
   nails: "nails",
   "face-paint": "facePaint",
+  fabric: "fabric",
 }
 
 export interface StylingValue {
@@ -201,6 +230,10 @@ export interface StylingValue {
   jewelry?: string
   nails?: string
   facePaint?: string
+  /** Clothing fabric / material — silk, leather, denim, etc. Phrased as
+   *  "wearing X"; overlaps in vocabulary with the universal Material node
+   *  in the Object category. */
+  fabric?: string
   preText?: string
   postText?: string
 }

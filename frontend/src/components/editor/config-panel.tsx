@@ -60,6 +60,10 @@ import {
   MoodConfig,
   PoseConfig,
   StylingConfig,
+  MaterialConfig,
+  AnimalConfig,
+  VehicleConfig,
+  WeaponConfig,
   TemporalConfig,
   GenerateScriptConfig,
   QACheckConfig,
@@ -193,6 +197,10 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "mood": "Mood",
   "pose": "Pose",
   "styling": "Styling",
+  "material": "Material",
+  "animal": "Animal",
+  "vehicle": "Vehicle",
+  "weapon": "Weapon",
   "temporal": "Temporal",
   "generate-script": "Generate Script",
   "generate-image": "Generate Image",
@@ -378,6 +386,10 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "mood": return <MoodConfig {...configProps} />
     case "pose": return <PoseConfig {...configProps} />
     case "styling": return <StylingConfig {...configProps} />
+    case "material": return <MaterialConfig {...configProps} />
+    case "animal": return <AnimalConfig {...configProps} />
+    case "vehicle": return <VehicleConfig {...configProps} />
+    case "weapon": return <WeaponConfig {...configProps} />
     case "temporal": return <TemporalConfig {...configProps} />
     case "generate-script": return <GenerateScriptConfig {...configProps} />
     case "generate-image": return <GenerateImageConfig {...configProps} nodeId={selectedNodeId} />

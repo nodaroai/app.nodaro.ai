@@ -31,7 +31,7 @@ describe("Framing vantage category", () => {
     expect(isVantageFraming("rule-of-thirds")).toBe(false) // composition
     expect(isVantageFraming(undefined)).toBe(false)
   })
-  it("has 34 total framing entries (24 original + 6 vantage + 4 reference-parity adds)", () => {
-    expect(FRAMINGS.length).toBe(34)
+  it("has 35 total framing entries (24 original + 6 vantage + 4 reference-parity adds + 1 later add)", () => {
+    expect(FRAMINGS.length).toBe(35)
   })
 })

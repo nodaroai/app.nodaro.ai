@@ -776,7 +776,8 @@ describe("text-to-video", () => {
       "seedance-2-fast",
       expect.objectContaining({
         duration: undefined,
-        aspectRatio: undefined,
+        // Seedance 2 silently defaults to 16:9 when data.aspectRatio is unset
+        aspectRatio: "16:9",
         resolution: "720p",
         generateAudio: true,
       }),

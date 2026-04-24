@@ -90,6 +90,9 @@ import {
   ArrowUpDown,
   PersonStanding,
   Gem,
+  PawPrint,
+  Car,
+  Swords,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -355,7 +358,35 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     label: "Styling",
     icon: <Gem className="h-4 w-4" />,
     category: "Subject",
-    keywords: ["beauty", "makeup", "glamour", "smoky eye", "lipstick", "eyewear", "sunglasses", "aviators", "headwear", "hat", "beanie", "fedora", "jewelry", "necklace", "earrings", "nails", "manicure", "face paint"],
+    keywords: ["beauty", "makeup", "glamour", "smoky eye", "lipstick", "eyewear", "sunglasses", "aviators", "headwear", "hat", "beanie", "fedora", "jewelry", "necklace", "earrings", "nails", "manicure", "face paint", "fabric", "silk", "leather", "denim", "velvet", "satin", "lace"],
+  },
+  {
+    type: "material",
+    label: "Material",
+    icon: <Layers className="h-4 w-4" />,
+    category: "Object",
+    keywords: ["material", "fabric", "metal", "stone", "wood", "glass", "silk", "leather", "chrome", "marble", "gold", "silver", "bronze", "velvet", "porcelain", "crystal", "holographic", "iridescent", "neon", "made of"],
+  },
+  {
+    type: "animal",
+    label: "Animal",
+    icon: <PawPrint className="h-4 w-4" />,
+    category: "Object",
+    keywords: ["animal", "cat", "dog", "bird", "fish", "horse", "lion", "tiger", "bear", "wolf", "fox", "elephant", "pet", "wildlife", "dinosaur", "dragon"],
+  },
+  {
+    type: "vehicle",
+    label: "Vehicle",
+    icon: <Car className="h-4 w-4" />,
+    category: "Object",
+    keywords: ["vehicle", "car", "truck", "motorcycle", "bike", "boat", "plane", "helicopter", "tank", "spaceship", "muscle", "classic", "sports", "transport"],
+  },
+  {
+    type: "weapon",
+    label: "Weapon",
+    icon: <Swords className="h-4 w-4" />,
+    category: "Object",
+    keywords: ["weapon", "sword", "katana", "gun", "rifle", "pistol", "bow", "dagger", "axe", "spear", "mace", "crossbow", "firearm", "blade"],
   },
   {
     type: "temporal",
@@ -1038,6 +1069,12 @@ export const CATEGORIES = [
     label: "SUBJECT",
     icon: <UserRound className="h-4 w-4" />,
     description: "Person, Mood, Pose, Styling",
+  },
+  {
+    id: "Object",
+    label: "OBJECT",
+    icon: <Package className="h-4 w-4" />,
+    description: "Material, Animal, Vehicle, Weapon",
   },
   {
     id: "AI",

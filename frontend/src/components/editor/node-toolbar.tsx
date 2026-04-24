@@ -7,7 +7,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server, Brush, Mountain,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge, ArrowUpDown, Smile, PersonStanding,
+  SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge, ArrowUpDown, Smile, PersonStanding, PawPrint, Car, Swords,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -74,6 +74,10 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "person", label: "Person", icon: <UserRound className="h-4 w-4" />, category: "Subject", keywords: ["subject", "character", "people", "human", "gender", "age", "ethnicity", "hair", "skin", "eyes", "build", "man", "woman", "child", "beard", "mustache"] },
   { type: "mood", label: "Mood", icon: <Smile className="h-4 w-4" />, category: "Subject", keywords: ["emotion", "expression", "feeling", "happy", "sad", "angry", "serene", "fierce", "brooding", "confident", "melancholy", "mysterious"] },
   { type: "pose", label: "Pose", icon: <PersonStanding className="h-4 w-4" />, category: "Subject", keywords: ["pose", "posture", "action", "stance", "standing", "sitting", "running", "walking", "dancing", "jumping", "fighting", "body", "position"] },
+  { type: "material", label: "Material", icon: <Layers className="h-4 w-4" />, category: "Object", keywords: ["material", "fabric", "metal", "stone", "wood", "glass", "silk", "leather", "chrome", "marble", "gold", "silver", "bronze", "velvet", "porcelain", "crystal", "holographic", "iridescent", "neon", "made of"] },
+  { type: "animal", label: "Animal", icon: <PawPrint className="h-4 w-4" />, category: "Object", keywords: ["animal", "cat", "dog", "bird", "fish", "horse", "lion", "tiger", "bear", "wolf", "fox", "elephant", "pet", "wildlife", "dinosaur", "dragon"] },
+  { type: "vehicle", label: "Vehicle", icon: <Car className="h-4 w-4" />, category: "Object", keywords: ["vehicle", "car", "truck", "motorcycle", "bike", "boat", "plane", "helicopter", "tank", "spaceship", "muscle", "classic", "sports", "transport"] },
+  { type: "weapon", label: "Weapon", icon: <Swords className="h-4 w-4" />, category: "Object", keywords: ["weapon", "sword", "katana", "gun", "rifle", "pistol", "bow", "dagger", "axe", "spear", "mace", "crossbow", "firearm", "blade"] },
   { type: "temporal", label: "Temporal", icon: <Clock className="h-4 w-4" />, category: "Camera", keywords: ["time", "speed", "slow motion", "freeze", "bullet time", "shutter", "shot"] },
   // AI — Script & Text
   { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI", group: "Script & Text" },
