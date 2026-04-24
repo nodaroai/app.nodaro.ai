@@ -90,7 +90,8 @@ export function getParameterValue(
         trim(data.ethnicity) ??
         trim(data.build) ??
         trim(data.hairColor) ??
-        trim(data.hairStyle) ??
+        trim(data.hairBase) ??
+        trim(data.eyebrows) ??
         trim(data.skinTone) ??
         trim(data.skinTexture) ??
         trim(data.eyeColor) ??
@@ -107,9 +108,10 @@ export function getParameterValue(
       // through buildStylingHints in the executors).
       return (
         trim(data.makeup) ??
+        trim(data.hairCut) ??
+        trim(data.hairTreatment) ??
         trim(data.eyewear) ??
         trim(data.headwear) ??
-        trim(data.hairTreatment) ??
         trim(data.jewelry) ??
         trim(data.nails) ??
         trim(data.facePaint)
