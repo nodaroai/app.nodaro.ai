@@ -445,6 +445,8 @@ export interface PersonData {
   hairStyle?: string
   /** Skin tone. */
   skinTone?: string
+  /** Skin texture / quality (smooth, wrinkled, goosebumps, dewy, glistening, weathered). */
+  skinTexture?: string
   /** Eye color. */
   eyeColor?: string
   /** Facial hair style (clean-shaven, stubble, full-beard). */
@@ -458,6 +460,54 @@ export interface PersonData {
   /** Grid columns when displaying multiple enabled dimensions in the node
    * card. Default 2. Range 1-4. */
   maxItemsPerRow?: number
+}
+
+/** Standalone Styling parameter node data. Beauty + accessories compound
+ * hint appended to downstream gen prompts. Multi-dimension: 6 orthogonal
+ * fields covering makeup, eyewear, headwear, jewelry, nails, face paint.
+ * Distinct from clothing (future Wardrobe node). Applies to both image
+ * and video consumers. See `packages/shared/src/styling.ts`. */
+export interface StylingData {
+  [key: string]: unknown
+  label: string
+  makeup?: string
+  eyewear?: string
+  headwear?: string
+  jewelry?: string
+  nails?: string
+  facePaint?: string
+  preText?: string
+  postText?: string
+  maxItemsPerRow?: number
+}
+
+/** Standalone Mood parameter node data. Emotional-state hint appended to
+ * downstream gen prompts ("happy", "melancholy", "fierce"). Single-pick
+ * with optional pre/post free-text fields. See `packages/shared/src/mood.ts`. */
+export interface MoodData {
+  [key: string]: unknown
+  label: string
+  /** Mood id from MOODS catalog. */
+  mood: string
+  /** Free-text prepended before the mood hint. */
+  preText?: string
+  /** Free-text appended after the mood hint. */
+  postText?: string
+}
+
+/** Standalone Pose parameter node data. Posture + action hint appended to
+ * downstream gen prompts ("standing upright", "mid-run", "fighting stance").
+ * Single-pick with optional pre/post free-text fields. See
+ * `packages/shared/src/pose.ts`. */
+export interface PoseData {
+  [key: string]: unknown
+  label: string
+  /** Pose id from POSES catalog. */
+  pose: string
+  /** Free-text prepended before the pose hint. */
+  preText?: string
+  /** Free-text appended after the pose hint. */
+  postText?: string
 }
 
 /** Standalone Temporal parameter node data. */
@@ -2737,6 +2787,9 @@ export type SceneNodeData =
   | StyleData
   | SettingData
   | PersonData
+  | MoodData
+  | PoseData
+  | StylingData
   | TemporalData
   | GenerateScriptData
   | GenerateImageData
@@ -2863,6 +2916,9 @@ export type SceneNodeType =
   | "style"
   | "setting"
   | "person"
+  | "mood"
+  | "pose"
+  | "styling"
   | "temporal"
   | "generate-script"
   | "generate-image"
@@ -3246,6 +3302,33 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Person", type: "woman", age: "age-30s", maxItemsPerRow: 2 },
+  },
+  {
+    type: "mood",
+    label: "Mood",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Mood", mood: "calm" },
+  },
+  {
+    type: "pose",
+    label: "Pose",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Pose", pose: "standing-upright" },
+  },
+  {
+    type: "styling",
+    label: "Styling",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Styling", makeup: "makeup-natural", maxItemsPerRow: 2 },
   },
   {
     type: "temporal",

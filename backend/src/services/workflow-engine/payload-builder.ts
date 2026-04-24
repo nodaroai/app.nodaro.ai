@@ -21,6 +21,9 @@ import { getAtmospherePromptHint } from "../../../../packages/shared/src/atmosph
 import { getStylePromptHint } from "../../../../packages/shared/src/style.js"
 import { getSettingPromptHint } from "../../../../packages/shared/src/setting.js"
 import { buildPersonHints } from "../../../../packages/shared/src/person.js"
+import { buildMoodHints } from "../../../../packages/shared/src/mood.js"
+import { buildPoseHints } from "../../../../packages/shared/src/pose.js"
+import { buildStylingHints } from "../../../../packages/shared/src/styling.js"
 import { buildTemporalHints } from "../../../../packages/shared/src/temporal.js"
 import type { CharacterDef, SceneData } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
@@ -359,6 +362,18 @@ function getNodePromptHint(node: SimpleNode | undefined): string {
       return getSettingPromptHint(typeof data.setting === "string" ? data.setting : "")
     case "person": {
       const hints = buildPersonHints(data)
+      return hints.join(", ")
+    }
+    case "mood": {
+      const hints = buildMoodHints(data)
+      return hints.join(", ")
+    }
+    case "pose": {
+      const hints = buildPoseHints(data)
+      return hints.join(", ")
+    }
+    case "styling": {
+      const hints = buildStylingHints(data)
       return hints.join(", ")
     }
     case "temporal": {
