@@ -25,6 +25,9 @@ export const PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
   "setting",
   "person",
   "mood",
+  "photographer",
+  "aesthetic",
+  "era",
   "pose",
   "styling",
   "temporal",
@@ -32,6 +35,13 @@ export const PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
   "animal",
   "vehicle",
   "weapon",
+  "photo-genre",
+  "backdrop",
+  "held-prop",
+  "exposure-settings",
+  "render-quality",
+  "composition-effects",
+  "post-process-effects",
   "scene-count",
   "duration",
   "aspect-ratio",
@@ -74,7 +84,9 @@ export function getParameterValue(
       return (
         trim(data.timeOfDay) ??
         trim(data.lightingStyle) ??
-        trim(data.lightingDirection)
+        trim(data.lightingDirection) ??
+        trim(data.lightingRatio) ??
+        trim(data.colorTemperature)
       )
     case "color-look":
       return trim(data.colorLook)
@@ -92,6 +104,12 @@ export function getParameterValue(
       return trim(data.vehicle)
     case "weapon":
       return trim(data.weapon)
+    case "photo-genre":
+      return trim(data.photoGenre)
+    case "backdrop":
+      return trim(data.backdrop)
+    case "held-prop":
+      return trim(data.heldProp)
     case "person":
       // Multi-dimension: return the first set per-dimension value (used for
       // single-string field-mapping resolution; full hint composition goes
@@ -114,12 +132,26 @@ export function getParameterValue(
         trim(data.skinTexture) ??
         trim(data.eyeColor) ??
         trim(data.facialHair) ??
-        trim(data.distinctiveFeature)
+        trim(data.distinctiveFeature) ??
+        trim(data.lipState) ??
+        trim(data.eyeState)
       )
     case "mood":
       return trim(data.mood)
+    case "photographer":
+      return trim(data.photographer)
+    case "aesthetic":
+      return trim(data.aesthetic)
+    case "era":
+      return trim(data.era)
     case "pose":
-      return trim(data.pose)
+      return (
+        trim(data.pose) ??
+        trim(data.handPosition) ??
+        trim(data.bodyLean) ??
+        trim(data.headTilt) ??
+        trim(data.activity)
+      )
     case "styling":
       // Multi-dimension: return the first set per-dimension value (used for
       // single-string field-mapping resolution; full hint composition goes
@@ -128,12 +160,20 @@ export function getParameterValue(
         trim(data.makeup) ??
         trim(data.hairCut) ??
         trim(data.hairTreatment) ??
+        trim(data.hairState) ??
         trim(data.eyewear) ??
         trim(data.headwear) ??
         trim(data.jewelry) ??
         trim(data.nails) ??
         trim(data.facePaint) ??
-        trim(data.fabric)
+        trim(data.outfit) ??
+        trim(data.top) ??
+        trim(data.bottom) ??
+        trim(data.outerwear) ??
+        trim(data.legwear) ??
+        trim(data.footwear) ??
+        trim(data.fabric) ??
+        trim(data.wardrobeState)
       )
     case "temporal":
       // Multi-category: return the first set per-category value (used for
@@ -145,6 +185,18 @@ export function getParameterValue(
         trim(data.temporalDirection) ??
         trim(data.temporalShutter)
       )
+    case "exposure-settings":
+      return (
+        trim(data.aperture) ??
+        trim(data.shutterSpeed) ??
+        trim(data.isoValue)
+      )
+    case "render-quality":
+      return trim(data.renderQuality)
+    case "composition-effects":
+      return trim(data.compositionEffect)
+    case "post-process-effects":
+      return trim(data.postProcess)
     case "scene-count":
       return data.count != null ? String(data.count) : undefined
     case "duration":

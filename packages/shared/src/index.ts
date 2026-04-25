@@ -26,6 +26,14 @@ export {
   collectAncestorRefs,
 } from "./ancestor-refs.js"
 
+export {
+  DEFAULT_IDENTITY_LOCK,
+  getIdentityLockClause,
+  toIdentityLockMode,
+  collectIdentityLockClause,
+  type IdentityLockMode,
+} from "./identity-lock.js"
+
 export { buildCreditModelIdentifier, buildVideoCreditModelIdentifier } from "./credit-identifiers.js"
 
 export {
@@ -240,6 +248,46 @@ export {
   buildTemporalHints,
 } from "./temporal.js"
 export type { Temporal, TemporalCategory, TemporalValue } from "./temporal.js"
+
+export {
+  EXPOSURE_SETTINGS,
+  EXPOSURE_IDS,
+  EXPOSURE_CATEGORY_ORDER,
+  EXPOSURE_CATEGORY_LABELS,
+  EXPOSURE_FIELD_BY_CATEGORY,
+  getExposure,
+  getExposureLabel,
+  getExposurePromptHint,
+  buildExposureHints,
+} from "./exposure-settings.js"
+export type { ExposureSettings, ExposureCategory, ExposureValue } from "./exposure-settings.js"
+
+export {
+  RENDER_QUALITIES,
+  RENDER_QUALITY_IDS,
+  getRenderQuality,
+  getRenderQualityLabel,
+  getRenderQualityPromptHint,
+} from "./render-quality.js"
+export type { RenderQuality } from "./render-quality.js"
+
+export {
+  COMPOSITION_EFFECTS,
+  COMPOSITION_EFFECT_IDS,
+  getCompositionEffect,
+  getCompositionEffectLabel,
+  getCompositionEffectPromptHint,
+} from "./composition-effects.js"
+export type { CompositionEffect } from "./composition-effects.js"
+
+export {
+  POST_PROCESS_EFFECTS,
+  POST_PROCESS_EFFECT_IDS,
+  getPostProcessEffect,
+  getPostProcessEffectLabel,
+  getPostProcessEffectPromptHint,
+} from "./post-process-effects.js"
+export type { PostProcessEffect } from "./post-process-effects.js"
 
 export {
   PARAMETER_NODE_TYPES,

@@ -43,12 +43,14 @@ export type PersonDimension =
   | "eye-shape"
   | "nose"
   | "lips"
+  | "lip-state"
   | "hair-color"
   | "hair-base"
   | "eyebrows"
   | "skin-tone"
   | "skin-texture"
   | "eye-color"
+  | "eye-state"
   | "facial-hair"
   | "distinctive-features"
 
@@ -170,6 +172,13 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "curvy",         label: "Curvy",          dimension: "build", description: "Curvy figure",           promptHint: "curvy figure" },
   { id: "heavy-set",     label: "Heavy-set",      dimension: "build", description: "Large, heavy-set",       promptHint: "heavy-set build" },
   { id: "tall-lean",     label: "Tall & Lean",    dimension: "build", description: "Tall, lean frame",       promptHint: "tall and lean" },
+  { id: "voluptuous",    label: "Voluptuous",     dimension: "build", description: "Full-figured, curvy",    promptHint: "voluptuous, full-figured curvy build" },
+  { id: "hourglass",     label: "Hourglass",      dimension: "build", description: "Narrow waist, full bust + hips", promptHint: "an hourglass build with a narrow waist and full hips and bust" },
+  { id: "pear-build",    label: "Pear",           dimension: "build", description: "Narrower upper body, fuller hips", promptHint: "a pear-shaped build with a narrower upper body and fuller hips" },
+  { id: "apple-build",   label: "Apple",          dimension: "build", description: "Fuller midsection, slimmer legs", promptHint: "an apple-shaped build with a fuller midsection and slimmer legs" },
+  { id: "rectangular",   label: "Rectangular / Boyish", dimension: "build", description: "Straight up-and-down silhouette", promptHint: "a rectangular boyish build with a straight up-and-down silhouette" },
+  { id: "plus-size",     label: "Plus-size",      dimension: "build", description: "Plus-size body type",    promptHint: "a plus-size build" },
+  { id: "lanky",         label: "Lanky",          dimension: "build", description: "Tall and thin, long limbs", promptHint: "a lanky build, tall and thin with long limbs" },
 
   // -------------------- Body Proportions (ratio, distinct from Build's silhouette+size) --------------------
   { id: "proportions-balanced",     label: "Balanced",       dimension: "body-proportions", description: "Even legs-to-torso ratio",   promptHint: "balanced body proportions, even legs-to-torso ratio" },
@@ -225,6 +234,16 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "lips-wide",       label: "Wide",        dimension: "lips", description: "Wide mouth shape",                  promptHint: "a wide mouth" },
   { id: "lips-cupids-bow", label: "Cupid's Bow", dimension: "lips", description: "Pronounced cupid's bow on upper lip", promptHint: "a pronounced cupid's bow on the upper lip" },
   { id: "lips-small",      label: "Small",       dimension: "lips", description: "Petite mouth",                      promptHint: "a small petite mouth" },
+
+  // -------------------- Lip State (what the lips are doing / wearing) --------------------
+  { id: "lip-state-chapped",   label: "Chapped",   dimension: "lip-state", description: "Cracked, dry, weather-worn lips", promptHint: "with chapped, cracked, weather-worn dry lips" },
+  { id: "lip-state-glossy",    label: "Glossy",    dimension: "lip-state", description: "High-shine, wet-look lips",       promptHint: "with high-shine glossy wet-look lips" },
+  { id: "lip-state-bare",      label: "Bare",      dimension: "lip-state", description: "Natural, untreated, no makeup",   promptHint: "with bare, natural, untreated lips" },
+  { id: "lip-state-bold-red",  label: "Bold Red",  dimension: "lip-state", description: "Saturated red lipstick statement", promptHint: "with a bold, saturated red lipstick statement" },
+  { id: "lip-state-bitten",    label: "Bitten",    dimension: "lip-state", description: "Slight playful lip-bite, lower lip caught", promptHint: "playfully biting the lower lip" },
+  { id: "lip-state-parted",    label: "Parted",    dimension: "lip-state", description: "Lips slightly parted, breath of air", promptHint: "with lips slightly parted, taking a soft breath" },
+  { id: "lip-state-pursed",    label: "Pursed",    dimension: "lip-state", description: "Lips pressed and pushed forward", promptHint: "with lips pursed, pressed and pushed forward" },
+  { id: "lip-state-pouting",   label: "Pouting",   dimension: "lip-state", description: "Full pout",                       promptHint: "with a full pouting expression" },
 
   // -------------------- Hair Color --------------------
   // Blonde family (light → warm → cool)
@@ -311,6 +330,16 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "eyes-gray",   label: "Gray",   dimension: "eye-color", description: "Gray eyes",   promptHint: "gray eyes" },
   { id: "eyes-amber",  label: "Amber",  dimension: "eye-color", description: "Amber eyes",  promptHint: "amber eyes" },
 
+  // -------------------- Eye State (what the eyes are doing / where they look) --------------------
+  { id: "eye-state-closed",         label: "Closed",            dimension: "eye-state", description: "Eyes fully closed, peaceful",       promptHint: "with eyes fully closed in a peaceful expression" },
+  { id: "eye-state-half-lidded",    label: "Half-lidded",       dimension: "eye-state", description: "Heavy-lidded sleepy gaze",          promptHint: "with heavy half-lidded sleepy eyes" },
+  { id: "eye-state-wide-eyed",      label: "Wide-eyed",         dimension: "eye-state", description: "Eyes wide open, alert / surprised", promptHint: "with eyes wide open, alert and surprised" },
+  { id: "eye-state-staring-camera", label: "Staring at Camera", dimension: "eye-state", description: "Direct unbroken eye contact with the lens", promptHint: "staring directly at the camera with unbroken eye contact" },
+  { id: "eye-state-gazing-away",    label: "Gazing Away",       dimension: "eye-state", description: "Looking off-camera, contemplative", promptHint: "gazing off-camera with a contemplative expression" },
+  { id: "eye-state-gazing-up",      label: "Gazing Up",         dimension: "eye-state", description: "Eyes raised toward something above", promptHint: "with eyes gazing upward toward something above" },
+  { id: "eye-state-gazing-down",    label: "Gazing Down",       dimension: "eye-state", description: "Eyes downcast",                     promptHint: "with eyes downcast, gazing softly downward" },
+  { id: "eye-state-glassy",         label: "Glassy",            dimension: "eye-state", description: "Eyes wet / tear-glazed",            promptHint: "with glassy, tear-glazed wet eyes" },
+
   // -------------------- Facial Hair --------------------
   { id: "face-clean-shaven", label: "Clean-shaven", dimension: "facial-hair", description: "Clean-shaven face", promptHint: "clean-shaven" },
   { id: "face-stubble",      label: "Stubble",      dimension: "facial-hair", description: "Light stubble",     promptHint: "light stubble" },
@@ -326,6 +355,18 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "texture-dewy",       label: "Dewy",        dimension: "skin-texture", description: "Glowing, dewy fresh skin",    promptHint: "with dewy, glowing skin and a fresh sheen" },
   { id: "texture-glistening", label: "Glistening",  dimension: "skin-texture", description: "Sweat or oil sheen",          promptHint: "with glistening skin, sweat or oil catching the light" },
   { id: "texture-weathered",  label: "Weathered",   dimension: "skin-texture", description: "Sun-aged rough skin",         promptHint: "with weathered, sun-worn rough skin" },
+  { id: "texture-porcelain",  label: "Porcelain",   dimension: "skin-texture", description: "Flawless near-translucent porcelain", promptHint: "with flawless, near-translucent porcelain skin" },
+  { id: "texture-sun-kissed", label: "Sun-kissed",  dimension: "skin-texture", description: "Warm tan with healthy glow",  promptHint: "with sun-kissed skin, warmly tanned with a healthy glow" },
+  { id: "texture-tanned",     label: "Tanned",      dimension: "skin-texture", description: "Deeply, evenly tanned skin",  promptHint: "with deeply, evenly bronzed tanned skin" },
+  { id: "texture-tan-lines",  label: "Tan Lines",   dimension: "skin-texture", description: "Visible tan lines from swimwear", promptHint: "with visible swimwear tan lines on the skin" },
+  { id: "texture-freckled",   label: "Freckled",    dimension: "skin-texture", description: "Freckles across cheeks and nose", promptHint: "with visible freckles scattered across cheeks and the bridge of the nose" },
+  { id: "texture-ruddy",      label: "Ruddy",       dimension: "skin-texture", description: "Pink-flushed cheeks and nose", promptHint: "with ruddy, warm pink-flushed cheeks and nose" },
+  { id: "texture-ashen",      label: "Ashen / Pale", dimension: "skin-texture", description: "Cool pale, near-bloodless undertone", promptHint: "with ashen, cool pale, near-bloodless skin" },
+  { id: "texture-oily",       label: "Oily / Shiny", dimension: "skin-texture", description: "Slight oil sheen on T-zone", promptHint: "with a slight oily sheen across the T-zone" },
+  { id: "texture-matte",      label: "Matte",       dimension: "skin-texture", description: "Poreless matte finish",       promptHint: "with a poreless, matte skin finish" },
+  { id: "texture-blemished",  label: "Blemished",   dimension: "skin-texture", description: "Visible blemishes, real-skin imperfections", promptHint: "with visible blemishes and natural real-skin imperfections" },
+  { id: "texture-baby-soft",  label: "Baby-soft",   dimension: "skin-texture", description: "Smooth, fine-pored youthful skin", promptHint: "with baby-soft, fine-pored, youthful smooth skin" },
+  { id: "texture-shower-fresh-wet", label: "Shower-Fresh Wet", dimension: "skin-texture", description: "Just-out-of-shower wet skin with water beads", promptHint: "with just-out-of-the-shower wet skin, water beading on the surface and rolling in slow droplets down the curves of the body" },
 
   // -------------------- Distinctive Features --------------------
   { id: "feature-glasses",   label: "Glasses",      dimension: "distinctive-features", description: "Wears glasses",        promptHint: "wearing glasses" },
@@ -334,6 +375,26 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "feature-scar",      label: "Scar",         dimension: "distinctive-features", description: "Facial scar",          promptHint: "with a facial scar" },
   { id: "feature-dimples",   label: "Dimples",      dimension: "distinctive-features", description: "Dimpled cheeks",       promptHint: "with dimples" },
   { id: "feature-piercing",  label: "Piercing",     dimension: "distinctive-features", description: "Visible piercing",     promptHint: "with a visible piercing" },
+  { id: "feature-birthmark", label: "Birthmark",    dimension: "distinctive-features", description: "Visible birthmark on face or shoulder", promptHint: "with a visible birthmark on the face or shoulder" },
+  { id: "feature-mole",      label: "Mole / Beauty Mark", dimension: "distinctive-features", description: "One prominent mole, often near upper lip", promptHint: "with a prominent beauty mark mole near the upper lip" },
+  { id: "feature-gap-teeth", label: "Gap Teeth",    dimension: "distinctive-features", description: "Gap between front teeth", promptHint: "with a gap between the front teeth" },
+  { id: "feature-monolids",  label: "Monolids",     dimension: "distinctive-features", description: "Single-fold eyelid", promptHint: "with monolid single-fold eyelids" },
+  { id: "feature-double-eyelid", label: "Double Eyelid", dimension: "distinctive-features", description: "Defined upper-eyelid crease", promptHint: "with clearly defined double eyelid creases" },
+  { id: "feature-aegyo-sal", label: "Aegyo Sal",    dimension: "distinctive-features", description: "Puffy under-eye fold prized in K-beauty", promptHint: "with aegyo sal, the soft puffy under-eye fold" },
+  { id: "feature-eye-bags",  label: "Eye Bags",     dimension: "distinctive-features", description: "Mild dark under-eye circles", promptHint: "with mild dark circles and under-eye bags" },
+  { id: "feature-dimpled-chin", label: "Dimpled Chin", dimension: "distinctive-features", description: "Soft dimple in the chin", promptHint: "with a soft dimple in the chin" },
+  { id: "feature-cleft-chin", label: "Cleft Chin",  dimension: "distinctive-features", description: "Defined vertical chin cleft", promptHint: "with a defined vertical cleft chin" },
+  { id: "feature-heterochromia", label: "Heterochromia", dimension: "distinctive-features", description: "Each iris a different color", promptHint: "with heterochromia, each iris a different color" },
+  { id: "feature-vitiligo",  label: "Vitiligo",     dimension: "distinctive-features", description: "Patches of depigmented skin", promptHint: "with vitiligo, visible patches of depigmented skin" },
+  { id: "feature-sleeve-tattoo", label: "Sleeve Tattoo", dimension: "distinctive-features", description: "Full one-arm tattoo sleeve", promptHint: "with a full tattoo sleeve covering one arm in intricate ink" },
+  { id: "feature-face-tattoo", label: "Face Tattoo", dimension: "distinctive-features", description: "Small face tattoo near eye or cheekbone", promptHint: "with a small face tattoo near the eye or cheekbone" },
+  { id: "feature-hand-tattoos", label: "Hand Tattoos", dimension: "distinctive-features", description: "Knuckle / finger tattoos", promptHint: "with hand tattoos across knuckles and fingers" },
+  { id: "feature-visible-piercings", label: "Visible Piercings", dimension: "distinctive-features", description: "Multiple visible piercings (septum, nose, lip, multi-ear)", promptHint: "with multiple visible piercings — septum, nose, lip, and multi-ear" },
+  { id: "feature-bare-shoulders", label: "Bare Shoulders", dimension: "distinctive-features", description: "Bare shoulders exposed", promptHint: "with bare shoulders exposed, the line of the collarbone and shoulder muscles uncovered" },
+  { id: "feature-collarbone-visible", label: "Collarbone Visible", dimension: "distinctive-features", description: "Prominent collarbone catching light", promptHint: "with a prominent collarbone clearly defined and catching the light" },
+  { id: "feature-midriff-visible", label: "Midriff Visible", dimension: "distinctive-features", description: "Exposed midriff between top and bottom", promptHint: "with the midriff exposed, a strip of bare stomach visible between the top and the bottom" },
+  { id: "feature-navel-visible", label: "Navel Visible", dimension: "distinctive-features", description: "Visible navel on bare stomach", promptHint: "with a visible navel on a bare stomach" },
+  { id: "feature-elongated-neck", label: "Elongated Neck", dimension: "distinctive-features", description: "Long swan-like neck", promptHint: "with an elongated, swan-like neck, long and gracefully extended" },
 ] as const
 
 export const PERSON_DIMENSION_ORDER: ReadonlyArray<PersonDimension> = [
@@ -350,6 +411,7 @@ export const PERSON_DIMENSION_ORDER: ReadonlyArray<PersonDimension> = [
   "eye-shape",
   "nose",
   "lips",
+  "lip-state",
   // Hair
   "hair-base",
   "hair-color",
@@ -358,6 +420,7 @@ export const PERSON_DIMENSION_ORDER: ReadonlyArray<PersonDimension> = [
   "skin-tone",
   "skin-texture",
   "eye-color",
+  "eye-state",
   "facial-hair",
   "distinctive-features",
 ]
@@ -373,12 +436,14 @@ export const PERSON_DIMENSION_LABELS: Readonly<Record<PersonDimension, string>> 
   "eye-shape": "Eye Shape",
   nose: "Nose",
   lips: "Lips",
+  "lip-state": "Lip State",
   "hair-color": "Hair Color",
   "hair-base": "Hair (Texture & Length)",
   eyebrows: "Eyebrows",
   "skin-tone": "Skin Tone",
   "skin-texture": "Skin Texture",
   "eye-color": "Eye Color",
+  "eye-state": "Eye State",
   "facial-hair": "Facial Hair",
   "distinctive-features": "Distinctive Features",
 }
@@ -391,9 +456,9 @@ export const PERSON_DIMENSION_LABELS: Readonly<Record<PersonDimension, string>> 
 export const PERSON_FIELD_BY_DIMENSION: Record<
   PersonDimension,
   | "type" | "age" | "ethnicity" | "build" | "bodyProportions"
-  | "faceShape" | "jawline" | "eyeShape" | "nose" | "lips"
+  | "faceShape" | "jawline" | "eyeShape" | "nose" | "lips" | "lipState"
   | "hairColor" | "hairBase" | "eyebrows"
-  | "skinTone" | "skinTexture" | "eyeColor" | "facialHair" | "distinctiveFeature"
+  | "skinTone" | "skinTexture" | "eyeColor" | "eyeState" | "facialHair" | "distinctiveFeature"
 > = {
   type: "type",
   age: "age",
@@ -405,12 +470,14 @@ export const PERSON_FIELD_BY_DIMENSION: Record<
   "eye-shape": "eyeShape",
   nose: "nose",
   lips: "lips",
+  "lip-state": "lipState",
   "hair-color": "hairColor",
   "hair-base": "hairBase",
   eyebrows: "eyebrows",
   "skin-tone": "skinTone",
   "skin-texture": "skinTexture",
   "eye-color": "eyeColor",
+  "eye-state": "eyeState",
   "facial-hair": "facialHair",
   "distinctive-features": "distinctiveFeature",
 }
@@ -437,6 +504,10 @@ export interface PersonValue {
   nose?: string
   /** Lip fullness / shape (thin, full, wide, cupid's bow…). */
   lips?: string
+  /** Lip state — what the lips are doing right now (chapped, glossy,
+   *  parted, biting, pursed, bold-red…). Distinct from `lips` which is
+   *  anatomical shape. */
+  lipState?: string
   hairColor?: string
   /** Natural hair texture + length (texture×length combos). The actual cut
    *  / styling choice (bob, wolf cut, braids…) lives in Styling.hair-cut. */
@@ -445,6 +516,10 @@ export interface PersonValue {
   skinTone?: string
   skinTexture?: string
   eyeColor?: string
+  /** Eye state — what the eyes are doing (closed, half-lidded, wide-eyed,
+   *  staring at camera, gazing away/up/down, glassy). Distinct from
+   *  `eyeShape` (anatomy) and `eyeColor`. */
+  eyeState?: string
   facialHair?: string
   distinctiveFeature?: string
   /** Free-text appended BEFORE the dimension compound. Use when you want

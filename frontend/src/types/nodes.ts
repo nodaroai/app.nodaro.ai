@@ -379,6 +379,10 @@ export interface LightingData {
   timeOfDay?: string
   lightingStyle?: string
   lightingDirection?: string
+  /** Lighting ratio id (relative key-to-shadow brightness, e.g. "ratio-1-2"). */
+  lightingRatio?: string
+  /** Color temperature id (Kelvin warmth/coolness, e.g. "temp-5600k"). */
+  colorTemperature?: string
   /** Grid columns when displaying multiple enabled categories in the node
    * card. Default (render-time) = 1 (vertical stack). Range 1-3. */
   maxItemsPerRow?: number
@@ -451,6 +455,9 @@ export interface PersonData {
   nose?: string
   /** Lip shape (thin, medium, full, wide, cupid's bow, small). */
   lips?: string
+  /** Lip state — what the lips are doing (chapped, glossy, parted, biting,
+   *  pursed, bold-red). Distinct from `lips` (anatomical shape). */
+  lipState?: string
   /** Hair color (brown, blonde, gray, dyed). */
   hairColor?: string
   /** Natural hair texture + length (short straight, long curly, afro…). The
@@ -464,6 +471,10 @@ export interface PersonData {
   skinTexture?: string
   /** Eye color. */
   eyeColor?: string
+  /** Eye state — what the eyes are doing (closed, half-lidded, wide-eyed,
+   *  staring-at-camera, gazing-away/up/down, glassy). Distinct from
+   *  `eyeShape` (anatomy) and `eyeColor`. */
+  eyeState?: string
   /** Facial hair style (clean-shaven, stubble, full-beard). */
   facialHair?: string
   /** Distinctive feature (glasses, freckles, tattoos, scar, dimples, piercing). */
@@ -477,11 +488,12 @@ export interface PersonData {
   maxItemsPerRow?: number
 }
 
-/** Standalone Styling parameter node data. Beauty + accessories compound
- * hint appended to downstream gen prompts. Multi-dimension: 6 orthogonal
- * fields covering makeup, eyewear, headwear, jewelry, nails, face paint.
- * Distinct from clothing (future Wardrobe node). Applies to both image
- * and video consumers. See `packages/shared/src/styling.ts`. */
+/** Standalone Styling parameter node data. Beauty + wardrobe + accessories
+ * compound hint appended to downstream gen prompts. Multi-dimension covering:
+ * makeup, hair (cut + treatment), eyewear, headwear, jewelry, nails, face
+ * paint, outfit (complete-look override), top, bottom, outerwear, legwear,
+ * footwear, fabric, and wardrobe-state. Applies to both image and video
+ * consumers. See `packages/shared/src/styling.ts`. */
 export interface StylingData {
   [key: string]: unknown
   label: string
@@ -493,13 +505,35 @@ export interface StylingData {
   hairCut?: string
   /** Hair treatment (babylights, balayage, ombré, highlights, rooted). */
   hairTreatment?: string
+  /** Hair state / motion / condition (wet, messy, windswept, voluminous,
+   *  sleek, frizzy, tousled, flowing…). Distinct from hairCut (shape) and
+   *  hairTreatment (color processing). */
+  hairState?: string
   jewelry?: string
   nails?: string
   facePaint?: string
+  /** Single-pick complete outfit archetype (school uniform, business suit,
+   *  evening gown, scrubs, bikini, lingerie, kimono…). Intended as an override
+   *  that semantically supersedes the per-piece top/bottom/outerwear pieces. */
+  outfit?: string
+  /** Upper-body garment (t-shirt, sweater, blouse, sports bra, bikini top…). */
+  top?: string
+  /** Lower-body garment (jeans, chinos, skirt, shorts, leggings…). */
+  bottom?: string
+  /** Layered-over outer garment (jacket, blazer, coat, cardigan…). */
+  outerwear?: string
+  /** Legwear worn between bottom and footwear (tights, fishnets, stockings, socks…). */
+  legwear?: string
+  /** Shoes (sneakers, heels, boots, loafers, sandals…). */
+  footwear?: string
   /** Clothing fabric / material (silk, leather, denim, velvet…). Overlaps
    *  vocabulary with the Material node in the Object category — Fabric uses
    *  "wearing X" grammar, Material uses "made of X". */
   fabric?: string
+  /** How the clothes are worn — oversized, fitted, cropped, sheer, wet,
+   *  ripped, off-shoulder, tucked-in, layered, unbuttoned… Modifier that
+   *  composes with any garment selection. */
+  wardrobeState?: string
   preText?: string
   postText?: string
   maxItemsPerRow?: number
@@ -519,15 +553,55 @@ export interface MoodData {
   postText?: string
 }
 
+/** Standalone Photographer parameter node data. Picks ONE photographer or
+ * artist whose visual signature drives the look. See
+ * `packages/shared/src/photographer.ts`. */
+export interface PhotographerData {
+  [key: string]: unknown
+  label: string
+  /** Photographer id from PHOTOGRAPHERS catalog. */
+  photographer: string
+}
+
+/** Standalone Aesthetic / Microtrend parameter node data. Picks ONE
+ * microtrend bundle (Y2K, dark academia, cottagecore, gorpcore, etc.). See
+ * `packages/shared/src/aesthetic.ts`. */
+export interface AestheticData {
+  [key: string]: unknown
+  label: string
+  /** Aesthetic id from AESTHETICS catalog. */
+  aesthetic: string
+}
+
+/** Standalone Era / Period parameter node data. Picks ONE historical era or
+ * speculative period that bundles wardrobe + environment + photographic
+ * treatment. See `packages/shared/src/era.ts`. */
+export interface EraData {
+  [key: string]: unknown
+  label: string
+  /** Era id from ERAS catalog. */
+  era: string
+}
+
 /** Standalone Pose parameter node data. Posture + action hint appended to
  * downstream gen prompts ("standing upright", "mid-run", "fighting stance").
- * Single-pick with optional pre/post free-text fields. See
+ * Multi-dimensional: pose plus orthogonal sub-pickers (hand position / body
+ * lean / head tilt) plus optional pre/post free-text fields. See
  * `packages/shared/src/pose.ts`. */
 export interface PoseData {
   [key: string]: unknown
   label: string
   /** Pose id from POSES catalog. */
   pose: string
+  /** Optional hand-position pose id (orthogonal sub-dimension). */
+  handPosition?: string
+  /** Optional body-lean pose id (orthogonal sub-dimension). */
+  bodyLean?: string
+  /** Optional head-tilt pose id (orthogonal sub-dimension). */
+  headTilt?: string
+  /** Optional activity pose id — what the subject is DOING in the world
+   *  (smoking, eating, texting, driving…). Orthogonal to the other sub-pickers. */
+  activity?: string
   /** Free-text prepended before the pose hint. */
   preText?: string
   /** Free-text appended after the pose hint. */
@@ -576,6 +650,86 @@ export interface WeaponData {
   label: string
   /** Weapon id from WEAPONS catalog. */
   weapon: string
+}
+
+/** Standalone Photo Genre parameter node data. Single-pick meta-preset
+ * bundling lighting/framing/wardrobe/grade conventions of a recognizable
+ * photographic genre (paparazzi, vogue editorial, gym mirror selfie,
+ * mugshot, etc.). See `packages/shared/src/photo-genre.ts`. */
+export interface PhotoGenreData {
+  [key: string]: unknown
+  label: string
+  /** Photo genre id from PHOTO_GENRES catalog. */
+  photoGenre: string
+}
+
+/** Standalone Backdrop parameter node data. Single-pick describing the
+ * studio backdrop / wall / surface immediately behind the subject —
+ * distinct from Setting, which describes a full environment. See
+ * `packages/shared/src/backdrop.ts`. */
+export interface BackdropData {
+  [key: string]: unknown
+  label: string
+  /** Backdrop id from BACKDROPS catalog. */
+  backdrop: string
+}
+
+/** Standalone Held Prop parameter node data. Single-pick describing the
+ * object the subject is actively holding or interacting with (phone,
+ * cigarette, coffee cup, microphone, bouquet, instrument). Distinct from
+ * the Object node, which describes a separate scene object. See
+ * `packages/shared/src/held-prop.ts`. */
+export interface HeldPropData {
+  [key: string]: unknown
+  label: string
+  /** Held prop id from HELD_PROPS catalog. */
+  heldProp: string
+}
+
+/** Standalone Exposure Settings parameter node data. Multi-category: aperture
+ * (depth of field), shutter speed (motion treatment), and ISO (grain). Each
+ * field optional. See `packages/shared/src/exposure-settings.ts`. */
+export interface ExposureSettingsData {
+  [key: string]: unknown
+  label: string
+  /** Aperture id (f/1.2 → f/16). */
+  aperture?: string
+  /** Shutter-speed id. */
+  shutterSpeed?: string
+  /** ISO id. */
+  isoValue?: string
+  /** Grid columns when displaying multiple enabled categories on the node card. */
+  maxItemsPerRow?: number
+}
+
+/** Standalone Render Quality parameter node data. Single-pick technical
+ * stamp — engine name, render-quality keyword, resolution stamp, or style
+ * stamp. See `packages/shared/src/render-quality.ts`. */
+export interface RenderQualityData {
+  [key: string]: unknown
+  label: string
+  /** Render-quality id from RENDER_QUALITIES catalog. */
+  renderQuality: string
+}
+
+/** Standalone Composition Effects parameter node data. Single-pick subject /
+ * frame compositional trick (bursting through frame, smoke sculpture,
+ * exploding particles, …). See `packages/shared/src/composition-effects.ts`. */
+export interface CompositionEffectsData {
+  [key: string]: unknown
+  label: string
+  /** Composition-effect id from COMPOSITION_EFFECTS catalog. */
+  compositionEffect: string
+}
+
+/** Standalone Post-Process Effects parameter node data. Single-pick image-
+ * level grade / processing pass (vignette, grain, halation, bloom, light
+ * leak, …). See `packages/shared/src/post-process-effects.ts`. */
+export interface PostProcessEffectsData {
+  [key: string]: unknown
+  label: string
+  /** Post-process id from POST_PROCESS_EFFECTS catalog. */
+  postProcess: string
 }
 
 /** Standalone Temporal parameter node data. */
@@ -2170,6 +2324,12 @@ export type CharacterNodeData = {
   style: "realistic" | "anime" | "3d-pixar" | "illustration"
   baseOutfit: string
   provider?: string
+  /** Identity preservation strength when this Character is fed as a reference.
+   *  - "off"     — model is free to creatively reinterpret the face
+   *  - "soft"    — encourage facial likeness preservation
+   *  - "strict"  — clamp facial identity precisely to the reference photo (default for face-locked workflows)
+   *  Defaults to "soft" for backward compatibility. */
+  identityLock?: "off" | "soft" | "strict"
   characterSheet: CharacterSheet | null
   projectId: string
   createdAt: string
@@ -2864,13 +3024,23 @@ export type SceneNodeData =
   | SettingData
   | PersonData
   | MoodData
+  | PhotographerData
+  | AestheticData
+  | EraData
   | PoseData
   | StylingData
   | MaterialData
   | AnimalData
   | VehicleData
   | WeaponData
+  | PhotoGenreData
+  | BackdropData
+  | HeldPropData
   | TemporalData
+  | ExposureSettingsData
+  | RenderQualityData
+  | CompositionEffectsData
+  | PostProcessEffectsData
   | GenerateScriptData
   | GenerateImageData
   | ModifyImageData
@@ -2997,13 +3167,23 @@ export type SceneNodeType =
   | "setting"
   | "person"
   | "mood"
+  | "photographer"
+  | "aesthetic"
+  | "era"
   | "pose"
   | "styling"
   | "material"
   | "animal"
   | "vehicle"
   | "weapon"
+  | "photo-genre"
+  | "backdrop"
+  | "held-prop"
   | "temporal"
+  | "exposure-settings"
+  | "render-quality"
+  | "composition-effects"
+  | "post-process-effects"
   | "generate-script"
   | "generate-image"
   | "modify-image"
@@ -3397,6 +3577,33 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: { label: "Mood", mood: "calm" },
   },
   {
+    type: "photographer",
+    label: "Photographer / Artist Style",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Photographer", photographer: "tim-walker" },
+  },
+  {
+    type: "aesthetic",
+    label: "Aesthetic / Microtrend",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Aesthetic", aesthetic: "y2k" },
+  },
+  {
+    type: "era",
+    label: "Era / Period",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Era", era: "1990s-mall" },
+  },
+  {
     type: "pose",
     label: "Pose",
     category: "parameter",
@@ -3451,6 +3658,33 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: { label: "Weapon", weapon: "katana" },
   },
   {
+    type: "photo-genre",
+    label: "Photo Genre",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Photo Genre", photoGenre: "fashion-editorial" },
+  },
+  {
+    type: "backdrop",
+    label: "Backdrop",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Backdrop", backdrop: "white-seamless" },
+  },
+  {
+    type: "held-prop",
+    label: "Held Prop",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Held Prop", heldProp: "smartphone" },
+  },
+  {
     type: "temporal",
     label: "Temporal",
     category: "parameter",
@@ -3458,6 +3692,42 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Temporal", temporalSpeed: "real-time" },
+  },
+  {
+    type: "exposure-settings",
+    label: "Exposure Settings",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Exposure Settings", aperture: "aperture-f1-4", maxItemsPerRow: 2 },
+  },
+  {
+    type: "render-quality",
+    label: "Render Quality",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Render Quality", renderQuality: "raytracing" },
+  },
+  {
+    type: "composition-effects",
+    label: "Composition Effects",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Composition Effects", compositionEffect: "bursting-through-frame" },
+  },
+  {
+    type: "post-process-effects",
+    label: "Post-Process Effects",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Post-Process Effects", postProcess: "vignette-soft" },
   },
   // AI
   {

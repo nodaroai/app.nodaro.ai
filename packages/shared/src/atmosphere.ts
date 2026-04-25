@@ -29,6 +29,18 @@ export const ATMOSPHERES: ReadonlyArray<Atmosphere> = [
   { id: "god-rays",        label: "God Rays",        description: "Sun shafts through haze",                  promptHint: "visible volumetric god rays, sun shafts cutting through hazy atmosphere" },
   { id: "smoke",           label: "Smoke",           description: "Drifting smoke",                           promptHint: "drifting smoke in the scene, hazy volumetric smoke partially obscuring the subject" },
   { id: "bokeh-particles", label: "Bokeh Particles", description: "Floating out-of-focus specks",             promptHint: "floating bokeh particles in the air, out-of-focus glowing specks adding ambient depth" },
+  { id: "chalk-dust",      label: "Chalk Dust",      description: "Soft chalk dust hanging in the air",       promptHint: "soft chalk dust haze suspended in the air, fine pale powder catching light with a classroom-like quality" },
+  { id: "falling-petals",  label: "Falling Petals",  description: "Drifting flower petals",                   promptHint: "delicate flower petals drifting through the frame, cherry-blossom or rose petals tumbling slowly on a soft breeze" },
+  { id: "confetti",        label: "Confetti",        description: "Colorful confetti falling",                promptHint: "colorful confetti raining through the frame, bright paper flecks tumbling and twirling against the background" },
+  { id: "sparks-embers",   label: "Sparks / Embers", description: "Glowing embers drifting upward",           promptHint: "glowing sparks and embers drifting upward through the air, hot orange specks trailing faint motion against darker surroundings" },
+  { id: "lens-flare",      label: "Lens Flare",      description: "Anamorphic flare streak across frame",     promptHint: "anamorphic horizontal lens flare streaking across the frame, cinematic light artifact with subtle ghosting and bloom" },
+  { id: "heat-haze",       label: "Heat Haze",       description: "Visible heat shimmer warping background",  promptHint: "visible heat shimmer rising in the scene, warping and rippling the background with refracted air distortion" },
+  { id: "steam",           label: "Steam",           description: "Rising white steam",                       promptHint: "soft white steam rising through the frame, warm vapor curling upward from a hot surface and catching ambient light" },
+  { id: "bubbles-underwater", label: "Underwater Bubbles", description: "Rising bubbles in water",            promptHint: "streams of bubbles rising through water, clear underwater spheres drifting upward with shifting refractive light" },
+  { id: "rain-on-glass",   label: "Rain on Glass",   description: "Droplets streaking foreground glass",      promptHint: "raindrops beading and streaking down a foreground window pane, distorting the view behind with soft refracted detail" },
+  { id: "pollen-light",    label: "Pollen in Light", description: "Warm particles in a sunbeam",              promptHint: "warm pollen and floating particles caught in a beam of sunlight, glowing motes drifting lazily through a shaft of light" },
+  { id: "water-droplets",  label: "Water Droplets",  description: "Droplets clinging to skin or surface",     promptHint: "fine water droplets clinging to skin and surfaces, fresh post-shower wetness with small beads catching highlights" },
+  { id: "falling-ash",     label: "Falling Ash",     description: "Fine grey ash drifting through the air",  promptHint: "fine grey ash drifting slowly through the air, weightless flakes settling across the scene with a quiet post-fire mood" },
 ] as const
 
 const atmosphereById = new Map<string, Atmosphere>(ATMOSPHERES.map((a) => [a.id, a]))

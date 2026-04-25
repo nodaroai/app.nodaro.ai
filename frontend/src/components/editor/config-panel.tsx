@@ -58,13 +58,23 @@ import {
   SettingConfig,
   PersonConfig,
   MoodConfig,
+  PhotographerConfig,
+  AestheticConfig,
+  EraConfig,
   PoseConfig,
   StylingConfig,
   MaterialConfig,
   AnimalConfig,
   VehicleConfig,
   WeaponConfig,
+  PhotoGenreConfig,
+  BackdropConfig,
+  HeldPropConfig,
   TemporalConfig,
+  ExposureSettingsConfig,
+  RenderQualityConfig,
+  CompositionEffectsConfig,
+  PostProcessEffectsConfig,
   GenerateScriptConfig,
   QACheckConfig,
   GenerateImageConfig,
@@ -195,13 +205,23 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "setting": "Setting",
   "person": "Person",
   "mood": "Mood",
+  "photographer": "Photographer / Artist Style",
+  "aesthetic": "Aesthetic / Microtrend",
+  "era": "Era / Period",
   "pose": "Pose",
   "styling": "Styling",
   "material": "Material",
   "animal": "Animal",
   "vehicle": "Vehicle",
   "weapon": "Weapon",
+  "photo-genre": "Photo Genre",
+  "backdrop": "Backdrop",
+  "held-prop": "Held Prop",
   "temporal": "Temporal",
+  "exposure-settings": "Exposure Settings",
+  "render-quality": "Render Quality",
+  "composition-effects": "Composition Effects",
+  "post-process-effects": "Post-Process Effects",
   "generate-script": "Generate Script",
   "generate-image": "Generate Image",
   "modify-image": "Modify Image",
@@ -384,13 +404,23 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "setting": return <SettingConfig {...configProps} />
     case "person": return <PersonConfig {...configProps} />
     case "mood": return <MoodConfig {...configProps} />
+    case "photographer": return <PhotographerConfig {...configProps} />
+    case "aesthetic": return <AestheticConfig {...configProps} />
+    case "era": return <EraConfig {...configProps} />
     case "pose": return <PoseConfig {...configProps} />
     case "styling": return <StylingConfig {...configProps} />
     case "material": return <MaterialConfig {...configProps} />
     case "animal": return <AnimalConfig {...configProps} />
     case "vehicle": return <VehicleConfig {...configProps} />
     case "weapon": return <WeaponConfig {...configProps} />
+    case "photo-genre": return <PhotoGenreConfig {...configProps} />
+    case "backdrop": return <BackdropConfig {...configProps} />
+    case "held-prop": return <HeldPropConfig {...configProps} />
     case "temporal": return <TemporalConfig {...configProps} />
+    case "exposure-settings": return <ExposureSettingsConfig {...configProps} />
+    case "render-quality": return <RenderQualityConfig {...configProps} />
+    case "composition-effects": return <CompositionEffectsConfig {...configProps} />
+    case "post-process-effects": return <PostProcessEffectsConfig {...configProps} />
     case "generate-script": return <GenerateScriptConfig {...configProps} />
     case "generate-image": return <GenerateImageConfig {...configProps} nodeId={selectedNodeId} />
     case "modify-image": return <ModifyImageConfig {...configProps} nodeId={selectedNodeId} />

@@ -24,13 +24,23 @@ import { StyleNode } from "./style-node";
 import { SettingNode } from "./setting-node";
 import { PersonNode } from "./person-node";
 import { MoodNode } from "./mood-node";
+import { PhotographerNode } from "./photographer-node";
+import { AestheticNode } from "./aesthetic-node";
+import { EraNode } from "./era-node";
 import { PoseNode } from "./pose-node";
 import { StylingNode } from "./styling-node";
 import { MaterialNode } from "./material-node";
 import { AnimalNode } from "./animal-node";
 import { VehicleNode } from "./vehicle-node";
 import { WeaponNode } from "./weapon-node";
+import { PhotoGenreNode } from "./photo-genre-node";
+import { BackdropNode } from "./backdrop-node";
+import { HeldPropNode } from "./held-prop-node";
 import { TemporalNode } from "./temporal-node";
+import { ExposureSettingsNode } from "./exposure-settings-node";
+import { RenderQualityNode } from "./render-quality-node";
+import { CompositionEffectsNode } from "./composition-effects-node";
+import { PostProcessEffectsNode } from "./post-process-effects-node";
 import { ReferenceAudioNode } from "./reference-audio-node";
 import { GenerateScriptNode } from "./generate-script-node";
 import { GenerateImageNode } from "./generate-image-node";
@@ -158,13 +168,23 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "setting": SettingNode,
   "person": PersonNode,
   "mood": MoodNode,
+  "photographer": PhotographerNode,
+  "aesthetic": AestheticNode,
+  "era": EraNode,
   "pose": PoseNode,
   "styling": StylingNode,
   "material": MaterialNode,
   "animal": AnimalNode,
   "vehicle": VehicleNode,
   "weapon": WeaponNode,
+  "photo-genre": PhotoGenreNode,
+  "backdrop": BackdropNode,
+  "held-prop": HeldPropNode,
   "temporal": TemporalNode,
+  "exposure-settings": ExposureSettingsNode,
+  "render-quality": RenderQualityNode,
+  "composition-effects": CompositionEffectsNode,
+  "post-process-effects": PostProcessEffectsNode,
   "reference-audio": ReferenceAudioNode,
   // AI
   "generate-script": GenerateScriptNode,

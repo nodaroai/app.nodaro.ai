@@ -65,6 +65,7 @@ export const STYLES: ReadonlyArray<Style> = [
   { id: "paper-cutout",    label: "Paper Cutout",     description: "Layered cut paper + shadows",              promptHint: "paper cutout papercraft style, Matisse-inspired layered cut paper shapes with visible paper texture, clean scissor edges and soft drop shadows between layered planes" },
   { id: "illuminated",     label: "Illuminated Manuscript", description: "Gold leaf + calligraphy",            promptHint: "illuminated manuscript style, medieval parchment with gold leaf accents, ornate decorative borders with vines and creatures, calligraphic script and jewel-toned miniature paintings" },
   { id: "pixar-3d",        label: "Pixar 3D",         description: "Polished character animation CG",          promptHint: "Pixar-style 3D character animation, polished CG with appealing rounded character design, soft subsurface skin shading, cinematic key lighting and expressive animated feature-film quality" },
+  { id: "caricature",      label: "Caricature",       description: "Exaggerated stylized portrait",            promptHint: "caricature illustration style, an exaggerated stylized portrait with a comically oversized head on a small body, amplified signature features — large nose, wide grin, oversized eyes — drawn with confident ink lines and watery color washes in the tradition of street-fair sketch artists" },
 ] as const
 
 const styleById = new Map<string, Style>(STYLES.map((s) => [s.id, s]))

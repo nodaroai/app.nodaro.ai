@@ -10,7 +10,12 @@
  * frontend DAG executor and the backend orchestrator.
  */
 
-export type LightingCategory = "time-of-day" | "style" | "direction"
+export type LightingCategory =
+  | "time-of-day"
+  | "style"
+  | "direction"
+  | "lighting-ratio"
+  | "color-temperature"
 
 export interface Lighting {
   readonly id: string
@@ -21,17 +26,19 @@ export interface Lighting {
 }
 
 export const LIGHTINGS: ReadonlyArray<Lighting> = [
-  // Time of day (8)
+  // Time of day (10)
   { id: "sunrise",       label: "Sunrise",       category: "time-of-day", description: "Warm low sun, long shadows",   promptHint: "sunrise lighting, warm low-angle sun with long shadows and soft golden tones" },
   { id: "golden-hour",   label: "Golden Hour",   category: "time-of-day", description: "Warm sunset glow",              promptHint: "golden hour lighting, warm sunset glow with soft directional sunlight and saturated golden tones" },
   { id: "noon",          label: "Noon",          category: "time-of-day", description: "Harsh overhead midday sun",     promptHint: "midday noon lighting, harsh overhead sun with high contrast and strong vertical shadows" },
+  { id: "harsh-midday",  label: "Harsh Midday",  category: "time-of-day", description: "Bleached white-sun zenith",     promptHint: "harsh midday white-sun lighting, sun directly overhead at zenith, blown-out white highlights and short hard shadows pooled directly beneath the subject" },
   { id: "overcast",      label: "Overcast",      category: "time-of-day", description: "Soft diffused daylight",        promptHint: "overcast daylight, soft diffused light from a uniformly cloudy sky with no harsh shadows" },
   { id: "blue-hour",     label: "Blue Hour",     category: "time-of-day", description: "Cool dusk twilight",            promptHint: "blue hour twilight lighting, cool desaturated tones just after sunset with soft ambient light" },
+  { id: "twilight",      label: "Twilight",      category: "time-of-day", description: "Between blue hour and night",   promptHint: "twilight lighting, the transitional dusk between blue hour and full night, deep indigo sky with the last residual ambient glow on the horizon and emerging artificial city lights" },
   { id: "night",         label: "Night",         category: "time-of-day", description: "Deep night, low ambient",       promptHint: "night lighting, deep dark scene with minimal ambient illumination and high contrast highlights" },
   { id: "moonlight",     label: "Moonlight",     category: "time-of-day", description: "Cool blue moonlit scene",       promptHint: "moonlight, cool blue ambient illumination with soft directional moonlit highlights and deep shadows" },
   { id: "neon-night",    label: "Neon Night",    category: "time-of-day", description: "Saturated neon city night",     promptHint: "neon night lighting, saturated magenta and cyan neon glow against deep night ambient, urban cyberpunk feel" },
 
-  // Style (10)
+  // Style (31)
   { id: "three-point",   label: "Three-Point",   category: "style",       description: "Classic key + fill + back",    promptHint: "three-point lighting setup, balanced key light with fill and rim back-light, classical studio look" },
   { id: "rembrandt",     label: "Rembrandt",     category: "style",       description: "Triangle of light on cheek",   promptHint: "Rembrandt lighting, distinctive triangle of light on the shadow-side cheek, painterly chiaroscuro" },
   { id: "chiaroscuro",   label: "Chiaroscuro",   category: "style",       description: "Strong light/dark contrast",   promptHint: "chiaroscuro lighting, dramatic strong contrast between deep shadows and bright highlights" },
@@ -49,26 +56,64 @@ export const LIGHTINGS: ReadonlyArray<Lighting> = [
   { id: "natural",           label: "Natural",           category: "style", description: "Available ambient light",       promptHint: "natural lighting, available ambient light with no artificial setup, organic and unpolished" },
   { id: "volumetric",        label: "Volumetric",        category: "style", description: "Visible light beams in haze",  promptHint: "volumetric lighting, visible god-ray light beams cutting through hazy atmosphere with strong directional shafts" },
   { id: "noir",              label: "Noir",              category: "style", description: "High-contrast B&W film noir",  promptHint: "film noir lighting, high-contrast black-and-white aesthetic with hard chiaroscuro shadows, venetian-blind slat shadows, and crushed deep blacks" },
+  // Flash & camera-flash styles
+  { id: "on-camera-flash",   label: "On-Camera Flash",   category: "style", description: "Paparazzi/iPhone direct flash", promptHint: "on-camera flash lighting, harsh direct frontal flash with blown-out highlights on skin, hard shadow falloff behind the subject and a darkened background, paparazzi and iPhone-flash signature" },
+  { id: "mirror-bounce-flash", label: "Mirror-Bounce Flash", category: "style", description: "Mirror-selfie flash bounce", promptHint: "mirror-selfie flash lighting, yellowish uneven LED-or-flash bouncing off the mirror surface with a hot flare spot, partially obscured face by the phone, classic mirror-selfie aesthetic" },
+  { id: "bounced-flash",     label: "Bounced Flash",     category: "style", description: "Soft ceiling-bounced fill",   promptHint: "bounced flash lighting, on-camera flash redirected off a ceiling or wall to create soft top-down fill with gentle shadows, even skin tones and natural ambient feel" },
+  { id: "softbox-key",       label: "Softbox Key",       category: "style", description: "Large diffused fashion key",   promptHint: "softbox key lighting, large diffused fashion-studio key light producing gentle wraparound illumination, soft falloff and clean even skin rendering" },
+  { id: "beauty-dish",       label: "Beauty Dish",       category: "style", description: "Hero light, crisp falloff",    promptHint: "beauty dish lighting, semi-hard hero light with crisp shadow falloff and a distinctive round catchlight, slightly punchy contour and contrast favored in beauty and editorial portraits" },
+  { id: "gridded-snoot",     label: "Gridded Snoot",     category: "style", description: "Tight focused pool of light",  promptHint: "gridded snoot lighting, tightly focused circular pool of light isolating the subject's face or shoulders against deep surrounding shadow, theatrical and controlled" },
+  { id: "silk-diffusion",    label: "Silk Diffusion",    category: "style", description: "Silk-softened gentle key",     promptHint: "silk diffusion lighting, gentle key light passed through a large silk to soften shadow edges, producing creamy gradients and flattering skin tones" },
+  { id: "kicker-rim",        label: "Kicker / Rim Accent", category: "style", description: "Low-side accent separator",   promptHint: "kicker rim accent lighting, low side-rear accent light skimming the subject's edge to separate them from a darker background, adds dimension and depth" },
+  { id: "candlelight",       label: "Candlelight",       category: "style", description: "Warm flickering firelight",    promptHint: "candlelight or firelight, warm flickering tungsten glow with soft falloff, low color temperature and gentle dancing shadows on nearby surfaces" },
+  { id: "edison-tungsten",   label: "Edison Tungsten",   category: "style", description: "Cozy warm globe-bulb glow",    promptHint: "Edison-bulb tungsten lighting, warm low-CRI globe-bulb glow with visible filament hot-spots, cozy bar or cafe atmosphere with amber-orange ambient" },
+  { id: "dappled-light",     label: "Dappled / Leaf-Filtered", category: "style", description: "Speckled foliage light",  promptHint: "dappled leaf-filtered lighting, sunlight broken into a speckled pattern of bright spots and soft shadows as it passes through overhead foliage, organic and painterly" },
+  { id: "raking-sidelight",  label: "Raking Sidelight",  category: "style", description: "Extreme low side, texture",    promptHint: "raking sidelight, extreme low-angle side light skimming across the surface to exaggerate texture and microcontour, long parallel shadows reveal every detail" },
+  { id: "stage-spotlight",   label: "Stage Spotlight",   category: "style", description: "Single hard overhead spot",    promptHint: "stage spotlight lighting, single hard overhead theatre spotlight isolating the subject in a circular pool of light against pure black surroundings, dust motes catching the beam" },
+  { id: "underwater-caustics", label: "Underwater Caustics", category: "style", description: "Rippled refracted patterns", promptHint: "underwater caustics lighting, rippled wavy refracted light patterns dancing across the subject and surroundings, cool aquatic blue-green palette with shimmering highlights" },
+  { id: "bioluminescence",   label: "Bioluminescence",   category: "style", description: "Cool eerie biological glow",   promptHint: "bioluminescence lighting, cool eerie cyan-green glow emanating from biological sources, soft self-illuminated highlights against deep ambient darkness, otherworldly atmosphere" },
 
-  // Direction (6)
+  // Direction (8)
   { id: "front",         label: "Front",         category: "direction",   description: "Light from camera direction",  promptHint: "front lighting, light coming from the camera direction, flat even illumination across the subject" },
+  { id: "three-quarter", label: "3/4 Light",     category: "direction",   description: "Classic portrait key angle",   promptHint: "three-quarter light, classic portrait key angle split between front and side at roughly 45 degrees off-camera, sculpts the face with a visible shadow on the far cheek and a defined nose shadow" },
   { id: "side",          label: "Side",          category: "direction",   description: "Light from one side",          promptHint: "side lighting, light coming from the side of the subject, emphasizing texture and form" },
   { id: "back-rim",      label: "Back / Rim",    category: "direction",   description: "Backlight rim around subject", promptHint: "back-light or rim-light, light coming from behind the subject creating a bright rim around their silhouette" },
+  { id: "silhouette-backlight", label: "Silhouette Backlight", category: "direction", description: "Bright halo, dark subject", promptHint: "silhouette backlight, strong light source directly behind the subject rendering them as a dark shape with a luminous halo edge and bright background bloom, dramatic contour against the sky or window" },
   { id: "top-overhead",  label: "Top / Overhead",category: "direction",   description: "Light from directly above",    promptHint: "top-down overhead lighting, light coming from directly above the subject creating shadows under the eyes and chin" },
   { id: "under-uplight", label: "Under / Uplight",category: "direction",  description: "Light from below",             promptHint: "uplighting from below, light coming from below the subject creating an unsettling theatrical look" },
   { id: "window",        label: "Window",        category: "direction",   description: "Soft sidelight from window",   promptHint: "window lighting, soft directional light from a single window source with natural falloff" },
+
+  // Lighting ratio (6) — relative key-to-shadow brightness
+  { id: "ratio-1-1",  label: "1:1",  category: "lighting-ratio", description: "Flat, no shadow contrast",       promptHint: "1:1 lighting ratio, flat even illumination across the subject with no contrast between key and fill, beauty and catalog look that flattens dimension" },
+  { id: "ratio-1-2",  label: "1:2",  category: "lighting-ratio", description: "Soft one-stop falloff",          promptHint: "1:2 lighting ratio, gentle soft modeling with roughly one stop of falloff from key to shadow side, classic flattering portraiture with mild dimension" },
+  { id: "ratio-1-3",  label: "1:3",  category: "lighting-ratio", description: "Moderate two-stop contrast",     promptHint: "1:3 lighting ratio, moderate contrast with about two stops between the lit and shadow sides, well-defined facial dimension and visible but recovered shadow detail" },
+  { id: "ratio-1-4",  label: "1:4",  category: "lighting-ratio", description: "Strong editorial contrast",      promptHint: "1:4 lighting ratio, strong contrast with deepening shadows on the unlit side, dramatic editorial feel with sculpted form and minimal shadow detail" },
+  { id: "ratio-1-8",  label: "1:8",  category: "lighting-ratio", description: "Extreme low-key chiaroscuro",    promptHint: "1:8 lighting ratio, extreme chiaroscuro with near-black shadow side balanced against a single bright key, classic low-key cinema atmosphere" },
+  { id: "ratio-1-16", label: "1:16", category: "lighting-ratio", description: "Single-source film-noir falloff", promptHint: "1:16 lighting ratio, single-source key against pitch-black shadow side, theatrical film-noir falloff with no fill and crushed unlit detail" },
+
+  // Color temperature (6) — Kelvin from warm to cool
+  { id: "temp-2700k", label: "2700K Candle",   category: "color-temperature", description: "Deep amber candle/tungsten",   promptHint: "2700K warm candle and low-tungsten color temperature, deep amber and orange cast across the scene, intimate and cozy mood with rich golden highlights" },
+  { id: "temp-3200k", label: "3200K Tungsten", category: "color-temperature", description: "Warm yellow interior",         promptHint: "3200K tungsten color temperature, warm yellow-orange cast typical of classic incandescent home interiors, lived-in domestic ambient" },
+  { id: "temp-4000k", label: "4000K Mixed",    category: "color-temperature", description: "Neutral white",                promptHint: "4000K neutral white color temperature, balanced midpoint between warm tungsten and cool daylight, clean office and mixed-source feel without strong color cast" },
+  { id: "temp-5600k", label: "5600K Daylight", category: "color-temperature", description: "Daylight-balanced midday sun", promptHint: "5600K daylight-balanced color temperature, neutral midday white sun with accurate color rendering and no warm or cool bias" },
+  { id: "temp-6500k", label: "6500K Overcast", category: "color-temperature", description: "Slightly cool blue cast",      promptHint: "6500K overcast-cool color temperature, slightly blue cast typical of overcast skies and high-noon shadow areas, subtly cool and clinical" },
+  { id: "temp-9000k", label: "9000K Shade",    category: "color-temperature", description: "Distinctly cool blue shade",   promptHint: "9000K open-shade color temperature, distinctly cool blue cast found in deep shade and cloud-shadowed mountain air, chilled and atmospheric" },
 ] as const
 
 export const LIGHTING_CATEGORY_ORDER: ReadonlyArray<LightingCategory> = [
   "time-of-day",
   "style",
   "direction",
+  "lighting-ratio",
+  "color-temperature",
 ]
 
 export const LIGHTING_CATEGORY_LABELS: Record<LightingCategory, string> = {
   "time-of-day": "Time of Day",
   style: "Style",
   direction: "Direction",
+  "lighting-ratio": "Lighting Ratio",
+  "color-temperature": "Color Temperature",
 }
 
 const lightingById = new Map<string, Lighting>(LIGHTINGS.map((l) => [l.id, l]))
@@ -102,11 +147,17 @@ export const LIGHTING_IDS: ReadonlyArray<string> = LIGHTINGS.map((l) => l.id)
  */
 export const LIGHTING_FIELD_BY_CATEGORY: Record<
   LightingCategory,
-  "timeOfDay" | "lightingStyle" | "lightingDirection"
+  | "timeOfDay"
+  | "lightingStyle"
+  | "lightingDirection"
+  | "lightingRatio"
+  | "colorTemperature"
 > = {
   "time-of-day": "timeOfDay",
   style: "lightingStyle",
   direction: "lightingDirection",
+  "lighting-ratio": "lightingRatio",
+  "color-temperature": "colorTemperature",
 }
 
 /**
@@ -117,6 +168,10 @@ export interface LightingValue {
   timeOfDay?: string
   lightingStyle?: string
   lightingDirection?: string
+  /** Lighting ratio id from LIGHTINGS (relative key-to-shadow brightness, e.g. "ratio-1-2"). */
+  lightingRatio?: string
+  /** Color temperature id from LIGHTINGS (Kelvin warmth/coolness, e.g. "temp-5600k"). */
+  colorTemperature?: string
 }
 
 /**
@@ -135,6 +190,8 @@ export function buildLightingHints(
     timeOfDay?: unknown
     lightingStyle?: unknown
     lightingDirection?: unknown
+    lightingRatio?: unknown
+    colorTemperature?: unknown
   },
 ): string[] {
   const hints: string[] = []

@@ -37,13 +37,23 @@ import type {
   SettingData,
   PersonData,
   MoodData,
+  PhotographerData,
+  AestheticData,
+  EraData,
   PoseData,
   StylingData,
   MaterialData,
   AnimalData,
   VehicleData,
   WeaponData,
+  PhotoGenreData,
+  BackdropData,
+  HeldPropData,
   TemporalData,
+  ExposureSettingsData,
+  RenderQualityData,
+  CompositionEffectsData,
+  PostProcessEffectsData,
 } from "@/types/nodes"
 import { CameraMotionPicker } from "./camera-motion-picker"
 import { FramingPicker } from "./framing-picker"
@@ -66,6 +76,16 @@ import { MaterialPicker } from "./material-picker"
 import { AnimalPicker } from "./animal-picker"
 import { VehiclePicker } from "./vehicle-picker"
 import { WeaponPicker } from "./weapon-picker"
+import { PhotoGenrePicker } from "./photo-genre-picker"
+import { BackdropPicker } from "./backdrop-picker"
+import { HeldPropPicker } from "./held-prop-picker"
+import { ExposureSettingsPicker } from "./exposure-settings-picker"
+import { RenderQualityPicker } from "./render-quality-picker"
+import { CompositionEffectsPicker } from "./composition-effects-picker"
+import { PostProcessEffectsPicker } from "./post-process-effects-picker"
+import { PhotographerPicker } from "./photographer-picker"
+import { AestheticPicker } from "./aesthetic-picker"
+import { EraPicker } from "./era-picker"
 import { PromptInjectionPreview } from "./prompt-injection-preview"
 import { composeCameraMotionHintForNode } from "@/lib/cinematography-hints"
 import { buildFramingHints } from "@nodaro-shared/framing"
@@ -85,6 +105,16 @@ import { getMaterialPromptHint } from "@nodaro-shared/materials"
 import { getAnimal } from "@nodaro-shared/animals"
 import { getVehicle } from "@nodaro-shared/vehicles"
 import { getWeapon } from "@nodaro-shared/weapons"
+import { getPhotoGenrePromptHint } from "@nodaro-shared/photo-genre"
+import { getBackdropPromptHint } from "@nodaro-shared/backdrop"
+import { getHeldPropPromptHint } from "@nodaro-shared/held-prop"
+import { getPhotographerPromptHint } from "@nodaro-shared/photographer"
+import { getAestheticPromptHint } from "@nodaro-shared/aesthetic"
+import { getEraPromptHint } from "@nodaro-shared/era"
+import { buildExposureHints } from "@nodaro-shared/exposure-settings"
+import { getRenderQualityPromptHint } from "@nodaro-shared/render-quality"
+import { getCompositionEffectPromptHint } from "@nodaro-shared/composition-effects"
+import { getPostProcessEffectPromptHint } from "@nodaro-shared/post-process-effects"
 import type { ConfigProps } from "./types"
 
 export function ToneConfig({ data, onUpdate }: ConfigProps<ToneData>) {
@@ -562,6 +592,45 @@ export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
   )
 }
 
+export function PhotographerConfig({ data, onUpdate }: ConfigProps<PhotographerData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getPhotographerPromptHint(data.photographer)]} />
+      <Label>Photographer / Artist Style</Label>
+      <PhotographerPicker
+        value={data.photographer || "tim-walker"}
+        onValueChange={(v) => onUpdate({ photographer: v })}
+      />
+    </div>
+  )
+}
+
+export function AestheticConfig({ data, onUpdate }: ConfigProps<AestheticData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getAestheticPromptHint(data.aesthetic)]} />
+      <Label>Aesthetic / Microtrend</Label>
+      <AestheticPicker
+        value={data.aesthetic || "y2k"}
+        onValueChange={(v) => onUpdate({ aesthetic: v })}
+      />
+    </div>
+  )
+}
+
+export function EraConfig({ data, onUpdate }: ConfigProps<EraData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getEraPromptHint(data.era)]} />
+      <Label>Era / Period</Label>
+      <EraPicker
+        value={data.era || "1990s-mall"}
+        onValueChange={(v) => onUpdate({ era: v })}
+      />
+    </div>
+  )
+}
+
 export function PoseConfig({ data, onUpdate }: ConfigProps<PoseData>) {
   return (
     <div className="flex flex-col gap-3">
@@ -767,6 +836,97 @@ export function WeaponConfig({ data, onUpdate }: ConfigProps<WeaponData>) {
       <WeaponPicker
         value={data.weapon || "katana"}
         onValueChange={(v) => onUpdate({ weapon: v })}
+      />
+    </div>
+  )
+}
+
+export function PhotoGenreConfig({ data, onUpdate }: ConfigProps<PhotoGenreData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getPhotoGenrePromptHint(data.photoGenre)]} />
+      <Label>Photo Genre</Label>
+      <PhotoGenrePicker
+        value={data.photoGenre || "fashion-editorial"}
+        onValueChange={(v) => onUpdate({ photoGenre: v })}
+      />
+    </div>
+  )
+}
+
+export function BackdropConfig({ data, onUpdate }: ConfigProps<BackdropData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getBackdropPromptHint(data.backdrop)]} />
+      <Label>Backdrop</Label>
+      <BackdropPicker
+        value={data.backdrop || "white-seamless"}
+        onValueChange={(v) => onUpdate({ backdrop: v })}
+      />
+    </div>
+  )
+}
+
+export function HeldPropConfig({ data, onUpdate }: ConfigProps<HeldPropData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getHeldPropPromptHint(data.heldProp)]} />
+      <Label>Held Prop</Label>
+      <HeldPropPicker
+        value={data.heldProp || "smartphone"}
+        onValueChange={(v) => onUpdate({ heldProp: v })}
+      />
+    </div>
+  )
+}
+
+export function ExposureSettingsConfig({ data, onUpdate }: ConfigProps<ExposureSettingsData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={buildExposureHints(data)} />
+      <Label>Exposure Settings</Label>
+      <ExposureSettingsPicker
+        value={{ aperture: data.aperture, shutterSpeed: data.shutterSpeed, isoValue: data.isoValue }}
+        onChange={(patch) => onUpdate(patch)}
+      />
+    </div>
+  )
+}
+
+export function RenderQualityConfig({ data, onUpdate }: ConfigProps<RenderQualityData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getRenderQualityPromptHint(data.renderQuality)]} />
+      <Label>Render Quality</Label>
+      <RenderQualityPicker
+        value={data.renderQuality || "raytracing"}
+        onValueChange={(v) => onUpdate({ renderQuality: v })}
+      />
+    </div>
+  )
+}
+
+export function CompositionEffectsConfig({ data, onUpdate }: ConfigProps<CompositionEffectsData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getCompositionEffectPromptHint(data.compositionEffect)]} />
+      <Label>Composition Effect</Label>
+      <CompositionEffectsPicker
+        value={data.compositionEffect || "bursting-through-frame"}
+        onValueChange={(v) => onUpdate({ compositionEffect: v })}
+      />
+    </div>
+  )
+}
+
+export function PostProcessEffectsConfig({ data, onUpdate }: ConfigProps<PostProcessEffectsData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <PromptInjectionPreview hints={[getPostProcessEffectPromptHint(data.postProcess)]} />
+      <Label>Post-Process Effect</Label>
+      <PostProcessEffectsPicker
+        value={data.postProcess || "vignette-soft"}
+        onValueChange={(v) => onUpdate({ postProcess: v })}
       />
     </div>
   )
