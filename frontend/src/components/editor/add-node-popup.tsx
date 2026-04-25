@@ -93,6 +93,11 @@ import {
   PawPrint,
   Car,
   Swords,
+  Camera,
+  Hourglass,
+  Cpu,
+  LayoutDashboard,
+  HandMetal,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -347,6 +352,27 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["emotion", "expression", "feeling", "happy", "sad", "angry", "serene", "fierce", "brooding", "confident", "melancholy", "mysterious"],
   },
   {
+    type: "photographer",
+    label: "Photographer / Artist Style",
+    icon: <Camera className="h-4 w-4" />,
+    category: "Camera",
+    keywords: ["photographer", "artist", "style", "tim walker", "deakins", "lubezki", "fashion", "editorial", "cinematographer", "illustrator", "painter", "ghibli", "rutkowski", "leibovitz", "cartier-bresson"],
+  },
+  {
+    type: "aesthetic",
+    label: "Aesthetic / Microtrend",
+    icon: <Sparkles className="h-4 w-4" />,
+    category: "Look",
+    keywords: ["aesthetic", "microtrend", "core", "y2k", "cottagecore", "dark academia", "techwear", "gorpcore", "old money", "preppy", "streetwear", "coquette", "indie sleaze", "balletcore", "goblincore", "minimalism", "maximalism", "vibe"],
+  },
+  {
+    type: "era",
+    label: "Era / Period",
+    icon: <Hourglass className="h-4 w-4" />,
+    category: "Look",
+    keywords: ["era", "period", "decade", "1920s", "1950s", "1970s", "1980s", "1990s", "2000s", "victorian", "medieval", "renaissance", "wild west", "feudal japan", "cyberpunk", "post-apocalyptic", "retrofuturism", "dieselpunk", "atompunk", "vintage", "future"],
+  },
+  {
     type: "pose",
     label: "Pose",
     icon: <PersonStanding className="h-4 w-4" />,
@@ -389,11 +415,60 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["weapon", "sword", "katana", "gun", "rifle", "pistol", "bow", "dagger", "axe", "spear", "mace", "crossbow", "firearm", "blade"],
   },
   {
+    type: "photo-genre",
+    label: "Photo Genre",
+    icon: <Camera className="h-4 w-4" />,
+    category: "Subject",
+    keywords: ["photo", "genre", "intent", "paparazzi", "editorial", "vogue", "lookbook", "selfie", "mirror selfie", "gym selfie", "headshot", "mugshot", "passport", "yearbook", "wedding", "movie poster", "album cover", "advertising", "documentary", "snapshot", "noir"],
+  },
+  {
+    type: "backdrop",
+    label: "Backdrop",
+    icon: <LayoutDashboard className="h-4 w-4" />,
+    category: "Camera",
+    keywords: ["backdrop", "background", "studio", "seamless", "wall", "gradient", "muslin", "velvet", "halo", "bokeh", "vignette", "white seamless", "black seamless", "brick wall", "concrete"],
+  },
+  {
+    type: "held-prop",
+    label: "Held Prop",
+    icon: <HandMetal className="h-4 w-4" />,
+    category: "Subject",
+    keywords: ["prop", "hand", "holding", "phone", "cigarette", "coffee", "wine", "microphone", "book", "umbrella", "bouquet", "guitar", "katana", "drink", "smoking", "instrument", "bag"],
+  },
+  {
     type: "temporal",
     label: "Temporal",
     icon: <Clock className="h-4 w-4" />,
     category: "Camera",
     keywords: ["time", "speed", "slow motion", "freeze", "bullet time", "shutter", "shot"],
+  },
+  {
+    type: "exposure-settings",
+    label: "Exposure Settings",
+    icon: <Aperture className="h-4 w-4" />,
+    category: "Camera",
+    keywords: ["exposure", "aperture", "f-stop", "shutter", "iso", "depth of field", "bokeh", "grain", "long exposure", "freeze"],
+  },
+  {
+    type: "render-quality",
+    label: "Render Quality",
+    icon: <Cpu className="h-4 w-4" />,
+    category: "Look",
+    keywords: ["render", "engine", "unreal", "octane", "cycles", "raytracing", "pbr", "8k", "4k", "masterpiece", "raw", "award-winning", "lumen", "global illumination"],
+  },
+  {
+    type: "composition-effects",
+    label: "Composition Effects",
+    icon: <Wand2 className="h-4 w-4" />,
+    category: "Look",
+    keywords: ["composition", "frame", "burst", "shatter", "smoke", "liquid", "pixel", "particles", "glitch", "mosaic", "silhouette", "exploding", "fragment", "glass", "trick"],
+  },
+  {
+    type: "post-process-effects",
+    label: "Post-Process Effects",
+    icon: <Sparkles className="h-4 w-4" />,
+    category: "Look",
+    keywords: ["post", "grade", "vignette", "grain", "halation", "bloom", "chromatic aberration", "light leak", "film burn", "scratched", "diffusion", "contrast", "glow"],
   },
   // AI — Script & Text
   {

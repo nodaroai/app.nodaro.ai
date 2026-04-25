@@ -96,6 +96,34 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     description: "Whole body head-to-toe in frame",
     promptHint: "full shot, the subject's entire body framed head to toe with minimal headroom and footroom",
   },
+  {
+    id: "cowboy-shot",
+    label: "Cowboy Shot",
+    category: "shot-size",
+    description: "Mid-thigh up, classic Western framing",
+    promptHint: "cowboy shot, subject framed from mid-thigh up, classic Western framing that leaves the holster visible",
+  },
+  {
+    id: "head-to-knees",
+    label: "Head to Knees",
+    category: "shot-size",
+    description: "From head down to the knees",
+    promptHint: "head-to-knees framing, subject visible from the top of the head down to just above the knees",
+  },
+  {
+    id: "head-to-hip",
+    label: "Head to Hip",
+    category: "shot-size",
+    description: "From head down to the hips",
+    promptHint: "head-to-hip framing, subject visible from the top of the head down to the hipline, slightly tighter than waist-up",
+  },
+  {
+    id: "half-body",
+    label: "Half Body",
+    category: "shot-size",
+    description: "Clean waist-up portrait",
+    promptHint: "half body portrait, subject framed from the waist up with clean portrait composition",
+  },
 
   // Angle (camera height / orientation)
   {
@@ -146,6 +174,13 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "angle",
     description: "High aerial overhead view",
     promptHint: "bird's eye view, high aerial perspective looking down on the scene from far above",
+  },
+  {
+    id: "slightly-downward",
+    label: "Slightly Downward",
+    category: "angle",
+    description: "Gentle tilt from above, selfie-style",
+    promptHint: "slightly downward angle, camera tilted gently down toward the subject from just above their eyeline, the natural angle of a held-out phone",
   },
 
   // Coverage (dialog / multi-subject framing)
@@ -198,6 +233,48 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     description: "Arm's-length self-portrait",
     promptHint: "selfie framing, subject holding the camera at arm's length to frame themselves, slightly high angle from above, phone-camera perspective with the subject's face and upper body dominant in frame, arm or phone edge sometimes visible",
   },
+  {
+    id: "mirror-selfie",
+    label: "Mirror Selfie",
+    category: "coverage",
+    description: "Phone visible in a mirror reflection",
+    promptHint: "mirror selfie composition, the subject photographs themselves in a mirror with the phone clearly visible in front of their face or chest, the reflection itself is the photograph, often a slight phone-flash bloom",
+  },
+  {
+    id: "gym-mirror-selfie",
+    label: "Gym Mirror Selfie",
+    category: "coverage",
+    description: "3/4 side-back angle through a gym mirror",
+    promptHint: "gym mirror selfie, subject photographed in a full-length gym mirror from a three-quarter side-back angle, phone held near the chest or hip, fluorescent gym lighting and equipment in the background",
+  },
+  {
+    id: "through-glass",
+    label: "Through Glass",
+    category: "coverage",
+    description: "Framed through a foreground glass pane",
+    promptHint: "shot through a foreground pane of glass, subject seen with subtle optical refraction, reflections, and surface distortions across the image, glass texture frames the composition",
+  },
+  {
+    id: "top-down-flat-lay",
+    label: "Top-down Flat Lay",
+    category: "coverage",
+    description: "Overhead arrangement of items on a surface",
+    promptHint: "top-down flat lay composition, camera directly overhead looking down at items neatly arranged on a flat surface, every object parallel to the picture plane",
+  },
+  {
+    id: "establishing-shot",
+    label: "Establishing Shot",
+    category: "coverage",
+    description: "Wide environmental shot, subject small",
+    promptHint: "establishing shot, wide environmental framing that prioritizes the location, the subject sits small within the larger scene to set context",
+  },
+  {
+    id: "dirty-single",
+    label: "Dirty Single",
+    category: "coverage",
+    description: "Single with another character at the edge",
+    promptHint: "dirty single framing, the shot is on one character but a slice of another character — a shoulder, ear, or back of head — intrudes into the foreground edge of frame",
+  },
 
   // Composition (where the subject sits in the frame)
   {
@@ -234,6 +311,55 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "composition",
     description: "Lines draw eye to subject",
     promptHint: "leading lines composition, environmental lines converge toward the subject to draw the viewer's eye",
+  },
+  {
+    id: "3x3-grid-collage",
+    label: "3×3 Grid Collage",
+    category: "composition",
+    description: "Subject in a 3×3 grid of variations",
+    promptHint: "3 by 3 grid collage layout, nine equal-sized panels arranged in a three-by-three grid, each cell shows the same subject in a different pose, expression, or outfit, clean white gutters between panels",
+  },
+  {
+    id: "diptych",
+    label: "Diptych",
+    category: "composition",
+    description: "Two-frame side-by-side composition",
+    promptHint: "diptych composition, two equal panels placed side by side as a single image, each panel a separate but related shot of the subject",
+  },
+  {
+    id: "triptych",
+    label: "Triptych",
+    category: "composition",
+    description: "Three-frame composition",
+    promptHint: "triptych composition, three equal vertical panels arranged side by side as one image, each panel a related but distinct shot of the subject",
+  },
+  {
+    id: "multi-frame-mosaic",
+    label: "Multi-frame Mosaic",
+    category: "composition",
+    description: "Face built from a mosaic of small tiles",
+    promptHint: "multi-frame mosaic, the subject's face assembled from many small photographic tiles arranged in a grid, each tile a tiny image that combines from a distance into the larger portrait",
+  },
+  {
+    id: "contact-sheet",
+    label: "Contact Sheet",
+    category: "composition",
+    description: "Photo contact sheet of thumbnails",
+    promptHint: "contact sheet layout, multiple sequential thumbnail frames arranged in rows on a black or dark grey background, frame numbers along the edge, mimicking a 35mm film proof sheet",
+  },
+  {
+    id: "magazine-spread",
+    label: "Magazine Spread",
+    category: "composition",
+    description: "Two-page magazine layout with typography",
+    promptHint: "magazine spread layout, two-page editorial composition with bold display typography overlaid on the image, headline and pull quotes integrated with the photograph, visible page gutter down the middle",
+  },
+  {
+    id: "cutaway-cross-section",
+    label: "Cutaway / Cross-Section",
+    category: "composition",
+    description: "Architectural cross-section with walls peeled away",
+    promptHint: "cutaway cross-section composition, the building's near wall peeled away to reveal the interior in dollhouse fashion, multiple rooms visible at once with floors and furnishings exposed in clean architectural section, the subject inhabiting one of the rooms",
   },
 
   // Vantage (horizontal camera direction — azimuth around subject)
@@ -278,6 +404,13 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "vantage",
     description: "Direct rear view",
     promptHint: "shot from directly behind the subject, looking at their back",
+  },
+  {
+    id: "side-back-angle",
+    label: "Side-Back Angle",
+    category: "vantage",
+    description: "3/4 view from behind one shoulder",
+    promptHint: "side-back angle, three-quarter view from behind one shoulder of the subject, partial face visible in profile, the back and shoulder line dominate the framing",
   },
 ]
 

@@ -30,6 +30,10 @@ export const LENSES: ReadonlyArray<Lens> = [
   { id: "macro",                 label: "Macro",                   description: "Extreme close-up of small detail",            promptHint: "macro lens, extreme close-up revealing fine detail with shallow depth of field" },
   { id: "tilt-shift",            label: "Tilt-shift",              description: "Selective focus, miniature effect",           promptHint: "tilt-shift lens, selective plane of focus producing a miniature-diorama effect" },
   { id: "shallow-dof",           label: "Shallow DOF",             description: "Razor-thin focus, dreamy bokeh",              promptHint: "extremely shallow depth of field, razor-thin focal plane with dreamy out-of-focus bokeh" },
+  { id: "canon-k35",             label: "Canon K35 Prime",         description: "Vintage cinematic, warm gentle skin",         promptHint: "shot on a vintage Canon K35 cinema prime, warm gentle skin rendition, low-contrast highlight roll-off, soft dreamy falloff into the bokeh and the unmistakable seventies-era cinematic patina" },
+  { id: "cooke-s4",              label: "Cooke S4 Prime",          description: "The Cooke look — creamy painterly skin",      promptHint: "shot on a Cooke S4 cinema prime, the signature \"Cooke look\" with creamy painterly bokeh, gently rounded out-of-focus highlights and a flattering filmic skin rendition" },
+  { id: "helios-44",             label: "Helios 44",               description: "Vintage Soviet swirly bokeh",                 promptHint: "shot on a vintage Soviet Helios 44 lens, the legendary swirly bokeh circling the subject, soft low contrast in the corners and a dreamlike vintage aberration character" },
+  { id: "petzval",               label: "Petzval Portrait",        description: "Ultra-vintage swirl, dramatic falloff",       promptHint: "shot on an ultra-vintage Petzval portrait lens, sharp central focus that falls off rapidly into a swirling, painterly bokeh, dramatic vignetting and a 19th-century daguerreotype-era softness at the edges" },
 ] as const
 
 const lensById = new Map<string, Lens>(LENSES.map((l) => [l.id, l]))

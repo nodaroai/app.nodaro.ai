@@ -48,9 +48,19 @@ export const TEXT_SOURCE_TYPES: ReadonlyArray<string> = [
   "setting",
   "person",
   "mood",
+  "photographer",
+  "aesthetic",
+  "era",
   "pose",
   "styling",
+  "photo-genre",
+  "backdrop",
+  "held-prop",
   "temporal",
+  "exposure-settings",
+  "render-quality",
+  "composition-effects",
+  "post-process-effects",
 ]
 
 export const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = {

@@ -35,6 +35,16 @@ import { getMaterialPromptHint } from "./materials.js"
 import { getAnimal } from "./animals.js"
 import { getVehicle } from "./vehicles.js"
 import { getWeapon } from "./weapons.js"
+import { getPhotoGenrePromptHint } from "./photo-genre.js"
+import { getBackdropPromptHint } from "./backdrop.js"
+import { getHeldPropPromptHint } from "./held-prop.js"
+import { getPhotographerPromptHint } from "./photographer.js"
+import { getAestheticPromptHint } from "./aesthetic.js"
+import { getEraPromptHint } from "./era.js"
+import { buildExposureHints } from "./exposure-settings.js"
+import { getRenderQualityPromptHint } from "./render-quality.js"
+import { getCompositionEffectPromptHint } from "./composition-effects.js"
+import { getPostProcessEffectPromptHint } from "./post-process-effects.js"
 
 export interface HintNodeLike {
   readonly id: string
@@ -121,16 +131,36 @@ export function getParameterPromptHint(
       const weapon = getWeapon(asStr(data.weapon))
       return weapon ? `with a ${weapon.label.toLowerCase()}, ${weapon.description}` : ""
     }
+    case "photo-genre":
+      return getPhotoGenrePromptHint(asStr(data.photoGenre))
+    case "backdrop":
+      return getBackdropPromptHint(asStr(data.backdrop))
+    case "held-prop":
+      return getHeldPropPromptHint(asStr(data.heldProp))
     case "person":
       return buildPersonHints(data).join(", ")
     case "mood":
       return buildMoodHints(data).join(", ")
+    case "photographer":
+      return getPhotographerPromptHint(asStr(data.photographer))
+    case "aesthetic":
+      return getAestheticPromptHint(asStr(data.aesthetic))
+    case "era":
+      return getEraPromptHint(asStr(data.era))
     case "pose":
       return buildPoseHints(data).join(", ")
     case "styling":
       return buildStylingHints(data).join(", ")
     case "temporal":
       return buildTemporalHints(data).join(", ")
+    case "exposure-settings":
+      return buildExposureHints(data).join(", ")
+    case "render-quality":
+      return getRenderQualityPromptHint(asStr(data.renderQuality))
+    case "composition-effects":
+      return getCompositionEffectPromptHint(asStr(data.compositionEffect))
+    case "post-process-effects":
+      return getPostProcessEffectPromptHint(asStr(data.postProcess))
     case "tone":
       return asStr(data.tone).trim()
     case "text-prompt":

@@ -8,6 +8,7 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from 
 // Shared logic from packages/shared — single source of truth
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "../../../../packages/shared/src/ancestor-refs.js"
 import { buildImagePrompt, buildScenePrompt } from "../../../../packages/shared/src/prompt-builder.js"
+import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "../../../../packages/shared/src/identity-lock.js"
 import { resolveTemplate, applyTemplate } from "../../../../packages/shared/src/prompt-templates.js"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
@@ -419,6 +420,17 @@ function collectCinematographyHints(
   return hints
 }
 
+/**
+ * Walk upstream Character nodes and return the strongest identityLock clause
+ * (or empty string). Mirror of frontend `collectIdentityLockClause` —
+ * delegates to the shared implementation but adapts the `(nodeId, ctx)`
+ * call signature used elsewhere in this file.
+ */
+function collectIdentityLockClause(consumerNodeId: string, ctx: PayloadBuildContext | undefined): string {
+  if (!ctx?.nodes || !ctx?.edges) return ""
+  return sharedCollectIdentityLockClause(consumerNodeId, ctx.nodes, ctx.edges)
+}
+
 export function buildPayload(
   node: SimpleNode,
   jobId: string,
@@ -519,6 +531,10 @@ export function buildPayload(
           rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
         }
       }
+      {
+        const identityClause = collectIdentityLockClause(node.id, buildCtx)
+        if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
+      }
 
       // Use shared prompt builder (single source of truth with frontend)
       const styleBypass = hasConnectedStyleNode(node.id, buildCtx)
@@ -610,6 +626,10 @@ export function buildPayload(
           editPrompt = editPrompt ? `${editPrompt}. ${joined}` : joined
         }
       }
+      {
+        const identityClause = collectIdentityLockClause(node.id, buildCtx)
+        if (identityClause) editPrompt = editPrompt ? `${editPrompt} ${identityClause}` : identityClause
+      }
 
       const targetResolution = data.targetResolution as string | undefined
       return {
@@ -683,6 +703,10 @@ export function buildPayload(
           const joined = cinematographyHints.join(", ")
           rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
         }
+      }
+      {
+        const identityClause = collectIdentityLockClause(node.id, buildCtx)
+        if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
       }
 
       // Build prompt with style + character descriptions (same as generate-image)
@@ -779,6 +803,10 @@ export function buildPayload(
             editPrompt = editPrompt ? `${editPrompt}. ${joined}` : joined
           }
         }
+        {
+          const identityClause = collectIdentityLockClause(node.id, buildCtx)
+          if (identityClause) editPrompt = editPrompt ? `${editPrompt} ${identityClause}` : identityClause
+        }
 
         return {
           jobName: "edit-image",
@@ -847,6 +875,10 @@ export function buildPayload(
             const joined = cinematographyHints.join(", ")
             rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
           }
+        }
+        {
+          const identityClause = collectIdentityLockClause(node.id, buildCtx)
+          if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
         }
 
         const modStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
@@ -953,6 +985,8 @@ export function buildPayload(
             for (const h of cinematographyHints) hints.push(h)
             if (hints.length > 0 && p) p = `${p}. ${hints.join(", ")}`
             else if (hints.length > 0) p = hints.join(", ")
+            const identityClause = collectIdentityLockClause(node.id, buildCtx)
+            if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
             return p
           })(),
           provider,
@@ -1013,6 +1047,8 @@ export function buildPayload(
                 p = p ? `${p}. ${joined}` : joined
               }
             }
+            const identityClause = collectIdentityLockClause(node.id, buildCtx)
+            if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
             return p
           })(),
           provider,
@@ -1058,6 +1094,8 @@ export function buildPayload(
                 p = p ? `${p}. ${joined}` : joined
               }
             }
+            const identityClause = collectIdentityLockClause(node.id, buildCtx)
+            if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
             return p
           })(),
           provider: v2vProvider,
@@ -1133,6 +1171,8 @@ export function buildPayload(
                 p = p ? `${p}. ${joined}` : joined
               }
             }
+            const identityClause = collectIdentityLockClause(node.id, buildCtx)
+            if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
             return p
           })(),
           resolution: s2vResolution,
@@ -1213,6 +1253,8 @@ export function buildPayload(
                 p = p ? `${p}. ${joined}` : joined
               }
             }
+            const identityClause = collectIdentityLockClause(node.id, buildCtx)
+            if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
             return p
           })(),
           provider: evProvider,

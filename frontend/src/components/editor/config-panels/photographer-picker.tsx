@@ -1,0 +1,122 @@
+"use client"
+
+import { memo, useMemo, useState } from "react"
+import { Search } from "lucide-react"
+import {
+  PHOTOGRAPHERS,
+  PHOTOGRAPHER_CATEGORY_LABELS,
+  PHOTOGRAPHER_CATEGORY_ORDER,
+  type Photographer,
+  type PhotographerCategory,
+} from "@nodaro-shared/photographer"
+import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
+
+interface PhotographerPickerProps {
+  readonly value: string
+  readonly onValueChange: (photographerId: string) => void
+  readonly className?: string
+}
+
+/**
+ * Single-select photographer / artist style picker. Entries are grouped by
+ * category (Editorial, Documentary, Cinematographer, Concept, Illustrator)
+ * and rendered as text tiles — there's no canonical visual swatch for an
+ * artist's name, so we lean on label + 1-line description. Search filters
+ * across label + description.
+ */
+export const PhotographerPicker = memo(function PhotographerPicker({
+  value,
+  onValueChange,
+  className,
+}: PhotographerPickerProps) {
+  const [query, setQuery] = useState("")
+
+  const grouped = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const byCategory = new Map<PhotographerCategory, Photographer[]>()
+    for (const photographer of PHOTOGRAPHERS) {
+      if (q && !photographer.label.toLowerCase().includes(q) && !photographer.description.toLowerCase().includes(q)) {
+        continue
+      }
+      const list = byCategory.get(photographer.category) ?? []
+      list.push(photographer)
+      byCategory.set(photographer.category, list)
+    }
+    return PHOTOGRAPHER_CATEGORY_ORDER.map((cat) => ({
+      category: cat,
+      photographers: byCategory.get(cat) ?? [],
+    }))
+  }, [query])
+
+  const anyVisible = grouped.some((g) => g.photographers.length > 0)
+
+  return (
+    <div className={cn("flex flex-col gap-3", className)}>
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+        <Input
+          aria-label="Search photographer"
+          placeholder="Search photographer"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="pl-8 h-8 text-xs"
+        />
+      </div>
+
+      {!anyVisible && query && (
+        <div className="text-xs text-muted-foreground text-center py-4">
+          No photographer matches &quot;{query}&quot;
+        </div>
+      )}
+
+      {grouped.map(({ category, photographers }) => {
+        if (photographers.length === 0) return null
+        return (
+          <div key={category} className="flex flex-col gap-1.5">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
+              {PHOTOGRAPHER_CATEGORY_LABELS[category]}
+            </div>
+            <div
+              role="radiogroup"
+              aria-label={PHOTOGRAPHER_CATEGORY_LABELS[category]}
+              className="grid grid-cols-2 gap-1.5"
+            >
+              {photographers.map((photographer) => {
+                const selected = photographer.id === value
+                return (
+                  <button
+                    key={photographer.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    title={photographer.description}
+                    onClick={() => onValueChange(photographer.id)}
+                    className={cn(
+                      "flex flex-col items-start gap-0.5 p-2 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
+                      selected
+                        ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
+                        : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "text-[11px] font-semibold leading-tight truncate w-full",
+                        selected ? "text-[#ff0073]" : "text-gray-800 dark:text-[#E2E8F0]",
+                      )}
+                    >
+                      {photographer.label}
+                    </span>
+                    <span className="text-[10px] leading-snug text-muted-foreground line-clamp-2 w-full">
+                      {photographer.description}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+})

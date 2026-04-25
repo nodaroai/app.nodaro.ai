@@ -237,6 +237,23 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
           </SelectContent>
         </Select>
       </div>
+      <div>
+        <Label htmlFor="char-identity-lock">Identity Lock</Label>
+        <Select
+          value={data.identityLock ?? "soft"}
+          onValueChange={(v) => onUpdate({ identityLock: v as NonNullable<CharacterNodeData["identityLock"]> })}
+        >
+          <SelectTrigger id="char-identity-lock"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="off">Off — model may reinterpret the face</SelectItem>
+            <SelectItem value="soft">Soft — preserve overall likeness (default)</SelectItem>
+            <SelectItem value="strict">Strict — clamp facial identity to the reference</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-0.5">
+          Applied when this Character feeds downstream image / video generation.
+        </p>
+      </div>
       <MappableField field="baseOutfit" label="Base Outfit" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea
           id="char-outfit"

@@ -193,6 +193,7 @@ import {
 } from "./asset-executors";
 import { buildImagePrompt } from "@nodaro-shared/prompt-builder";
 import type { CharacterDef } from "@nodaro-shared/types";
+import { collectIdentityLockClause } from "@nodaro-shared/identity-lock";
 import { resolveSeparator } from "@nodaro-shared/text-separators";
 import { evaluateJsonPath, stringifyPathResults } from "@nodaro-shared/json-path";
 import { spreadJsonArrayIfSingleton } from "@nodaro-shared/generated-results";
@@ -567,6 +568,10 @@ export function executeNode(
       toast.error(`Node "${imgData.label}": no prompt — type one or connect a cinematography source`);
       return Promise.reject(new Error("No prompt"));
     }
+    {
+      const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+      if (identityClause) prompt = `${prompt} ${identityClause}`;
+    }
 
     const result = buildImagePrompt({
       prompt,
@@ -652,6 +657,10 @@ export function executeNode(
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
     }
+    {
+      const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+      if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
+    }
 
     // Collect reference images for nano-banana-edit
     const editRefUrls = orderedImageUrls.filter((url) => url !== imageUrl);
@@ -715,6 +724,10 @@ export function executeNode(
         const joined = cinematographyHints.join(", ");
         rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
       }
+    }
+    {
+      const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+      if (identityClause) rawPrompt = `${rawPrompt} ${identityClause}`;
     }
 
     // Collect reference images from connected nodes + character assets
@@ -824,6 +837,10 @@ export function executeNode(
         const joined = cinematographyHints.join(", ");
         rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
       }
+    }
+    {
+      const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+      if (identityClause) rawPrompt = `${rawPrompt} ${identityClause}`;
     }
 
     // Collect reference images from connected nodes + character assets
@@ -999,6 +1016,10 @@ export function executeNode(
     for (const h of cinematographyHints) motionHints.push(h);
     if (motionHints.length > 0 && prompt) prompt = `${prompt}. ${motionHints.join(", ")}`;
     else if (motionHints.length > 0) prompt = motionHints.join(", ");
+    {
+      const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+      if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
+    }
     const kling3Mode = (i2vData as Record<string, unknown>).kling3Mode as
       | string
       | undefined;
@@ -1078,6 +1099,10 @@ export function executeNode(
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
     }
+    {
+      const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+      if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
+    }
     const provider =
       typeof v2vData.provider === "string" ? v2vData.provider : undefined;
     return runVideoToVideoGeneration(
@@ -1115,6 +1140,10 @@ export function executeNode(
     if (!prompt) {
       toast.error(`Node "${t2vData.label}": no prompt — type one or connect a cinematography source`);
       return Promise.reject(new Error("No prompt"));
+    }
+    {
+      const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+      if (identityClause) prompt = `${prompt} ${identityClause}`;
     }
     const t2vProvider = t2vData.provider || "seedance-2-fast";
     const t2vRaw = t2vData as Record<string, unknown>;
@@ -2663,6 +2692,10 @@ export function executeNode(
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
     }
+    {
+      const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+      if (identityClause) prompt = `${prompt} ${identityClause}`;
+    }
 
     return runProcessingNode(
       node.id,
@@ -2781,6 +2814,10 @@ export function executeNode(
         const joined = cinematographyHints.join(", ");
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
+    }
+    {
+      const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+      if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
     }
 
     return runProcessingNode(

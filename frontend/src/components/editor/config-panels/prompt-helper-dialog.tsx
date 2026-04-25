@@ -49,9 +49,47 @@ interface PromptHelperDialogProps {
 
 type Phase = "input" | "review" | "result"
 
+type OutputFormat = "natural" | "json"
+
 const CUSTOM_VALUE = "__custom__"
 
 const GENERAL_TEXT_VALUE = "text-prompt"
+
+// Wizard category key → JSON output key. Mirrors the prompthero-style
+// schema commonly seen in ChatGPT-Image / Nano-Banana JSON prompts
+// (subject, scene, camera, lighting, composition, mood, …).
+const CATEGORY_TO_JSON_KEY: Record<string, string> = {
+  subject: "subject",
+  "subject-action": "subject",
+  environment: "scene",
+  lighting: "lighting",
+  "camera-composition": "camera",
+  "camera-movement": "camera",
+  composition: "composition",
+  "style-medium": "style",
+  "style-look": "style",
+  "mood-tone": "mood",
+  "mood-energy": "mood",
+  "details-texture": "details",
+  "what-to-avoid": "negative_prompt",
+  "pacing-speed": "pacing",
+  "genre-style": "genre",
+  instruments: "instruments",
+  tempo: "tempo",
+  vocals: "vocals",
+  "production-style": "production",
+  "sound-type": "sound_type",
+  intensity: "intensity",
+  "texture-quality": "texture",
+  "purpose-intent": "purpose",
+  "tone-voice": "tone",
+  audience: "audience",
+  "length-format": "format",
+  task: "task",
+  tone: "tone",
+  format: "format",
+  constraints: "constraints",
+}
 
 // Keep in sync with NODE_TYPE_TO_CATEGORIES in packages/shared/src/prompt-wizard-categories.ts
 const WIZARD_TARGET_OPTIONS: ReadonlyArray<{
@@ -140,6 +178,11 @@ export function PromptHelperDialog({
   // Phase 3 state
   const [generatedPrompt, setGeneratedPrompt] = useState("")
   const [recommendedModel, setRecommendedModel] = useState<RecommendedModel | null>(null)
+  // Output format toggle — natural-language (default) vs prompthero-style JSON.
+  // JSON mode serializes the wizard's structured answers directly into a JSON
+  // dict (subject / scene / camera / lighting / composition / mood / …) rather
+  // than relying on the LLM-rendered prose.
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>("natural")
 
   // User preference (persisted in localStorage)
   const [showPreference, setShowPreference] = useState(false)
@@ -258,7 +301,8 @@ export function PromptHelperDialog({
     const modelChange = applyModel && recommendedModel
       ? { field: recommendedModel.field, value: recommendedModel.provider }
       : undefined
-    onAccept(generatedPrompt, modelChange)
+    const finalPrompt = outputFormat === "json" ? buildJsonPrompt() : generatedPrompt
+    onAccept(finalPrompt, modelChange)
     handleClose()
   }
 
@@ -275,6 +319,7 @@ export function PromptHelperDialog({
     setCustomTexts({})
     setGeneratedPrompt("")
     setRecommendedModel(null)
+    setOutputFormat("natural")
     setError("")
     setLoading(false)
     onClose()
@@ -307,6 +352,59 @@ export function PromptHelperDialog({
         ? (multiSelections[q.category]?.length ?? 0) > 0
         : !!selections[q.category] && (selections[q.category] !== CUSTOM_VALUE || !!customTexts[q.category])
     )
+
+  /**
+   * Serialize wizard answers into a prompthero-style JSON dict.
+   * Empty/unset fields are omitted entirely (no `null` keys).
+   * Reference image roles collapse into a `references` array.
+   */
+  function buildJsonPrompt(): string {
+    const out: Record<string, unknown> = {}
+    if (roughIdea.trim()) out.idea = roughIdea.trim()
+    const refs: Array<{ index: number; role: string }> = []
+
+    for (const q of questions) {
+      // Resolve the selected label (or custom text) for this question
+      let label: string | undefined
+      if (q.multi) {
+        const vals = multiSelections[q.category] ?? []
+        if (vals.length === 0) continue
+        const labels = vals.map((v) => q.options.find((o) => o.value === v)?.label ?? v)
+        label = labels.join(", ")
+      } else {
+        const val = selections[q.category]
+        if (!val) continue
+        if (val === CUSTOM_VALUE) {
+          const custom = customTexts[q.category]?.trim()
+          if (!custom) continue
+          label = custom
+        } else {
+          label = q.options.find((o) => o.value === val)?.label ?? val
+        }
+      }
+      if (!label) continue
+
+      // Reference image role → references[]
+      const refMatch = q.category.match(/^reference-role-(\d+)$/)
+      if (refMatch) {
+        refs.push({ index: parseInt(refMatch[1], 10), role: label })
+        continue
+      }
+
+      const jsonKey = CATEGORY_TO_JSON_KEY[q.category] ?? q.category.replace(/-/g, "_")
+      out[jsonKey] = label
+    }
+
+    if (refs.length > 0) {
+      refs.sort((a, b) => a.index - b.index)
+      out.references = refs.map((r) => ({ slot: r.index, role: r.role }))
+    }
+    if (provider) out.model = provider
+    if (aspectRatio) out.aspect_ratio = aspectRatio
+    if (duration) out.duration_seconds = duration
+
+    return JSON.stringify(out, null, 2)
+  }
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
@@ -518,14 +616,43 @@ export function PromptHelperDialog({
           {/* PHASE 3: Result */}
           {phase === "result" && (
             <>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Generated Prompt</label>
-                <Textarea
-                  rows={4}
-                  value={generatedPrompt}
-                  onChange={(e) => setGeneratedPrompt(e.target.value)}
-                  className="text-xs resize-none"
-                />
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {outputFormat === "json" ? "Generated Prompt (JSON)" : "Generated Prompt"}
+                  </label>
+                  <div className="inline-flex rounded-md border bg-background p-0.5 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setOutputFormat("natural")}
+                      className={`px-2 py-0.5 rounded-sm transition-colors ${outputFormat === "natural" ? "bg-[#ff0073] text-white" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      Natural
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOutputFormat("json")}
+                      className={`px-2 py-0.5 rounded-sm transition-colors ${outputFormat === "json" ? "bg-[#ff0073] text-white" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      JSON
+                    </button>
+                  </div>
+                </div>
+                {outputFormat === "natural" ? (
+                  <Textarea
+                    rows={4}
+                    value={generatedPrompt}
+                    onChange={(e) => setGeneratedPrompt(e.target.value)}
+                    className="text-xs resize-none"
+                  />
+                ) : (
+                  <Textarea
+                    rows={10}
+                    value={buildJsonPrompt()}
+                    readOnly
+                    className="text-xs resize-none font-mono"
+                  />
+                )}
               </div>
 
               {/* Model recommendation card */}
