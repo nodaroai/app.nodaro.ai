@@ -101,6 +101,10 @@ export const ANIMALS: ReadonlyArray<Animal> = [
   { id: "capybara",             label: "Capybara",             subcategory: "wild", description: "Large peaceful South American rodent with a barrel-shaped body, blunt muzzle and calm expression, often photographed soaking in a hot spring with citrus floating around it" },
   { id: "sloth",                label: "Sloth",                subcategory: "wild", description: "Slow-moving tree-dwelling mammal with shaggy fur, long curved claws and a permanent gentle smile, often hanging upside-down from a branch" },
   { id: "red-panda",            label: "Red Panda",            subcategory: "wild", description: "Small fox-faced bamboo eater with rich reddish-brown fur, white facial markings, ringed tail and tufted upright ears, distinct from the giant panda" },
+  { id: "pangolin",             label: "Pangolin",             subcategory: "wild", description: "Scaly armored anteater, distinctive overlapping plates" },
+  { id: "okapi",                label: "Okapi",                subcategory: "wild", description: "Forest giraffe with zebra-striped legs" },
+  { id: "quokka",               label: "Quokka",               subcategory: "wild", description: "Smiling Australian marsupial, internet-famous selfie animal" },
+  { id: "meerkat",              label: "Meerkat",              subcategory: "wild", description: "Standing African mongoose, sentinel posture" },
 
   // -------------------- Birds --------------------
   { id: "eagle",                label: "Eagle",                subcategory: "birds", description: "Majestic eagle with a dark brown body, white head and tail, curved yellow beak and sharp talons" },
@@ -114,6 +118,7 @@ export const ANIMALS: ReadonlyArray<Animal> = [
   { id: "crow",                 label: "Crow",                 subcategory: "birds", description: "Glossy all-black crow with a thick straight beak, intelligent dark eyes and sleek iridescent feathers" },
   { id: "hummingbird",          label: "Hummingbird",          subcategory: "birds", description: "Tiny jewel-toned hummingbird with iridescent emerald and ruby plumage and a long needle-like beak" },
   { id: "raven",                label: "Raven",                subcategory: "birds", description: "Large glossy all-black raven with a heavy wedge-shaped beak, shaggy throat hackles and an intelligent piercing gaze, often perched in a cinematic mysterious mood" },
+  { id: "emu",                  label: "Emu",                  subcategory: "birds", description: "Large flightless Australian ratite bird" },
 
   // -------------------- Sea --------------------
   { id: "dolphin",              label: "Dolphin",              subcategory: "sea", description: "Sleek grey dolphin with a playful smiling face, curved dorsal fin and powerful tail flukes" },
@@ -154,6 +159,7 @@ export const ANIMALS: ReadonlyArray<Animal> = [
   { id: "mosquito",             label: "Mosquito",             subcategory: "insects", description: "Slender mosquito with long thin legs, narrow transparent wings and a needle-like proboscis" },
   { id: "scorpion",             label: "Scorpion",             subcategory: "insects", description: "Desert scorpion with armored segments, large pincer claws and a curled stinger-tipped tail raised over its back" },
   { id: "caterpillar",          label: "Caterpillar",          subcategory: "insects", description: "Plump segmented caterpillar with soft tufts, tiny legs and a cheerful munching posture on a green leaf" },
+  { id: "tarantula",            label: "Tarantula",            subcategory: "insects", description: "Large hairy hunting spider" },
 
   // -------------------- Dinosaurs --------------------
   { id: "t-rex",                label: "Tyrannosaurus Rex",    subcategory: "dinosaurs", description: "Massive T-Rex with powerful hind legs, tiny clawed arms, a huge jaw full of dagger teeth and thick scaly hide" },

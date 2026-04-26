@@ -41,6 +41,7 @@ export const WEAPONS: ReadonlyArray<Weapon> = [
   { id: "saber",                label: "Saber",               subcategory: "swords", description: "Cavalry saber with a single-edged curved blade, brass knuckle-bow guard and a ribbed leather grip" },
   { id: "scimitar",             label: "Scimitar",            subcategory: "swords", description: "Curved scimitar with a wide single-edged blade, ornate crossguard and a rounded metal pommel" },
   { id: "claymore",             label: "Claymore",            subcategory: "swords", description: "Massive two-handed Scottish claymore with a long straight blade, forward-angled crossguard and a large leather-bound grip" },
+  { id: "zweihander",           label: "Zweihänder",          subcategory: "swords", description: "Two-handed German Renaissance greatsword with an enormous straight double-edged blade, leather-wrapped ricasso above the crossguard, parrying lugs partway up the blade and a long extended grip ending in a heavy pear-shaped pommel" },
   { id: "cutlass",              label: "Cutlass",             subcategory: "swords", description: "Pirate cutlass with a short curved single-edged blade, brass cup-shaped hand guard and a weathered wooden grip" },
   { id: "wakizashi",            label: "Wakizashi",           subcategory: "swords", description: "Short Japanese wakizashi companion blade with a gently curved edge, small tsuba and rayskin-wrapped handle" },
   { id: "falchion",             label: "Falchion",            subcategory: "swords", description: "Heavy single-edged falchion with a cleaver-like tapering blade, simple crossguard and a riveted leather grip" },
@@ -92,6 +93,8 @@ export const WEAPONS: ReadonlyArray<Weapon> = [
   { id: "boomerang",            label: "Boomerang",           subcategory: "throwing", description: "Curved wooden boomerang with an elbow bend, painted tribal patterns and a smooth aerodynamic profile" },
   { id: "javelin",              label: "Javelin",             subcategory: "throwing", description: "Lightweight throwing javelin with a slim steel tip, tapered wooden shaft and a leather grip wrap near the balance point" },
   { id: "bolas",                label: "Bolas",               subcategory: "throwing", description: "Three weighted stone or iron balls tied together by braided leather cords meeting at a central knot" },
+  { id: "slingshot",            label: "Slingshot",           subcategory: "throwing", description: "Y-shaped wooden slingshot with a forked handle whittled from a tree branch, two thick rubber elastic bands stretched between the prongs and a small leather pouch in the middle for cradling stone projectiles" },
+  { id: "blowgun",              label: "Blowgun",             subcategory: "throwing", description: "Long hollow blowpipe traditionally used by indigenous hunters, fashioned from a single piece of bamboo or carved hardwood with a small mouthpiece at one end and slender feather-fletched darts loaded for breath-launched shots" },
 
   // -------------------- Modern Firearms --------------------
   { id: "pistol",               label: "Pistol",              subcategory: "firearms-modern", description: "Modern semi-automatic pistol with a matte black polymer frame, ribbed slide, trigger guard and a flush magazine base" },
@@ -101,6 +104,8 @@ export const WEAPONS: ReadonlyArray<Weapon> = [
   { id: "smg",                  label: "Submachine Gun",      subcategory: "firearms-modern", description: "Compact submachine gun with a short barrel, side-mounted magazine, folding wire stock and an integral foregrip" },
   { id: "sniper-rifle",         label: "Sniper Rifle",        subcategory: "firearms-modern", description: "Bolt-action sniper rifle with a long barrel, high-magnification scope, bipod legs and an ergonomic polymer stock" },
   { id: "machine-gun",          label: "Machine Gun",         subcategory: "firearms-modern", description: "Heavy belt-fed machine gun with a long finned barrel, bipod, carry handle and an ammunition belt feeding from the side" },
+  { id: "service-pistol",       label: "Service Pistol",      subcategory: "firearms-modern", description: "Modern semi-automatic service sidearm in the Glock or Beretta style with a matte black polymer frame, ribbed steel slide, accessory rail under the dust cover, three-dot iron sights and a flush double-stack magazine" },
+  { id: "hunting-rifle",        label: "Hunting Rifle",       subcategory: "firearms-modern", description: "Bolt-action hunting rifle with a polished walnut wood stock, blued steel barrel, mounted variable-zoom scope on the receiver rail, leather sling and a checkered grip and forend for steady offhand shooting" },
 
   // -------------------- Historical Firearms --------------------
   { id: "musket",               label: "Musket",              subcategory: "firearms-historical", description: "Long flintlock musket with a smooth-bore iron barrel, walnut stock, brass fittings and a bayonet fixed near the muzzle" },
@@ -126,6 +131,8 @@ export const WEAPONS: ReadonlyArray<Weapon> = [
   { id: "phaser",               label: "Phaser",              subcategory: "sci-fi", description: "Sleek sci-fi phaser with a minimalist curved grip, glowing emitter tip and a smooth panel controlling intensity" },
   { id: "rail-gun",             label: "Rail Gun",            subcategory: "sci-fi", description: "Heavy electromagnetic rail gun with parallel metal rails, massive capacitors along the body and a glowing projectile chamber" },
   { id: "emp-grenade",          label: "EMP Grenade",         subcategory: "sci-fi", description: "Spherical electromagnetic pulse grenade with exposed coils, glowing blue indicator lights and a holographic arming dial" },
+  { id: "plasma-sword",         label: "Plasma Sword / Lightsaber", subcategory: "sci-fi", description: "Sci-fi energy blade with a metallic ridged hilt projecting a tall column of saturated plasma energy, surrounded by a bright halo of glowing light, casting colored reflections on the wielder and humming softly with contained power" },
+  { id: "gravity-gun",          label: "Gravity Gun",         subcategory: "sci-fi", description: "Sci-fi physics-manipulating ranged weapon with a chunky metallic body, three articulated prongs at the muzzle that crackle with blue gravitational energy, exposed power conduits along the barrel and a heavy two-handed grip with a glowing trigger assembly" },
 
   // -------------------- Fantasy / Magical --------------------
   { id: "enchanted-sword",      label: "Enchanted Sword",     subcategory: "fantasy", description: "Enchanted sword with a glowing rune-etched blade, gold-inlaid crossguard and a gemstone embedded in the pommel" },

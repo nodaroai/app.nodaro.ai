@@ -244,6 +244,46 @@ export const PHOTOGRAPHERS: ReadonlyArray<Photographer> = [
     promptHint:
       "in the style of Irving Penn, austere mid-century studio portraiture against a commanding gray seamless backdrop with controlled grace, sculptural fashion staging and refined still-life precision",
   },
+  {
+    id: "mcginley",
+    label: "Ryan McGinley",
+    category: "editorial",
+    description: "Naturalistic youth + nudity in landscape, sun-flared candid",
+    promptHint:
+      "shot in the language of Ryan McGinley, naturalistic youth and nudity roaming through open landscape, sun-flared candid 35mm with euphoric movement and unposed freedom",
+  },
+  {
+    id: "mitchell",
+    label: "Tyler Mitchell",
+    category: "editorial",
+    description: "Contemporary Black portraiture, soft natural light, fashion-meets-documentary",
+    promptHint:
+      "shot in the language of Tyler Mitchell, contemporary Black portraiture in soft natural light with a fashion-meets-documentary tenderness, pastel wardrobe and sun-warmed skin",
+  },
+  {
+    id: "collins",
+    label: "Petra Collins",
+    category: "editorial",
+    description: "Pink-saturated dreamy female-gaze fashion, hazy 35mm",
+    promptHint:
+      "shot in the language of Petra Collins, dreamy pink-saturated female-gaze fashion, hazy 35mm grain, soft window light",
+  },
+  {
+    id: "weston",
+    label: "Edward Weston",
+    category: "editorial",
+    description: "Modernist B&W still life, sculptural nudes, sharp formalism",
+    promptHint:
+      "in the style of Edward Weston, modernist black-and-white still life and sculptural nudes with sharp formalism, large-format clarity and sensuous tonal gradation",
+  },
+  {
+    id: "beaton",
+    label: "Cecil Beaton",
+    category: "editorial",
+    description: "Classical Hollywood-era portraiture, theatrical staging, opulent backdrops",
+    promptHint:
+      "in the style of Cecil Beaton, classical Hollywood-era portraiture with theatrical staging, opulent painted backdrops and elegant silver-screen glamour",
+  },
 
   // -------------------- Documentary / Street --------------------
   {

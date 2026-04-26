@@ -58,6 +58,12 @@ export const RENDER_QUALITIES: ReadonlyArray<RenderQuality> = [
   { id: "raw-photo",       label: "Raw Photo",       description: "Unprocessed photographic feel",      promptHint: "raw photograph aesthetic, unprocessed natural color science, authentic photographic detail and untouched documentary realism" },
   { id: "masterpiece",     label: "Masterpiece",     description: "Hand-of-an-expert quality stamp",    promptHint: "masterpiece-quality rendering, hand-of-an-expert level execution with refined composition, immaculate detail and curated finish" },
   { id: "award-winning",   label: "Award Winning",   description: "Award-circuit caliber",              promptHint: "award-winning quality, award-circuit caliber image with editorial-grade composition, magazine-cover finish and signature visual authority" },
+
+  // ---------------------------- Lighting / Image-quality passes ----------------------------
+  { id: "volumetric-lighting", label: "Volumetric Lighting", description: "God-ray volumetric light shafts cutting through atmosphere", promptHint: "volumetric lighting with god-ray light shafts cutting through atmospheric haze, beams of illuminated dust and particulate scattering through the scene" },
+  { id: "photon-mapping",      label: "Photon Mapping",      description: "Caustic-aware photon-mapped global illumination renderer", promptHint: "photon-mapped global illumination with caustic-aware light transport, accurate refractive light patterns through glass and water and physically correct indirect bounces" },
+  { id: "ai-upscaled",         label: "AI Upscaled",         description: "Neural-network upscaled detail enhancement, sharp super-resolution", promptHint: "neural-network AI-upscaled detail enhancement, sharp super-resolution clarity with reconstructed micro-detail and surgically clean edge definition" },
+  { id: "denoised",            label: "Denoised",            description: "Clean noise-removed pristine rendering, no grain or speckle", promptHint: "clean denoised rendering with noise removed entirely, pristine smooth surfaces and zero grain or speckle across shadows and midtones" },
 ] as const
 
 const renderQualityById = new Map<string, RenderQuality>(
