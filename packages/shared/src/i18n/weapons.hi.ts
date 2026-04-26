@@ -102,6 +102,15 @@ const map: LocaleCatalogMap = {
   "wizard-wand": { label: "जादूगर की छड़ी", description: "पतली लकड़ी की छड़ी, गाँठदार स्वर्ल्स, चमड़े का grip और नुकीली नोक से रिसती जादू की नन्ही चिंगारियाँ" },
   "war-horn": { label: "रणसिंगा", description: "विशाल घुमावदार रणसिंगा, चमड़े और चाँदी की पट्टियों से बंधा, एक सिरे पर mouthpiece और दूसरे पर flared गूँजता मुख" },
   "sorcerer-orb": { label: "जादूगर का गोला", description: "Crystal का जादूगर का गोला, मुड़े हुए चाँदी के पंजे-stand में थामा हुआ, काँच के गोले के अंदर निलंबित घूमती जादुई धुंध" },
+
+  // -------------------- Round 2 --------------------
+  "zweihander": { label: "Zweihänder", description: "दो-हाथी German Renaissance greatsword" },
+  "slingshot": { label: "Slingshot", description: "Y-आकार का लकड़ी का frame, elastic के साथ" },
+  "blowgun": { label: "Blowgun", description: "साँस से darts दागने वाला लंबा pipe" },
+  "service-pistol": { label: "Service Pistol", description: "आधुनिक semi-auto sidearm" },
+  "hunting-rifle": { label: "Hunting Rifle", description: "Bolt-action wood-stock rifle scope के साथ" },
+  "plasma-sword": { label: "Plasma Sword / Lightsaber", description: "Sci-fi energy ब्लेड चमकीली glow छोड़ती हुई" },
+  "gravity-gun": { label: "Gravity Gun", description: "Sci-fi physics-manipulating ranged weapon" },
 }
 
 export default map

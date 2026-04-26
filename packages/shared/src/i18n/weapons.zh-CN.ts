@@ -102,6 +102,13 @@ const map: LocaleCatalogMap = {
   "wizard-wand":    { label: "魔杖",         description: "纤细的木质魔杖,带螺旋雕刻、皮革握把与从尖端漏出的小小魔法火花" },
   "war-horn":       { label: "战斗号角",     description: "巨大的弯曲战斗号角,皮革与银带捆绑,一端为吹口,另一端为喇叭形吹响开口" },
   "sorcerer-orb":   { label: "巫师水晶球",   description: "扭曲银色爪式底座托起的水晶巫师水晶球,玻璃球内悬浮着旋转的奥术雾气" },
+  "zweihander":     { label: "Zweihänder 双手剑", description: "德意志文艺复兴时期的双手大剑" },
+  "slingshot":      { label: "弹弓",         description: "Y 形木叉配橡皮筋" },
+  "blowgun":        { label: "吹箭筒",       description: "用气息发射飞镖的长管" },
+  "service-pistol": { label: "制式手枪",     description: "现代半自动佩枪" },
+  "hunting-rifle":  { label: "猎枪",         description: "栓动式木托狩猎步枪,带瞄准镜" },
+  "plasma-sword":   { label: "等离子剑 / 光剑", description: "科幻能量光刃,散发明亮光晕" },
+  "gravity-gun":    { label: "重力枪",       description: "操控物理的科幻远程武器" },
 }
 
 export default map

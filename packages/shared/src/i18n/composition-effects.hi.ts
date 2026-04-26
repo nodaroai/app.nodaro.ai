@@ -15,6 +15,13 @@ const map: LocaleCatalogMap = {
   "silhouette-outline": { label: "Silhouette की रेखा", description: "Flat BG पर साफ़ काला silhouette" },
   "exploding-particles": { label: "विस्फोटक कण", description: "रेखा कणों में बिखर रही है" },
   "3x3-grid-collage": { label: "3x3 Grid Collage", description: "Contact-sheet 9-pose montage" },
+
+  // -------------------- Round 2 --------------------
+  "matte-painting": { label: "Matte Painting", description: "Live action के साथ blended composite matte-painted background" },
+  "double-exposure": { label: "Double Exposure", description: "दो layered photographic exposures fused" },
+  "multiple-exposure": { label: "Multiple Exposure", description: "तीन या उससे ज़्यादा exposures stacked" },
+  "in-camera-effects": { label: "In-Camera Effects", description: "Practical in-camera optical effects, no post" },
+  "prism-flares": { label: "Prism Flares", description: "Crystal prism refracted light flares spectral bands में बँटते हुए" },
 }
 
 export default map

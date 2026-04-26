@@ -31,6 +31,13 @@ const map: LocaleCatalogMap = {
   "starfield": { label: "星空", description: "星の見える夜空、宇宙的な背景" },
   "dandelion-seeds": { label: "タンポポの綿毛", description: "漂うタンポポの綿毛、夏のそよ風" },
   "pollen-drift": { label: "花粉の漂い", description: "ゴールデンアワーの光の中を漂う細かな黄金色の花粉" },
+
+  // Additional atmospheres
+  "snowflakes-heavy": { label: "豪雪", description: "空気を埋め尽くす厚く重い雪片" },
+  "snowflakes-light": { label: "軽く舞う雪", description: "まばらに漂う雪片" },
+  "raindrops-on-skin": { label: "肌に当たる雨粒", description: "肌の上に玉のように広がる目に見える水滴" },
+  "bioluminescent-cloud": { label: "生物発光の粒子雲", description: "漂う青緑色の輝く粒子" },
+  "motion-streaks": { label: "モーションストリーク", description: "スピードラインのモーションブラー筋" },
 }
 
 export default map

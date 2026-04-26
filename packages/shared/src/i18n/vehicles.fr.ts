@@ -114,6 +114,12 @@ const map: LocaleCatalogMap = {
   "space-shuttle": { label: "Navette spatiale", description: "Orbiteur de navette spatiale avec ailes delta blanches, ventre noir bouclier thermique et énormes tuyères de fusée à l'arrière" },
   "rocket": { label: "Fusée", description: "Haute fusée cylindrique avec cône de nez pointu, ailettes de queue, étages de propulseur et flammes rugissant des moteurs au lancement" },
   "hoverboard": { description: "Hoverboard futuriste flottant à quelques centimètres du sol avec jets sous le ventre lumineux et corps mono-planche élégant" },
+  "ambulance": { label: "Ambulance", description: "Véhicule médical d'urgence" },
+  "police-car": { label: "Voiture de police", description: "Voiture de patrouille noir et blanc avec rampe lumineuse" },
+  "hovercraft": { label: "Aéroglisseur", description: "Véhicule à coussin d'air sur eau / terre" },
+  "paraglider": { label: "Parapente", description: "Planeur à voile souple décollant à pied" },
+  "microlight": { label: "ULM", description: "Avion léger récréatif monoplace" },
+  "airship": { label: "Dirigeable", description: "Grand véhicule rigide plus léger que l'air" },
 }
 
 export default map

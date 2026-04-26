@@ -50,6 +50,11 @@ const map: LocaleCatalogMap = {
   "lazy-shy": { label: "كسول خجول", description: "نعسان، ناعم، نصف خجول" },
   "awe": { label: "رهبة", description: "دهشة، خشوع" },
   "shocked": { label: "مصدوم", description: "مفاجأ، فمه مفتوح" },
+
+  "flirty": { label: "مغازل", description: "مغازلة مرحة، ابتسامة طويلة، تواصل عيني مستمر" },
+  "suspicious": { label: "مرتاب", description: "ارتياب حذر، عيون ضيقة، نظرة جانبية" },
+  "resigned": { label: "مستسلم", description: "قبول هادئ لوضع غير سار" },
+  "conflicted": { label: "متناقض", description: "صراع داخلي مرئي، حاجبان مقطبان" },
 }
 
 export default map

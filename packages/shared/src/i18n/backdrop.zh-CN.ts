@@ -48,6 +48,10 @@ const map: LocaleCatalogMap = {
   // -------------------- Reflective --------------------
   "mirror-floor":  { label: "镜面地板",   description: "反射式镜面地面" },
   "polished-floor":{ label: "抛光地板",   description: "高光抛光地板的微反射" },
+  "graffiti-wall":   { label: "涂鸦墙",     description: "色彩鲜明的城市涂鸦墙" },
+  "exposed-stone":   { label: "裸露石墙",   description: "原生裸露石材或方石砌成的墙" },
+  "window-with-light":{ label: "透光窗",    description: "大窗户作为背景,光线倾泻而入" },
+  "rooftop-skyline": { label: "屋顶天际线", description: "户外屋顶,背景为城市天际线" },
 }
 
 export default map

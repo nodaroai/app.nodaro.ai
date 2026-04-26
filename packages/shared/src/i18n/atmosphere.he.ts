@@ -31,6 +31,11 @@ const map: LocaleCatalogMap = {
   "starfield": { label: "שדה כוכבים", description: "שמי לילה גלויים עם כוכבים, רקע קוסמי" },
   "dandelion-seeds": { label: "זרעי שן הארי", description: "פלומה של שן הארי נסחפת, רוח קיץ" },
   "pollen-drift": { label: "אבקנים נסחפים", description: "אבקנים זהובים-צהובים דקים באור Golden Hour" },
+  "snowflakes-heavy": { label: "שלג כבד", description: "פתיתי שלג כבדים ועבים ממלאים את האוויר" },
+  "snowflakes-light": { label: "פתיתי שלג קלים", description: "פתיתי שלג בודדים נסחפים" },
+  "raindrops-on-skin": { label: "טיפות גשם על העור", description: "טיפות מים גלויות מתאספות על העור" },
+  "bioluminescent-cloud": { label: "ענן חלקיקים ביו-לומינסנטיים", description: "חלקיקים זוהרים בכחול-ירוק נסחפים" },
+  "motion-streaks": { label: "פסי תנועה", description: "פסי טשטוש תנועה של קווי מהירות" },
 }
 
 export default map

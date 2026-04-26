@@ -269,6 +269,49 @@ const map: LocaleCatalogMap = {
   "state-unbuttoned": { label: "ボタンを外した", description: "開いた／ボタンを外した" },
   "state-rolled-sleeves": { label: "袖まくり", description: "前腕まで袖をまくり上げる" },
   "state-layered": { label: "レイヤード", description: "複数の層を重ねた" },
+
+  // Outfit (additional)
+  "outfit-goth": { label: "ゴス", description: "フルダークゴス：黒のレース、レザー、ダークメイク、チェーン" },
+  "outfit-emo": { label: "エモ", description: "2000年代初頭のエモ：スキニージーンズ、バンドTシャツ、染めた髪、アイライナー" },
+  "outfit-streetwear": { label: "ストリートウェア", description: "モダンなストリートウェア：フーディー、バギーパンツ、スニーカー、バケットハット" },
+  "outfit-cyberpunk": { label: "サイバーパンク", description: "ネオンに照らされたサイバーパンク：テックウェア、LEDアクセント、メッシュレイヤー" },
+  "outfit-cottagecore": { label: "コテージコア", description: "牧歌的なコテージの美意識：プレーリードレス、エプロン、バスケット" },
+  "outfit-dark-academia": { label: "ダークアカデミア", description: "オックスフォード・ツイードの学者：ブレザー、ベスト、オックスフォードシューズ" },
+  "outfit-anime-cosplay": { label: "アニメコスプレ", description: "認識可能なアニメキャラクターをモデルにした衣装" },
+  "outfit-nurse": { label: "看護師", description: "医療用スクラブ、聴診器、ランヤードIDカード" },
+  "outfit-pirate": { label: "海賊", description: "海賊衣装：トリコーンハット、サッシュ、フリル付きシャツ、ブーツ" },
+  "outfit-fairy": { label: "妖精", description: "ファンタジーフェアリー：薄い翼、花冠、エーテルなドレス" },
+  "outfit-mermaid": { label: "人魚", description: "ファンタジーマーメイド：鱗のあるテール／スカート、シェルトップ" },
+
+  // Headwear (additional)
+  "headwear-bucket-hat": { label: "バケットハット", description: "柔らかいつばのカジュアルなバケットハット" },
+  "headwear-beret": { label: "ベレー帽", description: "柔らかい丸型のフレンチベレー" },
+  "headwear-turban": { label: "ターバン", description: "頭に巻くターバン、文化／ファッション" },
+  "headwear-fascinator": { label: "ファシネーター", description: "ロイヤルウェディングスタイルの小さな装飾的ヘッドピース" },
+  "headwear-bowler": { label: "ボーラーハット", description: "丸いクラウンのダービー／ボーラーハット" },
+  "headwear-cowboy-hat": { label: "カウボーイハット", description: "つばの広い西部風カウボーイハット" },
+
+  // Footwear (additional)
+  "footwear-crocs": { label: "クロックス", description: "カラフルな樹脂製クロッグ、カジュアル" },
+  "footwear-birkenstocks": { label: "バーケンシュトック", description: "コルクフットベッドのサンダル" },
+  "footwear-doc-martens": { label: "ドクターマーチン", description: "ごつめのレザーコンバットブーツ" },
+  "footwear-converse": { label: "コンバース", description: "キャンバスのハイカットスニーカー、クラシックなチャックテイラー" },
+  "footwear-vans": { label: "バンズ", description: "スリッポンまたはローカットのスケータースニーカー" },
+  "footwear-espadrilles": { label: "エスパドリーユ", description: "ジュートソールに織られたキャンバスのサマーシューズ" },
+
+  // Bottom (additional)
+  "bottom-overalls": { label: "オーバーオール", description: "デニムのオーバーオール／ダンガリー" },
+  "bottom-culottes": { label: "キュロット", description: "ふくらはぎ丈のワイドレッグ・クロップドトラウザー" },
+  "bottom-palazzo-pants": { label: "パラッツォパンツ", description: "流れるようなワイドレッグパンツ" },
+  "bottom-harem-pants": { label: "ハーレムパンツ", description: "股下が下がったゆったりしたパンツ" },
+  "bottom-bike-shorts": { label: "バイクショーツ", description: "フィットしたライクラのミッドサイ・ショーツ" },
+
+  // Top (additional)
+  "top-bodysuit": { label: "ボディスーツ", description: "フィットしたワンピースの胴体衣服" },
+  "top-leotard": { label: "レオタード", description: "袖付きのダンス風フィットトップ" },
+  "top-mesh-top": { label: "メッシュトップ", description: "シアーなメッシュ生地のトップ" },
+  "top-sheer-top": { label: "シアートップ", description: "半透明な生地のトップ" },
+  "top-bandeau": { label: "バンドゥ", description: "ストラップレスのチューブトップ" },
 }
 
 export default map

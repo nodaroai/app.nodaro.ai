@@ -42,6 +42,10 @@ const map: LocaleCatalogMap = {
   "paper-roll-seamless": { label: "גליל נייר ללא תפר", description: "גליל נייר פסטל נייטרלי כללי" },
   "tile-wall": { label: "קיר אריחים", description: "קיר אריחים מרובעים של חדר אמבטיה / מטבח" },
   "marble-wall": { label: "קיר שיש", description: "קיר שיש יוקרתי עם ורידים" },
+  "graffiti-wall": { label: "קיר גרפיטי", description: "קיר עירוני תוסס מכוסה בגרפיטי" },
+  "exposed-stone": { label: "קיר אבן חשוף", description: "קיר אבן חשוף גולמי או בנייה מסותתת" },
+  "window-with-light": { label: "חלון עם אור", description: "רקע חלון גדול עם אור זורם פנימה" },
+  "rooftop-skyline": { label: "קו רקיע מהגג", description: "גג חיצוני עם קו רקיע של עיר" },
 }
 
 export default map

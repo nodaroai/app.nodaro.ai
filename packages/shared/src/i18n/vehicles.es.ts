@@ -125,6 +125,14 @@ const map: LocaleCatalogMap = {
   "space-shuttle": { label: "Transbordador Espacial", description: "Orbitador del transbordador espacial con alas delta blancas, escudo térmico negro debajo y enormes toberas de cohete en la parte trasera" },
   "rocket": { label: "Cohete", description: "Cohete cilíndrico alto con cono de morro puntiagudo, aletas de cola, etapas de propulsores y llamas rugiendo de los motores en el lanzamiento" },
   "hoverboard": { label: "Hoverboard", description: "Hoverboard futurista flotando a centímetros del suelo con propulsores debajo brillantes y un cuerpo elegante de tabla única" },
+
+  // -------------------- Round 2 --------------------
+  "ambulance": { label: "Ambulancia", description: "Vehículo médico de emergencia" },
+  "police-car": { label: "Patrulla", description: "Patrulla blanco y negro con barra de luces" },
+  "hovercraft": { label: "Aerodeslizador", description: "Vehículo de colchón de aire sobre agua / tierra" },
+  "paraglider": { label: "Parapente", description: "Planeador de ala blanda lanzado a pie" },
+  "microlight": { label: "Avión Ultraligero", description: "Aeronave recreativa monoplaza ligera" },
+  "airship": { label: "Dirigible", description: "Gran vehículo rígido más ligero que el aire" },
 }
 
 export default map

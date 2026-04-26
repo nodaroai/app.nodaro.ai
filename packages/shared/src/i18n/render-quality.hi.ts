@@ -24,6 +24,12 @@ const map: LocaleCatalogMap = {
   "raw-photo": { label: "Raw Photo", description: "Unprocessed photographic एहसास" },
   "masterpiece": { label: "Masterpiece", description: "विशेषज्ञ-स्तर का quality stamp" },
   "award-winning": { label: "Award Winning", description: "Award-circuit caliber" },
+
+  // -------------------- Round 2 --------------------
+  "volumetric-lighting": { label: "Volumetric Lighting", description: "God-ray volumetric light shafts" },
+  "photon-mapping": { label: "Photon Mapping", description: "Caustic-aware photon-mapped global illumination" },
+  "ai-upscaled": { label: "AI Upscaled", description: "Neural-network upscaled detail enhancement" },
+  "denoised": { label: "Denoised", description: "साफ़ noise-removed pristine rendering" },
 }
 
 export default map

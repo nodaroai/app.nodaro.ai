@@ -263,6 +263,49 @@ const map: LocaleCatalogMap = {
   "state-unbuttoned": { label: "단추 풀린", description: "단추가 풀려 열린 상태입니다" },
   "state-rolled-sleeves": { label: "걷어 올린 소매", description: "소매를 팔뚝까지 걷어 올린 모습입니다" },
   "state-layered": { label: "레이어드", description: "여러 겹으로 쌓아 입은 모습입니다" },
+
+  // Outfit (additional)
+  "outfit-goth": { label: "고스", description: "풀 다크 고스: 검정 레이스, 가죽, 다크 메이크업, 체인입니다" },
+  "outfit-emo": { label: "이모", description: "2000년대 초반 이모: 스키니 진, 밴드 티, 염색 머리, 아이라이너입니다" },
+  "outfit-streetwear": { label: "스트리트웨어", description: "모던 스트리트웨어: 후디, 배기 팬츠, 스니커즈, 버킷햇입니다" },
+  "outfit-cyberpunk": { label: "사이버펑크", description: "네온 라이트의 사이버펑크: 테크웨어, LED 액센트, 메쉬 레이어입니다" },
+  "outfit-cottagecore": { label: "코티지코어", description: "전원풍 코티지 미학: 프레리 드레스, 앞치마, 바구니입니다" },
+  "outfit-dark-academia": { label: "다크 아카데미아", description: "옥스퍼드 트위드 학자풍: 블레이저, 베스트, 옥스퍼드 슈즈입니다" },
+  "outfit-anime-cosplay": { label: "애니메이션 코스프레", description: "유명 애니메이션 캐릭터를 본뜬 코스튬입니다" },
+  "outfit-nurse": { label: "간호사", description: "메디컬 스크럽, 청진기, 사원증 랜야드입니다" },
+  "outfit-pirate": { label: "해적", description: "해적 코스튬: 트라이콘 햇, 새시, 프릴 셔츠, 부츠입니다" },
+  "outfit-fairy": { label: "요정", description: "판타지 요정: 얇은 거즈 날개, 꽃 화관, 신비로운 드레스입니다" },
+  "outfit-mermaid": { label: "인어", description: "판타지 인어: 비늘 꼬리/스커트, 조개 톱입니다" },
+
+  // Headwear (additional)
+  "headwear-bucket-hat": { label: "버킷햇", description: "부드러운 챙의 캐주얼 버킷햇입니다" },
+  "headwear-beret": { label: "베레모", description: "부드러운 라운드형 프렌치 베레모입니다" },
+  "headwear-turban": { label: "터번", description: "머리에 두른 터번, 문화적 / 패션 아이템입니다" },
+  "headwear-fascinator": { label: "패시네이터", description: "로열 웨딩 스타일의 작은 장식용 헤드피스입니다" },
+  "headwear-bowler": { label: "보울러 햇", description: "둥근 크라운의 더비/보울러 햇입니다" },
+  "headwear-cowboy-hat": { label: "카우보이 햇", description: "넓은 챙의 웨스턴 카우보이 햇입니다" },
+
+  // Footwear (additional)
+  "footwear-crocs": { label: "크록스", description: "컬러풀한 레진 클로그, 캐주얼합니다" },
+  "footwear-birkenstocks": { label: "버켄스탁", description: "코르크 풋베드 샌들입니다" },
+  "footwear-doc-martens": { label: "닥터마틴", description: "묵직한 가죽 컴뱃 부츠입니다" },
+  "footwear-converse": { label: "컨버스", description: "캔버스 하이탑 스니커즈, 클래식 척 테일러입니다" },
+  "footwear-vans": { label: "반스", description: "슬립온 또는 로우탑 스케이터 스니커즈입니다" },
+  "footwear-espadrilles": { label: "에스파드리유", description: "주트 솔의 캔버스 서머 슈즈입니다" },
+
+  // Bottom (additional)
+  "bottom-overalls": { label: "멜빵바지", description: "데님 멜빵바지 / 던가리입니다" },
+  "bottom-culottes": { label: "큐롯", description: "와이드 레그의 크롭 트라우저, 미디 종아리 길이입니다" },
+  "bottom-palazzo-pants": { label: "팔라초 팬츠", description: "흐르는 듯한 와이드 레그 팬츠입니다" },
+  "bottom-harem-pants": { label: "하렘 팬츠", description: "드롭 크로치의 헐렁한 팬츠입니다" },
+  "bottom-bike-shorts": { label: "바이크 쇼츠", description: "허벅지 중간 길이의 피티드 라이크라 쇼츠입니다" },
+
+  // Top (additional)
+  "top-bodysuit": { label: "보디수트", description: "몸에 꼭 맞는 원피스 토르소 의류입니다" },
+  "top-leotard": { label: "레오타드", description: "댄스 스타일의 소매 있는 피티드 톱입니다" },
+  "top-mesh-top": { label: "메쉬 톱", description: "비치는 메쉬 원단의 톱입니다" },
+  "top-sheer-top": { label: "시어 톱", description: "투명한 원단의 톱입니다" },
+  "top-bandeau": { label: "밴도", description: "스트랩리스 튜브 톱입니다" },
 }
 
 export default map

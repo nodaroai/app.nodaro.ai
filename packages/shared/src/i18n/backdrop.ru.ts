@@ -48,6 +48,10 @@ const map: LocaleCatalogMap = {
   "paper-roll-seamless": { label: "Бесшовный бумажный фон", description: "Универсальный пастельный нейтральный бумажный рулон" },
   "tile-wall": { label: "Плиточная стена", description: "Стена из квадратной плитки для ванной или кухни" },
   "marble-wall": { label: "Мраморная стена", description: "Роскошная мраморная стена с прожилками" },
+  "graffiti-wall": { label: "Стена с граффити", description: "Яркая городская стена, исписанная граффити" },
+  "exposed-stone": { label: "Открытая каменная стена", description: "Сырая открытая каменная или тёсаная кладка" },
+  "window-with-light": { label: "Окно со светом", description: "Большое окно как фон, через которое льётся свет" },
+  "rooftop-skyline": { label: "Крыша с панорамой города", description: "Открытая крыша с панорамой города" },
 }
 
 export default map

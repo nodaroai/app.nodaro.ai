@@ -32,6 +32,13 @@ const map: LocaleCatalogMap = {
   "starfield": { label: "Campo de Estrellas", description: "Cielo nocturno visible con estrellas, fondo cósmico" },
   "dandelion-seeds": { label: "Semillas de Diente de León", description: "Pelusa de diente de león a la deriva, brisa estival" },
   "pollen-drift": { label: "Polen a la Deriva", description: "Polen fino dorado en luz de hora dorada" },
+
+  // -------------------- Round 2 --------------------
+  "snowflakes-heavy": { label: "Nevada Intensa", description: "Copos de nieve gruesos y densos llenando el aire" },
+  "snowflakes-light": { label: "Nevada Ligera a la Deriva", description: "Copos de nieve dispersos a la deriva" },
+  "raindrops-on-skin": { label: "Gotas de Lluvia en la Piel", description: "Gotas de agua visibles formándose sobre la piel" },
+  "bioluminescent-cloud": { label: "Nube de Partículas Bioluminiscentes", description: "Partículas brillantes azul-verdes a la deriva" },
+  "motion-streaks": { label: "Estelas de Movimiento", description: "Estelas de motion-blur tipo línea de velocidad" },
 }
 
 export default map

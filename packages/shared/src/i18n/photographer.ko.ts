@@ -72,6 +72,13 @@ const map: LocaleCatalogMap = {
   "tillmans": { description: "동시대의 캔디드, 퀴어한 친밀함입니다" },
   "teller": { description: "캐주얼한 플래시 패션, 안티 글래머입니다" },
   "penn": { description: "미드센추리 스튜디오 인물 사진, 패션과 스틸라이프입니다" },
+
+  // Additional photographers
+  "mcginley": { description: "자연스러운 청춘과 누드를 풍경 속에 담은 햇살 가득한 캔디드 사진입니다" },
+  "mitchell": { description: "동시대의 흑인 인물 사진, 부드러운 자연광입니다" },
+  "collins": { description: "핑크 빛으로 가득 찬 몽환적인 여성의 시선 패션, 흐릿한 35mm입니다" },
+  "weston": { description: "모더니즘 흑백 정물, 조각적인 누드입니다" },
+  "beaton": { description: "클래식한 할리우드 시대 인물 사진, 연극적인 연출입니다" },
 }
 
 export default map

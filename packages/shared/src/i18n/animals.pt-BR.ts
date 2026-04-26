@@ -146,6 +146,12 @@ const map: LocaleCatalogMap = {
   "red-panda": { label: "Panda-vermelho", description: "Pequeno comedor de bambu castanho-avermelhado, com rosto de raposa" },
   "raven": { label: "Corvo", description: "Corvo preto brilhante com olhar inteligente" },
   "axolotl": { label: "Axolote", description: "Salamandra aquática rosa com guelras emplumadas" },
+  "pangolin": { label: "Pangolim", description: "Tamanduá blindado de escamas" },
+  "okapi": { label: "Okapi", description: "Girafa-da-floresta com pernas listradas como as de zebra" },
+  "quokka": { label: "Quokka", description: "Marsupial australiano sorridente" },
+  "meerkat": { label: "Suricato", description: "Mangusto africano em postura ereta" },
+  "emu": { label: "Emu", description: "Grande ave ratita australiana, não voadora" },
+  "tarantula": { label: "Tarântula", description: "Aranha caçadora grande e peluda" },
 }
 
 export default map

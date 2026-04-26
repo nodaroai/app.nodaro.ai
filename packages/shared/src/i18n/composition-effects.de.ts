@@ -15,6 +15,11 @@ const map: LocaleCatalogMap = {
   "silhouette-outline": { label: "Silhouetten-Umriss", description: "Saubere schwarze Silhouette auf flachem Hintergrund" },
   "exploding-particles": { label: "Explodierende Partikel", description: "Umriss zerstreut sich in Partikel" },
   "3x3-grid-collage": { label: "3x3-Raster-Collage", description: "Kontaktbogen mit 9 Posen-Montage" },
+  "matte-painting": { label: "Matte Painting", description: "Kompositiertes Matte-Painting-Hintergrund mit Live-Action verbunden" },
+  "double-exposure": { label: "Doppelbelichtung", description: "Zwei geschichtete fotografische Belichtungen verschmolzen" },
+  "multiple-exposure": { label: "Mehrfachbelichtung", description: "Drei oder mehr übereinander gestapelte Belichtungen" },
+  "in-camera-effects": { label: "In-Camera-Effekte", description: "Praktische optische Effekte direkt in der Kamera, ohne Postproduktion" },
+  "prism-flares": { label: "Prismenreflexe", description: "Kristallprisma-gebrochene Lichtreflexe, die in spektrale Bänder aufspalten" },
 }
 
 export default map

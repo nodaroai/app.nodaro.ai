@@ -144,6 +144,12 @@ const map: LocaleCatalogMap = {
   "griffin": { label: "狮鹫",   description: "混血狮鹫,头、翅与前爪如鹰,后身肌肉发达如狮" },
   "pegasus": { label: "飞马",   description: "纯白的有翼之马,羽翼飘扬、鬃毛流动,带有超凡的气场" },
   "kraken":  { label: "克拉肯", description: "巨大的海怪克拉肯,头颅庞大、双眼发光,带吸盘的巨大触手从深海中翻涌而出" },
+  "pangolin":  { label: "穿山甲",   description: "披甲鳞片的食蚁兽" },
+  "okapi":     { label: "霍加狓",   description: "腿上有斑马条纹的森林长颈鹿亲属" },
+  "quokka":    { label: "短尾矮袋鼠", description: "总是带着微笑的澳洲有袋类动物" },
+  "meerkat":   { label: "狐獴",     description: "直立站立的非洲獴类" },
+  "emu":       { label: "鸸鹋",     description: "澳大利亚不会飞的大型走禽" },
+  "tarantula": { label: "捕鸟蛛",   description: "毛茸茸的大型狩猎蜘蛛" },
 }
 
 export default map

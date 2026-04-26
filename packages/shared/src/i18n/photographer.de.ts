@@ -64,6 +64,11 @@ const map: LocaleCatalogMap = {
   "tillmans": { description: "Zeitgenössische ungestellte Aufnahmen, queere Intimität" },
   "teller": { description: "Lässige Blitzlicht-Mode, Anti-Glamour" },
   "penn": { description: "Mid-Century-Studio-Porträtfotografie, Mode + Stillleben" },
+  "mcginley": { description: "Naturalistische Jugend + Nacktheit in Landschaft, sonnendurchflutete Schnappschüsse" },
+  "mitchell": { description: "Zeitgenössisches Schwarzes Porträt, weiches natürliches Licht" },
+  "collins": { description: "Pink-gesättigte verträumte Female-Gaze-Mode, dunstiges 35mm" },
+  "weston": { description: "Modernistisches S/W-Stillleben, skulpturale Akte" },
+  "beaton": { description: "Klassische Porträtfotografie der Hollywood-Ära, theatralisches Arrangement" },
 }
 
 export default map

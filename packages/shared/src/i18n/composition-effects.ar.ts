@@ -15,6 +15,12 @@ const map: LocaleCatalogMap = {
   "silhouette-outline": { label: "ظل خارجي", description: "ظل أسود نقي على خلفية مسطحة" },
   "exploding-particles": { label: "جسيمات منفجرة", description: "الخط الخارجي يتطاير إلى جسيمات" },
   "3x3-grid-collage": { label: "كولاج شبكة 3×3", description: "مونتاج تسع وضعيات على ورقة اتصال" },
+
+  "matte-painting": { label: "رسم Matte", description: "خلفية مرسومة بـ Matte مدمجة مع Live Action" },
+  "double-exposure": { label: "تعريض مزدوج", description: "تعريضان فوتوغرافيان متراكبان مدمجان" },
+  "multiple-exposure": { label: "تعريض متعدد", description: "ثلاثة تعريضات أو أكثر مكدسة" },
+  "in-camera-effects": { label: "تأثيرات داخل الكاميرا", description: "تأثيرات بصرية عملية داخل الكاميرا، بدون Post" },
+  "prism-flares": { label: "وهج المنشور", description: "وهج ضوئي منكسر بمنشور بلوري ينقسم إلى نطاقات طيفية" },
 }
 
 export default map

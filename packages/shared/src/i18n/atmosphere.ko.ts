@@ -31,6 +31,13 @@ const map: LocaleCatalogMap = {
   "starfield": { label: "별밭", description: "별이 보이는 밤하늘, 우주적 배경입니다" },
   "dandelion-seeds": { label: "민들레 씨앗", description: "여름 산들바람을 타고 흩날리는 민들레 솜털입니다" },
   "pollen-drift": { label: "꽃가루 드리프트", description: "골든아워 빛 속의 곱고 황금빛 노란 꽃가루입니다" },
+
+  // Additional atmospheres
+  "snowflakes-heavy": { label: "폭설", description: "두껍고 무거운 눈송이가 공기를 가득 채웁니다" },
+  "snowflakes-light": { label: "가벼운 눈발", description: "드문드문 흩날리는 눈송이입니다" },
+  "raindrops-on-skin": { label: "피부 위의 빗방울", description: "피부에 맺힌 보이는 물방울입니다" },
+  "bioluminescent-cloud": { label: "생체발광 입자 구름", description: "푸른빛-녹색으로 빛나며 떠다니는 입자입니다" },
+  "motion-streaks": { label: "모션 스트릭", description: "스피드 라인 모션 블러 스트릭입니다" },
 }
 
 export default map

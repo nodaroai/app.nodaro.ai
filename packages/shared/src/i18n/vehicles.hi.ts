@@ -125,6 +125,14 @@ const map: LocaleCatalogMap = {
   "space-shuttle": { label: "Space Shuttle", description: "Space shuttle orbiter, सफ़ेद delta wings, काला heat-shield underbelly और पीछे विशाल rocket nozzles" },
   "rocket": { label: "Rocket", description: "ऊँचा cylindrical rocket, नुकीला nose cone, tail fins, booster stages और launch पर engines से गर्जती लपटें" },
   "hoverboard": { label: "Hoverboard", description: "भविष्यवादी hoverboard ज़मीन के ऊपर इंच भर तैरती हुई, चमकते underside jets और sleek single-plank बदन" },
+
+  // -------------------- Round 2 --------------------
+  "ambulance": { label: "Ambulance", description: "Emergency medical vehicle" },
+  "police-car": { label: "Police Car", description: "Light bar के साथ काली-सफ़ेद patrol car" },
+  "hovercraft": { label: "Hovercraft", description: "पानी / ज़मीन पर air-cushion vehicle" },
+  "paraglider": { label: "Paraglider", description: "Foot-launched soft-wing glider" },
+  "microlight": { label: "Microlight Aircraft", description: "हल्का single-pilot recreational aircraft" },
+  "airship": { label: "Airship / Dirigible", description: "बड़ा rigid lighter-than-air vehicle" },
 }
 
 export default map

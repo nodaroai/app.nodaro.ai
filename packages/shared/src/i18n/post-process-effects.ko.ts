@@ -15,6 +15,12 @@ const map: LocaleCatalogMap = {
   "color-fringe": { label: "컬러 프린지", description: "은은한 고대비 프린지입니다" },
   "soft-focus-diffusion": { label: "소프트 포커스 디퓨전", description: "흐릿하고 몽환적인 하이라이트 블룸입니다" },
   "contrast-boost": { label: "콘트라스트 부스트", description: "섀도우는 깊게, 하이라이트는 강하게 처리합니다" },
+
+  // Additional post-process effects
+  "sharpening": { label: "헤비 샤프닝", description: "공격적인 엣지 샤프닝 처리입니다" },
+  "clarity-boost": { label: "클래리티 부스트", description: "미드톤 클래리티 향상, 로컬 콘트라스트 증가입니다" },
+  "dehaze": { label: "디헤이즈", description: "대기 디헤이즈 적용, 부드러움을 제거합니다" },
+  "lift-gamma-gain": { label: "리프트-감마-게인 그레이드", description: "3-웨이 컬러 그레이딩 휠입니다" },
 }
 
 export default map

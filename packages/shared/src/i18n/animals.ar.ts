@@ -133,6 +133,13 @@ const map: LocaleCatalogMap = {
   "red-panda": { label: "باندا حمراء", description: "آكل خيزران صغير بفرو بني محمر ووجه يشبه الثعلب" },
   "raven": { label: "غراب أسحم", description: "غراب أسحم أسود لامع بنظرة ذكية" },
   "axolotl": { label: "أكسولوتل", description: "سلمندر مائي وردي بخياشيم ريشية" },
+
+  "pangolin": { label: "بنغول", description: "آكل نمل مدرع بحراشف" },
+  "okapi": { label: "أوكابي", description: "زرافة الغابة بأرجل مخططة كالحمار الوحشي" },
+  "quokka": { label: "كواكا", description: "جرابي أسترالي مبتسم" },
+  "meerkat": { label: "ميركات", description: "نمس أفريقي يقف منتصبا" },
+  "emu": { label: "إمو", description: "طائر أسترالي كبير غير قادر على الطيران" },
+  "tarantula": { label: "Tarantula", description: "عنكبوت صياد كبير مشعر" },
 }
 
 export default map

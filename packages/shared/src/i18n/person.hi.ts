@@ -336,6 +336,26 @@ const map: LocaleCatalogMap = {
   "feature-midriff-visible": { label: "Midriff दिखाई देता", description: "Top और bottom के बीच खुला midriff" },
   "feature-navel-visible": { label: "Navel दिखाई देता", description: "खुले पेट पर दिखाई देती नाभि" },
   "feature-elongated-neck": { label: "लंबी गर्दन", description: "लंबी हंस-जैसी गर्दन" },
+
+  // -------------------- Type (Round 2) --------------------
+  "femboy": { label: "Femboy", description: "नर्म स्त्रैण मर्दाना type, gender-fluid styling" },
+  "twink": { label: "Twink", description: "पतला, चिकना, युवा gay-male type" },
+  "soft-butch": { label: "Soft Butch", description: "कोमल मर्दाना-of-center महिला" },
+  "tomboy": { label: "Tomboy", description: "स्त्रैण बदन पर लड़कों जैसी styling और ऊर्जा" },
+  "thick": { label: "Thick", description: "Voluptuous body-positive figure curves के साथ" },
+  "bear": { label: "Bear", description: "बड़ा, दाढ़ी वाला, बालों भरा मर्दाना type" },
+
+  // -------------------- Distinctive Features (Round 2) --------------------
+  "feature-back-tattoo": { label: "Back Tattoo", description: "पीठ पर बड़ा piece" },
+  "feature-chest-tattoo": { label: "Chest Tattoo", description: "छाती / décolletage पर tattoo" },
+  "feature-leg-tattoo": { label: "Leg Tattoo", description: "टाँग / पिंडली / जाँघ पर दिखाई देता tattoo" },
+  "feature-forearm-tattoo": { label: "Forearm Tattoo", description: "अंदरूनी या बाहरी forearm पर tattoo" },
+  "feature-ear-piercings": { label: "Ear Piercings", description: "कई stacked कान के piercings (cartilage, helix, conch)" },
+  "feature-lip-piercing": { label: "Lip Piercing", description: "होंठ की रिंग / labret stud" },
+  "feature-nostril-piercing": { label: "Nostril Piercing", description: "एकल nostril stud या रिंग" },
+
+  // -------------------- Eye Shape (Round 2) --------------------
+  "eye-double-eyelid": { label: "Double Eyelid", description: "परिभाषित ऊपरी पलक crease" },
 }
 
 export default map

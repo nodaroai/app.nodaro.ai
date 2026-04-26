@@ -15,6 +15,10 @@ const map: LocaleCatalogMap = {
   "color-fringe": { label: "Farbsaum", description: "Subtiles Hochkontrast-Fringing" },
   "soft-focus-diffusion": { label: "Soft-Focus-Diffusion", description: "Diesiger verträumter Glanzlicht-Bloom" },
   "contrast-boost": { label: "Kontrast-Boost", description: "Verstärkte Schatten + erhöhte Glanzlichter" },
+  "sharpening": { label: "Starke Schärfung", description: "Aggressiver Kantenschärfungs-Durchgang" },
+  "clarity-boost": { label: "Klarheits-Boost", description: "Verbesserung der Mitteltonklarheit, erhöhter lokaler Kontrast" },
+  "dehaze": { label: "Dunst entfernen", description: "Atmosphärische Dunstentfernung angewendet, beseitigt Weichheit" },
+  "lift-gamma-gain": { label: "Lift-Gamma-Gain-Grading", description: "Dreiwege-Color-Grading-Räder" },
 }
 
 export default map

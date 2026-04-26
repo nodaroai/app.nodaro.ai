@@ -121,6 +121,26 @@ const map: LocaleCatalogMap = {
     label: "花粉飘散",
     description: "黄金时刻光线中的金黄色花粉细粒",
   },
+  "snowflakes-heavy": {
+    label: "鹅毛大雪",
+    description: "厚密的大颗雪花布满空中",
+  },
+  "snowflakes-light": {
+    label: "稀疏飘雪",
+    description: "稀疏飘动的小雪花",
+  },
+  "raindrops-on-skin": {
+    label: "皮肤上的雨珠",
+    description: "凝结在皮肤上、清晰可见的水珠",
+  },
+  "bioluminescent-cloud": {
+    label: "生物发光颗粒云",
+    description: "蓝绿色发光颗粒缓缓飘动",
+  },
+  "motion-streaks": {
+    label: "速度残影",
+    description: "速度线般的运动模糊条纹",
+  },
 }
 
 export default map

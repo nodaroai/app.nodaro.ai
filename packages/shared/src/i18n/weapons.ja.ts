@@ -102,6 +102,15 @@ const map: LocaleCatalogMap = {
   "wizard-wand": { label: "魔法使いの杖", description: "ローレットの渦巻き、革のグリップ、尖った先端から漏れる小さな魔法の火花を持つ細い木製の杖" },
   "war-horn": { label: "戦の角笛", description: "革と銀のバンドで縛られ、片端に吹き口、もう片端に広がる鳴り響く開口部を持つ巨大な湾曲した戦の角笛" },
   "sorcerer-orb": { label: "魔術師のオーブ", description: "ねじれた銀の爪のスタンドに保持され、ガラス球内に浮かぶ渦巻く秘術の霧を持つクリスタルの魔術師のオーブ" },
+
+  // Additional weapons
+  "zweihander": { label: "ツヴァイハンダー", description: "両手用のドイツ・ルネサンス期の大剣" },
+  "slingshot": { label: "パチンコ", description: "ゴム付きY字型の木製フレーム" },
+  "blowgun": { label: "吹き矢", description: "息で矢を撃ち出す長いパイプ" },
+  "service-pistol": { label: "サービスピストル", description: "現代のセミオートマチック・サイドアーム" },
+  "hunting-rifle": { label: "ハンティングライフル", description: "スコープ付きの木製ストックのボルトアクションライフル" },
+  "plasma-sword": { label: "プラズマソード／ライトセーバー", description: "明るい輝きを発するSFのエネルギー刃" },
+  "gravity-gun": { label: "グラビティガン", description: "物理を操作するSFの遠隔武器" },
 }
 
 export default map

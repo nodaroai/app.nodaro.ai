@@ -146,6 +146,14 @@ const map: LocaleCatalogMap = {
   "red-panda": { label: "레드 판다", description: "여우 같은 얼굴의 작은 적갈색 대나무를 먹는 동물입니다" },
   "raven": { label: "큰까마귀", description: "지적인 눈빛을 가진 윤기 흐르는 검은 큰까마귀입니다" },
   "axolotl": { label: "아홀로틀", description: "깃털 같은 외부 아가미를 가진 분홍빛 수생 도롱뇽입니다" },
+
+  // Additional animals
+  "pangolin": { label: "천산갑", description: "비늘 갑옷이 있는 개미핥기입니다" },
+  "okapi": { label: "오카피", description: "얼룩말 줄무늬 다리를 가진 숲의 기린입니다" },
+  "quokka": { label: "쿼카", description: "미소 짓는 호주 유대류입니다" },
+  "meerkat": { label: "미어캣", description: "두 발로 서는 아프리카 몽구스입니다" },
+  "emu": { label: "에뮤", description: "비행하지 못하는 큰 호주 주금류입니다" },
+  "tarantula": { label: "타란툴라", description: "크고 털 많은 사냥 거미입니다" },
 }
 
 export default map

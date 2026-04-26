@@ -67,6 +67,11 @@ const map: LocaleCatalogMap = {
   "tillmans": { description: "Candid contemporain, intimité queer" },
   "teller": { description: "Mode flash décontractée, anti-glamour" },
   "penn": { description: "Portrait studio mid-century, mode + nature morte" },
+  "mcginley": { description: "Jeunesse naturaliste + nudité dans le paysage, candid au flare solaire" },
+  "mitchell": { description: "Portrait noir contemporain, lumière naturelle douce" },
+  "collins": { description: "Mode female-gaze onirique saturée de rose, 35mm brumeux" },
+  "weston": { description: "Nature morte N&B moderniste, nus sculpturaux" },
+  "beaton": { description: "Portrait de l'âge d'or hollywoodien, mise en scène théâtrale" },
 }
 
 export default map

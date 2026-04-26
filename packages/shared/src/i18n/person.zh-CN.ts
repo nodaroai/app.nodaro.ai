@@ -27,6 +27,12 @@ const map: LocaleCatalogMap = {
   "wise-elder":       { label: "智者长者",               description: "睿智的年长者" },
   "silver-fox":       { label: "成熟魅力大叔",           description: "气质出众、迷人的年长男性" },
   "mysterious-figure":{ label: "神秘人",                 description: "神秘的人物" },
+  "femboy":           { label: "Femboy",                 description: "柔美的男性气质,性别流动的造型" },
+  "twink":            { label: "Twink",                  description: "纤瘦、肌肤光滑、青春感的同志男性" },
+  "soft-butch":       { label: "柔性 Butch",             description: "温和的中性偏阳刚女性" },
+  "tomboy":           { label: "假小子",                 description: "女性身体上的男孩气造型与气场" },
+  "thick":            { label: "丰腴 Thick",             description: "健壮丰满的身材,自我接纳的曲线" },
+  "bear":             { label: "Bear 熊型",              description: "魁梧、有胡须、毛发浓密的男性气质" },
 
   // -------------------- Age --------------------
   "age-baby":    { label: "婴儿",     description: "2 岁以下" },
@@ -145,6 +151,7 @@ const map: LocaleCatalogMap = {
   "eye-upturned":   { label: "上扬眼",     description: "外眼角上挑" },
   "eye-wide-set":   { label: "宽距眼",     description: "两眼距离较远" },
   "eye-close-set":  { label: "近距眼",     description: "两眼距离较近" },
+  "eye-double-eyelid":{ label: "双眼皮",   description: "上眼睑有清晰的双眼皮褶" },
 
   // -------------------- Nose --------------------
   "nose-straight": { label: "直鼻",       description: "鼻梁笔直" },
@@ -336,6 +343,13 @@ const map: LocaleCatalogMap = {
   "feature-midriff-visible":  { label: "腰腹露出",         description: "上下衣之间露出腰腹" },
   "feature-navel-visible":    { label: "肚脐外露",         description: "裸露肚子上可见肚脐" },
   "feature-elongated-neck":   { label: "天鹅颈",           description: "细长如天鹅般的颈部" },
+  "feature-back-tattoo":      { label: "背部纹身",         description: "横跨整个背部的大型纹身" },
+  "feature-chest-tattoo":     { label: "胸前纹身",         description: "胸口 / 锁骨处的纹身" },
+  "feature-leg-tattoo":       { label: "腿部纹身",         description: "腿 / 小腿 / 大腿上可见的纹身" },
+  "feature-forearm-tattoo":   { label: "前臂纹身",         description: "前臂内侧或外侧的纹身" },
+  "feature-ear-piercings":    { label: "多耳穿孔",         description: "多个堆叠的耳部穿孔(耳骨、耳轮、耳窝)" },
+  "feature-lip-piercing":     { label: "唇钉",             description: "唇环 / 唇钉" },
+  "feature-nostril-piercing": { label: "鼻翼穿孔",         description: "单只鼻翼上的钉饰或环" },
 }
 
 export default map

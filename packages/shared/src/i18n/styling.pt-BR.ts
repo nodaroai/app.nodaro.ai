@@ -29,6 +29,12 @@ const map: LocaleCatalogMap = {
   "headwear-crown": { label: "Coroa", description: "Coroa real ou decorativa" },
   "headwear-helmet": { label: "Capacete", description: "Capacete de proteção" },
   "headwear-veil": { label: "Véu", description: "Véu caindo sobre o rosto/cabelo" },
+  "headwear-bucket-hat": { label: "Chapéu Bucket", description: "Chapéu bucket casual de aba mole" },
+  "headwear-beret": { label: "Boina", description: "Boina francesa redonda e macia" },
+  "headwear-turban": { label: "Turbante", description: "Turbante envolto na cabeça, cultural / fashion" },
+  "headwear-fascinator": { label: "Fascinator", description: "Pequena peça decorativa de cabeça, estilo casamento real" },
+  "headwear-bowler": { label: "Chapéu-Coco", description: "Chapéu derby/bowler de copa redonda" },
+  "headwear-cowboy-hat": { label: "Chapéu de Cowboy", description: "Chapéu de cowboy western de aba larga" },
 
   // Hair Cut
   "cut-pixie": { description: "Corte pixie curto e cropado" },
@@ -164,6 +170,17 @@ const map: LocaleCatalogMap = {
   "outfit-kimono": { label: "Quimono", description: "Quimono japonês tradicional" },
   "outfit-ballerina": { label: "Bailarina", description: "Roupa clássica de bailarina" },
   "outfit-flapper": { label: "Flapper Anos 1920", description: "Vestido flapper com franjas" },
+  "outfit-goth": { label: "Gótico", description: "Visual gótico completo: renda preta, couro, maquiagem escura, correntes" },
+  "outfit-emo": { label: "Emo", description: "Emo dos anos 2000: jeans skinny, camiseta de banda, cabelo tingido, lápis de olho" },
+  "outfit-streetwear": { label: "Streetwear", description: "Streetwear moderno: moletom, calça larga, tênis, chapéu bucket" },
+  "outfit-cyberpunk": { label: "Cyberpunk", description: "Cyberpunk iluminado por neon: tech wear, detalhes de LED, camadas de tela" },
+  "outfit-cottagecore": { label: "Cottagecore", description: "Estética pastoral de chalé: vestido pradaria, avental, cesta" },
+  "outfit-dark-academia": { label: "Dark Academia", description: "Acadêmico oxford de tweed: blazer, colete, sapatos oxford" },
+  "outfit-anime-cosplay": { label: "Cosplay de Anime", description: "Fantasia inspirada em personagem de anime reconhecível" },
+  "outfit-nurse": { label: "Enfermeira", description: "Pijama médico, estetoscópio, crachá no cordão" },
+  "outfit-pirate": { label: "Pirata", description: "Fantasia de pirata: chapéu tricorne, faixa, camisa rendada, botas" },
+  "outfit-fairy": { label: "Fada", description: "Fada de fantasia: asas vaporosas, coroa de flores, vestido etéreo" },
+  "outfit-mermaid": { label: "Sereia", description: "Sereia de fantasia: cauda/saia escamada, top de conchas" },
 
   // Top
   "top-tshirt": { label: "Camiseta", description: "Camiseta lisa de gola careca" },
@@ -181,6 +198,11 @@ const map: LocaleCatalogMap = {
   "top-bra-top": { label: "Top Sutiã", description: "Top sutiã que mostra a barriga" },
   "top-sports-bra": { label: "Top Esportivo", description: "Top esportivo atlético" },
   "top-bikini-top": { label: "Parte de Cima de Biquíni", description: "Parte de cima de biquíni cortininha" },
+  "top-bodysuit": { label: "Body", description: "Peça única ajustada que cobre o tronco" },
+  "top-leotard": { label: "Collant", description: "Top ajustado estilo dança com mangas" },
+  "top-mesh-top": { label: "Top de Tela", description: "Top de tecido em tela transparente" },
+  "top-sheer-top": { label: "Top Transparente", description: "Top em tecido translúcido" },
+  "top-bandeau": { label: "Top Tomara-que-Caia Faixa", description: "Top em formato de faixa, sem alças" },
 
   // Bottom
   "bottom-jeans": { label: "Jeans", description: "Calça jeans clássica azul" },
@@ -199,6 +221,11 @@ const map: LocaleCatalogMap = {
   "bottom-pleated-skirt": { label: "Saia Plissada", description: "Saia plissada na metade da coxa" },
   "bottom-midi-skirt": { label: "Saia Midi", description: "Saia midi até a panturrilha" },
   "bottom-maxi-skirt": { label: "Saia Longa", description: "Saia longa até o chão" },
+  "bottom-overalls": { label: "Macacão Jeans", description: "Macacão jeans / dungarees" },
+  "bottom-culottes": { label: "Pantacourt", description: "Calças cropped de perna larga, na altura da panturrilha" },
+  "bottom-palazzo-pants": { label: "Calça Pantalona", description: "Calça pantalona fluida de perna larga" },
+  "bottom-harem-pants": { label: "Calça Saruel", description: "Calça saruel solta com gancho baixo" },
+  "bottom-bike-shorts": { label: "Bermuda Ciclista", description: "Bermuda ciclista justa de lycra na metade da coxa" },
 
   // Outerwear
   "outerwear-leather-jacket": { label: "Jaqueta de Couro", description: "Jaqueta de couro slim fit" },
@@ -247,6 +274,12 @@ const map: LocaleCatalogMap = {
   "footwear-flip-flops": { label: "Chinelos", description: "Chinelos casuais de borracha" },
   "footwear-ballet-flats": { label: "Sapatilha", description: "Sapatilha de bailarina" },
   "footwear-barefoot": { label: "Descalço(a)", description: "Sem sapatos — descalço(a)" },
+  "footwear-crocs": { label: "Crocs", description: "Crocs coloridos de resina, casuais" },
+  "footwear-birkenstocks": { label: "Birkenstocks", description: "Sandálias com palmilha de cortiça" },
+  "footwear-doc-martens": { label: "Doc Martens", description: "Coturnos robustos de couro" },
+  "footwear-converse": { label: "Converse", description: "Tênis Converse de cano alto em lona, clássico Chuck Taylor" },
+  "footwear-vans": { label: "Vans", description: "Vans slip-on ou cano baixo, tênis de skatista" },
+  "footwear-espadrilles": { label: "Alpargatas", description: "Sapato de verão em lona com sola de juta trançada" },
 
   // Wardrobe state
   "state-oversized": { description: "Caimento solto e oversized" },

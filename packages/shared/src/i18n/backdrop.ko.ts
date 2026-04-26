@@ -48,6 +48,12 @@ const map: LocaleCatalogMap = {
   "paper-roll-seamless": { label: "페이퍼 롤 심리스", description: "범용 중성 파스텔 페이퍼 롤입니다" },
   "tile-wall": { label: "타일 벽", description: "욕실 / 주방의 사각 타일 벽입니다" },
   "marble-wall": { label: "마블 벽", description: "결이 있는 럭셔리 대리석 벽입니다" },
+
+  // Additional backdrops
+  "graffiti-wall": { label: "그래피티 벽", description: "선명한 도시 그래피티 태그 벽입니다" },
+  "exposed-stone": { label: "노출 돌 벽", description: "다듬지 않은 노출 돌 또는 애쉬라 석조입니다" },
+  "window-with-light": { label: "빛이 들어오는 창", description: "빛이 쏟아져 들어오는 큰 창문 배경입니다" },
+  "rooftop-skyline": { label: "루프탑 스카이라인", description: "도시 스카이라인이 보이는 야외 루프탑입니다" },
 }
 
 export default map

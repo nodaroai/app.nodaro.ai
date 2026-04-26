@@ -48,6 +48,12 @@ const map: LocaleCatalogMap = {
   "paper-roll-seamless": { label: "Paper Roll Seamless", description: "सामान्य तटस्थ pastel paper roll" },
   "tile-wall": { label: "Tile दीवार", description: "Bathroom / kitchen चौकोर tile दीवार" },
   "marble-wall": { label: "संगमरमर की दीवार", description: "Luxury veined संगमरमर की दीवार" },
+
+  // -------------------- Round 2 --------------------
+  "graffiti-wall": { label: "Graffiti दीवार", description: "जीवंत urban graffiti tagged दीवार" },
+  "exposed-stone": { label: "खुली पत्थर की दीवार", description: "खुली कच्ची पत्थर या ashlar masonry" },
+  "window-with-light": { label: "रोशनी वाली खिड़की", description: "रोशनी छनकर आती बड़ी खिड़की का backdrop" },
+  "rooftop-skyline": { label: "Rooftop Skyline", description: "City skyline के साथ बाहरी rooftop" },
 }
 
 export default map

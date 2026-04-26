@@ -102,6 +102,13 @@ const map: LocaleCatalogMap = {
   "wizard-wand": { label: "Zauberstab", description: "Schlanker Holz-Zauberstab mit gerändelten Spiralen, Ledergriff und winzigen Magiefunken, die aus der spitzen Spitze entweichen" },
   "war-horn": { label: "Kriegshorn", description: "Massives gebogenes Kriegshorn, umwickelt mit Leder und Silberbändern, mit Mundstück an einem Ende und ausgestellter dröhnender Öffnung am anderen" },
   "sorcerer-orb": { label: "Hexer-Orb", description: "Kristallener Hexer-Orb, gehalten in einem verdrehten silbernen Klauenständer, mit wirbelndem arkanem Nebel im Inneren der Glaskugel" },
+  "zweihander": { label: "Zweihänder", description: "Beidhändiges deutsches Renaissance-Großschwert" },
+  "slingshot": { label: "Steinschleuder", description: "Y-förmiger Holzrahmen mit Gummiband" },
+  "blowgun": { label: "Blasrohr", description: "Langes Rohr, das mit dem Atem Pfeile verschießt" },
+  "service-pistol": { label: "Dienstpistole", description: "Moderne halbautomatische Seitenwaffe" },
+  "hunting-rifle": { label: "Jagdgewehr", description: "Repetiergewehr mit Holzschaft und Zielfernrohr" },
+  "plasma-sword": { label: "Plasmaschwert / Lichtschwert", description: "Sci-Fi-Energieklinge, die ein helles Leuchten aussendet" },
+  "gravity-gun": { label: "Gravity Gun", description: "Sci-Fi-Distanzwaffe zur Manipulation der Physik" },
 }
 
 export default map

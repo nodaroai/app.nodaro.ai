@@ -125,6 +125,13 @@ const map: LocaleCatalogMap = {
   "space-shuttle": { label: "مكوك فضائي", description: "مكوك فضائي مداري بأجنحة Delta بيضاء وبطن أسود لدرع حراري وفوهات صواريخ ضخمة في الخلف" },
   "rocket": { label: "صاروخ", description: "صاروخ أسطواني طويل بمخروط أنف مدبب وزعانف ذيل ومراحل دفع ولهب يهدر من المحركات عند الإطلاق" },
   "hoverboard": { label: "Hoverboard", description: "Hoverboard مستقبلي يطفو على بعد بوصات من الأرض بنفاثات سفلية متوهجة وجسم لوح أنيق فردي" },
+
+  "ambulance": { label: "سيارة إسعاف", description: "مركبة طبية للطوارئ" },
+  "police-car": { label: "سيارة شرطة", description: "سيارة دورية بألوان أبيض وأسود مع شريط أضواء" },
+  "hovercraft": { label: "Hovercraft", description: "مركبة على وسادة هوائية على الماء / اليابسة" },
+  "paraglider": { label: "Paraglider", description: "طائرة شراعية ناعمة الجناح تنطلق بالأقدام" },
+  "microlight": { label: "طائرة Microlight", description: "طائرة ترفيهية خفيفة بطيار واحد" },
+  "airship": { label: "Airship / منطاد", description: "مركبة كبيرة جامدة أخف من الهواء" },
 }
 
 export default map

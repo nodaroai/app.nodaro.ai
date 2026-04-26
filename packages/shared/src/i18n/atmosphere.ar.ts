@@ -32,6 +32,12 @@ const map: LocaleCatalogMap = {
   "starfield": { label: "حقل نجوم", description: "سماء ليلية مرئية بالنجوم، خلفية كونية" },
   "dandelion-seeds": { label: "بذور الهندباء", description: "زغب الهندباء المنجرف، نسيم صيفي" },
   "pollen-drift": { label: "انجراف حبوب لقاح", description: "حبوب لقاح صفراء ذهبية دقيقة في ضوء الساعة الذهبية" },
+
+  "snowflakes-heavy": { label: "تساقط ثلج كثيف", description: "ندفات ثلج سميكة كثيفة تملأ الهواء" },
+  "snowflakes-light": { label: "انجراف ثلج خفيف", description: "ندفات ثلج متناثرة منجرفة" },
+  "raindrops-on-skin": { label: "قطرات مطر على الجلد", description: "قطرات ماء مرئية تتجمع على الجلد" },
+  "bioluminescent-cloud": { label: "سحابة جسيمات Bioluminescent", description: "جسيمات زرقاء-خضراء متوهجة تنجرف" },
+  "motion-streaks": { label: "خطوط حركة", description: "خطوط Motion-Blur بأسلوب Speed-Lines" },
 }
 
 export default map

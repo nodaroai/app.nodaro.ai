@@ -68,6 +68,11 @@ const map: LocaleCatalogMap = {
   "tillmans": { description: "candid עכשווי, אינטימיות קווירית" },
   "teller": { description: "פלאש קז'ואל באופנה, אנטי-זוהר" },
   "penn": { description: "פורטרטיקה אולפן של אמצע המאה, אופנה וטבע דומם" },
+  "mcginley": { description: "נעורים נטורליסטיים + עירום בנוף, candid עם flare של שמש" },
+  "mitchell": { description: "פורטרטיקה שחורה עכשווית, אור טבעי רך" },
+  "collins": { description: "אופנה חולמנית רוויית ורוד במבט נשי, 35mm מעורפל" },
+  "weston": { description: "טבע דומם מודרניסטי בשחור-לבן, עירומים פיסוליים" },
+  "beaton": { description: "פורטרטיקה מתקופת הוליווד הקלאסית, ביום תיאטרלי" },
 }
 
 export default map

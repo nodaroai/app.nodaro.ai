@@ -20,6 +20,11 @@ const map: LocaleCatalogMap = {
   "raw-photo": { label: "صورة Raw", description: "إحساس فوتوغرافي غير معالج" },
   "masterpiece": { label: "تحفة", description: "ختم جودة بمستوى يد خبير" },
   "award-winning": { label: "حائز على جائزة", description: "بمستوى جوائز" },
+
+  "volumetric-lighting": { label: "إضاءة Volumetric", description: "أعمدة ضوء Volumetric كأشعة الإله" },
+  "photon-mapping": { label: "Photon Mapping", description: "إضاءة عالمية بـ Photon-Mapping واعية بالـ Caustics" },
+  "ai-upscaled": { label: "Upscaled بالذكاء الاصطناعي", description: "تعزيز تفاصيل بـ Upscaling عصبي" },
+  "denoised": { label: "Denoised", description: "إنتاج نقي خال من الضوضاء" },
 }
 
 export default map

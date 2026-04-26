@@ -27,6 +27,12 @@ const map: LocaleCatalogMap = {
   "wise-elder": { label: "Ancião Sábio", description: "Ancião com conhecimento e sabedoria" },
   "silver-fox": { description: "Homem mais velho distinto e atraente" },
   "mysterious-figure": { label: "Figura Misteriosa", description: "Figura enigmática" },
+  "femboy": { label: "Femboy", description: "Tipo masculino de feminilidade suave, com estilo de gênero fluido" },
+  "twink": { label: "Twink", description: "Tipo gay masculino esbelto, suave e jovem" },
+  "soft-butch": { label: "Butch Suave", description: "Mulher de masculinidade gentil" },
+  "tomboy": { label: "Maria-Chiquinha", description: "Estilo e energia de menino em corpo feminino" },
+  "thick": { label: "Encorpada", description: "Figura voluptuosa, com curvas e body-positive" },
+  "bear": { label: "Bear", description: "Tipo masculino grande, barbudo e peludo" },
 
   // Age
   "age-baby": { label: "Bebê", description: "Menos de 2 anos" },
@@ -145,6 +151,7 @@ const map: LocaleCatalogMap = {
   "eye-upturned": { label: "Cantos Erguidos", description: "Cantos externos elevados" },
   "eye-wide-set": { label: "Afastados", description: "Olhos espaçados" },
   "eye-close-set": { label: "Próximos", description: "Olhos próximos um do outro" },
+  "eye-double-eyelid": { label: "Pálpebra Dupla", description: "Dobra superior da pálpebra bem definida" },
 
   // Nose
   "nose-straight": { label: "Reto", description: "Dorso reto" },
@@ -336,6 +343,13 @@ const map: LocaleCatalogMap = {
   "feature-midriff-visible": { label: "Barriga à Mostra", description: "Barriga exposta entre o top e a parte de baixo" },
   "feature-navel-visible": { label: "Umbigo Visível", description: "Umbigo visível em barriga descoberta" },
   "feature-elongated-neck": { label: "Pescoço Alongado", description: "Pescoço longo de cisne" },
+  "feature-back-tattoo": { label: "Tatuagem nas Costas", description: "Peça grande cobrindo as costas" },
+  "feature-chest-tattoo": { label: "Tatuagem no Peito", description: "Tatuagem no peito / decote" },
+  "feature-leg-tattoo": { label: "Tatuagem na Perna", description: "Tatuagem visível na perna / panturrilha / coxa" },
+  "feature-forearm-tattoo": { label: "Tatuagem no Antebraço", description: "Tatuagem na parte interna ou externa do antebraço" },
+  "feature-ear-piercings": { label: "Piercings na Orelha", description: "Vários piercings empilhados na orelha (cartilagem, hélix, conch)" },
+  "feature-lip-piercing": { label: "Piercing no Lábio", description: "Argola no lábio / pino labret" },
+  "feature-nostril-piercing": { label: "Piercing na Narina", description: "Pino ou argola única na narina" },
 }
 
 export default map

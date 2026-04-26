@@ -31,6 +31,11 @@ const map: LocaleCatalogMap = {
   "starfield": { label: "Sternenfeld", description: "Sichtbarer Nachthimmel mit Sternen, kosmische Kulisse" },
   "dandelion-seeds": { label: "Pusteblumen-Samen", description: "Treibende Pusteblumen-Flusen, Sommerbrise" },
   "pollen-drift": { label: "Pollenflug", description: "Feine gelb-goldene Pollen im Licht der goldenen Stunde" },
+  "snowflakes-heavy": { label: "Starker Schneefall", description: "Dichte schwere Schneeflocken füllen die Luft" },
+  "snowflakes-light": { label: "Leichtes Schneetreiben", description: "Vereinzelte treibende Schneeflocken" },
+  "raindrops-on-skin": { label: "Regentropfen auf der Haut", description: "Sichtbare Wassertropfen, die auf der Haut perlen" },
+  "bioluminescent-cloud": { label: "Biolumineszente Partikelwolke", description: "Glühende blau-grüne Partikel, die durch die Luft treiben" },
+  "motion-streaks": { label: "Bewegungs-Streifen", description: "Speedline-Bewegungsunschärfe-Streifen" },
 }
 
 export default map

@@ -102,6 +102,13 @@ const map: LocaleCatalogMap = {
   "wizard-wand": { label: "שרביט קוסם", description: "שרביט עץ דק עם פיתולים מסולסלים, אחיזת עור וניצוצות קסם זעירים זולגים מהקצה המחודד" },
   "war-horn": { label: "שופר מלחמה", description: "שופר מלחמה מעוקל עצום כרוך בעור וברצועות כסף עם פייה בקצה אחד ופתח מתרחב נוהם בקצה השני" },
   "sorcerer-orb": { label: "כדור מכשף", description: "כדור קריסטל של מכשף המוחזק במעמד טופר כסף מפותל עם ערפל ארקאני סואן תלוי בתוך הספירה הזכוכית" },
+  "zweihander": { label: "Zweihänder", description: "חרב גדולה גרמנית רנסנסית דו-ידנית" },
+  "slingshot": { label: "רוגטקה", description: "מסגרת עץ בצורת Y עם רצועה אלסטית" },
+  "blowgun": { label: "צינור נשיפה", description: "צינור ארוך היורה חצים בנשיפה" },
+  "service-pistol": { label: "אקדח שירות", description: "אקדח צד מודרני חצי-אוטומטי" },
+  "hunting-rifle": { label: "רובה ציד", description: "רובה פעולת בריח עם קת עץ וכוונת" },
+  "plasma-sword": { label: "חרב פלזמה / Lightsaber", description: "להב אנרגיה מדע בדיוני הפולט זוהר בהיר" },
+  "gravity-gun": { label: "תותח כבידה", description: "נשק טווח מדע בדיוני המתמרן פיזיקה" },
 }
 
 export default map

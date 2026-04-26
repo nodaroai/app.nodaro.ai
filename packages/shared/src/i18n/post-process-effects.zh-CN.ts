@@ -15,6 +15,10 @@ const map: LocaleCatalogMap = {
   "color-fringe":         { label: "色彩边缘",       description: "高对比边缘的微妙色散" },
   "soft-focus-diffusion": { label: "柔焦扩散",       description: "梦幻雾感高光" },
   "contrast-boost":       { label: "对比增强",       description: "压黑阴影、推高高光" },
+  "sharpening":           { label: "强力锐化",       description: "强烈的边缘锐化处理" },
+  "clarity-boost":        { label: "清晰度提升",     description: "中间调清晰度增强,提升局部对比" },
+  "dehaze":               { label: "去雾",           description: "去除大气雾感,消除柔化" },
+  "lift-gamma-gain":      { label: "Lift-Gamma-Gain 调色", description: "三向色轮调色" },
 }
 
 export default map

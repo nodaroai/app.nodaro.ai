@@ -43,6 +43,11 @@ const map: LocaleCatalogMap = {
   "paper-roll-seamless": { label: "ورق بلا حدود", description: "ورق بدرجة باستيلية محايدة عامة" },
   "tile-wall": { label: "جدار بلاط", description: "جدار بلاط مربع للحمام / المطبخ" },
   "marble-wall": { label: "جدار رخامي", description: "جدار رخامي فاخر بعروق" },
+
+  "graffiti-wall": { label: "جدار جرافيتي", description: "جدار حضري نابض بالحياة موسوم بالجرافيتي" },
+  "exposed-stone": { label: "جدار حجري مكشوف", description: "حجر خام مكشوف أو بناء بالأشلار" },
+  "window-with-light": { label: "نافذة بضوء", description: "خلفية نافذة كبيرة بضوء يتدفق منها" },
+  "rooftop-skyline": { label: "أفق سطح", description: "سطح خارجي مع أفق المدينة" },
 }
 
 export default map

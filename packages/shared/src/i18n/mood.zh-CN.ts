@@ -54,6 +54,10 @@ const map: LocaleCatalogMap = {
   "lazy-shy":    { label: "慵懒带羞",   description: "昏昏欲睡、柔软、半带羞涩" },
   "awe":         { label: "敬畏",       description: "惊叹、敬仰" },
   "shocked":     { label: "震惊",       description: "惊讶、张口呆视" },
+  "flirty":      { label: "撩人",       description: "调皮的眉目传情、含笑不去、持续的眼神交流" },
+  "suspicious":  { label: "起疑",       description: "戒备性的不信任、眯起的眼睛、斜睨" },
+  "resigned":    { label: "认命",       description: "对不愉快境遇的安静接受" },
+  "conflicted":  { label: "矛盾",       description: "可见的内心挣扎、眉头紧锁" },
 }
 
 export default map

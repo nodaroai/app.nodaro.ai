@@ -50,6 +50,12 @@ const map: LocaleCatalogMap = {
   "paper-roll-seamless": { label: "ペーパーロール・シームレス", description: "汎用的なニュートラル・パステルのペーパーロール" },
   "tile-wall": { label: "タイル壁", description: "バスルーム／キッチンの正方形タイル壁" },
   "marble-wall": { label: "大理石の壁", description: "高級感のある脈の入った大理石の壁" },
+
+  // Additional backdrops
+  "graffiti-wall": { label: "グラフィティの壁", description: "鮮やかなアーバン・グラフィティで覆われた壁" },
+  "exposed-stone": { label: "剥き出しの石壁", description: "生の剥き出しの石または切石組積" },
+  "window-with-light": { label: "光の差す窓", description: "光が差し込む大きな窓の背景" },
+  "rooftop-skyline": { label: "屋上の街並み", description: "都市のスカイラインを望む屋外の屋上" },
 }
 
 export default map

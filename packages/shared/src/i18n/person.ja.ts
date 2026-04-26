@@ -336,6 +336,26 @@ const map: LocaleCatalogMap = {
   "feature-midriff-visible": { label: "腹部が見える", description: "トップとボトムの間に素肌の腹部が見える" },
   "feature-navel-visible": { label: "へそが見える", description: "むき出しのお腹にへそが見える" },
   "feature-elongated-neck": { label: "長い首", description: "白鳥のように長い首" },
+
+  // Type (additional)
+  "femboy": { label: "フェムボーイ", description: "柔らかく女性的な男性タイプ、ジェンダーフルイドなスタイリング" },
+  "twink": { label: "トゥインク", description: "細身で滑らかな肌の若々しいゲイ男性タイプ" },
+  "soft-butch": { label: "ソフトブッチ", description: "穏やかな男性寄りの女性" },
+  "tomboy": { label: "トムボーイ", description: "女性的な体に少年的なスタイリングとエネルギー" },
+  "thick": { label: "シック", description: "豊かな曲線を持つボディポジティブな体型" },
+  "bear": { label: "ベア", description: "大柄でひげと体毛のある男性的タイプ" },
+
+  // Distinctive features (additional)
+  "feature-back-tattoo": { label: "バックタトゥー", description: "背中全面の大きなタトゥー" },
+  "feature-chest-tattoo": { label: "チェストタトゥー", description: "胸／デコルテのタトゥー" },
+  "feature-leg-tattoo": { label: "レッグタトゥー", description: "脚／ふくらはぎ／太ももに見えるタトゥー" },
+  "feature-forearm-tattoo": { label: "フォアームタトゥー", description: "前腕の内側または外側のタトゥー" },
+  "feature-ear-piercings": { label: "耳ピアス", description: "耳に複数のスタックピアス（軟骨／ヘリックス／コンク）" },
+  "feature-lip-piercing": { label: "リップピアス", description: "リップリングまたはラブレットスタッド" },
+  "feature-nostril-piercing": { label: "鼻ピアス", description: "片側の鼻孔スタッドまたはリング" },
+
+  // Eye shape (additional)
+  "eye-double-eyelid": { label: "二重まぶた", description: "はっきりした上瞼の二重ライン" },
 }
 
 export default map
