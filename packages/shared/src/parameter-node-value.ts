@@ -209,7 +209,20 @@ export function getParameterValue(
 }
 
 function trim(v: unknown): string | undefined {
-  if (typeof v !== "string") return undefined
-  const s = v.trim()
-  return s.length > 0 ? s : undefined
+  if (typeof v === "string") {
+    const s = v.trim()
+    return s.length > 0 ? s : undefined
+  }
+  // Multi-pick fields (ethnicity, mood, aesthetic) may be a string[]. The
+  // single-string field-mapping resolver only needs *some* value to indicate
+  // the field is set — return the first non-empty entry.
+  if (Array.isArray(v)) {
+    for (const item of v) {
+      if (typeof item === "string") {
+        const s = item.trim()
+        if (s.length > 0) return s
+      }
+    }
+  }
+  return undefined
 }

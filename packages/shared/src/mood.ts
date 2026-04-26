@@ -42,7 +42,7 @@ export const MOODS: ReadonlyArray<Mood> = [
   { id: "confident",   label: "Confident",    category: "positive", description: "Self-assured, confident",     promptHint: "with a confident, self-assured expression and poised demeanor" },
   { id: "loving",      label: "Loving",       category: "positive", description: "Tender, affectionate",        promptHint: "with a tender, loving expression" },
   { id: "amused",      label: "Amused",       category: "positive", description: "Subtly amused, smirking",     promptHint: "with a subtly amused expression, a faint smirk" },
-  { id: "smirking",    label: "Smirking",     category: "positive", description: "Cocky, arrogant amusement",   promptHint: "with a cocky, arrogant smirk and one eyebrow slightly raised" },
+  { id: "smirking",    label: "Smirking",     category: "neutral",  description: "Cocky, arrogant amusement",   promptHint: "with a cocky, arrogant smirk and one eyebrow slightly raised" },
   { id: "eccentric",   label: "Eccentric",    category: "positive", description: "Quirky, unconventional",      promptHint: "with a quirky, eccentric expression and offbeat playful energy" },
   { id: "hopeful",     label: "Hopeful",      category: "positive", description: "Bright-eyed, optimistic",     promptHint: "with a hopeful expression, a soft slight smile and bright, expectant eyes" },
 
@@ -84,7 +84,7 @@ export const MOODS: ReadonlyArray<Mood> = [
   { id: "smoldering",  label: "Smoldering",   category: "intense",  description: "Coiled, slow-burning intensity", promptHint: "with a smoldering, coiled expression, slow-burning intensity behind half-closed eyes and a still, predatory calm" },
   { id: "sinister",    label: "Sinister",     category: "intense",  description: "Dark, malicious, threatening", promptHint: "with a sinister expression, a slow crooked smile and eyes glinting with dark malicious intent" },
   { id: "wiccan-mystical", label: "Wiccan / Mystical", category: "intense", description: "Quietly otherworldly, occult", promptHint: "with a quietly mystical, otherworldly expression, eyes distant and knowing as if reading something the camera cannot see" },
-  { id: "lazy-shy",    label: "Lazy Shy",     category: "positive", description: "Drowsy, soft, half-shy",      promptHint: "with a soft, drowsy half-shy expression, eyes lowered and barely-there smile, languid and unbothered" },
+  { id: "lazy-shy",    label: "Lazy Shy",     category: "neutral",  description: "Drowsy, soft, half-shy",      promptHint: "with a soft, drowsy half-shy expression, eyes lowered and barely-there smile, languid and unbothered" },
   { id: "awe",         label: "Awe",          category: "intense",  description: "Wonder, reverent",            promptHint: "with an awestruck expression of wonder, mouth slightly agape and wide-eyed" },
   { id: "shocked",     label: "Shocked",      category: "intense",  description: "Surprised, mouth open",       promptHint: "with a shocked, surprised expression, eyes wide, brows raised and mouth open" },
 ] as const
@@ -124,17 +124,42 @@ export const MOOD_CATEGORY_ORDER: ReadonlyArray<MoodCategory> = [
 ]
 
 /**
- * Shape of Mood parameter data. Single-pick + optional pre/post free text.
+ * Shape of Mood parameter data. Single id OR array of up to 2 ids (mixed
+ * mood like "smirking + aloof"). Plus optional pre/post free text.
  */
 export interface MoodValue {
-  mood?: string
+  mood?: string | ReadonlyArray<string>
   preText?: string
   postText?: string
 }
 
 /**
+ * Combine 1-2 mood ids into a single expression clause. Single → the entry's
+ * own promptHint. Two → strip the leading "with a ... expression" template
+ * from each and weave them: "with a smirking and aloof expression".
+ */
+function buildMoodHint(value: unknown): string {
+  const ids: string[] = []
+  if (typeof value === "string" && value) ids.push(value)
+  else if (Array.isArray(value)) {
+    for (const v of value) {
+      if (typeof v === "string" && v && !ids.includes(v)) ids.push(v)
+    }
+  }
+  if (ids.length === 0) return ""
+  if (ids.length === 1) return getMoodPromptHint(ids[0])
+  const labels = ids
+    .slice(0, 2)
+    .map((id) => getMood(id)?.label?.toLowerCase() ?? "")
+    .filter((s): s is string => Boolean(s))
+  if (labels.length < 2) return getMoodPromptHint(ids[0])
+  return `with a ${labels[0]} and ${labels[1]} expression`
+}
+
+/**
  * Build prompt hints from MoodData: optional pre-text, the selected mood's
- * hint, optional post-text. Returns array — caller joins with ", ".
+ * hint (single or mixed), optional post-text. Returns array — caller joins
+ * with ", ".
  */
 export function buildMoodHints(
   data: Record<string, unknown> & MoodValue,
@@ -144,8 +169,7 @@ export function buildMoodHints(
   const pre = typeof data.preText === "string" ? data.preText.trim() : ""
   if (pre) hints.push(pre)
 
-  const moodId = typeof data.mood === "string" ? data.mood : ""
-  const moodHint = getMoodPromptHint(moodId)
+  const moodHint = buildMoodHint(data.mood)
   if (moodHint) hints.push(moodHint)
 
   const post = typeof data.postText === "string" ? data.postText.trim() : ""

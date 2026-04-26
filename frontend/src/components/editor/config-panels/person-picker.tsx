@@ -11,10 +11,30 @@ import {
   type PersonDimension,
   type PersonValue,
 } from "@nodaro-shared/person"
+import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { ColorSwatch } from "./color-swatch"
 import { getPersonSwatch } from "./color-swatches"
+
+/** Per-dimension multi-select cap.
+ *  - ethnicity: 2 (mixed heritage)
+ *  - hair-color: 2 (two-tone, ombre, highlights, balayage)
+ *  - eye-color: 2 (heterochromia)
+ *  - distinctive-features: 3 (combined features — freckles + glasses + tattoo)
+ *  - lip-state: 2 (glossy + parted, bitten + bold-red, …)
+ *  - eye-state: 2 (half-lidded + glassy, gazing-away + glassy, …)
+ *  - skin-texture: 2 (porcelain + freckled, sun-kissed + dewy, …)
+ *  All other dims are single-select. */
+const MAX_SELECTED_BY_DIMENSION: Partial<Record<PersonDimension, number>> = {
+  ethnicity: 2,
+  "hair-color": 2,
+  "eye-color": 2,
+  "distinctive-features": 3,
+  "lip-state": 2,
+  "eye-state": 2,
+  "skin-texture": 2,
+}
 import {
   BuildIcon,
   FacialHairIcon,
@@ -89,8 +109,10 @@ export const PersonPicker = memo(function PersonPicker({
 
       {grouped.map(({ dimension, entries }) => {
         const field = PERSON_FIELD_BY_DIMENSION[dimension]
-        const current = value[field]
-        const checked = current !== undefined && current !== ""
+        const raw = value[field]
+        const selectedIds = pickIds(raw)
+        const checked = selectedIds.length > 0
+        const maxSelected = MAX_SELECTED_BY_DIMENSION[dimension] ?? 1
         if (query && entries.length === 0) return null
         return (
           <DimensionSection
@@ -99,7 +121,8 @@ export const PersonPicker = memo(function PersonPicker({
             entries={entries}
             field={field}
             checked={checked}
-            current={current}
+            selectedIds={selectedIds}
+            maxSelected={maxSelected}
             resolveLabel={resolveLabel}
             resolveDescription={resolveDescription}
             onToggle={(next) => {
@@ -110,7 +133,16 @@ export const PersonPicker = memo(function PersonPicker({
                 onChange({ [field]: undefined } as Partial<PersonValue>)
               }
             }}
-            onPick={(id) => onChange({ [field]: id } as Partial<PersonValue>)}
+            onPick={(id) => {
+              if (maxSelected <= 1) {
+                onChange({ [field]: id } as Partial<PersonValue>)
+                return
+              }
+              const next = togglePick(selectedIds, id, maxSelected)
+              if (next.length === 0) onChange({ [field]: undefined } as Partial<PersonValue>)
+              else if (next.length === 1) onChange({ [field]: next[0] } as Partial<PersonValue>)
+              else onChange({ [field]: next } as Partial<PersonValue>)
+            }}
           />
         )
       })}
@@ -123,7 +155,8 @@ interface DimensionSectionProps {
   readonly entries: ReadonlyArray<Person>
   readonly field: keyof PersonValue
   readonly checked: boolean
-  readonly current: string | undefined
+  readonly selectedIds: ReadonlyArray<string>
+  readonly maxSelected: number
   readonly resolveLabel: (id: string, englishLabel: string) => string
   readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
@@ -146,6 +179,8 @@ function EntryChip({
   dimension,
   entry,
   selected,
+  selectedIndex,
+  multi,
   enabled,
   label,
   resolveLabel,
@@ -155,6 +190,10 @@ function EntryChip({
   readonly dimension: PersonDimension
   readonly entry: Person
   readonly selected: boolean
+  /** Position in the multi-pick array (0-based). -1 if not selected. */
+  readonly selectedIndex: number
+  /** True when this dimension allows multi-pick (>1 max). */
+  readonly multi: boolean
   readonly enabled: boolean
   readonly label: string
   readonly resolveLabel: (id: string, englishLabel: string) => string
@@ -170,17 +209,25 @@ function EntryChip({
   return (
     <button
       type="button"
-      role="radio"
+      role={multi ? "checkbox" : "radio"}
       aria-checked={selected}
       title={enabled ? resolvedDescription : `${resolvedDescription} (click to enable ${label})`}
       onClick={() => onPick(entry.id)}
       className={cn(
-        "flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden",
+        "relative flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden",
         selected
           ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
           : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
       )}
     >
+      {multi && selected && (
+        <span
+          className="absolute top-1 right-1 size-4 rounded-full bg-[#ff0073] text-white text-[9px] font-semibold flex items-center justify-center pointer-events-none"
+          aria-hidden="true"
+        >
+          {selectedIndex + 1}
+        </span>
+      )}
       {swatch && <ColorSwatch value={swatch} className="size-5" />}
       {icon}
       <span
@@ -199,7 +246,8 @@ function GroupedEntryGrid({
   dimension,
   entries,
   checked,
-  current,
+  selectedIds,
+  multi,
   label,
   resolveLabel,
   resolveDescription,
@@ -208,7 +256,8 @@ function GroupedEntryGrid({
   readonly dimension: PersonDimension
   readonly entries: ReadonlyArray<Person>
   readonly checked: boolean
-  readonly current: string | undefined
+  readonly selectedIds: ReadonlyArray<string>
+  readonly multi: boolean
   readonly label: string
   readonly resolveLabel: (id: string, englishLabel: string) => string
   readonly resolveDescription: (id: string, englishDescription: string) => string
@@ -226,9 +275,17 @@ function GroupedEntryGrid({
     byGroup.get(g)!.push(e)
   }
 
-  // The group containing the current pick starts open; other groups closed.
-  const activeGroup = current ? entries.find((e) => e.id === current)?.group ?? undefined : undefined
-  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(activeGroup ? [activeGroup] : []))
+  // Groups containing any selected pick start open; other groups closed. With
+  // multi-select, both picks' groups open so users can see what they've chosen.
+  const activeGroups = useMemo(() => {
+    const set = new Set<string>()
+    for (const id of selectedIds) {
+      const g = entries.find((e) => e.id === id)?.group
+      if (g) set.add(g)
+    }
+    return set
+  }, [selectedIds, entries])
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(activeGroups))
   const toggleGroup = (g: string) => setOpenGroups((prev) => {
     const next = new Set(prev)
     if (next.has(g)) next.delete(g)
@@ -241,7 +298,11 @@ function GroupedEntryGrid({
       {groupOrder.map((group) => {
         const list = byGroup.get(group)!
         const isOpen = openGroups.has(group)
-        const hasCurrent = list.some((e) => e.id === current)
+        const groupSelectedCount = list.reduce(
+          (n, e) => (selectedIds.includes(e.id) ? n + 1 : n),
+          0,
+        )
+        const hasCurrent = groupSelectedCount > 0
         return (
           <div key={group} className="rounded-md border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
             <button
@@ -257,25 +318,31 @@ function GroupedEntryGrid({
             >
               <span className="truncate text-left flex-1">{group}</span>
               <span className="text-[10px] text-muted-foreground shrink-0">
-                {list.length}{hasCurrent ? " · selected" : ""}
+                {list.length}
+                {hasCurrent ? ` · ${groupSelectedCount} selected` : ""}
               </span>
               <span className="text-muted-foreground shrink-0">{isOpen ? "▾" : "▸"}</span>
             </button>
             {isOpen && (
               <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-white dark:bg-[#0f0f0f]">
-                {list.map((entry) => (
-                  <EntryChip
-                    key={entry.id}
-                    dimension={dimension}
-                    entry={entry}
-                    selected={checked && entry.id === current}
-                    enabled={checked}
-                    label={label}
-                    resolveLabel={resolveLabel}
-                    resolveDescription={resolveDescription}
-                    onPick={onPick}
-                  />
-                ))}
+                {list.map((entry) => {
+                  const idx = selectedIds.indexOf(entry.id)
+                  return (
+                    <EntryChip
+                      key={entry.id}
+                      dimension={dimension}
+                      entry={entry}
+                      selected={checked && idx >= 0}
+                      selectedIndex={idx}
+                      multi={multi}
+                      enabled={checked}
+                      label={label}
+                      resolveLabel={resolveLabel}
+                      resolveDescription={resolveDescription}
+                      onPick={onPick}
+                    />
+                  )
+                })}
               </div>
             )}
           </div>
@@ -290,14 +357,17 @@ function DimensionSection({
   entries,
   field,
   checked,
-  current,
+  selectedIds,
+  maxSelected,
   resolveLabel,
   resolveDescription,
   onToggle,
   onPick,
 }: DimensionSectionProps) {
   const id = useId()
-  const label = PERSON_DIMENSION_LABELS[dimension]
+  const baseLabel = PERSON_DIMENSION_LABELS[dimension]
+  const multi = maxSelected > 1
+  const label = multi ? `${baseLabel} (pick up to ${maxSelected})` : baseLabel
   // Ethnicity has 39 entries across 6 groups — render as collapsible two-level
   // picker (region header → specific entries inside). Other dims stay as flat
   // chip grids since their entry counts are small enough.
@@ -324,7 +394,8 @@ function DimensionSection({
           dimension={dimension}
           entries={entries}
           checked={checked}
-          current={current}
+          selectedIds={selectedIds}
+          multi={multi}
           label={label}
           resolveLabel={resolveLabel}
           resolveDescription={resolveDescription}
@@ -332,23 +403,28 @@ function DimensionSection({
         />
       ) : (
         <div
-          role="radiogroup"
+          role={multi ? "group" : "radiogroup"}
           aria-label={label}
           className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}
         >
-          {entries.map((entry) => (
-            <EntryChip
-              key={entry.id}
-              dimension={dimension}
-              entry={entry}
-              selected={checked && entry.id === current}
-              enabled={checked}
-              label={label}
-              resolveLabel={resolveLabel}
-              resolveDescription={resolveDescription}
-              onPick={onPick}
-            />
-          ))}
+          {entries.map((entry) => {
+            const idx = selectedIds.indexOf(entry.id)
+            return (
+              <EntryChip
+                key={entry.id}
+                dimension={dimension}
+                entry={entry}
+                selected={checked && idx >= 0}
+                selectedIndex={idx}
+                multi={multi}
+                enabled={checked}
+                label={label}
+                resolveLabel={resolveLabel}
+                resolveDescription={resolveDescription}
+                onPick={onPick}
+              />
+            )
+          })}
         </div>
       )}
     </div>

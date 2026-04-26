@@ -439,8 +439,9 @@ export interface PersonData {
   type?: string
   /** Age range (20s, 30s, teen, elderly). */
   age?: string
-  /** Ethnicity / cultural descriptor. */
-  ethnicity?: string
+  /** Ethnicity / cultural descriptor. Single id or up to 2 ids for mixed
+   *  heritage (e.g. ["slavic","mediterranean"]). */
+  ethnicity?: string | ReadonlyArray<string>
   /** Body silhouette + height combined (slim, athletic, tall-lean). */
   build?: string
   /** Body shape ratio (long-legged, hourglass, pear). Independent from Build. */
@@ -456,10 +457,12 @@ export interface PersonData {
   /** Lip shape (thin, medium, full, wide, cupid's bow, small). */
   lips?: string
   /** Lip state — what the lips are doing (chapped, glossy, parted, biting,
-   *  pursed, bold-red). Distinct from `lips` (anatomical shape). */
-  lipState?: string
-  /** Hair color (brown, blonde, gray, dyed). */
-  hairColor?: string
+   *  pursed, bold-red). Distinct from `lips` (anatomical shape). Single id
+   *  or up to 2 (e.g. glossy + parted). */
+  lipState?: string | ReadonlyArray<string>
+  /** Hair color (brown, blonde, gray, dyed). Single id or up to 2 ids for
+   *  two-tone / ombre / highlighted hair. */
+  hairColor?: string | ReadonlyArray<string>
   /** Natural hair texture + length (short straight, long curly, afro…). The
    *  styled cut (bob, wolf cut, braids…) lives in Styling.hairCut. */
   hairBase?: string
@@ -467,18 +470,22 @@ export interface PersonData {
   eyebrows?: string
   /** Skin tone. */
   skinTone?: string
-  /** Skin texture / quality (smooth, wrinkled, goosebumps, dewy, glistening, weathered). */
-  skinTexture?: string
-  /** Eye color. */
-  eyeColor?: string
+  /** Skin texture / quality (smooth, wrinkled, goosebumps, dewy, glistening,
+   *  weathered, porcelain, freckled, sun-kissed, …). Single id or up to 2
+   *  combined (e.g. porcelain + freckled). */
+  skinTexture?: string | ReadonlyArray<string>
+  /** Eye color. Single id or up to 2 ids for heterochromia. */
+  eyeColor?: string | ReadonlyArray<string>
   /** Eye state — what the eyes are doing (closed, half-lidded, wide-eyed,
    *  staring-at-camera, gazing-away/up/down, glassy). Distinct from
-   *  `eyeShape` (anatomy) and `eyeColor`. */
-  eyeState?: string
+   *  `eyeShape` (anatomy) and `eyeColor`. Single id or up to 2 (e.g.
+   *  half-lidded + glassy). */
+  eyeState?: string | ReadonlyArray<string>
   /** Facial hair style (clean-shaven, stubble, full-beard). */
   facialHair?: string
-  /** Distinctive feature (glasses, freckles, tattoos, scar, dimples, piercing). */
-  distinctiveFeature?: string
+  /** Distinctive feature (glasses, freckles, tattoos, scar, dimples, piercing).
+   *  Single id or up to 3 ids for combined features. */
+  distinctiveFeature?: string | ReadonlyArray<string>
   /** Free-text prepended before the dimension compound. */
   preText?: string
   /** Free-text appended after the dimension compound. */
@@ -545,8 +552,9 @@ export interface StylingData {
 export interface MoodData {
   [key: string]: unknown
   label: string
-  /** Mood id from MOODS catalog. */
-  mood: string
+  /** Mood id from MOODS catalog. Single id or up to 2 ids for blended mood
+   *  (e.g. ["smirking","aloof"] → "with a smirking and aloof expression"). */
+  mood: string | ReadonlyArray<string>
   /** Free-text prepended before the mood hint. */
   preText?: string
   /** Free-text appended after the mood hint. */
@@ -569,8 +577,9 @@ export interface PhotographerData {
 export interface AestheticData {
   [key: string]: unknown
   label: string
-  /** Aesthetic id from AESTHETICS catalog. */
-  aesthetic: string
+  /** Aesthetic id from AESTHETICS catalog. Single id or up to 2 ids for an
+   *  aesthetic blend (e.g. ["y2k","dadcore"]). */
+  aesthetic: string | ReadonlyArray<string>
 }
 
 /** Standalone Era / Period parameter node data. Picks ONE historical era or

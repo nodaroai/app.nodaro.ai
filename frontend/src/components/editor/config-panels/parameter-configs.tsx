@@ -109,7 +109,7 @@ import { getPhotoGenrePromptHint } from "@nodaro-shared/photo-genre"
 import { getBackdropPromptHint } from "@nodaro-shared/backdrop"
 import { getHeldPropPromptHint } from "@nodaro-shared/held-prop"
 import { getPhotographerPromptHint } from "@nodaro-shared/photographer"
-import { getAestheticPromptHint } from "@nodaro-shared/aesthetic"
+import { buildAestheticHints } from "@nodaro-shared/aesthetic"
 import { getEraPromptHint } from "@nodaro-shared/era"
 import { buildExposureHints } from "@nodaro-shared/exposure-settings"
 import { getRenderQualityPromptHint } from "@nodaro-shared/render-quality"
@@ -547,12 +547,14 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
           eyeShape: data.eyeShape,
           nose: data.nose,
           lips: data.lips,
+          lipState: data.lipState,
           hairColor: data.hairColor,
           hairBase: data.hairBase,
           eyebrows: data.eyebrows,
           skinTone: data.skinTone,
           skinTexture: data.skinTexture,
           eyeColor: data.eyeColor,
+          eyeState: data.eyeState,
           facialHair: data.facialHair,
           distinctiveFeature: data.distinctiveFeature,
         }}
@@ -613,18 +615,18 @@ export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
           className="text-xs resize-none"
         />
       </div>
-      <Label>Mood</Label>
-      {/* Mood is a single-dimension node — render the inline tile grid with
-          emoji faces. Each entry shows the matching expression so users pick
-          by face rather than by parsing similar-sounding labels. */}
+      <Label>Mood (pick up to 2)</Label>
+      {/* Multi-pick (max 2): single → single mood hint; two → blended
+          "with a X and Y expression". Numbered tile badges show pick order. */}
       <DimensionTileGrid
         entries={MOODS}
-        value={data.mood || "calm"}
+        value={data.mood ?? "calm"}
         onChange={(v) => onUpdate({ mood: v ?? "calm" })}
         renderIcon={(entry) => <MoodEmoji moodId={entry.id} className="size-full" />}
         searchPlaceholder="Search moods"
         gridClassName="grid grid-cols-3 gap-2"
         catalog="mood"
+        maxSelected={2}
       />
     </div>
   )
@@ -650,11 +652,12 @@ export function AestheticConfig({ data, onUpdate }: ConfigProps<AestheticData>) 
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getAestheticPromptHint(data.aesthetic)]} />
-      <Label>Aesthetic / Microtrend</Label>
+      <PromptInjectionPreview hints={[buildAestheticHints(data.aesthetic)]} />
+      <Label>Aesthetic / Microtrend (pick up to 2)</Label>
       <AestheticPicker
-        value={data.aesthetic || "y2k"}
-        onValueChange={(v) => onUpdate({ aesthetic: v })}
+        value={data.aesthetic ?? "y2k"}
+        onValueChange={(v) => onUpdate({ aesthetic: v ?? "y2k" })}
+        maxSelected={2}
       />
     </div>
   )

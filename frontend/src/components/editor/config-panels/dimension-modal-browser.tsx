@@ -69,7 +69,10 @@ export const DimensionModalBrowser = memo(function DimensionModalBrowser({
       : selected.label
     : placeholder
 
-  const handlePick = (id: string | undefined) => {
+  const handlePick = (next: string | ReadonlyArray<string> | undefined) => {
+    // Modal browser is single-select only — DimensionTileGrid emits a string
+    // here since maxSelected defaults to 1. Guard the array branch defensively.
+    const id = typeof next === "string" ? next : Array.isArray(next) ? next[0] : undefined
     onChange(id)
     if (id) setOpen(false)
   }

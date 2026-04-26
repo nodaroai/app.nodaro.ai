@@ -3,10 +3,14 @@
 import { type ReactNode, useMemo, useState } from "react"
 import { Search } from "lucide-react"
 import type { I18nCatalogId } from "@nodaro-shared/i18n"
+import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import type { DimensionEntry } from "./dimension-modal-browser"
+
+/** Multi-pick value: undefined / single id / array of ids (1..maxSelected). */
+export type DimensionPickValue = string | ReadonlyArray<string> | undefined
 
 /**
  * Search-first tile grid for picking one entry from a list of dimension
@@ -30,10 +34,11 @@ export function DimensionTileGrid({
   autoFocusSearch = false,
   showClear = false,
   catalog,
+  maxSelected = 1,
 }: {
   readonly entries: ReadonlyArray<DimensionEntry>
-  readonly value: string | undefined
-  readonly onChange: (id: string | undefined) => void
+  readonly value: DimensionPickValue
+  readonly onChange: (value: DimensionPickValue) => void
   readonly renderIcon: (entry: DimensionEntry, isSelected: boolean) => ReactNode
   readonly searchPlaceholder?: string
   readonly emptyMessage?: string
@@ -42,11 +47,27 @@ export function DimensionTileGrid({
   readonly autoFocusSearch?: boolean
   readonly showClear?: boolean
   readonly catalog?: I18nCatalogId
+  /** Max simultaneous picks. 1 = single (back-compat). >1 = multi-pick with
+   *  numbered tile badges and FIFO replace when full. */
+  readonly maxSelected?: number
 }) {
   const [query, setQuery] = useState("")
   // Always call the hook to keep order stable; pass a sentinel catalog id when
   // i18n is disabled. The resolver falls back to English when no sidecar exists.
   const i18n = useLocalizedCatalog(catalog ?? ("__noop__" as I18nCatalogId))
+
+  const selectedIds = useMemo(() => pickIds(value), [value])
+
+  const handlePick = (id: string) => {
+    if (maxSelected <= 1) {
+      onChange(selectedIds[0] === id ? undefined : id)
+      return
+    }
+    const next = togglePick(selectedIds, id, maxSelected)
+    if (next.length === 0) onChange(undefined)
+    else if (next.length === 1) onChange(next[0])
+    else onChange(next)
+  }
 
   const filtered = useMemo<ReadonlyArray<DimensionEntry>>(() => {
     const q = query.trim().toLowerCase()
@@ -80,9 +101,14 @@ export function DimensionTileGrid({
           {emptyMessage} {query && <>&quot;{query}&quot;</>}
         </div>
       ) : (
-        <div role="radiogroup" className={gridClassName}>
+        <div
+          role={maxSelected > 1 ? "group" : "radiogroup"}
+          aria-label={searchPlaceholder}
+          className={gridClassName}
+        >
           {filtered.map((entry) => {
-            const isSelected = entry.id === value
+            const selectedIndex = selectedIds.indexOf(entry.id)
+            const isSelected = selectedIndex >= 0
             const label = catalog ? i18n.resolveLabel(entry.id, entry.label) : entry.label
             const description = catalog
               ? i18n.resolveDescription(entry.id, entry.description)
@@ -91,17 +117,25 @@ export function DimensionTileGrid({
               <button
                 key={entry.id}
                 type="button"
-                role="radio"
+                role={maxSelected > 1 ? "checkbox" : "radio"}
                 aria-checked={isSelected}
                 title={description}
-                onClick={() => onChange(entry.id)}
+                onClick={() => handlePick(entry.id)}
                 className={cn(
-                  "group flex flex-col items-center gap-1 rounded-xl border p-2 transition-colors cursor-pointer",
+                  "relative group flex flex-col items-center gap-1 rounded-xl border p-2 transition-colors cursor-pointer",
                   isSelected
                     ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
                     : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
                 )}
               >
+                {maxSelected > 1 && isSelected && (
+                  <span
+                    className="absolute top-1 right-1 size-4 rounded-full bg-[#ff0073] text-white text-[9px] font-semibold flex items-center justify-center pointer-events-none"
+                    aria-hidden="true"
+                  >
+                    {selectedIndex + 1}
+                  </span>
+                )}
                 <div
                   className={cn(
                     "size-14 flex items-center justify-center",
@@ -124,7 +158,7 @@ export function DimensionTileGrid({
         </div>
       )}
 
-      {showClear && value && (
+      {showClear && selectedIds.length > 0 && (
         <button
           type="button"
           onClick={() => onChange(undefined)}

@@ -39,7 +39,7 @@ import { getPhotoGenrePromptHint } from "./photo-genre.js"
 import { getBackdropPromptHint } from "./backdrop.js"
 import { getHeldPropPromptHint } from "./held-prop.js"
 import { getPhotographerPromptHint } from "./photographer.js"
-import { getAestheticPromptHint } from "./aesthetic.js"
+import { buildAestheticHints } from "./aesthetic.js"
 import { getEraPromptHint } from "./era.js"
 import { buildExposureHints } from "./exposure-settings.js"
 import { getRenderQualityPromptHint } from "./render-quality.js"
@@ -144,7 +144,7 @@ export function getParameterPromptHint(
     case "photographer":
       return getPhotographerPromptHint(asStr(data.photographer))
     case "aesthetic":
-      return getAestheticPromptHint(asStr(data.aesthetic))
+      return buildAestheticHints(data.aesthetic)
     case "era":
       return getEraPromptHint(asStr(data.era))
     case "pose":
