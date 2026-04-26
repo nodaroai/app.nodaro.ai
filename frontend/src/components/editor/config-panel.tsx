@@ -12,6 +12,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 const Kling3StudioConfig = lazy(() => import("./config-panels/kling3-studio-config").then(m => ({ default: m.Kling3StudioConfig })))
 import { GenerateButton } from "@/components/credits/GenerateButton"
+import { useProvidersCreditsSum } from "@/hooks/use-providers-credits-sum"
 import { createClient } from "@/lib/supabase"
 import {
   NODE_DEFINITIONS,
@@ -717,6 +718,19 @@ export function ConfigPanel() {
     [displayNode?.data, update, sources, fieldMappings, handleMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, removeLoopColumnEdges]
   )
 
+  // Multi-provider sum + repeat count for the GenerateButton's displayed total.
+  // Hooks called unconditionally with safe defaults when no node is selected.
+  const _earlyType = displayNode?.type as string | undefined
+  const _earlyData = (displayNode?.data ?? {}) as Record<string, unknown>
+  const _isMultiProviderNode = _earlyType === "generate-image"
+    && Array.isArray(_earlyData.providers)
+    && (_earlyData.providers as unknown[]).length >= 2
+  const _providersForSum = _isMultiProviderNode ? (_earlyData.providers as readonly string[]) : []
+  const _providerSum = useProvidersCreditsSum(_providersForSum, _earlyData)
+  const _repeatMultiplier = _earlyType && REPEATABLE_NODE_TYPES.has(_earlyType)
+    ? getEffectiveRepeatCount(_earlyData)
+    : 1
+
   if (!displayNode) {
     // On mobile, render nothing when no node selected (bottom sheet simply gone)
     if (isMobile) return null
@@ -884,7 +898,14 @@ export function ConfigPanel() {
                 userId={userId ?? ""}
                 label="Run This Node"
                 isRunning={nodeData.executionStatus === "running"}
-                creditOverride={nodeType === "component" ? (nodeData.estimatedCredits as number) || undefined : undefined}
+                creditOverride={
+                  nodeType === "component"
+                    ? (nodeData.estimatedCredits as number) || undefined
+                    : _isMultiProviderNode && _providerSum > 0
+                      ? _providerSum
+                      : undefined
+                }
+                multiplier={_repeatMultiplier}
               />
             )}
 

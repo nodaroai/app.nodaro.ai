@@ -114,7 +114,7 @@ export {
 } from "./edge-range.js"
 export type { SelectorMode, OutputMode } from "./edge-range.js"
 
-export { REPEATABLE_NODE_TYPES, REPEAT_PLACEHOLDER, getEffectiveRepeatCount, expandItemsWithRepeat } from "./repeat-types.js"
+export { REPEATABLE_NODE_TYPES, REPEAT_PLACEHOLDER, PROVIDER_PLACEHOLDER_PREFIX, encodeProviderItem, decodeProviderItem, getEffectiveRepeatCount, expandItemsWithRepeat } from "./repeat-types.js"
 
 export { settledWithLimit } from "./settled-with-limit.js"
 

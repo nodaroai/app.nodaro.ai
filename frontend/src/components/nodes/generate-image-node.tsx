@@ -19,6 +19,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { useProvidersCreditsSum } from "@/hooks/use-providers-credits-sum"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { EditableNodeLabel } from "./editable-node-label"
 import type { GenerateImageData, ExtractedReference } from "@/types/nodes"
@@ -69,7 +70,17 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.provider ?? "nano-banana-pro",
     nodeData as unknown as Record<string, unknown>,
   )
-  const credits = useModelCredits(creditModelId, 1)
+  // Single-provider primary cost (also primes the cache). Multi-provider total
+  // is the SUM across all selected providers — `RunNodeButton` will further
+  // multiply by repeatCount and any upstream-list fan-out, so we just supply
+  // the per-press cost here.
+  const primaryCredits = useModelCredits(creditModelId, 1)
+  const isMultiProvider = (nodeData.providers?.length ?? 0) >= 2
+  const providersForSum = isMultiProvider ? (nodeData.providers as readonly string[]) : []
+  const providerSum = useProvidersCreditsSum(providersForSum, nodeData as unknown as Record<string, unknown>)
+  // While the multi-provider queries are still loading, providerSum is 0 — pass
+  // 0 so RunNodeButton hides the credit pill rather than flashing a stale value.
+  const credits = isMultiProvider ? providerSum : primaryCredits
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
   const isNodeRunning = nodeData.executionStatus === "running"

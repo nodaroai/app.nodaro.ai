@@ -17,6 +17,27 @@ export const REPEATABLE_NODE_TYPES = new Set([
  *  executeNodeForList skips the overridePrompt/overrideMediaUrl when it sees this. */
 export const REPEAT_PLACEHOLDER = "__repeat__"
 
+/** Sentinel prefix for per-iteration provider override.
+ *  An item like `__provider:nano-banana__` tells executeNodeForList to clone the
+ *  node with `data.provider = "nano-banana"` for that iteration and otherwise
+ *  behave like REPEAT_PLACEHOLDER (no prompt/media override). */
+export const PROVIDER_PLACEHOLDER_PREFIX = "__provider:"
+const PROVIDER_PLACEHOLDER_SUFFIX = "__"
+
+export function encodeProviderItem(provider: string): string {
+  return `${PROVIDER_PLACEHOLDER_PREFIX}${provider}${PROVIDER_PLACEHOLDER_SUFFIX}`
+}
+
+export function decodeProviderItem(item: string): string | undefined {
+  if (!item.startsWith(PROVIDER_PLACEHOLDER_PREFIX)) return undefined
+  if (!item.endsWith(PROVIDER_PLACEHOLDER_SUFFIX)) return undefined
+  const inner = item.slice(
+    PROVIDER_PLACEHOLDER_PREFIX.length,
+    item.length - PROVIDER_PLACEHOLDER_SUFFIX.length,
+  )
+  return inner.length > 0 ? inner : undefined
+}
+
 /** Read repeatCount from node data, clamped to 1-20. Returns 1 if unset/invalid. */
 export function getEffectiveRepeatCount(nodeData: Record<string, unknown>): number {
   const raw = nodeData.repeatCount as number | undefined
@@ -24,9 +45,24 @@ export function getEffectiveRepeatCount(nodeData: Record<string, unknown>): numb
   return Math.min(Math.max(Math.floor(raw), 1), 20)
 }
 
+/** Read providers array from node data. Returns the array only when it has 2+
+ *  entries; one provider is equivalent to single-provider mode. */
+function getEffectiveProviders(nodeData: Record<string, unknown>): readonly string[] | undefined {
+  const raw = nodeData.providers as readonly unknown[] | undefined
+  if (!raw || raw.length < 2) return undefined
+  const cleaned = raw.filter((p): p is string => typeof p === "string" && p.length > 0)
+  return cleaned.length >= 2 ? cleaned : undefined
+}
+
 /**
- * Expand list items by repeatCount, or create synthetic repeat items.
- * Returns null when no expansion is needed (single execution).
+ * Expand list items by repeatCount, or create synthetic repeat / provider items.
+ *
+ * Resolution order:
+ * 1. If an upstream list exists, the list drives expansion (repeatCount multiplies).
+ * 2. Else if `data.providers` has 2+ entries, emit `providers.length × repeatCount`
+ *    items — each provider runs `repeatCount` times consecutively.
+ * 3. Else if repeatCount > 1, emit `repeatCount` synthetic items.
+ * 4. Otherwise return null — single execution, no fan-out.
  */
 export function expandItemsWithRepeat(
   listItems: string[] | undefined,
@@ -42,6 +78,15 @@ export function expandItemsWithRepeat(
       ? listItems.flatMap(item => Array(repeatCount).fill(item) as string[])
       : listItems
     return expanded
+  }
+
+  const providers = getEffectiveProviders(nodeData)
+  if (providers) {
+    // Cross-product: each provider runs `repeatCount` times. Same provider's
+    // iterations are grouped (better for UI progress + caching).
+    return providers.flatMap(p =>
+      Array(Math.max(repeatCount, 1)).fill(encodeProviderItem(p)) as string[],
+    )
   }
 
   if (repeatCount > 1) {
