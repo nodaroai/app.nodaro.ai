@@ -30,10 +30,13 @@ import type {
   RemoveBackgroundData,
   CharacterDefinition,
   ManualReferenceImage,
+  ImageProvider,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, IMAGE_EDIT_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "./model-options"
+import { IMAGE_GEN_MODELS, IMAGE_GEN_MODEL_IDS, IMAGE_I2I_MODELS, IMAGE_EDIT_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
+import { MultiProviderPicker } from "./multi-provider-picker"
+import { intersectModelOptions } from "@/lib/multi-provider/intersect-model-options"
 import { MappableField } from "./mappable-field"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { ReferenceImageList } from "./reference-image-list"
@@ -57,22 +60,52 @@ const DEFAULT_REF_IMAGE_MAX = 4
 
 export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateImageData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
-  const currentProvider = data.provider || "nano-banana-pro"
-  const supportsRefImage = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(currentProvider)
-  const aspectRatioOptions = useMemo(() => getAspectRatiosForModel(currentProvider), [currentProvider])
-  const resolutionOptions = useMemo(() => IMAGE_RESOLUTION_OPTIONS[currentProvider], [currentProvider])
-  const qualityOptions = useMemo(() => IMAGE_QUALITY_OPTIONS[currentProvider], [currentProvider])
+
+  // The selected providers list is the source of truth. Legacy data with only
+  // `data.provider` set falls back to `[data.provider]` so existing workflows work.
+  const providersList = useMemo<readonly ImageProvider[]>(
+    () => (data.providers && data.providers.length > 0
+      ? data.providers
+      : [data.provider || "nano-banana-pro"]),
+    [data.providers, data.provider],
+  )
+  const currentProvider = providersList[0] || "nano-banana-pro"
+  const isMulti = providersList.length > 1
+
+  // Narrow option sets to what ALL selected providers support (intersection).
+  // Single-provider mode falls back to that provider's full set.
+  const intersected = useMemo(() => intersectModelOptions(providersList), [providersList])
+  const aspectRatioOptions = isMulti
+    ? intersected.aspectRatios
+    : getAspectRatiosForModel(currentProvider)
+  const resolutionOptions = isMulti
+    ? (intersected.resolutions.length > 0 ? intersected.resolutions : undefined)
+    : IMAGE_RESOLUTION_OPTIONS[currentProvider]
+  const qualityOptions = isMulti
+    ? (intersected.qualities.length > 0 ? intersected.qualities : undefined)
+    : IMAGE_QUALITY_OPTIONS[currentProvider]
+  const supportsRefImage = isMulti
+    ? intersected.supportsReferenceImage
+    : MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(currentProvider)
+
   const supportsSeed = SEED_SUPPORT.has(currentProvider)
   const supportsRenderingSpeed = RENDERING_SPEED_SUPPORT.has(currentProvider)
   const maxRefImages = REF_IMAGE_MAX_LIMITS[currentProvider] ?? DEFAULT_REF_IMAGE_MAX
 
-  // When provider changes, reset aspect ratio if current value isn't valid for new provider,
-  // and clear reference image if new provider doesn't support it
+  // When the cohort changes (provider added/removed/swapped), reset narrowed
+  // fields whose current value isn't supported by all providers, and drop ref
+  // images if the cohort no longer supports them.
   useEffect(() => {
-    const validValues = aspectRatioOptions.map((o) => o.value)
     const updates: Partial<GenerateImageData> = {}
-    if (data.aspectRatio && !validValues.includes(data.aspectRatio)) {
-      updates.aspectRatio = validValues[0] || "1:1"
+    const aspectValues = aspectRatioOptions.map((o) => o.value)
+    if (data.aspectRatio && !aspectValues.includes(data.aspectRatio)) {
+      updates.aspectRatio = aspectValues[0] || "1:1"
+    }
+    if (data.resolution && resolutionOptions && !resolutionOptions.some((o) => o.value === data.resolution)) {
+      updates.resolution = resolutionOptions[0]?.value
+    }
+    if (data.quality && qualityOptions && !qualityOptions.some((o) => o.value === data.quality)) {
+      updates.quality = qualityOptions[0]?.value
     }
     if (!supportsRefImage && data.referenceImageUrl) {
       updates.referenceImageUrl = undefined
@@ -84,7 +117,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
-  }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [providersList]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Migrate legacy single referenceImageUrl to new multi-image format
   useEffect(() => {
@@ -186,19 +219,21 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
       <FinalPromptPreview userPrompt={data.prompt} style={data.style} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       {/* Provider — primary decision, determines which model-specific fields appear below */}
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
-        <Select
-          value={currentProvider}
-          onValueChange={(v) => onUpdate({ provider: v as GenerateImageData["provider"] })}
-        >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {IMAGE_GEN_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
-            ))}
-          </SelectContent>
-        </Select>
+        <MultiProviderPicker
+          providers={providersList}
+          options={IMAGE_GEN_MODEL_IDS}
+          labelOf={(p) => IMAGE_GEN_MODELS.find((m) => m.value === p)?.label ?? p}
+          onChange={(next) => onUpdate({ providers: next, provider: next[0] })}
+          renderItems={(current) =>
+            IMAGE_GEN_MODELS
+              .filter((m) => m.value === current || !providersList.includes(m.value))
+              .map((m) => (
+                <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              ))
+          }
+          renderHint={(p) => <ModelDescriptionHint modelId={p} />}
+        />
       </MappableField>
-      <ModelDescriptionHint modelId={currentProvider} />
 
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="generate-image" currentPrompt={data.prompt || ""} provider={currentProvider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea

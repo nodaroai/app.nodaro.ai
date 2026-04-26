@@ -1003,6 +1003,11 @@ export type GenerateImageData = {
   label: string
   prompt: string
   provider: ImageProvider
+  /** When set with 2+ entries, each press runs the node once per provider with
+   *  the same prompt — analogous to repeatCount. UI for editing this field
+   *  lives in a separate branch; execution treats it as fan-out via the
+   *  shared expandItemsWithRepeat sentinel. */
+  providers?: readonly ImageProvider[]
   model: string
   style: string
   aspectRatio: string

@@ -13,6 +13,9 @@ import {
 import {
   REPEATABLE_NODE_TYPES,
   REPEAT_PLACEHOLDER,
+  PROVIDER_PLACEHOLDER_PREFIX,
+  encodeProviderItem,
+  decodeProviderItem,
   getEffectiveRepeatCount,
   expandItemsWithRepeat,
 } from "../repeat-types.js"
@@ -463,5 +466,76 @@ describe("expandItemsWithRepeat", () => {
     const result = expandItemsWithRepeat(undefined, "generate-image", { repeatCount: 100 })
     expect(result).toHaveLength(20)
     expect(result!.every(item => item === REPEAT_PLACEHOLDER)).toBe(true)
+  })
+
+  it("expands by providers when 2+ entries and no list/repeats", () => {
+    const result = expandItemsWithRepeat(undefined, "generate-image", {
+      providers: ["nano-banana", "flux", "ideogram"],
+    })
+    expect(result).toEqual([
+      encodeProviderItem("nano-banana"),
+      encodeProviderItem("flux"),
+      encodeProviderItem("ideogram"),
+    ])
+  })
+
+  it("ignores single-entry providers (treated as single-provider mode)", () => {
+    expect(
+      expandItemsWithRepeat(undefined, "generate-image", { providers: ["flux"] }),
+    ).toBeNull()
+  })
+
+  it("filters out non-string / empty providers", () => {
+    const result = expandItemsWithRepeat(undefined, "generate-image", {
+      providers: ["flux", "", null, "nano-banana"] as unknown as readonly string[],
+    })
+    expect(result).toEqual([
+      encodeProviderItem("flux"),
+      encodeProviderItem("nano-banana"),
+    ])
+  })
+
+  it("list input wins over providers (list × repeats)", () => {
+    const result = expandItemsWithRepeat(["a", "b"], "generate-image", {
+      providers: ["flux", "nano-banana"],
+    })
+    expect(result).toEqual(["a", "b"])
+  })
+
+  it("cross-products providers × repeatCount when no list", () => {
+    const result = expandItemsWithRepeat(undefined, "generate-image", {
+      providers: ["flux", "nano-banana"],
+      repeatCount: 3,
+    })
+    expect(result).toEqual([
+      encodeProviderItem("flux"),
+      encodeProviderItem("flux"),
+      encodeProviderItem("flux"),
+      encodeProviderItem("nano-banana"),
+      encodeProviderItem("nano-banana"),
+      encodeProviderItem("nano-banana"),
+    ])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Provider sentinel codec
+// ---------------------------------------------------------------------------
+describe("encodeProviderItem / decodeProviderItem", () => {
+  it("round-trips a provider id", () => {
+    const encoded = encodeProviderItem("nano-banana")
+    expect(encoded.startsWith(PROVIDER_PLACEHOLDER_PREFIX)).toBe(true)
+    expect(decodeProviderItem(encoded)).toBe("nano-banana")
+  })
+
+  it("returns undefined for unrelated strings", () => {
+    expect(decodeProviderItem("nano-banana")).toBeUndefined()
+    expect(decodeProviderItem("__repeat__")).toBeUndefined()
+    expect(decodeProviderItem("")).toBeUndefined()
+    expect(decodeProviderItem("https://example.com/img.png")).toBeUndefined()
+  })
+
+  it("returns undefined for empty inner provider id", () => {
+    expect(decodeProviderItem("__provider:__")).toBeUndefined()
   })
 })

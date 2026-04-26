@@ -6,6 +6,7 @@ import { hasCredits } from "@/lib/edition"
 import { cancelJob } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getListInputForNode } from "@/components/editor/workflow-editor/node-input-resolver"
+import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro-shared/repeat-types"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 interface RunNodeButtonProps {
@@ -27,15 +28,18 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
 
-  const fanOutCount = useMemo(() => {
-    if (!credits || credits <= 0) return 1
+  const { fanOutCount, repeatCount } = useMemo(() => {
     const node = nodes.find((n) => n.id === nodeId)
-    if (!node) return 1
+    if (!node || !credits || credits <= 0) return { fanOutCount: 1, repeatCount: 1 }
     const listItems = getListInputForNode(node as WorkflowNode, nodes as WorkflowNode[], edges as WorkflowEdge[])
-    return listItems ? listItems.length : 1
+    const fanOut = listItems ? listItems.length : 1
+    const repeats = REPEATABLE_NODE_TYPES.has(node.type ?? "")
+      ? getEffectiveRepeatCount(node.data as Record<string, unknown>)
+      : 1
+    return { fanOutCount: fanOut, repeatCount: repeats }
   }, [nodeId, credits, nodes, edges])
 
-  const totalCredits = (credits ?? 0) * fanOutCount
+  const totalCredits = (credits ?? 0) * fanOutCount * repeatCount
 
   if (isRunning && currentJobId) {
     return (
@@ -83,7 +87,7 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
       {label}
       {hasCredits() && credits !== undefined && credits > 0 && (
         <span className="ml-1 opacity-80">
-          ({fanOutCount > 1 ? `${fanOutCount}×${credits}` : credits} CR)
+          ({totalCredits} CR)
         </span>
       )}
     </button>

@@ -149,4 +149,24 @@ describe("GenerateButton", () => {
     expect(button.textContent).toContain("Custom Child")
     expect(button.textContent).not.toContain("Generate")
   })
+
+  it("applies multiplier to the looked-up cost (e.g. repeatCount)", () => {
+    render(<GenerateButton {...defaultProps} multiplier={3} />)
+    // base 2 × 3 = 6
+    const button = screen.getByTestId("generate-button")
+    expect(button.textContent).toContain("(6 credits)")
+  })
+
+  it("multiplier compounds with creditOverride (e.g. multi-provider sum × repeats)", () => {
+    render(<GenerateButton {...defaultProps} creditOverride={11} multiplier={2} />)
+    // 11 (sum) × 2 (repeats) = 22
+    const button = screen.getByTestId("generate-button")
+    expect(button.textContent).toContain("(22 credits)")
+  })
+
+  it("multiplier=1 (default) preserves original cost display", () => {
+    render(<GenerateButton {...defaultProps} multiplier={1} />)
+    const button = screen.getByTestId("generate-button")
+    expect(button.textContent).toContain("(2 credits)")
+  })
 })

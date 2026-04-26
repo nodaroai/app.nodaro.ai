@@ -34,7 +34,7 @@ import type {
 import { WORKFLOW_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { filterCloneNodes } from "../../../packages/shared/src/clone-utils.js"
 import { migrateEdgeOutputMode } from "../../../packages/shared/src/edge-range.js"
-import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, expandItemsWithRepeat } from "../../../packages/shared/src/repeat-types.js"
+import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, expandItemsWithRepeat, decodeProviderItem } from "../../../packages/shared/src/repeat-types.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { settledWithLimit } from "../lib/settled-with-limit.js"
 import { calculateMonetizationMarkup } from "../../../packages/shared/src/monetization.js"
@@ -426,8 +426,20 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         ? getEffectiveRepeatCount(node.data as Record<string, unknown>)
         : 1
 
+      // Mirror expandItemsWithRepeat resolution order: list × repeats win, then
+      // providers (when no list), then repeats alone.
+      const providerCount = (() => {
+        const raw = (node.data as Record<string, unknown>)?.providers
+        if (!Array.isArray(raw)) return 1
+        const cleaned = raw.filter(p => typeof p === "string" && p.length > 0)
+        return cleaned.length >= 2 ? cleaned.length : 1
+      })()
+
       if (listItems && listItems.length > 1) {
         const expandedCount = listItems.length * repeatCount
+        totalExecutions += expandedCount - 1
+      } else if (providerCount > 1) {
+        const expandedCount = providerCount * repeatCount
         totalExecutions += expandedCount - 1
       } else if (repeatCount > 1) {
         totalExecutions += repeatCount - 1
@@ -880,8 +892,14 @@ async function executeNodeForList(
     )
     overrideInputWithListItem(inputs, item)
 
+    // For provider-fanout iterations, swap data.provider for this run only.
+    const providerOverride = decodeProviderItem(item)
+    const iterationNode: SimpleNode = providerOverride
+      ? { ...node, data: { ...(node.data ?? {}), provider: providerOverride } }
+      : node
+
     const result = await executeNode(
-      node,
+      iterationNode,
       inputs,
       edges,
       allNodes,
@@ -962,6 +980,9 @@ function overrideInputWithListItem(
 ): void {
   // Skip override for repeat placeholder — use normal upstream inputs
   if (item === REPEAT_PLACEHOLDER) return
+  // Provider-fanout sentinel — provider swap happens at the executeNode call site;
+  // here we just avoid touching prompt/media inputs.
+  if (decodeProviderItem(item) !== undefined) return
 
   const isUrl =
     item.startsWith("http") ||

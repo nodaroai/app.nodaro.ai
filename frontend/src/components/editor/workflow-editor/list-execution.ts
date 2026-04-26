@@ -9,7 +9,7 @@ import { TIER_PARALLELISM } from "@/lib/pricing-data";
 import { hasCredits } from "@/lib/edition";
 import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
-import { REPEAT_PLACEHOLDER } from "@nodaro-shared/repeat-types";
+import { REPEAT_PLACEHOLDER, decodeProviderItem } from "@nodaro-shared/repeat-types";
 import { settledWithLimit } from "@nodaro-shared/settled-with-limit";
 import { setSuppressToasts } from "./poll-job";
 
@@ -61,7 +61,8 @@ export async function executeNodeForList(
       .nodes.find((n) => n.id === node.id);
     if (!freshNode) throw new Error("Node removed");
 
-    const isRepeat = item === REPEAT_PLACEHOLDER;
+    const providerOverride = decodeProviderItem(item);
+    const isRepeat = providerOverride !== undefined || item === REPEAT_PLACEHOLDER;
     const isUrl =
       !isRepeat &&
       (item.startsWith("http") ||
@@ -69,9 +70,15 @@ export async function executeNodeForList(
           item,
         ));
 
+    // For provider-fanout iterations, swap data.provider for this run only.
+    // The clone is shallow on data; the original store node is untouched.
+    const iterationNode: WorkflowNode = providerOverride
+      ? { ...freshNode, data: { ...freshNode.data, provider: providerOverride } }
+      : freshNode;
+
     // executeNode now returns the output string directly
     const result = await executeNode(
-      freshNode,
+      iterationNode,
       ctx,
       isRepeat ? undefined : isUrl ? undefined : item,
       isRepeat ? undefined : isUrl ? item : undefined,
