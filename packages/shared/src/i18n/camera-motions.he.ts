@@ -24,6 +24,10 @@ const map: LocaleCatalogMap = {
   "dolly-zoom": { label: "Dolly Zoom", description: "אפקט ורטיגו: dolly מנוגד ל-zoom" },
   "push-in": { label: "Push In", description: "דחיפה איטית עדינה לעבר הסובייקט" },
   "pull-out": { label: "Pull Out", description: "משיכה איטית עדינה מהסובייקט" },
+  "breathing": { label: "מצלמה נושמת", description: "תנודה עדינה ורציפה של push-in / pull-out, תחושת handheld אורגנית" },
+  "push-pull": { label: "Push-Pull / נדנוד", description: "המצלמה נעה לעבר הסובייקט וחזרה אחורה, גישה והתרחקות מתנדנדות" },
+  "creep-in": { label: "Creep-In", description: "Push-in איטי באופן בלתי מורגש, בונה אימה או מתח" },
+  "creep-out": { label: "Creep-Out", description: "Pull-out איטי באופן בלתי מורגש, מבודד את הסובייקט במרחב" },
 
   "truck-left": { label: "Truck שמאלה", description: "החלק את גוף המצלמה לרוחב שמאלה" },
   "truck-right": { label: "Truck ימינה", description: "החלק את גוף המצלמה לרוחב ימינה" },
@@ -37,6 +41,8 @@ const map: LocaleCatalogMap = {
 
   "orbit-left": { label: "Orbit שמאלה", description: "מעגל שלם סביב הסובייקט שמאלה" },
   "orbit-right": { label: "Orbit ימינה", description: "מעגל שלם סביב הסובייקט ימינה" },
+  "spin-360": { label: "סיבוב מלא 360°", description: "המצלמה מסתובבת 360 מעלות מלאות סביב צירה" },
+  "orbit-360": { label: "Orbit מלא 360°", description: "המצלמה מתארת קשת מלאה של 360 מעלות סביב הסובייקט" },
   "arc-left": { label: "Arc שמאלה", description: "קשת חלקית סביב הסובייקט שמאלה" },
   "arc-right": { label: "Arc ימינה", description: "קשת חלקית סביב הסובייקט ימינה" },
 
@@ -50,6 +56,9 @@ const map: LocaleCatalogMap = {
   "lead": { label: "הובלה", description: "נוע לפני סובייקט מתקדם" },
   "drone-follow": { label: "מעקב רחפן", description: "מעקב רחפן מורם אחרי הסובייקט" },
   "dolly-track": { label: "Dolly Track", description: "Dolly על מסילה מקבילה לצד הסובייקט" },
+  "gimbal-walk": { label: "הליכה עם Gimbal", description: "צילום הליכה חלק על gimbal תלת-צירי, תנועה קדימה יציבה ומרחפת" },
+  "ronin-glide": { label: "Ronin Glide", description: "תנועת החלקה איטית על gimbal Ronin / Movi, ריחוף קולנועי ללא רעידות" },
+  "serpentine": { label: "מסלול נחשי", description: "המצלמה מתפתלת בין מכשולים בעקומות S, מסלול קדימה מתעקל" },
 
   "pov": { label: "POV", description: "נקודת מבט גוף ראשון" },
   "over-the-shoulder": { label: "מעל הכתף", description: "מסגר מעבר לכתף של דמות" },

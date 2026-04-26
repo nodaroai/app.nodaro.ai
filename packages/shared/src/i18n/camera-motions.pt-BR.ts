@@ -29,6 +29,10 @@ const map: LocaleCatalogMap = {
   "dolly-zoom": { description: "Efeito vertigo: dolly oposto ao zoom" },
   "push-in": { description: "Empurro lento e sutil em direção ao sujeito" },
   "pull-out": { description: "Afastamento lento e sutil do sujeito" },
+  "breathing": { label: "Câmera Respirante", description: "Oscilação contínua e sutil de empurro e afastamento, sensação orgânica de câmera na mão" },
+  "push-pull": { label: "Push-Pull / Vai-e-Vem", description: "A câmera se move em direção ao sujeito e depois se afasta, aproximação e retirada oscilantes" },
+  "creep-in": { label: "Aproximação Imperceptível", description: "Empurro extremamente lento e imperceptível que constrói pavor ou tensão" },
+  "creep-out": { label: "Afastamento Imperceptível", description: "Afastamento extremamente lento e imperceptível que isola o sujeito no espaço" },
 
   // Truck
   "truck-left": { description: "Desliza a câmera lateralmente para a esquerda" },
@@ -46,6 +50,8 @@ const map: LocaleCatalogMap = {
   // Orbit / Arc
   "orbit-left": { description: "Volta completa em torno do sujeito para a esquerda" },
   "orbit-right": { description: "Volta completa em torno do sujeito para a direita" },
+  "spin-360": { label: "Giro Completo 360°", description: "A câmera gira 360 graus completos sobre seu próprio eixo" },
+  "orbit-360": { label: "Órbita Completa 360°", description: "A câmera descreve um arco completo de 360 graus em torno do sujeito" },
   "arc-left": { description: "Arco parcial em torno do sujeito pela esquerda" },
   "arc-right": { description: "Arco parcial em torno do sujeito pela direita" },
 
@@ -61,6 +67,9 @@ const map: LocaleCatalogMap = {
   "lead": { label: "Liderar", description: "Mover-se à frente do sujeito que avança" },
   "drone-follow": { description: "Drone elevado seguindo o sujeito" },
   "dolly-track": { description: "Dolly em trilho paralelo ao lado do sujeito" },
+  "gimbal-walk": { label: "Caminhada com Gimbal", description: "Tomada caminhada suave em gimbal de 3 eixos, movimento flutuante e estável para frente" },
+  "ronin-glide": { label: "Deslizamento Ronin", description: "Movimento deslizante lento em gimbal Ronin / Movi, flutuação cinematográfica sem tremor" },
+  "serpentine": { label: "Trajetória Serpenteante", description: "A câmera serpenteia entre obstáculos em curvas em S, avançando por um caminho sinuoso" },
 
   // Special angles / rigs
   "pov": { description: "Ponto de vista em primeira pessoa" },

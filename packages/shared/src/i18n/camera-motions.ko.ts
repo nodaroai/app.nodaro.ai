@@ -29,6 +29,10 @@ const map: LocaleCatalogMap = {
   "dolly-zoom": { label: "달리 줌", description: "버티고 효과: 달리와 줌이 반대로 동작합니다" },
   "push-in": { label: "푸시 인", description: "피사체를 향한 천천히 미묘한 푸시입니다" },
   "pull-out": { label: "풀 아웃", description: "피사체로부터 천천히 미묘한 풀백입니다" },
+  "breathing": { label: "브리딩 카메라", description: "은은하게 지속되는 푸시 인 / 풀 아웃의 진동, 유기적인 핸드헬드 느낌입니다" },
+  "push-pull": { label: "푸시 풀 / 스윙", description: "카메라가 피사체를 향해 다가갔다가 다시 멀어지는, 흔들리는 접근과 후퇴입니다" },
+  "creep-in": { label: "크리프 인", description: "감지하기 어려울 만큼 느린 푸시 인으로 공포감이나 긴장감을 쌓아갑니다" },
+  "creep-out": { label: "크리프 아웃", description: "감지하기 어려울 만큼 느린 풀 아웃으로 피사체를 공간 속에 고립시킵니다" },
 
   // Truck
   "truck-left": { label: "트럭 왼쪽", description: "카메라 본체를 측면으로 왼쪽으로 슬라이드합니다" },
@@ -46,6 +50,8 @@ const map: LocaleCatalogMap = {
   // Orbit / Arc
   "orbit-left": { label: "오비트 왼쪽", description: "피사체 주위를 왼쪽으로 한 바퀴 도는 궤도입니다" },
   "orbit-right": { label: "오비트 오른쪽", description: "피사체 주위를 오른쪽으로 한 바퀴 도는 궤도입니다" },
+  "spin-360": { label: "풀 360° 스핀", description: "카메라가 자신의 축을 중심으로 360도 완전 회전합니다" },
+  "orbit-360": { label: "풀 360° 오비트", description: "카메라가 피사체 주위를 360도 완전한 호로 돕니다" },
   "arc-left": { label: "아크 왼쪽", description: "피사체 주위를 왼쪽으로 부분적으로 도는 호입니다" },
   "arc-right": { label: "아크 오른쪽", description: "피사체 주위를 오른쪽으로 부분적으로 도는 호입니다" },
 
@@ -61,6 +67,9 @@ const map: LocaleCatalogMap = {
   "lead": { label: "리드", description: "전진하는 피사체보다 앞서 이동합니다" },
   "drone-follow": { label: "드론 팔로우", description: "피사체를 추적하는 고도의 드론입니다" },
   "dolly-track": { label: "달리 트랙", description: "피사체와 평행한 트랙 위의 달리입니다" },
+  "gimbal-walk": { label: "짐벌 워크", description: "3축 짐벌로 부드럽게 걷는 샷, 떠다니듯 안정된 전진 움직임입니다" },
+  "ronin-glide": { label: "Ronin 글라이드", description: "Ronin / Movi 짐벌 위에서의 느린 미끄러지는 움직임, 흔들림 없는 시네마틱한 부유감입니다" },
+  "serpentine": { label: "서펜타인 트랙", description: "카메라가 장애물 사이를 S자 곡선으로 누비며, 굽이치는 전진 경로를 그립니다" },
 
   // Special angles / rigs
   "pov": { label: "POV", description: "1인칭 시점입니다" },
