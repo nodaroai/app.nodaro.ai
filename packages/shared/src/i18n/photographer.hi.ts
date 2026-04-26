@@ -68,6 +68,13 @@ const map: LocaleCatalogMap = {
   "peter-gric": { description: "Architectural surrealist landscape" },
   "ingrid-baars": { description: "Sculptural fashion-art collage" },
   "guido-van-helten": { description: "Monumental muralist portrait" },
+
+  // -------------------- Round 2 --------------------
+  "mcginley": { description: "Naturalistic युवा + nudity landscape में, sun-flared candid" },
+  "mitchell": { description: "समकालीन Black portraiture, नर्म प्राकृतिक रोशनी" },
+  "collins": { description: "गुलाबी-संतृप्त स्वप्निल female-gaze fashion, hazy 35mm" },
+  "weston": { description: "Modernist B&W still life, sculptural nudes" },
+  "beaton": { description: "Classical Hollywood-era portraiture, theatrical staging" },
 }
 
 export default map

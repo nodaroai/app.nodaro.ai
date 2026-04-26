@@ -72,6 +72,13 @@ const map: LocaleCatalogMap = {
   "tillmans": { description: "コンテンポラリーなキャンディッド、クィアな親密さ" },
   "teller": { description: "カジュアルなフラッシュ・ファッション、アンチ・グラマー" },
   "penn": { description: "ミッドセンチュリーのスタジオ・ポートレート、ファッションと静物" },
+
+  // Additional photographers
+  "mcginley": { description: "風景の中の自然主義的な若者とヌード、太陽光のフレアの効いたキャンディッド" },
+  "mitchell": { description: "コンテンポラリーな黒人ポートレート、柔らかな自然光" },
+  "collins": { description: "ピンクに彩度の高い夢のような女性視点ファッション、霞んだ35mm" },
+  "weston": { description: "モダニズムの白黒静物、彫刻的なヌード" },
+  "beaton": { description: "クラシックなハリウッド時代のポートレート、演劇的な演出" },
 }
 
 export default map

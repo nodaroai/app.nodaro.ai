@@ -146,6 +146,14 @@ const map: LocaleCatalogMap = {
   "red-panda": { label: "レッサーパンダ", description: "竹を食べる小型の赤茶色の動物、キツネのような顔つき" },
   "raven": { label: "ワタリガラス", description: "知的な眼差しを持つ艶のある真っ黒なワタリガラス" },
   "axolotl": { label: "ウーパールーパー", description: "羽毛のような外鰓を持つピンク色の水生サンショウウオ" },
+
+  // Additional animals
+  "pangolin": { label: "パンゴリン", description: "鱗で覆われた装甲のアリクイ" },
+  "okapi": { label: "オカピ", description: "シマウマ模様の脚を持つ森のキリン" },
+  "quokka": { label: "クオッカ", description: "微笑むオーストラリアの有袋類" },
+  "meerkat": { label: "ミーアキャット", description: "立ち上がるアフリカのマングース" },
+  "emu": { label: "エミュー", description: "オーストラリアの大型飛べない走鳥" },
+  "tarantula": { label: "タランチュラ", description: "大型で毛深い狩猟性のクモ" },
 }
 
 export default map

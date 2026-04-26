@@ -29,6 +29,12 @@ const map: LocaleCatalogMap = {
   "headwear-crown": { label: "כתר", description: "כתר מלכותי או דקורטיבי" },
   "headwear-helmet": { label: "קסדה", description: "קסדת מגן" },
   "headwear-veil": { label: "צעיף", description: "צעיף נופל על הפנים/השיער" },
+  "headwear-bucket-hat": { label: "כובע דלי", description: "כובע דלי קז'ואל עם שוליים רכים" },
+  "headwear-beret": { label: "ברט", description: "ברט צרפתי עגול ורך" },
+  "headwear-turban": { label: "טורבן", description: "טורבן עטוף סביב הראש, תרבותי / אופנתי" },
+  "headwear-fascinator": { label: "Fascinator", description: "כיסוי ראש דקורטיבי קטן בסגנון חתונה מלכותית" },
+  "headwear-bowler": { label: "כובע בוקסר", description: "כובע bowler/derby עם כתר עגול" },
+  "headwear-cowboy-hat": { label: "כובע קאובוי", description: "כובע קאובוי מערבי עם שוליים רחבים" },
 
   // Hair Cut
   "cut-pixie": { label: "Pixie", description: "תספורת pixie קצרה ומקוצרת" },
@@ -170,6 +176,17 @@ const map: LocaleCatalogMap = {
   "outfit-kimono": { label: "קימונו", description: "קימונו יפני מסורתי" },
   "outfit-ballerina": { label: "בלרינה", description: "תלבושת בלרינה קלאסית" },
   "outfit-flapper": { label: "Flapper של שנות ה-1920", description: "שמלת flapper מחורזת" },
+  "outfit-goth": { label: "גות'", description: "גות' כהה מלא: תחרה שחורה, עור, איפור כהה, שרשראות" },
+  "outfit-emo": { label: "Emo", description: "Emo מתחילת שנות ה-2000: ג'ינס סקיני, חולצת להקה, שיער צבוע, אייליינר" },
+  "outfit-streetwear": { label: "Streetwear", description: "Streetwear מודרני: הודי, מכנסיים רפויים, סניקרס, כובע דלי" },
+  "outfit-cyberpunk": { label: "Cyberpunk", description: "Cyberpunk מואר ניאון: tech wear, אקצנטי LED, שכבות רשת" },
+  "outfit-cottagecore": { label: "Cottagecore", description: "אסתטיקה כפרית של ביתן: שמלת prairie, סינר, סלסילה" },
+  "outfit-dark-academia": { label: "Dark Academia", description: "מלומד tweed-Oxford: בלייזר, אפודה, נעלי oxford" },
+  "outfit-anime-cosplay": { label: "Anime Cosplay", description: "תחפושת על פי דמות אנימה מוכרת" },
+  "outfit-nurse": { label: "אחות", description: "סקרבס רפואיים, סטטוסקופ, lanyard עם תעודה" },
+  "outfit-pirate": { label: "פיראט", description: "תחפושת פיראט: כובע tricorn, חגורת בד, חולצה עם מלמלה, מגפיים" },
+  "outfit-fairy": { label: "פיה", description: "פיית פנטזיה: כנפיים שקופות, כתר פרחים, שמלה אתרית" },
+  "outfit-mermaid": { label: "בת ים", description: "בת ים פנטזיה: זנב/חצאית מקושקשים, חלק עליון מצדפים" },
 
   // Top
   "top-tshirt": { label: "טי-שירט", description: "טי-שירט פשוט עם צווארון עגול" },
@@ -187,6 +204,11 @@ const map: LocaleCatalogMap = {
   "top-bra-top": { label: "Bra Top", description: "Top בסגנון חזייה החושף את אמצע הגוף" },
   "top-sports-bra": { label: "חזיית ספורט", description: "חזיית ספורט אתלטית" },
   "top-bikini-top": { label: "חלק עליון של ביקיני", description: "חלק עליון של ביקיני משולש" },
+  "top-bodysuit": { label: "בגד גוף", description: "בגד גוף חלק אחד מוצמד לפלג גוף עליון" },
+  "top-leotard": { label: "Leotard", description: "Top מוצמד בסגנון מחול עם שרוולים" },
+  "top-mesh-top": { label: "Top רשת", description: "Top מבד רשת שקוף" },
+  "top-sheer-top": { label: "Top שקוף", description: "Top מבד שקוף" },
+  "top-bandeau": { label: "Bandeau", description: "Top צינור ללא רצועות" },
 
   // Bottom
   "bottom-jeans": { label: "ג'ינס", description: "ג'ינס כחול קלאסי" },
@@ -205,6 +227,11 @@ const map: LocaleCatalogMap = {
   "bottom-pleated-skirt": { label: "חצאית קפלים", description: "חצאית קפלים באורך אמצע ירך" },
   "bottom-midi-skirt": { label: "חצאית מידי", description: "חצאית מידי באורך שוק" },
   "bottom-maxi-skirt": { label: "חצאית מקסי", description: "חצאית מקסי באורך רצפה" },
+  "bottom-overalls": { label: "אוברול", description: "אוברול ג'ינס / dungarees" },
+  "bottom-culottes": { label: "Culottes", description: "מכנסיים קצוצים רחבי-רגליים, באורך אמצע שוק" },
+  "bottom-palazzo-pants": { label: "מכנסי Palazzo", description: "מכנסיים זורמים רחבי-רגליים" },
+  "bottom-harem-pants": { label: "מכנסי Harem", description: "מכנסיים רפויים עם מפשעה נמוכה" },
+  "bottom-bike-shorts": { label: "מכנסי אופניים", description: "מכנסיים קצרים מוצמדים מליקרה באורך אמצע ירך" },
 
   // Outerwear
   "outerwear-leather-jacket": { label: "ז'קט עור", description: "ז'קט עור בגזרה צמודה" },
@@ -253,6 +280,12 @@ const map: LocaleCatalogMap = {
   "footwear-flip-flops": { label: "כפכפים", description: "כפכפי גומי קז'ואל" },
   "footwear-ballet-flats": { label: "Ballet Flats", description: "Ballet flats slip-on" },
   "footwear-barefoot": { label: "יחף", description: "ללא נעליים — יחף" },
+  "footwear-crocs": { label: "Crocs", description: "כפכפי שרף צבעוניים, קז'ואל" },
+  "footwear-birkenstocks": { label: "Birkenstocks", description: "סנדלים עם מדרס שעם" },
+  "footwear-doc-martens": { label: "Doc Martens", description: "מגפי קומבט עור עבים" },
+  "footwear-converse": { label: "Converse", description: "סניקרס high-top קנבס, Chuck Taylor קלאסי" },
+  "footwear-vans": { label: "Vans", description: "סניקרס סקייטרים slip-on או low-top" },
+  "footwear-espadrilles": { label: "Espadrilles", description: "נעל קיץ קנבס עם סוליית יוטה ארוגה" },
 
   // Wardrobe State
   "state-oversized": { label: "Oversized", description: "גזרה רפויה ו-oversized" },

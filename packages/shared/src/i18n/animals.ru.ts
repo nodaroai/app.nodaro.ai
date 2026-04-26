@@ -144,6 +144,12 @@ const map: LocaleCatalogMap = {
   "red-panda": { label: "Малая панда", description: "Маленький рыжевато-коричневый поедатель бамбука с лисьей мордой" },
   "raven": { label: "Ворон", description: "Глянцево-чёрный ворон с умным взглядом" },
   "axolotl": { label: "Аксолотль", description: "Розовая водная саламандра с перистыми жабрами" },
+  "pangolin": { label: "Панголин", description: "Чешуйчатый бронированный муравьед" },
+  "okapi": { label: "Окапи", description: "Лесной жираф с зеброподобными полосами на ногах" },
+  "quokka": { label: "Квокка", description: "Улыбающийся австралийский сумчатый" },
+  "meerkat": { label: "Сурикат", description: "Стоящий африканский мангуст" },
+  "emu": { label: "Эму", description: "Большая нелетающая австралийская бескилевая птица" },
+  "tarantula": { label: "Тарантул", description: "Большой волосатый охотничий паук" },
 }
 
 export default map

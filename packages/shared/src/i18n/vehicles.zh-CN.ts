@@ -125,6 +125,12 @@ const map: LocaleCatalogMap = {
   "space-shuttle":  { label: "航天飞机",       description: "航天飞机轨道器,白色三角翼、黑色隔热瓦机腹与尾部巨大火箭喷管" },
   "rocket":         { label: "火箭",           description: "高耸的圆柱形火箭,尖锐头锥、尾翼、助推级与发射时引擎喷出的烈焰" },
   "hoverboard":     { label: "悬浮滑板",       description: "未来悬浮滑板,悬浮在地面之上几英寸,底部发光喷气与时尚的单板造型" },
+  "ambulance":      { label: "救护车",         description: "紧急医疗救护车" },
+  "police-car":     { label: "警车",           description: "黑白涂装巡逻警车,车顶带警灯条" },
+  "hovercraft":     { label: "气垫船",         description: "可在水面 / 陆地上行驶的气垫船" },
+  "paraglider":     { label: "滑翔伞",         description: "脚起飞的软翼滑翔伞" },
+  "microlight":     { label: "超轻型飞机",     description: "轻量化单人休闲飞行器" },
+  "airship":        { label: "飞艇 / 齐柏林",   description: "大型硬式轻于空气飞行器" },
 }
 
 export default map

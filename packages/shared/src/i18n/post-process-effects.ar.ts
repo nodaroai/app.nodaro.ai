@@ -15,6 +15,11 @@ const map: LocaleCatalogMap = {
   "color-fringe": { label: "هامش لوني", description: "هامش طفيف على تباين عال" },
   "soft-focus-diffusion": { label: "انتشار تركيز ناعم", description: "توهج إبرازات ضبابي حالم" },
   "contrast-boost": { label: "تعزيز تباين", description: "ظلال مسحوقة + إبرازات مدفوعة" },
+
+  "sharpening": { label: "Sharpening كثيف", description: "تمرير Sharpening حواد عدواني" },
+  "clarity-boost": { label: "تعزيز Clarity", description: "تعزيز Clarity للنغمات المتوسطة، تباين محلي مرفوع" },
+  "dehaze": { label: "Dehaze", description: "Dehaze جوي مطبق، يزيل النعومة" },
+  "lift-gamma-gain": { label: "تدرج Lift-Gamma-Gain", description: "عجلات تدرج لوني ثلاثية" },
 }
 
 export default map

@@ -15,6 +15,13 @@ const map: LocaleCatalogMap = {
   "silhouette-outline": { label: "シルエットの輪郭", description: "フラットな背景上の真っ黒なシルエット" },
   "exploding-particles": { label: "爆発する粒子", description: "粒子に飛散する輪郭" },
   "3x3-grid-collage": { label: "3×3グリッド・コラージュ", description: "コンタクトシート風の9ポーズモンタージュ" },
+
+  // Additional composition effects
+  "matte-painting": { label: "マットペインティング", description: "実写と合成されたマットペイントの背景" },
+  "double-exposure": { label: "二重露光", description: "2層の写真露光を融合" },
+  "multiple-exposure": { label: "多重露光", description: "3層以上の露光を重ね合わせ" },
+  "in-camera-effects": { label: "カメラ内エフェクト", description: "ポストプロセスなしのカメラ内実写光学効果" },
+  "prism-flares": { label: "プリズムフレア", description: "クリスタルプリズムが光を屈折させスペクトル帯に分けるフレア" },
 }
 
 export default map

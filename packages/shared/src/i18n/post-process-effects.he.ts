@@ -15,6 +15,10 @@ const map: LocaleCatalogMap = {
   "color-fringe": { label: "הילה צבעונית", description: "הילה עדינה בקונטרסט גבוה" },
   "soft-focus-diffusion": { label: "פיזור פוקוס רך", description: "Bloom חולמני מעורפל בהיילייטים" },
   "contrast-boost": { label: "הגברת קונטרסט", description: "צללים שחוקים + היילייטים מורמים" },
+  "sharpening": { label: "חידוד כבד", description: "מעבר חידוד קצוות אגרסיבי" },
+  "clarity-boost": { label: "הגברת בהירות", description: "שיפור בהירות גוונים בינוניים, הגברת קונטרסט מקומי" },
+  "dehaze": { label: "Dehaze", description: "הסרת אובך אטמוספרי, הסרת רכות" },
+  "lift-gamma-gain": { label: "Lift-Gamma-Gain", description: "גלגלי דירוג צבע תלת-כיווניים" },
 }
 
 export default map

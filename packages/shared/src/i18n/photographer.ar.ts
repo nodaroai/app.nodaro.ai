@@ -64,6 +64,12 @@ const map: LocaleCatalogMap = {
   "tillmans": { description: "حميمية معاصرة عفوية وكويرية" },
   "teller": { description: "أزياء فلاش كاجوال ومضادة للبريق" },
   "penn": { description: "بورتريه استوديو من منتصف القرن وأزياء وحياة جامدة" },
+
+  "mcginley": { description: "شباب طبيعي + عري في المناظر الطبيعية، عفوي بوهج الشمس" },
+  "mitchell": { description: "بورتريه أسود معاصر، ضوء طبيعي ناعم" },
+  "collins": { description: "أزياء حالمة بنظرة أنثوية مشبعة بالوردي، 35mm ضبابي" },
+  "weston": { description: "حياة جامدة Modernist بالأبيض والأسود، عريات نحتية" },
+  "beaton": { description: "بورتريه من حقبة Hollywood الكلاسيكية، إخراج مسرحي" },
 }
 
 export default map

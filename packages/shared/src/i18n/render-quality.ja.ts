@@ -24,6 +24,12 @@ const map: LocaleCatalogMap = {
   "raw-photo": { label: "Raw 写真", description: "未加工の写真的な質感" },
   "masterpiece": { label: "マスターピース", description: "熟練者の手によるクオリティの証" },
   "award-winning": { label: "受賞作品級", description: "受賞回路レベルの品質" },
+
+  // Additional render quality
+  "volumetric-lighting": { label: "ボリュメトリック・ライティング", description: "ゴッドレイのボリュメトリックな光の柱" },
+  "photon-mapping": { label: "フォトンマッピング", description: "コースティックを意識したフォトンマップによるグローバルイルミネーション" },
+  "ai-upscaled": { label: "AIアップスケール", description: "ニューラルネットワークによるディテール強化アップスケール" },
+  "denoised": { label: "ノイズ除去", description: "クリーンでノイズを除去した高純度のレンダリング" },
 }
 
 export default map

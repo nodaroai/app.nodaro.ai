@@ -336,6 +336,20 @@ const map: LocaleCatalogMap = {
   "feature-midriff-visible": { label: "Видимая талия", description: "Открытая талия между верхом и низом" },
   "feature-navel-visible": { label: "Видимый пупок", description: "Видимый пупок на голом животе" },
   "feature-elongated-neck": { label: "Удлинённая шея", description: "Длинная лебединая шея" },
+  "feature-back-tattoo": { label: "Татуировка на спине", description: "Большая работа поперёк спины" },
+  "feature-chest-tattoo": { label: "Татуировка на груди", description: "Татуировка через грудь / декольте" },
+  "feature-leg-tattoo": { label: "Татуировка на ноге", description: "Видимая татуировка на ноге / икре / бедре" },
+  "feature-forearm-tattoo": { label: "Татуировка на предплечье", description: "Татуировка на внутренней или внешней стороне предплечья" },
+  "feature-ear-piercings": { label: "Пирсинг ушей", description: "Множественный сложенный пирсинг ушей (хрящ, хеликс, конча)" },
+  "feature-lip-piercing": { label: "Пирсинг губы", description: "Кольцо в губе / лабрет" },
+  "feature-nostril-piercing": { label: "Пирсинг ноздри", description: "Один пусет или кольцо в ноздре" },
+  "eye-double-eyelid": { label: "Двойное веко", description: "Чёткая складка верхнего века" },
+  "femboy": { label: "Femboy", description: "Мягко-фемининный мужской типаж, гендерфлюидный стайлинг" },
+  "twink": { label: "Twink", description: "Стройный, гладкий, юношеский гей-мужской типаж" },
+  "soft-butch": { label: "Мягкий буч", description: "Нежная маскулинно-центрическая женщина" },
+  "tomboy": { label: "Пацанка", description: "Мальчишеский стайлинг и энергия на женском теле" },
+  "thick": { label: "Пышная", description: "Чувственная боди-позитивная фигура с формами" },
+  "bear": { label: "Bear", description: "Крупный, бородатый, волосатый маскулинный типаж" },
 }
 
 export default map

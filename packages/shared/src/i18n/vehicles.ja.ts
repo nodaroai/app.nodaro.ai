@@ -125,6 +125,14 @@ const map: LocaleCatalogMap = {
   "space-shuttle": { label: "スペースシャトル", description: "白いデルタ翼、黒い熱遮蔽の腹部、後部の巨大なロケットノズルを持つスペースシャトル軌道機" },
   "rocket": { label: "ロケット", description: "尖ったノーズコーン、テールフィン、ブースター段、打ち上げ時にエンジンから噴き出す炎を持つ高い円筒形のロケット" },
   "hoverboard": { label: "ホバーボード", description: "底面に輝くジェット、洗練された一枚板のボディを持ち、地面のすぐ上に浮かぶ未来的なホバーボード" },
+
+  // Additional vehicles
+  "ambulance": { label: "救急車", description: "緊急医療搬送車両" },
+  "police-car": { label: "パトカー", description: "ライトバー付きの白黒パトロールカー" },
+  "hovercraft": { label: "ホバークラフト", description: "水上／陸上を走るエアクッション車両" },
+  "paraglider": { label: "パラグライダー", description: "足で離陸するソフトウィングのグライダー" },
+  "microlight": { label: "マイクロライト機", description: "軽量の単座レクリエーション航空機" },
+  "airship": { label: "飛行船／ダイリジブル", description: "大型の硬式空気より軽い飛行船" },
 }
 
 export default map

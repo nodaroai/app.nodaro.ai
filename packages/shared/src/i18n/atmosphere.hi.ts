@@ -31,6 +31,13 @@ const map: LocaleCatalogMap = {
   "starfield": { label: "तारों भरा आसमान", description: "तारों के साथ दिखाई देता रात का आसमान, cosmic backdrop" },
   "dandelion-seeds": { label: "Dandelion के बीज", description: "तैरती हुई dandelion की रूई, गर्मी की हवा" },
   "pollen-drift": { label: "पराग का बहाव", description: "Golden hour रोशनी में बारीक पीला-सुनहरा पराग" },
+
+  // -------------------- Round 2 --------------------
+  "snowflakes-heavy": { label: "भारी हिमपात", description: "हवा को भरते भारी मोटे बर्फ़ के फाहे" },
+  "snowflakes-light": { label: "हल्की बर्फ़ का बहाव", description: "विरल बहते बर्फ़ के फाहे" },
+  "raindrops-on-skin": { label: "त्वचा पर बारिश की बूँदें", description: "त्वचा पर जमी हुई दिखाई देती पानी की बूँदें" },
+  "bioluminescent-cloud": { label: "Bioluminescent कण-बादल", description: "बहते हुए चमकते नीले-हरे कण" },
+  "motion-streaks": { label: "Motion की लकीरें", description: "Speed-line motion-blur की लकीरें" },
 }
 
 export default map

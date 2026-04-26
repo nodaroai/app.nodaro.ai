@@ -336,6 +336,26 @@ const map: LocaleCatalogMap = {
   "feature-midriff-visible": { label: "허리 노출", description: "상의와 하의 사이로 허리가 드러납니다" },
   "feature-navel-visible": { label: "배꼽 노출", description: "맨 배에 배꼽이 보입니다" },
   "feature-elongated-neck": { label: "긴 목", description: "백조 같은 긴 목입니다" },
+
+  // -------------------- Type (additional) --------------------
+  "femboy": { label: "팸보이", description: "부드러운 페미닌 무드의 마스큘린 타입, 젠더 플루이드 스타일링입니다" },
+  "twink": { label: "트윙크", description: "마르고 매끈하며 어려 보이는 게이 남성 타입입니다" },
+  "soft-butch": { label: "소프트 부치", description: "온화한 마스큘린 오브 센터 여성입니다" },
+  "tomboy": { label: "톰보이", description: "여성스러운 몸매에 보이시한 스타일링과 에너지를 더한 모습입니다" },
+  "thick": { label: "씩", description: "굴곡이 있는 풍만한 바디 포지티브 체형입니다" },
+  "bear": { label: "베어", description: "크고 수염이 있으며 털이 많은 마스큘린 타입입니다" },
+
+  // -------------------- Distinctive Features (additional) --------------------
+  "feature-back-tattoo": { label: "백 타투", description: "등 전체에 걸친 큰 타투 작품입니다" },
+  "feature-chest-tattoo": { label: "체스트 타투", description: "가슴 / 데콜테에 걸친 타투입니다" },
+  "feature-leg-tattoo": { label: "레그 타투", description: "다리 / 종아리 / 허벅지에 보이는 타투입니다" },
+  "feature-forearm-tattoo": { label: "포어암 타투", description: "팔뚝 안쪽 또는 바깥쪽의 타투입니다" },
+  "feature-ear-piercings": { label: "이어 피어싱", description: "여러 개를 쌓아 올린 귀 피어싱 (카르틸리지, 헬릭스, 콘치)입니다" },
+  "feature-lip-piercing": { label: "립 피어싱", description: "립 링 / 라브렛 스터드입니다" },
+  "feature-nostril-piercing": { label: "코 피어싱", description: "한쪽 콧방울 스터드 또는 링입니다" },
+
+  // -------------------- Eye Shape (additional) --------------------
+  "eye-double-eyelid": { label: "쌍꺼풀", description: "또렷한 윗눈꺼풀 라인입니다" },
 }
 
 export default map

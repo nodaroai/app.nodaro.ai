@@ -125,6 +125,14 @@ const map: LocaleCatalogMap = {
   "space-shuttle": { label: "우주왕복선", description: "흰색 델타 윙, 검은 열차폐 하부, 후방의 거대한 로켓 노즐을 가진 우주왕복선 오비터입니다" },
   "rocket": { label: "로켓", description: "뾰족한 노즈콘, 테일 핀, 부스터 단계, 발사 시 엔진에서 포효하는 화염을 가진 키 큰 원통형 로켓입니다" },
   "hoverboard": { label: "호버보드", description: "지면 위 몇 인치 떠 있는, 빛나는 하부 제트, 매끈한 단일 판자 차체를 가진 미래형 호버보드입니다" },
+
+  // Additional vehicles
+  "ambulance": { label: "구급차", description: "응급 의료 차량입니다" },
+  "police-car": { label: "경찰차", description: "라이트 바가 달린 흑백 패트롤 카입니다" },
+  "hovercraft": { label: "호버크래프트", description: "물 / 육지 위를 달리는 공기 쿠션 차량입니다" },
+  "paraglider": { label: "패러글라이더", description: "발로 이륙하는 소프트 윙 글라이더입니다" },
+  "microlight": { label: "마이크로라이트 항공기", description: "단일 조종사용 경량 레크리에이션 항공기입니다" },
+  "airship": { label: "비행선 / 비행 비행정", description: "거대한 경식 공기보다 가벼운 비행체입니다" },
 }
 
 export default map

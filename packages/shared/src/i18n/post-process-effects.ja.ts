@@ -15,6 +15,12 @@ const map: LocaleCatalogMap = {
   "color-fringe": { label: "カラーフリンジ", description: "ハイコントラストエッジの繊細なフリンジ" },
   "soft-focus-diffusion": { label: "ソフトフォーカス・ディフュージョン", description: "霞んだ夢のようなハイライト・ブルーム" },
   "contrast-boost": { label: "コントラスト強調", description: "潰したシャドウと押し上げたハイライト" },
+
+  // Additional post-process effects
+  "sharpening": { label: "強いシャープニング", description: "積極的なエッジシャープニング処理" },
+  "clarity-boost": { label: "明瞭度ブースト", description: "ミッドトーンの明瞭度強調、局所コントラストの増加" },
+  "dehaze": { label: "霞除去", description: "適用された大気の霞除去、柔らかさを取り除く" },
+  "lift-gamma-gain": { label: "リフト・ガンマ・ゲイン・グレード", description: "三方向カラーグレーディングホイール" },
 }
 
 export default map

@@ -144,6 +144,12 @@ const map: LocaleCatalogMap = {
   "red-panda": { label: "פנדה אדומה", description: "אוכל-במבוק אדמדם-חום קטן עם פנים דמויי שועל" },
   "raven": { label: "עורב שחור", description: "עורב שחור מבריק עם מבט אינטליגנטי" },
   "axolotl": { label: "אקסולוטל", description: "סלמנדרה מימית ורודה עם זימים נוצתיים" },
+  "pangolin": { label: "פנגולין", description: "אוכל-נמלים משוריין מקושקש" },
+  "okapi": { label: "אוקאפי", description: "ג'ירפת יער עם רגליים בפסי זברה" },
+  "quokka": { label: "קווקה", description: "מרסופיאל אוסטרלי מחייך" },
+  "meerkat": { label: "סורייקטה", description: "נמייה אפריקאית עומדת" },
+  "emu": { label: "אמו", description: "ציפור רטיט אוסטרלית גדולה ולא מעופפת" },
+  "tarantula": { label: "טרנטולה", description: "עכביש ציד גדול ושעיר" },
 }
 
 export default map

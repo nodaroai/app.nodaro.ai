@@ -54,6 +54,10 @@ const map: LocaleCatalogMap = {
   "lazy-shy": { label: "ביישן עצל", description: "מנמנם, רך, ביישן למחצה" },
   "awe": { label: "פליאה", description: "פלא, יראה" },
   "shocked": { label: "המום", description: "מופתע, פה פתוח" },
+  "flirty": { label: "פלרטטני", description: "פלרטוט שובב, חיוך מתעכב, קשר עין מתמשך" },
+  "suspicious": { label: "חשדן", description: "אי-אמון זהיר, עיניים מצומצמות, מבט צד" },
+  "resigned": { label: "מושלם עם המצב", description: "השלמה שקטה עם מצב לא נעים" },
+  "conflicted": { label: "מתלבט", description: "מאבק פנימי גלוי, מצח מקומט" },
 }
 
 export default map

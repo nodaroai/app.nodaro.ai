@@ -24,6 +24,12 @@ const map: LocaleCatalogMap = {
   "raw-photo": { label: "Raw 포토", description: "가공되지 않은 사진의 느낌입니다" },
   "masterpiece": { label: "마스터피스", description: "장인의 손길이 느껴지는 품질의 스탬프입니다" },
   "award-winning": { label: "어워드 위닝", description: "수상작 수준의 퀄리티입니다" },
+
+  // Additional render qualities
+  "volumetric-lighting": { label: "볼류메트릭 라이팅", description: "갓 레이 볼류메트릭 광선 샤프트입니다" },
+  "photon-mapping": { label: "포톤 매핑", description: "코스틱을 인식하는 포톤 매핑 기반 글로벌 일루미네이션입니다" },
+  "ai-upscaled": { label: "AI 업스케일드", description: "신경망으로 업스케일된 디테일 향상입니다" },
+  "denoised": { label: "디노이즈드", description: "노이즈가 제거된 깨끗하고 정갈한 렌더링입니다" },
 }
 
 export default map

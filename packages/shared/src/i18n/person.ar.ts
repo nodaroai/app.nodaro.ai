@@ -322,6 +322,23 @@ const map: LocaleCatalogMap = {
   "feature-midriff-visible": { label: "وسط مرئي", description: "وسط مكشوف بين الأعلى والأسفل" },
   "feature-navel-visible": { label: "سرة مرئية", description: "سرة مرئية على معدة عارية" },
   "feature-elongated-neck": { label: "عنق ممدود", description: "عنق طويل كالبجعة" },
+
+  "femboy": { label: "Femboy", description: "نوع ذكوري ناعم أنثوي، تنسيق متغير الجنس" },
+  "twink": { label: "Twink", description: "نوع ذكر مثلي نحيف وأملس وشاب" },
+  "soft-butch": { label: "Soft Butch", description: "امرأة ذكورية الميول لطيفة" },
+  "tomboy": { label: "Tomboy", description: "تنسيق وطاقة صبيانية على جسد أنثوي" },
+  "thick": { label: "ممتلئ", description: "قوام ممتلئ إيجابي بمنحنيات" },
+  "bear": { label: "Bear", description: "نوع ذكوري كبير وملتح وكثيف الشعر" },
+
+  "feature-back-tattoo": { label: "وشم على الظهر", description: "قطعة كبيرة عبر الظهر" },
+  "feature-chest-tattoo": { label: "وشم على الصدر", description: "وشم عبر الصدر / منطقة الصدر" },
+  "feature-leg-tattoo": { label: "وشم على الساق", description: "وشم مرئي على الساق / السمانة / الفخذ" },
+  "feature-forearm-tattoo": { label: "وشم على الساعد", description: "وشم على الساعد الداخلي أو الخارجي" },
+  "feature-ear-piercings": { label: "Piercings الأذن", description: "Piercings متعددة متراكمة على الأذن (غضروف، Helix، Conch)" },
+  "feature-lip-piercing": { label: "Piercing الشفة", description: "حلقة شفة / Stud Labret" },
+  "feature-nostril-piercing": { label: "Piercing الأنف", description: "Stud أو حلقة فردية في فتحة الأنف" },
+
+  "eye-double-eyelid": { label: "جفن مزدوج", description: "تجعد جفن علوي محدد" },
 }
 
 export default map

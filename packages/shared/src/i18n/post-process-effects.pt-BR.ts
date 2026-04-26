@@ -15,6 +15,10 @@ const map: LocaleCatalogMap = {
   "color-fringe": { label: "Franja de Cor", description: "Franja sutil em bordas de alto contraste" },
   "soft-focus-diffusion": { description: "Bloom sonhador, suave e enevoado" },
   "contrast-boost": { label: "Boost de Contraste", description: "Sombras esmagadas + altas-luzes empurradas" },
+  "sharpening": { label: "Sharpening Pesado", description: "Passagem agressiva de sharpening nas bordas" },
+  "clarity-boost": { label: "Boost de Clareza", description: "Aprimoramento de clareza nos meios-tons, contraste local elevado" },
+  "dehaze": { label: "Dehaze", description: "Dehaze atmosférico aplicado, removendo a suavidade" },
+  "lift-gamma-gain": { label: "Color Grading Lift-Gamma-Gain", description: "Rodas de color grading em três vias" },
 }
 
 export default map

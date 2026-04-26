@@ -68,6 +68,11 @@ const map: LocaleCatalogMap = {
   "peter-gric":         { description: "以 Peter Gric 的风格,建筑感超现实风光,水晶状几何结构与冷调静谧色板" },
   "ingrid-baars":       { description: "以 Ingrid Baars 的风格,雕塑感时尚艺术拼贴,拉长的形体、平滑彩绘的肤质与精致面料" },
   "guido-van-helten":   { description: "以 Guido van Helten 的风格,纪念碑式壁画人像,风化水泥肌理与安静的灰阶影调" },
+  "mcginley":           { description: "以 Ryan McGinley 的风格,自然主义的青年与裸体置身风景之中,阳光斑驳的抓拍" },
+  "mitchell":           { description: "以 Tyler Mitchell 的风格,当代黑人肖像摄影,柔和的自然光" },
+  "collins":            { description: "以 Petra Collins 的风格,粉色饱和的梦幻女性视角时装,朦胧的 35mm 颗粒感" },
+  "weston":             { description: "以 Edward Weston 的风格,现代主义黑白静物,雕塑感的人体" },
+  "beaton":             { description: "以 Cecil Beaton 的风格,古典好莱坞时代的肖像摄影,戏剧化的舞台布置" },
 }
 
 export default map

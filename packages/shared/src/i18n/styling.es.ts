@@ -269,6 +269,49 @@ const map: LocaleCatalogMap = {
   "state-unbuttoned": { label: "Desabotonado", description: "Abierto / desabotonado" },
   "state-rolled-sleeves": { label: "Mangas Arremangadas", description: "Mangas arremangadas hasta el antebrazo" },
   "state-layered": { label: "En Capas", description: "Múltiples capas apiladas" },
+
+  // -------------------- Outfit (round 2) --------------------
+  "outfit-goth": { label: "Goth", description: "Look gótico oscuro completo: encaje negro, cuero, maquillaje oscuro, cadenas" },
+  "outfit-emo": { label: "Emo", description: "Emo de principios de los 2000s: jeans skinny, camiseta de banda, cabello teñido, eyeliner" },
+  "outfit-streetwear": { label: "Streetwear", description: "Streetwear moderno: sudadera con capucha, pantalones holgados, tenis, gorro de cubo" },
+  "outfit-cyberpunk": { label: "Cyberpunk", description: "Cyberpunk iluminado por neón: techwear, acentos LED, capas de malla" },
+  "outfit-cottagecore": { label: "Cottagecore", description: "Estética pastoral de cabaña: vestido pradera, delantal, canasta" },
+  "outfit-dark-academia": { label: "Dark Academia", description: "Académico de tweed Oxford: blazer, chaleco, zapatos oxford" },
+  "outfit-anime-cosplay": { label: "Cosplay de Anime", description: "Disfraz inspirado en un personaje de anime reconocible" },
+  "outfit-nurse": { label: "Enfermera", description: "Uniforme quirúrgico, estetoscopio, identificación con cordón" },
+  "outfit-pirate": { label: "Pirata", description: "Disfraz de pirata: tricornio, faja, camisa con volantes, botas" },
+  "outfit-fairy": { label: "Hada", description: "Hada de fantasía: alas vaporosas, corona de flores, vestido etéreo" },
+  "outfit-mermaid": { label: "Sirena", description: "Sirena de fantasía: cola/falda escamada, top de conchas" },
+
+  // -------------------- Headwear (round 2) --------------------
+  "headwear-bucket-hat": { label: "Gorro de Cubo", description: "Gorro de cubo casual con ala blanda" },
+  "headwear-beret": { label: "Boina", description: "Boina francesa redonda y suave" },
+  "headwear-turban": { label: "Turbante", description: "Turbante envuelto a la cabeza, cultural / fashion" },
+  "headwear-fascinator": { label: "Fascinator", description: "Pequeño tocado decorativo, estilo boda real" },
+  "headwear-bowler": { label: "Sombrero Bombín", description: "Sombrero bombín / derby de copa redonda" },
+  "headwear-cowboy-hat": { label: "Sombrero Vaquero", description: "Sombrero vaquero del Oeste de ala ancha" },
+
+  // -------------------- Footwear (round 2) --------------------
+  "footwear-crocs": { label: "Crocs", description: "Zuecos de resina coloridos, casuales" },
+  "footwear-birkenstocks": { label: "Birkenstocks", description: "Sandalias con plantilla de corcho" },
+  "footwear-doc-martens": { label: "Doc Martens", description: "Botas de combate gruesas de cuero" },
+  "footwear-converse": { label: "Converse", description: "Tenis altos de lona, clásicas Chuck Taylor" },
+  "footwear-vans": { label: "Vans", description: "Tenis skater slip-on o de caña baja" },
+  "footwear-espadrilles": { label: "Alpargatas", description: "Calzado de verano de lona con suela de yute trenzado" },
+
+  // -------------------- Bottom (round 2) --------------------
+  "bottom-overalls": { label: "Overoles", description: "Overoles / petos de mezclilla" },
+  "bottom-culottes": { label: "Culottes", description: "Pantalones cortos de pierna ancha, hasta media pantorrilla" },
+  "bottom-palazzo-pants": { label: "Pantalones Palazzo", description: "Pantalones fluidos de pierna ancha" },
+  "bottom-harem-pants": { label: "Pantalones Harem", description: "Pantalones holgados con tiro caído" },
+  "bottom-bike-shorts": { label: "Shorts de Ciclista", description: "Shorts ajustados de licra hasta medio muslo" },
+
+  // -------------------- Top (round 2) --------------------
+  "top-bodysuit": { label: "Body", description: "Prenda de torso de una sola pieza ajustada" },
+  "top-leotard": { label: "Leotardo", description: "Top ajustado estilo danza con mangas" },
+  "top-mesh-top": { label: "Top de Malla", description: "Top de tela de malla transparente" },
+  "top-sheer-top": { label: "Top Transparente", description: "Top de tela translúcida" },
+  "top-bandeau": { label: "Bandeau", description: "Top tubo sin tirantes" },
 }
 
 export default map

@@ -17,6 +17,10 @@ const map: LocaleCatalogMap = {
   "raw-photo": { label: "Roh-Foto", description: "Unbearbeitetes fotografisches Gefühl" },
   "masterpiece": { label: "Meisterwerk", description: "Hand-eines-Experten-Qualitätsstempel" },
   "award-winning": { label: "Preisgekrönt", description: "Auszeichnungs-Kaliber" },
+  "volumetric-lighting": { label: "Volumetrisches Licht", description: "God-Ray-volumetrische Lichtschächte" },
+  "photon-mapping": { label: "Photon Mapping", description: "Kaustik-bewusste photongemappte globale Beleuchtung" },
+  "ai-upscaled": { label: "KI-hochskaliert", description: "Mit neuronalem Netzwerk hochskalierte Detailverbesserung" },
+  "denoised": { label: "Entrauscht", description: "Sauberes rauschbefreites makelloses Rendering" },
 }
 
 export default map

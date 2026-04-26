@@ -27,6 +27,12 @@ const map: LocaleCatalogMap = {
   "wise-elder": { label: "Sage aîné", description: "Aîné âgé et savant" },
   "silver-fox": { description: "Homme âgé distingué et séduisant" },
   "mysterious-figure": { label: "Figure mystérieuse", description: "Figure énigmatique" },
+  "femboy": { label: "Femboy", description: "Type masculin doux-féminin, style fluide en genre" },
+  "twink": { label: "Twink", description: "Type gay masculin mince, glabre et juvénile" },
+  "soft-butch": { label: "Soft Butch", description: "Femme douce, masculine de centre" },
+  "tomboy": { label: "Garçon manqué", description: "Style et énergie de garçon sur un corps féminin" },
+  "thick": { label: "Thick", description: "Silhouette voluptueuse body-positive avec courbes" },
+  "bear": { label: "Bear", description: "Type masculin grand, barbu, poilu" },
   // Age
   "age-baby": { label: "Bébé", description: "Moins de 2 ans" },
   "age-child": { label: "Enfant", description: "Environ 5-12 ans" },
@@ -317,6 +323,14 @@ const map: LocaleCatalogMap = {
   "feature-midriff-visible": { label: "Ventre visible", description: "Ventre exposé entre haut et bas" },
   "feature-navel-visible": { label: "Nombril visible", description: "Nombril visible sur ventre nu" },
   "feature-elongated-neck": { label: "Cou allongé", description: "Long cou de cygne" },
+  "feature-back-tattoo": { label: "Tatouage dans le dos", description: "Grande pièce sur tout le dos" },
+  "feature-chest-tattoo": { label: "Tatouage sur la poitrine", description: "Tatouage en travers de la poitrine / décolleté" },
+  "feature-leg-tattoo": { label: "Tatouage sur la jambe", description: "Tatouage visible sur la jambe / le mollet / la cuisse" },
+  "feature-forearm-tattoo": { label: "Tatouage sur l'avant-bras", description: "Tatouage sur l'avant-bras intérieur ou extérieur" },
+  "feature-ear-piercings": { label: "Piercings d'oreille", description: "Plusieurs piercings d'oreille empilés (cartilage, hélix, conque)" },
+  "feature-lip-piercing": { label: "Piercing à la lèvre", description: "Anneau de lèvre / labret" },
+  "feature-nostril-piercing": { label: "Piercing à la narine", description: "Une seule pierre ou anneau à la narine" },
+  "eye-double-eyelid": { label: "Double paupière", description: "Pli supérieur de paupière défini" },
 }
 
 export default map

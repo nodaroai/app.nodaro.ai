@@ -31,6 +31,11 @@ const map: LocaleCatalogMap = {
   "starfield": { label: "Звёздное поле", description: "Видимое ночное небо со звёздами, космический фон" },
   "dandelion-seeds": { label: "Семена одуванчика", description: "Дрейфующий пух одуванчика, летний бриз" },
   "pollen-drift": { label: "Пыльцевая дымка", description: "Тонкая жёлто-золотая пыльца в свете золотого часа" },
+  "snowflakes-heavy": { label: "Сильный снегопад", description: "Густые тяжёлые снежинки, заполняющие воздух" },
+  "snowflakes-light": { label: "Лёгкий снегопад", description: "Редкие дрейфующие снежинки" },
+  "raindrops-on-skin": { label: "Капли дождя на коже", description: "Видимые капли воды, собирающиеся на коже" },
+  "bioluminescent-cloud": { label: "Биолюминесцентное облако частиц", description: "Светящиеся сине-зелёные частицы, дрейфующие в воздухе" },
+  "motion-streaks": { label: "Полосы движения", description: "Скоростные полосы размытия движения" },
 }
 
 export default map

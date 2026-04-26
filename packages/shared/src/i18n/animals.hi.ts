@@ -144,6 +144,14 @@ const map: LocaleCatalogMap = {
   "griffin": { label: "Griffin", description: "हाइब्रिड griffin, बाज़ का सिर, पंख और पंजे वाले अग्र-पैर और शेर का मांसल पिछला बदन" },
   "pegasus": { label: "Pegasus", description: "शुद्ध सफ़ेद पंखों वाला घोड़ा, पंखदार पंख, बहती अयाल और एक अलौकिक उपस्थिति" },
   "kraken": { label: "Kraken", description: "विशाल समुद्री-दैत्य kraken, विशाल सिर, चमकती आँखें और गहराई से उठते विशाल suckered tentacles" },
+
+  // -------------------- Round 2 --------------------
+  "pangolin": { label: "Pangolin", description: "शल्कदार कवचदार चींटीखोर" },
+  "okapi": { label: "Okapi", description: "ज़ेब्रा-धारीदार टाँगों वाला वन जिराफ़" },
+  "quokka": { label: "Quokka", description: "मुस्कुराता ऑस्ट्रेलियाई marsupial" },
+  "meerkat": { label: "Meerkat", description: "खड़ा अफ़्रीकी mongoose" },
+  "emu": { label: "Emu", description: "बड़ा उड़ नहीं सकने वाला ऑस्ट्रेलियाई ratite पक्षी" },
+  "tarantula": { label: "Tarantula", description: "बड़ी बालों वाली शिकारी मकड़ी" },
 }
 
 export default map

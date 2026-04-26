@@ -102,6 +102,13 @@ const map: LocaleCatalogMap = {
   "wizard-wand": { label: "Varinha de Mago", description: "Varinha esguia de madeira com espirais entalhadas, empunhadura de couro e pequenas faíscas de magia escapando da ponta" },
   "war-horn": { label: "Berrante de Guerra", description: "Massivo berrante de guerra curvado, encadernado em couro e bandas de prata, com bocal em uma extremidade e abertura flamejante na outra" },
   "sorcerer-orb": { label: "Orbe de Feiticeiro", description: "Orbe de cristal de feiticeiro sustentado por um suporte torcido de prata em forma de garra, com névoa arcana rodopiando suspensa dentro da esfera de vidro" },
+  "zweihander": { label: "Zweihänder", description: "Espada longa renascentista alemã empunhada com as duas mãos" },
+  "slingshot": { label: "Estilingue", description: "Armação de madeira em formato de Y com elástico" },
+  "blowgun": { label: "Zarabatana", description: "Tubo longo que dispara dardos com o sopro" },
+  "service-pistol": { label: "Pistola de Serviço", description: "Pistola lateral semiautomática moderna" },
+  "hunting-rifle": { label: "Rifle de Caça", description: "Rifle de ferrolho com coronha de madeira e luneta" },
+  "plasma-sword": { label: "Espada de Plasma / Sabre de Luz", description: "Lâmina de energia sci-fi emitindo brilho intenso" },
+  "gravity-gun": { label: "Arma de Gravidade", description: "Arma sci-fi de longo alcance que manipula a física" },
 }
 
 export default map

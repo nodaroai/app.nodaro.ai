@@ -125,6 +125,12 @@ const map: LocaleCatalogMap = {
   "space-shuttle": { label: "מעבורת חלל", description: "מעבורת חלל מסלולית עם כנפי דלתא לבנות, בטן שחורה של מגן חום ופיות רקטה ענקיות מאחור" },
   "rocket": { label: "רקטה", description: "רקטה גלילית גבוהה עם חרטום מחודד, סנפירי זנב, שלבי מאיץ ולהבות שואגות ממנועים בעת שיגור" },
   "hoverboard": { label: "הוברבורד", description: "הוברבורד עתידני המרחף סנטימטרים מעל הקרקע עם סילוני תחתית זוהרים וגוף לוח יחיד חלק" },
+  "ambulance": { label: "אמבולנס", description: "רכב חירום רפואי" },
+  "police-car": { label: "ניידת משטרה", description: "ניידת סיור שחורה-לבנה עם שורת אורות" },
+  "hovercraft": { label: "רחפת", description: "רכב כרית אוויר על מים / יבשה" },
+  "paraglider": { label: "מצנח רחיפה", description: "דאון כנף רכה הממריא ברגליים" },
+  "microlight": { label: "מטוס מיקרולייט", description: "מטוס פנאי קל לטייס יחיד" },
+  "airship": { label: "ספינת אוויר / דיריז'בל", description: "כלי טיס נוקשה גדול קל-מאוויר" },
 }
 
 export default map

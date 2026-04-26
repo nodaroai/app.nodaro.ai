@@ -54,6 +54,12 @@ const map: LocaleCatalogMap = {
   "lazy-shy": { label: "게으르고 수줍은", description: "졸리고 부드러우며 반쯤 수줍은 표정입니다" },
   "awe": { label: "경이로움", description: "경건한 경외의 감정입니다" },
   "shocked": { label: "충격받은", description: "놀라서 입을 벌린 표정입니다" },
+
+  // Additional moods
+  "flirty": { label: "플러티", description: "장난스럽게 추파를 던지며 머무는 미소와 지속적인 시선 교환입니다" },
+  "suspicious": { label: "의심하는", description: "경계하는 불신, 가늘게 뜬 눈, 곁눈질입니다" },
+  "resigned": { label: "체념한", description: "불쾌한 상황을 조용히 받아들이는 표정입니다" },
+  "conflicted": { label: "갈등하는", description: "내면의 갈등이 보이고 미간이 찌푸려진 표정입니다" },
 }
 
 export default map

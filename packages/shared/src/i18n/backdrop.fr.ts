@@ -43,6 +43,10 @@ const map: LocaleCatalogMap = {
   "paper-roll-seamless": { label: "Rouleau papier sans couture", description: "Rouleau de papier pastel neutre générique" },
   "tile-wall": { label: "Mur carrelé", description: "Mur de carreaux carrés salle de bain / cuisine" },
   "marble-wall": { label: "Mur de marbre", description: "Mur de marbre veiné de luxe" },
+  "graffiti-wall": { label: "Mur de graffiti", description: "Mur urbain vibrant tagué de graffitis" },
+  "exposed-stone": { label: "Mur de pierre apparente", description: "Pierre apparente brute ou maçonnerie de pierre de taille" },
+  "window-with-light": { label: "Fenêtre avec lumière", description: "Grande fenêtre en fond avec lumière inondant la pièce" },
+  "rooftop-skyline": { label: "Toit avec skyline", description: "Toit en plein air avec skyline urbaine" },
 }
 
 export default map

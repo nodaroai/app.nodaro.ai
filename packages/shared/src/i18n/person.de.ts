@@ -27,6 +27,12 @@ const map: LocaleCatalogMap = {
   "wise-elder": { label: "Weiser Älterer", description: "Gealterter, weiser Älterer" },
   "silver-fox": { description: "Vornehmer attraktiver älterer Mann" },
   "mysterious-figure": { label: "Geheimnisvolle Gestalt", description: "Rätselhafte Gestalt" },
+  "femboy": { label: "Femboy", description: "Soft-femininer maskuliner Typ, gender-fluide Stylings" },
+  "twink": { label: "Twink", description: "Schlanker, glatter, jugendlicher schwuler männlicher Typ" },
+  "soft-butch": { label: "Soft Butch", description: "Sanft maskulin-zentrierte Frau" },
+  "tomboy": { label: "Tomboy", description: "Jungenhafte Stylings und Energie auf einem femininen Körper" },
+  "thick": { label: "Thick", description: "Üppige body-positive Figur mit Kurven" },
+  "bear": { label: "Bear", description: "Großer, bärtiger, behaarter maskuliner Typ" },
   // Age
   "age-baby": { label: "Baby", description: "Unter 2 Jahre alt" },
   "age-child": { label: "Kind", description: "Etwa 5-12 Jahre alt" },
@@ -317,6 +323,13 @@ const map: LocaleCatalogMap = {
   "feature-midriff-visible": { label: "Bauchfrei", description: "Freie Mitte zwischen Oberteil und Unterteil" },
   "feature-navel-visible": { label: "Bauchnabel sichtbar", description: "Sichtbarer Bauchnabel auf nacktem Bauch" },
   "feature-elongated-neck": { label: "Langgezogener Hals", description: "Langer schwanenartiger Hals" },
+  "feature-back-tattoo": { label: "Rücken-Tattoo", description: "Großes Werk über den ganzen Rücken" },
+  "feature-chest-tattoo": { label: "Brust-Tattoo", description: "Tattoo über Brust / Dekolleté" },
+  "feature-leg-tattoo": { label: "Bein-Tattoo", description: "Sichtbares Tattoo an Bein / Wade / Oberschenkel" },
+  "feature-forearm-tattoo": { label: "Unterarm-Tattoo", description: "Tattoo an Innen- oder Außenseite des Unterarms" },
+  "feature-ear-piercings": { label: "Ohrpiercings", description: "Mehrere gestapelte Ohrpiercings (Knorpel, Helix, Conch)" },
+  "feature-lip-piercing": { label: "Lippenpiercing", description: "Lippenring / Labret-Stecker" },
+  "feature-nostril-piercing": { label: "Nasenflügel-Piercing", description: "Einzelner Nasenflügel-Stecker oder -Ring" },
 }
 
 export default map

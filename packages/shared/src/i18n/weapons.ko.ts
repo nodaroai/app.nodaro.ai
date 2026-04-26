@@ -102,6 +102,15 @@ const map: LocaleCatalogMap = {
   "wizard-wand": { label: "마법사 완드", description: "옹이 진 소용돌이, 가죽 그립, 뾰족한 끝에서 새어 나오는 작은 마법의 불꽃을 가진 슬림한 목재 완드입니다" },
   "war-horn": { label: "전쟁 호른", description: "가죽과 은색 띠로 묶인 거대한 휘어진 전쟁 호른으로, 한쪽 끝에 마우스피스와 다른 쪽에 플레어된 울리는 입구가 있습니다" },
   "sorcerer-orb": { label: "마법사의 오브", description: "비틀린 은색 발톱 스탠드에 들린 크리스털 마법사의 오브로, 유리 구체 안에 소용돌이치는 비전 안개가 떠 있습니다" },
+
+  // Additional weapons
+  "zweihander": { label: "츠바이헨더", description: "양손으로 다루는 독일 르네상스 시대의 그레이트소드입니다" },
+  "slingshot": { label: "새총", description: "고무줄이 달린 Y자형 목재 프레임입니다" },
+  "blowgun": { label: "블로건", description: "숨으로 다트를 발사하는 긴 파이프입니다" },
+  "service-pistol": { label: "서비스 권총", description: "모던 반자동 사이드암입니다" },
+  "hunting-rifle": { label: "사냥 라이플", description: "스코프가 장착된 볼트 액션 호두나무 스톡 라이플입니다" },
+  "plasma-sword": { label: "플라즈마 소드 / 라이트세이버", description: "밝은 빛을 내뿜는 SF 에너지 검입니다" },
+  "gravity-gun": { label: "그래비티 건", description: "물리 법칙을 조작하는 SF 원거리 무기입니다" },
 }
 
 export default map

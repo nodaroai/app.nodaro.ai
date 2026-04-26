@@ -15,6 +15,11 @@ const map: LocaleCatalogMap = {
   "silhouette-outline":       { label: "剪影轮廓",       description: "纯色背景上的干净黑剪影" },
   "exploding-particles":      { label: "粒子爆裂",       description: "轮廓向外炸成颗粒" },
   "3x3-grid-collage":         { label: "3x3 网格拼贴",   description: "9 格姿势接触印样拼贴" },
+  "matte-painting":           { label: "接景绘画",       description: "接景背景与实拍画面合成" },
+  "double-exposure":          { label: "二次曝光",       description: "两层摄影曝光叠合" },
+  "multiple-exposure":        { label: "多重曝光",       description: "三次或更多次曝光叠合" },
+  "in-camera-effects":        { label: "机内特效",       description: "实拍机内光学特效,无后期" },
+  "prism-flares":             { label: "棱镜光斑",       description: "水晶棱镜折射出的光斑,分裂成光谱色带" },
 }
 
 export default map

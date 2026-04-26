@@ -15,6 +15,10 @@ const map: LocaleCatalogMap = {
   "color-fringe": { label: "Цветная бахрома", description: "Тонкая высококонтрастная цветовая бахрома" },
   "soft-focus-diffusion": { label: "Рассеивание мягкого фокуса", description: "Мечтательное свечение на бликах" },
   "contrast-boost": { label: "Усиление контраста", description: "Раздавленные тени, поднятые света" },
+  "sharpening": { label: "Сильное усиление резкости", description: "Агрессивный проход по усилению резкости краёв" },
+  "clarity-boost": { label: "Усиление чёткости", description: "Усиление чёткости средних тонов, повышенный локальный контраст" },
+  "dehaze": { label: "Удаление дымки", description: "Применено атмосферное удаление дымки, убирающее мягкость" },
+  "lift-gamma-gain": { label: "Грейдинг lift-gamma-gain", description: "Трёхзонные колёса цветокоррекции" },
 }
 
 export default map

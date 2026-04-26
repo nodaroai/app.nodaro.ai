@@ -54,6 +54,12 @@ const map: LocaleCatalogMap = {
   "lazy-shy": { label: "Lazy Shy", description: "Drowsy, मुलायम, आधा-शरमीला" },
   "awe": { label: "विस्मय", description: "अचंभा, श्रद्धावान" },
   "shocked": { label: "हैरान", description: "चौंका हुआ, मुँह खुला" },
+
+  // -------------------- Round 2 --------------------
+  "flirty": { label: "Flirty", description: "चंचल flirtation, ठहरी हुई मुस्कान, बनाए रखा eye contact" },
+  "suspicious": { label: "संदेहास्पद", description: "सावधान अविश्वास, सिकुड़ी आँखें, side-eye" },
+  "resigned": { label: "विवश", description: "किसी अप्रिय स्थिति की शांत स्वीकार्यता" },
+  "conflicted": { label: "द्वंद्वग्रस्त", description: "दिखाई देता आंतरिक संघर्ष, भौंहें सिकुड़ी हुई" },
 }
 
 export default map

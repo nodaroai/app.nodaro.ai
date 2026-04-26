@@ -102,6 +102,14 @@ const map: LocaleCatalogMap = {
   "wizard-wand": { label: "عصا ساحر", description: "عصا خشبية نحيلة بدوائر محززة ومقبض جلدي وشرارات سحر صغيرة تتسرب من الطرف المدبب" },
   "war-horn": { label: "بوق حرب", description: "بوق حرب منحن ضخم مربوط بالجلد وأشرطة فضية بفم في طرف وفتحة هدير متسعة في الطرف الآخر" },
   "sorcerer-orb": { label: "كرة الساحر", description: "كرة بلورية للساحر محمولة في حامل مخلب فضي ملتو مع ضباب غامض ملتو معلق داخل الكرة الزجاجية" },
+
+  "zweihander": { label: "Zweihänder", description: "سيف عظيم ألماني ثنائي اليدين من عصر النهضة" },
+  "slingshot": { label: "مقلاع", description: "إطار خشبي على شكل Y مع شريط مطاطي" },
+  "blowgun": { label: "أنبوب نفخ", description: "أنبوب طويل يطلق سهاما بالنفس" },
+  "service-pistol": { label: "مسدس خدمة", description: "سلاح جانبي شبه آلي حديث" },
+  "hunting-rifle": { label: "بندقية صيد", description: "بندقية Bolt-Action بمخزن خشبي ومنظار" },
+  "plasma-sword": { label: "سيف بلازما / Lightsaber", description: "شفرة طاقة Sci-Fi تطلق توهجا ساطعا" },
+  "gravity-gun": { label: "مدفع جاذبية", description: "سلاح Sci-Fi بعيد المدى يتلاعب بالفيزياء" },
 }
 
 export default map

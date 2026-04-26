@@ -54,6 +54,12 @@ const map: LocaleCatalogMap = {
   "lazy-shy": { label: "Tímido Perezoso", description: "Adormilado, suave, medio tímido" },
   "awe": { label: "Asombro", description: "Maravilla, reverente" },
   "shocked": { label: "Conmocionado", description: "Sorprendido, boca abierta" },
+
+  // -------------------- Round 2 --------------------
+  "flirty": { label: "Coqueto", description: "Coqueteo juguetón, sonrisa prolongada, contacto visual sostenido" },
+  "suspicious": { label: "Suspicaz", description: "Desconfianza recelosa, ojos entrecerrados, mirada de reojo" },
+  "resigned": { label: "Resignado", description: "Aceptación silenciosa de una situación desagradable" },
+  "conflicted": { label: "Conflictuado", description: "Lucha interna visible, ceño fruncido" },
 }
 
 export default map

@@ -252,6 +252,44 @@ const map: LocaleCatalogMap = {
   "state-unbuttoned": { label: "غير مزرر", description: "مفتوح / غير مزرر" },
   "state-rolled-sleeves": { label: "أكمام مطوية", description: "أكمام مطوية للساعد" },
   "state-layered": { label: "متعدد الطبقات", description: "طبقات متعددة متراكمة" },
+
+  "outfit-goth": { label: "Goth", description: "Goth داكن كامل: دانتيل أسود، جلد، مكياج داكن، سلاسل" },
+  "outfit-emo": { label: "Emo", description: "Emo بأسلوب أوائل الألفية: Jeans ضيق، تي شيرت فرقة، شعر مصبوغ، Eyeliner" },
+  "outfit-streetwear": { label: "Streetwear", description: "Streetwear حديث: Hoodie، بنطلون فضفاض، أحذية رياضية، قبعة دلو" },
+  "outfit-cyberpunk": { label: "Cyberpunk", description: "Cyberpunk مضاء بالنيون: ملابس تقنية، لمسات LED، طبقات شبكية" },
+  "outfit-cottagecore": { label: "Cottagecore", description: "جمالية Cottage باستورالية: فستان Prairie، مريلة، سلة" },
+  "outfit-dark-academia": { label: "Dark Academia", description: "عالم Oxford-Tweed: Blazer، Vest، أحذية Oxford" },
+  "outfit-anime-cosplay": { label: "Cosplay أنيمي", description: "زي مصمم على شخصية أنيمي معروفة" },
+  "outfit-nurse": { label: "ممرضة", description: "Scrubs طبية، سماعة طبيب، بطاقة Lanyard" },
+  "outfit-pirate": { label: "قرصان", description: "زي قرصان: قبعة Tricorn، حزام، قميص بكشكشة، أحذية" },
+  "outfit-fairy": { label: "جنية", description: "جنية فانتازيا: أجنحة شفافة، تاج زهور، فستان أثيري" },
+  "outfit-mermaid": { label: "حورية البحر", description: "حورية بحر فانتازيا: ذيل/تنورة بحراشف، أعلى من صدفة" },
+
+  "headwear-bucket-hat": { label: "قبعة دلو", description: "قبعة دلو كاجوال بحافة ناعمة" },
+  "headwear-beret": { label: "Beret", description: "Beret فرنسي مدور ناعم" },
+  "headwear-turban": { label: "عمامة", description: "عمامة ملفوفة على الرأس، ثقافية / موضة" },
+  "headwear-fascinator": { label: "Fascinator", description: "قطعة رأس صغيرة مزخرفة بأسلوب الزفاف الملكي" },
+  "headwear-bowler": { label: "قبعة Bowler", description: "قبعة Derby/Bowler بتاج مدور" },
+  "headwear-cowboy-hat": { label: "قبعة رعاة بقر", description: "قبعة رعاة بقر غربية عريضة الحافة" },
+
+  "footwear-crocs": { label: "Crocs", description: "Clogs ملونة من الراتنج، كاجوال" },
+  "footwear-birkenstocks": { label: "Birkenstocks", description: "صنادل بنعل من الفلين" },
+  "footwear-doc-martens": { label: "Doc Martens", description: "أحذية Combat جلدية ضخمة" },
+  "footwear-converse": { label: "Converse", description: "أحذية رياضية قماشية High-Top، كلاسيكية Chuck Taylor" },
+  "footwear-vans": { label: "Vans", description: "أحذية Skater رياضية Slip-on أو Low-Top" },
+  "footwear-espadrilles": { label: "Espadrilles", description: "حذاء صيفي قماشي بنعل من الجوت المنسوج" },
+
+  "bottom-overalls": { label: "Overalls", description: "Overalls / Dungarees من Denim" },
+  "bottom-culottes": { label: "Culottes", description: "بنطلون مقصوص واسع الساق، بطول منتصف الساق" },
+  "bottom-palazzo-pants": { label: "بنطلون Palazzo", description: "بنطلون متدفق واسع الساق" },
+  "bottom-harem-pants": { label: "بنطلون Harem", description: "بنطلون فضفاض بمؤخرة منخفضة" },
+  "bottom-bike-shorts": { label: "Shorts دراجة", description: "Shorts Lycra محكمة بطول منتصف الفخذ" },
+
+  "top-bodysuit": { label: "Bodysuit", description: "ملابس قطعة واحدة محكمة للجذع" },
+  "top-leotard": { label: "Leotard", description: "أعلى محكم بأكمام بأسلوب الرقص" },
+  "top-mesh-top": { label: "أعلى شبكي", description: "أعلى من قماش شبكي شفاف" },
+  "top-sheer-top": { label: "أعلى شفاف", description: "أعلى من قماش شفاف" },
+  "top-bandeau": { label: "Bandeau", description: "أعلى أنبوبي بدون حمالات" },
 }
 
 export default map

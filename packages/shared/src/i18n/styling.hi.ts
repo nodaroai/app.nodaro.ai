@@ -275,6 +275,49 @@ const map: LocaleCatalogMap = {
   "state-unbuttoned": { label: "Unbuttoned", description: "खुला / unbuttoned" },
   "state-rolled-sleeves": { label: "Rolled Sleeves", description: "Sleeves कोहनी तक rolled" },
   "state-layered": { label: "Layered", description: "कई stacked परतें" },
+
+  // -------------------- Outfit (Round 2) --------------------
+  "outfit-goth": { label: "Goth", description: "पूरा गहरा goth: काला lace, leather, गहरा makeup, chains" },
+  "outfit-emo": { label: "Emo", description: "2000s के शुरुआती emo: skinny jeans, band tee, रंगे बाल, eyeliner" },
+  "outfit-streetwear": { label: "Streetwear", description: "आधुनिक streetwear: hoodie, baggy pants, sneakers, bucket hat" },
+  "outfit-cyberpunk": { label: "Cyberpunk", description: "Neon-lit cyberpunk: tech wear, LED accents, mesh परतें" },
+  "outfit-cottagecore": { label: "Cottagecore", description: "Pastoral cottage aesthetic: prairie dress, apron, टोकरी" },
+  "outfit-dark-academia": { label: "Dark Academia", description: "Oxford-tweed विद्वान: blazer, vest, oxford जूते" },
+  "outfit-anime-cosplay": { label: "Anime Cosplay", description: "किसी पहचाने जाने वाले anime character पर modeled costume" },
+  "outfit-nurse": { label: "Nurse", description: "Medical scrubs, stethoscope, lanyard ID" },
+  "outfit-pirate": { label: "Pirate", description: "Pirate costume: tricorn टोपी, sash, frilly shirt, boots" },
+  "outfit-fairy": { label: "Fairy", description: "Fantasy परी: gauzy पंख, फूलों का मुकुट, ethereal dress" },
+  "outfit-mermaid": { label: "Mermaid", description: "Fantasy जलपरी: scaled tail/skirt, shell top" },
+
+  // -------------------- Headwear (Round 2) --------------------
+  "headwear-bucket-hat": { label: "Bucket Hat", description: "नर्म-brim casual bucket hat" },
+  "headwear-beret": { label: "Beret", description: "नर्म गोल French beret" },
+  "headwear-turban": { label: "Turban", description: "लिपटी हुई head turban, सांस्कृतिक / fashion" },
+  "headwear-fascinator": { label: "Fascinator", description: "छोटा सजावटी headpiece, royal-wedding शैली" },
+  "headwear-bowler": { label: "Bowler Hat", description: "गोल-crown derby/bowler hat" },
+  "headwear-cowboy-hat": { label: "Cowboy Hat", description: "चौड़ी-brim Western cowboy hat" },
+
+  // -------------------- Footwear (Round 2) --------------------
+  "footwear-crocs": { label: "Crocs", description: "रंगीन resin clogs, casual" },
+  "footwear-birkenstocks": { label: "Birkenstocks", description: "Cork-footbed sandals" },
+  "footwear-doc-martens": { label: "Doc Martens", description: "Chunky leather combat boots" },
+  "footwear-converse": { label: "Converse", description: "Canvas high-top sneakers, क्लासिक Chuck Taylor" },
+  "footwear-vans": { label: "Vans", description: "Slip-on या low-top skater sneakers" },
+  "footwear-espadrilles": { label: "Espadrilles", description: "बुने jute-sole canvas गर्मियों के जूते" },
+
+  // -------------------- Bottom (Round 2) --------------------
+  "bottom-overalls": { label: "Overalls", description: "Denim overalls / dungarees" },
+  "bottom-culottes": { label: "Culottes", description: "Wide-leg cropped trousers, mid-calf" },
+  "bottom-palazzo-pants": { label: "Palazzo Pants", description: "बहती wide-leg pants" },
+  "bottom-harem-pants": { label: "Harem Pants", description: "Drop-crotch ढीली pants" },
+  "bottom-bike-shorts": { label: "Bike Shorts", description: "Fitted lycra mid-thigh shorts" },
+
+  // -------------------- Top (Round 2) --------------------
+  "top-bodysuit": { label: "Bodysuit", description: "Fitted one-piece torso garment" },
+  "top-leotard": { label: "Leotard", description: "Dance-शैली का fitted top sleeves के साथ" },
+  "top-mesh-top": { label: "Mesh Top", description: "Sheer mesh कपड़े का top" },
+  "top-sheer-top": { label: "Sheer Top", description: "पारभासी कपड़े का top" },
+  "top-bandeau": { label: "Bandeau", description: "Strapless tube top" },
 }
 
 export default map

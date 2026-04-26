@@ -336,6 +336,26 @@ const map: LocaleCatalogMap = {
   "feature-midriff-visible": { label: "Abdomen Visible", description: "Abdomen expuesto entre la parte superior e inferior" },
   "feature-navel-visible": { label: "Ombligo Visible", description: "Ombligo visible en estómago desnudo" },
   "feature-elongated-neck": { label: "Cuello Alargado", description: "Cuello largo de cisne" },
+
+  // -------------------- Type (round 2) --------------------
+  "femboy": { label: "Femboy", description: "Tipo masculino suave-femenino, estilo de género fluido" },
+  "twink": { label: "Twink", description: "Tipo gay masculino esbelto, lampiño y juvenil" },
+  "soft-butch": { label: "Soft Butch", description: "Mujer gentil de centro masculino" },
+  "tomboy": { label: "Marimacho", description: "Estilo y energía masculinos en cuerpo femenino" },
+  "thick": { label: "Curvilínea", description: "Figura voluptuosa con curvas, body-positive" },
+  "bear": { label: "Bear", description: "Tipo masculino grande, barbudo y peludo" },
+
+  // -------------------- Distinctive Features (round 2) --------------------
+  "feature-back-tattoo": { label: "Tatuaje en la Espalda", description: "Pieza grande a través de la espalda" },
+  "feature-chest-tattoo": { label: "Tatuaje en el Pecho", description: "Tatuaje a través del pecho / escote" },
+  "feature-leg-tattoo": { label: "Tatuaje en la Pierna", description: "Tatuaje visible en pierna / pantorrilla / muslo" },
+  "feature-forearm-tattoo": { label: "Tatuaje en el Antebrazo", description: "Tatuaje en antebrazo interior o exterior" },
+  "feature-ear-piercings": { label: "Piercings en la Oreja", description: "Múltiples piercings apilados en la oreja (cartílago, helix, conch)" },
+  "feature-lip-piercing": { label: "Piercing en el Labio", description: "Aro en el labio / labret" },
+  "feature-nostril-piercing": { label: "Piercing en la Nariz", description: "Stud o aro único en la fosa nasal" },
+
+  // -------------------- Eye Shape (round 2) --------------------
+  "eye-double-eyelid": { label: "Doble Párpado", description: "Pliegue definido del párpado superior" },
 }
 
 export default map

@@ -51,6 +51,10 @@ const map: LocaleCatalogMap = {
   "lazy-shy": { label: "Träg-Schüchtern", description: "Schläfrig, weich, halb-schüchtern" },
   "awe": { label: "Ehrfurcht", description: "Staunen, ehrfürchtig" },
   "shocked": { label: "Schockiert", description: "Überrascht, Mund offen" },
+  "flirty": { label: "Kokett", description: "Verspieltes Flirten, anhaltendes Lächeln, gehaltener Blickkontakt" },
+  "suspicious": { label: "Misstrauisch", description: "Wachsames Misstrauen, zusammengekniffene Augen, Seitenblick" },
+  "resigned": { label: "Resigniert", description: "Stille Hinnahme einer unangenehmen Situation" },
+  "conflicted": { label: "Innerlich zerrissen", description: "Sichtbarer innerer Kampf, gerunzelte Stirn" },
 }
 
 export default map

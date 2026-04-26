@@ -54,6 +54,12 @@ const map: LocaleCatalogMap = {
   "lazy-shy": { label: "怠惰でシャイ", description: "うとうと、柔らかく半ばシャイ" },
   "awe": { label: "畏敬", description: "驚嘆、畏れに満ちた" },
   "shocked": { label: "ショック", description: "驚いて口を開ける" },
+
+  // Additional moods
+  "flirty": { label: "フリーティ", description: "遊び心のある誘い、長く残る笑み、続くアイコンタクト" },
+  "suspicious": { label: "疑わしい", description: "警戒した不信、細めた目、横目" },
+  "resigned": { label: "諦念", description: "不快な状況を静かに受け入れる" },
+  "conflicted": { label: "葛藤", description: "目に見える内的葛藤、寄せた眉" },
 }
 
 export default map

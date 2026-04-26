@@ -15,6 +15,13 @@ const map: LocaleCatalogMap = {
   "silhouette-outline": { label: "실루엣 아웃라인", description: "평면 배경 위의 깔끔한 검은 실루엣입니다" },
   "exploding-particles": { label: "익스플로딩 파티클", description: "윤곽이 입자로 흩뿌려집니다" },
   "3x3-grid-collage": { label: "3x3 그리드 콜라주", description: "9 포즈 콘택트 시트 몽타주입니다" },
+
+  // Additional composition effects
+  "matte-painting": { label: "매트 페인팅", description: "라이브 액션과 합성된 매트 페인팅 배경입니다" },
+  "double-exposure": { label: "다중 노출", description: "두 개의 사진 노출이 겹쳐 결합된 모습입니다" },
+  "multiple-exposure": { label: "다중 다중 노출", description: "세 개 이상의 노출을 쌓은 모습입니다" },
+  "in-camera-effects": { label: "인 카메라 이펙트", description: "후보정 없이 카메라 안에서 만들어진 실용적 광학 효과입니다" },
+  "prism-flares": { label: "프리즘 플레어", description: "스펙트럼 밴드로 분광되는 크리스털 프리즘 굴절 라이트 플레어입니다" },
 }
 
 export default map

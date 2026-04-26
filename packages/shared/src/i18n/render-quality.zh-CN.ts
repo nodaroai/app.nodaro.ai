@@ -24,6 +24,10 @@ const map: LocaleCatalogMap = {
   "raw-photo":     { label: "原始照片",   description: "未经处理的摄影感" },
   "masterpiece":   { label: "大师级",     description: "出自高手之手的品质标签" },
   "award-winning": { label: "获奖之作",   description: "评奖级别水准" },
+  "volumetric-lighting": { label: "体积光",     description: "丁达尔光柱般的体积光" },
+  "photon-mapping":      { label: "光子映射",   description: "支持焦散的光子映射全局光照" },
+  "ai-upscaled":         { label: "AI 升采样",  description: "神经网络放大后的细节增强" },
+  "denoised":            { label: "降噪",       description: "去噪后的纯净渲染" },
 }
 
 export default map

@@ -37,6 +37,10 @@ const map: LocaleCatalogMap = {
   "paper-roll-seamless": { label: "Papierrolle Hohlkehle", description: "Generische neutrale Pastell-Papierrolle" },
   "tile-wall": { label: "Fliesenwand", description: "Quadratische Fliesenwand für Bad/Küche" },
   "marble-wall": { label: "Marmorwand", description: "Luxuriöse marmorierte Wand mit Adern" },
+  "graffiti-wall": { label: "Graffiti-Wand", description: "Lebhaft besprühte urbane Graffiti-Wand" },
+  "exposed-stone": { label: "Sichtbare Steinwand", description: "Roh sichtbarer Stein oder Quadermauerwerk" },
+  "window-with-light": { label: "Fenster mit Licht", description: "Großes Fenster als Hintergrund mit einströmendem Licht" },
+  "rooftop-skyline": { label: "Dachterrasse mit Skyline", description: "Außendach mit Stadtsilhouette" },
 }
 
 export default map

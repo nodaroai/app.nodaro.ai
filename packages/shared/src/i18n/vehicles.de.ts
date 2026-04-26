@@ -114,6 +114,12 @@ const map: LocaleCatalogMap = {
   "space-shuttle": { label: "Space Shuttle", description: "Space-Shuttle-Orbiter mit weißen Deltaflügeln, schwarzem Hitzeschild-Unterboden und riesigen Raketendüsen am Heck" },
   "rocket": { label: "Rakete", description: "Hohe zylindrische Rakete mit spitzem Nasenkonus, Heckflossen, Booster-Stufen und Flammen, die bei Start aus den Triebwerken brüllen" },
   "hoverboard": { description: "Futuristisches Hoverboard, das Zentimeter über dem Boden schwebt, mit glühenden Untertriebwerken und einer schlanken Einzelplankenkarosserie" },
+  "ambulance": { label: "Krankenwagen", description: "Medizinisches Notfallfahrzeug" },
+  "police-car": { label: "Polizeiauto", description: "Schwarz-weißer Streifenwagen mit Lichtbalken" },
+  "hovercraft": { label: "Luftkissenfahrzeug", description: "Luftkissenfahrzeug auf Wasser / Land" },
+  "paraglider": { label: "Gleitschirm", description: "Fußstart-Gleitschirm mit Flügelsegel" },
+  "microlight": { label: "Ultraleichtflugzeug", description: "Leichtes Einsitzer-Freizeitflugzeug" },
+  "airship": { label: "Luftschiff / Zeppelin", description: "Großes starres Leichter-als-Luft-Fahrzeug" },
 }
 
 export default map

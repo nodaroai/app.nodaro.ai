@@ -91,6 +91,13 @@ const map: LocaleCatalogMap = {
   "wizard-wand": { label: "Baguette de magicien", description: "Baguette en bois mince avec moletages en spirale, poignée en cuir et minuscules étincelles de magie s'échappant de la pointe" },
   "war-horn": { label: "Cor de guerre", description: "Massif cor de guerre courbé bordé de cuir et de bandes d'argent avec embouchure à un bout et ouverture évasée à l'autre" },
   "sorcerer-orb": { label: "Orbe du sorcier", description: "Orbe de sorcier en cristal tenu dans un support en argent torsadé en forme de griffe avec brume arcanique tourbillonnante suspendue à l'intérieur de la sphère" },
+  "zweihander": { description: "Épée à deux mains allemande de la Renaissance" },
+  "slingshot": { label: "Lance-pierre", description: "Cadre en bois en forme de Y avec élastique" },
+  "blowgun": { label: "Sarbacane", description: "Long tube projetant des fléchettes par le souffle" },
+  "service-pistol": { label: "Pistolet de service", description: "Arme de poing semi-automatique moderne" },
+  "hunting-rifle": { label: "Carabine de chasse", description: "Carabine à verrou à crosse en bois avec lunette" },
+  "plasma-sword": { label: "Sabre laser / Plasma", description: "Lame d'énergie sci-fi émettant une lueur vive" },
+  "gravity-gun": { label: "Pistolet à gravité", description: "Arme à distance sci-fi manipulant la physique" },
 }
 
 export default map

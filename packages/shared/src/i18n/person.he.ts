@@ -27,6 +27,12 @@ const map: LocaleCatalogMap = {
   "wise-elder": { label: "זקן חכם", description: "זקן בוגר ויודע" },
   "silver-fox": { label: "Silver Fox", description: "גבר מבוגר מכובד ומושך" },
   "mysterious-figure": { label: "דמות מסתורית", description: "דמות חידתית" },
+  "femboy": { label: "Femboy", description: "טיפוס גברי רך-נשי, סגנון נזיל-מגדרית" },
+  "twink": { label: "Twink", description: "טיפוס גבר גיי דק, חלק וצעיר" },
+  "soft-butch": { label: "Soft Butch", description: "אישה גברית-במרכז עדינה" },
+  "tomboy": { label: "Tomboy", description: "סגנון ואנרגיה נעריים על גוף נשי" },
+  "thick": { label: "Thick", description: "דמות חושנית בעלת ביטחון בגוף עם עקומות" },
+  "bear": { label: "Bear", description: "טיפוס גברי גדול, מזוקן, שעיר" },
 
   // Age
   "age-baby": { label: "תינוק", description: "מתחת לגיל 2" },
@@ -145,6 +151,7 @@ const map: LocaleCatalogMap = {
   "eye-upturned": { label: "מורם", description: "פינות חיצוניות מורמות" },
   "eye-wide-set": { label: "מרוחק", description: "עיניים רחוקות זו מזו" },
   "eye-close-set": { label: "קרוב", description: "עיניים קרובות זו לזו" },
+  "eye-double-eyelid": { label: "עפעף כפול", description: "קפל עפעף עליון מוגדר" },
 
   // Nose
   "nose-straight": { label: "ישר", description: "גשר ישר" },
@@ -336,6 +343,13 @@ const map: LocaleCatalogMap = {
   "feature-midriff-visible": { label: "אמצע גוף גלוי", description: "אמצע גוף חשוף בין החלק העליון לתחתון" },
   "feature-navel-visible": { label: "טבור גלוי", description: "טבור גלוי על בטן חשופה" },
   "feature-elongated-neck": { label: "צוואר מאורך", description: "צוואר ארוך דמוי ברבור" },
+  "feature-back-tattoo": { label: "קעקוע גב", description: "יצירה גדולה לרוחב הגב" },
+  "feature-chest-tattoo": { label: "קעקוע חזה", description: "קעקוע לרוחב החזה / מחשוף" },
+  "feature-leg-tattoo": { label: "קעקוע רגל", description: "קעקוע גלוי על רגל / שוק / ירך" },
+  "feature-forearm-tattoo": { label: "קעקוע אמה", description: "קעקוע על האמה הפנימית או החיצונית" },
+  "feature-ear-piercings": { label: "פירסינג אוזן", description: "פירסינג אוזן מרובה ומוערם (סחוס, helix, conch)" },
+  "feature-lip-piercing": { label: "פירסינג שפה", description: "טבעת שפה / labret stud" },
+  "feature-nostril-piercing": { label: "פירסינג נחיר", description: "stud או טבעת בנחיר יחיד" },
 }
 
 export default map

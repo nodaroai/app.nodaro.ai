@@ -20,6 +20,10 @@ const map: LocaleCatalogMap = {
   "raw-photo": { label: "תמונה גולמית", description: "תחושה צילומית לא מעובדת" },
   "masterpiece": { label: "יצירת מופת", description: "חותם איכות של יד מומחה" },
   "award-winning": { label: "זוכה פרסים", description: "רמה של מעגל פרסים" },
+  "volumetric-lighting": { label: "Volumetric Lighting", description: "פירי אור וולומטרי מסוג קרני אלוהים" },
+  "photon-mapping": { label: "Photon Mapping", description: "תאורה גלובלית photon-mapped מודעת ל-caustics" },
+  "ai-upscaled": { label: "AI Upscaled", description: "שיפור פירוט בהגדלה ברשת נוירונים" },
+  "denoised": { label: "Denoised", description: "רנדור נקי, ללא רעש, מבריק" },
 }
 
 export default map

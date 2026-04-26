@@ -15,6 +15,11 @@ const map: LocaleCatalogMap = {
   "silhouette-outline": { label: "Silhouette en contour", description: "Silhouette noire nette sur fond uni" },
   "exploding-particles": { label: "Particules explosives", description: "Contour se dispersant en particules" },
   "3x3-grid-collage": { label: "Collage en grille 3x3", description: "Montage planche-contact de 9 poses" },
+  "matte-painting": { label: "Matte painting", description: "Fond peint en matte painting fondu avec prise de vue réelle" },
+  "double-exposure": { label: "Double exposition", description: "Deux expositions photographiques superposées et fondues" },
+  "multiple-exposure": { label: "Exposition multiple", description: "Trois expositions ou plus empilées" },
+  "in-camera-effects": { label: "Effets in-camera", description: "Effets optiques pratiques in-camera, sans post-prod" },
+  "prism-flares": { label: "Flares de prisme", description: "Flares de lumière réfractée par prisme de cristal se décomposant en bandes spectrales" },
 }
 
 export default map

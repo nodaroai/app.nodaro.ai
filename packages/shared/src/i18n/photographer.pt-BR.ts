@@ -73,6 +73,11 @@ const map: LocaleCatalogMap = {
   "tillmans": { description: "Espontaneidade contemporânea e intimidade queer" },
   "teller": { description: "Moda casual com flash, antiglamour" },
   "penn": { description: "Retrato e still life de moda em estúdio meio-século" },
+  "mcginley": { description: "Juventude naturalista + nudez na paisagem, candid com flare de sol" },
+  "mitchell": { description: "Retrato negro contemporâneo, luz natural suave" },
+  "collins": { description: "Moda onírica saturada de rosa com olhar feminino, 35mm enevoado" },
+  "weston": { description: "Still life modernista em P&B, nus escultóricos" },
+  "beaton": { description: "Retrato da era clássica de Hollywood, encenação teatral" },
 }
 
 export default map

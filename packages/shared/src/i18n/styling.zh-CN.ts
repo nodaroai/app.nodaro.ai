@@ -29,6 +29,12 @@ const map: LocaleCatalogMap = {
   "headwear-crown":        { label: "皇冠",       description: "皇冠或装饰冠" },
   "headwear-helmet":       { label: "头盔",       description: "防护头盔" },
   "headwear-veil":         { label: "面纱",       description: "覆盖脸 / 头发的面纱" },
+  "headwear-bucket-hat":   { label: "渔夫帽",     description: "软帽檐的休闲渔夫帽" },
+  "headwear-beret":        { label: "贝雷帽",     description: "柔软圆顶的法式贝雷帽" },
+  "headwear-turban":       { label: "头巾",       description: "缠绕式头巾,文化 / 时尚款" },
+  "headwear-fascinator":   { label: "迷你头饰",   description: "小巧装饰头饰,皇室婚礼风" },
+  "headwear-bowler":       { label: "圆顶礼帽",   description: "圆顶硬礼帽 / 德比帽" },
+  "headwear-cowboy-hat":   { label: "牛仔帽",     description: "宽檐西部牛仔帽" },
 
   // -------------------- Hair Cut --------------------
   "cut-pixie":           { label: "精灵短发",       description: "短而利落的精灵短发" },
@@ -170,6 +176,17 @@ const map: LocaleCatalogMap = {
   "outfit-kimono":        { label: "和服",       description: "传统日式和服" },
   "outfit-ballerina":     { label: "芭蕾舞服",   description: "古典芭蕾舞服" },
   "outfit-flapper":       { label: "1920 年代 Flapper", description: "镶珠流苏的 Flapper 短裙" },
+  "outfit-goth":          { label: "哥特造型",   description: "整身暗黑哥特:黑色蕾丝、皮革、深色妆容、链条" },
+  "outfit-emo":           { label: "Emo 造型",   description: "千禧初年的 Emo:紧身牛仔裤、乐队 T 恤、染发、眼线" },
+  "outfit-streetwear":    { label: "街头潮流",   description: "现代街头风:连帽卫衣、阔腿裤、运动鞋、渔夫帽" },
+  "outfit-cyberpunk":     { label: "赛博朋克",   description: "霓虹赛博朋克:机能服、LED 点缀、网纱叠搭" },
+  "outfit-cottagecore":   { label: "Cottagecore 田园风", description: "田园小屋美学:草原长裙、围裙、小提篮" },
+  "outfit-dark-academia": { label: "Dark Academia 暗黑学院", description: "牛津学究风:粗花呢西装外套、马甲、牛津鞋" },
+  "outfit-anime-cosplay": { label: "动漫 Cosplay", description: "以可辨识的动漫角色为蓝本的服装" },
+  "outfit-nurse":         { label: "护士装",     description: "医用刷手服、听诊器、挂带式工牌" },
+  "outfit-pirate":        { label: "海盗装",     description: "海盗服:三角帽、腰带、荷叶边衬衫、长靴" },
+  "outfit-fairy":         { label: "仙女装",     description: "奇幻仙女:轻纱翅膀、花环、空灵长裙" },
+  "outfit-mermaid":       { label: "美人鱼装",   description: "奇幻美人鱼:鱼鳞鱼尾 / 半裙、贝壳上衣" },
 
   // -------------------- Top --------------------
   "top-tshirt":     { label: "T 恤",       description: "纯色圆领 T 恤" },
@@ -187,6 +204,11 @@ const map: LocaleCatalogMap = {
   "top-bra-top":    { label: "内衣式上衣", description: "露腰的胸衣式上衣" },
   "top-sports-bra": { label: "运动内衣",   description: "运动型胸衣" },
   "top-bikini-top": { label: "比基尼上装", description: "三角比基尼上衣" },
+  "top-bodysuit":   { label: "连体衣",     description: "贴身连体上衣" },
+  "top-leotard":    { label: "舞蹈紧身衣", description: "舞蹈风格的合身长袖紧身衣" },
+  "top-mesh-top":   { label: "网纱上衣",   description: "通透网纱面料上衣" },
+  "top-sheer-top":  { label: "薄透上衣",   description: "半透明面料上衣" },
+  "top-bandeau":    { label: "抹胸 Bandeau", description: "无肩带的抹胸式上衣" },
 
   // -------------------- Bottom --------------------
   "bottom-jeans":         { label: "牛仔裤",       description: "经典蓝色牛仔裤" },
@@ -205,6 +227,11 @@ const map: LocaleCatalogMap = {
   "bottom-pleated-skirt": { label: "百褶裙",       description: "及大腿的百褶裙" },
   "bottom-midi-skirt":    { label: "中长裙",       description: "及小腿的中长裙" },
   "bottom-maxi-skirt":    { label: "长裙",         description: "落地长裙" },
+  "bottom-overalls":      { label: "工装背带裤",   description: "牛仔背带裤 / 连身裤" },
+  "bottom-culottes":      { label: "宽腿七分裤",   description: "中长款阔腿裤,及小腿中部" },
+  "bottom-palazzo-pants": { label: "阔腿长裤",     description: "飘逸感阔腿长裤" },
+  "bottom-harem-pants":   { label: "哈伦裤",       description: "低裆宽松长裤" },
+  "bottom-bike-shorts":   { label: "骑行短裤",     description: "贴身莱卡材质的中大腿短裤" },
 
   // -------------------- Outerwear --------------------
   "outerwear-leather-jacket":{ label: "皮夹克",       description: "修身皮夹克" },
@@ -253,6 +280,12 @@ const map: LocaleCatalogMap = {
   "footwear-flip-flops":       { label: "人字拖",       description: "随性的橡胶人字拖" },
   "footwear-ballet-flats":     { label: "芭蕾平底鞋",   description: "套穿式芭蕾平底鞋" },
   "footwear-barefoot":         { label: "赤脚",         description: "不穿鞋——赤脚" },
+  "footwear-crocs":            { label: "卡骆驰 Crocs",   description: "彩色树脂洞洞鞋,休闲风" },
+  "footwear-birkenstocks":     { label: "勃肯凉鞋 Birkenstocks", description: "软木鞋床凉鞋" },
+  "footwear-doc-martens":      { label: "马汀博士 Doc Martens", description: "厚实皮质战斗靴" },
+  "footwear-converse":         { label: "匡威 Converse",  description: "帆布高帮运动鞋,经典 Chuck Taylor" },
+  "footwear-vans":             { label: "范斯 Vans",      description: "一脚蹬或低帮滑板鞋" },
+  "footwear-espadrilles":      { label: "草编鞋",         description: "黄麻底帆布夏季鞋" },
 
   // -------------------- Wardrobe State --------------------
   "state-oversized":     { label: "宽松超大",     description: "松垮、超大版型" },

@@ -15,6 +15,12 @@ const map: LocaleCatalogMap = {
   "color-fringe": { label: "Color Fringe", description: "सूक्ष्म high-contrast fringing" },
   "soft-focus-diffusion": { label: "Soft-Focus Diffusion", description: "धुँधला स्वप्निल highlight bloom" },
   "contrast-boost": { label: "Contrast Boost", description: "दबी हुई shadows + पुश की हुई highlights" },
+
+  // -------------------- Round 2 --------------------
+  "sharpening": { label: "Heavy Sharpening", description: "आक्रामक edge-sharpening pass" },
+  "clarity-boost": { label: "Clarity Boost", description: "Mid-tone clarity enhancement, बढ़ा हुआ local contrast" },
+  "dehaze": { label: "Dehaze", description: "Atmospheric dehaze लगाया हुआ, softness हटाते हुए" },
+  "lift-gamma-gain": { label: "Lift-Gamma-Gain Grade", description: "तीन-तरफ़ा color grading wheels" },
 }
 
 export default map
