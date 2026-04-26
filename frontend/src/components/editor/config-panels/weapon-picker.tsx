@@ -11,6 +11,7 @@ import {
 } from "@nodaro-shared/weapons"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface WeaponPickerProps {
   readonly value: string
@@ -90,12 +91,12 @@ export const WeaponPicker = memo(function WeaponPicker({
   className,
 }: WeaponPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("weapons")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<WeaponSubcategory, Weapon[]>()
     for (const weapon of WEAPONS) {
-      if (q && !weapon.label.toLowerCase().includes(q) && !weapon.description.toLowerCase().includes(q)) {
+      if (!matches(weapon.id, weapon.label, weapon.description, query)) {
         continue
       }
       const list = byCategory.get(weapon.subcategory) ?? []
@@ -106,7 +107,7 @@ export const WeaponPicker = memo(function WeaponPicker({
       subcategory: cat,
       weapons: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.weapons.length > 0)
 
@@ -143,13 +144,15 @@ export const WeaponPicker = memo(function WeaponPicker({
             >
               {weapons.map((weapon) => {
                 const selected = weapon.id === value
+                const label = resolveLabel(weapon.id, weapon.label)
+                const description = resolveDescription(weapon.id, weapon.description)
                 return (
                   <button
                     key={weapon.id}
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    title={weapon.description}
+                    title={description}
                     onClick={() => onValueChange(weapon.id, weapon)}
                     className={cn(
                       "group flex flex-col items-center gap-1 p-1.5 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -167,7 +170,7 @@ export const WeaponPicker = memo(function WeaponPicker({
                         selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                       )}
                     >
-                      {weapon.label}
+                      {label}
                     </span>
                   </button>
                 )

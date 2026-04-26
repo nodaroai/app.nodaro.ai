@@ -11,6 +11,7 @@ import {
 } from "@nodaro-shared/photo-genre"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface PhotoGenrePickerProps {
   readonly value: string
@@ -29,12 +30,12 @@ export const PhotoGenrePicker = memo(function PhotoGenrePicker({
   className,
 }: PhotoGenrePickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("photo-genre")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<PhotoGenreCategory, PhotoGenre[]>()
     for (const genre of PHOTO_GENRES) {
-      if (q && !genre.label.toLowerCase().includes(q) && !genre.description.toLowerCase().includes(q)) {
+      if (!matches(genre.id, genre.label, genre.description, query)) {
         continue
       }
       const list = byCategory.get(genre.category) ?? []
@@ -45,7 +46,7 @@ export const PhotoGenrePicker = memo(function PhotoGenrePicker({
       category: cat,
       genres: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.genres.length > 0)
 
@@ -78,13 +79,15 @@ export const PhotoGenrePicker = memo(function PhotoGenrePicker({
             <div role="radiogroup" aria-label={PHOTO_GENRE_CATEGORY_LABELS[category]} className="grid grid-cols-2 gap-1.5">
               {genres.map((genre) => {
                 const selected = genre.id === value
+                const label = resolveLabel(genre.id, genre.label)
+                const description = resolveDescription(genre.id, genre.description)
                 return (
                   <button
                     key={genre.id}
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    title={genre.description}
+                    title={description}
                     onClick={() => onValueChange(genre.id)}
                     className={cn(
                       "group flex flex-col gap-1 p-2 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -101,11 +104,11 @@ export const PhotoGenrePicker = memo(function PhotoGenrePicker({
                           selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                         )}
                       >
-                        {genre.label}
+                        {label}
                       </span>
                     </div>
                     <span className="text-[10px] text-muted-foreground leading-snug line-clamp-2">
-                      {genre.description}
+                      {description}
                     </span>
                   </button>
                 )

@@ -11,6 +11,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { SettingPreview } from "./setting-preview"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface SettingPickerProps {
   readonly value: string
@@ -36,12 +37,12 @@ export const SettingPicker = memo(function SettingPicker({
   className,
 }: SettingPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("setting")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<SettingCategory, Setting[]>()
     for (const setting of SETTINGS) {
-      if (q && !setting.label.toLowerCase().includes(q) && !setting.description.toLowerCase().includes(q)) {
+      if (!matches(setting.id, setting.label, setting.description, query)) {
         continue
       }
       const list = byCategory.get(setting.category) ?? []
@@ -52,7 +53,7 @@ export const SettingPicker = memo(function SettingPicker({
       category: cat,
       settings: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.settings.length > 0)
 
@@ -85,13 +86,15 @@ export const SettingPicker = memo(function SettingPicker({
             <div role="radiogroup" aria-label={SETTING_CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
               {settings.map((setting) => {
                 const selected = setting.id === value
+                const label = resolveLabel(setting.id, setting.label)
+                const description = resolveDescription(setting.id, setting.description)
                 return (
                   <button
                     key={setting.id}
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    title={setting.description}
+                    title={description}
                     onClick={() => onValueChange(setting.id)}
                     className={cn(
                       "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -107,7 +110,7 @@ export const SettingPicker = memo(function SettingPicker({
                         selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                       )}
                     >
-                      {setting.label}
+                      {label}
                     </span>
                   </button>
                 )

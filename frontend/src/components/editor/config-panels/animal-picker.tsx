@@ -11,6 +11,7 @@ import {
 } from "@nodaro-shared/animals"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface AnimalPickerProps {
   readonly value: string
@@ -93,12 +94,12 @@ export const AnimalPicker = memo(function AnimalPicker({
   className,
 }: AnimalPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("animals")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<AnimalSubcategory, Animal[]>()
     for (const animal of ANIMALS) {
-      if (q && !animal.label.toLowerCase().includes(q) && !animal.description.toLowerCase().includes(q)) {
+      if (!matches(animal.id, animal.label, animal.description, query)) {
         continue
       }
       const list = byCategory.get(animal.subcategory) ?? []
@@ -109,7 +110,7 @@ export const AnimalPicker = memo(function AnimalPicker({
       subcategory: cat,
       animals: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.animals.length > 0)
 
@@ -146,13 +147,15 @@ export const AnimalPicker = memo(function AnimalPicker({
             >
               {animals.map((animal) => {
                 const selected = animal.id === value
+                const label = resolveLabel(animal.id, animal.label)
+                const description = resolveDescription(animal.id, animal.description)
                 return (
                   <button
                     key={animal.id}
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    title={animal.description}
+                    title={description}
                     onClick={() => onValueChange(animal.id, animal)}
                     className={cn(
                       "group flex flex-col items-center gap-1 p-1.5 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -170,7 +173,7 @@ export const AnimalPicker = memo(function AnimalPicker({
                         selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                       )}
                     >
-                      {animal.label}
+                      {label}
                     </span>
                   </button>
                 )

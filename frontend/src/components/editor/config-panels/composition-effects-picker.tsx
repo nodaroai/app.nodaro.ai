@@ -5,6 +5,7 @@ import { Search } from "lucide-react"
 import { COMPOSITION_EFFECTS } from "@nodaro-shared/composition-effects"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface CompositionEffectsPickerProps {
   readonly value: string
@@ -18,14 +19,11 @@ export const CompositionEffectsPicker = memo(function CompositionEffectsPicker({
   className,
 }: CompositionEffectsPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("composition-effects")
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return COMPOSITION_EFFECTS
-    return COMPOSITION_EFFECTS.filter(
-      (e) => e.label.toLowerCase().includes(q) || e.description.toLowerCase().includes(q),
-    )
-  }, [query])
+    return COMPOSITION_EFFECTS.filter((e) => matches(e.id, e.label, e.description, query))
+  }, [query, matches])
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
@@ -49,13 +47,15 @@ export const CompositionEffectsPicker = memo(function CompositionEffectsPicker({
       <div role="radiogroup" aria-label="Composition Effect" className="grid grid-cols-2 gap-1.5">
         {filtered.map((entry) => {
           const selected = entry.id === value
+          const label = resolveLabel(entry.id, entry.label)
+          const description = resolveDescription(entry.id, entry.description)
           return (
             <button
               key={entry.id}
               type="button"
               role="radio"
               aria-checked={selected}
-              title={entry.description}
+              title={description}
               onClick={() => onValueChange(entry.id)}
               className={cn(
                 "group flex flex-col items-start gap-0.5 p-2 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -70,10 +70,10 @@ export const CompositionEffectsPicker = memo(function CompositionEffectsPicker({
                   selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               >
-                {entry.label}
+                {label}
               </span>
               <span className="text-[10px] leading-snug text-muted-foreground line-clamp-2">
-                {entry.description}
+                {description}
               </span>
             </button>
           )

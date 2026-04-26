@@ -6,6 +6,7 @@ import { LENSES } from "@nodaro-shared/lens"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { LensPreview } from "./lens-preview"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface LensPickerProps {
   readonly value: string
@@ -19,14 +20,11 @@ export const LensPicker = memo(function LensPicker({
   className,
 }: LensPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("lens")
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return LENSES
-    return LENSES.filter(
-      (l) => l.label.toLowerCase().includes(q) || l.description.toLowerCase().includes(q),
-    )
-  }, [query])
+    return LENSES.filter((l) => matches(l.id, l.label, l.description, query))
+  }, [query, matches])
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
@@ -50,13 +48,15 @@ export const LensPicker = memo(function LensPicker({
       <div role="radiogroup" aria-label="Lens" className="grid grid-cols-3 gap-1.5">
         {filtered.map((lens) => {
           const selected = lens.id === value
+          const label = resolveLabel(lens.id, lens.label)
+          const description = resolveDescription(lens.id, lens.description)
           return (
             <button
               key={lens.id}
               type="button"
               role="radio"
               aria-checked={selected}
-              title={lens.description}
+              title={description}
               onClick={() => onValueChange(lens.id)}
               className={cn(
                 "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -72,7 +72,7 @@ export const LensPicker = memo(function LensPicker({
                   selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               >
-                {lens.label}
+                {label}
               </span>
             </button>
           )

@@ -11,6 +11,7 @@ import {
 } from "@nodaro-shared/photographer"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface PhotographerPickerProps {
   readonly value: string
@@ -31,12 +32,12 @@ export const PhotographerPicker = memo(function PhotographerPicker({
   className,
 }: PhotographerPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("photographer")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<PhotographerCategory, Photographer[]>()
     for (const photographer of PHOTOGRAPHERS) {
-      if (q && !photographer.label.toLowerCase().includes(q) && !photographer.description.toLowerCase().includes(q)) {
+      if (!matches(photographer.id, photographer.label, photographer.description, query)) {
         continue
       }
       const list = byCategory.get(photographer.category) ?? []
@@ -47,7 +48,7 @@ export const PhotographerPicker = memo(function PhotographerPicker({
       category: cat,
       photographers: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.photographers.length > 0)
 
@@ -84,13 +85,15 @@ export const PhotographerPicker = memo(function PhotographerPicker({
             >
               {photographers.map((photographer) => {
                 const selected = photographer.id === value
+                const label = resolveLabel(photographer.id, photographer.label)
+                const description = resolveDescription(photographer.id, photographer.description)
                 return (
                   <button
                     key={photographer.id}
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    title={photographer.description}
+                    title={description}
                     onClick={() => onValueChange(photographer.id)}
                     className={cn(
                       "flex flex-col items-start gap-0.5 p-2 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -105,10 +108,10 @@ export const PhotographerPicker = memo(function PhotographerPicker({
                         selected ? "text-[#ff0073]" : "text-gray-800 dark:text-[#E2E8F0]",
                       )}
                     >
-                      {photographer.label}
+                      {label}
                     </span>
                     <span className="text-[10px] leading-snug text-muted-foreground line-clamp-2 w-full">
-                      {photographer.description}
+                      {description}
                     </span>
                   </button>
                 )

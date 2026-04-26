@@ -1,0 +1,96 @@
+import type { LocaleCatalogMap } from "./types.js"
+
+const map: LocaleCatalogMap = {
+  // Swords
+  "katana": { description: "Sabre japonais à lame courbée à un seul tranchant, manche enveloppé de peau de raie, garde tsuba en disque et finition miroir polie" },
+  "longsword": { label: "Épée longue", description: "Épée longue médiévale à double tranchant droit effilé, garde croisée, poignée enveloppée de cuir et pommeau rond" },
+  "broadsword": { label: "Épée large", description: "Lourde épée large à lame droite double tranchant, garde en panier et solide poignée enveloppée de cuir" },
+  "rapier": { label: "Rapière", description: "Rapière mince à longue lame d'estoc étroite, garde basket-hilt ornée et pommeau sphérique" },
+  "saber": { label: "Sabre", description: "Sabre de cavalerie à lame courbée à un seul tranchant, garde knuckle-bow en laiton et poignée nervurée en cuir" },
+  "scimitar": { label: "Cimeterre", description: "Cimeterre courbé à large lame à un seul tranchant, garde croisée ornée et pommeau métallique arrondi" },
+  "claymore": { description: "Massive claymore écossaise à deux mains avec longue lame droite, garde croisée inclinée vers l'avant et grande poignée bordée de cuir" },
+  "cutlass": { label: "Coutelas", description: "Coutelas de pirate à courte lame courbée à un seul tranchant, garde de main en coupe en laiton et poignée en bois patinée" },
+  "wakizashi": { description: "Sabre wakizashi japonais court à lame doucement courbée, petite tsuba et manche enveloppé de peau de raie" },
+  "falchion": { description: "Lourd fauchon à un seul tranchant avec lame effilée façon couperet, garde croisée simple et poignée rivée en cuir" },
+  // Daggers
+  "dagger": { label: "Dague", description: "Dague classique à double tranchant avec lame étroite et pointue, garde croisée et poignée enveloppée de cuir" },
+  "bowie-knife": { label: "Couteau Bowie", description: "Grand couteau Bowie à lame clip-point, garde en laiton, manche en rondelles de cuir empilées et garde croisée" },
+  "kukri": { description: "Kukri népalais à large lame recourbée vers l'avant, manche en bois et recourbe distinctive vers l'intérieur" },
+  "stiletto": { description: "Stylet mince à longue lame triangulaire effilée comme une aiguille, garde croisée minimaliste et manche effilé" },
+  "dirk": { description: "Dirk écossais à longue lame droite à un seul tranchant, manche entrelacé de nœuds celtiques et pommeau orné" },
+  "tanto": { description: "Dague tanto japonaise à pointe en ciseau angulaire, petite tsuba et manche enveloppé de peau de raie" },
+  "switchblade": { label: "Couteau à cran d'arrêt", description: "Couteau à cran d'arrêt de poche à lame pliante à ressort, panneaux latéraux en nacre ou résine et bouton de relâche poli" },
+  "trench-knife": { label: "Couteau de tranchée", description: "Couteau de tranchée militaire à lame mince à double tranchant et garde de main poing américain en laiton enveloppant la poignée" },
+  // Axes
+  "battle-axe": { label: "Hache de guerre", description: "Lourde hache de guerre à deux mains avec large tranchant courbé, profil barbu et long manche en bois cerclé de fer" },
+  "tomahawk": { description: "Tomahawk de lancer léger avec petite tête en fer à un seul tranchant, manche en bois droit et enveloppe de cuir près de la poignée" },
+  "hatchet": { label: "Hachette", description: "Hachette compacte avec court manche en bois, petite tête en acier à un seul tranchant et finition martelée" },
+  "halberd": { label: "Hallebarde", description: "Hallebarde à hampe combinant lame de hache, pointe d'estoc et crochet arrière sur une haute hampe en bois" },
+  "greataxe": { label: "Grande hache", description: "Massive grande hache avec énorme tête en croissant double face, bandes de renfort en fer et long manche lourd nécessitant deux mains" },
+  "bearded-axe": { label: "Hache barbue", description: "Hache barbue viking avec tranchant inférieur allongé, tête en fer étroite et haute hampe en bois enveloppée de cuir" },
+  // Polearms
+  "spear": { label: "Lance", description: "Lance simple avec fer de lance en forme de feuille attaché à une haute hampe en bois droite et un petit talon à la base" },
+  "lance": { description: "Lance de joute avec longue hampe en bois, pointe conique en acier et garde-main évasée protégeant la poignée" },
+  "pike": { label: "Pique", description: "Très longue pique avec petit fer de lance triangulaire monté sur un pieu en bois deux fois la hauteur d'un homme" },
+  "glaive": { description: "Glaive à hampe avec longue lame courbée à un seul tranchant montée sur une hampe en bois, s'effilant vers une petite garde croisée" },
+  "trident": { description: "Trident à trois pointes avec dents barbelées, hampe centrale et longue hampe en bois" },
+  "naginata": { description: "Naginata japonaise à lame courbée à un seul tranchant montée sur une longue hampe en bois laqué avec ligatures en soie" },
+  // Bows
+  "longbow": { label: "Arc long", description: "Haut arc long anglais d'une seule pièce d'if, corde en lin ciré et poignée enveloppée de cuir" },
+  "recurve-bow": { label: "Arc recourbé", description: "Arc recourbé traditionnel avec branches qui s'écartent de l'archer, riser enveloppé de cuir et corde tendue" },
+  "compound-bow": { label: "Arc à poulies", description: "Arc à poulies moderne avec cames en aluminium, roues à poulies à chaque pointe, repose-flèche en fibre de carbone et viseur" },
+  "crossbow": { label: "Arbalète", description: "Arbalète médiévale avec crosse en bois horizontale, prod en acier, corde tendue et mécanisme de gâchette sous le rail" },
+  "short-bow": { label: "Arc court", description: "Arc court compact en bois avec profil courbé simple, corde cirée et poignée en cuir au milieu" },
+  // Blunt
+  "mace": { label: "Masse", description: "Masse médiévale à flammes avec lourde tête couronnée portant des flammes en fer saillantes sur un court manche en fer" },
+  "war-hammer": { label: "Marteau de guerre", description: "Marteau de guerre à long manche avec lourde tête en fer présentant une face de frappe plate d'un côté et une pointe courbée de l'autre" },
+  "club": { label: "Massue", description: "Massue simple en bois avec tête noueuse épaisse, manche effilé et poignée en cuir bien usée près de la base" },
+  "morning-star": { label: "Morning Star", description: "Morning star avec hampe en bois surmontée d'une grande boule en fer hérissée de hautes pointes dans toutes les directions" },
+  "flail": { label: "Fléau d'armes", description: "Fléau d'armes militaire avec boule en fer à pointes reliée par une courte chaîne à un manche en bois avec embout en fer" },
+  "nunchaku": { description: "Nunchaku d'arts martiaux avec deux matraques en bois polies reliées par une courte longueur de cordon ou chaîne tressée" },
+  // Throwing
+  "shuriken": { description: "Étoile de jet métallique avec plusieurs pointes ultra-tranchantes rayonnant d'un moyeu central et finition acier noirci" },
+  "throwing-knife": { label: "Couteau de jet", description: "Couteau de jet équilibré avec lame en feuille à double tranchant, manche minimal et finition acier polie" },
+  "boomerang": { description: "Boomerang en bois courbé avec coude, motifs tribaux peints et profil aérodynamique lisse" },
+  "javelin": { label: "Javelot", description: "Javelot de lancer léger avec pointe d'acier mince, hampe en bois effilée et enveloppe de cuir près du point d'équilibre" },
+  "bolas": { description: "Trois boules pondérées en pierre ou en fer reliées par des cordons en cuir tressé se rejoignant à un nœud central" },
+  // Modern Firearms
+  "pistol": { label: "Pistolet", description: "Pistolet semi-automatique moderne avec cadre polymère noir mat, glissière nervurée, garde-pèche et chargeur affleurant" },
+  "revolver": { label: "Revolver", description: "Revolver six coups avec barillet rotatif, long canon, chien armé et poignée en bois quadrillée" },
+  "assault-rifle": { label: "Fusil d'assaut", description: "Fusil d'assaut militaire avec long canon, crosse rétractable, viseur optique sur le rail et chargeur amovible courbé" },
+  "shotgun": { label: "Fusil à pompe", description: "Fusil à pompe à action pump avec canon à âme large, garde-main tactique, chargeur tubulaire en dessous et crosse en bois ou synthétique" },
+  "smg": { label: "Pistolet-mitrailleur", description: "Pistolet-mitrailleur compact avec court canon, chargeur monté latéralement, crosse en fil métallique pliante et poignée avant intégrée" },
+  "sniper-rifle": { label: "Fusil de sniper", description: "Fusil de sniper à verrou avec long canon, lunette à fort grossissement, bipied et crosse polymère ergonomique" },
+  "machine-gun": { label: "Mitrailleuse", description: "Lourde mitrailleuse à bande avec long canon à ailettes, bipied, poignée de transport et bande de munitions s'alimentant par le côté" },
+  // Historical Firearms
+  "musket": { label: "Mousquet", description: "Long mousquet à silex avec canon à âme lisse en fer, crosse en noyer, ferrures en laiton et baïonnette fixée près de la bouche" },
+  "flintlock-pistol": { label: "Pistolet à silex", description: "Pistolet à silex orné avec poignée en bois courbée, ferrures en laiton gravées, chien à silex et un seul long canon" },
+  "blunderbuss": { description: "Court tromblon à silex avec bouche évasée, ferrures en laiton sur une crosse en bois trapue et présence d'époque pirate" },
+  "dueling-pistol": { label: "Pistolet de duel", description: "Pistolet de duel élégant avec canon octogonal mince, platine finement gravée et poignée en noyer poli" },
+  // Explosives & Siege
+  "grenade": { label: "Grenade", description: "Grenade à fragmentation en fer texturé ananas avec levier cuillère maintenu en place par une goupille de sécurité tirée" },
+  "stick-grenade": { label: "Grenade à manche", description: "Grenade à manche cylindrique avec ogive en fer montée sur un long manche en bois et un cordon de mise à feu à la base" },
+  "dynamite": { label: "Dynamite", description: "Bâtons groupés de dynamite rouge enveloppés de ficelle et reliés à une longue mèche crachotante au bout brûlant" },
+  "bomb": { label: "Bombe de cartoon", description: "Bombe noire ronde de cartoon avec mèche fumante en spirale sortant du sommet et coquille sphérique en fer brillant" },
+  "rocket-launcher": { label: "Lance-roquettes", description: "Lance-roquettes à l'épaule avec long tube, poignée avant, cône d'échappement arrière et viseur optique de ciblage" },
+  "cannon": { label: "Canon", description: "Canon à chargement par la bouche en fonte monté sur un affût en bois à roues avec long canon à âme lisse et évent fumant" },
+  "catapult": { label: "Catapulte", description: "Catapulte de siège en bois avec long bras de lancement armé, contrepoids ou faisceau de torsion et panier chargé de pierre" },
+  "trebuchet": { description: "Haut trébuchet médiéval avec massif contrepoids, long bras de lancement, fronde tressée et lourd cadre en bois" },
+  // Sci-Fi
+  "laser-pistol": { label: "Pistolet laser", description: "Pistolet laser sci-fi compact avec bobines d'énergie néon lumineuses, corps métallique nervuré et court canon émetteur" },
+  "plasma-rifle": { label: "Fusil à plasma", description: "Fusil à plasma futuriste avec cellules d'énergie bleues lumineuses, coques de canon ventilées et viseur holographique" },
+  "lightsaber": { label: "Sabre laser", description: "Épée laser avec poignée nervurée métallique émettant une haute lame lumineuse d'énergie saturée avec un halo plasma brumeux" },
+  "blaster": { description: "Pistolet blaster rétrofuturiste avec corps trapu, chambre d'énergie lumineuse, évents de refroidissement et lunette montée sur le dessus" },
+  "phaser": { description: "Phaser sci-fi élégant avec poignée minimaliste courbée, pointe d'émetteur lumineuse et panneau lisse contrôlant l'intensité" },
+  "rail-gun": { label: "Canon électromagnétique", description: "Lourd canon électromagnétique avec rails métalliques parallèles, condensateurs massifs le long du corps et chambre de projectile lumineuse" },
+  "emp-grenade": { label: "Grenade EMP", description: "Grenade à impulsion électromagnétique sphérique avec bobines exposées, voyants bleus lumineux et cadran d'armement holographique" },
+  // Fantasy
+  "enchanted-sword": { label: "Épée enchantée", description: "Épée enchantée avec lame gravée de runes lumineuses, garde croisée incrustée d'or et pierre précieuse incrustée dans le pommeau" },
+  "magic-staff": { label: "Bâton magique", description: "Haut bâton de magicien noueux avec hampe en bois tordue se terminant en couronne de branches tenant un cristal lumineux" },
+  "runed-dagger": { label: "Dague runique", description: "Dague mystique avec lame inscrite de runes lumineuses, manche en os et énergie sombre tourbillonnant le long du tranchant" },
+  "wizard-wand": { label: "Baguette de magicien", description: "Baguette en bois mince avec moletages en spirale, poignée en cuir et minuscules étincelles de magie s'échappant de la pointe" },
+  "war-horn": { label: "Cor de guerre", description: "Massif cor de guerre courbé bordé de cuir et de bandes d'argent avec embouchure à un bout et ouverture évasée à l'autre" },
+  "sorcerer-orb": { label: "Orbe du sorcier", description: "Orbe de sorcier en cristal tenu dans un support en argent torsadé en forme de griffe avec brume arcanique tourbillonnante suspendue à l'intérieur de la sphère" },
+}
+
+export default map

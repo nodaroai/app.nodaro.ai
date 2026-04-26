@@ -1,0 +1,69 @@
+import type { LocaleCatalogMap } from "./types.js"
+
+const map: LocaleCatalogMap = {
+  // Shot size
+  "extreme-wide-shot": { label: "大远景",         description: "主体在广阔环境中显得渺小" },
+  "wide-shot":         { label: "远景",           description: "全身加周围环境" },
+  "medium-wide-shot":  { label: "中远景",         description: "膝盖以上的主体" },
+  "medium-shot":       { label: "中景",           description: "腰部以上的主体" },
+  "medium-close-up":   { label: "中近景",         description: "胸部以上的主体" },
+  "close-up":          { label: "近景",           description: "脸部充满画面" },
+  "extreme-close-up":  { label: "大特写",         description: "面部某一特征的紧凑细节" },
+  "insert":            { label: "插入镜头",       description: "对某物体的细节镜头" },
+  "macro":             { label: "微距",           description: "对小型主体的极近距细节" },
+  "full-shot":         { label: "全身镜头",       description: "全身入画" },
+  "cowboy-shot":       { label: "牛仔镜头",       description: "大腿中部以上,经典西部片取景" },
+  "head-to-knees":     { label: "头到膝盖",       description: "从头部到膝盖" },
+  "head-to-hip":       { label: "头到髋",         description: "从头部到髋部" },
+  "half-body":         { label: "半身像",         description: "干净的腰部以上人像" },
+
+  // Angle
+  "eye-level":         { label: "平视角",         description: "镜头与主体眼睛平齐" },
+  "high-angle":        { label: "俯视角",         description: "镜头从上俯瞰主体" },
+  "low-angle":         { label: "仰视角",         description: "镜头从下仰望主体" },
+  "overhead":          { label: "正上方俯视",     description: "正上方上帝视角" },
+  "worms-eye-angle":   { label: "蠕虫视角",       description: "极低机位仰望" },
+  "dutch-angle":       { label: "荷兰角",         description: "倾斜的失衡地平线" },
+  "birds-eye":         { label: "鸟瞰",           description: "高空俯瞰视角" },
+  "slightly-downward": { label: "略微俯视",       description: "自拍式从上方轻微下倾" },
+
+  // Coverage
+  "single":                  { label: "单人镜头",       description: "对一名主体的干净取景" },
+  "two-shot":                { label: "双人镜头",       description: "两个主体同时入画" },
+  "three-shot":              { label: "三人镜头",       description: "三个主体同时入画" },
+  "over-the-shoulder-framing":{ label: "过肩取景",      description: "越过一名主体的肩膀对向另一人" },
+  "reverse-shot":            { label: "反打镜头",       description: "上一镜头的对侧视角" },
+  "pov-framing":             { label: "主观视角",       description: "通过主体的眼睛看世界" },
+  "selfie-framing":          { label: "自拍取景",       description: "手臂长度的自拍" },
+  "mirror-selfie":           { label: "镜面自拍",       description: "镜面反射中可见手机" },
+  "gym-mirror-selfie":       { label: "健身房镜面自拍", description: "健身房镜中三分之四侧后角度" },
+  "through-glass":           { label: "穿玻璃拍摄",     description: "透过前景玻璃取景" },
+  "top-down-flat-lay":       { label: "俯拍平铺",       description: "桌面物品的正上方俯拍排列" },
+  "establishing-shot":       { label: "建立镜头",       description: "宽阔的环境镜头,主体很小" },
+  "dirty-single":            { label: "脏单人镜头",     description: "单人镜头边缘有另一角色入画" },
+
+  // Composition
+  "rule-of-thirds":     { label: "三分法",         description: "主体置于三分线交点" },
+  "centered":           { label: "居中构图",       description: "主体正中、对称" },
+  "headroom-tight":     { label: "顶部预留紧凑",   description: "主体头部贴近画框上沿" },
+  "negative-space":     { label: "负空间",         description: "主体偏置,留出大量空白" },
+  "leading-lines":      { label: "引导线",         description: "线条将视线引向主体" },
+  "3x3-grid-collage":   { label: "3×3 网格拼贴",   description: "3×3 网格中的主体变体" },
+  "diptych":            { label: "双联画",         description: "并列两幅一组的构图" },
+  "triptych":           { label: "三联画",         description: "三幅一组的构图" },
+  "multi-frame-mosaic": { label: "多格马赛克",     description: "由众多小图块拼成的脸" },
+  "contact-sheet":      { label: "印样小样",       description: "缩略图组成的摄影印样" },
+  "magazine-spread":    { label: "杂志跨页",       description: "带文字版式的两版杂志跨页" },
+  "cutaway-cross-section":{ label: "剖面 / 横截面",description: "墙面剥开露出剖面的建筑视图" },
+
+  // Vantage
+  "front-on":            { label: "正面",         description: "主体正对镜头" },
+  "three-quarter-front": { label: "三分之四正面", description: "略微偏离正面" },
+  "profile-left":        { label: "左侧侧面",     description: "侧视图,主体左侧" },
+  "profile-right":       { label: "右侧侧面",     description: "侧视图,主体右侧" },
+  "three-quarter-back":  { label: "三分之四背面", description: "从背后偏角度的视角" },
+  "behind":              { label: "正背面",       description: "正后方视角" },
+  "side-back-angle":     { label: "侧背角度",     description: "从一侧肩后的三分之四视角" },
+}
+
+export default map

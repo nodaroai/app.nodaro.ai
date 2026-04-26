@@ -1,0 +1,56 @@
+import type { LocaleCatalogMap } from "./types.js"
+
+const map: LocaleCatalogMap = {
+  // Positive
+  "happy": { label: "Heureux", description: "Bonheur chaleureux et souriant" },
+  "joyful": { label: "Joyeux", description: "Joie radieuse et débridée" },
+  "serene": { label: "Serein", description: "Calme et contentement paisible" },
+  "playful": { label: "Espiègle", description: "Énergie joueuse et malicieuse" },
+  "confident": { label: "Sûr de soi", description: "Assuré et confiant" },
+  "loving": { label: "Aimant", description: "Tendre, affectueux" },
+  "amused": { label: "Amusé", description: "Subtilement amusé, esquisse de sourire" },
+  "smirking": { label: "Sourire en coin", description: "Amusement arrogant et désinvolte" },
+  "eccentric": { label: "Excentrique", description: "Original, non conventionnel" },
+  "hopeful": { label: "Plein d'espoir", description: "Œil brillant, optimiste" },
+  // Negative
+  "sad": { label: "Triste", description: "Tristement silencieux, abattu" },
+  "angry": { label: "Furieux", description: "Colère claire, tension" },
+  "afraid": { label: "Effrayé", description: "Apeuré, yeux écarquillés" },
+  "anxious": { label: "Anxieux", description: "Nerveux, inquiet" },
+  "melancholy": { label: "Mélancolique", description: "Tristesse rêveuse" },
+  "devastated": { label: "Dévasté", description: "Chagrin de cœur brisé" },
+  "grieving": { label: "En deuil", description: "Profond chagrin, perte" },
+  "caught-off-guard": { label: "Pris au dépourvu", description: "Surpris en pleine réaction" },
+  "aloof": { label: "Distant", description: "Replié, indifférent" },
+  "vulnerable": { label: "Vulnérable", description: "Exposé, sans défense" },
+  "coy": { label: "Timide enjôleur", description: "Timide, regard baissé" },
+  "bored": { label: "Ennuyé", description: "Désintéressé, impassible" },
+  "embarrassed": { label: "Gêné", description: "Rougissant, regard détourné" },
+  "disgusted": { label: "Dégoûté", description: "Repoussé, reculant" },
+  "bewildered": { label: "Perplexe", description: "Confus, perdu" },
+  // Neutral
+  "thoughtful": { label: "Pensif", description: "Plongé dans ses pensées" },
+  "stoic": { label: "Stoïque", description: "Impassible, indéchiffrable" },
+  "calm": { label: "Calme", description: "Centré, sans réaction" },
+  "curious": { label: "Curieux", description: "Intrigué, en alerte" },
+  "mysterious": { label: "Mystérieux", description: "Insondable, énigmatique" },
+  "dazed": { label: "Hébété", description: "Rêveur, à demi présent" },
+  "sleepy": { label: "Endormi", description: "Somnolent, paupières lourdes" },
+  "unbothered": { label: "Imperturbable", description: "Calme et maître de soi" },
+  // Intense
+  "fierce": { label: "Féroce", description: "Féroce, impérieux" },
+  "determined": { label: "Déterminé", description: "Volonté résolue et ciblée" },
+  "passionate": { label: "Passionné", description: "Passion brûlante" },
+  "brooding": { label: "Tourmenté", description: "Mélancolie sombre et tourmentée" },
+  "seductive": { label: "Séducteur", description: "Séduisant, attirant" },
+  "defiant": { label: "Défiant", description: "Défiant, inflexible" },
+  "sultry": { label: "Sulfureux", description: "Couvant, paupières lourdes" },
+  "smoldering": { label: "Brûlant", description: "Intensité ramassée, à combustion lente" },
+  "sinister": { label: "Sinistre", description: "Sombre, malicieux, menaçant" },
+  "wiccan-mystical": { label: "Wicca / Mystique", description: "D'un autre monde discret, occulte" },
+  "lazy-shy": { label: "Timide nonchalant", description: "Somnolent, doux, à demi timide" },
+  "awe": { label: "Émerveillement", description: "Émerveillement, révérent" },
+  "shocked": { label: "Choqué", description: "Surpris, bouche ouverte" },
+}
+
+export default map

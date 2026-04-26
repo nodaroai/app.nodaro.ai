@@ -44,6 +44,7 @@ export const HairCutBrowser = memo(function HairCutBrowser({
       className={className}
       triggerVariant={variant}
       triggerLabel="Pick by look"
+      catalog="styling"
     />
   )
 })

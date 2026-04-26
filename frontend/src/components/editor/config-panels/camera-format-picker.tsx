@@ -6,6 +6,7 @@ import { CAMERA_FORMATS } from "@nodaro-shared/camera-format"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { CameraFormatPreview } from "./camera-format-preview"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface CameraFormatPickerProps {
   readonly value: string
@@ -19,14 +20,11 @@ export const CameraFormatPicker = memo(function CameraFormatPicker({
   className,
 }: CameraFormatPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("camera-format")
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return CAMERA_FORMATS
-    return CAMERA_FORMATS.filter(
-      (f) => f.label.toLowerCase().includes(q) || f.description.toLowerCase().includes(q),
-    )
-  }, [query])
+    return CAMERA_FORMATS.filter((f) => matches(f.id, f.label, f.description, query))
+  }, [query, matches])
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
@@ -50,13 +48,15 @@ export const CameraFormatPicker = memo(function CameraFormatPicker({
       <div role="radiogroup" aria-label="Camera / Film" className="grid grid-cols-3 gap-1.5">
         {filtered.map((format) => {
           const selected = format.id === value
+          const label = resolveLabel(format.id, format.label)
+          const description = resolveDescription(format.id, format.description)
           return (
             <button
               key={format.id}
               type="button"
               role="radio"
               aria-checked={selected}
-              title={format.description}
+              title={description}
               onClick={() => onValueChange(format.id)}
               className={cn(
                 "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -72,7 +72,7 @@ export const CameraFormatPicker = memo(function CameraFormatPicker({
                   selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               >
-                {format.label}
+                {label}
               </span>
             </button>
           )

@@ -1,0 +1,42 @@
+import type { LocaleCatalogMap } from "./types.js"
+
+const map: LocaleCatalogMap = {
+  "warm": { label: "Cálido", description: "Tonos cálidos naranja/rojo" },
+  "cool": { label: "Frío", description: "Tonos fríos azul/turquesa" },
+  "teal-orange": { label: "Turquesa y Naranja", description: "Grado complementario hollywoodense" },
+  "split-toning": { label: "Tonos Divididos", description: "Sombras frías, luces cálidas" },
+  "selective-color": { label: "Color Selectivo", description: "B&N con un color de acento" },
+  "faded-matte": { label: "Mate Desvanecido", description: "Negros levantados, bajo contraste lechoso" },
+  "log-flat": { label: "Log Plano", description: "S-Log/V-Log neutro pre-grado" },
+  "desaturated": { label: "Desaturado", description: "Baja saturación, apagado" },
+  "monochrome-bw": { label: "Monocromo B&N", description: "Blanco y negro puro" },
+  "sepia": { label: "Sepia", description: "Tono marrón vintage" },
+  "pastel": { label: "Pastel", description: "Pasteles suaves de bajo contraste" },
+  "high-contrast": { label: "Alto Contraste", description: "Contraste fuerte, negros profundos" },
+  "vibrant": { label: "Vibrante", description: "Colores altamente saturados" },
+
+  "kodak-portra": { description: "Tonos de piel suaves, grano fino" },
+  "kodak-ektar": { description: "Saturado, grano fino" },
+  "kodak-vision3": { description: "Película cinematográfica de motion picture" },
+  "fuji-pro-400h": { description: "Verdes pastel y cielos" },
+  "cinestill-800t": { description: "Película de tungsteno con halación roja" },
+  "bleach-bypass": { label: "Bleach Bypass", description: "Alto contraste, desaturado" },
+  "technicolor": { label: "Technicolor de 3 Tiras", description: "Technicolor retro vívido" },
+  "two-strip-technicolor": { label: "Technicolor de 2 Tiras", description: "Technicolor rojo-azul de los años 1920-30" },
+  "eastman-color": { description: "Película cálida desvanecida de los 50/60" },
+  "hand-tinted": { label: "Coloreado a Mano", description: "B&N con color pintado a mano" },
+  "agfa-orwo": { description: "Verdes fríos de Europa del Este" },
+  "day-for-night": { label: "Día por Noche", description: "Luz diurna graduada como noche" },
+  "cross-processed": { label: "Procesado Cruzado", description: "Cambios de color del xpro" },
+
+  "instagram-warm": { label: "Cálido de Instagram", description: "Filtro cálido estilo Valencia" },
+  "tiktok-saturated": { label: "Saturado de TikTok", description: "Paleta social brillante y punzante" },
+  "youtube-vlog-flat": { label: "Plano de Vlog YouTube", description: "Grado plano limpio de vlog" },
+  "iphone-hdr": { label: "HDR de iPhone", description: "Look computacional HDR" },
+  "y2k-saturated": { label: "Saturado Y2K", description: "Pop digital de principios de los 2000" },
+  "mtv-90s-vhs": { label: "VHS de MTV de los 90", description: "Cromo VHS sobresaturado de los 90" },
+  "polaroid-faded": { label: "Polaroid Desvanecida", description: "Polaroid desvanecida con tinte magenta" },
+  "lifestyle-warm-magazine": { label: "Revista Lifestyle Cálida", description: "Grado editorial moderno y cálido" },
+}
+
+export default map

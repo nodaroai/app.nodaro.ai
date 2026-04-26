@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { TemporalPreview } from "./temporal-preview"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface TemporalPickerProps {
   readonly value: TemporalValue
@@ -34,12 +35,12 @@ export const TemporalPicker = memo(function TemporalPicker({
   className,
 }: TemporalPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("temporal")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<TemporalCategory, Temporal[]>()
     for (const temporal of TEMPORALS) {
-      if (q && !temporal.label.toLowerCase().includes(q) && !temporal.description.toLowerCase().includes(q)) {
+      if (!matches(temporal.id, temporal.label, temporal.description, query)) {
         continue
       }
       const list = byCategory.get(temporal.category) ?? []
@@ -50,7 +51,7 @@ export const TemporalPicker = memo(function TemporalPicker({
       category: cat,
       temporals: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((s) => s.temporals.length > 0)
 
@@ -89,6 +90,8 @@ export const TemporalPicker = memo(function TemporalPicker({
             field={field}
             checked={checked}
             current={current}
+            resolveLabel={resolveLabel}
+            resolveDescription={resolveDescription}
             onToggle={(next) => {
               if (next) {
                 // Enabling: auto-pick the first entry in this category as default.
@@ -112,6 +115,8 @@ interface CategorySectionProps {
   readonly field: "temporalSpeed" | "temporalFreeze" | "temporalDirection" | "temporalShutter"
   readonly checked: boolean
   readonly current: string | undefined
+  readonly resolveLabel: (id: string, englishLabel: string) => string
+  readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
   readonly onPick: (id: string) => void
 }
@@ -122,6 +127,8 @@ function CategorySection({
   field,
   checked,
   current,
+  resolveLabel,
+  resolveDescription,
   onToggle,
   onPick,
 }: CategorySectionProps) {
@@ -147,13 +154,15 @@ function CategorySection({
       <div role="radiogroup" aria-label={label} className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}>
         {temporals.map((temporal) => {
           const selected = checked && temporal.id === current
+          const entryLabel = resolveLabel(temporal.id, temporal.label)
+          const entryDescription = resolveDescription(temporal.id, temporal.description)
           return (
             <button
               key={temporal.id}
               type="button"
               role="radio"
               aria-checked={selected}
-              title={checked ? temporal.description : `${temporal.description} (click to enable ${label})`}
+              title={checked ? entryDescription : `${entryDescription} (click to enable ${label})`}
               onClick={() => onPick(temporal.id)}
               className={cn(
                 "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -169,7 +178,7 @@ function CategorySection({
                   selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               >
-                {temporal.label}
+                {entryLabel}
               </span>
             </button>
           )

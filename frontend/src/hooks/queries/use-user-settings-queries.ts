@@ -6,6 +6,9 @@ interface UserSettings {
   publicOutputs: boolean
   tier: string
   promptTemplates: Record<string, string>
+  /** User-selected language for parameter-node picker labels/descriptions.
+   *  null = browser-detected, falls back to English. */
+  preferredLocale: string | null
 }
 
 async function fetchUserSettings(userId: string): Promise<UserSettings> {
@@ -20,6 +23,7 @@ async function fetchUserSettings(userId: string): Promise<UserSettings> {
     publicOutputs: data.publicOutputs ?? true,
     tier: data.tier ?? "free",
     promptTemplates: data.promptTemplates ?? {},
+    preferredLocale: data.preferredLocale ?? null,
   }
 }
 
@@ -43,6 +47,31 @@ export function useUpdatePublicOutputsMutation() {
         body: JSON.stringify({ userId, publicOutputs }),
       })
       if (!res.ok) throw new Error("Failed to update settings")
+      return res.json()
+    },
+    onSuccess: (_data, { userId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.userSettings.detail(userId) })
+    },
+  })
+}
+
+export function useUpdatePreferredLocaleMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      preferredLocale,
+    }: {
+      userId: string
+      preferredLocale: string | null
+    }) => {
+      const authHeaders = await getAuthHeaders()
+      const res = await fetch(`/v1/user/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ userId, preferredLocale }),
+      })
+      if (!res.ok) throw new Error("Failed to update preferred locale")
       return res.json()
     },
     onSuccess: (_data, { userId }) => {

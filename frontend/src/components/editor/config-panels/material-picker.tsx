@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { MaterialPreview } from "./material-preview"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface MaterialPickerProps {
   readonly value: string
@@ -30,12 +31,12 @@ export const MaterialPicker = memo(function MaterialPicker({
   className,
 }: MaterialPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("materials")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<MaterialCategory, Material[]>()
     for (const material of MATERIALS) {
-      if (q && !material.label.toLowerCase().includes(q) && !material.description.toLowerCase().includes(q)) {
+      if (!matches(material.id, material.label, material.description, query)) {
         continue
       }
       const list = byCategory.get(material.category) ?? []
@@ -46,7 +47,7 @@ export const MaterialPicker = memo(function MaterialPicker({
       category: cat,
       materials: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.materials.length > 0)
 
@@ -79,13 +80,15 @@ export const MaterialPicker = memo(function MaterialPicker({
             <div role="radiogroup" aria-label={MATERIAL_CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
               {materials.map((material) => {
                 const selected = material.id === value
+                const label = resolveLabel(material.id, material.label)
+                const description = resolveDescription(material.id, material.description)
                 return (
                   <button
                     key={material.id}
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    title={material.description}
+                    title={description}
                     onClick={() => onValueChange(material.id)}
                     className={cn(
                       "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -101,7 +104,7 @@ export const MaterialPicker = memo(function MaterialPicker({
                         selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                       )}
                     >
-                      {material.label}
+                      {label}
                     </span>
                   </button>
                 )

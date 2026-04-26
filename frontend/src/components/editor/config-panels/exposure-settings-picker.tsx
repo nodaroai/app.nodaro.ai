@@ -13,6 +13,7 @@ import {
 } from "@nodaro-shared/exposure-settings"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface ExposureSettingsPickerProps {
   readonly value: ExposureValue
@@ -33,12 +34,12 @@ export const ExposureSettingsPicker = memo(function ExposureSettingsPicker({
   className,
 }: ExposureSettingsPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("exposure-settings")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<ExposureCategory, ExposureSettings[]>()
     for (const exposure of EXPOSURE_SETTINGS) {
-      if (q && !exposure.label.toLowerCase().includes(q) && !exposure.description.toLowerCase().includes(q)) {
+      if (!matches(exposure.id, exposure.label, exposure.description, query)) {
         continue
       }
       const list = byCategory.get(exposure.category) ?? []
@@ -49,7 +50,7 @@ export const ExposureSettingsPicker = memo(function ExposureSettingsPicker({
       category: cat,
       exposures: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.exposures.length > 0)
 
@@ -85,6 +86,8 @@ export const ExposureSettingsPicker = memo(function ExposureSettingsPicker({
             field={field}
             checked={checked}
             current={current}
+            resolveLabel={resolveLabel}
+            resolveDescription={resolveDescription}
             onToggle={(next) => {
               if (next) {
                 const first = EXPOSURE_SETTINGS.find((e) => e.category === category)?.id
@@ -107,6 +110,8 @@ interface CategorySectionProps {
   readonly field: "aperture" | "shutterSpeed" | "isoValue"
   readonly checked: boolean
   readonly current: string | undefined
+  readonly resolveLabel: (id: string, englishLabel: string) => string
+  readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
   readonly onPick: (id: string) => void
 }
@@ -117,6 +122,8 @@ function CategorySection({
   field,
   checked,
   current,
+  resolveLabel,
+  resolveDescription,
   onToggle,
   onPick,
 }: CategorySectionProps) {
@@ -142,13 +149,15 @@ function CategorySection({
       <div role="radiogroup" aria-label={label} className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}>
         {exposures.map((exposure) => {
           const selected = checked && exposure.id === current
+          const entryLabel = resolveLabel(exposure.id, exposure.label)
+          const entryDescription = resolveDescription(exposure.id, exposure.description)
           return (
             <button
               key={exposure.id}
               type="button"
               role="radio"
               aria-checked={selected}
-              title={checked ? exposure.description : `${exposure.description} (click to enable ${label})`}
+              title={checked ? entryDescription : `${entryDescription} (click to enable ${label})`}
               onClick={() => onPick(exposure.id)}
               className={cn(
                 "group flex flex-col items-center gap-1 p-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden min-h-[44px]",
@@ -163,7 +172,7 @@ function CategorySection({
                   selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               >
-                {exposure.label}
+                {entryLabel}
               </span>
             </button>
           )

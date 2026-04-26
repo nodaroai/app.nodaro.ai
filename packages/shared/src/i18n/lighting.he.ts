@@ -1,0 +1,76 @@
+import type { LocaleCatalogMap } from "./types.js"
+
+const map: LocaleCatalogMap = {
+  // Time of day
+  "sunrise": { label: "זריחה", description: "שמש נמוכה חמה, צללים ארוכים" },
+  "golden-hour": { label: "Golden Hour", description: "זוהר חם של שקיעה" },
+  "noon": { label: "צהריים", description: "שמש צהריים חזקה מלמעלה" },
+  "harsh-midday": { label: "צהריים חזקים", description: "זנית של שמש לבנה מולבנת" },
+  "overcast": { label: "מעונן", description: "אור יום רך מפוזר" },
+  "blue-hour": { label: "Blue Hour", description: "דמדומים קרים של בין הערביים" },
+  "twilight": { label: "דמדומים", description: "בין Blue Hour ללילה מלא" },
+  "night": { label: "לילה", description: "לילה עמוק, אור סביבתי נמוך" },
+  "moonlight": { label: "אור ירח", description: "סצנה מוארת בכחול ירח קר" },
+  "neon-night": { label: "לילה ניאון", description: "ליל עיר ניאון רווי" },
+
+  // Style
+  "three-point": { label: "שלוש נקודות", description: "Key + fill + back קלאסי" },
+  "rembrandt": { label: "Rembrandt", description: "משולש של אור על הלחי" },
+  "chiaroscuro": { label: "chiaroscuro", description: "קונטרסט חזק בין אור לחושך" },
+  "silhouette": { label: "צללית", description: "סובייקט כצורה טהורה" },
+  "high-key": { label: "High-Key", description: "בהיר, קונטרסט נמוך" },
+  "low-key": { label: "Low-Key", description: "כהה, קונטרסט גבוה" },
+  "split": { label: "Split", description: "פנים מוארים-לחצי, מוצלים-לחצי" },
+  "hard": { label: "קשה", description: "צללים עם קצוות חדים" },
+  "soft": { label: "רך", description: "אור עדין מפוזר" },
+  "practical": { label: "מעשי", description: "אורות נראים בתוך הסצנה" },
+  "ring-light": { label: "Ring Light", description: "Catchlight של ring beauty/vlog" },
+  "phone-screen-glow": { label: "זוהר מסך טלפון", description: "תאורה תחתונה קרה ממסך" },
+  "selfie-natural": { label: "סלפי טבעי", description: "סלפי באור חלון" },
+  "natural": { label: "טבעי", description: "אור סביבה זמין" },
+  "volumetric": { label: "Volumetric", description: "קרני אור נראות באובך" },
+  "noir": { label: "Noir", description: "Film noir שחור-לבן בקונטרסט גבוה" },
+  "on-camera-flash": { label: "פלאש על המצלמה", description: "פלאש ישיר של פפראצי/iPhone" },
+  "mirror-bounce-flash": { label: "פלאש קפיצת מראה", description: "Bounce של פלאש בסלפי במראה" },
+  "bounced-flash": { label: "פלאש מוקפץ", description: "Fill רך מוקפץ מהתקרה" },
+  "softbox-key": { label: "Softbox Key", description: "Key אופנה רחב מפוזר" },
+  "beauty-dish": { label: "Beauty Dish", description: "אור גיבור, נפילה חדה" },
+  "gridded-snoot": { label: "Snoot מורם", description: "בריכת אור הדוקה ממוקדת" },
+  "silk-diffusion": { label: "פיזור משי", description: "Key רך עדין מפוזר במשי" },
+  "kicker-rim": { label: "Kicker / Rim Accent", description: "מפריד מבטא צד-נמוך" },
+  "candlelight": { label: "אור נר", description: "זוהר אש מהבהב חמים" },
+  "edison-tungsten": { label: "Edison Tungsten", description: "זוהר נורת גלובוס חמים נעים" },
+  "dappled-light": { label: "אור עלוותי", description: "אור עלים מנוקד" },
+  "raking-sidelight": { label: "Sidelight גורף", description: "צד נמוך קיצוני, טקסטורה" },
+  "stage-spotlight": { label: "זרקור במה", description: "זרקור קשה יחיד מלמעלה" },
+  "underwater-caustics": { label: "Caustics תת-מימיים", description: "דפוסים מרוצדים נשברים" },
+  "bioluminescence": { label: "ביו-לומינסנציה", description: "זוהר ביולוגי קר ומצמרר" },
+
+  // Direction
+  "front": { label: "חזית", description: "אור מכיוון המצלמה" },
+  "three-quarter": { label: "אור 3/4", description: "זווית key פורטרט קלאסית" },
+  "side": { label: "צד", description: "אור מצד אחד" },
+  "back-rim": { label: "Back / Rim", description: "תאורה אחורית סביב הסובייקט" },
+  "silhouette-backlight": { label: "תאורת צללית מאחור", description: "הילה בהירה, סובייקט כהה" },
+  "top-overhead": { label: "Top / Overhead", description: "אור ישירות מלמעלה" },
+  "under-uplight": { label: "מתחת / Uplight", description: "אור מלמטה" },
+  "window": { label: "חלון", description: "Sidelight רך מחלון" },
+
+  // Lighting ratio
+  "ratio-1-1": { description: "שטוח, ללא קונטרסט צללים" },
+  "ratio-1-2": { description: "נפילה רכה של צעד אחד" },
+  "ratio-1-3": { description: "קונטרסט מתון של שני צעדים" },
+  "ratio-1-4": { description: "קונטרסט אדיטוריאלי חזק" },
+  "ratio-1-8": { description: "Chiaroscuro Low-key קיצוני" },
+  "ratio-1-16": { description: "נפילה Film-noir ממקור יחיד" },
+
+  // Color temperature
+  "temp-2700k": { label: "2700K נר", description: "ענבר עמוק של נר/טונגסטן" },
+  "temp-3200k": { label: "3200K טונגסטן", description: "פנים חמים בצהוב" },
+  "temp-4000k": { label: "4000K מעורב", description: "לבן נייטרלי" },
+  "temp-5600k": { label: "5600K אור יום", description: "שמש צהריים מאוזנת לאור יום" },
+  "temp-6500k": { label: "6500K מעונן", description: "גוון כחול מעט קר" },
+  "temp-9000k": { label: "9000K צל", description: "צל כחול קר במובהק" },
+}
+
+export default map

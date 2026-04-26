@@ -1,0 +1,43 @@
+import type { LocaleCatalogMap } from "./types.js"
+
+const map: LocaleCatalogMap = {
+  // Palette
+  "warm": { label: "Chaud", description: "Tons orange/rouge chauds" },
+  "cool": { label: "Froid", description: "Tons bleu/turquoise froids" },
+  "teal-orange": { label: "Turquoise & Orange", description: "Étalonnage complémentaire hollywoodien" },
+  "split-toning": { label: "Split-toning", description: "Ombres froides, hautes lumières chaudes" },
+  "selective-color": { label: "Couleur sélective", description: "N&B avec une seule couleur d'accent" },
+  "faded-matte": { label: "Mat délavé", description: "Noirs relevés, contraste laiteux et faible" },
+  "log-flat": { label: "Log plat", description: "S-Log/V-Log neutre pré-étalonnage" },
+  "desaturated": { label: "Désaturé", description: "Saturation faible, atténué" },
+  "monochrome-bw": { label: "Monochrome N&B", description: "Noir et blanc pur" },
+  "sepia": { label: "Sépia", description: "Ton brun vintage" },
+  "pastel": { label: "Pastel", description: "Pastels doux à faible contraste" },
+  "high-contrast": { label: "Contraste élevé", description: "Contraste punchy, noirs profonds" },
+  "vibrant": { label: "Vibrant", description: "Couleurs très saturées" },
+  // Film emulation
+  "kodak-portra": { description: "Tons de peau doux, grain fin" },
+  "kodak-ektar": { description: "Saturé, grain fin" },
+  "kodak-vision3": { description: "Pellicule cinéma" },
+  "fuji-pro-400h": { description: "Verts pastel et ciels" },
+  "cinestill-800t": { description: "Pellicule tungstène avec halation rouge" },
+  "bleach-bypass": { description: "Contraste élevé, désaturé" },
+  "technicolor": { label: "Technicolor 3 bandes", description: "Technicolor rétro vif" },
+  "two-strip-technicolor": { label: "Technicolor 2 bandes", description: "Technicolor rouge-bleu des années 1920-30" },
+  "eastman-color": { description: "Pellicule chaude délavée des années 1950/60" },
+  "hand-tinted": { label: "Coloré à la main", description: "N&B avec couleur peinte à la main" },
+  "agfa-orwo": { description: "Verts froids d'Europe de l'Est" },
+  "day-for-night": { label: "Nuit américaine", description: "Lumière du jour étalonnée en nuit" },
+  "cross-processed": { label: "Développement croisé", description: "Décalages chromatiques du xpro" },
+  // Social-preset
+  "instagram-warm": { description: "Filtre chaud style Valencia" },
+  "tiktok-saturated": { description: "Palette sociale punchy et brillante" },
+  "youtube-vlog-flat": { description: "Étalonnage vlog plat propre" },
+  "iphone-hdr": { description: "Look HDR computationnel" },
+  "y2k-saturated": { description: "Pop numérique du début des années 2000" },
+  "mtv-90s-vhs": { description: "Chroma VHS sursaturée des années 90" },
+  "polaroid-faded": { description: "Polaroid délavé teinté magenta" },
+  "lifestyle-warm-magazine": { description: "Étalonnage éditorial chaud moderne" },
+}
+
+export default map
