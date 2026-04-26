@@ -527,7 +527,9 @@ export interface FramingValue {
   shotSize?: string
   angle?: string
   coverage?: string
-  composition?: string
+  /** Composition — single id or up to 2 ids for layered compositions
+   *  (e.g. ["rule-of-thirds", "leading-lines"], ["centered", "negative-space"]). */
+  composition?: string | ReadonlyArray<string>
   vantage?: string
 }
 
@@ -560,10 +562,19 @@ export function buildFramingHints(
   for (const category of FRAMING_CATEGORY_ORDER) {
     if (category === "vantage" && skipVantage) continue
     const field = FRAMING_FIELD_BY_CATEGORY[category]
-    const id = data[field]
-    if (typeof id !== "string" || id.length === 0) continue
-    const hint = getFramingPromptHint(id)
-    if (hint) hints.push(hint)
+    const raw = data[field]
+    // composition accepts string | string[] (multi-pick max 2). Other
+    // categories are single-pick; arrays are tolerated defensively.
+    if (typeof raw === "string" && raw.length > 0) {
+      const hint = getFramingPromptHint(raw)
+      if (hint) hints.push(hint)
+    } else if (Array.isArray(raw)) {
+      for (const item of raw) {
+        if (typeof item !== "string" || item.length === 0) continue
+        const hint = getFramingPromptHint(item)
+        if (hint) hints.push(hint)
+      }
+    }
   }
   return hints
 }

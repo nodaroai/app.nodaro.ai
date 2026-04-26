@@ -98,6 +98,9 @@ export const ANIMALS: ReadonlyArray<Animal> = [
   { id: "koala",                label: "Koala",                subcategory: "wild", description: "Fluffy grey marsupial with a round head, large fuzzy ears, a big black nose and a soft fluffy chest" },
   { id: "deer",                 label: "Deer",                 subcategory: "wild", description: "Graceful deer with a reddish-brown coat, slender legs, white throat patch and — on a stag — branched antlers" },
   { id: "raccoon",              label: "Raccoon",              subcategory: "wild", description: "Masked raccoon with a grey coat, a dark bandit mask across the eyes and a bushy ringed tail" },
+  { id: "capybara",             label: "Capybara",             subcategory: "wild", description: "Large peaceful South American rodent with a barrel-shaped body, blunt muzzle and calm expression, often photographed soaking in a hot spring with citrus floating around it" },
+  { id: "sloth",                label: "Sloth",                subcategory: "wild", description: "Slow-moving tree-dwelling mammal with shaggy fur, long curved claws and a permanent gentle smile, often hanging upside-down from a branch" },
+  { id: "red-panda",            label: "Red Panda",            subcategory: "wild", description: "Small fox-faced bamboo eater with rich reddish-brown fur, white facial markings, ringed tail and tufted upright ears, distinct from the giant panda" },
 
   // -------------------- Birds --------------------
   { id: "eagle",                label: "Eagle",                subcategory: "birds", description: "Majestic eagle with a dark brown body, white head and tail, curved yellow beak and sharp talons" },
@@ -110,6 +113,7 @@ export const ANIMALS: ReadonlyArray<Animal> = [
   { id: "sparrow",              label: "Sparrow",              subcategory: "birds", description: "Small brown-and-grey sparrow with a streaked back, tidy round body and alert black eye" },
   { id: "crow",                 label: "Crow",                 subcategory: "birds", description: "Glossy all-black crow with a thick straight beak, intelligent dark eyes and sleek iridescent feathers" },
   { id: "hummingbird",          label: "Hummingbird",          subcategory: "birds", description: "Tiny jewel-toned hummingbird with iridescent emerald and ruby plumage and a long needle-like beak" },
+  { id: "raven",                label: "Raven",                subcategory: "birds", description: "Large glossy all-black raven with a heavy wedge-shaped beak, shaggy throat hackles and an intelligent piercing gaze, often perched in a cinematic mysterious mood" },
 
   // -------------------- Sea --------------------
   { id: "dolphin",              label: "Dolphin",              subcategory: "sea", description: "Sleek grey dolphin with a playful smiling face, curved dorsal fin and powerful tail flukes" },
@@ -120,6 +124,7 @@ export const ANIMALS: ReadonlyArray<Animal> = [
   { id: "jellyfish",            label: "Jellyfish",            subcategory: "sea", description: "Translucent jellyfish with a glowing bell-shaped body and long trailing filamentous tentacles" },
   { id: "crab",                 label: "Crab",                 subcategory: "sea", description: "Red-shelled crab with a wide armored carapace, large pincer claws and skittering side-stepping legs" },
   { id: "seahorse",             label: "Seahorse",             subcategory: "sea", description: "Tiny seahorse with a curled prehensile tail, horse-like head and delicate dorsal fin" },
+  { id: "axolotl",              label: "Axolotl",              subcategory: "sea", description: "Pink-fleshed aquatic salamander with feathery external gills fanning out from the head, tiny clawed limbs and a distinctive smiling face" },
 
   // -------------------- Small Pets --------------------
   { id: "hamster",              label: "Hamster",              subcategory: "small-pets", description: "Round fluffy hamster with chubby cheek pouches, tiny paws and bright black bead eyes" },

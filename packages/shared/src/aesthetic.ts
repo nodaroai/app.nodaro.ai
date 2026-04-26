@@ -151,6 +151,14 @@ export const AESTHETICS: ReadonlyArray<Aesthetic> = [
     promptHint:
       "in the indie sleaze aesthetic — smudged eyeliner, leather jackets and skinny jeans at smoky house parties, lit by harsh on-camera flash with deep blacks and noisy grain",
   },
+  {
+    id: "baddie",
+    label: "Baddie",
+    category: "mainstream",
+    description: "Confident, styled, trend-savvy",
+    promptHint:
+      "in the baddie aesthetic — sharp-arched eyebrows, glossy lip, hoop earrings, bodycon dresses and bouncy curls in mirror-selfie poses, with high-contrast color and a polished glamorous finish",
+  },
 
   // -------------------- Niche -core / -kei / -punk --------------------
   {
@@ -240,6 +248,54 @@ export const AESTHETICS: ReadonlyArray<Aesthetic> = [
     description: "Cat-eared cozy domestic",
     promptHint:
       "in the catcore aesthetic — cat-ear hoodies, paw mittens, knitted cardigans and tabby-print scarves curled up by sun-warmed windows, with soft golden color",
+  },
+  {
+    id: "weirdcore",
+    label: "Weirdcore",
+    category: "niche",
+    description: "Surreal liminal-space unease",
+    promptHint:
+      "in the weirdcore aesthetic — surreal liminal-space anxiety blending glitch and nostalgia, low-fi muted color and JPEG artefacts, often empty hallways, fluorescent basements or backrooms-style pools rendered with quiet dread",
+  },
+  {
+    id: "dreamcore",
+    label: "Dreamcore",
+    category: "niche",
+    description: "Soft surreal dreamlike serenity",
+    promptHint:
+      "in the dreamcore aesthetic — dreamlike soft-focus surrealism with candy pastel palettes and uncanny serenity, often empty rooms, drifting clouds or abandoned playgrounds bathed in hazy diffuse light",
+  },
+  {
+    id: "traumacore",
+    label: "Traumacore",
+    category: "niche",
+    description: "Distorted nostalgic childhood collage",
+    promptHint:
+      "in the traumacore aesthetic — distorted nostalgic childhood imagery layered with melancholic captions and unsettling edits, Hello-Kitty stickers cut against scratched found-photo collage, washed-out pinks and faded sadness",
+  },
+  {
+    id: "alt-girl",
+    label: "Alt / Alt-Girl",
+    category: "niche",
+    description: "Grunge-meets-emo internet alt",
+    promptHint:
+      "in the alt-girl aesthetic — alternative subculture mix of grunge, scene, emo and e-girl with dyed split hair, layered chains, fishnets, oversized band tees and smudged dark eyeliner, lit with cool moody color",
+  },
+  {
+    id: "blokecore",
+    label: "Blokecore",
+    category: "niche",
+    description: "Football-jersey dadcore menswear",
+    promptHint:
+      "in the blokecore aesthetic — vintage football jerseys, Adidas Sambas, straight-leg denim, bucket hats and casual sportswear elevated to a fashion statement, on terraced streets with naturalistic everyday color",
+  },
+  {
+    id: "y2k-rave",
+    label: "Y2K Rave / Decora Club-Kid",
+    category: "niche",
+    description: "Neon Japanese decora rave kid",
+    promptHint:
+      "in the Y2K-rave decora club-kid aesthetic — fluorescent layered tops, plastic-charm bracelets, kawaii hair clips, leg warmers and platform sneakers under blacklight and neon strobes, with hyper-saturated electric color",
   },
 
   // -------------------- Fashion eras --------------------

@@ -46,6 +46,13 @@ export const LIGHTINGS: ReadonlyArray<Lighting> = [
   { id: "high-key",      label: "High-Key",      category: "style",       description: "Bright, low-contrast",         promptHint: "high-key lighting, bright low-contrast scene with minimal shadows and a light overall tone" },
   { id: "low-key",       label: "Low-Key",       category: "style",       description: "Dark, high-contrast",          promptHint: "low-key lighting, dark high-contrast scene with deep shadows and selective highlights" },
   { id: "split",         label: "Split",         category: "style",       description: "Half-lit half-shadow face",    promptHint: "split lighting, light hitting only one half of the face with the other half in deep shadow" },
+  // Classical portrait lighting setups
+  { id: "butterfly",     label: "Butterfly",     category: "style",       description: "Glamour, nose-shadow butterfly", promptHint: "butterfly portrait lighting, key light placed directly above and slightly in front of the subject casting a small symmetrical butterfly-shaped shadow under the nose, classic Hollywood glamour with even illumination across both cheeks" },
+  { id: "loop",          label: "Loop",          category: "style",       description: "Most natural portrait setup",   promptHint: "loop portrait lighting, key light slightly to one side and above eye level casting a small loop-shaped nose shadow on the cheek that does not touch the shadow side, the most natural and flattering classical portrait setup" },
+  { id: "broad",         label: "Broad",         category: "style",       description: "Wider face, friendly key",      promptHint: "broad portrait lighting, key light striking the side of the face turned toward the camera so the larger lit cheek dominates the frame, makes the face appear wider and more open with a friendly approachable feel" },
+  { id: "short",         label: "Short",         category: "style",       description: "Slimming, dramatic key",        promptHint: "short portrait lighting, key light striking the side of the face turned away from the camera so the larger plane of the face falls into shadow, slims the face and adds dramatic dimension favored in editorial and male portraiture" },
+  { id: "hatchet",       label: "Hatchet",       category: "style",       description: "Overhead skim, deep side shadow", promptHint: "hatchet portrait lighting, hard overhead light skimming the face from one side and leaving the opposite side in deep unrelieved shadow, theatrical and severe with a sharply divided contour" },
+  { id: "clamshell",     label: "Clamshell",     category: "style",       description: "Beauty key + bottom reflector", promptHint: "clamshell beauty lighting, soft key light above the subject paired with a reflector or fill below the chin sandwiching the face evenly between two light sources, glossy commercial beauty look with twin catchlights and minimal shadow under the jaw" },
   { id: "hard",          label: "Hard",          category: "style",       description: "Sharp-edged shadows",          promptHint: "hard lighting, sharp-edged crisp shadows from an undiffused direct light source" },
   { id: "soft",          label: "Soft",          category: "style",       description: "Diffused gentle light",        promptHint: "soft diffused lighting, gentle wraparound light with smooth shadow transitions" },
   { id: "practical",     label: "Practical",     category: "style",       description: "In-scene visible lights",      promptHint: "practical lighting, illumination from visible in-scene sources (lamps, windows, screens, candles)" },
@@ -166,7 +173,9 @@ export const LIGHTING_FIELD_BY_CATEGORY: Record<
  */
 export interface LightingValue {
   timeOfDay?: string
-  lightingStyle?: string
+  /** Lighting style — single id or up to 2 ids for layered setups
+   *  (e.g. ["key", "rim"], ["soft", "hard"], ["beauty-dish", "kicker"]). */
+  lightingStyle?: string | ReadonlyArray<string>
   lightingDirection?: string
   /** Lighting ratio id from LIGHTINGS (relative key-to-shadow brightness, e.g. "ratio-1-2"). */
   lightingRatio?: string
@@ -197,10 +206,19 @@ export function buildLightingHints(
   const hints: string[] = []
   for (const category of LIGHTING_CATEGORY_ORDER) {
     const field = LIGHTING_FIELD_BY_CATEGORY[category]
-    const id = data[field]
-    if (typeof id !== "string" || id.length === 0) continue
-    const hint = getLightingPromptHint(id)
-    if (hint) hints.push(hint)
+    const raw = data[field]
+    // lightingStyle accepts string | string[] (multi-pick max 2). Other
+    // categories are single-pick and may also tolerate arrays defensively.
+    if (typeof raw === "string" && raw.length > 0) {
+      const hint = getLightingPromptHint(raw)
+      if (hint) hints.push(hint)
+    } else if (Array.isArray(raw)) {
+      for (const item of raw) {
+        if (typeof item !== "string" || item.length === 0) continue
+        const hint = getLightingPromptHint(item)
+        if (hint) hints.push(hint)
+      }
+    }
   }
   return hints
 }

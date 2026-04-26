@@ -347,7 +347,9 @@ export type FramingData = {
   shotSize?: string
   angle?: string
   coverage?: string
-  composition?: string
+  /** Composition — single id or up to 2 ids for layered compositions
+   *  (e.g. ["rule-of-thirds","leading-lines"], ["centered","negative-space"]). */
+  composition?: string | ReadonlyArray<string>
   vantage?: string
   /** Grid columns when displaying multiple enabled categories in the node
    * card. Default (render-time) = 1 (vertical stack). Range 1-5. */
@@ -377,7 +379,9 @@ export interface LightingData {
   /** Per-category lighting selections (multi-category model). One id per
    * enabled category. See `LIGHTING_FIELD_BY_CATEGORY` in `packages/shared/src/lighting.ts`. */
   timeOfDay?: string
-  lightingStyle?: string
+  /** Lighting style — single id or up to 2 ids for layered setups
+   *  (e.g. ["key", "rim"], ["soft", "hard"]). */
+  lightingStyle?: string | ReadonlyArray<string>
   lightingDirection?: string
   /** Lighting ratio id (relative key-to-shadow brightness, e.g. "ratio-1-2"). */
   lightingRatio?: string
@@ -515,9 +519,12 @@ export interface StylingData {
   hairTreatment?: string
   /** Hair state / motion / condition (wet, messy, windswept, voluminous,
    *  sleek, frizzy, tousled, flowing…). Distinct from hairCut (shape) and
-   *  hairTreatment (color processing). */
-  hairState?: string
-  jewelry?: string
+   *  hairTreatment (color processing). Single id or up to 2 (e.g.
+   *  ["wet","windswept"], ["messy","voluminous"]). */
+  hairState?: string | ReadonlyArray<string>
+  /** Jewelry. Single id or up to 3 ids for stacked jewelry pieces
+   *  (e.g. necklace + earrings + rings). */
+  jewelry?: string | ReadonlyArray<string>
   nails?: string
   facePaint?: string
   /** Single-pick complete outfit archetype (school uniform, business suit,
@@ -540,8 +547,9 @@ export interface StylingData {
   fabric?: string
   /** How the clothes are worn — oversized, fitted, cropped, sheer, wet,
    *  ripped, off-shoulder, tucked-in, layered, unbuttoned… Modifier that
-   *  composes with any garment selection. */
-  wardrobeState?: string
+   *  composes with any garment selection. Single id or up to 3 (e.g.
+   *  ["oversized","wet","ripped"]). */
+  wardrobeState?: string | ReadonlyArray<string>
   preText?: string
   postText?: string
   maxItemsPerRow?: number

@@ -33,6 +33,8 @@ export type PhotoGenreCategory =
   | "studio-formal"
   | "selfie"
   | "print-context"
+  | "lifestyle"
+  | "commercial"
 
 export interface PhotoGenre {
   readonly id: string
@@ -97,6 +99,13 @@ export const PHOTO_GENRES: ReadonlyArray<PhotoGenre> = [
   { id: "food-photography",       label: "Food Photography",       category: "print-context",  description: "Overhead or 45-degree food shot",   promptHint: "shot as professional food photography, soft window-style key light, a 45-degree or overhead angle, glossy fresh ingredients in shallow focus and a styled rustic surface beneath" },
   { id: "real-estate",            label: "Real Estate",            category: "print-context",  description: "Wide architectural interior",       promptHint: "shot as a wide-angle real-estate listing photograph, ultra-wide lens emphasizing space, neutral white-balanced light, all rooms tidied to perfection and clean horizontal/vertical lines" },
   { id: "sports-action",          label: "Sports Action",          category: "print-context",  description: "Telephoto frozen sports moment",    promptHint: "shot as a telephoto sports-action photograph, frozen peak-action moment, blurred crowd background, dramatic stadium lighting and a slightly desaturated press-photo grade" },
+
+  // -------------------- Lifestyle --------------------
+  { id: "point-and-shoot",        label: "Point-and-Shoot / Disposable", category: "lifestyle",   description: "Disposable / P&S casual aesthetic", promptHint: "shot in a point-and-shoot disposable-camera aesthetic, harsh on-camera flash blowing out the foreground, slight motion blur, casual unposed framing and the warm grainy quality of a single-use 35mm camera" },
+  { id: "lifestyle-blog",         label: "Lifestyle Blog",         category: "lifestyle",      description: "Soft natural-light home blogger feel", promptHint: "shot as a lifestyle-blog image, soft natural window light, cozy home or coffee morning-routine setting, gentle pastel color grade and the airy aspirational warmth of an instagram-blogger feed" },
+
+  // -------------------- Commercial --------------------
+  { id: "product-shot",           label: "Product Shot",           category: "commercial",     description: "Clean isolated e-commerce product",  promptHint: "shot as a clean e-commerce product photograph, the subject isolated on a neutral seamless background, even shadowless studio lighting and a sharp catalog-ready composition" },
 ] as const
 
 const photoGenreById = new Map<string, PhotoGenre>(
@@ -127,6 +136,8 @@ export const PHOTO_GENRE_CATEGORY_LABELS: Readonly<Record<PhotoGenreCategory, st
   "studio-formal": "Studio / Formal",
   selfie: "Selfie",
   "print-context": "Print / Context",
+  lifestyle: "Lifestyle",
+  commercial: "Commercial",
 }
 
 export const PHOTO_GENRE_CATEGORY_ORDER: ReadonlyArray<PhotoGenreCategory> = [
@@ -135,4 +146,6 @@ export const PHOTO_GENRE_CATEGORY_ORDER: ReadonlyArray<PhotoGenreCategory> = [
   "studio-formal",
   "selfie",
   "print-context",
+  "lifestyle",
+  "commercial",
 ]

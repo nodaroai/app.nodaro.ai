@@ -68,6 +68,7 @@ export const HELD_PROPS: ReadonlyArray<HeldProp> = [
   { id: "cigar",              label: "Cigar",              category: "smoking",         description: "Thick lit cigar",                   promptHint: "holding a thick lit cigar between two fingers, a slow wisp of smoke rising and an ember glowing at the tip" },
   { id: "vape-pen",           label: "Vape Pen",           category: "smoking",         description: "Slim vape pen",                     promptHint: "holding a slim vape pen between two fingers, a soft puff of vapor curling out from a half-parted mouth" },
   { id: "joint",              label: "Joint",              category: "smoking",         description: "Hand-rolled joint",                 promptHint: "holding a hand-rolled joint pinched between thumb and forefinger, a thin trail of smoke rising into the frame" },
+  { id: "lighter",            label: "Lighter",            category: "smoking",         description: "Chrome lighter with thumb on flame", promptHint: "holding a polished chrome lighter cupped in one hand with the thumb pressed on the wheel, a small warm flame catching across the fingers" },
 
   // -------------------- Reading / Writing --------------------
   { id: "book",               label: "Book",               category: "reading-writing", description: "Open hardback book",                promptHint: "holding an open hardback book in both hands at chest height, eyes drifting down toward the page" },
@@ -85,6 +86,8 @@ export const HELD_PROPS: ReadonlyArray<HeldProp> = [
   { id: "briefcase",          label: "Briefcase",          category: "bag-accessory",   description: "Hard-shell briefcase",              promptHint: "carrying a hard-shell briefcase by the top handle in one hand at hip height, the case angled to read clearly in frame" },
   { id: "umbrella",           label: "Umbrella",           category: "bag-accessory",   description: "Open black umbrella",               promptHint: "holding an open black umbrella overhead with one hand, the canopy haloing the head and shadow falling across the face" },
   { id: "fan-folding",        label: "Folding Fan",        category: "bag-accessory",   description: "Open hand-painted fan",             promptHint: "holding an open hand-painted folding fan raised near the face, fingers fanned along the spine" },
+  { id: "parasol",            label: "Parasol",            category: "bag-accessory",   description: "Decorative Victorian / Asian parasol", promptHint: "holding a decorative parasol open above one shoulder, the lace or hand-painted canopy shielding the face from sun and casting a delicate dappled shadow" },
+  { id: "locket",             label: "Locket",             category: "bag-accessory",   description: "Open vintage locket pendant",       promptHint: "holding an open vintage locket pendant between thumb and forefinger close to the chest, the tiny portrait inside angled gently toward the face" },
 
   // -------------------- Floral / Nature --------------------
   { id: "bouquet",            label: "Bouquet",            category: "floral-nature",   description: "Mixed bouquet of flowers",          promptHint: "cradling a mixed bouquet of fresh flowers in both arms against the chest, blooms framing the face from below" },
@@ -110,6 +113,11 @@ export const HELD_PROPS: ReadonlyArray<HeldProp> = [
   { id: "pointer-stick",      label: "Pointer Stick",      category: "occupational",    description: "Telescoping pointer stick",         promptHint: "holding a slender telescoping pointer stick in one hand, the tip raised toward an unseen surface as if mid-explanation" },
   { id: "gavel",              label: "Gavel",              category: "occupational",    description: "Wooden judicial gavel",             promptHint: "gripping a polished wooden gavel mid-strike with one hand, the head poised above an unseen sound block" },
   { id: "wine-bottle",        label: "Wine Bottle",        category: "occupational",    description: "Full bottle with foil seal",        promptHint: "holding a tall wine bottle by the neck with one hand, the labeled body and red foil seal angled clearly toward the camera" },
+  { id: "lantern",            label: "Lantern",            category: "occupational",    description: "Vintage handheld lantern with amber glow", promptHint: "carrying a vintage handheld lantern by its top ring at hip height, warm amber glow casting a soft circular pool of light across the face and surroundings" },
+  { id: "flashlight",         label: "Flashlight",         category: "occupational",    description: "Modern flashlight cutting a beam",  promptHint: "holding a modern flashlight raised forward in one hand, a sharp white beam cutting through the darkness ahead and side-lighting the face" },
+  { id: "compass",            label: "Compass",            category: "occupational",    description: "Vintage handheld nautical compass", promptHint: "holding a vintage brass nautical compass open in one cupped palm at chest height, the needle clearly visible as the eyes drift down to read the bearing" },
+  { id: "bow-and-arrow",      label: "Bow and Arrow",      category: "occupational",    description: "Drawn archery bow with arrow nocked", promptHint: "holding an archery bow drawn at full tension with one hand on the grip and the other pulling the string back to the cheek, an arrow nocked and aimed forward" },
+  { id: "shield",             label: "Shield",             category: "occupational",    description: "Handheld medieval shield",          promptHint: "holding a medieval shield raised across the body with one arm strapped through the back, the front face angled forward in a defensive stance" },
 ] as const
 
 const heldPropById = new Map<string, HeldProp>(HELD_PROPS.map((p) => [p.id, p]))

@@ -450,9 +450,12 @@ export interface StylingValue {
   hairTreatment?: string
   /** Hair state / motion / condition — wet, messy, windswept, voluminous,
    *  sleek, frizzy, tousled, flowing… Distinct from cut (shape) and
-   *  treatment (color processing). */
-  hairState?: string
-  jewelry?: string
+   *  treatment (color processing). Single id or up to 2 (e.g.
+   *  ["wet", "windswept"], ["messy", "voluminous"]). */
+  hairState?: string | ReadonlyArray<string>
+  /** Jewelry. Single id or up to 3 ids for stacked jewelry
+   *  (e.g. necklace + earrings + rings). */
+  jewelry?: string | ReadonlyArray<string>
   nails?: string
   facePaint?: string
   /** Single-pick complete outfit archetype (school uniform, business suit,
@@ -475,8 +478,9 @@ export interface StylingValue {
   fabric?: string
   /** How the clothes are worn — oversized, fitted, cropped, sheer, wet,
    *  ripped, off-shoulder, tucked-in, layered, unbuttoned… Composes with
-   *  any garment selection. */
-  wardrobeState?: string
+   *  any garment selection. Single id or up to 3 ids for stacked
+   *  modifiers (e.g. ["oversized", "wet", "ripped"]). */
+  wardrobeState?: string | ReadonlyArray<string>
   preText?: string
   postText?: string
 }
@@ -511,10 +515,19 @@ export function buildStylingHints(
 
   for (const dimension of STYLING_DIMENSION_ORDER) {
     const field = STYLING_FIELD_BY_DIMENSION[dimension]
-    const id = data[field]
-    if (typeof id !== "string" || id.length === 0) continue
-    const hint = getStylingPromptHint(id)
-    if (hint) hints.push(hint)
+    const raw = data[field]
+    // jewelry / wardrobe-state / hair-state are multi-pick (string | string[]);
+    // emit each id's hint independently and let the comma-join compose.
+    if (typeof raw === "string" && raw.length > 0) {
+      const hint = getStylingPromptHint(raw)
+      if (hint) hints.push(hint)
+    } else if (Array.isArray(raw)) {
+      for (const item of raw) {
+        if (typeof item !== "string" || item.length === 0) continue
+        const hint = getStylingPromptHint(item)
+        if (hint) hints.push(hint)
+      }
+    }
   }
 
   const post = typeof data.postText === "string" ? data.postText.trim() : ""
