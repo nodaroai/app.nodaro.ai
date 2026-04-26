@@ -115,8 +115,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
 
   // GPT Image family
-  // Supported aspect_ratio values: "1:1", "3:2", "2:3" ONLY (NOT "16:9", "9:16", or "4:3")
-  // Quality parameter: "medium", "high"
+  // GPT Image 1.5 — Supported aspect_ratio: "1:1", "3:2", "2:3" ONLY. Quality: "medium", "high"
   "gpt-image": {
     model: "gpt-image/1.5-text-to-image",
     credits: 4,
@@ -132,6 +131,25 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     inputType: "image-to-image",
     imageParam: "input_urls",  // GPT Image uses input_urls array, not "image"
     extraParams: { aspect_ratio: "3:2", quality: "medium" },
+  },
+  // GPT Image 2 — newer family. Resolution-based pricing (NOT quality), aspect_ratio includes 16:9/9:16/4:3/3:4
+  // See: docs.kie.ai/market/gpt/gpt-image-2-text-to-image.md, gpt-image-2-image-to-image.md
+  // Constraints: 1:1 cannot be 4K; "auto" aspect_ratio limited to 1K
+  "gpt-image-2": {
+    model: "gpt-image-2-text-to-image",
+    credits: 4,
+    cost: 0.02,  // 1K default; pricing calibrated from credit-anomalies once usage data exists
+    ***REDACTED-OSS-SCRUB***
+    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
+  },
+  "gpt-image-2-i2i": {
+    model: "gpt-image-2-image-to-image",
+    credits: 4,
+    cost: 0.02,  // 1K default
+    ***REDACTED-OSS-SCRUB***
+    inputType: "image-to-image",
+    imageParam: "input_urls",  // Array, max 16
+    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
 
   // Google Imagen4 family

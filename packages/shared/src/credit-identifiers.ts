@@ -6,6 +6,7 @@
 import {
   HIGH_QUALITY_PROVIDERS,
   TWO_K_RESOLUTION_PROVIDERS,
+  RESOLUTION_2K_4K_TIERED_PROVIDERS,
   IDEOGRAM_PROVIDERS,
   DURATION_PRICED_PROVIDERS,
   AUDIO_ADDON_PROVIDERS,
@@ -38,7 +39,7 @@ export function buildCreditModelIdentifier(
   if (provider === "nano-banana-pro" && resolution === "4K") {
     return `${provider}:4K`
   }
-  if (provider === "nano-banana-2" && (resolution === "2K" || resolution === "4K")) {
+  if (RESOLUTION_2K_4K_TIERED_PROVIDERS.has(provider) && (resolution === "2K" || resolution === "4K")) {
     return `${provider}:${resolution}`
   }
   // Topaz Image Upscale: 2K is default (no suffix), 4K/8K get composite identifiers

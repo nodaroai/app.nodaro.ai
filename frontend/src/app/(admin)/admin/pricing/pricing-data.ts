@@ -133,6 +133,7 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "flux-kontext-max":  { provider: "KIE.ai",    providerCostUsd: 0.050, markupPct: 25 },  // 10 KIE cr (Max)
   "grok":              { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
   "gpt-image":         { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr (gpt image 1.5 medium)
+  "gpt-image-2":       { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr (1K default; estimated until calibrated)
   "imagen4":           { provider: "KIE.ai",    providerCostUsd: 0.040, markupPct: 25 },  // 8 KIE cr (default)
   "imagen4-fast":      { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
   "imagen4-ultra":     { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr
@@ -159,6 +160,7 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "flux-pro-i2i":      { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },  // 5 KIE cr (flux-2 pro i2i 1K)
   "grok-i2i":          { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
   "gpt-image-i2i":     { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr (gpt image 1.5 medium)
+  "gpt-image-2-i2i":   { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr (1K default; estimated)
   // ── Video Generation (I2V / T2V) — costs for default config ──
   "minimax":           { provider: "KIE.ai",    providerCostUsd: 0.285, markupPct: 25 },  // 57 KIE cr (hailuo 02 Pro 6s 1080p)
   "veo3":              { provider: "KIE.ai",    providerCostUsd: 1.250, markupPct: 25 },  // 250 KIE cr (VEO 3.1 Quality)

@@ -3770,6 +3770,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "flux-kontext", label: "Flux Kontext" },
           { value: "flux-kontext-max", label: "Flux Kontext Max" },
           { value: "gpt-image", label: "GPT Image" },
+          { value: "gpt-image-2", label: "GPT Image 2" },
           { value: "grok", label: "Grok" },
           { value: "ideogram-v3", label: "Ideogram V3" },
           { value: "imagen4", label: "Imagen 4" },
