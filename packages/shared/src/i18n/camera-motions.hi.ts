@@ -29,6 +29,10 @@ const map: LocaleCatalogMap = {
   "dolly-zoom": { label: "Dolly Zoom", description: "Vertigo प्रभाव: dolly zoom के विपरीत" },
   "push-in": { label: "Push In", description: "subject की ओर धीमा सूक्ष्म push" },
   "pull-out": { label: "Pull Out", description: "subject से धीमा सूक्ष्म pull back" },
+  "breathing": { label: "Breathing Camera", description: "सूक्ष्म निरंतर push-in / pull-out दोलन, organic handheld अनुभव" },
+  "push-pull": { label: "Push-Pull / Swing", description: "Camera subject की ओर बढ़ता है फिर पीछे, झूलता हुआ approach-and-retreat" },
+  "creep-in": { label: "Creep-In", description: "अदृश्य रूप से धीमा push-in जो भय या तनाव बढ़ाता है" },
+  "creep-out": { label: "Creep-Out", description: "अदृश्य रूप से धीमा pull-out जो subject को space में अकेला कर देता है" },
 
   // Truck
   "truck-left": { label: "Truck बाएँ", description: "camera body को बग़ल में बाएँ खिसकाएँ" },
@@ -46,6 +50,8 @@ const map: LocaleCatalogMap = {
   // Orbit / Arc
   "orbit-left": { label: "Orbit बाएँ", description: "subject के चारों ओर बाएँ पूरा वृत्त" },
   "orbit-right": { label: "Orbit दाएँ", description: "subject के चारों ओर दाएँ पूरा वृत्त" },
+  "spin-360": { label: "Full 360 Spin", description: "Camera अपनी धुरी पर पूरे 360 degree घूमता है" },
+  "orbit-360": { label: "Full 360 Orbit", description: "Camera subject के चारों ओर पूरे 360 degree का arc बनाता है" },
   "arc-left": { label: "Arc बाएँ", description: "subject के चारों ओर बाएँ आंशिक arc" },
   "arc-right": { label: "Arc दाएँ", description: "subject के चारों ओर दाएँ आंशिक arc" },
 
@@ -61,6 +67,9 @@ const map: LocaleCatalogMap = {
   "lead": { label: "Lead", description: "आगे बढ़ते subject के आगे बढ़ें" },
   "drone-follow": { label: "Drone Follow", description: "ऊँचा drone subject को track करता है" },
   "dolly-track": { label: "Dolly Track", description: "subject के साथ समानांतर track पर dolly" },
+  "gimbal-walk": { label: "Gimbal Walk", description: "3-axis gimbal पर smooth walking shot, floating steady forward motion" },
+  "ronin-glide": { label: "Ronin Glide", description: "Ronin / Movi gimbal पर धीमी gliding move, बिना shake के cinematic float" },
+  "serpentine": { label: "Serpentine Track", description: "Camera obstacles के बीच S-curves में बल खाते हुए snaking forward path बनाता है" },
 
   // Special angles / rigs
   "pov": { label: "POV", description: "प्रथम-व्यक्ति point of view" },

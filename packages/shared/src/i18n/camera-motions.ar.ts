@@ -24,6 +24,10 @@ const map: LocaleCatalogMap = {
   "dolly-zoom": { label: "Dolly Zoom", description: "تأثير Vertigo: Dolly يعاكس Zoom" },
   "push-in": { label: "Push In", description: "دفع بطيء خفيف نحو الموضوع" },
   "pull-out": { label: "Pull Out", description: "سحب بطيء خفيف عن الموضوع" },
+  "breathing": { label: "كاميرا تتنفس", description: "تذبذب مستمر خفيف من الدفع والسحب، إحساس عضوي بالكاميرا المحمولة باليد" },
+  "push-pull": { label: "Push-Pull / تأرجح", description: "تتحرك الكاميرا نحو الموضوع ثم تعود للخلف، اقتراب وانسحاب متأرجح" },
+  "creep-in": { label: "Creep-In", description: "Push-in بطيء بشكل غير محسوس يبني الرعب أو التوتر" },
+  "creep-out": { label: "Creep-Out", description: "Pull-out بطيء بشكل غير محسوس يعزل الموضوع في الفضاء" },
 
   "truck-left": { label: "Truck لليسار", description: "انزلاق جسم الكاميرا أفقيا لليسار" },
   "truck-right": { label: "Truck لليمين", description: "انزلاق جسم الكاميرا أفقيا لليمين" },
@@ -37,6 +41,8 @@ const map: LocaleCatalogMap = {
 
   "orbit-left": { label: "دوران Orbit يسار", description: "دائرة كاملة حول الموضوع لليسار" },
   "orbit-right": { label: "دوران Orbit يمين", description: "دائرة كاملة حول الموضوع لليمين" },
+  "spin-360": { label: "دوران كامل 360°", description: "تدور الكاميرا 360 درجة كاملة حول محورها" },
+  "orbit-360": { label: "Orbit كامل 360°", description: "تتحرك الكاميرا في قوس كامل 360 درجة حول الموضوع" },
   "arc-left": { label: "قوس Arc يسار", description: "قوس جزئي حول الموضوع لليسار" },
   "arc-right": { label: "قوس Arc يمين", description: "قوس جزئي حول الموضوع لليمين" },
 
@@ -50,6 +56,9 @@ const map: LocaleCatalogMap = {
   "lead": { label: "تقدم", description: "التحرك أمام الموضوع المتقدم" },
   "drone-follow": { label: "متابعة بالدرون", description: "درون مرتفع يتتبع الموضوع" },
   "dolly-track": { label: "Dolly Track", description: "Dolly على مسار مواز بجانب الموضوع" },
+  "gimbal-walk": { label: "مشي بالـ Gimbal", description: "لقطة مشي سلسة على gimbal ثلاثي المحاور، حركة أمامية ثابتة عائمة" },
+  "ronin-glide": { label: "انزلاق Ronin", description: "حركة انزلاق بطيئة على gimbal Ronin / Movi، طفو سينمائي بدون اهتزاز" },
+  "serpentine": { label: "مسار متعرج", description: "تنسج الكاميرا بين العقبات في منحنيات S، مسار أمامي متلوّ" },
 
   "pov": { label: "POV", description: "منظور الشخص الأول" },
   "over-the-shoulder": { label: "فوق الكتف", description: "تأطير عبر كتف الشخصية" },

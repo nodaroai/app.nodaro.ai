@@ -29,6 +29,10 @@ const map: LocaleCatalogMap = {
   "dolly-zoom": { label: "ドリーズーム", description: "ヴァーティゴ効果：ドリーがズームと逆方向" },
   "push-in": { label: "プッシュイン", description: "被写体へのゆっくり繊細な押し込み" },
   "pull-out": { label: "プルアウト", description: "被写体からのゆっくり繊細な引き戻し" },
+  "breathing": { label: "ブリージング・カメラ", description: "繊細で連続的なプッシュインとプルアウトの揺らぎ、有機的な手持ちの感触" },
+  "push-pull": { label: "プッシュプル／スウィング", description: "カメラが被写体に近づいてから離れる、振り子のような接近と後退" },
+  "creep-in": { label: "クリープイン", description: "ほとんど気づかれないほどゆっくりのプッシュイン、恐怖や緊張を高める" },
+  "creep-out": { label: "クリープアウト", description: "ほとんど気づかれないほどゆっくりのプルアウト、被写体を空間に孤立させる" },
 
   // Truck
   "truck-left": { label: "トラック・レフト", description: "カメラ本体を横方向に左へスライドさせる" },
@@ -46,6 +50,8 @@ const map: LocaleCatalogMap = {
   // Orbit
   "orbit-left": { label: "オービット・レフト", description: "被写体の周りを左に1周回る" },
   "orbit-right": { label: "オービット・ライト", description: "被写体の周りを右に1周回る" },
+  "spin-360": { label: "フル360°スピン", description: "カメラが軸上で360度フル回転する" },
+  "orbit-360": { label: "フル360°オービット", description: "カメラが被写体の周りを360度の完全な弧で回る" },
   "arc-left": { label: "アーク・レフト", description: "被写体の周りを左に部分的に弧を描く" },
   "arc-right": { label: "アーク・ライト", description: "被写体の周りを右に部分的に弧を描く" },
 
@@ -61,6 +67,9 @@ const map: LocaleCatalogMap = {
   "lead": { label: "リード", description: "進む被写体の前方を移動する" },
   "drone-follow": { label: "ドローン・フォロー", description: "上空のドローンが被写体をトラッキング" },
   "dolly-track": { label: "ドリー・トラック", description: "被写体に並走するドリー軌道" },
+  "gimbal-walk": { label: "ジンバル・ウォーク", description: "3軸ジンバルでの滑らかな歩行ショット、浮遊感のある安定した前進運動" },
+  "ronin-glide": { label: "Ronin・グライド", description: "Ronin / Moviジンバルでのゆっくり滑らかな移動、揺れのないシネマティックな浮遊" },
+  "serpentine": { label: "サーペンタイン・トラック", description: "カメラが障害物の間をS字カーブで縫うように、蛇行する前進経路" },
 
   // Special
   "pov": { label: "POV", description: "一人称視点" },

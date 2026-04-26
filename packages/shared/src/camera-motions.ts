@@ -172,6 +172,34 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     description: "Slow subtle pull back from subject",
     promptHint: "slow pull out, gentle backward movement away from the subject",
   },
+  {
+    id: "breathing",
+    label: "Breathing Camera",
+    category: "dolly",
+    description: "Subtle continuous push/pull oscillation",
+    promptHint: "breathing camera, subtle continuous breathing-like push-in and pull-out oscillation with an organic handheld feel",
+  },
+  {
+    id: "push-pull",
+    label: "Push-Pull / Swing",
+    category: "dolly",
+    description: "Camera swings toward subject then away",
+    promptHint: "push-pull swing, the camera moves toward the subject then back away in a single move, a swinging approach-and-retreat that creates emphasis or hesitation",
+  },
+  {
+    id: "creep-in",
+    label: "Creep-In",
+    category: "dolly",
+    description: "Imperceptibly slow push-in over time",
+    promptHint: "creep-in, imperceptibly slow push-in over many seconds, building dread or tension",
+  },
+  {
+    id: "creep-out",
+    label: "Creep-Out",
+    category: "dolly",
+    description: "Imperceptibly slow pull-out over time",
+    promptHint: "creep-out, imperceptibly slow pull-out over many seconds, isolating the subject in space",
+  },
 
   // Truck — lateral slide
   {
@@ -227,6 +255,13 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     description: "Static tilted frame for tension",
     promptHint: "dutch angle, canted tilted frame for tension",
   },
+  {
+    id: "spin-360",
+    label: "Full 360 Spin",
+    category: "roll",
+    description: "Camera rotates a full 360° on its axis",
+    promptHint: "full 360 degree spin, the camera rotates a complete revolution on its own lens axis",
+  },
 
   // Orbit / Arc
   {
@@ -256,6 +291,13 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "orbit",
     description: "Partial arc around subject right",
     promptHint: "camera arcs to the right around the subject",
+  },
+  {
+    id: "orbit-360",
+    label: "Full 360 Orbit",
+    category: "orbit",
+    description: "Full circular arc around subject",
+    promptHint: "full 360 degree orbit, the camera arcs a complete revolution around the subject",
   },
 
   // Crane / Jib
@@ -323,6 +365,27 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "tracking",
     description: "Dolly on parallel track alongside subject",
     promptHint: "dolly on a parallel track alongside the subject, smooth lateral tracking with strong foreground parallax",
+  },
+  {
+    id: "gimbal-walk",
+    label: "Gimbal Walk",
+    category: "tracking",
+    description: "Smooth walking shot on a 3-axis gimbal",
+    promptHint: "gimbal walk, smooth walking shot on a 3-axis gimbal with floating steady forward motion",
+  },
+  {
+    id: "ronin-glide",
+    label: "Ronin Glide",
+    category: "tracking",
+    description: "Slow gliding move on a Ronin/Movi gimbal",
+    promptHint: "ronin glide, slow gliding move on a Ronin or Movi gimbal, cinematic float without any shake",
+  },
+  {
+    id: "serpentine",
+    label: "Serpentine Track",
+    category: "tracking",
+    description: "Camera weaves through obstacles in S-curves",
+    promptHint: "serpentine track, the camera weaves through obstacles in S-curves, snaking forward along a winding path",
   },
 
   // Special angles / rigs

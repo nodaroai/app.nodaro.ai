@@ -29,6 +29,10 @@ const map: LocaleCatalogMap = {
   "dolly-zoom": { label: "滑动变焦", description: "眩晕效果:推轨与变焦反向" },
   "push-in":    { label: "缓推",     description: "缓慢轻柔地推向被摄对象" },
   "pull-out":   { label: "缓拉",     description: "缓慢轻柔地拉远被摄对象" },
+  "breathing":  { label: "呼吸式镜头", description: "细微而连续的推拉震荡,有机的手持质感" },
+  "push-pull":  { label: "推拉/摇摆",  description: "镜头先靠近主体再后退,摆动式的接近与撤离" },
+  "creep-in":   { label: "渐近推近",   description: "几乎察觉不到的极慢推近,营造恐惧或紧张感" },
+  "creep-out":  { label: "渐远拉离",   description: "几乎察觉不到的极慢拉离,使主体在空间中孤立" },
 
   // Truck
   "truck-left":  { label: "向左横移",   description: "机身横向向左滑移" },
@@ -46,6 +50,8 @@ const map: LocaleCatalogMap = {
   // Orbit / Arc
   "orbit-left":  { label: "向左环绕",   description: "镜头绕被摄对象向左完整环绕" },
   "orbit-right": { label: "向右环绕",   description: "镜头绕被摄对象向右完整环绕" },
+  "spin-360":    { label: "360°整圈自转", description: "镜头围绕自身轴心整圈360度旋转" },
+  "orbit-360":   { label: "360°整圈环绕", description: "镜头围绕主体整圈360度环行" },
   "arc-left":    { label: "左弧形运镜", description: "围绕被摄对象向左做局部弧线" },
   "arc-right":   { label: "右弧形运镜", description: "围绕被摄对象向右做局部弧线" },
 
@@ -61,6 +67,9 @@ const map: LocaleCatalogMap = {
   "lead":          { label: "倒退引拍",     description: "在前进的主体前方退行拍摄" },
   "drone-follow":  { label: "无人机跟拍",   description: "高空无人机跟随主体" },
   "dolly-track":   { label: "并行轨道推移", description: "在主体旁的平行轨道上推移" },
+  "gimbal-walk":   { label: "稳定器行走",   description: "三轴稳定器上的平稳行走镜头,稳定漂浮的前进运动" },
+  "ronin-glide":   { label: "Ronin 滑行",  description: "Ronin / Movi 稳定器上的缓慢滑行,无抖动的电影感漂浮" },
+  "serpentine":    { label: "蛇形轨道",     description: "镜头以 S 形曲线在障碍间穿行,蜿蜒前行的路径" },
 
   // Special
   "pov":              { label: "主观视角",         description: "第一人称视角" },

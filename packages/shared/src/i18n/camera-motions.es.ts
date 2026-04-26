@@ -24,6 +24,10 @@ const map: LocaleCatalogMap = {
   "dolly-zoom": { label: "Dolly Zoom", description: "Efecto vértigo: dolly opuesto al zoom" },
   "push-in": { label: "Empuje", description: "Empuje sutil y lento hacia el sujeto" },
   "pull-out": { label: "Retroceso", description: "Retroceso sutil y lento desde el sujeto" },
+  "breathing": { label: "Cámara Respirante", description: "Oscilación sutil y continua de empuje y retroceso, sensación orgánica de cámara en mano" },
+  "push-pull": { label: "Push-Pull / Vaivén", description: "La cámara se mueve hacia el sujeto y luego se aleja, una aproximación y retirada oscilante" },
+  "creep-in": { label: "Acercamiento Imperceptible", description: "Empuje extremadamente lento e imperceptible que crea pavor o tensión" },
+  "creep-out": { label: "Alejamiento Imperceptible", description: "Retroceso extremadamente lento e imperceptible que aísla al sujeto en el espacio" },
 
   "truck-left": { label: "Travelling a la Izquierda", description: "Deslizar la cámara lateralmente a la izquierda" },
   "truck-right": { label: "Travelling a la Derecha", description: "Deslizar la cámara lateralmente a la derecha" },
@@ -37,6 +41,8 @@ const map: LocaleCatalogMap = {
 
   "orbit-left": { label: "Órbita a la Izquierda", description: "Círculo completo alrededor del sujeto a la izquierda" },
   "orbit-right": { label: "Órbita a la Derecha", description: "Círculo completo alrededor del sujeto a la derecha" },
+  "spin-360": { label: "Giro Completo 360°", description: "La cámara rota 360 grados completos sobre su eje" },
+  "orbit-360": { label: "Órbita Completa 360°", description: "La cámara describe un arco completo de 360 grados alrededor del sujeto" },
   "arc-left": { label: "Arco a la Izquierda", description: "Arco parcial alrededor del sujeto a la izquierda" },
   "arc-right": { label: "Arco a la Derecha", description: "Arco parcial alrededor del sujeto a la derecha" },
 
@@ -50,6 +56,9 @@ const map: LocaleCatalogMap = {
   "lead": { label: "Adelantarse", description: "Moverse delante del sujeto que avanza" },
   "drone-follow": { label: "Seguimiento con Dron", description: "Dron elevado siguiendo al sujeto" },
   "dolly-track": { label: "Riel de Dolly", description: "Dolly sobre riel paralelo junto al sujeto" },
+  "gimbal-walk": { label: "Caminata con Gimbal", description: "Toma caminada suave en gimbal de 3 ejes, movimiento flotante y estable hacia adelante" },
+  "ronin-glide": { label: "Deslizamiento Ronin", description: "Movimiento deslizante lento sobre gimbal Ronin / Movi, flotación cinematográfica sin temblor" },
+  "serpentine": { label: "Trayectoria Serpenteante", description: "La cámara serpentea entre obstáculos en curvas en S, avanzando por un camino sinuoso" },
 
   "pov": { label: "POV", description: "Punto de vista en primera persona" },
   "over-the-shoulder": { label: "Sobre el Hombro", description: "Encuadre por encima del hombro de un personaje" },

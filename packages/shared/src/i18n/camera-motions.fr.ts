@@ -25,6 +25,10 @@ const map: LocaleCatalogMap = {
   "dolly-zoom": { description: "Effet vertigo : travelling opposé au zoom" },
   "push-in": { label: "Push in", description: "Poussée subtile et lente vers le sujet" },
   "pull-out": { label: "Pull out", description: "Recul subtil et lent depuis le sujet" },
+  "breathing": { label: "Caméra respirante", description: "Oscillation continue et subtile de poussée et recul, sensation organique caméra à l'épaule" },
+  "push-pull": { label: "Push-Pull / Va-et-vient", description: "La caméra avance vers le sujet puis recule, approche-retrait oscillant" },
+  "creep-in": { label: "Approche imperceptible", description: "Poussée extrêmement lente et imperceptible qui installe la peur ou la tension" },
+  "creep-out": { label: "Retrait imperceptible", description: "Recul extrêmement lent et imperceptible qui isole le sujet dans l'espace" },
   // Truck
   "truck-left": { label: "Travelling latéral à gauche", description: "Glisser le corps de la caméra latéralement à gauche" },
   "truck-right": { label: "Travelling latéral à droite", description: "Glisser le corps de la caméra latéralement à droite" },
@@ -38,6 +42,8 @@ const map: LocaleCatalogMap = {
   // Orbit
   "orbit-left": { label: "Orbite à gauche", description: "Cercle complet autour du sujet vers la gauche" },
   "orbit-right": { label: "Orbite à droite", description: "Cercle complet autour du sujet vers la droite" },
+  "spin-360": { label: "Tour complet 360°", description: "La caméra effectue un tour complet de 360 degrés sur son axe" },
+  "orbit-360": { label: "Orbite complète 360°", description: "La caméra décrit un arc complet de 360 degrés autour du sujet" },
   "arc-left": { label: "Arc à gauche", description: "Arc partiel autour du sujet à gauche" },
   "arc-right": { label: "Arc à droite", description: "Arc partiel autour du sujet à droite" },
   // Crane
@@ -51,6 +57,9 @@ const map: LocaleCatalogMap = {
   "lead": { label: "Précéder", description: "Avancer devant le sujet qui avance" },
   "drone-follow": { label: "Suivi par drone", description: "Drone élevé suivant le sujet" },
   "dolly-track": { description: "Travelling sur rail parallèle au sujet" },
+  "gimbal-walk": { label: "Marche au gimbal", description: "Plan en marche fluide sur gimbal 3 axes, mouvement flottant et stable vers l'avant" },
+  "ronin-glide": { label: "Glissement Ronin", description: "Mouvement glissant lent sur gimbal Ronin / Movi, flottement cinématographique sans tremblement" },
+  "serpentine": { label: "Travelling serpentin", description: "La caméra serpente entre les obstacles en courbes en S, avançant sur un chemin sinueux" },
   // Special
   "pov": { label: "POV", description: "Point de vue à la première personne" },
   "over-the-shoulder": { label: "Par-dessus l'épaule", description: "Cadrer par-dessus l'épaule d'un personnage" },
