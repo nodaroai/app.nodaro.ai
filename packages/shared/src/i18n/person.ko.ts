@@ -19,6 +19,7 @@ const map: LocaleCatalogMap = {
   "bad-boy": { label: "배드 보이", description: "반항적이고 날카로운 매력의 남성입니다" },
   "graceful-woman": { label: "우아한 여성", description: "부드럽고 우아한 여성입니다" },
   "baddie": { label: "배디", description: "트렌디하고 자신감 있게 스타일링된 여성입니다" },
+  "stylish-influencer": { label: "스타일리시한 인플루언서", description: "세련된 소셜미디어 트렌드세터" },
   "stunning-model": { label: "스타일리시한 모델", description: "패션 모델 같은 미적 감각입니다" },
   "supermodel": { label: "슈퍼모델", description: "런웨이와 표지를 장식하는 최고급의 상징적 존재" },
   "femme-fatale": { label: "팜므 파탈", description: "매혹적이고 위험한 느와르의 유혹자입니다" },
