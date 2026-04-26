@@ -2,10 +2,16 @@
 
 import { useMemo, type ReactNode } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
+import { Eye, FileText, Layers as LayersIcon } from "lucide-react"
+import { getParameterPromptHint } from "@nodaro-shared/parameter-prompt-hint"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
+import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { cn } from "@/lib/utils"
+
+type DisplayMode = "picks" | "prompt" | "both"
 
 interface ParameterNodeShellProps {
   readonly id: string
@@ -24,7 +30,27 @@ const makeHandles = (id: string) => [
 
 export function ParameterNodeShell({ id, label, icon, handleId, selected, children, fluidWidth }: ParameterNodeShellProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const runFromHere = useWorkflowStore((s) => s.runFromHere)
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const edges = useWorkflowStore((s) => s.edges)
   const handles = useMemo(() => makeHandles(handleId), [handleId])
+
+  // Only show "Run from here" when this parameter node feeds at least one
+  // downstream node — running with no consumers is a no-op for the user.
+  const hasDownstream = useMemo(() => edges.some((e) => e.source === id), [edges, id])
+
+  const node = useMemo(() => nodes.find((n) => n.id === id), [nodes, id])
+  const data = (node?.data ?? {}) as Record<string, unknown>
+  const displayMode: DisplayMode = (data.displayMode as DisplayMode) || "picks"
+  const setDisplayMode = (mode: DisplayMode) => updateNodeData(id, { displayMode: mode })
+
+  // Compute the would-be prompt injection so users can preview what the
+  // node contributes downstream. Pass the graph context so camera-motion
+  // composes start/end edges; other types ignore ctx.
+  const promptText = useMemo(() => {
+    if (!node) return ""
+    return getParameterPromptHint(node, { nodes, edges })
+  }, [node, nodes, edges])
 
   return (
     <div className={fluidWidth ? "relative w-full h-full" : "relative max-w-[220px]"}>
@@ -43,12 +69,116 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
         minWidth={220}
         hideHeader
         handles={handles}
+        topToolbarContent={
+          hasDownstream ? (
+            <RunNodeButton
+              nodeId={id}
+              credits={0}
+              isRunning={false}
+              onRun={(nid) => runFromHere?.(nid)}
+              runFromHere
+            />
+          ) : undefined
+        }
       >
-        <div className={fluidWidth ? "px-3 py-3 flex flex-col gap-2 h-full" : "px-3 py-3"}>
-          {children}
+        <div className={fluidWidth ? "px-3 py-3 flex flex-col gap-2 h-full" : "px-3 py-3 flex flex-col gap-2"}>
+          {/* 3-mode display toggle: Picks / Prompt / Both. Mirrors the
+              compare-style switches used elsewhere in the app. Persists per-node
+              so it survives reload. */}
+          <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
+          {(displayMode === "picks" || displayMode === "both") && children}
+          {(displayMode === "prompt" || displayMode === "both") && (
+            <PromptPreview text={promptText} />
+          )}
         </div>
       </BaseNode>
       <HandleIcon icon={icon} color="indigo" top="20px" />
+    </div>
+  )
+}
+
+function DisplayModeToggle({
+  mode,
+  onChange,
+}: {
+  readonly mode: DisplayMode
+  readonly onChange: (mode: DisplayMode) => void
+}) {
+  return (
+    <div
+      className="nodrag nopan flex self-end gap-0 rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] overflow-hidden"
+      role="tablist"
+      aria-label="Display mode"
+    >
+      <ModeButton
+        active={mode === "picks"}
+        onClick={() => onChange("picks")}
+        label="Picks"
+        icon={<Eye className="size-3" />}
+      />
+      <ModeButton
+        active={mode === "prompt"}
+        onClick={() => onChange("prompt")}
+        label="Prompt"
+        icon={<FileText className="size-3" />}
+      />
+      <ModeButton
+        active={mode === "both"}
+        onClick={() => onChange("both")}
+        label="Both"
+        icon={<LayersIcon className="size-3" />}
+      />
+    </div>
+  )
+}
+
+function ModeButton({
+  active,
+  onClick,
+  label,
+  icon,
+}: {
+  readonly active: boolean
+  readonly onClick: () => void
+  readonly label: string
+  readonly icon: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick()
+      }}
+      className={cn(
+        "flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium transition-colors",
+        active
+          ? "bg-[#ff0073]/15 text-[#ff0073]"
+          : "text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#1a1a1a]",
+      )}
+      title={`Show ${label}`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  )
+}
+
+function PromptPreview({ text }: { readonly text: string }) {
+  if (!text || !text.trim()) {
+    return (
+      <p className="text-muted-foreground text-[10.5px] italic leading-snug">
+        (no prompt — pick something first)
+      </p>
+    )
+  }
+  return (
+    <div className="rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#101010] px-2 py-1.5">
+      <p className="text-foreground text-[10.5px] leading-snug font-mono whitespace-pre-wrap break-words">
+        {text}
+      </p>
     </div>
   )
 }

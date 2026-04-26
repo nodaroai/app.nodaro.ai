@@ -45,6 +45,7 @@ vi.mock("lucide-react", () => {
     RectangleHorizontal: I, Activity: I, Video: I, ShieldCheck: I,
     Rss: I, Webhook: I, HardDrive: I, Scissors: I, FileText: I,
     Type: I, ImageIcon: I, Check: I, X: I, Frame: I, Aperture: I, Film: I, Lightbulb: I, SwatchBook: I, CloudFog: I, Sparkles: I,
+    Eye: I, Layers: I, Play: I, Square: I, FastForward: I,
   }
 })
 
