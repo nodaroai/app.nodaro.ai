@@ -95,6 +95,7 @@ describe("useUserSettings", () => {
       publicOutputs: false,
       tier: "pro",
       promptTemplates: { k: "v" },
+      preferredLocale: null,
     })
   })
 
@@ -111,6 +112,7 @@ describe("useUserSettings", () => {
       publicOutputs: true,
       tier: "free",
       promptTemplates: {},
+      preferredLocale: null,
     })
   })
 })
