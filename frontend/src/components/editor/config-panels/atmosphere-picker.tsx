@@ -5,6 +5,7 @@ import { Search } from "lucide-react"
 import { ATMOSPHERES } from "@nodaro-shared/atmosphere"
 import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
 import { Input } from "@/components/ui/input"
+import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { AtmospherePreview } from "./atmosphere-preview"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
@@ -90,14 +91,13 @@ export const AtmospherePicker = memo(function AtmospherePicker({
                 </span>
               )}
               <AtmospherePreview atmosphereId={atmosphere.id} className="w-full aspect-square" />
-              <span
+              <FitText
+                text={label}
                 className={cn(
-                  "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center truncate",
+                  "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center",
                   selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
-              >
-                {label}
-              </span>
+              />
             </button>
           )
         })}

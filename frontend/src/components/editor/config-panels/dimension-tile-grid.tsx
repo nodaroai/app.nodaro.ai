@@ -5,6 +5,7 @@ import { Search } from "lucide-react"
 import type { I18nCatalogId } from "@nodaro-shared/i18n"
 import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
 import { Input } from "@/components/ui/input"
+import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import type { DimensionEntry } from "./dimension-modal-browser"
@@ -144,14 +145,13 @@ export function DimensionTileGrid({
                 >
                   {renderIcon(entry, isSelected)}
                 </div>
-                <span
+                <FitText
+                  text={label}
                   className={cn(
                     "text-[10px] font-medium leading-tight text-center",
                     isSelected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                   )}
-                >
-                  {label}
-                </span>
+                />
               </button>
             )
           })}

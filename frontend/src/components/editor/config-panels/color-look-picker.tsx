@@ -10,6 +10,7 @@ import {
   type ColorLookCategory,
 } from "@nodaro-shared/color-look"
 import { Input } from "@/components/ui/input"
+import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { ColorLookPreview } from "./color-look-preview"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
@@ -88,14 +89,13 @@ export const ColorLookPicker = memo(function ColorLookPicker({
                   )}
                 >
                   <ColorLookPreview colorLookId={colorLook.id} className="w-full aspect-square" />
-                  <span
+                  <FitText
+                    text={label}
                     className={cn(
-                      "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center truncate",
+                      "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center",
                       selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                     )}
-                  >
-                    {label}
-                  </span>
+                  />
                 </button>
               )
             })}

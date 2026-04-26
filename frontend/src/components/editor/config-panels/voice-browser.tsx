@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { FitText } from "@/components/ui/fit-text"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { useVoices } from "@/hooks/use-voices"
 import { useVoiceLibrary } from "@/hooks/use-voices"
@@ -246,7 +247,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
           type="button"
           className={`flex items-center justify-between rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${compact ? "h-8 w-[140px] text-xs" : "h-9 w-full"}`}
         >
-          <span className="truncate">{displayLabel}</span>
+          <FitText text={displayLabel} />
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
         </button>
       </DialogTrigger>
@@ -851,7 +852,7 @@ function MyVoicesTab({
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-medium truncate">{clone.name}</span>
+                      <FitText text={clone.name} className="text-sm font-medium" />
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
                         Custom
                       </span>
@@ -947,7 +948,7 @@ function VoiceList({
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium truncate">{voice.name}</span>
+                  <FitText text={voice.name} className="text-sm font-medium" />
                   {showCategory && voice.category && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
                       {voice.category}

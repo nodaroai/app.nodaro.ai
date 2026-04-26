@@ -12,6 +12,7 @@ import {
   type ExposureValue,
 } from "@nodaro-shared/exposure-settings"
 import { Input } from "@/components/ui/input"
+import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
@@ -166,14 +167,13 @@ function CategorySection({
                   : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
               )}
             >
-              <span
+              <FitText
+                text={entryLabel}
                 className={cn(
                   "text-[11px] font-semibold leading-tight",
                   selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
-              >
-                {entryLabel}
-              </span>
+              />
             </button>
           )
         })}
