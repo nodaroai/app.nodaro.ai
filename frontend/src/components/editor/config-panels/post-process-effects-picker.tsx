@@ -5,6 +5,7 @@ import { Search } from "lucide-react"
 import { POST_PROCESS_EFFECTS } from "@nodaro-shared/post-process-effects"
 import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
 import { Input } from "@/components/ui/input"
+import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
@@ -88,14 +89,13 @@ export const PostProcessEffectsPicker = memo(function PostProcessEffectsPicker({
                   {selectedIdx + 1}
                 </span>
               )}
-              <span
+              <FitText
+                text={label}
                 className={cn(
-                  "text-[11.5px] font-semibold leading-tight truncate w-full",
+                  "text-[11.5px] font-semibold leading-tight w-full",
                   selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
-              >
-                {label}
-              </span>
+              />
               <span className="text-[10px] leading-snug text-muted-foreground line-clamp-2">
                 {description}
               </span>

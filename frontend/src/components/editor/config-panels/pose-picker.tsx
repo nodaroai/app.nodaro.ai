@@ -10,6 +10,7 @@ import {
   type PoseCategory,
 } from "@nodaro-shared/pose"
 import { Input } from "@/components/ui/input"
+import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
@@ -96,14 +97,13 @@ export const PosePicker = memo(function PosePicker({
                         : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
                     )}
                   >
-                    <span
+                    <FitText
+                      text={label}
                       className={cn(
-                        "text-[11px] font-medium leading-tight truncate max-w-full",
+                        "text-[11px] font-medium leading-tight max-w-full",
                         selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                       )}
-                    >
-                      {label}
-                    </span>
+                    />
                   </button>
                 )
               })}

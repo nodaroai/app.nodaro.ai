@@ -13,6 +13,7 @@ import {
 } from "@nodaro-shared/person"
 import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
 import { Input } from "@/components/ui/input"
+import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { ColorSwatch } from "./color-swatch"
 import { getPersonSwatch } from "./color-swatches"
@@ -230,14 +231,13 @@ function EntryChip({
       )}
       {swatch && <ColorSwatch value={swatch} className="size-5" />}
       {icon}
-      <span
+      <FitText
+        text={resolvedLabel}
         className={cn(
-          "text-[11px] font-medium leading-tight truncate max-w-full",
+          "text-[11px] font-medium leading-tight max-w-full",
           selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
         )}
-      >
-        {resolvedLabel}
-      </span>
+      />
     </button>
   )
 }

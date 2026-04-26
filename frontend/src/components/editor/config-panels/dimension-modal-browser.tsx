@@ -11,6 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import { FitText } from "@/components/ui/fit-text"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { DimensionTileGrid } from "./dimension-tile-grid"
 
@@ -108,9 +109,10 @@ export const DimensionModalBrowser = memo(function DimensionModalBrowser({
                 {fallbackIcon}
               </div>
             )}
-            <span className="flex-1 truncate text-xs text-gray-700 dark:text-[#E2E8F0]">
-              {displayLabel}
-            </span>
+            <FitText
+              text={displayLabel}
+              className="flex-1 text-xs text-gray-700 dark:text-[#E2E8F0]"
+            />
             <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
           </button>
         )}

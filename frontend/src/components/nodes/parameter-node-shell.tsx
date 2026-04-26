@@ -53,7 +53,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   }, [node, nodes, edges])
 
   return (
-    <div className={fluidWidth ? "relative w-full h-full" : "relative max-w-[220px]"}>
+    <div className={cn("group", fluidWidth ? "relative w-full h-full" : "relative max-w-[220px]")}>
       <EditableNodeLabel
         label={label}
         icon={icon}
@@ -81,17 +81,27 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
           ) : undefined
         }
       >
-        <div className={fluidWidth ? "px-3 py-3 flex flex-col gap-2 h-full" : "px-3 py-3 flex flex-col gap-2"}>
-          {/* 3-mode display toggle: Picks / Prompt / Both. Mirrors the
-              compare-style switches used elsewhere in the app. Persists per-node
-              so it survives reload. */}
-          <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
+        <div className={cn(fluidWidth ? "px-3 py-3 flex flex-col gap-2 h-full" : "px-3 py-3 flex flex-col gap-2")}>
           {(displayMode === "picks" || displayMode === "both") && children}
           {(displayMode === "prompt" || displayMode === "both") && (
             <PromptPreview text={promptText} />
           )}
         </div>
       </BaseNode>
+
+      {/* Mode toggle (Picks / Prompt / Both) — pinned to the OUTER wrapper
+          so it's never clipped by BaseNode's internal overflow/scroll, even
+          when the picks content is taller than the node body. Hidden by
+          default; visible on hover OR when selected. */}
+      <div
+        className={cn(
+          "nodrag nopan absolute top-[28px] right-2 z-20 transition-opacity",
+          selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+        )}
+      >
+        <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
+      </div>
+
       <HandleIcon icon={icon} color="indigo" top="20px" />
     </div>
   )
@@ -106,7 +116,7 @@ function DisplayModeToggle({
 }) {
   return (
     <div
-      className="nodrag nopan flex self-end gap-0 rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] overflow-hidden"
+      className="nodrag nopan flex gap-0 rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-gray-50/95 dark:bg-[#161616]/95 backdrop-blur-sm overflow-hidden shadow-sm"
       role="tablist"
       aria-label="Display mode"
     >
@@ -175,8 +185,11 @@ function PromptPreview({ text }: { readonly text: string }) {
     )
   }
   return (
-    <div className="rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#101010] px-2 py-1.5">
-      <p className="text-foreground text-[10.5px] leading-snug font-mono whitespace-pre-wrap break-words">
+    <div className="rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#101010] px-2 py-1.5 max-w-full overflow-hidden">
+      <p
+        className="text-foreground text-[10.5px] leading-snug font-mono whitespace-pre-wrap"
+        style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
+      >
         {text}
       </p>
     </div>

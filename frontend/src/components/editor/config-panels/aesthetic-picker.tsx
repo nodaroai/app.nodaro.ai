@@ -11,6 +11,7 @@ import {
 } from "@nodaro-shared/aesthetic"
 import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
 import { Input } from "@/components/ui/input"
+import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
@@ -127,14 +128,13 @@ export const AestheticPicker = memo(function AestheticPicker({
                         {selectedIdx + 1}
                       </span>
                     )}
-                    <span
+                    <FitText
+                      text={label}
                       className={cn(
-                        "text-[11px] font-semibold leading-tight truncate w-full",
+                        "text-[11px] font-semibold leading-tight w-full",
                         selected ? "text-[#ff0073]" : "text-gray-800 dark:text-[#E2E8F0]",
                       )}
-                    >
-                      {label}
-                    </span>
+                    />
                     <span className="text-[10px] leading-snug text-muted-foreground line-clamp-2 w-full">
                       {description}
                     </span>

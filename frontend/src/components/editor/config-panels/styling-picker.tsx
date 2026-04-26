@@ -13,6 +13,7 @@ import {
 } from "@nodaro-shared/styling"
 import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
 import { Input } from "@/components/ui/input"
+import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { HairCutBrowser } from "./hair-cut-browser"
 import { EyewearIcon, HeadwearIcon } from "./small-silhouette-icons"
@@ -221,14 +222,13 @@ function DimensionSection({
               )}
               {eyewearIcon}
               {headwearIcon}
-              <span
+              <FitText
+                text={entryLabel}
                 className={cn(
-                  "text-[11px] font-medium leading-tight truncate max-w-full",
+                  "text-[11px] font-medium leading-tight max-w-full",
                   selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
-              >
-                {entryLabel}
-              </span>
+              />
             </button>
           )
         })}

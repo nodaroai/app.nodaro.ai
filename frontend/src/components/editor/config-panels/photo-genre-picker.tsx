@@ -10,6 +10,7 @@ import {
   type PhotoGenreCategory,
 } from "@nodaro-shared/photo-genre"
 import { Input } from "@/components/ui/input"
+import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
@@ -98,14 +99,13 @@ export const PhotoGenrePicker = memo(function PhotoGenrePicker({
                   >
                     <div className="flex items-center gap-1.5">
                       <Camera className={cn("size-3 shrink-0", selected ? "text-[#ff0073]" : "text-muted-foreground")} aria-hidden="true" />
-                      <span
+                      <FitText
+                        text={label}
                         className={cn(
-                          "text-[11px] font-medium leading-tight truncate",
+                          "text-[11px] font-medium leading-tight",
                           selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                         )}
-                      >
-                        {label}
-                      </span>
+                      />
                     </div>
                     <span className="text-[10px] text-muted-foreground leading-snug line-clamp-2">
                       {description}
