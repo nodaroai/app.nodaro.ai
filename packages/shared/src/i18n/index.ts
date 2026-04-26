@@ -145,33 +145,28 @@ export function entryMatchesQuery(
 
 /**
  * Vite-bundled glob of every sidecar file at build time. Vite scans the
- * pattern at build time and creates a code-split chunk per file, with the
- * loader function wrapping a real dynamic `import()` for that chunk.
+ * pattern at build time and REPLACES this call with a static object literal
+ * mapping each matched path to a code-split loader function. At runtime
+ * `import.meta.glob` does not exist as a real function — the syntax is a
+ * compile-time marker; do NOT guard on `typeof === "function"` because that
+ * check is false at runtime even in Vite-built output.
  *
- * We use `import.meta.glob` instead of a constructed-path `import()` because
- * the latter (with @vite-ignore) was excluded from the build entirely and
- * locale switching silently fell back to English in production.
- *
- * On non-Vite runtimes (backend / Node test), `import.meta.glob` is
- * undefined; we guard with a try/catch and fall back to runtime dynamic
- * imports (which still won't bundle anything but keep the API working).
+ * On non-Vite runtimes (backend / Node tests) the call throws (`glob` is
+ * undefined). We catch and fall back to an empty loader map; backend code
+ * never resolves picker labels so this is harmless.
  */
 type SidecarModule = { default?: LocaleCatalogMap } & Record<string, unknown>
 type SidecarLoader = () => Promise<unknown>
 
-const sidecarLoaders: Record<string, SidecarLoader> = (() => {
-  try {
-    const meta = import.meta as ImportMeta & {
-      glob?: (pattern: string) => Record<string, SidecarLoader>
-    }
-    if (typeof meta.glob === "function") {
-      return meta.glob("./*.*.ts")
-    }
-  } catch {
-    /* non-Vite runtime — fall through to empty */
-  }
-  return {}
-})()
+let sidecarLoaders: Record<string, SidecarLoader> = {}
+try {
+  // Vite replaces this call with a static object literal at build time.
+  sidecarLoaders = (import.meta as ImportMeta & {
+    glob: (pattern: string) => Record<string, SidecarLoader>
+  }).glob("./*.*.ts")
+} catch {
+  /* not in Vite (Node / tests) — leave empty */
+}
 
 async function loadLocaleCatalog(
   catalog: I18nCatalogId,
