@@ -27,6 +27,7 @@ import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { useUndoRedoSubscription } from "@/hooks/use-undo-redo";
+import { useAltKeyTracker } from "@/hooks/use-alt-key";
 import { useProjectsStore } from "@/hooks/use-projects-store";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase";
@@ -75,6 +76,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const { save, load, saving, loading } = useWorkflowPersistence(projectId);
   const fetchProjects = useProjectsStore((s) => s.fetchProjects);
   useUndoRedoSubscription();
+  useAltKeyTracker();
   const navigate = useNavigate();
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [isRunning, setIsRunning] = useState(false);

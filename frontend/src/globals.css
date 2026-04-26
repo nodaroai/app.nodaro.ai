@@ -702,3 +702,13 @@ html, body {
   border-bottom: 1px solid var(--border);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
+
+/* Parameter-node toggle row: dragging the row drags the node.
+   `nodrag` is intentionally absent so React Flow's drag threshold
+   distinguishes click-vs-drag on the pick/prompt/both buttons. */
+.toggle-row {
+  cursor: grab;
+}
+.react-flow__node--dragging .toggle-row {
+  cursor: grabbing;
+}
