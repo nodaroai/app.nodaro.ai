@@ -54,6 +54,7 @@ export const VEHICLES: ReadonlyArray<Vehicle> = [
   { id: "crossover",             label: "Crossover",             subcategory: "cars-everyday", description: "Mid-sized crossover SUV with a raised ride height, car-like styling and aerodynamic LED accents" },
   { id: "electric-car",          label: "Electric Car",          subcategory: "cars-everyday", description: "Sleek modern electric car with a smooth grille-less front, flush door handles and aerodynamic clean lines" },
   { id: "hatchback-econobox",    label: "Econobox",              subcategory: "cars-everyday", description: "Tiny affordable two-door city car with a stubby hood, small wheels and simple compact styling" },
+  { id: "police-car",            label: "Police Car",            subcategory: "cars-everyday", description: "Black-and-white patrol car with a roof-mounted light bar flashing red and blue, push bar on the front bumper, agency decals on the doors and antenna whips on the trunk" },
 
   // -------------------- Performance / Exotic --------------------
   { id: "sports-car",            label: "Sports Car",            subcategory: "cars-performance", description: "Low-slung two-door sports car with a wide aggressive stance, aerodynamic bodywork and bright glossy paint" },
@@ -93,6 +94,7 @@ export const VEHICLES: ReadonlyArray<Vehicle> = [
   { id: "ice-cream-truck",       label: "Ice Cream Truck",       subcategory: "trucks", description: "Cheerful ice cream truck with pastel paint, a window counter displaying treats, colorful decals and a cone-shaped rooftop ornament" },
   { id: "food-truck",            label: "Food Truck",            subcategory: "trucks", description: "Stylized food truck with a folding service window, chalkboard menu, string lights and a bright custom wrap" },
   { id: "box-truck",             label: "Box Truck",             subcategory: "trucks", description: "Medium box truck with a plain rectangular cargo box, roll-up rear door and a forward cab" },
+  { id: "ambulance",             label: "Ambulance",             subcategory: "trucks", description: "Emergency medical ambulance with a tall white box body, red cross and EMS livery, flashing red-and-blue lightbar, side warning lights and a high-visibility chevron pattern across the rear doors" },
 
   // -------------------- Transit (Bus / Rail / Horse-Drawn) --------------------
   { id: "city-bus",              label: "City Bus",              subcategory: "transit", description: "Modern articulated city bus with a low floor, sliding doors, destination sign up front and an advertising wrap" },
@@ -113,9 +115,12 @@ export const VEHICLES: ReadonlyArray<Vehicle> = [
   { id: "propeller-plane",       label: "Propeller Plane",       subcategory: "aircraft", description: "Small single-engine propeller plane with a spinning nose prop, high wings, fixed landing gear and a bubble cockpit" },
   { id: "helicopter",            label: "Helicopter",            subcategory: "aircraft", description: "Utility helicopter with a large main rotor on top, a slim tail boom, skids underneath and a bubble-front cockpit" },
   { id: "seaplane",              label: "Seaplane",              subcategory: "aircraft", description: "Seaplane with twin pontoon floats instead of wheels, high wings and a propeller, resting on calm water" },
-  { id: "hot-air-balloon",       label: "Hot Air Balloon",       subcategory: "aircraft", description: "Giant hot-air balloon with a colorful striped envelope, a flame burner flaring upward and a wicker basket underneath" },
+  { id: "hot-air-balloon",       label: "Hot Air Balloon",       subcategory: "aircraft", description: "Giant hot-air balloon with a colorful rainbow-striped fabric envelope, a roaring flame burner flaring upward into the mouth and a wicker passenger basket suspended below by braided cables" },
   { id: "blimp",                 label: "Blimp",                 subcategory: "aircraft", description: "Sausage-shaped blimp airship with a sleek silver envelope, small rear fins and a slung gondola beneath" },
+  { id: "airship",               label: "Airship / Dirigible",   subcategory: "aircraft", description: "Massive rigid lighter-than-air dirigible with a long cigar-shaped fabric-covered metal frame, large rear stabilizer fins, multiple slung engine gondolas and a long passenger cabin running underneath the hull" },
   { id: "glider",                label: "Glider",                subcategory: "aircraft", description: "Elegant sailplane glider with ultra-long narrow wings, no engine and a teardrop cockpit pod" },
+  { id: "paraglider",            label: "Paraglider",            subcategory: "aircraft", description: "Foot-launched paraglider with a wide elliptical soft-fabric ram-air wing arched overhead, dozens of slender suspension lines converging into a tandem harness with a seated pilot" },
+  { id: "microlight",            label: "Microlight Aircraft",   subcategory: "aircraft", description: "Lightweight single-pilot microlight aircraft with an exposed tubular metal frame, fabric-covered high wings, a small pusher propeller engine behind the open seat and tricycle landing gear" },
   { id: "drone",                 label: "Drone",                 subcategory: "aircraft", description: "Quadcopter camera drone with four spinning rotors on slim arms, a central body and a gimbaled camera underneath" },
 
   // -------------------- Watercraft --------------------
@@ -130,6 +135,7 @@ export const VEHICLES: ReadonlyArray<Vehicle> = [
   { id: "jet-ski",               label: "Jet Ski",               subcategory: "watercraft", description: "Stand-up personal watercraft with an aggressive fairing, handlebars, a single seat and a jet-propulsion nozzle" },
   { id: "submarine",             label: "Submarine",             subcategory: "watercraft", description: "Military submarine with a long cylindrical hull, a conning tower with periscopes and a bulbous bow diving through deep water" },
   { id: "pirate-ship",           label: "Pirate Ship",           subcategory: "watercraft", description: "Wooden pirate galleon with tall masts, square sails, a figurehead on the bow, cannons along the hull and a tattered black flag" },
+  { id: "hovercraft",            label: "Hovercraft",            subcategory: "watercraft", description: "Air-cushion hovercraft riding on a thick inflated rubber skirt billowing outward, large rear ducted fans for propulsion, a flat boxy passenger cabin on top and capable of skimming over both water and land" },
 
   // -------------------- Military --------------------
   { id: "tank",                  label: "Tank",                  subcategory: "military", description: "Heavy battle tank with a long cannon barrel, rotating turret, thick sloped armor and wide continuous tracks" },

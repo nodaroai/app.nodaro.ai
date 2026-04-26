@@ -87,6 +87,12 @@ export const MOODS: ReadonlyArray<Mood> = [
   { id: "lazy-shy",    label: "Lazy Shy",     category: "neutral",  description: "Drowsy, soft, half-shy",      promptHint: "with a soft, drowsy half-shy expression, eyes lowered and barely-there smile, languid and unbothered" },
   { id: "awe",         label: "Awe",          category: "intense",  description: "Wonder, reverent",            promptHint: "with an awestruck expression of wonder, mouth slightly agape and wide-eyed" },
   { id: "shocked",     label: "Shocked",      category: "intense",  description: "Surprised, mouth open",       promptHint: "with a shocked, surprised expression, eyes wide, brows raised and mouth open" },
+
+  // -------------------- Micro-emotions --------------------
+  { id: "flirty",      label: "Flirty",       category: "positive", description: "Playful flirtation, lingering smile, sustained eye contact", promptHint: "with a flirty expression, a lingering playful smile and sustained, knowing eye contact with the camera" },
+  { id: "suspicious",  label: "Suspicious",   category: "negative", description: "Wary distrust, narrowed eyes, side-eye", promptHint: "with a suspicious, wary expression, eyes narrowed in distrust and a sidelong side-eye glance" },
+  { id: "resigned",    label: "Resigned",     category: "neutral",  description: "Quiet acceptance of an unpleasant situation, sigh", promptHint: "with a resigned expression of quiet acceptance, shoulders softly dropped mid-sigh and a tired half-closed gaze" },
+  { id: "conflicted",  label: "Conflicted",   category: "neutral",  description: "Visible internal struggle, brow furrowed, gaze unfocused", promptHint: "with a conflicted expression of visible internal struggle, brow furrowed and gaze unfocused, caught between two impulses" },
 ] as const
 
 const moodById = new Map<string, Mood>(MOODS.map((m) => [m.id, m]))

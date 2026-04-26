@@ -102,6 +102,12 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "headwear-crown",        label: "Crown",         dimension: "headwear", description: "Royal or decorative crown", promptHint: "wearing a crown atop the head" },
   { id: "headwear-helmet",       label: "Helmet",        dimension: "headwear", description: "Protective helmet",       promptHint: "wearing a helmet" },
   { id: "headwear-veil",         label: "Veil",          dimension: "headwear", description: "Veil draped over face/hair", promptHint: "wearing a veil draped over the head" },
+  { id: "headwear-bucket-hat",   label: "Bucket Hat",    dimension: "headwear", description: "Soft-brimmed casual bucket hat", promptHint: "wearing a soft-brimmed casual bucket hat" },
+  { id: "headwear-beret",        label: "Beret",         dimension: "headwear", description: "Soft round French beret", promptHint: "wearing a soft round French beret tilted to one side" },
+  { id: "headwear-turban",       label: "Turban",        dimension: "headwear", description: "Wrapped head turban, cultural / fashion", promptHint: "wearing a wrapped head turban with neatly folded layers" },
+  { id: "headwear-fascinator",   label: "Fascinator",    dimension: "headwear", description: "Small decorative headpiece, royal-wedding style", promptHint: "wearing a small decorative fascinator with feathers and netting, royal-wedding style" },
+  { id: "headwear-bowler",       label: "Bowler Hat",    dimension: "headwear", description: "Round-crown derby/bowler hat", promptHint: "wearing a round-crown bowler hat with a curled brim" },
+  { id: "headwear-cowboy-hat",   label: "Cowboy Hat",    dimension: "headwear", description: "Wide-brim Western cowboy hat", promptHint: "wearing a wide-brim Western cowboy hat with a creased crown" },
 
   // -------------------- Hair Cut (the styled cut/shape) --------------------
   // Natural texture + length live in Person.hair-base. This is what the
@@ -256,6 +262,17 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "outfit-kimono",           label: "Kimono",           dimension: "outfit", description: "Traditional Japanese kimono",       promptHint: "dressed in a traditional Japanese kimono with an obi sash" },
   { id: "outfit-ballerina",        label: "Ballerina",        dimension: "outfit", description: "Classical ballerina costume",       promptHint: "dressed in a classical ballerina costume — fitted leotard and tulle tutu" },
   { id: "outfit-flapper",          label: "1920s Flapper",    dimension: "outfit", description: "Beaded flapper dress",              promptHint: "dressed in a 1920s flapper dress — beaded fringe and a low-drop hem" },
+  { id: "outfit-goth",             label: "Goth",             dimension: "outfit", description: "Full dark goth: black lace, leather, dark makeup, chains", promptHint: "wearing a full goth outfit — black lace and leather layered together, chains and silver hardware, with dark dramatic makeup" },
+  { id: "outfit-emo",              label: "Emo",              dimension: "outfit", description: "Early-2000s emo: skinny jeans, band tee, dyed hair, eyeliner", promptHint: "wearing an early-2000s emo outfit — skinny black jeans and a band tee, with dyed side-swept hair and heavy eyeliner" },
+  { id: "outfit-streetwear",       label: "Streetwear",       dimension: "outfit", description: "Modern streetwear: hoodie, baggy pants, sneakers, bucket hat", promptHint: "wearing a modern streetwear outfit — an oversized hoodie, baggy pants, chunky sneakers, and a bucket hat" },
+  { id: "outfit-cyberpunk",        label: "Cyberpunk",        dimension: "outfit", description: "Neon-lit cyberpunk: tech wear, LED accents, mesh layers", promptHint: "wearing a cyberpunk outfit — neon-lit techwear with LED accents, mesh layers, and a futuristic urban silhouette" },
+  { id: "outfit-cottagecore",      label: "Cottagecore",      dimension: "outfit", description: "Pastoral cottage aesthetic: prairie dress, apron, basket", promptHint: "wearing a cottagecore outfit — a long pastoral prairie dress with an apron and a woven basket on the arm" },
+  { id: "outfit-dark-academia",    label: "Dark Academia",    dimension: "outfit", description: "Oxford-tweed scholar: blazer, vest, oxford shoes, books", promptHint: "wearing a dark academia outfit — a tweed blazer over a knit vest, oxford shoes, with books tucked under the arm" },
+  { id: "outfit-anime-cosplay",    label: "Anime Cosplay",    dimension: "outfit", description: "Costume modeled on a recognizable anime character archetype", promptHint: "wearing an anime cosplay costume modeled on a recognizable anime character archetype, with stylized details and bold colors" },
+  { id: "outfit-nurse",            label: "Nurse",            dimension: "outfit", description: "Medical scrubs, stethoscope, lanyard ID", promptHint: "dressed as a nurse — fitted medical scrubs with a stethoscope around the neck and a lanyard ID badge" },
+  { id: "outfit-pirate",           label: "Pirate",           dimension: "outfit", description: "Pirate costume: tricorn hat, sash, frilly shirt, boots", promptHint: "wearing a pirate costume — a tricorn hat, a frilly shirt with a sash at the waist, and tall leather boots" },
+  { id: "outfit-fairy",            label: "Fairy",            dimension: "outfit", description: "Fantasy fairy: gauzy wings, flower crown, ethereal dress", promptHint: "wearing a fantasy fairy costume — gauzy translucent wings, a flower crown, and an ethereal flowing dress" },
+  { id: "outfit-mermaid",          label: "Mermaid",          dimension: "outfit", description: "Fantasy mermaid: scaled tail/skirt, shell top, flowing hair", promptHint: "wearing a fantasy mermaid costume — a scaled tail or fitted scaled skirt, a shell top, and long flowing hair" },
 
   // -------------------- Top (upper-body garment) --------------------
   { id: "top-tshirt",        label: "T-Shirt",        dimension: "top", description: "Plain crewneck t-shirt",         promptHint: "wearing a fitted plain crewneck t-shirt with short sleeves" },
@@ -273,6 +290,11 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "top-bra-top",       label: "Bra Top",        dimension: "top", description: "Bra-style top showing midriff", promptHint: "wearing a fitted bra-style top with the midriff exposed" },
   { id: "top-sports-bra",    label: "Sports Bra",     dimension: "top", description: "Athletic sports bra",            promptHint: "wearing a structured sports bra with athletic strapping" },
   { id: "top-bikini-top",    label: "Bikini Top",     dimension: "top", description: "Triangle bikini top",            promptHint: "wearing a triangle bikini top tied behind the neck and back" },
+  { id: "top-bodysuit",      label: "Bodysuit",       dimension: "top", description: "Fitted one-piece torso garment", promptHint: "wearing a fitted bodysuit, a one-piece torso garment snapped at the inseam" },
+  { id: "top-leotard",       label: "Leotard",        dimension: "top", description: "Dance-style fitted top with sleeves", promptHint: "wearing a dance-style leotard, a fitted one-piece top with sleeves" },
+  { id: "top-mesh-top",      label: "Mesh Top",       dimension: "top", description: "Sheer mesh fabric top",          promptHint: "wearing a sheer mesh top, the open-weave fabric letting skin show through" },
+  { id: "top-sheer-top",     label: "Sheer Top",      dimension: "top", description: "Translucent fabric top",          promptHint: "wearing a sheer translucent top with a soft drape, hinting at the silhouette underneath" },
+  { id: "top-bandeau",       label: "Bandeau",        dimension: "top", description: "Strapless tube top",              promptHint: "wearing a strapless bandeau top wrapped across the chest" },
 
   // -------------------- Bottom (lower-body garment) --------------------
   { id: "bottom-jeans",         label: "Jeans",            dimension: "bottom", description: "Classic blue jeans",       promptHint: "in classic five-pocket blue jeans with a straight leg cut" },
@@ -291,6 +313,11 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "bottom-pleated-skirt", label: "Pleated Skirt",    dimension: "bottom", description: "Pleated mid-thigh skirt",  promptHint: "in a pleated mid-thigh skirt with sharp folds" },
   { id: "bottom-midi-skirt",    label: "Midi Skirt",       dimension: "bottom", description: "Calf-length midi skirt",   promptHint: "in a calf-length midi skirt with a flowing hem" },
   { id: "bottom-maxi-skirt",    label: "Maxi Skirt",       dimension: "bottom", description: "Floor-length maxi skirt",  promptHint: "in a floor-length maxi skirt with a fluid drape" },
+  { id: "bottom-overalls",      label: "Overalls",         dimension: "bottom", description: "Denim overalls / dungarees", promptHint: "in denim overalls with a bib front, shoulder straps, and metal buckles" },
+  { id: "bottom-culottes",      label: "Culottes",         dimension: "bottom", description: "Wide-leg cropped trousers, mid-calf", promptHint: "in wide-leg culottes cropped at mid-calf with a flowing silhouette" },
+  { id: "bottom-palazzo-pants", label: "Palazzo Pants",    dimension: "bottom", description: "Flowing wide-leg pants",   promptHint: "in flowing palazzo pants with a wide-leg silhouette and fluid drape" },
+  { id: "bottom-harem-pants",   label: "Harem Pants",      dimension: "bottom", description: "Drop-crotch loose pants",  promptHint: "in drop-crotch harem pants, loose through the leg and gathered at the ankle" },
+  { id: "bottom-bike-shorts",   label: "Bike Shorts",      dimension: "bottom", description: "Fitted lycra mid-thigh shorts", promptHint: "in fitted lycra bike shorts ending mid-thigh" },
 
   // -------------------- Outerwear (layered-over outer garment) --------------------
   { id: "outerwear-leather-jacket", label: "Leather Jacket",  dimension: "outerwear", description: "Slim-fit leather jacket",    promptHint: "wearing a slim-fit black leather jacket with a fitted collar and zip front" },
@@ -339,6 +366,12 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "footwear-flip-flops",      label: "Flip-Flops",       dimension: "footwear", description: "Casual rubber flip-flops", promptHint: "in casual rubber flip-flops" },
   { id: "footwear-ballet-flats",    label: "Ballet Flats",     dimension: "footwear", description: "Slip-on ballet flats",     promptHint: "in slip-on ballet flats with a soft rounded toe" },
   { id: "footwear-barefoot",        label: "Barefoot",         dimension: "footwear", description: "No shoes — barefoot",      promptHint: "barefoot, no shoes" },
+  { id: "footwear-crocs",           label: "Crocs",            dimension: "footwear", description: "Colorful resin clogs, casual and divisive", promptHint: "in colorful resin Crocs clogs with the signature perforated upper" },
+  { id: "footwear-birkenstocks",    label: "Birkenstocks",     dimension: "footwear", description: "Cork-footbed sandals",     promptHint: "in cork-footbed Birkenstock sandals with twin leather straps" },
+  { id: "footwear-doc-martens",     label: "Doc Martens",      dimension: "footwear", description: "Chunky leather combat boots", promptHint: "in chunky leather Doc Martens boots with yellow welt stitching and an air-cushioned sole" },
+  { id: "footwear-converse",        label: "Converse",         dimension: "footwear", description: "Canvas high-top sneakers, classic Chuck Taylor", promptHint: "in classic Converse Chuck Taylor canvas high-top sneakers with a rubber toe cap" },
+  { id: "footwear-vans",            label: "Vans",             dimension: "footwear", description: "Slip-on or low-top skater sneakers", promptHint: "in classic Vans skater sneakers with the signature waffle sole" },
+  { id: "footwear-espadrilles",     label: "Espadrilles",      dimension: "footwear", description: "Woven jute-sole canvas summer shoe", promptHint: "in woven jute-sole espadrilles with a canvas upper, a casual summer shoe" },
 
   // -------------------- Wardrobe State (modifier — composes with any garment) --------------------
   { id: "state-oversized",     label: "Oversized",       dimension: "wardrobe-state", description: "Loose, oversized fit",      promptHint: "the clothing loose and oversized, draping freely well past the body" },
