@@ -80,6 +80,7 @@ export const EXECUTION_DATA_KEYS = new Set([
   "activeRoutes",
   "routeOutputs",
   "_upstreamRefresh",
+  "zoom",
 ])
 
 /** Detect loop column type from upstream node's output handle. */
@@ -383,6 +384,11 @@ interface WorkflowState {
   readonly addNode: (type: SceneNodeType, position: { x: number; y: number }, initialData?: Record<string, unknown>) => string | undefined
   readonly updateNode: (nodeId: string, updates: Partial<WorkflowNode>) => void
   readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
+  readonly updateNodeWithData: (
+    nodeId: string,
+    nodeUpdates: Partial<WorkflowNode>,
+    dataUpdates: Record<string, unknown>,
+  ) => void
   readonly deleteNode: (nodeId: string) => void
   readonly deleteEdge: (edgeId: string) => void
   readonly updateEdgeData: (edgeId: string, data: Record<string, unknown>) => void
@@ -938,6 +944,37 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       return { nodes, isDirty: true }
     })
     if (isExecOnly) setSkipUndoCapture(false)
+  },
+
+  updateNodeWithData: (nodeId, nodeUpdates, dataUpdates) => {
+    if (!get().nodes.some((n) => n.id === nodeId)) return
+
+    const dataKeys = Object.keys(dataUpdates)
+    const isExecOnly =
+      dataKeys.length > 0 && dataKeys.every((k) => EXECUTION_DATA_KEYS.has(k))
+    // Stricter than updateNodeData's `every()` (vacuously true on empty) —
+    // empty dataUpdates must NOT suppress undo capture.
+
+    if (isExecOnly) setSkipUndoCapture(true)
+    try {
+      set((state) => ({
+        nodes: state.nodes.map((n) =>
+          n.id === nodeId
+            ? {
+                ...n,
+                ...nodeUpdates,
+                data:
+                  dataKeys.length > 0
+                    ? ({ ...n.data, ...dataUpdates } as SceneNodeData)
+                    : n.data,
+              }
+            : n,
+        ),
+        isDirty: true,
+      }))
+    } finally {
+      if (isExecOnly) setSkipUndoCapture(false)
+    }
   },
 
   duplicateNode: (nodeId, position) =>

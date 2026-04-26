@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useMemo } from "react"
-import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon } from "lucide-react"
+import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon, ZoomIn, Maximize2 } from "lucide-react"
 import { useReactFlow } from "@xyflow/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
@@ -20,6 +20,8 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   const runSelected = useWorkflowStore((s) => s.runSelected)
   const toggleSkipNode = useWorkflowStore((s) => s.toggleSkipNode)
   const setWorkflowThumbnail = useWorkflowStore((s) => s.setWorkflowThumbnail)
+  const updateNode = useWorkflowStore((s) => s.updateNode)
+  const updateNodeWithData = useWorkflowStore((s) => s.updateNodeWithData)
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const { screenToFlowPosition } = useReactFlow()
@@ -50,6 +52,12 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
     if (!node) return null
     const d = node.data as Record<string, unknown>
     return (d.generatedImageUrl as string) ?? (d.generatedVideoUrl as string) ?? null
+  }, [nodeId, nodes])
+
+  const zoom = useMemo(() => {
+    const node = nodes.find((n) => n.id === nodeId)
+    const z = (node?.data as Record<string, unknown> | undefined)?.zoom
+    return typeof z === "number" ? z : 1.0
   }, [nodeId, nodes])
 
   useEffect(() => {
@@ -86,6 +94,40 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
 
   function handleToggleSkip() {
     toggleSkipNode(nodeId)
+    onClose()
+  }
+
+  function handleSetZoom(newZoom: number) {
+    const node = nodes.find((n) => n.id === nodeId)
+    if (!node) return
+    const z0 = zoom
+    if (newZoom === z0) return
+    // Preserve logical size, scale the visual box by the new zoom.
+    const measured = node.measured as { width?: number; height?: number } | undefined
+    const w0 = node.width ?? measured?.width ?? 200
+    const h0 = node.height ?? measured?.height ?? 100
+    const logicalW = Math.round(w0 / z0)
+    const logicalH = Math.round(h0 / z0)
+    const newW = Math.round(logicalW * newZoom)
+    const newH = Math.round(logicalH * newZoom)
+    // Single batched write via the action that bypasses undo for zoom-only data.
+    updateNodeWithData(nodeId, { width: newW, height: newH }, { zoom: newZoom })
+    // Follow-up via updateNode to capture exactly one undo snapshot
+    // (data ref change). Mirrors the BaseNode handleZoomDragEnd pattern.
+    const refreshed = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
+    if (refreshed) {
+      useWorkflowStore.getState().updateNode(nodeId, {
+        data: { ...refreshed.data, zoom: newZoom } as typeof refreshed.data,
+      })
+    }
+    // Don't close the menu — let the user keep adjusting.
+  }
+
+  function handleFitContent() {
+    // Clear height only — preserves user's chosen width and zoom. The
+    // useAutoMeasureForZoom hook in parameter-node-shell handles the
+    // visual = logical × zoom write-back at non-identity zoom.
+    updateNode(nodeId, { height: undefined })
     onClose()
   }
 
@@ -150,6 +192,36 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
           Set as Thumbnail
         </button>
       )}
+      {/* Zoom row: shows current zoom with - / + / reset buttons inline */}
+      <div className="flex items-center gap-1 px-3 py-1.5 text-sm">
+        <ZoomIn className="h-3.5 w-3.5" />
+        <span className="flex-1">Zoom: {Math.round(zoom * 100)}%</span>
+        {/* Fixed-width buttons so different glyph widths (−, +, ↺) and
+            disabled-state changes don't shift sibling buttons sideways. */}
+        <button
+          className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs"
+          onClick={() => handleSetZoom(Math.max(0.5, Math.round((zoom - 0.25) * 100) / 100))}
+          title="Decrease zoom"
+        >−</button>
+        <button
+          className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs"
+          onClick={() => handleSetZoom(Math.min(2.0, Math.round((zoom + 0.25) * 100) / 100))}
+          title="Increase zoom"
+        >+</button>
+        <button
+          className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+          disabled={zoom === 1}
+          onClick={() => handleSetZoom(1)}
+          title="Reset to 100%"
+        >↺</button>
+      </div>
+      <button
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left"
+        onClick={handleFitContent}
+      >
+        <Maximize2 className="h-3.5 w-3.5" />
+        Fit Content
+      </button>
       <div className="my-1 border-t" />
       <button
         className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left"

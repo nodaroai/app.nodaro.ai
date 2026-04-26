@@ -1,11 +1,15 @@
 "use client"
 
-import { memo, useState, useEffect, useRef, type ReactNode, type MouseEvent } from "react"
-import { Handle, Position, NodeResizer, NodeToolbar } from "@xyflow/react"
+import { memo, useState, useEffect, useRef, useCallback, type ReactNode, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react"
+import { Handle, Position, NodeToolbar, useUpdateNodeInternals, NodeResizeControl } from "@xyflow/react"
 import { MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useShallow } from "zustand/react/shallow"
+import { useAltKeyStore } from "@/hooks/use-alt-key"
 import { useMobileCanvas } from "@/components/editor/mobile-canvas-context"
+import { CustomHandle } from "./custom-handle"
+import { computeZoomFromDrag, computeVisualSize, applyMagnet } from "./zoom-math"
 
 export interface HandleConfig {
   readonly id: string
@@ -151,6 +155,7 @@ function BaseNodeComponent({
   }, [imageAspectRatio, id])
 
   const { isMobile } = useMobileCanvas()
+  const altPressed = useAltKeyStore((s) => s.pressed)
   const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
   const clearNewNode = useWorkflowStore((s) => s.clearNewNode)
   const isEditing = useWorkflowStore((s) => s.selectedNodeId === id)
@@ -158,6 +163,23 @@ function BaseNodeComponent({
     const node = s.nodes.find((n) => n.id === id)
     return !!(node?.data as Record<string, unknown> | undefined)?.skipped
   })
+  // Inner zoom wrapper bookkeeping. Combine into one selector with shallow
+  // compare so we do ONE `nodes.find(...)` per store update (not three).
+  // Resize fires the store at ~60Hz; with 100+ nodes on canvas, three
+  // separate selectors meant 300 extra O(N) array iterations per frame.
+  const { zoom, visualW, visualH } = useWorkflowStore(
+    useShallow((s) => {
+      const node = s.nodes.find((n) => n.id === id)
+      const z = (node?.data as Record<string, unknown> | undefined)?.zoom
+      return {
+        zoom: typeof z === "number" ? z : 1.0,
+        visualW: node?.width,
+        visualH: node?.height,
+      }
+    }),
+  )
+  const logicalW = visualW != null ? visualW / zoom : undefined
+  const logicalH = visualH != null ? visualH / zoom : undefined
   const isNew = newNodeIds.has(id)
 
   useEffect(() => {
@@ -166,12 +188,101 @@ function BaseNodeComponent({
     return () => clearTimeout(timer)
   }, [isNew, id, clearNewNode])
 
+  // Defensive insurance: when interactive zoom changes width/height + zoom together,
+  // React Flow re-measures handle positions automatically. But if width/height happen
+  // not to change (e.g. floor clamp), force a re-measure so connection handles stay
+  // visually aligned with the zoomed wrapper edges.
+  const updateNodeInternals = useUpdateNodeInternals()
+  useEffect(() => {
+    // Only force re-measurement when zoom is non-identity. At zoom=1 React
+    // Flow's native auto-measure handles handle positions correctly — calling
+    // updateNodeInternals here would be an extra signal that didn't exist
+    // in the pre-feature-branch code, breaking strict identity.
+    if (zoom === 1) return
+    updateNodeInternals(id)
+  }, [id, zoom, updateNodeInternals])
+
+  // Drag state for the bottom-left zoom corner. Snapshot once at drag start.
+  // Resize is now handled by <NodeResizeControl> from @xyflow/react and uses
+  // its own internal drag state — we don't track it here.
+  const updateNodeWithData = useWorkflowStore((s) => s.updateNodeWithData)
+  const dragRef = useRef<{
+    mode: "zoom"
+    startX: number
+    startY: number
+    zoom0: number
+    logicalW: number
+    logicalH: number
+    handlePosition: "bottom-left" | "bottom-right"
+  } | null>(null)
+
   function handleMoreMenu(e: MouseEvent) {
     e.stopPropagation()
     window.dispatchEvent(new CustomEvent("open-node-context-menu", {
       detail: { nodeId: id, x: e.clientX, y: e.clientY },
     }))
   }
+
+  // -----------------------------------------------------------------------
+  // Zoom-handle (bottom-left) drag handlers
+  // -----------------------------------------------------------------------
+  const handleZoomDragStart = useCallback((e: ReactPointerEvent) => {
+    const node = useWorkflowStore.getState().nodes.find((n) => n.id === id)
+    // Prefer explicit width if set; fall back to React Flow's auto-measured
+    // size (populated by the resize observer once the node renders); finally
+    // fall back to minWidth. Matches XYResizer's snapshot behavior.
+    const measured = node?.measured as { width?: number; height?: number } | undefined
+    const w = node?.width ?? measured?.width ?? minWidth
+    const h = node?.height ?? measured?.height ?? effectiveMinHeight
+    const z = zoom
+    dragRef.current = {
+      mode: "zoom",
+      startX: e.clientX,
+      startY: e.clientY,
+      zoom0: z,
+      logicalW: Math.round(w / z),
+      logicalH: Math.round(h / z),
+      // Snapshot which corner the zoom handle is at so the drag-direction
+      // math stays consistent even if the user releases Alt mid-drag.
+      handlePosition: altPressed ? "bottom-right" : "bottom-left",
+    }
+  }, [id, zoom, minWidth, effectiveMinHeight, altPressed])
+
+  const handleZoomDragMove = useCallback((e: ReactPointerEvent) => {
+    const ds = dragRef.current
+    if (!ds || ds.mode !== "zoom") return
+    const zRaw = computeZoomFromDrag(
+      ds.zoom0,
+      { x: ds.startX, y: ds.startY },
+      { x: e.clientX, y: e.clientY },
+      ds.handlePosition,
+    )
+    const z = applyMagnet(zRaw, ds.zoom0)
+    const visual = computeVisualSize({ w: ds.logicalW, h: ds.logicalH }, z)
+    updateNodeWithData(id, { width: visual.w, height: visual.h }, { zoom: z })
+  }, [id, updateNodeWithData])
+
+  const handleZoomDragEnd = useCallback((_e: ReactPointerEvent) => {
+    const ds = dragRef.current
+    dragRef.current = null
+    if (!ds) return
+    const finalNode = useWorkflowStore.getState().nodes.find((n) => n.id === id)
+    if (!finalNode) return
+    const finalZoom = (finalNode.data as Record<string, unknown> | undefined)?.zoom
+    if (typeof finalZoom === "number" && finalZoom !== ds.zoom0) {
+      // Capture exactly one undo snapshot for the entire drag.
+      // Using updateNode (not updateNodeData) bypasses the EXECUTION_DATA_KEYS
+      // skip wrap; writing a new data reference triggers the undo subscription.
+      useWorkflowStore.getState().updateNode(id, {
+        data: { ...finalNode.data, zoom: finalZoom } as typeof finalNode.data,
+      })
+    }
+  }, [id])
+
+  // Note: 7 standard resize handles are now rendered via React Flow's
+  // <NodeResizeControl>, which encapsulates pointer math, viewport-zoom
+  // compensation, min/max clamping, aspect-ratio locking, and corner-anchored
+  // position adjustment. We no longer need any of that custom code here.
 
   return (
     <>
@@ -186,6 +297,25 @@ function BaseNodeComponent({
         leaveTimerRef.current = setTimeout(() => setIsHovered(false), 600)
       }}
     >
+      <div
+        className={cn(
+          "origin-top-left relative",
+          // At zoom=1, `display: contents` removes this wrapper from layout
+          // entirely — children participate in outerRef's flex column as if
+          // the wrapper didn't exist. DOM is byte-for-byte the pre-zoom tree,
+          // so nodes with media using `w-full h-full object-cover` (text-to-
+          // video, image generation) render exactly as before.
+          // At zoom!=1, the wrapper becomes a real flex column at logical
+          // dimensions with `transform: scale(zoom)` for visual sizing.
+          zoom !== 1 && "flex flex-col h-full",
+        )}
+        style={{
+          display: zoom !== 1 ? undefined : "contents",
+          width: zoom !== 1 ? (logicalW != null ? logicalW : "100%") : undefined,
+          height: zoom !== 1 ? (logicalH != null ? logicalH : "100%") : undefined,
+          transform: zoom !== 1 ? `scale(${zoom})` : undefined,
+        }}
+      >
       <NodeToolbar align="end" isVisible={isHovered} position={Position.Top} offset={4}>
         <div
           className="flex items-center gap-1"
@@ -381,16 +511,32 @@ function BaseNodeComponent({
         </div>
       ))}
 
-      {/* Resize — NodeResizer manages dimensions through React Flow state */}
-      {!isMobile && (
-        <NodeResizer
-          minWidth={minWidth}
-          minHeight={effectiveMinHeight}
-          keepAspectRatio={!!imageAspectRatio}
-          isVisible={isHovered || !!selected}
-          lineClassName="!border-0 !pointer-events-none"
-          handleClassName="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
-        />
+      </div>
+      {/* Resize controls (7 of 8 NodeResizeControl positions) + custom zoom
+          corner. Replaces <NodeResizer> from @xyflow/react verbatim, only
+          dropping the bottom-left corner so we can put our zoom gesture there.
+          Behavior of the 7 controls is therefore IDENTICAL to NodeResizer
+          (XYResizer math, viewport-zoom compensation, min/max clamp,
+          aspect-ratio lock, anchored corners). */}
+      {!isMobile && (isHovered || !!selected) && (
+        <>
+          {/* Hold Alt to swap: resize moves to bottom-left, zoom to bottom-right. */}
+          <NodeResizeControl
+            nodeId={id}
+            position={altPressed ? "bottom-left" : "bottom-right"}
+            minWidth={minWidth}
+            minHeight={effectiveMinHeight}
+            keepAspectRatio={!!imageAspectRatio}
+            className="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
+          />
+          <CustomHandle
+            visible
+            position={altPressed ? "bottom-right" : "bottom-left"}
+            onDragStart={handleZoomDragStart}
+            onDragMove={handleZoomDragMove}
+            onDragEnd={handleZoomDragEnd}
+          />
+        </>
       )}
     </div>
     </>

@@ -27,7 +27,8 @@ vi.mock("@xyflow/react", () => ({
   ]),
 }))
 
-import { useWorkflowStore } from "../use-workflow-store"
+import { useWorkflowStore, EXECUTION_DATA_KEYS } from "../use-workflow-store"
+import * as undoFlags from "../undo-flags"
 
 function resetStore() {
   useWorkflowStore.setState({
@@ -104,6 +105,75 @@ describe("useWorkflowStore", () => {
 
       const updated = useWorkflowStore.getState().nodes[0]
       expect((updated.data as Record<string, unknown>).text).toBe("Hello world")
+    })
+  })
+
+  describe("updateNodeWithData", () => {
+    beforeEach(() => {
+      useWorkflowStore.setState({
+        nodes: [
+          { id: "n1", type: "person", position: { x: 0, y: 0 }, data: { displayMode: "picks", zoom: 1 }, width: 200, height: 100 },
+        ],
+        edges: [],
+        isDirty: false,
+      } as unknown as Partial<ReturnType<typeof useWorkflowStore.getState>>)
+    })
+
+    it("merges node-level and data-level updates in one set()", () => {
+      const renderCounts: number[] = []
+      const unsub = useWorkflowStore.subscribe((s) => renderCounts.push(s.nodes[0].width!))
+
+      useWorkflowStore.getState().updateNodeWithData("n1", { width: 300, height: 150 }, { zoom: 1.5 })
+
+      const node = useWorkflowStore.getState().nodes[0]
+      expect(node.width).toBe(300)
+      expect(node.height).toBe(150)
+      expect(node.data.zoom).toBe(1.5)
+      expect(node.data.displayMode).toBe("picks") // existing data preserved
+      expect(renderCounts.length).toBe(1) // single notification, not two
+      unsub()
+    })
+
+    it("sets isDirty true so autosave runs", () => {
+      useWorkflowStore.getState().updateNodeWithData("n1", { width: 300 }, { zoom: 1.5 })
+      expect(useWorkflowStore.getState().isDirty).toBe(true)
+    })
+
+    it("calls setSkipUndoCapture(true) when all dataUpdates are in EXECUTION_DATA_KEYS", () => {
+      const skipSpy = vi.spyOn(undoFlags, "setSkipUndoCapture")
+      useWorkflowStore.getState().updateNodeWithData("n1", { width: 300 }, { zoom: 1.5 })
+      expect(skipSpy).toHaveBeenCalledWith(true)
+      expect(skipSpy).toHaveBeenCalledWith(false)
+      skipSpy.mockRestore()
+    })
+
+    it("does NOT call setSkipUndoCapture when dataUpdates contain a non-exec key", () => {
+      const skipSpy = vi.spyOn(undoFlags, "setSkipUndoCapture")
+      useWorkflowStore.getState().updateNodeWithData("n1", { width: 300 }, { displayMode: "prompt", zoom: 1.5 })
+      expect(skipSpy).not.toHaveBeenCalled()
+      skipSpy.mockRestore()
+    })
+
+    it("is a no-op for unknown nodeId", () => {
+      const before = useWorkflowStore.getState().nodes
+      useWorkflowStore.getState().updateNodeWithData("missing", { width: 999 }, { zoom: 999 })
+      expect(useWorkflowStore.getState().nodes).toEqual(before)
+      expect(useWorkflowStore.getState().isDirty).toBe(false) // don't dirty the workflow on a stale call
+    })
+
+    it("preserves data reference when dataUpdates is empty (resize-only path)", () => {
+      const before = useWorkflowStore.getState().nodes[0].data
+      useWorkflowStore.getState().updateNodeWithData("n1", { width: 300, height: 150 }, {})
+      const after = useWorkflowStore.getState().nodes[0].data
+      expect(after).toBe(before) // reference equality — undo system relies on this
+    })
+
+    it("does not notify subscribers for unknown nodeId", () => {
+      let notifications = 0
+      const unsub = useWorkflowStore.subscribe(() => { notifications++ })
+      useWorkflowStore.getState().updateNodeWithData("missing", { width: 999 }, { zoom: 999 })
+      expect(notifications).toBe(0)
+      unsub()
     })
   })
 
@@ -259,5 +329,11 @@ describe("useWorkflowStore", () => {
       useWorkflowStore.getState().markClean()
       expect(useWorkflowStore.getState().isDirty).toBe(false)
     })
+  })
+})
+
+describe("EXECUTION_DATA_KEYS", () => {
+  it("includes zoom so per-frame zoom drag writes skip undo capture", () => {
+    expect(EXECUTION_DATA_KEYS.has("zoom")).toBe(true)
   })
 })
