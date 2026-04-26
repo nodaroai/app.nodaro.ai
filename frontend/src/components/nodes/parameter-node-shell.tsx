@@ -44,12 +44,11 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   const data = (node?.data ?? {}) as Record<string, unknown>
   const displayMode: DisplayMode = (data.displayMode as DisplayMode) || "picks"
   const setDisplayMode = (mode: DisplayMode) => {
-    // Clear any explicit width/height that NodeResizer wrote into the node
-    // — picks / prompt / both have very different content sizes, and the
-    // user expects the node to fit the new mode's content automatically
-    // (not stay locked at a previously-dragged size). The next render
-    // will let ReactFlow auto-measure from the new content.
-    updateNode(id, { width: undefined, height: undefined })
+    // Clear any explicit height that NodeResizer wrote into the node — the
+    // three modes have very different content heights and the user expects
+    // the node to fit the new mode automatically. Width is preserved (user
+    // controls horizontal sizing; vertical re-flows to content).
+    updateNode(id, { height: undefined })
     updateNodeData(id, { displayMode: mode })
   }
 
