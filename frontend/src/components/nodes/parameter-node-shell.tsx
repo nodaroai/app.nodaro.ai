@@ -1,7 +1,7 @@
 "use client"
 
-import { useMemo, type ReactNode } from "react"
-import { Position, type NodeProps } from "@xyflow/react"
+import { useEffect, useMemo, type ReactNode } from "react"
+import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Eye, FileText, Layers as LayersIcon } from "lucide-react"
 import { getParameterPromptHint } from "@nodaro-shared/parameter-prompt-hint"
 import { BaseNode } from "./base-node"
@@ -44,6 +44,15 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   const displayMode: DisplayMode = (data.displayMode as DisplayMode) || "picks"
   const setDisplayMode = (mode: DisplayMode) => updateNodeData(id, { displayMode: mode })
 
+  // Tell ReactFlow to re-measure this node whenever the display mode changes.
+  // Switching between picks / prompt / both swaps content of very different
+  // heights — without this, the node's reported size lags one render and
+  // edges/handles can attach to stale positions.
+  const updateNodeInternals = useUpdateNodeInternals()
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [id, displayMode, updateNodeInternals])
+
   // Compute the would-be prompt injection so users can preview what the
   // node contributes downstream. Pass the graph context so camera-motion
   // composes start/end edges; other types ignore ctx.
@@ -82,25 +91,26 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
         }
       >
         <div className={cn(fluidWidth ? "px-3 py-3 flex flex-col gap-2 h-full" : "px-3 py-3 flex flex-col gap-2")}>
+          {/* Mode toggle (Picks / Prompt / Both) — at the TOP of the body
+              with a small margin below, so it never overlaps content. The
+              toggle row reserves its space at all times (opacity, not
+              display) — that way content placement doesn't shift when the
+              toggle fades in/out. Hidden by default; visible on hover OR
+              when the node is selected. */}
+          <div
+            className={cn(
+              "nodrag nopan flex justify-end mb-1 transition-opacity",
+              selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            )}
+          >
+            <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
+          </div>
           {(displayMode === "picks" || displayMode === "both") && children}
           {(displayMode === "prompt" || displayMode === "both") && (
             <PromptPreview text={promptText} />
           )}
         </div>
       </BaseNode>
-
-      {/* Mode toggle (Picks / Prompt / Both) — pinned to the OUTER wrapper
-          so it's never clipped by BaseNode's internal overflow/scroll, even
-          when the picks content is taller than the node body. Hidden by
-          default; visible on hover OR when selected. */}
-      <div
-        className={cn(
-          "nodrag nopan absolute top-[28px] right-2 z-20 transition-opacity",
-          selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-        )}
-      >
-        <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
-      </div>
 
       <HandleIcon icon={icon} color="indigo" top="20px" />
     </div>
