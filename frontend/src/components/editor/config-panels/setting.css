@@ -1347,3 +1347,197 @@
     repeating-linear-gradient(90deg, rgba(80, 60, 40, 0.6) 0 3%, transparent 3% 7%),
     linear-gradient(180deg, #2a1e10 0%, #0a0604 100%);
 }
+
+/* ============================================================================
+   ADDITIONS (audit pass)
+   ========================================================================== */
+
+/* Attic — sloped roof beam silhouette + warm dusty light */
+.setting-preview--attic .setting-preview__scene {
+  background: linear-gradient(180deg, #6a4a2a 0%, #8a6238 55%, #c89868 100%);
+}
+.setting-preview--attic .setting-preview__scene::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(20,10,4,0.55) 0%, rgba(20,10,4,0.55) 22%, transparent 22% 78%, rgba(20,10,4,0.55) 78% 100%);
+}
+.setting-preview--attic .setting-preview__scene::after {
+  content: "";
+  position: absolute;
+  inset: 38% 35% 40% 35%;
+  background: radial-gradient(ellipse at 50% 50%, rgba(255, 220, 150, 0.7) 0%, transparent 70%);
+}
+
+/* Balcony — railing silhouette over distant city skyline */
+.setting-preview--balcony .setting-preview__scene {
+  background: linear-gradient(180deg, #ffb088 0%, #8a5a78 50%, #2a1a3a 100%);
+}
+.setting-preview--balcony .setting-preview__scene::before {
+  content: "";
+  position: absolute;
+  bottom: 35%;
+  left: 0;
+  right: 0;
+  height: 18%;
+  background:
+    repeating-linear-gradient(90deg, #1a0a1a 0 8%, transparent 8% 18%, #1a0a1a 18% 24%, transparent 24% 36%);
+}
+.setting-preview--balcony .setting-preview__scene::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 24%;
+  background: linear-gradient(180deg, #4a3a2a 0%, #2a1810 100%);
+  box-shadow: inset 0 4px 0 rgba(0,0,0,0.4);
+}
+
+/* Basement — dim concrete walls + bare bulb glow */
+.setting-preview--basement .setting-preview__scene {
+  background: linear-gradient(180deg, #28282a 0%, #1a1a1c 55%, #0a0a0c 100%);
+}
+.setting-preview--basement .setting-preview__scene::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 22%, rgba(255, 220, 140, 0.55) 0%, transparent 38%),
+    repeating-linear-gradient(0deg, transparent 0 14%, rgba(0,0,0,0.25) 14% 15%);
+}
+.setting-preview--basement .setting-preview__scene::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 18%;
+  background: #1a1a1c;
+  box-shadow: inset 0 6px 0 rgba(0,0,0,0.5);
+}
+
+/* Conservatory — glass roof segments + bright plants */
+.setting-preview--conservatory .setting-preview__scene {
+  background: linear-gradient(180deg, #d4ecf8 0%, #a8d4c4 55%, #5a8a68 100%);
+}
+.setting-preview--conservatory .setting-preview__scene::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 55%;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,0.0) 0%, rgba(255,255,255,0.0) 14%, rgba(0,0,0,0.4) 14% 15%, rgba(255,255,255,0.0) 15% 33%, rgba(0,0,0,0.4) 33% 34%, rgba(255,255,255,0.0) 34% 52%, rgba(0,0,0,0.4) 52% 53%, rgba(255,255,255,0.0) 53% 71%, rgba(0,0,0,0.4) 71% 72%, rgba(255,255,255,0.0) 72% 90%, rgba(0,0,0,0.4) 90% 91%, rgba(255,255,255,0.0) 91% 100%);
+}
+.setting-preview--conservatory .setting-preview__scene::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: -5%;
+  right: -5%;
+  height: 36%;
+  background:
+    radial-gradient(circle at 18% 60%, #2c6a3a 0 12%, transparent 14%),
+    radial-gradient(circle at 52% 50%, #3a8a48 0 14%, transparent 16%),
+    radial-gradient(circle at 80% 65%, #2c6a3a 0 12%, transparent 14%),
+    linear-gradient(180deg, #6a8a5a 0%, #2a4a2a 100%);
+}
+
+/* Dorm Room — twin bed + poster wall + warm desk lamp */
+.setting-preview--dorm-room .setting-preview__scene {
+  background: linear-gradient(180deg, #c8a890 0%, #a07868 55%, #4a3828 100%);
+}
+.setting-preview--dorm-room .setting-preview__scene::before {
+  content: "";
+  position: absolute;
+  top: 22%;
+  left: 12%;
+  width: 26%;
+  height: 30%;
+  background: linear-gradient(135deg, #ff5a78 0%, #5a78ff 100%);
+  box-shadow: 30% 0 0 -2px #ffd040;
+}
+.setting-preview--dorm-room .setting-preview__scene::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30%;
+  background: #e8c8a8;
+  box-shadow: inset 0 6px 0 rgba(255,240,220,0.55);
+}
+
+/* Locker Room — rows of metal lockers with vertical seams */
+.setting-preview--locker-room .setting-preview__scene {
+  background: linear-gradient(180deg, #4a5868 0%, #38465a 55%, #1c2838 100%);
+}
+.setting-preview--locker-room .setting-preview__scene::before {
+  content: "";
+  position: absolute;
+  top: 18%;
+  left: 0;
+  right: 0;
+  height: 56%;
+  background:
+    repeating-linear-gradient(90deg, #5a6878 0 9%, #3a4858 9% 10%, #5a6878 10% 19%, rgba(0,0,0,0.4) 19% 20%);
+}
+.setting-preview--locker-room .setting-preview__scene::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 22%;
+  background: linear-gradient(180deg, #2a3848 0%, #0e1822 100%);
+}
+
+/* Music Studio — wedge foam panels on wall */
+.setting-preview--music-studio .setting-preview__scene {
+  background: linear-gradient(180deg, #2a2028 0%, #181018 100%);
+}
+.setting-preview--music-studio .setting-preview__scene::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-conic-gradient(from 0deg at 12% 30%, #38283a 0deg 90deg, #281828 90deg 180deg),
+    repeating-conic-gradient(from 0deg at 36% 30%, #38283a 0deg 90deg, #281828 90deg 180deg),
+    repeating-conic-gradient(from 0deg at 60% 30%, #38283a 0deg 90deg, #281828 90deg 180deg),
+    repeating-conic-gradient(from 0deg at 84% 30%, #38283a 0deg 90deg, #281828 90deg 180deg);
+  background-size: 24% 50%, 24% 50%, 24% 50%, 24% 50%;
+  background-repeat: no-repeat;
+  background-position: 0 0, 25% 0, 50% 0, 75% 0;
+}
+.setting-preview--music-studio .setting-preview__scene::after {
+  content: "";
+  position: absolute;
+  bottom: 12%;
+  left: 38%;
+  right: 38%;
+  height: 22%;
+  background: radial-gradient(ellipse at 50% 50%, #ff0073 0%, #5a0030 70%, transparent 100%);
+  border-radius: 50% / 30%;
+}
+
+/* Sauna — horizontal wooden slats + warm steamy haze */
+.setting-preview--sauna .setting-preview__scene {
+  background: linear-gradient(180deg, #d8a060 0%, #a06838 55%, #4a2818 100%);
+}
+.setting-preview--sauna .setting-preview__scene::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, rgba(20,10,4,0.45) 0 1px, transparent 1px 14%);
+}
+.setting-preview--sauna .setting-preview__scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 60%, rgba(255, 230, 200, 0.45) 0%, transparent 60%);
+}

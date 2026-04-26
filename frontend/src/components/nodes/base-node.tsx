@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useMobileCanvas } from "@/components/editor/mobile-canvas-context"
 
-interface HandleConfig {
+export interface HandleConfig {
   readonly id: string
   readonly type: "source" | "target"
   readonly position: Position

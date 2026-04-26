@@ -12,71 +12,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
+import { VEHICLE_ICON_FOR } from "@/lib/parameter-picker-icons-vehicles"
 
 interface VehiclePickerProps {
   readonly value: string
   readonly onValueChange: (vehicleId: string, vehicle: Vehicle) => void
   readonly className?: string
-}
-
-const VEHICLE_EMOJI: Record<string, string> = {
-  // classic
-  "muscle-car": "🏎️", "car-57-chevy": "🚗", "hot-rod": "🏎️", "vintage-roadster": "🚗",
-  "model-t": "🚗", "vw-beetle": "🚙", "checker-cab": "🚕", "woody-wagon": "🚙", lowrider: "🚗",
-  // everyday
-  sedan: "🚗", suv: "🚙", hatchback: "🚗", minivan: "🚐", "station-wagon": "🚙",
-  crossover: "🚙", "electric-car": "🚗", "hatchback-econobox": "🚗",
-  // performance
-  "sports-car": "🏎️", supercar: "🏎️", convertible: "🚗", "grand-tourer": "🏎️",
-  roadster: "🚗", "racing-car": "🏎️", "rally-car": "🚗", "drift-car": "🏎️",
-  // motorcycles
-  sportbike: "🏍️", cruiser: "🏍️", chopper: "🏍️", "dirt-bike": "🏍️",
-  scooter: "🛵", moped: "🛵", "cafe-racer": "🏍️",
-  // bicycles
-  "road-bike": "🚴", "mountain-bike": "🚵", bmx: "🚲", "cruiser-bike": "🚲",
-  "penny-farthing": "🚲", unicycle: "🎪", skateboard: "🛹", "kick-scooter": "🛴",
-  // trucks
-  "pickup-truck": "🛻", "semi-truck": "🚛", "dump-truck": "🚚", "tow-truck": "🚛",
-  "delivery-van": "🚐", "ice-cream-truck": "🍦", "food-truck": "🌮", "box-truck": "🚚",
-  // transit
-  "city-bus": "🚌", "school-bus": "🚌", "double-decker": "🚌", "coach-bus": "🚌",
-  train: "🚆", "steam-locomotive": "🚂", "bullet-train": "🚄", subway: "🚇",
-  tram: "🚋", stagecoach: "🐎", "horse-carriage": "🐎",
-  // aircraft
-  airliner: "✈️", biplane: "🛩️", "propeller-plane": "🛩️", helicopter: "🚁",
-  seaplane: "🛩️", "hot-air-balloon": "🎈", blimp: "🛩️", glider: "🛩️", drone: "🚁",
-  // watercraft
-  yacht: "🛥️", sailboat: "⛵", speedboat: "🚤", "cruise-ship": "🛳️",
-  "cargo-ship": "🚢", canoe: "🛶", kayak: "🛶", rowboat: "🛶", "jet-ski": "🚤",
-  submarine: "🚢", "pirate-ship": "🏴‍☠️",
-  // military
-  tank: "🪖", humvee: "🚙", "armored-personnel-carrier": "🪖",
-  "fighter-jet": "✈️", "stealth-bomber": "✈️", destroyer: "🚢", "aircraft-carrier": "🚢",
-  // construction
-  bulldozer: "🚜", excavator: "🚜", "crane-truck": "🏗️", "cement-mixer": "🚚",
-  forklift: "🚜", backhoe: "🚜", tractor: "🚜",
-  // sci-fi
-  spaceship: "🚀", starfighter: "🚀", hovercar: "🛸", mech: "🤖",
-  "flying-saucer": "🛸", "space-shuttle": "🚀", rocket: "🚀", hoverboard: "🛹",
-}
-
-const SUBCATEGORY_FALLBACK_EMOJI: Record<VehicleSubcategory, string> = {
-  "cars-classic": "🚗",
-  "cars-everyday": "🚗",
-  "cars-performance": "🏎️",
-  motorcycles: "🏍️",
-  bicycles: "🚲",
-  trucks: "🚚",
-  transit: "🚌",
-  aircraft: "✈️",
-  watercraft: "⛵",
-  military: "🪖",
-  construction: "🚜",
-  "sci-fi": "🚀",
-}
-
-function emojiFor(vehicle: Vehicle): string {
-  return VEHICLE_EMOJI[vehicle.id] ?? SUBCATEGORY_FALLBACK_EMOJI[vehicle.subcategory]
 }
 
 /**
@@ -165,7 +106,7 @@ export const VehiclePicker = memo(function VehiclePicker({
                     )}
                   >
                     <span className="text-2xl leading-none select-none" aria-hidden="true">
-                      {emojiFor(vehicle)}
+                      {VEHICLE_ICON_FOR(vehicle.id)}
                     </span>
                     <span
                       className={cn(

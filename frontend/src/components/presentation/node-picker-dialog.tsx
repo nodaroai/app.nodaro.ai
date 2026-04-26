@@ -14,7 +14,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Lock, LockOpen, ChevronDown, ChevronRight, Sparkles } from "lucide-react"
+import { Lock, LockOpen, ChevronDown, ChevronRight, Sparkles, Filter } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import {
   getInputNodes,
@@ -28,11 +28,115 @@ import type { ExposableField, ExposableOutput, PresentationItem } from "@nodaro-
 import { migrateToItems } from "@nodaro-shared/presentation-utils"
 import { RestrictPopover } from "./restrict-popover"
 import { DEFAULT_SYSTEM_MAX_FANOUT } from "./input-card"
+import { PickerRestrictDialog } from "./picker-restrict-dialog"
+import {
+  getParameterPickerMeta,
+  type ParameterPickerMeta,
+} from "@/lib/parameter-picker-registry"
 
 interface NodePickerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   section: "inputs" | "outputs"
+}
+
+/**
+ * Editor controls shown for picker-type parameter input nodes (Setting,
+ * Mood, Animal, Camera Motion, …) — lets the workflow author choose
+ * inline vs modal display, and whitelist a subset of catalog values.
+ * Persists into presentationSettings.cardMeta[nodeId].
+ */
+function PickerInputConfig({
+  nodeId,
+  meta,
+  presentationSettings,
+  updatePresentationSettings,
+}: {
+  nodeId: string
+  meta: ParameterPickerMeta
+  presentationSettings: PresentationSettings
+  updatePresentationSettings: (settings: Partial<PresentationSettings>) => void
+}) {
+  const [restrictOpen, setRestrictOpen] = useState(false)
+  const card = presentationSettings.cardMeta?.[nodeId]
+  const mode = card?.pickerMode ?? "inline"
+  const allowed = card?.pickerAllowedValues
+  const allowedCount = allowed?.length ?? 0
+  const total = meta.kind === "single" ? meta.entries.length : 0
+  const restricted = allowed && allowed.length > 0 && allowed.length < total
+  const restrictLabel = restricted
+    ? `Restrict (${allowedCount}/${total})`
+    : `Restrict (all)`
+
+  const updateCard = (patch: { pickerMode?: "inline" | "modal"; pickerAllowedValues?: string[] | undefined }) => {
+    const current = presentationSettings.cardMeta ?? {}
+    const next = { ...current, [nodeId]: { ...(current[nodeId] ?? {}), ...patch } }
+    updatePresentationSettings({ cardMeta: next })
+  }
+
+  return (
+    <div className="ml-7 mt-1 flex flex-wrap items-center gap-2">
+      <span className="text-[10px] text-muted-foreground">Display:</span>
+      <div className="flex gap-1">
+        <button
+          className={`text-[10px] px-2 py-0.5 rounded border ${mode === "inline" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
+          onClick={() => updateCard({ pickerMode: "inline" })}
+        >
+          Inline
+        </button>
+        <button
+          className={`text-[10px] px-2 py-0.5 rounded border ${mode === "modal" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
+          onClick={() => updateCard({ pickerMode: "modal" })}
+        >
+          Modal
+        </button>
+      </div>
+      {meta.kind === "single" && (
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setRestrictOpen(true)}
+            className="h-6 px-2 gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+          >
+            <Filter className="size-3" />
+            {restrictLabel}
+          </Button>
+          <PickerRestrictDialog
+            open={restrictOpen}
+            onOpenChange={setRestrictOpen}
+            meta={meta}
+            value={allowed}
+            onChange={(v) => updateCard({ pickerAllowedValues: v ? [...v] : undefined })}
+          />
+        </>
+      )}
+    </div>
+  )
+}
+
+/** Renders PickerInputConfig only if the node type has a registered picker. */
+function PickerInputConfigSlot({
+  nodeType,
+  nodeId,
+  presentationSettings,
+  updatePresentationSettings,
+}: {
+  nodeType: string | undefined
+  nodeId: string
+  presentationSettings: PresentationSettings
+  updatePresentationSettings: (settings: Partial<PresentationSettings>) => void
+}) {
+  const meta = getParameterPickerMeta(nodeType)
+  if (!meta) return null
+  return (
+    <PickerInputConfig
+      nodeId={nodeId}
+      meta={meta}
+      presentationSettings={presentationSettings}
+      updatePresentationSettings={updatePresentationSettings}
+    />
+  )
 }
 
 function OutputDisplayModeToggle({
@@ -302,6 +406,15 @@ function NodeRow({
 
       {section === "outputs" && isVisible && (
         <OutputDisplayModeToggle
+          nodeId={node.id}
+          presentationSettings={presentationSettings}
+          updatePresentationSettings={updatePresentationSettings}
+        />
+      )}
+
+      {section === "inputs" && isVisible && (
+        <PickerInputConfigSlot
+          nodeType={node.type}
           nodeId={node.id}
           presentationSettings={presentationSettings}
           updatePresentationSettings={updatePresentationSettings}

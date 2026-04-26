@@ -469,3 +469,207 @@
   --format-grain-opacity: 0;
   --format-vignette-opacity: 0.06;
 }
+
+/* ============================================================================
+   ADDITIONS (audit pass) — film stocks, modern cameras, mobile, vintage
+   ========================================================================== */
+
+/* ALEXA 65 — large-format Arri, ultra clean, deep dynamic range */
+.camera-format-preview--alexa-65 {
+  --format-bg: #0e1721;
+  --format-sky: linear-gradient(180deg, #517a8c 0%, #1f3a55 100%);
+  --format-ground: linear-gradient(180deg, #6c5e52 0%, #16202a 100%);
+  --format-subject-scale: 1.14;
+  --format-grain-opacity: 0.03;
+  --format-vignette-opacity: 0.06;
+}
+
+/* Blackmagic Pocket 6K — punchy mid-range cinema, slight green skew */
+.camera-format-preview--blackmagic-pocket-6k {
+  --format-bg: #101a18;
+  --format-sky: linear-gradient(180deg, #4a7e80 0%, #1f3838 100%);
+  --format-ground: linear-gradient(180deg, #5e6048 0%, #16221c 100%);
+  --format-image-filter: saturate(1.08) contrast(1.06);
+  --format-grain-opacity: 0.05;
+  --format-vignette-opacity: 0.1;
+}
+
+/* Canon R5 — clean modern mirrorless, warm skin tones */
+.camera-format-preview--canon-r5 {
+  --format-bg: #131a23;
+  --format-sky: linear-gradient(180deg, #5a8aa6 0%, #28456b 100%);
+  --format-ground: linear-gradient(180deg, #786258 0%, #1f2a36 100%);
+  --format-image-filter: saturate(1.05) contrast(1.02);
+  --format-subject-scale: 1.06;
+  --format-grain-opacity: 0.04;
+  --format-vignette-opacity: 0.1;
+}
+
+/* Daguerreotype — silvered mirror tonality, tarnished edges, super soft */
+.camera-format-preview--daguerreotype {
+  --format-bg: #2a2418;
+  --format-sky: linear-gradient(180deg, #d8d0b8 0%, #807058 100%);
+  --format-ground: linear-gradient(180deg, #8a7a60 0%, #2a2018 100%);
+  --format-image-filter: grayscale(0.85) sepia(0.15) contrast(0.85);
+  --format-image-transform: scale(1.02);
+  --format-grain-opacity: 0.18;
+  --format-grain-size: 1.5px;
+  --format-vignette-opacity: 0.55;
+  --format-damage-display: block;
+}
+
+/* Disposable Camera — overexposed flash, color shift, soft */
+.camera-format-preview--disposable-camera {
+  --format-bg: #221a16;
+  --format-sky: linear-gradient(180deg, #e0a48c 0%, #885a48 100%);
+  --format-ground: linear-gradient(180deg, #9a6850 0%, #2c1d18 100%);
+  --format-image-filter: saturate(1.18) contrast(0.96) brightness(1.1);
+  --format-grain-opacity: 0.32;
+  --format-grain-size: 2.5px;
+  --format-vignette-opacity: 0.42;
+}
+
+/* Drone Aerial — high vantage, hazy distance, wide DR */
+.camera-format-preview--drone-aerial {
+  --format-bg: #0a1928;
+  --format-sky: linear-gradient(180deg, #98c8d8 0%, #4a7898 100%);
+  --format-ground: linear-gradient(180deg, #5a7a6a 0%, #243848 100%);
+  --format-image-filter: saturate(0.98) contrast(0.94);
+  --format-image-transform: scale(0.94);
+  --format-grain-opacity: 0.04;
+  --format-vignette-opacity: 0.16;
+}
+
+/* Fuji Instax — square instant film, milky highlight, lifted shadows */
+.camera-format-preview--fuji-instax {
+  --format-bg: #ece4d4;
+  --format-frame-bg: #fbf6e8;
+  --format-sky: linear-gradient(180deg, #c8e0e0 0%, #98b8b8 100%);
+  --format-ground: linear-gradient(180deg, #c89878 0%, #604838 100%);
+  --format-image-filter: saturate(0.86) contrast(0.84) brightness(1.06);
+  --format-image-transform: scale(0.84);
+  --format-grain-opacity: 0.08;
+  --format-vignette-opacity: 0.18;
+  --format-letterbox-display: block;
+  --format-letterbox-height: 22%;
+}
+
+/* Fuji XT4 — Fujifilm aesthetic, classic chrome warmth */
+.camera-format-preview--fuji-xt4 {
+  --format-bg: #1a1814;
+  --format-sky: linear-gradient(180deg, #8aa8a8 0%, #466068 100%);
+  --format-ground: linear-gradient(180deg, #8a7458 0%, #2a201c 100%);
+  --format-image-filter: saturate(0.94) contrast(1.08) sepia(0.06);
+  --format-grain-opacity: 0.06;
+  --format-vignette-opacity: 0.12;
+}
+
+/* GoPro Action Cam — fisheye distortion, wide DR */
+.camera-format-preview--gopro-action-cam {
+  --format-bg: #0a121c;
+  --format-sky: linear-gradient(180deg, #5ca0c8 0%, #1f486a 100%);
+  --format-ground: linear-gradient(180deg, #6a6868 0%, #181c20 100%);
+  --format-image-filter: saturate(1.18) contrast(1.18);
+  --format-image-transform: scale(1.06);
+  --format-grain-opacity: 0.04;
+  --format-vignette-opacity: 0.42;
+  --format-subject-scale: 0.92;
+}
+
+/* Hasselblad Medium Format — deep tonality, exquisite skin, low grain */
+.camera-format-preview--hasselblad-medium-format {
+  --format-bg: #181a1c;
+  --format-sky: linear-gradient(180deg, #6a90a8 0%, #283e58 100%);
+  --format-ground: linear-gradient(180deg, #8a6e58 0%, #1a232c 100%);
+  --format-image-filter: saturate(0.98) contrast(1.04);
+  --format-subject-scale: 1.08;
+  --format-grain-opacity: 0.05;
+  --format-vignette-opacity: 0.18;
+}
+
+/* Leica M Rangefinder — classic German tonality, painterly contrast */
+.camera-format-preview--leica-m-rangefinder {
+  --format-bg: #111418;
+  --format-sky: linear-gradient(180deg, #587e98 0%, #243e5a 100%);
+  --format-ground: linear-gradient(180deg, #6a5a4a 0%, #1a2028 100%);
+  --format-image-filter: saturate(0.92) contrast(1.1);
+  --format-grain-opacity: 0.1;
+  --format-vignette-opacity: 0.24;
+}
+
+/* Mirrorless A7III — Sony color science, cool slight cyan skew */
+.camera-format-preview--mirrorless-a7iii {
+  --format-bg: #0e151e;
+  --format-sky: linear-gradient(180deg, #5a90b0 0%, #244868 100%);
+  --format-ground: linear-gradient(180deg, #6c7080 0%, #1a232c 100%);
+  --format-image-filter: saturate(1.0) contrast(1.02);
+  --format-subject-scale: 1.04;
+  --format-grain-opacity: 0.04;
+  --format-vignette-opacity: 0.08;
+}
+
+/* RED Komodo — punchy raw cinema, deep saturation */
+.camera-format-preview--red-komodo {
+  --format-bg: #160d12;
+  --format-sky: linear-gradient(180deg, #6a8aa6 0%, #1a3858 100%);
+  --format-ground: linear-gradient(180deg, #8a4838 0%, #1a0e0a 100%);
+  --format-image-filter: saturate(1.18) contrast(1.12);
+  --format-grain-opacity: 0.04;
+  --format-vignette-opacity: 0.12;
+}
+
+/* Sony Venice — high-end full-frame cinema, gentle highlight roll-off */
+.camera-format-preview--sony-venice {
+  --format-bg: #0d161f;
+  --format-sky: linear-gradient(180deg, #4f7894 0%, #233f5a 100%);
+  --format-ground: linear-gradient(180deg, #6a5e4e 0%, #161f2a 100%);
+  --format-image-filter: saturate(1.05) contrast(1.0);
+  --format-subject-scale: 1.08;
+  --format-grain-opacity: 0.04;
+  --format-vignette-opacity: 0.1;
+  --format-letterbox-display: block;
+  --format-letterbox-height: 12%;
+}
+
+/* Tintype Wet Plate — silver/iron-toned, severe contrast, hand-poured edge */
+.camera-format-preview--tintype-wet-plate {
+  --format-bg: #1a1814;
+  --format-sky: linear-gradient(180deg, #aaa098 0%, #4a4a48 100%);
+  --format-ground: linear-gradient(180deg, #5a4a40 0%, #18120c 100%);
+  --format-image-filter: grayscale(0.88) sepia(0.18) contrast(1.18);
+  --format-grain-opacity: 0.22;
+  --format-vignette-opacity: 0.6;
+  --format-damage-display: block;
+}
+
+/* Toy Camera Holga — heavy vignette, light leaks, soft, super saturated */
+.camera-format-preview--toy-camera-holga {
+  --format-bg: #161020;
+  --format-sky: linear-gradient(180deg, #98a8c8 0%, #284060 100%);
+  --format-ground: linear-gradient(180deg, #c8704a 0%, #2a1a14 100%);
+  --format-image-filter: saturate(1.42) contrast(1.18) blur(0.2px);
+  --format-grain-opacity: 0.18;
+  --format-vignette-opacity: 0.65;
+  --format-damage-display: block;
+}
+
+/* Voigtlander — vintage prime, characterful with gentle softness */
+.camera-format-preview--voigtlander {
+  --format-bg: #16161c;
+  --format-sky: linear-gradient(180deg, #6a8090 0%, #2a3a50 100%);
+  --format-ground: linear-gradient(180deg, #6a584a 0%, #1a1a20 100%);
+  --format-image-filter: saturate(0.92) contrast(0.98) blur(0.15px);
+  --format-grain-opacity: 0.12;
+  --format-vignette-opacity: 0.36;
+}
+
+/* Webcam FaceTime — low-res grainy, soft auto-WB, narrow DR */
+.camera-format-preview--webcam-facetime {
+  --format-bg: #0c1018;
+  --format-sky: linear-gradient(180deg, #708898 0%, #38485a 100%);
+  --format-ground: linear-gradient(180deg, #6a6058 0%, #1a1f28 100%);
+  --format-image-filter: saturate(0.84) contrast(0.86) blur(0.4px);
+  --format-grain-opacity: 0.18;
+  --format-grain-size: 4px;
+  --format-vignette-opacity: 0.18;
+}

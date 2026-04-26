@@ -92,6 +92,14 @@ const SWATCHES: Record<string, SwatchStyle> = {
   plasma: { background: "radial-gradient(circle at 50% 50%, #ffffff 0%, #e14bff 25%, #5b0ea8 70%, #1a0430 100%)" },
   "crystal-shard": { background: "conic-gradient(from 90deg at 50% 50%, #a0e8ff, #ffc0ef, #d4ffec, #9cc9ff, #a0e8ff)" },
   "obsidian-glass": { background: "linear-gradient(135deg, #2a2a33 0%, #070709 100%)" },
+  "carbon-fiber": { background: "repeating-linear-gradient(45deg, #1c1c1f 0 4px, #2a2a2f 4px 8px), repeating-linear-gradient(-45deg, #1c1c1f 0 4px, #2a2a2f 4px 8px)" },
+  "holographic-film": { background: "conic-gradient(from 30deg at 50% 50%, #ffd56b, #ff6fd8, #b18bff, #6affc4, #ffd56b)", boxShadow: "inset 0 0 18px rgba(255,255,255,0.25)" },
+  iridescent: { background: "linear-gradient(135deg, #ffd6f5 0%, #d6c2ff 25%, #b8e8ff 50%, #c2ffd6 75%, #fff7c2 100%)" },
+  mesh: { background: "repeating-linear-gradient(0deg, #4a4a52 0 1px, transparent 1px 6px), repeating-linear-gradient(90deg, #4a4a52 0 1px, transparent 1px 6px), #1a1a1d" },
+  "mother-of-pearl": { background: "conic-gradient(from 60deg at 50% 50%, #fff5fb, #e0d6ff, #d6f0ff, #fff0c8, #ffe0e8, #fff5fb)", boxShadow: "inset 0 0 14px rgba(255,255,255,0.35)" },
+  "patent-leather": { background: "linear-gradient(135deg, #1a1a1c 0%, #3a3a3e 30%, #0a0a0c 70%, #2a2a2e 100%)", boxShadow: "inset 0 6px 14px rgba(255,255,255,0.18)" },
+  suede: { background: "radial-gradient(ellipse at 35% 30%, #b08560 0%, #6e4a2e 100%)" },
+  terrazzo: { background: "radial-gradient(circle at 20% 30%, #6b9b8a 0 6px, transparent 7px), radial-gradient(circle at 70% 60%, #c97a4a 0 5px, transparent 6px), radial-gradient(circle at 45% 80%, #4a6b8a 0 4px, transparent 5px), radial-gradient(circle at 85% 25%, #d4c98a 0 5px, transparent 6px), #f0ebe1" },
 }
 
 const FALLBACK: SwatchStyle = {
