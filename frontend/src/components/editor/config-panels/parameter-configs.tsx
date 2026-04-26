@@ -93,7 +93,7 @@ import { getLensPromptHint } from "@nodaro-shared/lens"
 import { getCameraFormatPromptHint } from "@nodaro-shared/camera-format"
 import { buildLightingHints } from "@nodaro-shared/lighting"
 import { getColorLookPromptHint } from "@nodaro-shared/color-look"
-import { getAtmospherePromptHint } from "@nodaro-shared/atmosphere"
+import { buildAtmosphereHints } from "@nodaro-shared/atmosphere"
 import { getStylePromptHint } from "@nodaro-shared/style"
 import { getSettingPromptHint } from "@nodaro-shared/setting"
 import { buildPersonHints } from "@nodaro-shared/person"
@@ -114,7 +114,7 @@ import { getEraPromptHint } from "@nodaro-shared/era"
 import { buildExposureHints } from "@nodaro-shared/exposure-settings"
 import { getRenderQualityPromptHint } from "@nodaro-shared/render-quality"
 import { getCompositionEffectPromptHint } from "@nodaro-shared/composition-effects"
-import { getPostProcessEffectPromptHint } from "@nodaro-shared/post-process-effects"
+import { buildPostProcessHints } from "@nodaro-shared/post-process-effects"
 import { useLocaleDir } from "@/lib/locale-store"
 import { LocalePicker } from "@/components/editor/locale-picker"
 import type { ConfigProps } from "./types"
@@ -461,11 +461,12 @@ export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getAtmospherePromptHint(data.atmosphere)]} />
-      <Label>Atmosphere</Label>
+      <PromptInjectionPreview hints={buildAtmosphereHints(data.atmosphere)} />
+      <Label>Atmosphere (pick up to 2)</Label>
       <AtmospherePicker
-        value={data.atmosphere || "clear"}
-        onValueChange={(v) => onUpdate({ atmosphere: v })}
+        value={data.atmosphere ?? "clear"}
+        onValueChange={(v) => onUpdate({ atmosphere: v ?? "clear" })}
+        maxSelected={2}
       />
     </div>
   )
@@ -1001,11 +1002,12 @@ export function PostProcessEffectsConfig({ data, onUpdate }: ConfigProps<PostPro
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getPostProcessEffectPromptHint(data.postProcess)]} />
-      <Label>Post-Process Effect</Label>
+      <PromptInjectionPreview hints={buildPostProcessHints(data.postProcess)} />
+      <Label>Post-Process Effect (pick up to 2)</Label>
       <PostProcessEffectsPicker
-        value={data.postProcess || "vignette-soft"}
-        onValueChange={(v) => onUpdate({ postProcess: v })}
+        value={data.postProcess ?? "vignette-soft"}
+        onValueChange={(v) => onUpdate({ postProcess: v ?? "vignette-soft" })}
+        maxSelected={2}
       />
     </div>
   )

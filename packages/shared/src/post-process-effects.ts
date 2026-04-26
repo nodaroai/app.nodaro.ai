@@ -65,4 +65,26 @@ export function getPostProcessEffectPromptHint(id: string | undefined | null): s
   return getPostProcessEffect(id)?.promptHint ?? ""
 }
 
+/**
+ * Multi-pick: 1-2 post-process effect ids → composite grading clause.
+ * Common pairs: vignette + film-grain, halation + bloom, dodge-burn +
+ * chromatic-aberration. Each entry already describes a complete grading
+ * pass, so we emit independently and let the comma-join compose them.
+ */
+export function buildPostProcessHints(value: unknown): string[] {
+  const ids: string[] = []
+  if (typeof value === "string" && value) ids.push(value)
+  else if (Array.isArray(value)) {
+    for (const v of value) {
+      if (typeof v === "string" && v && !ids.includes(v)) ids.push(v)
+    }
+  }
+  const out: string[] = []
+  for (const id of ids) {
+    const hint = getPostProcessEffectPromptHint(id)
+    if (hint) out.push(hint)
+  }
+  return out
+}
+
 export const POST_PROCESS_EFFECT_IDS: ReadonlyArray<string> = POST_PROCESS_EFFECTS.map((p) => p.id)

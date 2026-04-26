@@ -69,4 +69,26 @@ export function getAtmospherePromptHint(id: string | undefined | null): string {
   return getAtmosphere(id)?.promptHint ?? ""
 }
 
+/**
+ * Multi-pick: 1-2 atmosphere ids → composite atmospheric clause. Single →
+ * entry's own promptHint. Two → emit independently and join — atmospheres
+ * are particle-effect descriptions that compose naturally
+ * ("fog drifting in soft cool clouds, with golden god-rays cutting through").
+ */
+export function buildAtmosphereHints(value: unknown): string[] {
+  const ids: string[] = []
+  if (typeof value === "string" && value) ids.push(value)
+  else if (Array.isArray(value)) {
+    for (const v of value) {
+      if (typeof v === "string" && v && !ids.includes(v)) ids.push(v)
+    }
+  }
+  const out: string[] = []
+  for (const id of ids) {
+    const hint = getAtmospherePromptHint(id)
+    if (hint) out.push(hint)
+  }
+  return out
+}
+
 export const ATMOSPHERE_IDS: ReadonlyArray<string> = ATMOSPHERES.map((a) => a.id)

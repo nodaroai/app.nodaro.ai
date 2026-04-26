@@ -22,7 +22,7 @@ import { buildLightingHints } from "./lighting.js"
 import { getLensPromptHint } from "./lens.js"
 import { getCameraFormatPromptHint } from "./camera-format.js"
 import { getColorLookPromptHint } from "./color-look.js"
-import { getAtmospherePromptHint } from "./atmosphere.js"
+import { buildAtmosphereHints } from "./atmosphere.js"
 import { getStylePromptHint } from "./style.js"
 import { getSettingPromptHint } from "./setting.js"
 import { buildPersonHints } from "./person.js"
@@ -44,7 +44,7 @@ import { getEraPromptHint } from "./era.js"
 import { buildExposureHints } from "./exposure-settings.js"
 import { getRenderQualityPromptHint } from "./render-quality.js"
 import { getCompositionEffectPromptHint } from "./composition-effects.js"
-import { getPostProcessEffectPromptHint } from "./post-process-effects.js"
+import { buildPostProcessHints } from "./post-process-effects.js"
 
 export interface HintNodeLike {
   readonly id: string
@@ -112,7 +112,7 @@ export function getParameterPromptHint(
     case "color-look":
       return getColorLookPromptHint(asStr(data.colorLook))
     case "atmosphere":
-      return getAtmospherePromptHint(asStr(data.atmosphere))
+      return buildAtmosphereHints(data.atmosphere).join(", ")
     case "style":
       return getStylePromptHint(asStr(data.style))
     case "setting":
@@ -160,7 +160,7 @@ export function getParameterPromptHint(
     case "composition-effects":
       return getCompositionEffectPromptHint(asStr(data.compositionEffect))
     case "post-process-effects":
-      return getPostProcessEffectPromptHint(asStr(data.postProcess))
+      return buildPostProcessHints(data.postProcess).join(", ")
     case "tone":
       return asStr(data.tone).trim()
     case "text-prompt":
