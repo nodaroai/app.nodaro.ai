@@ -39,6 +39,16 @@ const map: LocaleCatalogMap = {
   "illuminated": { label: "彩色写本", description: "金箔とカリグラフィー" },
   "pixar-3d": { label: "Pixar 3D", description: "磨かれたキャラクター・アニメーションCG" },
   "caricature": { label: "カリカチュア", description: "誇張された様式化ポートレート" },
+  "fresco": { label: "フレスコ画", description: "漆喰の上に描くルネサンス様式の天井画風" },
+  "mosaic": { label: "モザイク", description: "小さなタイルを敷き詰めたビザンチン風モザイク" },
+  "woodcut": { label: "木版画", description: "デューラー時代の大胆なコントラストの凸版印刷" },
+  "etching": { label: "エッチング", description: "細かいクロスハッチングのレンブラント風凹版画" },
+  "lithograph": { label: "リトグラフ", description: "石版印刷の柔らかな階調、トゥールーズ＝ロートレック風" },
+  "charcoal": { label: "木炭画", description: "柔らかな黒と灰のトーン習作" },
+  "pastel": { label: "パステル", description: "柔らかなチョーク状のドライメディア" },
+  "acrylic-paint": { label: "アクリル絵具", description: "速乾性の不透明メディア、シャープなエッジ" },
+  "mixed-media": { label: "ミクストメディア", description: "複数の素材を組み合わせた不均質な質感" },
+  "manga": { label: "漫画", description: "インクで描かれた白黒のコマ漫画、スクリーントーン" },
 }
 
 export default map

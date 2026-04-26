@@ -32,6 +32,11 @@ const map: LocaleCatalogMap = {
   "vignette-dark": { label: "Dunkle Vignette", description: "Schwere dunkle Vignettenumrandung" },
   "mirror-floor": { label: "Spiegelboden", description: "Reflektierende verspiegelte Oberfläche" },
   "polished-floor": { label: "Polierter Boden", description: "Glänzender polierter Bodenreflex" },
+  "chroma-green": { label: "Chroma-Grün", description: "Flaches gesättigtes Greenscreen zum Keying" },
+  "chroma-blue": { label: "Chroma-Blau", description: "Flaches gesättigtes Bluescreen" },
+  "paper-roll-seamless": { label: "Papierrolle Hohlkehle", description: "Generische neutrale Pastell-Papierrolle" },
+  "tile-wall": { label: "Fliesenwand", description: "Quadratische Fliesenwand für Bad/Küche" },
+  "marble-wall": { label: "Marmorwand", description: "Luxuriöse marmorierte Wand mit Adern" },
 }
 
 export default map

@@ -60,6 +60,13 @@ const map: LocaleCatalogMap = {
   "three-quarter-back": { label: "Trois-quarts dos", description: "Décalé par rapport à l'arrière" },
   "behind": { label: "Par derrière", description: "Vue arrière directe" },
   "side-back-angle": { label: "Angle côté-arrière", description: "Vue 3/4 par-dessus une épaule" },
+  "golden-spiral": { label: "Spirale dorée", description: "Composition sur la spirale du nombre d'or" },
+  "frame-within-frame": { label: "Cadre dans le cadre", description: "Sujet encadré par un élément architectural intérieur" },
+  "s-curve": { label: "Courbe en S", description: "Flux diagonal sinueux guidant le regard" },
+  "diagonal-composition": { label: "Diagonale", description: "Forte ligne diagonale traversant le cadre" },
+  "triangular-composition": { label: "Triangulaire", description: "Disposition triangulaire à trois points" },
+  "symmetrical-mirror": { label: "Symétrique / Miroir", description: "Symétrie gauche-droite parfaite" },
+  "vignette-composition": { label: "Vignettage", description: "Fort assombrissement périphérique focalisant le centre" },
 }
 
 export default map

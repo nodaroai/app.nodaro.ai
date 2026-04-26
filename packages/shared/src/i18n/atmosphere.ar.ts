@@ -23,6 +23,15 @@ const map: LocaleCatalogMap = {
   "pollen-light": { label: "حبوب لقاح في الضوء", description: "جسيمات دافئة في شعاع شمس" },
   "water-droplets": { label: "قطرات ماء", description: "قطرات تتشبث بالجلد أو السطح" },
   "falling-ash": { label: "رماد متساقط", description: "رماد رمادي ناعم ينجرف في الهواء" },
+
+  "fireflies": { label: "يراعات", description: "يراعات منجرفة بومضات حيوية، سحر ليلة صيفية" },
+  "incense-smoke": { label: "دخان بخور", description: "دخان بخور كثيف يتصاعد ببطء" },
+  "cigarette-smoke": { label: "دخان سيجارة", description: "دخان سيجارة مزفور يلتف صعودا" },
+  "candle-glow": { label: "توهج شموع", description: "ضوء لهب شمعة دافئ بهالة" },
+  "glitter-sparkle": { label: "بريق / تلألؤ", description: "جسيمات لامعة في الهواء، أجواء حفلة" },
+  "starfield": { label: "حقل نجوم", description: "سماء ليلية مرئية بالنجوم، خلفية كونية" },
+  "dandelion-seeds": { label: "بذور الهندباء", description: "زغب الهندباء المنجرف، نسيم صيفي" },
+  "pollen-drift": { label: "انجراف حبوب لقاح", description: "حبوب لقاح صفراء ذهبية دقيقة في ضوء الساعة الذهبية" },
 }
 
 export default map

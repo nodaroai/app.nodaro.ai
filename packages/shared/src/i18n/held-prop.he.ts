@@ -60,6 +60,14 @@ const map: LocaleCatalogMap = {
   "pointer-stick": { label: "מקל מצביע", description: "מקל מצביע טלסקופי" },
   "gavel": { label: "פטיש שופט", description: "פטיש שופט מעץ" },
   "wine-bottle": { label: "בקבוק יין", description: "בקבוק מלא עם חותם foil" },
+  "parasol": { label: "שמשייה", description: "שמשייה דקורטיבית מגנה מהשמש" },
+  "locket": { label: "תליון מדליון", description: "תליון מדליון וינטג' פתוח באצבעות" },
+  "lighter": { label: "מצית", description: "מצית כרום עם אגודל על הלהבה" },
+  "lantern": { label: "פנס יד", description: "פנס יד וינטג' עם זוהר ענבר חמים" },
+  "flashlight": { label: "פנס", description: "אלומת פנס מודרני, חקירה / מסתורין" },
+  "compass": { label: "מצפן", description: "מצפן ימי מוחזק ביד, חקירה" },
+  "bow-and-arrow": { label: "קשת וחץ", description: "קשת קשתות דרוכה עם חץ על המיתר" },
+  "shield": { label: "מגן", description: "מגן מוחזק ביד, ימי הביניים / פנטזיה" },
 }
 
 export default map

@@ -139,6 +139,13 @@ const map: LocaleCatalogMap = {
   "griffin": { label: "Grifo", description: "Grifo híbrido com cabeça, asas e patas dianteiras com garras de águia e corpo traseiro musculoso de leão" },
   "pegasus": { label: "Pégaso", description: "Cavalo alado branco puro com asas emplumadas, crina esvoaçante e presença de outro mundo" },
   "kraken": { label: "Kraken", description: "Besta marinha colossal kraken com cabeça enorme, olhos brilhantes e enormes tentáculos com ventosas se contorcendo das profundezas" },
+
+  // Additional animals
+  "capybara": { label: "Capivara", description: "Roedor sul-americano grande e tranquilo" },
+  "sloth": { label: "Bicho-preguiça", description: "Mamífero arborícola lento com sorriso gentil" },
+  "red-panda": { label: "Panda-vermelho", description: "Pequeno comedor de bambu castanho-avermelhado, com rosto de raposa" },
+  "raven": { label: "Corvo", description: "Corvo preto brilhante com olhar inteligente" },
+  "axolotl": { label: "Axolote", description: "Salamandra aquática rosa com guelras emplumadas" },
 }
 
 export default map

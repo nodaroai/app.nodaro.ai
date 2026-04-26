@@ -23,6 +23,14 @@ const map: LocaleCatalogMap = {
   "pollen-light": { label: "Pollen dans la lumière", description: "Particules chaudes dans un rayon de soleil" },
   "water-droplets": { label: "Gouttelettes d'eau", description: "Gouttes accrochées à la peau ou à une surface" },
   "falling-ash": { label: "Cendres tombantes", description: "Cendres grises fines dérivant dans l'air" },
+  "fireflies": { label: "Lucioles", description: "Spécules bioluminescentes dérivantes, magie de nuit d'été" },
+  "incense-smoke": { label: "Fumée d'encens", description: "Fumée d'encens épaisse montant lentement" },
+  "cigarette-smoke": { label: "Fumée de cigarette", description: "Fumée de cigarette expirée s'enroulant vers le haut" },
+  "candle-glow": { label: "Lueur de bougie", description: "Source de flamme de bougie chaude avec halo" },
+  "glitter-sparkle": { label: "Paillettes / Étincelles", description: "Particules scintillantes dans l'air, contexte festif" },
+  "starfield": { label: "Champ d'étoiles", description: "Ciel nocturne visible avec étoiles, toile de fond cosmique" },
+  "dandelion-seeds": { label: "Graines de pissenlit", description: "Aigrette de pissenlit dérivante, brise estivale" },
+  "pollen-drift": { label: "Pollen flottant", description: "Pollen fin jaune-doré dans la lumière de l'heure dorée" },
 }
 
 export default map

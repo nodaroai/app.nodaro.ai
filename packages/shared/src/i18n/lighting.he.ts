@@ -71,6 +71,12 @@ const map: LocaleCatalogMap = {
   "temp-5600k": { label: "5600K אור יום", description: "שמש צהריים מאוזנת לאור יום" },
   "temp-6500k": { label: "6500K מעונן", description: "גוון כחול מעט קר" },
   "temp-9000k": { label: "9000K צל", description: "צל כחול קר במובהק" },
+  "butterfly": { label: "Butterfly", description: "אור מלמעלה מטיל צל פרפר מתחת לאף" },
+  "loop": { label: "Loop", description: "מעט מהצד ומלמעלה מטיל לולאה קטנה על הלחי" },
+  "broad": { label: "Broad", description: "הצד המואר פונה למצלמה, מראה רחב יותר של הפנים" },
+  "short": { label: "Short", description: "הצד המואר פונה הרחק מהמצלמה, מצמצם" },
+  "hatchet": { label: "Hatchet", description: "Skim עליון, צל עמוק בצד הנגדי" },
+  "clamshell": { label: "Clamshell", description: "מלמעלה + רפלקטור מלמטה, ביוטי כריך" },
 }
 
 export default map

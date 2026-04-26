@@ -59,6 +59,14 @@ const map: LocaleCatalogMap = {
   "three-quarter-back": { label: "ثلاثة أرباع خلفي", description: "خارج المحور من الخلف" },
   "behind": { label: "خلف", description: "منظر خلفي مباشر" },
   "side-back-angle": { label: "زاوية جانبية-خلفية", description: "ثلاثة أرباع من خلف كتف واحد" },
+
+  "golden-spiral": { label: "اللولب الذهبي", description: "تأليف على لولب نسبة Fibonacci" },
+  "frame-within-frame": { label: "إطار داخل إطار", description: "موضوع مؤطر بعنصر معماري داخلي" },
+  "s-curve": { label: "منحنى S", description: "تدفق قطري متعرج يوجه العين" },
+  "diagonal-composition": { label: "قطري", description: "خط قطري قوي يقطع الإطار" },
+  "triangular-composition": { label: "ثلاثي", description: "ترتيب ثلاثي النقاط" },
+  "symmetrical-mirror": { label: "متماثل / مرآة", description: "تماثل دقيق يمين-يسار" },
+  "vignette-composition": { label: "تظليل", description: "تعتيم محيطي ثقيل يركز على المركز" },
 }
 
 export default map

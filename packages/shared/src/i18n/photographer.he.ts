@@ -59,6 +59,15 @@ const map: LocaleCatalogMap = {
   "peter-gric": { description: "נוף סוריאליסטי אדריכלי" },
   "ingrid-baars": { description: "קולאז' פסיפס אופנה פיסולי" },
   "guido-van-helten": { description: "פורטרטיקה מונומנטלית של ציורי קיר" },
+  "mapplethorpe": { description: "פורטרט אולפן שחור-לבן, עירומים קלאסיים, פרחים" },
+  "sherman": { description: "פורטרט עצמי קונספטואלי, מחקרי דמות" },
+  "crewdson": { description: "פרברים קולנועיים, אווירת אימה" },
+  "lachapelle": { description: "סלבריטאי סוריאליסטי / קמפ רווי צבע" },
+  "klein": { description: "קצה אופנה גבוהה, תאורה דרמטית מוצלת" },
+  "lindbergh": { description: "אופנה מינימליסטית בשחור-לבן, יופי גולמי" },
+  "tillmans": { description: "candid עכשווי, אינטימיות קווירית" },
+  "teller": { description: "פלאש קז'ואל באופנה, אנטי-זוהר" },
+  "penn": { description: "פורטרטיקה אולפן של אמצע המאה, אופנה וטבע דומם" },
 }
 
 export default map

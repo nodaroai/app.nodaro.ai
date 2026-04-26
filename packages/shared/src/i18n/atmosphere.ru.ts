@@ -23,6 +23,14 @@ const map: LocaleCatalogMap = {
   "pollen-light": { label: "Пыльца в свете", description: "Тёплые частицы в солнечном луче" },
   "water-droplets": { label: "Капли воды", description: "Капли на коже или поверхности" },
   "falling-ash": { label: "Падающий пепел", description: "Тонкий серый пепел, дрейфующий в воздухе" },
+  "fireflies": { label: "Светлячки", description: "Дрейфующие биолюминесцентные точки, магия летней ночи" },
+  "incense-smoke": { label: "Дым благовоний", description: "Медленно поднимающийся густой дым благовоний" },
+  "cigarette-smoke": { label: "Сигаретный дым", description: "Выдыхаемый сигаретный дым, завивающийся вверх" },
+  "candle-glow": { label: "Свечение свечи", description: "Тёплое пламя свечи как источник света с ореолом" },
+  "glitter-sparkle": { label: "Блёстки / Искры", description: "Искрящиеся частицы в воздухе, праздничный контекст" },
+  "starfield": { label: "Звёздное поле", description: "Видимое ночное небо со звёздами, космический фон" },
+  "dandelion-seeds": { label: "Семена одуванчика", description: "Дрейфующий пух одуванчика, летний бриз" },
+  "pollen-drift": { label: "Пыльцевая дымка", description: "Тонкая жёлто-золотая пыльца в свете золотого часа" },
 }
 
 export default map

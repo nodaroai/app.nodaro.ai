@@ -64,6 +64,13 @@ const map: LocaleCatalogMap = {
   "three-quarter-back": { label: "Три четверти сзади", description: "Не по оси сзади" },
   "behind": { label: "Сзади", description: "Прямой вид сзади" },
   "side-back-angle": { label: "Угол сзади-сбоку", description: "Три четверти из-за одного плеча" },
+  "golden-spiral": { label: "Золотая спираль", description: "Композиция по спирали Фибоначчи" },
+  "frame-within-frame": { label: "Кадр в кадре", description: "Объект обрамлён внутренним архитектурным элементом" },
+  "s-curve": { label: "S-образная кривая", description: "Извилистый диагональный поток, ведущий взгляд" },
+  "diagonal-composition": { label: "Диагональная", description: "Сильная диагональ, рассекающая кадр" },
+  "triangular-composition": { label: "Треугольная", description: "Трёхточечная треугольная компоновка" },
+  "symmetrical-mirror": { label: "Симметрия / Зеркало", description: "Точная лево-правая симметрия" },
+  "vignette-composition": { label: "Виньетка", description: "Сильное затемнение по краям, фокус в центре" },
 }
 
 export default map

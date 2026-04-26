@@ -60,6 +60,14 @@ const map: LocaleCatalogMap = {
   "haunted-mansion": { label: "Manoir hanté", description: "Manoir gothique en décrépitude" },
   "dreamscape": { label: "Paysage onirique", description: "Îles flottantes surréalistes" },
   "wasteland": { label: "Friche post-apocalyptique", description: "Friche rouillée et nuageuse" },
+  "balcony": { label: "Balcon", description: "Balcon d'appartement / hôtel, vue urbaine, intime" },
+  "attic": { label: "Grenier", description: "Grenier poussiéreux à poutres en bois, toit incliné" },
+  "basement": { label: "Sous-sol", description: "Sous-sol en béton, tuyaux apparents, ambiance industrielle tamisée" },
+  "sauna": { label: "Sauna", description: "Sauna lambrissé de bois, vapeur, chaleur intime" },
+  "dorm-room": { label: "Chambre universitaire", description: "Chambre étudiante, lit simple, posters, guirlandes lumineuses" },
+  "locker-room": { label: "Vestiaire", description: "Vestiaire de gym/sport, carrelage, bancs, miroirs" },
+  "music-studio": { label: "Studio d'enregistrement", description: "Studio d'enregistrement, microphones, mousse, console de mixage" },
+  "conservatory": { label: "Jardin d'hiver", description: "Serre aux parois de verre, plantes tropicales, lumière filtrée" },
 }
 
 export default map

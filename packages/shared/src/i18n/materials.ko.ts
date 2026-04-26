@@ -72,6 +72,16 @@ const map: LocaleCatalogMap = {
   "plasma": { label: "플라즈마", description: "빛나는 전기 플라즈마입니다" },
   "crystal-shard": { label: "크리스털 샤드", description: "산산조각난 빛나는 크리스털입니다" },
   "obsidian-glass": { label: "옵시디언 글라스", description: "어두운 화산 유리입니다" },
+
+  // Newly added
+  "suede": { label: "스웨이드", description: "부드럽게 기모를 살린 가죽, 매트하고 벨벳 같은 표면입니다" },
+  "mesh": { label: "메쉬", description: "비치는 그물망 원단, 운동복 / 시스루 톱에 사용됩니다" },
+  "patent-leather": { label: "패턴트 레더", description: "강한 광택을 가진 반사성 가죽입니다" },
+  "terrazzo": { label: "테라조", description: "대리석 / 유리 조각이 박힌 복합 석재입니다" },
+  "iridescent": { label: "이리데센트", description: "각도에 따라 색이 변하는 무지갯빛 표면입니다" },
+  "mother-of-pearl": { label: "자개", description: "조개 안쪽의 진주층, 무지갯빛 크림색입니다" },
+  "carbon-fiber": { label: "카본 파이버", description: "직조된 검은 카본 파이버 복합재입니다" },
+  "holographic-film": { label: "홀로그래픽 필름", description: "빛을 굴절시켜 무지갯빛 광채를 내는 홀로그램 필름입니다" },
 }
 
 export default map

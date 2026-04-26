@@ -139,6 +139,13 @@ const map: LocaleCatalogMap = {
   "griffin": { label: "グリフォン", description: "ワシの頭・翼・爪のある前足とライオンの筋肉質な後半身を持つ混血のグリフォン" },
   "pegasus": { label: "ペガサス", description: "羽毛の翼、流れるたてがみ、異世界的な存在感を持つ純白の翼の馬" },
   "kraken": { label: "クラーケン", description: "巨大な頭、輝く瞳、深淵から伸びる吸盤付きの巨大な触手を持つ巨大な海の獣クラーケン" },
+
+  // Additional animals
+  "capybara": { label: "カピバラ", description: "南米原産の大型でおとなしい齧歯類" },
+  "sloth": { label: "ナマケモノ", description: "穏やかな笑顔を浮かべる、ゆっくり動く樹上性の哺乳類" },
+  "red-panda": { label: "レッサーパンダ", description: "竹を食べる小型の赤茶色の動物、キツネのような顔つき" },
+  "raven": { label: "ワタリガラス", description: "知的な眼差しを持つ艶のある真っ黒なワタリガラス" },
+  "axolotl": { label: "ウーパールーパー", description: "羽毛のような外鰓を持つピンク色の水生サンショウウオ" },
 }
 
 export default map

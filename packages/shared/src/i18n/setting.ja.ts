@@ -63,6 +63,16 @@ const map: LocaleCatalogMap = {
   "haunted-mansion": { label: "幽霊屋敷", description: "朽ちかけたゴシックの邸宅" },
   "dreamscape": { label: "夢の景色", description: "シュルレアリスティックな浮遊する島々" },
   "wasteland": { label: "ポストアポカリプスの荒野", description: "錆びついた曇り空の荒野" },
+
+  // Additional indoor / urban / mixed
+  "balcony": { label: "バルコニー", description: "アパート／ホテルのバルコニー、街の眺め、親密な雰囲気" },
+  "attic": { label: "屋根裏部屋", description: "木の梁が露わな埃っぽい屋根裏、傾斜した屋根" },
+  "basement": { label: "地下室", description: "コンクリートの地下室、剥き出しの配管、薄暗い工業的雰囲気" },
+  "sauna": { label: "サウナ", description: "木目パネル張りのサウナ、蒸気、親密で暖かな空間" },
+  "dorm-room": { label: "寮の部屋", description: "大学の寮、シングルベッド、ポスター、フェアリーライト" },
+  "locker-room": { label: "ロッカールーム", description: "ジム／スポーツ用ロッカールーム、タイル、ベンチ、鏡" },
+  "music-studio": { label: "音楽スタジオ", description: "レコーディングスタジオ、マイク、防音材、ミキシングコンソール" },
+  "conservatory": { label: "コンサバトリー（温室）", description: "ガラス張りの温室、熱帯植物、漉した光" },
 }
 
 export default map

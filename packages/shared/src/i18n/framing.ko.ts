@@ -64,6 +64,13 @@ const map: LocaleCatalogMap = {
   "three-quarter-back": { label: "3/4 후면", description: "뒤에서 비스듬히 본 각도입니다" },
   "behind": { label: "뒤", description: "피사체의 정후면 뷰입니다" },
   "side-back-angle": { label: "측후면 앵글", description: "한쪽 어깨 뒤에서 본 3/4 뷰입니다" },
+  "golden-spiral": { label: "황금 나선", description: "피보나치 비율의 나선 위에 배치된 구도입니다" },
+  "frame-within-frame": { label: "프레임 속 프레임", description: "내부 건축 요소로 둘러싸인 피사체 구도입니다" },
+  "s-curve": { label: "S 커브", description: "구불구불한 대각선의 흐름이 시선을 이끕니다" },
+  "diagonal-composition": { label: "대각선 구도", description: "프레임을 가로지르는 강한 대각선입니다" },
+  "triangular-composition": { label: "삼각형 구도", description: "세 점으로 이루어진 삼각형 배치입니다" },
+  "symmetrical-mirror": { label: "대칭 / 미러", description: "정확한 좌우 대칭의 구도입니다" },
+  "vignette-composition": { label: "비네트", description: "주변부를 강하게 어둡게 처리해 중앙에 시선을 집중시킵니다" },
 }
 
 export default map

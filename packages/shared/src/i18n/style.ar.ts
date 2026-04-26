@@ -39,6 +39,17 @@ const map: LocaleCatalogMap = {
   "illuminated": { label: "مخطوطة منيرة", description: "ورق ذهبي + خط عربي" },
   "pixar-3d": { label: "Pixar ثلاثي الأبعاد", description: "CG شخصية Animation مصقول" },
   "caricature": { label: "كاريكاتير", description: "بورتريه مبالغ فيه ومنمق" },
+
+  "fresco": { label: "فريسكو", description: "رسم جداري على جص بأسلوب أسقف عصر النهضة" },
+  "mosaic": { label: "فسيفساء", description: "عمل فني من بلاطات صغيرة بأسلوب بيزنطي" },
+  "woodcut": { label: "نقش خشبي", description: "طبعة نقش بارز بتباين جريء بأسلوب عصر Dürer" },
+  "etching": { label: "حفر بالماء الملكي", description: "طبعة Intaglio دقيقة بتظليل متقاطع بأسلوب Rembrandt" },
+  "lithograph": { label: "ليثوغراف", description: "طباعة حجرية بنطاق توني ناعم بأسلوب Toulouse-Lautrec" },
+  "charcoal": { label: "فحم", description: "دراسة تونية أسود/رمادي ناعمة" },
+  "pastel": { label: "باستيل", description: "باستيلات طباشيرية ناعمة، وسيط جاف" },
+  "acrylic-paint": { label: "طلاء أكريليك", description: "وسيط معتم سريع الجفاف بحواف حادة" },
+  "mixed-media": { label: "وسائط مختلطة", description: "وسائط مدمجة بأنسجة متغايرة" },
+  "manga": { label: "مانغا", description: "فن لوحات مرسومة بالحبر أبيض وأسود بتظليل Screen-tone" },
 }
 
 export default map

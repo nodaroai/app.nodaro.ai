@@ -39,6 +39,16 @@ const map: LocaleCatalogMap = {
   "illuminated": { label: "Illuminierte Handschrift", description: "Blattgold + Kalligrafie" },
   "pixar-3d": { description: "Polierte Charakteranimations-CG" },
   "caricature": { label: "Karikatur", description: "Übertriebenes stilisiertes Porträt" },
+  "fresco": { label: "Fresko", description: "Wandmalerei auf Putz im Stil einer Renaissance-Decke" },
+  "mosaic": { label: "Mosaik", description: "Aus kleinen Kacheln tesseliertes byzantinisches Kunstwerk" },
+  "woodcut": { label: "Holzschnitt", description: "Kontrastreicher Reliefdruck der Dürer-Ära" },
+  "etching": { label: "Radierung", description: "Fein schraffierter Tiefdruck im Stil Rembrandts" },
+  "lithograph": { label: "Lithografie", description: "Steindruck mit weichem Tonwertumfang im Stil Toulouse-Lautrecs" },
+  "charcoal": { label: "Kohlezeichnung", description: "Weiche Schwarz-Grau-Tonstudie" },
+  "pastel": { label: "Pastell", description: "Weiche Kreidepastelle, trockenes Medium" },
+  "acrylic-paint": { label: "Acrylfarbe", description: "Schnelltrocknendes deckendes Medium, scharfe Kanten" },
+  "mixed-media": { label: "Mischtechnik", description: "Kombinierte Medien, heterogene Texturen" },
+  "manga": { label: "Manga", description: "Getuschte S/W-Panel-Kunst, Rastertöne" },
 }
 
 export default map

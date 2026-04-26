@@ -72,6 +72,16 @@ const map: LocaleCatalogMap = {
   "plasma": { label: "プラズマ", description: "輝く電気プラズマ" },
   "crystal-shard": { label: "クリスタルの破片", description: "輝く砕けたクリスタル" },
   "obsidian-glass": { label: "黒曜石ガラス", description: "暗い火山ガラス" },
+
+  // Additional materials
+  "suede": { label: "スエード", description: "起毛した柔らかなレザー、マットでベルベットのような表面" },
+  "mesh": { label: "メッシュ", description: "透けるネット生地、アスレチック／シアートップ風" },
+  "patent-leather": { label: "エナメルレザー", description: "高光沢で反射するエナメル革" },
+  "terrazzo": { label: "テラゾー", description: "大理石やガラスの粒を埋め込んだ複合石材" },
+  "iridescent": { label: "イリディセント", description: "色が変化する虹色の表面" },
+  "mother-of-pearl": { label: "マザー・オブ・パール", description: "貝の内側の真珠光沢、虹色のクリーム色" },
+  "carbon-fiber": { label: "カーボンファイバー", description: "織られた黒いカーボン繊維の複合材" },
+  "holographic-film": { label: "ホログラフィックフィルム", description: "光を屈折させるホログラム、虹色の輝き" },
 }
 
 export default map

@@ -15,6 +15,9 @@ const map: LocaleCatalogMap = {
   "cashmere": { label: "羊绒",       description: "奢华柔软的羊绒" },
   "chiffon":  { label: "雪纺",       description: "薄透飘逸的雪纺" },
   "fur":      { label: "毛皮",       description: "厚实蓬松的毛皮" },
+  "suede":    { label: "麂皮",       description: "柔软起绒的皮革,哑光丝绒般的表面" },
+  "mesh":     { label: "网眼布",     description: "透视的网状面料,运动 / 透视上衣感" },
+  "patent-leather": { label: "漆皮", description: "高光泽反射的皮革" },
 
   // -------------------- Metal --------------------
   "gold":      { label: "黄金",       description: "抛光黄金" },
@@ -37,6 +40,7 @@ const map: LocaleCatalogMap = {
   "jade":       { label: "玉",         description: "半透明的绿色玉石" },
   "onyx":       { label: "玛瑙",       description: "条带抛光的玛瑙" },
   "concrete":   { label: "混凝土",     description: "工业感浇筑混凝土" },
+  "terrazzo":   { label: "水磨石",     description: "嵌入大理石 / 玻璃碎片的复合石材" },
 
   // -------------------- Wood --------------------
   "oak":       { label: "橡木",       description: "纹理丰富的橡木" },
@@ -72,6 +76,10 @@ const map: LocaleCatalogMap = {
   "plasma":        { label: "等离子",       description: "电光闪烁的等离子" },
   "crystal-shard": { label: "水晶碎片",     description: "破碎发光的水晶" },
   "obsidian-glass":{ label: "黑曜玻璃",     description: "暗色火山玻璃" },
+  "iridescent":     { label: "虹彩",         description: "随角度变化的彩虹光泽表面" },
+  "mother-of-pearl":{ label: "珍珠母",       description: "贝壳内壁的珠光面,虹彩奶白" },
+  "carbon-fiber":   { label: "碳纤维",       description: "编织的黑色碳纤维复合材料" },
+  "holographic-film":{ label: "全息膜",      description: "折射光线的全息膜,带彩虹闪光" },
 }
 
 export default map

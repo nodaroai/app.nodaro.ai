@@ -22,6 +22,14 @@ const map: LocaleCatalogMap = {
   "taxi":         { label: "出租车内",       description: "夜晚城市出租车的后座" },
   "cathedral":    { label: "大教堂",         description: "哥特式大教堂内部" },
   "art-gallery":  { label: "艺术画廊",       description: "极简的白盒艺术画廊" },
+  "balcony":      { label: "阳台",           description: "公寓 / 酒店阳台,城市景观,亲密氛围" },
+  "attic":        { label: "阁楼",           description: "木梁满布灰尘的阁楼,斜屋顶" },
+  "basement":     { label: "地下室",         description: "水泥地下室,裸露管道,昏暗工业感" },
+  "sauna":        { label: "桑拿房",         description: "木板包裹的桑拿房,蒸汽,温暖私密" },
+  "dorm-room":    { label: "宿舍",           description: "大学宿舍,单人床、海报与串灯" },
+  "locker-room":  { label: "更衣室",         description: "健身房 / 体育更衣室,瓷砖、长凳与镜子" },
+  "music-studio": { label: "录音棚",         description: "录音棚,麦克风、隔音棉与调音台" },
+  "conservatory": { label: "玻璃花房",       description: "玻璃围墙的温室,热带植物,过滤的阳光" },
 
   // -------------------- Urban --------------------
   "city-street":   { label: "城市街道",     description: "繁忙的城市街道" },

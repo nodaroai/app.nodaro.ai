@@ -37,6 +37,13 @@ const map: LocaleCatalogMap = {
   "mtv-90s-vhs": { label: "MTV 90s VHS", description: "כרומה רווייה של VHS משנות ה-90" },
   "polaroid-faded": { label: "Polaroid דהוי", description: "Polaroid דהוי בגוון מג'נטה" },
   "lifestyle-warm-magazine": { label: "מגזין Lifestyle חמים", description: "Grade אדיטוריאלי חמים מודרני" },
+  "kodachrome-64": { description: "אדומים רוויים והיילייטים בגוון ענבר, חום וינטג' של NatGeo" },
+  "ektachrome-100": { description: "כחולים נקיים וקרירים, צלילות של פילם slide" },
+  "kodak-tri-x-400": { description: "צילום רחוב שחור-לבן עם גרגירים, 35mm מחוספס" },
+  "aerochrome": { description: "עלווה בגוון ורוד-מג'נטה סוריאליסטי, נוף בצבע מזויף" },
+  "fuji-instax": { description: "טונים בינוניים בפסטל רך, פילם מיידי בפורמט מרובע" },
+  "cinestill-50d": { description: "פילם קולנוע לאור יום, כחולים מבוקרים, תחושת Wong Kar-wai" },
+  "expired-film": { label: "פילם פג תוקף", description: "שינויי צבע, מג'נטות בחשיפת יתר, דליפות אור" },
 }
 
 export default map

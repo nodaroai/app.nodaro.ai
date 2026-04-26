@@ -40,6 +40,15 @@ const map: LocaleCatalogMap = {
   "mtv-90s-vhs": { label: "MTV 90s VHS", description: "90년대 VHS의 과채도 색감입니다" },
   "polaroid-faded": { label: "폴라로이드 페이디드", description: "마젠타 톤의 바랜 폴라로이드입니다" },
   "lifestyle-warm-magazine": { label: "라이프스타일 웜 매거진", description: "모던한 따뜻한 에디토리얼 그레이드입니다" },
+
+  // Newly added
+  "kodachrome-64": { description: "채도 높은 레드와 호박색 하이라이트, 빈티지 내셔널 지오그래픽의 따뜻함입니다" },
+  "ektachrome-100": { description: "차갑고 깔끔한 블루, 슬라이드 필름의 명료함입니다" },
+  "kodak-tri-x-400": { description: "그레인이 강조된 흑백 거리 사진, 거친 35mm 룩입니다" },
+  "aerochrome": { description: "초현실적인 핑크-마젠타 단풍, 적외선 풍경 사진입니다" },
+  "fuji-instax": { description: "부드러운 파스텔 미드톤, 정사각형 인스턴트 필름입니다" },
+  "cinestill-50d": { description: "데이라이트 시네마 필름, 절제된 블루, 왕가위 스타일의 분위기입니다" },
+  "expired-film": { description: "컬러 시프트, 과노출된 마젠타, 라이트 릭이 있는 룩입니다" },
 }
 
 export default map

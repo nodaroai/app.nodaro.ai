@@ -89,6 +89,38 @@ const map: LocaleCatalogMap = {
     label: "飘落灰烬",
     description: "在空气中飘动的细小灰烬",
   },
+  "fireflies": {
+    label: "萤火虫",
+    description: "飘动的生物发光斑点,夏夜般的魔幻感",
+  },
+  "incense-smoke": {
+    label: "线香烟",
+    description: "缓缓升腾的浓厚线香烟雾",
+  },
+  "cigarette-smoke": {
+    label: "烟卷烟雾",
+    description: "向上盘绕的香烟吐息",
+  },
+  "candle-glow": {
+    label: "烛光",
+    description: "温暖的烛焰光源,带柔和光晕",
+  },
+  "glitter-sparkle": {
+    label: "亮片 / 闪粉",
+    description: "空气中闪光的颗粒,派对氛围",
+  },
+  "starfield": {
+    label: "星空",
+    description: "可见的夜空繁星,宇宙背景",
+  },
+  "dandelion-seeds": {
+    label: "蒲公英种子",
+    description: "飘动的蒲公英绒毛,夏日微风",
+  },
+  "pollen-drift": {
+    label: "花粉飘散",
+    description: "黄金时刻光线中的金黄色花粉细粒",
+  },
 }
 
 export default map

@@ -49,6 +49,10 @@ const map: LocaleCatalogMap = {
   "food-photography": { label: "تصوير طعام", description: "لقطة طعام علوية أو 45 درجة" },
   "real-estate": { label: "عقارات", description: "داخلي معماري عريض" },
   "sports-action": { label: "حركة رياضية", description: "لحظة رياضية مجمدة بالتيليفوتو" },
+
+  "point-and-shoot": { label: "Point-and-Shoot / كاميرا للاستعمال الواحد", description: "جمالية كاميرا للاستعمال الواحد، فلاش قاس، عفوي" },
+  "lifestyle-blog": { label: "مدونة Lifestyle", description: "إحساس مدون منزلي / قهوة بضوء طبيعي ناعم" },
+  "product-shot": { label: "لقطة منتج", description: "منتج معزول نظيف على خلفية محايدة، تجارة إلكترونية" },
 }
 
 export default map

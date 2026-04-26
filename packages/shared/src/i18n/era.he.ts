@@ -28,6 +28,9 @@ const map: LocaleCatalogMap = {
   "cyberpunk-future": { label: "עתיד Cyberpunk", description: "Mega-city ניאוני של high-tech low-life" },
   "post-apocalyptic": { label: "פוסט-אפוקליפטי", description: "הישרדות באדמת בור של מלקטים" },
   "retrofuturism": { label: "Retrofuturism", description: "נוסטלגיית המחר של אתמול" },
+  "atomic-age-50s": { label: "עידן האטום שנות ה-50", description: "פוטוריזם sci-fi של שנות ה-1950 + חרדת מלחמה קרה" },
+  "gen-z-2020s": { label: "Gen Z שנות ה-2020", description: "הרכב phone-first, סטיילינג מקודד TikTok, החייאת Y2K" },
+  "fin-de-siecle": { label: "Fin-de-siècle", description: "אלגנטיות אירופאית של Belle Epoque בסוף המאה" },
 }
 
 export default map

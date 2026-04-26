@@ -39,6 +39,16 @@ const map: LocaleCatalogMap = {
   "illuminated": { label: "Illuminated Manuscript", description: "Gold leaf + calligraphy" },
   "pixar-3d": { label: "Pixar 3D", description: "Polished character animation CG" },
   "caricature": { label: "Caricature", description: "Exaggerated stylized portrait" },
+  "fresco": { label: "Fresco", description: "Plaster पर Renaissance छत-शैली की दीवार चित्रकारी" },
+  "mosaic": { label: "Mosaic", description: "छोटे-tile tessellated कलाकृति, Byzantine" },
+  "woodcut": { label: "Woodcut", description: "Bold-contrast relief print, Dürer-era" },
+  "etching": { label: "Etching", description: "बारीक cross-hatched intaglio printmaking, Rembrandt" },
+  "lithograph": { label: "Lithograph", description: "Stone-print मुलायम tonal range, Toulouse-Lautrec" },
+  "charcoal": { label: "Charcoal", description: "मुलायम काला/धूसर tonal study" },
+  "pastel": { label: "Pastel", description: "मुलायम chalk pastels, dry medium" },
+  "acrylic-paint": { label: "Acrylic Paint", description: "तेज़ी से सूखने वाला opaque medium, तीखे edges" },
+  "mixed-media": { label: "Mixed Media", description: "मिश्रित media, heterogeneous textures" },
+  "manga": { label: "Manga", description: "Inked B&W panel कला, screen-tone shading" },
 }
 
 export default map

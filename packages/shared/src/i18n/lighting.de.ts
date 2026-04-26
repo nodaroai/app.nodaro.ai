@@ -67,6 +67,12 @@ const map: LocaleCatalogMap = {
   "temp-5600k": { label: "5600K Tageslicht", description: "Tageslicht-balancierte Mittagssonne" },
   "temp-6500k": { label: "6500K Bedeckt", description: "Leicht kühler Blaustich" },
   "temp-9000k": { label: "9000K Schatten", description: "Deutlich kühler blauer Schatten" },
+  "butterfly": { label: "Schmetterlingslicht", description: "Licht von oben wirft Schmetterlingsschatten unter die Nase" },
+  "loop": { label: "Loop-Licht", description: "Licht leicht von der Seite und oben wirft kleine Schleife auf die Wange" },
+  "broad": { label: "Breite Beleuchtung", description: "Beleuchtete Seite zur Kamera, breiteres Gesicht" },
+  "short": { label: "Kurze Beleuchtung", description: "Beleuchtete Seite von der Kamera abgewandt, schmälernd" },
+  "hatchet": { label: "Hatchet-Licht", description: "Streiflicht von oben, tiefer Schatten gegenüber" },
+  "clamshell": { label: "Clamshell-Licht", description: "Licht von oben und Reflektor von unten, Beauty-Sandwich" },
 }
 
 export default map

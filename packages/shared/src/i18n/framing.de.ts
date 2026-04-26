@@ -55,6 +55,13 @@ const map: LocaleCatalogMap = {
   "three-quarter-back": { label: "Drei-Viertel-Rücken", description: "Aus der Achse von hinten" },
   "behind": { label: "Von hinten", description: "Direkte Rückansicht" },
   "side-back-angle": { label: "Seiten-Rücken-Winkel", description: "3/4-Ansicht von hinten über eine Schulter" },
+  "golden-spiral": { label: "Goldene Spirale", description: "Komposition auf Fibonacci-Verhältnis-Spirale" },
+  "frame-within-frame": { label: "Rahmen im Rahmen", description: "Motiv eingerahmt durch ein inneres architektonisches Element" },
+  "s-curve": { label: "S-Kurve", description: "Geschwungener diagonaler Verlauf, der das Auge führt" },
+  "diagonal-composition": { label: "Diagonal", description: "Starke diagonale Linie quer durchs Bild" },
+  "triangular-composition": { label: "Triangulär", description: "Dreipunktige dreieckige Anordnung" },
+  "symmetrical-mirror": { label: "Symmetrisch / Spiegelung", description: "Exakte Links-Rechts-Symmetrie" },
+  "vignette-composition": { label: "Vignette", description: "Starke Randabdunklung fokussiert die Mitte" },
 }
 
 export default map

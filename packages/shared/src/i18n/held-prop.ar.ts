@@ -60,6 +60,15 @@ const map: LocaleCatalogMap = {
   "pointer-stick": { label: "عصا مؤشر", description: "عصا مؤشر تلسكوبية" },
   "gavel": { label: "مطرقة قاضي", description: "مطرقة قضائية خشبية" },
   "wine-bottle": { label: "زجاجة نبيذ", description: "زجاجة كاملة بختم رقائقي" },
+
+  "parasol": { label: "مظلة شمسية", description: "مظلة شمسية زخرفية تحجب الشمس" },
+  "locket": { label: "ميدالية", description: "ميدالية قديمة مفتوحة معلقة بين الأصابع" },
+  "lighter": { label: "ولاعة", description: "ولاعة كروم بإبهام على اللهب" },
+  "lantern": { label: "فانوس", description: "فانوس قديم محمول بتوهج كهرماني دافئ" },
+  "flashlight": { label: "مصباح يدوي", description: "حزمة مصباح يدوي حديث، استكشاف / غموض" },
+  "compass": { label: "بوصلة", description: "بوصلة بحرية محمولة، استكشاف" },
+  "bow-and-arrow": { label: "قوس وسهم", description: "قوس مشدود بسهم متأهب" },
+  "shield": { label: "درع", description: "درع محمول، عصور وسطى / خيال" },
 }
 
 export default map

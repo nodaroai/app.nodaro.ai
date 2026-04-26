@@ -39,6 +39,16 @@ const map: LocaleCatalogMap = {
   "illuminated": { label: "Manuscrito Iluminado", description: "Pan de oro + caligrafía" },
   "pixar-3d": { label: "Pixar 3D", description: "CG de animación de personajes pulida" },
   "caricature": { label: "Caricatura", description: "Retrato exagerado estilizado" },
+  "fresco": { label: "Fresco", description: "Pintura mural sobre yeso estilo techo renacentista" },
+  "mosaic": { label: "Mosaico", description: "Obra teselada de pequeñas teselas, bizantina" },
+  "woodcut": { label: "Xilografía", description: "Grabado en relieve de alto contraste, era de Dürer" },
+  "etching": { label: "Aguafuerte", description: "Grabado calcográfico finamente entrecruzado, Rembrandt" },
+  "lithograph": { label: "Litografía", description: "Impresión en piedra de rango tonal suave, Toulouse-Lautrec" },
+  "charcoal": { label: "Carboncillo", description: "Estudio tonal suave en negro/gris" },
+  "pastel": { label: "Pastel", description: "Pasteles de tiza suaves, medio seco" },
+  "acrylic-paint": { label: "Pintura Acrílica", description: "Medio opaco de secado rápido, bordes definidos" },
+  "mixed-media": { label: "Técnica Mixta", description: "Medios combinados, texturas heterogéneas" },
+  "manga": { label: "Manga", description: "Arte de viñetas entintado en B&N, sombreado con tramas" },
 }
 
 export default map

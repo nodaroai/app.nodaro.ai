@@ -54,6 +54,16 @@ const map: LocaleCatalogMap = {
   "peter-gric": { description: "منظر طبيعي سوريالي معماري" },
   "ingrid-baars": { description: "كولاج فن أزياء نحتي" },
   "guido-van-helten": { description: "بورتريه جدارية ضخمة" },
+
+  "mapplethorpe": { description: "بورتريه استوديو أبيض وأسود وعريات كلاسيكية وزهور" },
+  "sherman": { description: "بورتريهات ذاتية مفاهيمية ودراسات شخصيات" },
+  "crewdson": { description: "ضواحي سينمائية وأجواء رهبة" },
+  "lachapelle": { description: "مشاهير سوريالية وكامب متشبع" },
+  "klein": { description: "حافة أزياء راقية وإضاءة دراماتيكية بظلال" },
+  "lindbergh": { description: "أزياء أبيض وأسود مبسطة وجمال خام" },
+  "tillmans": { description: "حميمية معاصرة عفوية وكويرية" },
+  "teller": { description: "أزياء فلاش كاجوال ومضادة للبريق" },
+  "penn": { description: "بورتريه استوديو من منتصف القرن وأزياء وحياة جامدة" },
 }
 
 export default map

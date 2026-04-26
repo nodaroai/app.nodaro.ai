@@ -61,6 +61,17 @@ const map: LocaleCatalogMap = {
   "peter-gric": { description: "건축적인 초현실주의 풍경입니다" },
   "ingrid-baars": { description: "조각적인 패션 아트 콜라주입니다" },
   "guido-van-helten": { description: "거대한 벽화 인물 사진입니다" },
+
+  // Newly added
+  "mapplethorpe": { description: "흑백 스튜디오 인물 사진, 클래식한 누드와 꽃입니다" },
+  "sherman": { description: "개념적인 셀프 포트레이트와 캐릭터 연구입니다" },
+  "crewdson": { description: "시네마틱한 교외, 불안한 분위기입니다" },
+  "lachapelle": { description: "초현실적인 셀러브리티와 채도 높은 캠프입니다" },
+  "klein": { description: "하이패션의 날카로움, 드라마틱한 그림자 조명입니다" },
+  "lindbergh": { description: "미니멀한 흑백 패션, 꾸밈없는 아름다움입니다" },
+  "tillmans": { description: "동시대의 캔디드, 퀴어한 친밀함입니다" },
+  "teller": { description: "캐주얼한 플래시 패션, 안티 글래머입니다" },
+  "penn": { description: "미드센추리 스튜디오 인물 사진, 패션과 스틸라이프입니다" },
 }
 
 export default map

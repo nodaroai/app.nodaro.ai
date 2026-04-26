@@ -31,6 +31,14 @@ const map: LocaleCatalogMap = {
   "day-for-night":   { label: "日转夜",           description: "白天调色为夜景" },
   "cross-processed": { label: "交叉冲印",         description: "交叉冲印带来的色彩偏移" },
 
+  "kodachrome-64":   { description: "饱和的红色与琥珀色高光,复古《国家地理》式的暖意" },
+  "ektachrome-100":  { description: "干净冷调的蓝色,反转片般的清晰度" },
+  "kodak-tri-x-400": { description: "推感冲洗的颗粒黑白街拍,粗砺的 35mm 质感" },
+  "aerochrome":      { description: "超现实的粉品红植被,假色风光胶片" },
+  "fuji-instax":     { description: "柔和粉彩中间调,方画幅即时胶片" },
+  "cinestill-50d":   { description: "日光电影胶片,克制的蓝色,王家卫式的氛围" },
+  "expired-film":    { label: "过期胶片",       description: "色彩偏移、过曝品红与漏光" },
+
   // Social-preset
   "instagram-warm":     { description: "Valencia 风格的暖色滤镜" },
   "tiktok-saturated":   { description: "明亮饱和的社交媒体色板" },

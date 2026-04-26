@@ -59,6 +59,13 @@ const map: LocaleCatalogMap = {
   "three-quarter-back": { label: "Three-Quarter Back", description: "מחוץ לציר מאחור" },
   "behind": { label: "מאחור", description: "מבט אחורי ישיר" },
   "side-back-angle": { label: "זווית צד-אחור", description: "מבט 3/4 מאחורי כתף אחת" },
+  "golden-spiral": { label: "ספירלת הזהב", description: "הרכב על ספירלת יחס Fibonacci" },
+  "frame-within-frame": { label: "מסגרת בתוך מסגרת", description: "סובייקט ממוסגר על ידי אלמנט אדריכלי פנימי" },
+  "s-curve": { label: "עקומת S", description: "זרימה אלכסונית מתפתלת מנחה את העין" },
+  "diagonal-composition": { label: "אלכסוני", description: "קו אלכסוני חזק חוצה את הפריים" },
+  "triangular-composition": { label: "משולשי", description: "סידור משולשי תלת-נקודתי" },
+  "symmetrical-mirror": { label: "סימטרי / מראה", description: "סימטריה מדויקת בין שמאל לימין" },
+  "vignette-composition": { label: "ויניטה", description: "החשכה היקפית כבדה ממקדת את המרכז" },
 }
 
 export default map

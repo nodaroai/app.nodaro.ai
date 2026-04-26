@@ -72,6 +72,14 @@ const map: LocaleCatalogMap = {
   "plasma": { label: "Плазма", description: "Светящаяся электрическая плазма" },
   "crystal-shard": { label: "Хрустальные осколки", description: "Расколотый светящийся хрусталь" },
   "obsidian-glass": { label: "Обсидиановое стекло", description: "Тёмное вулканическое стекло" },
+  "suede": { label: "Замша", description: "Мягкая ворсистая кожа, матовая бархатистая поверхность" },
+  "mesh": { label: "Сетка", description: "Прозрачная сетчатая ткань, спортивная или прозрачный топ" },
+  "patent-leather": { label: "Лаковая кожа", description: "Высокоглянцевая отражающая кожа" },
+  "terrazzo": { label: "Терраццо", description: "Композитный камень с вкраплениями мрамора и стекла" },
+  "iridescent": { label: "Радужный", description: "Поверхность с радужным переливом" },
+  "mother-of-pearl": { label: "Перламутр", description: "Перламутровая внутренняя сторона раковины, переливчатый кремовый" },
+  "carbon-fiber": { label: "Карбон", description: "Тканый чёрный карбоновый композит" },
+  "holographic-film": { label: "Голографическая плёнка", description: "Светопреломляющая голограмма с радужным мерцанием" },
 }
 
 export default map

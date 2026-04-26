@@ -71,6 +71,14 @@ const map: LocaleCatalogMap = {
   "temp-5600k": { label: "5600K 데이라이트", description: "데이라이트 균형의 한낮 태양입니다" },
   "temp-6500k": { label: "6500K 흐림", description: "약간 차가운 푸른 캐스트입니다" },
   "temp-9000k": { label: "9000K 그늘", description: "확연히 차가운 푸른 그늘입니다" },
+
+  // Portrait setups
+  "butterfly": { label: "버터플라이 라이팅", description: "위에서 비춘 빛이 코 아래에 나비 모양 그림자를 만듭니다" },
+  "loop": { label: "루프 라이팅", description: "약간 측면 위에서 비춘 빛이 뺨에 작은 루프 그림자를 만듭니다" },
+  "broad": { label: "브로드 라이팅", description: "카메라를 향한 쪽이 밝아 얼굴이 더 넓게 보입니다" },
+  "short": { label: "쇼트 라이팅", description: "카메라 반대쪽이 밝아 얼굴이 슬림해 보입니다" },
+  "hatchet": { label: "해칫 라이팅", description: "위에서 스쳐 비춰 반대쪽에 짙은 그림자가 드리웁니다" },
+  "clamshell": { label: "클램셸 라이팅", description: "위 + 아래 리플렉터로 샌드위치된 뷰티 라이팅입니다" },
 }
 
 export default map

@@ -43,6 +43,11 @@ const map: LocaleCatalogMap = {
   // -------------------- Reflective --------------------
   "mirror-floor": { label: "Mirror फ़र्श", description: "परावर्ती mirror सतह" },
   "polished-floor": { label: "Polished फ़र्श", description: "चमकदार polished फ़र्श का प्रतिबिंब" },
+  "chroma-green": { label: "Chroma हरा", description: "Keying के लिए flat संतृप्त green-screen" },
+  "chroma-blue": { label: "Chroma नीला", description: "Flat संतृप्त blue-screen" },
+  "paper-roll-seamless": { label: "Paper Roll Seamless", description: "सामान्य तटस्थ pastel paper roll" },
+  "tile-wall": { label: "Tile दीवार", description: "Bathroom / kitchen चौकोर tile दीवार" },
+  "marble-wall": { label: "संगमरमर की दीवार", description: "Luxury veined संगमरमर की दीवार" },
 }
 
 export default map

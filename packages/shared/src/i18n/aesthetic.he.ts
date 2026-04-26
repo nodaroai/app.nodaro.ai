@@ -136,6 +136,34 @@ const map: LocaleCatalogMap = {
     label: "רטרו 90s",
     description: "שילוב של גראנג' ו-mall של שנות ה-90",
   },
+  "weirdcore": {
+    label: "Weirdcore",
+    description: "חרדת מרחב לימינלי סוריאליסטי, glitch + נוסטלגיה",
+  },
+  "dreamcore": {
+    label: "Dreamcore",
+    description: "סוריאליזם דמוי חלום בפוקוס רך, פסטל סוכרייתי",
+  },
+  "traumacore": {
+    label: "Traumacore",
+    description: "ילדות נוסטלגית מעוותת, עריכות מלנכוליות",
+  },
+  "baddie": {
+    label: "Baddie",
+    description: "אסתטיקה טרנדית מסוגננת ובוטחת, גבות חדות, עגילי חישוק",
+  },
+  "alt-girl": {
+    label: "Alt-Girl",
+    description: "תערובת תת-תרבות אלט, שיער צבוע, שרשראות, איפור מרוח",
+  },
+  "blokecore": {
+    label: "Blokecore",
+    description: "חולצת כדורגל + adidas + dadcore קז'ואל גברי",
+  },
+  "y2k-rave": {
+    label: "Y2K Rave",
+    description: "Decora יפני של club-kid, Rave פלורסנטי בניאון",
+  },
 }
 
 export default map

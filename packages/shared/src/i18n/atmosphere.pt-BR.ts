@@ -23,6 +23,16 @@ const map: LocaleCatalogMap = {
   "pollen-light": { label: "Pólen na Luz", description: "Partículas quentes em um feixe de sol" },
   "water-droplets": { label: "Gotas de Água", description: "Gotas grudadas na pele ou superfície" },
   "falling-ash": { label: "Cinzas Caindo", description: "Cinzas finas e cinzas à deriva no ar" },
+
+  // Additional atmospheric effects
+  "fireflies": { label: "Vagalumes", description: "Pontos bioluminescentes à deriva, magia de noite de verão" },
+  "incense-smoke": { label: "Fumaça de Incenso", description: "Fumaça densa de incenso subindo lentamente" },
+  "cigarette-smoke": { label: "Fumaça de Cigarro", description: "Fumaça de cigarro exalada serpenteando para cima" },
+  "candle-glow": { label: "Brilho de Vela", description: "Chama quente de vela como fonte de luz com halo" },
+  "glitter-sparkle": { label: "Glitter / Brilho", description: "Partículas brilhantes no ar, contexto de festa" },
+  "starfield": { label: "Campo de Estrelas", description: "Céu noturno visível com estrelas, fundo cósmico" },
+  "dandelion-seeds": { label: "Sementes de Dente-de-leão", description: "Penugem de dente-de-leão à deriva na brisa de verão" },
+  "pollen-drift": { label: "Pólen à Deriva", description: "Pólen fino dourado-amarelado na luz da hora dourada" },
 }
 
 export default map

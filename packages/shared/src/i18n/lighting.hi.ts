@@ -73,6 +73,12 @@ const map: LocaleCatalogMap = {
   "temp-5600k": { description: "Daylight-संतुलित दोपहर का सूरज" },
   "temp-6500k": { description: "थोड़ा ठंडा नीला cast" },
   "temp-9000k": { description: "स्पष्ट रूप से ठंडी नीली छाँव" },
+  "butterfly": { label: "Butterfly Lighting", description: "ऊपर से रोशनी नाक के नीचे butterfly छाया डालती है" },
+  "loop": { label: "Loop Lighting", description: "थोड़ा side+ऊपर गाल पर छोटा loop डालता है" },
+  "broad": { label: "Broad Lighting", description: "Camera की ओर रोशन side, चौड़ा चेहरा look" },
+  "short": { label: "Short Lighting", description: "Camera से दूर रोशन side, slimming" },
+  "hatchet": { label: "Hatchet Lighting", description: "ऊपर से skim, विपरीत side पर गहरी छाया" },
+  "clamshell": { label: "Clamshell Lighting", description: "ऊपर + नीचे reflector, sandwiched beauty" },
 }
 
 export default map

@@ -69,6 +69,14 @@ const map: LocaleCatalogMap = {
   "pointer-stick": { label: "Pointer Stick", description: "Telescoping pointer stick" },
   "gavel": { label: "Gavel", description: "लकड़ी का judicial gavel" },
   "wine-bottle": { label: "Wine की बोतल", description: "Foil seal के साथ पूरी बोतल" },
+  "parasol": { label: "Parasol", description: "धूप से बचाने वाला सजावटी parasol" },
+  "locket": { label: "Locket", description: "उँगलियों में खुला विंटेज locket pendant" },
+  "lighter": { label: "Lighter", description: "लौ पर अंगूठा रखे chrome lighter" },
+  "lantern": { label: "लालटेन", description: "गर्म amber चमक वाली विंटेज हाथ की लालटेन" },
+  "flashlight": { label: "Flashlight", description: "आधुनिक flashlight beam, अन्वेषण / रहस्य" },
+  "compass": { label: "कम्पास", description: "हाथ का nautical कम्पास, अन्वेषण" },
+  "bow-and-arrow": { label: "धनुष-बाण", description: "तीर लगाया हुआ खींचा हुआ archery धनुष" },
+  "shield": { label: "ढाल", description: "हाथ की ढाल, मध्यकालीन / fantasy" },
 }
 
 export default map

@@ -43,6 +43,13 @@ const map: LocaleCatalogMap = {
   // Reflective
   "mirror-floor": { label: "ミラーフロア", description: "反射する鏡面" },
   "polished-floor": { label: "鏡面仕上げの床", description: "光沢のある磨かれた床の反射" },
+
+  // Additional backdrops
+  "chroma-green": { label: "クロマグリーン", description: "キーイング用のフラットで彩度の高いグリーンスクリーン" },
+  "chroma-blue": { label: "クロマブルー", description: "フラットで彩度の高いブルースクリーン" },
+  "paper-roll-seamless": { label: "ペーパーロール・シームレス", description: "汎用的なニュートラル・パステルのペーパーロール" },
+  "tile-wall": { label: "タイル壁", description: "バスルーム／キッチンの正方形タイル壁" },
+  "marble-wall": { label: "大理石の壁", description: "高級感のある脈の入った大理石の壁" },
 }
 
 export default map

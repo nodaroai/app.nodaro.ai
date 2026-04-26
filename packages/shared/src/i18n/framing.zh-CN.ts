@@ -55,6 +55,13 @@ const map: LocaleCatalogMap = {
   "contact-sheet":      { label: "印样小样",       description: "缩略图组成的摄影印样" },
   "magazine-spread":    { label: "杂志跨页",       description: "带文字版式的两版杂志跨页" },
   "cutaway-cross-section":{ label: "剖面 / 横截面",description: "墙面剥开露出剖面的建筑视图" },
+  "golden-spiral":          { label: "黄金螺旋",       description: "依据斐波那契比例螺旋安排的构图" },
+  "frame-within-frame":     { label: "画中框",         description: "由室内建筑元素框出主体" },
+  "s-curve":                { label: "S 形曲线",       description: "蜿蜒的对角线引导视线" },
+  "diagonal-composition":   { label: "对角线构图",     description: "强烈的对角线斜切画面" },
+  "triangular-composition": { label: "三角构图",       description: "三点式三角形排布" },
+  "symmetrical-mirror":     { label: "对称 / 镜像",    description: "完全的左右对称" },
+  "vignette-composition":   { label: "暗角构图",       description: "周边明显压暗,聚焦中央" },
 
   // Vantage
   "front-on":            { label: "正面",         description: "主体正对镜头" },

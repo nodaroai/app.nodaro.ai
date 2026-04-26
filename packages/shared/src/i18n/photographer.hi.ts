@@ -19,6 +19,15 @@ const map: LocaleCatalogMap = {
   "jimmy-marble": { description: "Pastel, candy-bright editorial" },
   "rinko-kawauchi": { description: "शांत, light-suffused रोज़मर्रा" },
   "ellen-von-unwerth": { description: "चंचल retro pin-up ऊर्जा" },
+  "mapplethorpe": { description: "श्वेत-श्याम studio portraiture, क्लासिक nudes और फूल" },
+  "sherman": { description: "Conceptual self-portrait और character study" },
+  "crewdson": { description: "Cinematic suburban dread वातावरण" },
+  "lachapelle": { description: "Surrealist celebrity, संतृप्त camp" },
+  "klein": { description: "उच्च-fashion edge, नाटकीय shadowed lighting" },
+  "lindbergh": { description: "Minimalist B&W fashion, raw सौंदर्य" },
+  "tillmans": { description: "समकालीन candid, queer अंतरंगता" },
+  "teller": { description: "Casual flash fashion, anti-glamour" },
+  "penn": { description: "मध्य-शताब्दी studio portrait, fashion और still life" },
 
   // -------------------- Documentary / Street --------------------
   "henri-cartier-bresson": { description: "Decisive-moment street photography" },

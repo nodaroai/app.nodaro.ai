@@ -28,6 +28,10 @@ const map: LocaleCatalogMap = {
   "cyberpunk-future": { label: "مستقبل Cyberpunk", description: "ميغاسيتي نيون بتقنية عالية وحياة منخفضة" },
   "post-apocalyptic": { label: "ما بعد المحرقة", description: "نجاة Wasteland للبحث في المخلفات" },
   "retrofuturism": { label: "Retrofuturism", description: "حنين غد بالأمس" },
+
+  "atomic-age-50s": { label: "العصر الذري الخمسينيات", description: "خيال علمي خمسيني مستقبلي + قلق الحرب الباردة" },
+  "gen-z-2020s": { label: "جيل Z العشرينيات الجديدة", description: "تأليف يبدأ بالهاتف، أسلوب TikTok، إحياء Y2K" },
+  "fin-de-siecle": { label: "Fin-de-siècle", description: "أناقة أوروبية من نهاية القرن في عصر Belle Époque" },
 }
 
 export default map

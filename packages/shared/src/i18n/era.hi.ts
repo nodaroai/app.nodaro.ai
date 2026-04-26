@@ -31,6 +31,9 @@ const map: LocaleCatalogMap = {
   "cyberpunk-future": { label: "Cyberpunk Future", description: "Neon-megacity high-tech low-life" },
   "post-apocalyptic": { label: "Post-Apocalyptic", description: "Scavenger wasteland survival" },
   "retrofuturism": { label: "Retrofuturism", description: "बीते कल का कल — nostalgia" },
+  "atomic-age-50s": { label: "Atomic Age 50s", description: "1950 के दशक का sci-fi futurism और Cold War चिंता" },
+  "gen-z-2020s": { label: "Gen Z 2020s", description: "Phone-first composition, TikTok-coded styling, Y2K revival" },
+  "fin-de-siecle": { label: "Fin-de-siècle", description: "Belle Epoque सदी के अंत का यूरोपीय लालित्य" },
 }
 
 export default map

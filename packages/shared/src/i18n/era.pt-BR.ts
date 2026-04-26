@@ -31,6 +31,11 @@ const map: LocaleCatalogMap = {
   "cyberpunk-future": { label: "Futuro Cyberpunk", description: "Megacidade neon de alta tecnologia e baixa vida" },
   "post-apocalyptic": { label: "Pós-apocalíptico", description: "Sobrevivência de sucateiros no terreno baldio" },
   "retrofuturism": { label: "Retrofuturismo", description: "Nostalgia do amanhã de ontem" },
+
+  // Additional eras
+  "atomic-age-50s": { label: "Era Atômica Anos 50", description: "Futurismo sci-fi dos anos 1950 com ansiedade da Guerra Fria" },
+  "gen-z-2020s": { label: "Geração Z dos Anos 2020", description: "Composição phone-first, estilo TikTok-coded, revival Y2K" },
+  "fin-de-siecle": { label: "Fin-de-siècle", description: "Elegância europeia da Belle Époque na virada do século" },
 }
 
 export default map

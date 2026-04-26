@@ -43,6 +43,11 @@ const map: LocaleCatalogMap = {
   // Reflective
   "mirror-floor": { label: "거울 바닥", description: "반사되는 거울 표면입니다" },
   "polished-floor": { label: "광택 바닥", description: "광택이 흐르는 바닥 반사입니다" },
+  "chroma-green": { label: "크로마 그린", description: "키잉용으로 평평하게 채도 높은 그린 스크린입니다" },
+  "chroma-blue": { label: "크로마 블루", description: "평평하고 채도 높은 블루 스크린입니다" },
+  "paper-roll-seamless": { label: "페이퍼 롤 심리스", description: "범용 중성 파스텔 페이퍼 롤입니다" },
+  "tile-wall": { label: "타일 벽", description: "욕실 / 주방의 사각 타일 벽입니다" },
+  "marble-wall": { label: "마블 벽", description: "결이 있는 럭셔리 대리석 벽입니다" },
 }
 
 export default map

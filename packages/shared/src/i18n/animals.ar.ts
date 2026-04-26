@@ -127,6 +127,12 @@ const map: LocaleCatalogMap = {
   "griffin": { label: "غريفون", description: "غريفون هجين برأس وأجنحة وأرجل أمامية بمخالب نسر وجسم خلفي عضلي للأسد" },
   "pegasus": { label: "بيغاسوس", description: "حصان مجنح أبيض نقي بأجنحة من ريش وشعر متدفق وحضور خارق" },
   "kraken": { label: "كراكن", description: "وحش كراكن بحري عملاق برأس ضخم وعيون متوهجة ومجسات هائلة بمحاجم تتلوى من الأعماق" },
+
+  "capybara": { label: "كابيبارا", description: "قارض كبير ومسالم من أمريكا الجنوبية" },
+  "sloth": { label: "كسلان", description: "ثديي بطيء يعيش على الأشجار بابتسامة لطيفة" },
+  "red-panda": { label: "باندا حمراء", description: "آكل خيزران صغير بفرو بني محمر ووجه يشبه الثعلب" },
+  "raven": { label: "غراب أسحم", description: "غراب أسحم أسود لامع بنظرة ذكية" },
+  "axolotl": { label: "أكسولوتل", description: "سلمندر مائي وردي بخياشيم ريشية" },
 }
 
 export default map

@@ -120,6 +120,29 @@ const map: LocaleCatalogMap = {
     label: "Retrô Anos 90",
     description: "Anos 90 entre grunge e shopping",
   },
+
+  // Additional microtrends — names kept as English jargon
+  "weirdcore": {
+    description: "Ansiedade surreal de espaço liminar, glitch e nostalgia",
+  },
+  "dreamcore": {
+    description: "Surrealismo onírico em soft focus, pastel candy",
+  },
+  "traumacore": {
+    description: "Infância nostálgica distorcida, edições melancólicas",
+  },
+  "baddie": {
+    description: "Estética confiante e na moda, sobrancelhas marcadas e argolas",
+  },
+  "alt-girl": {
+    description: "Mistura alt-subcultura, cabelo tingido, correntes e maquiagem borrada",
+  },
+  "blokecore": {
+    description: "Camisa de futebol + Adidas + casual masculino dadcore",
+  },
+  "y2k-rave": {
+    description: "Decora japonês club-kid, neon-rave fluorescente",
+  },
 }
 
 export default map

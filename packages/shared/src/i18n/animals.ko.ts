@@ -139,6 +139,13 @@ const map: LocaleCatalogMap = {
   "griffin": { label: "그리핀", description: "독수리의 머리 · 날개 · 발톱 앞다리와 사자의 근육질 뒷몸을 가진 하이브리드 그리핀입니다" },
   "pegasus": { label: "페가수스", description: "깃털 날개, 흐르는 갈기, 초자연적 존재감을 가진 순백의 날개 달린 말입니다" },
   "kraken": { label: "크라켄", description: "거대한 머리, 빛나는 눈, 심해에서 꿈틀대는 거대한 빨판 촉수를 가진 거대한 바다 괴수 크라켄입니다" },
+
+  // Newly added
+  "capybara": { label: "카피바라", description: "남미 출신의 평화로운 대형 설치류입니다" },
+  "sloth": { label: "나무늘보", description: "온화한 미소를 짓는 느린 나무 위 포유류입니다" },
+  "red-panda": { label: "레드 판다", description: "여우 같은 얼굴의 작은 적갈색 대나무를 먹는 동물입니다" },
+  "raven": { label: "큰까마귀", description: "지적인 눈빛을 가진 윤기 흐르는 검은 큰까마귀입니다" },
+  "axolotl": { label: "아홀로틀", description: "깃털 같은 외부 아가미를 가진 분홍빛 수생 도롱뇽입니다" },
 }
 
 export default map

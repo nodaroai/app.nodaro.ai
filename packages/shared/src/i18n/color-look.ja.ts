@@ -40,6 +40,15 @@ const map: LocaleCatalogMap = {
   "mtv-90s-vhs": { label: "MTV 90s VHS", description: "彩度過多の90年代VHSクロマ" },
   "polaroid-faded": { label: "ポラロイド・フェイデッド", description: "マゼンタ調に褪せたポラロイド" },
   "lifestyle-warm-magazine": { label: "ライフスタイル・ウォーム雑誌", description: "モダンな暖色エディトリアル・グレーディング" },
+
+  // Additional film stocks — names kept English
+  "kodachrome-64": { description: "彩度の高い赤と琥珀色のハイライト、ヴィンテージのナショジオ的暖かさ" },
+  "ektachrome-100": { description: "クールでクリーンな青、スライドフィルムの透明感" },
+  "kodak-tri-x-400": { description: "粒状感を強調した白黒のストリート写真、ざらついた35mm" },
+  "aerochrome": { description: "シュルレアリスティックなピンクとマゼンタの植物、フォールスカラーの風景" },
+  "fuji-instax": { description: "柔らかなパステル中間調、スクエア・フォーマットのインスタントフィルム" },
+  "cinestill-50d": { description: "デイライトのシネマストック、抑制された青、ウォン・カーウァイ風" },
+  "expired-film": { label: "期限切れフィルム", description: "色のシフト、露出過多のマゼンタ、光漏れ" },
 }
 
 export default map

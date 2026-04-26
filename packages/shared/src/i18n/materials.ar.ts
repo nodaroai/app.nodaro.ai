@@ -65,6 +65,15 @@ const map: LocaleCatalogMap = {
   "plasma": { label: "بلازما", description: "بلازما كهربائية متوهجة" },
   "crystal-shard": { label: "شظايا كريستال", description: "كريستال محطم متوهج" },
   "obsidian-glass": { label: "زجاج Obsidian", description: "زجاج بركاني داكن" },
+
+  "suede": { label: "Suede", description: "جلد وبري ناعم بسطح مخملي مطفي" },
+  "mesh": { label: "شبك", description: "قماش شبكي شفاف، رياضي / علوي شفاف" },
+  "patent-leather": { label: "جلد لامع", description: "جلد عاكس عالي اللمعان" },
+  "terrazzo": { label: "Terrazzo", description: "حجر مركب برقائق رخام/زجاج مدمجة" },
+  "iridescent": { label: "متقزح", description: "سطح متغير الألوان بقوس قزح" },
+  "mother-of-pearl": { label: "صدف", description: "بطانة صدف داخلية متقزحة بكريمي" },
+  "carbon-fiber": { label: "ألياف الكربون", description: "مركب ألياف كربون منسوج أسود" },
+  "holographic-film": { label: "غشاء هولوغرافي", description: "غشاء هولوغرام يكسر الضوء بلمعان قوس قزح" },
 }
 
 export default map

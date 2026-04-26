@@ -43,6 +43,13 @@ const map: LocaleCatalogMap = {
   // Reflective
   "mirror-floor": { label: "Piso Espelhado", description: "Superfície espelhada e reflexiva" },
   "polished-floor": { label: "Piso Polido", description: "Piso polido e brilhante com reflexo" },
+
+  // Additional backdrops
+  "chroma-green": { label: "Chroma Verde", description: "Chroma key verde saturado e plano para recorte" },
+  "chroma-blue": { label: "Chroma Azul", description: "Chroma key azul saturado e plano" },
+  "paper-roll-seamless": { label: "Rolo de Papel Seamless", description: "Rolo de papel pastel neutro genérico" },
+  "tile-wall": { label: "Parede de Azulejos", description: "Parede de azulejos quadrados de banheiro ou cozinha" },
+  "marble-wall": { label: "Parede de Mármore", description: "Parede de mármore com veios de luxo" },
 }
 
 export default map

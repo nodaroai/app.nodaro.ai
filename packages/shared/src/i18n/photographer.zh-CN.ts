@@ -19,6 +19,15 @@ const map: LocaleCatalogMap = {
   "jimmy-marble":        { description: "以 Jimmy Marble 的风格,粉彩糖果般明亮的大片摄影,顽皮色块与干净棚拍形状" },
   "rinko-kawauchi":      { description: "以 Rinko Kawauchi 的风格,安静、被光浸透的日常摄影,梦幻粉雾与轻微过曝" },
   "ellen-von-unwerth":   { description: "以 Ellen von Unwerth 的风格,顽皮复古的海报女郎能量,黑白闪光与调皮肢体语言" },
+  "mapplethorpe":        { description: "以 Robert Mapplethorpe 的风格,黑白棚拍人像、古典裸体与花卉静物" },
+  "sherman":             { description: "以 Cindy Sherman 的风格,概念化自拍像与角色扮演研究" },
+  "crewdson":            { description: "以 Gregory Crewdson 的风格,电影感的郊区场景,弥漫不安氛围" },
+  "lachapelle":          { description: "以 David LaChapelle 的风格,超现实的明星大片,饱和而戏谑的 Camp 美学" },
+  "klein":               { description: "以 Steven Klein 的风格,高级时装的硬朗气场,戏剧化的阴影灯光" },
+  "lindbergh":           { description: "以 Peter Lindbergh 的风格,极简黑白时装,质朴本真的美感" },
+  "tillmans":            { description: "以 Wolfgang Tillmans 的风格,当代抓拍,酷儿亲密感" },
+  "teller":              { description: "以 Juergen Teller 的风格,随性的闪光时装,反魅惑感" },
+  "penn":                { description: "以 Irving Penn 的风格,中世纪棚拍人像,时装与静物兼修" },
 
   // -------------------- Documentary / Street --------------------
   "henri-cartier-bresson":{ description: "以 Henri Cartier-Bresson 的风格,决定性瞬间的黑白街头摄影,几何构图与自然光" },
