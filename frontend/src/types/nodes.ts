@@ -567,8 +567,9 @@ export interface MoodData {
 export interface PhotographerData {
   [key: string]: unknown
   label: string
-  /** Photographer id from PHOTOGRAPHERS catalog. */
-  photographer: string
+  /** Photographer id from PHOTOGRAPHERS catalog. Single id or up to 2 for
+   *  blended visual signatures (e.g. ["tim-walker","helmut-newton"]). */
+  photographer: string | ReadonlyArray<string>
 }
 
 /** Standalone Aesthetic / Microtrend parameter node data. Picks ONE
@@ -624,8 +625,9 @@ export interface PoseData {
 export interface MaterialData {
   [key: string]: unknown
   label: string
-  /** Material id from MATERIALS catalog. */
-  material: string
+  /** Material id from MATERIALS catalog. Single id or up to 2 for composites
+   *  (e.g. ["leather","brass"] → "made of leather and brass"). */
+  material: string | ReadonlyArray<string>
 }
 
 /** Standalone Animal parameter node data. Reuses the catalog from the
@@ -691,8 +693,9 @@ export interface BackdropData {
 export interface HeldPropData {
   [key: string]: unknown
   label: string
-  /** Held prop id from HELD_PROPS catalog. */
-  heldProp: string
+  /** Held prop id from HELD_PROPS catalog. Single id or up to 2 for combos
+   *  (e.g. ["book","coffee-cup"], ["cigarette","wine-glass"]). */
+  heldProp: string | ReadonlyArray<string>
 }
 
 /** Standalone Exposure Settings parameter node data. Multi-category: aperture

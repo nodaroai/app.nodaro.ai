@@ -172,6 +172,78 @@ export const PHOTOGRAPHERS: ReadonlyArray<Photographer> = [
     promptHint:
       "in the style of Ellen von Unwerth, playful retro pin-up energy with monochrome flash and mischievous body language",
   },
+  {
+    id: "mapplethorpe",
+    label: "Robert Mapplethorpe",
+    category: "editorial",
+    description: "Formalist B&W studio nudes and flowers",
+    promptHint:
+      "in the style of Robert Mapplethorpe, strict formalist black-and-white studio portraiture with dramatic chiaroscuro lighting, sculpted classical nudes and tightly controlled lily and orchid still lifes",
+  },
+  {
+    id: "sherman",
+    label: "Cindy Sherman",
+    category: "editorial",
+    description: "Conceptual self-portrait character study",
+    promptHint:
+      "in the style of Cindy Sherman, staged conceptual self-portraiture with costumed character studies, film-still references and a dispassionate often unsettling gaze",
+  },
+  {
+    id: "crewdson",
+    label: "Gregory Crewdson",
+    category: "editorial",
+    description: "Cinematic suburban dread tableau",
+    promptHint:
+      "in the style of Gregory Crewdson, large-format staged tableau of suburban dread with hyper-cinematic twilight blue-hour lighting and every detail meticulously composed",
+  },
+  {
+    id: "lachapelle",
+    label: "David LaChapelle",
+    category: "editorial",
+    description: "Surreal hyper-saturated celebrity camp",
+    promptHint:
+      "in the style of David LaChapelle, hyper-saturated surrealist celebrity tableau with religious iconography, candy-gloss color and theatrical excess",
+  },
+  {
+    id: "klein",
+    label: "Steven Klein",
+    category: "editorial",
+    description: "Hard-edged glamour and controlled aggression",
+    promptHint:
+      "in the style of Steven Klein, hard-edged high-fashion glamour with leather and latex wardrobe, dramatic shadowed lighting and a charge of controlled aggression",
+  },
+  {
+    id: "lindbergh",
+    label: "Peter Lindbergh",
+    category: "editorial",
+    description: "Minimalist B&W natural-light fashion",
+    promptHint:
+      "in the style of Peter Lindbergh, minimalist black-and-white fashion in natural light with bare makeup, supermodel-era documentary feel, windswept beach settings and untouched skin",
+  },
+  {
+    id: "tillmans",
+    label: "Wolfgang Tillmans",
+    category: "editorial",
+    description: "Candid queer intimacy and casual flash",
+    promptHint:
+      "in the style of Wolfgang Tillmans, democratic mix of intimate snapshot portraiture and abstract still life with casual on-camera flash and party, club and nightlife candor",
+  },
+  {
+    id: "teller",
+    label: "Juergen Teller",
+    category: "editorial",
+    description: "Anti-glamour direct-flash snapshot",
+    promptHint:
+      "in the style of Juergen Teller, direct on-camera flash snapshot fashion with deadpan unfiltered models, anti-airbrush rawness and an awkward off-kilter staging",
+  },
+  {
+    id: "penn",
+    label: "Irving Penn",
+    category: "editorial",
+    description: "Austere mid-century studio portrait",
+    promptHint:
+      "in the style of Irving Penn, austere mid-century studio portraiture against a commanding gray seamless backdrop with controlled grace, sculptural fashion staging and refined still-life precision",
+  },
 
   // -------------------- Documentary / Street --------------------
   {
@@ -456,6 +528,29 @@ export function getPhotographerLabel(id: string | undefined | null, fallback?: s
 
 export function getPhotographerPromptHint(id: string | undefined | null): string {
   return getPhotographer(id)?.promptHint ?? ""
+}
+
+/**
+ * Multi-pick variant: 1-2 photographer ids → blended hint. Single → entry's
+ * own promptHint. Two → "shot in the blended language of {A} and {B}" — the
+ * model interprets this as referencing both creators' visual signatures.
+ */
+export function buildPhotographerHints(value: unknown): string {
+  const ids: string[] = []
+  if (typeof value === "string" && value) ids.push(value)
+  else if (Array.isArray(value)) {
+    for (const v of value) {
+      if (typeof v === "string" && v && !ids.includes(v)) ids.push(v)
+    }
+  }
+  if (ids.length === 0) return ""
+  if (ids.length === 1) return getPhotographerPromptHint(ids[0])
+  const labels = ids
+    .slice(0, 2)
+    .map((id) => getPhotographer(id)?.label ?? "")
+    .filter((s): s is string => Boolean(s))
+  if (labels.length < 2) return getPhotographerPromptHint(ids[0])
+  return `shot in the blended visual language of ${labels[0]} and ${labels[1]}`
 }
 
 export const PHOTOGRAPHER_IDS: ReadonlyArray<string> = PHOTOGRAPHERS.map((p) => p.id)

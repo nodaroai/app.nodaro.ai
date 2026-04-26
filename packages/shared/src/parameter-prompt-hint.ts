@@ -31,14 +31,14 @@ import { buildPoseHints } from "./pose.js"
 import { buildStylingHints } from "./styling.js"
 import { buildTemporalHints } from "./temporal.js"
 import { composeCameraMotionHintFromConnections } from "./camera-motions.js"
-import { getMaterialPromptHint } from "./materials.js"
+import { buildMaterialHints } from "./materials.js"
 import { getAnimal } from "./animals.js"
 import { getVehicle } from "./vehicles.js"
 import { getWeapon } from "./weapons.js"
 import { getPhotoGenrePromptHint } from "./photo-genre.js"
 import { getBackdropPromptHint } from "./backdrop.js"
-import { getHeldPropPromptHint } from "./held-prop.js"
-import { getPhotographerPromptHint } from "./photographer.js"
+import { buildHeldPropHints } from "./held-prop.js"
+import { buildPhotographerHints } from "./photographer.js"
 import { buildAestheticHints } from "./aesthetic.js"
 import { getEraPromptHint } from "./era.js"
 import { buildExposureHints } from "./exposure-settings.js"
@@ -118,7 +118,7 @@ export function getParameterPromptHint(
     case "setting":
       return getSettingPromptHint(asStr(data.setting))
     case "material":
-      return getMaterialPromptHint(asStr(data.material))
+      return buildMaterialHints(data.material)
     case "animal": {
       const animal = getAnimal(asStr(data.animal))
       return animal ? `featuring a ${animal.label.toLowerCase()}, ${animal.description}` : ""
@@ -136,13 +136,13 @@ export function getParameterPromptHint(
     case "backdrop":
       return getBackdropPromptHint(asStr(data.backdrop))
     case "held-prop":
-      return getHeldPropPromptHint(asStr(data.heldProp))
+      return buildHeldPropHints(data.heldProp).join(", ")
     case "person":
       return buildPersonHints(data).join(", ")
     case "mood":
       return buildMoodHints(data).join(", ")
     case "photographer":
-      return getPhotographerPromptHint(asStr(data.photographer))
+      return buildPhotographerHints(data.photographer)
     case "aesthetic":
       return buildAestheticHints(data.aesthetic)
     case "era":

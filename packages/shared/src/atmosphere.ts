@@ -41,6 +41,14 @@ export const ATMOSPHERES: ReadonlyArray<Atmosphere> = [
   { id: "pollen-light",    label: "Pollen in Light", description: "Warm particles in a sunbeam",              promptHint: "warm pollen and floating particles caught in a beam of sunlight, glowing motes drifting lazily through a shaft of light" },
   { id: "water-droplets",  label: "Water Droplets",  description: "Droplets clinging to skin or surface",     promptHint: "fine water droplets clinging to skin and surfaces, fresh post-shower wetness with small beads catching highlights" },
   { id: "falling-ash",     label: "Falling Ash",     description: "Fine grey ash drifting through the air",  promptHint: "fine grey ash drifting slowly through the air, weightless flakes settling across the scene with a quiet post-fire mood" },
+  { id: "fireflies",       label: "Fireflies",       description: "Drifting bioluminescent specks",           promptHint: "fireflies drifting in soft warm pulses through the scene, summer-night magic glinting in the air with bioluminescent specks" },
+  { id: "incense-smoke",   label: "Incense Smoke",   description: "Slow rising thick incense smoke",          promptHint: "thick incense smoke rising slowly through the frame, spiritual temple atmosphere with dust-lit shafts curling upward" },
+  { id: "cigarette-smoke", label: "Cigarette Smoke", description: "Exhaled smoke curling upward",             promptHint: "exhaled cigarette smoke curling upward through the frame, café noir mood with thin pale plumes drifting against ambient light" },
+  { id: "candle-glow",     label: "Candle-Glow",     description: "Warm flame light with soft halo",          promptHint: "warm candle flame casting a soft glowing halo across the scene, intimate vigil-like atmosphere with flickering golden light pooling around the source" },
+  { id: "glitter-sparkle", label: "Glitter / Sparkle", description: "Sparkly particles in air",              promptHint: "sparkly glitter particles suspended in the air, party-disco atmosphere with tiny points of light catching and reflecting across the scene" },
+  { id: "starfield",       label: "Starfield / Visible Stars", description: "Visible night sky with stars", promptHint: "visible starfield filling the night sky, milky way and countless points of light spread across a vast cosmic backdrop" },
+  { id: "dandelion-seeds", label: "Dandelion Seeds", description: "Drifting dandelion fluff",                 promptHint: "dandelion seed fluff drifting on a soft summer breeze, ethereal whitish parachutes floating weightlessly through the frame with whimsical magic" },
+  { id: "pollen-drift",    label: "Pollen Drift",    description: "Fine yellow-gold pollen in golden light", promptHint: "fine yellow-gold pollen drifting through golden hour light, warm dust motes suspended in slanted sunbeams across the scene" },
 ] as const
 
 const atmosphereById = new Map<string, Atmosphere>(ATMOSPHERES.map((a) => [a.id, a]))

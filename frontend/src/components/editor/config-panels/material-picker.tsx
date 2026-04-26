@@ -9,15 +9,17 @@ import {
   type Material,
   type MaterialCategory,
 } from "@nodaro-shared/materials"
+import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { MaterialPreview } from "./material-preview"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface MaterialPickerProps {
-  readonly value: string
-  readonly onValueChange: (materialId: string) => void
+  readonly value: string | ReadonlyArray<string>
+  readonly onValueChange: (value: string | ReadonlyArray<string> | undefined) => void
   readonly className?: string
+  readonly maxSelected?: number
 }
 
 /**
@@ -29,9 +31,22 @@ export const MaterialPicker = memo(function MaterialPicker({
   value,
   onValueChange,
   className,
+  maxSelected = 1,
 }: MaterialPickerProps) {
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("materials")
+  const selectedIds = useMemo(() => pickIds(value), [value])
+
+  const handlePick = (id: string) => {
+    if (maxSelected <= 1) {
+      onValueChange(selectedIds[0] === id ? undefined : id)
+      return
+    }
+    const next = togglePick(selectedIds, id, maxSelected)
+    if (next.length === 0) onValueChange(undefined)
+    else if (next.length === 1) onValueChange(next[0])
+    else onValueChange(next)
+  }
 
   const grouped = useMemo(() => {
     const byCategory = new Map<MaterialCategory, Material[]>()
@@ -79,24 +94,33 @@ export const MaterialPicker = memo(function MaterialPicker({
             </div>
             <div role="radiogroup" aria-label={MATERIAL_CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
               {materials.map((material) => {
-                const selected = material.id === value
+                const selectedIdx = selectedIds.indexOf(material.id)
+                const selected = selectedIdx >= 0
                 const label = resolveLabel(material.id, material.label)
                 const description = resolveDescription(material.id, material.description)
                 return (
                   <button
                     key={material.id}
                     type="button"
-                    role="radio"
+                    role={maxSelected > 1 ? "checkbox" : "radio"}
                     aria-checked={selected}
                     title={description}
-                    onClick={() => onValueChange(material.id)}
+                    onClick={() => handlePick(material.id)}
                     className={cn(
-                      "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
+                      "relative group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
                       selected
                         ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
                         : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
                     )}
                   >
+                    {maxSelected > 1 && selected && (
+                      <span
+                        className="absolute top-1 right-1 size-4 rounded-full bg-[#ff0073] text-white text-[9px] font-semibold flex items-center justify-center pointer-events-none z-10"
+                        aria-hidden="true"
+                      >
+                        {selectedIdx + 1}
+                      </span>
+                    )}
                     <MaterialPreview materialId={material.id} className="w-full aspect-square" />
                     <span
                       className={cn(
