@@ -30,6 +30,7 @@ const makeHandles = (id: string) => [
 
 export function ParameterNodeShell({ id, label, icon, handleId, selected, children, fluidWidth }: ParameterNodeShellProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const updateNode = useWorkflowStore((s) => s.updateNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
@@ -42,7 +43,15 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   const node = useMemo(() => nodes.find((n) => n.id === id), [nodes, id])
   const data = (node?.data ?? {}) as Record<string, unknown>
   const displayMode: DisplayMode = (data.displayMode as DisplayMode) || "picks"
-  const setDisplayMode = (mode: DisplayMode) => updateNodeData(id, { displayMode: mode })
+  const setDisplayMode = (mode: DisplayMode) => {
+    // Clear any explicit width/height that NodeResizer wrote into the node
+    // — picks / prompt / both have very different content sizes, and the
+    // user expects the node to fit the new mode's content automatically
+    // (not stay locked at a previously-dragged size). The next render
+    // will let ReactFlow auto-measure from the new content.
+    updateNode(id, { width: undefined, height: undefined })
+    updateNodeData(id, { displayMode: mode })
+  }
 
   // Tell ReactFlow to re-measure this node whenever the display mode changes.
   // Switching between picks / prompt / both swaps content of very different
