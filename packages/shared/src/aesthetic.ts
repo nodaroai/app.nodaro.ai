@@ -339,6 +339,29 @@ export function getAestheticPromptHint(id: string | undefined | null): string {
   return getAesthetic(id)?.promptHint ?? ""
 }
 
+/**
+ * Multi-pick variant: 1-2 aesthetic ids → blended hint. Single → entry's
+ * own promptHint. Two → "styled in a {A} + {B} aesthetic blend" with
+ * canonical entry labels (Y2K, dark academia, etc. stay as written).
+ */
+export function buildAestheticHints(value: unknown): string {
+  const ids: string[] = []
+  if (typeof value === "string" && value) ids.push(value)
+  else if (Array.isArray(value)) {
+    for (const v of value) {
+      if (typeof v === "string" && v && !ids.includes(v)) ids.push(v)
+    }
+  }
+  if (ids.length === 0) return ""
+  if (ids.length === 1) return getAestheticPromptHint(ids[0])
+  const labels = ids
+    .slice(0, 2)
+    .map((id) => getAesthetic(id)?.label ?? "")
+    .filter((s): s is string => Boolean(s))
+  if (labels.length < 2) return getAestheticPromptHint(ids[0])
+  return `styled in a ${labels[0]} + ${labels[1]} aesthetic blend`
+}
+
 export const AESTHETIC_IDS: ReadonlyArray<string> = AESTHETICS.map((a) => a.id)
 
 export const AESTHETIC_CATEGORY_LABELS: Readonly<Record<AestheticCategory, string>> = {

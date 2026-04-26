@@ -91,6 +91,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "graceful-woman",    label: "Graceful Woman",     dimension: "type", description: "Gentle, graceful woman",        promptHint: "a graceful woman" },
   { id: "baddie",            label: "Baddie",             dimension: "type", description: "Confident, trendy, styled woman", promptHint: "a baddie — a confident, trendy woman with styled makeup and a fashion-forward look" },
   { id: "stunning-model",    label: "Stunning Model",     dimension: "type", description: "Fashion-model aesthetic",         promptHint: "a stunning fashion model with editorial poise, refined features, and high-fashion presence" },
+  { id: "supermodel",        label: "Supermodel",         dimension: "type", description: "Iconic, top-tier runway and cover star", promptHint: "a supermodel — iconic top-tier presence with magnetic statement features, a striking silhouette and the unmistakable runway-and-cover aura that commands attention" },
   { id: "femme-fatale",      label: "Femme Fatale",       dimension: "type", description: "Alluring, dangerous noir seductress", promptHint: "a femme fatale — alluring, mysterious, and dangerous with classic noir seduction" },
   { id: "tough-guy",         label: "Tough Guy",          dimension: "type", description: "Hardened, tough man",           promptHint: "a tough, hardened man" },
   { id: "wise-elder",        label: "Wise Elder",         dimension: "type", description: "Aged, knowing elder",           promptHint: "a wise elder" },
@@ -137,7 +138,12 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "afro-caribbean",     label: "Afro-Caribbean",      group: "African", dimension: "ethnicity", description: "Anglophone Caribbean (Jamaica / Trinidad / Barbados)", promptHint: "of Afro-Caribbean descent" },
   // European
   { id: "european-any",       label: "European (any)",      shortLabel: "any",              group: "European", dimension: "ethnicity", description: "Any European — unspecified region", promptHint: "of European descent" },
-  { id: "nordic",             label: "Nordic",              group: "European", dimension: "ethnicity", description: "Scandinavian / Northern European",  promptHint: "of Nordic Scandinavian descent" },
+  { id: "nordic",             label: "Nordic (any)",        shortLabel: "Nordic",           group: "European", dimension: "ethnicity", description: "Any Scandinavian / Northern European — unspecified region", promptHint: "of Nordic Scandinavian descent" },
+  { id: "swedish",            label: "Swedish",             group: "European", dimension: "ethnicity", description: "Sweden — tall, often blonde, fine features", promptHint: "of Swedish descent" },
+  { id: "norwegian",          label: "Norwegian",           group: "European", dimension: "ethnicity", description: "Norway — fair-skinned, often light-eyed",   promptHint: "of Norwegian descent" },
+  { id: "danish",             label: "Danish",              group: "European", dimension: "ethnicity", description: "Denmark — soft features, ash-blonde common", promptHint: "of Danish descent" },
+  { id: "finnish",            label: "Finnish",             group: "European", dimension: "ethnicity", description: "Finland — Uralic features, high cheekbones", promptHint: "of Finnish descent" },
+  { id: "icelandic",          label: "Icelandic",           group: "European", dimension: "ethnicity", description: "Iceland — Norse + Celtic blend, sharp angular features", promptHint: "of Icelandic descent" },
   { id: "celtic",             label: "Celtic",              group: "European", dimension: "ethnicity", description: "British / Irish features",          promptHint: "of Celtic British descent" },
   { id: "mediterranean",      label: "Mediterranean",       shortLabel: "Mediter.",         group: "European", dimension: "ethnicity", description: "Southern European (broad)",         promptHint: "of Mediterranean descent" },
   { id: "slavic",             label: "Slavic",              group: "European", dimension: "ethnicity", description: "Eastern European features",         promptHint: "of Slavic Eastern European descent" },
@@ -273,8 +279,24 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "hair-gray",        label: "Gray",         dimension: "hair-color", description: "Gray hair",                 promptHint: "gray hair" },
   { id: "hair-salt-pepper", label: "Salt & Pepper", dimension: "hair-color", description: "Mixed black and gray hair", promptHint: "salt-and-pepper hair" },
   { id: "hair-white",       label: "White",        dimension: "hair-color", description: "White hair",                promptHint: "white hair" },
-  // Dyed
-  { id: "hair-dyed",        label: "Colorful",     dimension: "hair-color", description: "Dyed vibrant colors",       promptHint: "vibrantly dyed colorful hair" },
+  // Silver / Metallic
+  { id: "hair-silver",      label: "Silver",       dimension: "hair-color", description: "Bright metallic silver",     promptHint: "bright metallic silver hair with a clean reflective sheen" },
+  { id: "hair-rose-gold",   label: "Rose Gold",    dimension: "hair-color", description: "Soft pink-gold metallic",    promptHint: "rose gold hair, soft pink-gold metallic warmth" },
+  // Dyed (catch-all + specific fantasy / cosplay colors)
+  { id: "hair-dyed",        label: "Colorful (any)", dimension: "hair-color", description: "Dyed vibrant colors — unspecified", promptHint: "vibrantly dyed colorful hair" },
+  { id: "hair-blue",        label: "Blue",         dimension: "hair-color", description: "Bold blue dyed hair",        promptHint: "bold blue dyed hair" },
+  { id: "hair-pastel-blue", label: "Pastel Blue",  dimension: "hair-color", description: "Soft pastel sky-blue",       promptHint: "soft pastel sky-blue hair" },
+  { id: "hair-teal",        label: "Teal",         dimension: "hair-color", description: "Saturated teal blue-green",  promptHint: "saturated teal blue-green hair" },
+  { id: "hair-mint",        label: "Mint",         dimension: "hair-color", description: "Pale mint green",            promptHint: "pale mint-green hair" },
+  { id: "hair-green",       label: "Green",        dimension: "hair-color", description: "Bold green dyed hair",       promptHint: "bold green dyed hair" },
+  { id: "hair-lavender",    label: "Lavender",     dimension: "hair-color", description: "Soft lavender violet",       promptHint: "soft lavender violet hair" },
+  { id: "hair-purple",      label: "Purple",       dimension: "hair-color", description: "Bold deep purple",           promptHint: "bold deep purple dyed hair" },
+  { id: "hair-magenta",     label: "Magenta",      dimension: "hair-color", description: "Vivid magenta pink-purple",  promptHint: "vivid magenta pink-purple hair" },
+  { id: "hair-pink",        label: "Pink",         dimension: "hair-color", description: "Bold pink dyed hair",        promptHint: "bold pink dyed hair" },
+  { id: "hair-pastel-pink", label: "Pastel Pink",  dimension: "hair-color", description: "Soft pastel cotton-candy pink", promptHint: "soft pastel cotton-candy pink hair" },
+  { id: "hair-peach",       label: "Peach",        dimension: "hair-color", description: "Warm peach blonde-pink",     promptHint: "warm peach hair, blonde-pink with soft warmth" },
+  { id: "hair-mermaid",     label: "Mermaid",      dimension: "hair-color", description: "Blue-green-purple ocean blend", promptHint: "mermaid hair blending blue, green, and purple in flowing waves" },
+  { id: "hair-rainbow",     label: "Rainbow",      dimension: "hair-color", description: "Multi-color rainbow streaks", promptHint: "rainbow hair with streaks of multiple bright dyed colors" },
 
   // -------------------- Hair Style (length + texture) --------------------
   // -------------------- Hair Base (natural texture + length) --------------------
@@ -328,7 +350,13 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "eyes-green",  label: "Green",  dimension: "eye-color", description: "Green eyes",  promptHint: "green eyes" },
   { id: "eyes-hazel",  label: "Hazel",  dimension: "eye-color", description: "Hazel eyes",  promptHint: "hazel eyes" },
   { id: "eyes-gray",   label: "Gray",   dimension: "eye-color", description: "Gray eyes",   promptHint: "gray eyes" },
-  { id: "eyes-amber",  label: "Amber",  dimension: "eye-color", description: "Amber eyes",  promptHint: "amber eyes" },
+  { id: "eyes-amber",     label: "Amber",     dimension: "eye-color", description: "Amber eyes",                          promptHint: "amber eyes" },
+  { id: "eyes-violet",    label: "Violet",    dimension: "eye-color", description: "Rare violet eyes (Liz Taylor)",       promptHint: "rare violet eyes with a deep purple iris" },
+  { id: "eyes-gold",      label: "Gold",      dimension: "eye-color", description: "Bright gold iris",                    promptHint: "bright gold eyes with luminous metallic warmth" },
+  { id: "eyes-silver",    label: "Silver",    dimension: "eye-color", description: "Pale silver-gray iris",               promptHint: "pale silver eyes with a luminous reflective sheen" },
+  { id: "eyes-red",       label: "Red",       dimension: "eye-color", description: "Red iris (albinism / fantasy)",       promptHint: "red eyes, albinism or fantasy red iris" },
+  { id: "eyes-pink",      label: "Pink",      dimension: "eye-color", description: "Soft pink iris (albino / fantasy)",   promptHint: "soft pink eyes, albino or fantasy pink iris" },
+  { id: "eyes-turquoise", label: "Turquoise", dimension: "eye-color", description: "Vivid turquoise blue-green iris",     promptHint: "vivid turquoise blue-green eyes" },
 
   // -------------------- Eye State (what the eyes are doing / where they look) --------------------
   { id: "eye-state-closed",         label: "Closed",            dimension: "eye-state", description: "Eyes fully closed, peaceful",       promptHint: "with eyes fully closed in a peaceful expression" },
@@ -489,7 +517,9 @@ export const PERSON_FIELD_BY_DIMENSION: Record<
 export interface PersonValue {
   type?: string
   age?: string
-  ethnicity?: string
+  /** Single id, or an array of up to 2 ids for mixed heritage (e.g.
+   *  ["slavic","mediterranean"] → "of mixed Slavic and Mediterranean heritage"). */
+  ethnicity?: string | ReadonlyArray<string>
   build?: string
   /** Body shape ratio (long-legged, hourglass, pear…). Independent from
    *  Build, which describes silhouette + size. */
@@ -506,22 +536,31 @@ export interface PersonValue {
   lips?: string
   /** Lip state — what the lips are doing right now (chapped, glossy,
    *  parted, biting, pursed, bold-red…). Distinct from `lips` which is
-   *  anatomical shape. */
-  lipState?: string
-  hairColor?: string
+   *  anatomical shape. Single id or up to 2 (e.g. glossy + parted). */
+  lipState?: string | ReadonlyArray<string>
+  /** Single id or up to 2 ids for two-tone / ombre / highlighted hair
+   *  (e.g. ["hair-black","hair-platinum"]). */
+  hairColor?: string | ReadonlyArray<string>
   /** Natural hair texture + length (texture×length combos). The actual cut
    *  / styling choice (bob, wolf cut, braids…) lives in Styling.hair-cut. */
   hairBase?: string
   eyebrows?: string
   skinTone?: string
-  skinTexture?: string
-  eyeColor?: string
+  /** Skin texture (smooth, porcelain, freckled, …). Single id or up to 2
+   *  combined (e.g. porcelain + freckled, sun-kissed + dewy). */
+  skinTexture?: string | ReadonlyArray<string>
+  /** Single id or up to 2 ids for heterochromia (e.g.
+   *  ["eyes-blue","eyes-green"]). */
+  eyeColor?: string | ReadonlyArray<string>
   /** Eye state — what the eyes are doing (closed, half-lidded, wide-eyed,
    *  staring at camera, gazing away/up/down, glassy). Distinct from
-   *  `eyeShape` (anatomy) and `eyeColor`. */
-  eyeState?: string
+   *  `eyeShape` (anatomy) and `eyeColor`. Single id or up to 2 (e.g.
+   *  half-lidded + glassy). */
+  eyeState?: string | ReadonlyArray<string>
   facialHair?: string
-  distinctiveFeature?: string
+  /** Single id or up to 3 ids for combined features (e.g. freckles +
+   *  glasses + sleeve tattoo). */
+  distinctiveFeature?: string | ReadonlyArray<string>
   /** Free-text appended BEFORE the dimension compound. Use when you want
    * context/framing to come first (e.g. "wet-haired" or "covered in paint"). */
   preText?: string
@@ -566,6 +605,83 @@ export const PERSON_IDS: ReadonlyArray<string> = PEOPLE.map((p) => p.id)
  * build, long wavy hair, brown hair, fair skin, green eyes, wearing
  * glasses").
  */
+/**
+ * Build the ethnicity hint clause. Single pick → "of {Group} descent"
+ * (the entry's own promptHint). Two picks → mixed-heritage clause that
+ * names both backgrounds. We use the entry label rather than re-running
+ * promptHint, since "of mixed X and Y heritage" is a different grammar
+ * from concatenating two "of X descent" / "of Y descent" sentences.
+ */
+function normalizePickIds(value: unknown): string[] {
+  if (typeof value === "string") return value ? [value] : []
+  if (!Array.isArray(value)) return []
+  const out: string[] = []
+  for (const v of value) {
+    if (typeof v === "string" && v && !out.includes(v)) out.push(v)
+  }
+  return out
+}
+
+function buildEthnicityHint(value: unknown): string {
+  const ids = normalizePickIds(value)
+  if (ids.length === 0) return ""
+  if (ids.length === 1) return getPersonPromptHint(ids[0])
+  const labels = ids
+    .slice(0, 2)
+    .map((id) => getPerson(id)?.shortLabel ?? getPerson(id)?.label ?? "")
+    .filter((s): s is string => Boolean(s))
+  if (labels.length < 2) return getPersonPromptHint(ids[0])
+  return `of mixed ${labels[0]} and ${labels[1]} heritage`
+}
+
+/**
+ * Hair color: single → entry's hint ("blonde hair", "auburn hair"). Two →
+ * "two-tone X and Y hair" using lowercased entry labels (covers ombre,
+ * balayage, highlights, dyed two-tone styles).
+ */
+function buildHairColorHint(value: unknown): string {
+  const ids = normalizePickIds(value)
+  if (ids.length === 0) return ""
+  if (ids.length === 1) return getPersonPromptHint(ids[0])
+  const labels = ids
+    .slice(0, 2)
+    .map((id) => getPerson(id)?.label?.toLowerCase() ?? "")
+    .filter((s): s is string => Boolean(s))
+  if (labels.length < 2) return getPersonPromptHint(ids[0])
+  return `two-tone ${labels[0]} and ${labels[1]} hair`
+}
+
+/**
+ * Eye color: single → entry's hint ("blue eyes"). Two → independent emit
+ * like distinctive-features. We deliberately avoid hard-coding a
+ * heterochromia interpretation because users also pick two colors to
+ * mean "natural eye color + tinted contacts" or "sectoral / mixed iris".
+ * Letting both hints stand side-by-side lets the diffusion model
+ * resolve from the rest of the prompt context. Users wanting an explicit
+ * heterochromia look should add the `feature-heterochromia` distinctive
+ * feature alongside the two color picks.
+ */
+function buildEyeColorHints(value: unknown): string[] {
+  return emitIndependentHints(value)
+}
+
+/**
+ * Multi-pick "state" dims (distinctive-features, lip-state, eye-state,
+ * skin-texture) — independent flags rather than mutually exclusive. Each
+ * entry's promptHint is a standalone "with X" / "wearing X" / "staring X"
+ * clause, so we emit them all separately and let buildPersonHints'
+ * comma-join read naturally.
+ */
+function emitIndependentHints(value: unknown): string[] {
+  const ids = normalizePickIds(value)
+  const out: string[] = []
+  for (const id of ids) {
+    const hint = getPersonPromptHint(id)
+    if (hint) out.push(hint)
+  }
+  return out
+}
+
 export function buildPersonHints(
   data: Record<string, unknown> & PersonValue,
 ): string[] {
@@ -576,9 +692,32 @@ export function buildPersonHints(
 
   for (const dimension of PERSON_DIMENSION_ORDER) {
     const field = PERSON_FIELD_BY_DIMENSION[dimension]
-    const id = data[field]
-    if (typeof id !== "string" || id.length === 0) continue
-    const hint = getPersonPromptHint(id)
+    const raw = data[field]
+    if (dimension === "ethnicity") {
+      const h = buildEthnicityHint(raw)
+      if (h) hints.push(h)
+      continue
+    }
+    if (dimension === "hair-color") {
+      const h = buildHairColorHint(raw)
+      if (h) hints.push(h)
+      continue
+    }
+    if (dimension === "eye-color") {
+      for (const h of buildEyeColorHints(raw)) hints.push(h)
+      continue
+    }
+    if (
+      dimension === "distinctive-features" ||
+      dimension === "lip-state" ||
+      dimension === "eye-state" ||
+      dimension === "skin-texture"
+    ) {
+      for (const h of emitIndependentHints(raw)) hints.push(h)
+      continue
+    }
+    if (typeof raw !== "string" || raw.length === 0) continue
+    const hint = getPersonPromptHint(raw)
     if (hint) hints.push(hint)
   }
 

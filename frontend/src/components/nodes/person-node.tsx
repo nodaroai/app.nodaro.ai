@@ -11,23 +11,26 @@ import {
   getPersonLabel,
   type PersonDimension,
 } from "@nodaro-shared/person"
+import { pickIds } from "@nodaro-shared/multi-pick"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { getPersonEntryIcon } from "./person-styling-icon"
 import type { PersonData } from "@/types/nodes"
 
 interface EnabledEntry {
   readonly dimension: PersonDimension
+  /** First / primary id — drives the icon and (for single-pick dims) the label. */
   readonly entryId: string
+  /** All picked ids in order. Length 1 for single-pick dims. */
+  readonly entryIds: ReadonlyArray<string>
 }
 
 function collectEnabled(data: PersonData): EnabledEntry[] {
   const enabled: EnabledEntry[] = []
   for (const dimension of PERSON_DIMENSION_ORDER) {
     const field = PERSON_FIELD_BY_DIMENSION[dimension]
-    const id = data[field]
-    if (typeof id === "string" && id.length > 0) {
-      enabled.push({ dimension, entryId: id })
-    }
+    const ids = pickIds(data[field])
+    if (ids.length === 0) continue
+    enabled.push({ dimension, entryId: ids[0], entryIds: ids })
   }
   return enabled
 }
@@ -56,9 +59,13 @@ function PersonNodeComponent({ id, data, selected }: NodeProps) {
             rowGap: "0.75rem",
           }}
         >
-          {enabled.map(({ dimension, entryId }) => {
+          {enabled.map(({ dimension, entryId, entryIds }) => {
             const entry = getPerson(entryId)
             const icon = getPersonEntryIcon(dimension, entryId)
+            // Multi-pick (ethnicity, hair-color, eye-color, distinctive-
+            // features): primary label on the main line, additional picks
+            // stacked underneath with a "+ " prefix so the chip stays narrow.
+            const extraIds = entryIds.slice(1)
             return (
               <div key={dimension} className="flex flex-col gap-0.5 min-w-0">
                 {/* Top row holds the dim label + entry name; the icon sits on
@@ -72,6 +79,15 @@ function PersonNodeComponent({ id, data, selected }: NodeProps) {
                     <p className="text-foreground text-sm font-medium leading-tight truncate">
                       {getPersonLabel(entryId)}
                     </p>
+                    {extraIds.map((extraId) => (
+                      <p
+                        key={extraId}
+                        className="text-foreground/80 text-xs leading-tight truncate"
+                      >
+                        <span className="text-muted-foreground">+ </span>
+                        {getPersonLabel(extraId)}
+                      </p>
+                    ))}
                   </div>
                   {icon && (
                     <div className="shrink-0 flex items-center justify-center">
@@ -79,7 +95,7 @@ function PersonNodeComponent({ id, data, selected }: NodeProps) {
                     </div>
                   )}
                 </div>
-                {entry?.description && (
+                {entry?.description && entryIds.length === 1 && (
                   <p className="text-muted-foreground text-[10.5px] leading-snug">
                     {entry.description}
                   </p>
