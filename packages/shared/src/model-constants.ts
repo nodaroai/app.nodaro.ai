@@ -26,6 +26,8 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
 export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | "rendering-speed"> = {
   "gpt-image": "quality",
   "gpt-image-i2i": "quality",
+  "gpt-image-2": "resolution",
+  "gpt-image-2-i2i": "resolution",
   "nano-banana-pro": "resolution",
   "nano-banana-2": "resolution",
   "flux": "resolution",
@@ -50,6 +52,13 @@ export const HIGH_QUALITY_PROVIDERS = new Set(["gpt-image", "gpt-image-i2i", "se
 // Models where resolution=2K triggers composite credit identifier
 export const TWO_K_RESOLUTION_PROVIDERS = new Set(["flux", "flux-pro-i2i", "flux-flex", "flux-i2i"])
 
+// Models where both 2K and 4K resolutions trigger composite credit identifiers (1K is base)
+export const RESOLUTION_2K_4K_TIERED_PROVIDERS = new Set([
+  "nano-banana-2",
+  "gpt-image-2",
+  "gpt-image-2-i2i",
+])
+
 // Ideogram family models with TURBO/QUALITY pricing variants
 export const IDEOGRAM_PROVIDERS = new Set(["ideogram-edit", "ideogram-remix", "ideogram-reframe", "ideogram-v3"])
 
@@ -65,6 +74,7 @@ export const IMAGE_GEN_PROVIDERS = [
   "nano-banana-2",
   "grok",
   "gpt-image",
+  "gpt-image-2",
   "imagen4",
   "imagen4-fast",
   "imagen4-ultra",
@@ -86,6 +96,7 @@ export const IMAGE_I2I_PROVIDERS = [
   "flux-i2i",
   "flux-pro-i2i",
   "gpt-image-i2i",
+  "gpt-image-2-i2i",
   "ideogram-edit",
   "ideogram-remix",
   "ideogram-reframe",

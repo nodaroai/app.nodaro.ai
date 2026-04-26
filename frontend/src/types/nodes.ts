@@ -400,8 +400,9 @@ export interface ColorLookData {
 export interface AtmosphereData {
   [key: string]: unknown
   label: string
-  /** Atmosphere id from ATMOSPHERES catalog (packages/shared/src/atmosphere.ts). */
-  atmosphere: string
+  /** Atmosphere id from ATMOSPHERES catalog. Single id or up to 2 for layered
+   *  particle effects (e.g. ["fog","god-rays"], ["dust","sun-shafts"]). */
+  atmosphere: string | ReadonlyArray<string>
 }
 
 /** Standalone Style parameter node data. */
@@ -740,8 +741,10 @@ export interface CompositionEffectsData {
 export interface PostProcessEffectsData {
   [key: string]: unknown
   label: string
-  /** Post-process id from POST_PROCESS_EFFECTS catalog. */
-  postProcess: string
+  /** Post-process id from POST_PROCESS_EFFECTS catalog. Single id or up to 2
+   *  for layered grading (e.g. ["vignette-soft","film-grain-fine"],
+   *  ["halation-glow","bloom"]). */
+  postProcess: string | ReadonlyArray<string>
 }
 
 /** Standalone Temporal parameter node data. */
@@ -3770,6 +3773,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "flux-kontext", label: "Flux Kontext" },
           { value: "flux-kontext-max", label: "Flux Kontext Max" },
           { value: "gpt-image", label: "GPT Image" },
+          { value: "gpt-image-2", label: "GPT Image 2" },
           { value: "grok", label: "Grok" },
           { value: "ideogram-v3", label: "Ideogram V3" },
           { value: "imagen4", label: "Imagen 4" },

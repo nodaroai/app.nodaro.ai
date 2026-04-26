@@ -6,6 +6,7 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "flux-kontext", label: "Flux Kontext", desc: "Context-aware generation and editing" },
   { value: "flux-kontext-max", label: "Flux Kontext Max", desc: "Highest quality Kontext generation" },
   { value: "gpt-image", label: "GPT Image", desc: "Text rendering, complex compositions" },
+  { value: "gpt-image-2", label: "GPT Image 2", desc: "Latest GPT Image, sharper text + photorealism, up to 4K" },
   { value: "grok", label: "Grok", desc: "Creative and stylized imagery" },
   { value: "ideogram-v3", label: "Ideogram V3", desc: "Fast text-to-image, affordable" },
   { value: "imagen4", label: "Imagen 4", desc: "Google's latest, strong prompt adherence" },
@@ -28,6 +29,7 @@ export const IMAGE_I2I_MODELS: readonly { value: ImageI2IProvider; label: string
   { value: "flux-kontext", label: "Flux Kontext", desc: "Context-aware editing via Kontext" },
   { value: "flux-kontext-max", label: "Flux Kontext Max", desc: "Highest quality Kontext editing" },
   { value: "gpt-image-i2i", label: "GPT Image", desc: "Text rendering, complex compositions" },
+  { value: "gpt-image-2-i2i", label: "GPT Image 2", desc: "Latest GPT Image, sharper text + photorealism, up to 4K" },
   { value: "grok-i2i", label: "Grok", desc: "Creative and stylized imagery" },
   { value: "ideogram-edit", label: "Ideogram Edit", desc: "AI-guided image editing" },
   { value: "ideogram-reframe", label: "Ideogram Reframe", desc: "Change aspect ratio intelligently" },
@@ -133,6 +135,8 @@ export const V2V_ALEPH_ASPECT_RATIOS = [
 export const MODEL_CREDIT_RANGES: Record<string, { min: number; max: number }> = {
   "gpt-image": { min: 2, max: 7 },
   "gpt-image-i2i": { min: 2, max: 7 },
+  "gpt-image-2": { min: 2, max: 7 },
+  "gpt-image-2-i2i": { min: 2, max: 7 },
   "nano-banana-pro": { min: 6, max: 8 },
   "flux": { min: 2, max: 3 },
   "flux-flex": { min: 5, max: 8 },
@@ -184,11 +188,22 @@ const GROK_RATIOS = [
   { value: "2:3", label: "2:3" },
 ] as const
 
-// GPT Image only supports these 3 aspect ratios (NOT 16:9, 9:16, or 4:3)
+// GPT Image 1.5 only supports these 3 aspect ratios (NOT 16:9, 9:16, or 4:3)
 const GPT_IMAGE_RATIOS = [
   { value: "1:1", label: "1:1 (Square)" },
   { value: "3:2", label: "3:2 (Landscape)" },
   { value: "2:3", label: "2:3 (Portrait)" },
+] as const
+
+// GPT Image 2 supports: auto, 1:1, 9:16, 16:9, 4:3, 3:4
+// Constraints: 1:1 cannot use 4K; "auto" limited to 1K
+const GPT_IMAGE_2_RATIOS = [
+  { value: "auto", label: "Auto" },
+  { value: "1:1", label: "1:1 (Square)" },
+  { value: "16:9", label: "16:9 (Landscape)" },
+  { value: "9:16", label: "9:16 (Portrait)" },
+  { value: "4:3", label: "4:3" },
+  { value: "3:4", label: "3:4" },
 ] as const
 
 const DEFAULT_RATIOS = [
@@ -259,6 +274,8 @@ export const IMAGE_ASPECT_RATIOS: Record<string, readonly { value: string; label
   "grok": GROK_RATIOS,
   "gpt-image": GPT_IMAGE_RATIOS,
   "gpt-image-i2i": GPT_IMAGE_RATIOS,
+  "gpt-image-2": GPT_IMAGE_2_RATIOS,
+  "gpt-image-2-i2i": GPT_IMAGE_2_RATIOS,
   "imagen4": IMAGEN4_RATIOS,
   "imagen4-fast": IMAGEN4_RATIOS,
   "imagen4-ultra": IMAGEN4_RATIOS,
@@ -323,6 +340,8 @@ export const IMAGE_RESOLUTION_OPTIONS: Record<string, readonly { value: string; 
   "flux-flex": FLUX_RESOLUTIONS,
   "flux-i2i": FLUX_RESOLUTIONS,
   "flux-pro-i2i": FLUX_RESOLUTIONS,
+  "gpt-image-2": NANO_BANANA_RESOLUTIONS,    // 1K/2K/4K
+  "gpt-image-2-i2i": NANO_BANANA_RESOLUTIONS,
 }
 
 // Models that support quality selection

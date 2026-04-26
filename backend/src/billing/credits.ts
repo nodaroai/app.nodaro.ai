@@ -95,6 +95,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "grok": 2,                     // 4 KIE cr, $0.02
   ***REDACTED-OSS-SCRUB***
   "gpt-image:high": 7,           // 22 KIE cr, $0.11
+  "gpt-image-2": 2,              // 4 KIE cr, $0.02 (1K default; estimated, recalibrate from anomalies)
+  "gpt-image-2:2K": 4,           // 12 KIE cr, $0.06 (estimated)
+  "gpt-image-2:4K": 7,           // 22 KIE cr, $0.11 (estimated)
   "imagen4": 3,                  // 8 KIE cr, $0.04
   "imagen4-fast": 2,             // 4 KIE cr, $0.02
   "imagen4-ultra": 4,            // 12 KIE cr, $0.06
@@ -124,6 +127,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "grok-i2i": 2,                 // 4 KIE cr, $0.02
   ***REDACTED-OSS-SCRUB***
   "gpt-image-i2i:high": 7,       // 22 KIE cr, $0.11
+  "gpt-image-2-i2i": 2,          // 4 KIE cr, $0.02 (1K default; estimated)
+  "gpt-image-2-i2i:2K": 4,       // 12 KIE cr, $0.06 (estimated)
+  "gpt-image-2-i2i:4K": 7,       // 22 KIE cr, $0.11 (estimated)
   "ideogram-edit": 6,            // 18 KIE cr, $0.09 (BALANCED default)
   "ideogram-edit:TURBO": 4,      // 12 KIE cr, $0.06
   "ideogram-edit:QUALITY": 8,    // 24 KIE cr, $0.12
