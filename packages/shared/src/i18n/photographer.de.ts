@@ -55,6 +55,15 @@ const map: LocaleCatalogMap = {
   "peter-gric": { description: "Architektonisch surrealistische Landschaft" },
   "ingrid-baars": { description: "Skulpturale Mode-Kunst-Collage" },
   "guido-van-helten": { description: "Monumentales Wandmaler-Porträt" },
+  "mapplethorpe": { description: "S/W-Studio-Porträtfotografie, klassische Akte, Blumen" },
+  "sherman": { description: "Konzeptuelle Selbstporträts, Charakterstudien" },
+  "crewdson": { description: "Cinematische Vorstadtszenerie, beklemmende Atmosphären" },
+  "lachapelle": { description: "Surrealistischer Promi-Camp in gesättigten Farben" },
+  "klein": { description: "High-Fashion-Schärfe, dramatische schattenbetonte Beleuchtung" },
+  "lindbergh": { description: "Minimalistische S/W-Mode, rohe Schönheit" },
+  "tillmans": { description: "Zeitgenössische ungestellte Aufnahmen, queere Intimität" },
+  "teller": { description: "Lässige Blitzlicht-Mode, Anti-Glamour" },
+  "penn": { description: "Mid-Century-Studio-Porträtfotografie, Mode + Stillleben" },
 }
 
 export default map

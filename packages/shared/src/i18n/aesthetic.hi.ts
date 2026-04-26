@@ -43,6 +43,13 @@ const map: LocaleCatalogMap = {
   "casual-lived-in": { label: "Casual / Lived-In", description: "पहना-हुआ, बिना styled रोज़मर्रा" },
   "effortless-cool": { description: "बिना अध्ययन off-duty French-girl सहजता" },
   "retro-90s": { label: "Retro 90s", description: "Throwback grunge-meets-mall 90s" },
+  "weirdcore": { description: "Surreal liminal-space चिंता, glitch और nostalgia" },
+  "dreamcore": { description: "स्वप्निल soft-focus surrealism, candy pastel" },
+  "traumacore": { description: "विकृत nostalgic बचपन, उदास edits" },
+  "baddie": { description: "आत्मविश्वासी styled trendy aesthetic, तीखी eyebrows, hoops" },
+  "alt-girl": { description: "Alt-subculture mix, रंगे हुए बाल, chains, smudged makeup" },
+  "blokecore": { description: "Football-jersey + adidas + dadcore पुरुषों का casual" },
+  "y2k-rave": { description: "जापानी decora club-kid, fluorescent neon-rave" },
 }
 
 export default map

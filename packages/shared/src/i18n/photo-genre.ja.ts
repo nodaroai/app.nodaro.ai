@@ -55,6 +55,11 @@ const map: LocaleCatalogMap = {
   "food-photography": { label: "フードフォトグラフィ", description: "俯瞰または45度角のフードショット" },
   "real-estate": { label: "不動産", description: "建築的に広い室内ショット" },
   "sports-action": { label: "スポーツアクション", description: "望遠で凍ったスポーツの瞬間" },
+
+  // Additional genres
+  "point-and-shoot": { label: "ポイント＆シュート／使い捨てカメラ", description: "使い捨てカメラ風の美学、強いフラッシュ、カジュアル" },
+  "lifestyle-blog": { label: "ライフスタイルブログ", description: "柔らかな自然光のホーム／コーヒーブロガー風" },
+  "product-shot": { label: "プロダクトショット", description: "ニュートラル背景にクリーンに切り抜かれた商品、EC向け" },
 }
 
 export default map

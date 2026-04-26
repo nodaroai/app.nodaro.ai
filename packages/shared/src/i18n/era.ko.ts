@@ -31,6 +31,9 @@ const map: LocaleCatalogMap = {
   "cyberpunk-future": { label: "사이버펑크 미래", description: "네온 메가시티의 하이테크 로우라이프입니다" },
   "post-apocalyptic": { label: "포스트 아포칼립스", description: "스캐빈저의 황무지 생존입니다" },
   "retrofuturism": { label: "레트로퓨처리즘", description: "어제가 꿈꾼 내일의 향수입니다" },
+  "atomic-age-50s": { label: "원자력 시대 50s", description: "1950년대 SF 미래주의와 냉전 시대의 불안입니다" },
+  "gen-z-2020s": { label: "Z세대 2020s", description: "폰 우선의 구도, 틱톡 코드의 스타일링, Y2K 리바이벌입니다" },
+  "fin-de-siecle": { label: "Fin-de-siècle", description: "벨 에포크 세기 전환기 유럽의 우아함입니다" },
 }
 
 export default map

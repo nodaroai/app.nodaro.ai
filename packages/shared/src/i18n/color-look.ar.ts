@@ -37,6 +37,14 @@ const map: LocaleCatalogMap = {
   "mtv-90s-vhs": { label: "MTV 90s VHS", description: "تشبع كروما VHS مفرط من التسعينيات" },
   "polaroid-faded": { label: "Polaroid باهت", description: "Polaroid باهت بصبغة أرجوانية" },
   "lifestyle-warm-magazine": { label: "مجلة Lifestyle دافئة", description: "تدرج تحريري دافئ حديث" },
+
+  "kodachrome-64": { description: "حمر متشبعة + إبرازات كهرمانية، دفء NatGeo القديم" },
+  "ektachrome-100": { description: "أزرق نقي بارد، وضوح فيلم Slide" },
+  "kodak-tri-x-400": { description: "تصوير شارع أبيض وأسود بحبيبات مدفوعة، 35mm خشن" },
+  "aerochrome": { description: "نباتات وردية أرجوانية سوريالية، منظر طبيعي بألوان زائفة" },
+  "fuji-instax": { description: "نغمات وسطى باستيلية ناعمة، فيلم فوري بصيغة مربعة" },
+  "cinestill-50d": { description: "مخزون سينما ضوء النهار، أزرق متحكم به، بإحساس Wong Kar-wai" },
+  "expired-film": { description: "تحولات لونية وإفراط في تعرض الأرجواني وتسربات ضوء" },
 }
 
 export default map

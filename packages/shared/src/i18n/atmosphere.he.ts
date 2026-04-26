@@ -23,6 +23,14 @@ const map: LocaleCatalogMap = {
   "pollen-light": { label: "אבקנים באור", description: "חלקיקים חמים בקרן שמש" },
   "water-droplets": { label: "טיפות מים", description: "טיפות נצמדות לעור או למשטח" },
   "falling-ash": { label: "אפר נופל", description: "אפר אפור דק נסחף באוויר" },
+  "fireflies": { label: "גחליליות", description: "כתמים ביו-לומינסנטיים נסחפים, קסם של ליל קיץ" },
+  "incense-smoke": { label: "עשן קטורת", description: "עשן קטורת סמיך עולה לאט" },
+  "cigarette-smoke": { label: "עשן סיגריה", description: "עשן סיגריה נשוף מסתלסל מעלה" },
+  "candle-glow": { label: "זוהר נר", description: "אור להבת נר חמים עם הילה" },
+  "glitter-sparkle": { label: "נצנצים / Sparkle", description: "חלקיקים מנצנצים באוויר, הקשר של מסיבה" },
+  "starfield": { label: "שדה כוכבים", description: "שמי לילה גלויים עם כוכבים, רקע קוסמי" },
+  "dandelion-seeds": { label: "זרעי שן הארי", description: "פלומה של שן הארי נסחפת, רוח קיץ" },
+  "pollen-drift": { label: "אבקנים נסחפים", description: "אבקנים זהובים-צהובים דקים באור Golden Hour" },
 }
 
 export default map

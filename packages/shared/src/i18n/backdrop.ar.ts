@@ -37,6 +37,12 @@ const map: LocaleCatalogMap = {
 
   "mirror-floor": { label: "أرضية مرآة", description: "سطح عاكس كالمرآة" },
   "polished-floor": { label: "أرضية مصقولة", description: "انعكاس أرضية مصقولة لامعة" },
+
+  "chroma-green": { label: "Chroma أخضر", description: "Green-Screen مسطح متشبع للـ Keying" },
+  "chroma-blue": { label: "Chroma أزرق", description: "Blue-Screen مسطح متشبع" },
+  "paper-roll-seamless": { label: "ورق بلا حدود", description: "ورق بدرجة باستيلية محايدة عامة" },
+  "tile-wall": { label: "جدار بلاط", description: "جدار بلاط مربع للحمام / المطبخ" },
+  "marble-wall": { label: "جدار رخامي", description: "جدار رخامي فاخر بعروق" },
 }
 
 export default map

@@ -55,6 +55,9 @@ const map: LocaleCatalogMap = {
   "food-photography": { label: "푸드 포토그래피", description: "오버헤드 또는 45도 음식 샷입니다" },
   "real-estate": { label: "부동산", description: "광각의 건축적 인테리어입니다" },
   "sports-action": { label: "스포츠 액션", description: "망원으로 정지된 스포츠 순간입니다" },
+  "point-and-shoot": { label: "포인트 앤 슛 / 일회용", description: "일회용 카메라 미학, 강한 플래시, 캐주얼한 분위기입니다" },
+  "lifestyle-blog": { label: "라이프스타일 블로그", description: "부드러운 자연광의 홈 / 카페 블로거 감성입니다" },
+  "product-shot": { label: "제품 샷", description: "중성 배경에 분리된 깨끗한 제품, 이커머스 스타일입니다" },
 }
 
 export default map

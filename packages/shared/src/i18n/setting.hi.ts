@@ -22,6 +22,14 @@ const map: LocaleCatalogMap = {
   "taxi": { label: "Taxi का अंदरूनी", description: "रात में city taxi की पिछली सीट" },
   "cathedral": { label: "Cathedral", description: "Gothic cathedral का अंदरूनी" },
   "art-gallery": { label: "Art Gallery", description: "Minimalist white-cube gallery" },
+  "balcony": { label: "बालकनी", description: "Apartment / hotel की बालकनी, urban view, अंतरंग" },
+  "attic": { label: "अटारी", description: "लकड़ी के beam वाली धूल भरी अटारी, ढलवाँ छत" },
+  "basement": { label: "तहख़ाना", description: "Concrete तहख़ाना, खुले pipes, मद्धम industrial" },
+  "sauna": { label: "Sauna", description: "लकड़ी-paneled sauna, भाप, अंतरंग गर्म" },
+  "dorm-room": { label: "Dorm Room", description: "College dorm, twin bed, posters, fairy lights" },
+  "locker-room": { label: "Locker Room", description: "Gym/sports locker room, tile, benches, mirrors" },
+  "music-studio": { label: "Music Studio", description: "Recording studio, microphones, foam, control board" },
+  "conservatory": { label: "Conservatory", description: "काँच-दीवारों वाला greenhouse, tropical पौधे, छनी धूप" },
 
   // -------------------- Urban --------------------
   "city-street": { label: "शहर की सड़क", description: "व्यस्त शहर की सड़क" },

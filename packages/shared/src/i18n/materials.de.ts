@@ -66,6 +66,14 @@ const map: LocaleCatalogMap = {
   "plasma": { label: "Plasma", description: "Glühendes elektrisches Plasma" },
   "crystal-shard": { label: "Kristallsplitter", description: "Zersplittertes glühendes Kristall" },
   "obsidian-glass": { label: "Obsidianglas", description: "Dunkles vulkanisches Glas" },
+  "suede": { label: "Wildleder", description: "Weiches angerautes Leder, matte samtige Oberfläche" },
+  "mesh": { label: "Netzgewebe", description: "Durchsichtiges Netzgewebe, sportlich / transparentes Top" },
+  "patent-leather": { label: "Lackleder", description: "Hochglänzend reflektierendes Leder" },
+  "terrazzo": { label: "Terrazzo", description: "Verbundstein mit eingelassenen Marmor-/Glas-Splittern" },
+  "iridescent": { label: "Schillernd", description: "Farbverschiebende Regenbogen-Oberfläche" },
+  "mother-of-pearl": { label: "Perlmutt", description: "Perlglänzende Muschelinnenseite, schillerndes Cremeweiß" },
+  "carbon-fiber": { label: "Kohlefaser", description: "Geflochtener schwarzer Kohlefaser-Verbundstoff" },
+  "holographic-film": { label: "Holografische Folie", description: "Lichtbrechendes Hologramm mit Regenbogenschimmer" },
 }
 
 export default map

@@ -71,6 +71,14 @@ const map: LocaleCatalogMap = {
   "temp-5600k": { description: "昼光バランスの真昼の太陽" },
   "temp-6500k": { description: "わずかにクールな青みのキャスト" },
   "temp-9000k": { description: "明らかにクールな青みのシェード" },
+
+  // Portrait setups
+  "butterfly": { label: "バタフライ照明", description: "頭上からの光が鼻の下にチョウ形の影を作る" },
+  "loop": { label: "ループ照明", description: "わずかに横上からの光が頬に小さなループを作る" },
+  "broad": { label: "ブロード照明", description: "カメラ側の顔を照らし、顔を広く見せる" },
+  "short": { label: "ショート照明", description: "カメラの反対側を照らし、顔を細く見せる" },
+  "hatchet": { label: "ハチェット照明", description: "頭上から斜めに当たる光、反対側に深い影" },
+  "clamshell": { label: "クラムシェル照明", description: "上からの光と下からのレフ板で挟むビューティ照明" },
 }
 
 export default map

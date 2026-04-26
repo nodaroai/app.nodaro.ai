@@ -39,6 +39,16 @@ const map: LocaleCatalogMap = {
   "illuminated": { label: "일루미네이티드 매뉴스크립트", description: "금박과 캘리그래피의 채식본입니다" },
   "pixar-3d": { description: "세련된 캐릭터 애니메이션 CG입니다" },
   "caricature": { label: "캐리커처", description: "과장되고 양식화된 인물화입니다" },
+  "fresco": { label: "프레스코", description: "회반죽 위에 그린 르네상스 천장 스타일의 벽화입니다" },
+  "mosaic": { label: "모자이크", description: "작은 타일을 이어붙인 비잔틴 풍의 모자이크 작품입니다" },
+  "woodcut": { label: "목판화", description: "뒤러 시대의 강한 대비를 가진 부조 판화입니다" },
+  "etching": { label: "에칭", description: "렘브란트 풍의 섬세한 크로스해칭 인타글리오 판화입니다" },
+  "lithograph": { label: "리소그래프", description: "툴루즈 로트렉 풍의 부드러운 톤을 가진 석판 인쇄입니다" },
+  "charcoal": { label: "차콜", description: "부드러운 흑백 톤의 목탄 드로잉입니다" },
+  "pastel": { label: "파스텔", description: "건식 매체인 부드러운 분필 파스텔입니다" },
+  "acrylic-paint": { label: "아크릴화", description: "빠르게 마르고 불투명한 매체로 가장자리가 또렷합니다" },
+  "mixed-media": { label: "믹스드 미디어", description: "다양한 매체가 결합된 이질적인 텍스처입니다" },
+  "manga": { label: "망가", description: "잉크로 그린 흑백 패널 아트와 스크린톤 셰이딩입니다" },
 }
 
 export default map

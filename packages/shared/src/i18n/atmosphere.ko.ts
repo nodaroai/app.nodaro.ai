@@ -23,6 +23,14 @@ const map: LocaleCatalogMap = {
   "pollen-light": { label: "빛 속의 꽃가루", description: "햇살 속의 따뜻한 입자들입니다" },
   "water-droplets": { label: "물방울", description: "피부나 표면에 맺힌 물방울입니다" },
   "falling-ash": { label: "떨어지는 재", description: "공중을 떠다니는 고운 회색 재입니다" },
+  "fireflies": { label: "반딧불이", description: "여름밤의 마법 같은 생체발광 입자가 흩날립니다" },
+  "incense-smoke": { label: "향 연기", description: "두꺼운 향 연기가 천천히 피어오릅니다" },
+  "cigarette-smoke": { label: "담배 연기", description: "내쉰 담배 연기가 위로 휘감겨 올라갑니다" },
+  "candle-glow": { label: "촛불 빛", description: "후광이 도는 따뜻한 촛불 광원입니다" },
+  "glitter-sparkle": { label: "글리터 / 스파클", description: "공중에 떠다니는 반짝이 입자, 파티 분위기입니다" },
+  "starfield": { label: "별밭", description: "별이 보이는 밤하늘, 우주적 배경입니다" },
+  "dandelion-seeds": { label: "민들레 씨앗", description: "여름 산들바람을 타고 흩날리는 민들레 솜털입니다" },
+  "pollen-drift": { label: "꽃가루 드리프트", description: "골든아워 빛 속의 곱고 황금빛 노란 꽃가루입니다" },
 }
 
 export default map

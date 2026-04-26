@@ -61,6 +61,17 @@ const map: LocaleCatalogMap = {
   "peter-gric": { description: "建築的シュルレアリスティックな風景" },
   "ingrid-baars": { description: "彫刻的なファッション・アート・コラージュ" },
   "guido-van-helten": { description: "壮大な壁画家のポートレート" },
+
+  // Additional photographers
+  "mapplethorpe": { description: "白黒のスタジオ・ポートレート、古典的なヌードと花" },
+  "sherman": { description: "コンセプチュアルな自画像とキャラクター・スタディ" },
+  "crewdson": { description: "シネマティックな郊外と不穏な雰囲気" },
+  "lachapelle": { description: "シュルレアリスト的なセレブと彩度の高いキャンプ" },
+  "klein": { description: "ハイファッションのエッジ、ドラマチックな影の照明" },
+  "lindbergh": { description: "ミニマリストの白黒ファッション、生々しい美" },
+  "tillmans": { description: "コンテンポラリーなキャンディッド、クィアな親密さ" },
+  "teller": { description: "カジュアルなフラッシュ・ファッション、アンチ・グラマー" },
+  "penn": { description: "ミッドセンチュリーのスタジオ・ポートレート、ファッションと静物" },
 }
 
 export default map

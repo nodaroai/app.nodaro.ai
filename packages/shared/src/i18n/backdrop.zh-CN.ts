@@ -12,6 +12,9 @@ const map: LocaleCatalogMap = {
   "dusty-pink":         { label: "雾粉色",           description: "柔和的低饱和粉色背景" },
   "mustard-yellow":     { label: "芥末黄",           description: "暖芥末黄色背景" },
   "teal-textured-wall": { label: "青绿色纹理墙",     description: "刷漆的青绿色纹理墙" },
+  "chroma-green":       { label: "色键绿幕",         description: "饱和平整的绿幕,用于抠像" },
+  "chroma-blue":        { label: "色键蓝幕",         description: "饱和平整的蓝幕" },
+  "paper-roll-seamless":{ label: "卷纸无缝背景",     description: "通用中性粉彩色背景纸卷" },
 
   // -------------------- Gradient --------------------
   "red-orange-gradient":   { label: "红橙渐变",         description: "暖色红到橙的渐变扫色" },
@@ -26,6 +29,8 @@ const map: LocaleCatalogMap = {
   "plastered-wall":  { label: "灰泥墙",     description: "手抹的灰泥肌理" },
   "peeling-paint":   { label: "斑驳漆面",   description: "复古剥落漆面墙" },
   "wood-paneling":   { label: "木饰面",     description: "暖色木饰面墙" },
+  "tile-wall":       { label: "瓷砖墙",     description: "浴室 / 厨房的方块瓷砖墙面" },
+  "marble-wall":     { label: "大理石墙",   description: "奢华的大理石纹墙" },
 
   // -------------------- Fabric / Drape --------------------
   "muslin-drape":  { label: "棉布背景",     description: "斑驳手绘棉布背景" },

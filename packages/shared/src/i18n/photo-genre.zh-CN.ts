@@ -55,6 +55,9 @@ const map: LocaleCatalogMap = {
   "food-photography":{ label: "美食摄影",       description: "俯拍或 45 度的美食拍摄" },
   "real-estate":     { label: "房产摄影",       description: "广角的建筑室内" },
   "sports-action":   { label: "体育动作",       description: "长焦凝固的体育瞬间" },
+  "point-and-shoot": { label: "傻瓜机 / 一次性相机", description: "一次性相机美学,硬闪光,随性感" },
+  "lifestyle-blog":  { label: "生活博客",         description: "柔和自然光,居家 / 咖啡博主感" },
+  "product-shot":    { label: "产品图",           description: "电商风,中性背景上孤立的清晰产品" },
 }
 
 export default map

@@ -71,6 +71,13 @@ const map: LocaleCatalogMap = {
   "temp-5600k": { description: "Sol mediodía balanceado a luz diurna" },
   "temp-6500k": { description: "Tinte azul ligeramente frío" },
   "temp-9000k": { description: "Sombra azul claramente fría" },
+
+  "butterfly": { label: "Iluminación Mariposa", description: "Luz desde arriba proyecta una sombra de mariposa bajo la nariz" },
+  "loop": { label: "Iluminación Loop", description: "Ligera lateral+arriba proyecta un pequeño bucle en la mejilla" },
+  "broad": { label: "Iluminación Amplia", description: "Lado iluminado hacia la cámara, aspecto de rostro más ancho" },
+  "short": { label: "Iluminación Corta", description: "Lado iluminado lejos de la cámara, efecto adelgazante" },
+  "hatchet": { label: "Iluminación Hacha", description: "Rasante cenital, sombra profunda en el lado opuesto" },
+  "clamshell": { label: "Iluminación Clamshell", description: "Arriba + reflector debajo, belleza emparedada" },
 }
 
 export default map

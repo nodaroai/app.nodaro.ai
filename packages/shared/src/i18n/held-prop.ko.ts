@@ -69,6 +69,16 @@ const map: LocaleCatalogMap = {
   "pointer-stick": { label: "포인터 스틱", description: "신축식 포인터 스틱입니다" },
   "gavel": { label: "법정 망치", description: "나무 사법 망치입니다" },
   "wine-bottle": { label: "와인 병", description: "포일 씰이 있는 가득 찬 병입니다" },
+
+  // Newly added
+  "parasol": { label: "파라솔", description: "햇빛을 가려주는 장식적인 파라솔입니다" },
+  "locket": { label: "로켓", description: "손가락 사이에 펼친 빈티지 로켓 펜던트입니다" },
+  "lighter": { label: "라이터", description: "엄지로 불을 켠 크롬 라이터입니다" },
+  "lantern": { label: "랜턴", description: "따뜻한 호박색 빛을 내는 빈티지 손전등 랜턴입니다" },
+  "flashlight": { label: "손전등", description: "탐험 / 미스터리 분위기의 모던한 손전등 빛줄기입니다" },
+  "compass": { label: "나침반", description: "탐험을 위한 손에 든 항해용 나침반입니다" },
+  "bow-and-arrow": { label: "활과 화살", description: "화살을 메긴 채 당겨진 양궁 활입니다" },
+  "shield": { label: "방패", description: "중세 / 판타지 분위기의 손에 든 방패입니다" },
 }
 
 export default map

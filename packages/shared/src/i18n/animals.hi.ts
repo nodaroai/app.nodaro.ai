@@ -66,6 +66,10 @@ const map: LocaleCatalogMap = {
   "koala": { label: "Koala", description: "रोएँदार धूसर marsupial, गोल सिर, बड़े फूले हुए कान, बड़ी काली नाक और मुलायम रोएँदार छाती" },
   "deer": { label: "हिरण", description: "सुंदर हिरण, लाल-भूरा कोट, पतली टाँगें, गले पर सफ़ेद धब्बा और — नर पर — शाखादार सींग" },
   "raccoon": { label: "Raccoon", description: "नक़ाबपोश raccoon, धूसर कोट, आँखों पर गहरा डाकू-मास्क और घनी छल्लेदार पूँछ" },
+  "capybara": { label: "Capybara", description: "बड़ा शांत दक्षिण अमेरिकी कृंतक" },
+  "sloth": { label: "स्लॉथ", description: "धीमा पेड़-वासी स्तनपायी, कोमल मुस्कान वाला" },
+  "red-panda": { label: "Red Panda", description: "छोटा लाल-भूरे रंग का बाँस खाने वाला, लोमड़ी जैसा चेहरा" },
+  "axolotl": { label: "Axolotl", description: "गुलाबी जलीय salamander, पंखदार gills वाला" },
 
   // -------------------- Birds --------------------
   "eagle": { label: "बाज़", description: "राजसी बाज़, गहरा भूरा बदन, सफ़ेद सिर और पूँछ, घुमावदार पीली चोंच और तीखे पंजे" },
@@ -77,6 +81,7 @@ const map: LocaleCatalogMap = {
   "swan": { label: "हंस", description: "लालित्यपूर्ण सफ़ेद हंस, लंबी घुमावदार गर्दन, नारंगी चोंच और नाज़ुक रूप से मुड़े हुए पंख" },
   "sparrow": { label: "गौरैया", description: "छोटी भूरी-धूसर गौरैया, धारीदार पीठ, साफ़ गोल बदन और सतर्क काली आँख" },
   "crow": { label: "कौआ", description: "चमकदार पूरी काली कौआ, मोटी सीधी चोंच, बुद्धिमान गहरी आँखें और चिकने इंद्रधनुषी पंख" },
+  "raven": { label: "रेवन", description: "चमकदार काला रेवन, बुद्धिमान दृष्टि वाला" },
   "hummingbird": { label: "Hummingbird", description: "नन्हा रत्न-रंगी hummingbird, इंद्रधनुषी emerald और ruby पंख और लंबी सूई-जैसी चोंच" },
 
   // -------------------- Sea --------------------

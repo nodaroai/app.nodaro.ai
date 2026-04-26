@@ -50,6 +50,9 @@ const map: LocaleCatalogMap = {
   "food-photography": { label: "Photographie culinaire", description: "Photo culinaire vue de dessus ou à 45 degrés" },
   "real-estate": { label: "Immobilier", description: "Intérieur architectural large" },
   "sports-action": { label: "Action sportive", description: "Moment sportif figé au téléobjectif" },
+  "point-and-shoot": { label: "Compact / Jetable", description: "Esthétique d'appareil jetable, flash dur, casual" },
+  "lifestyle-blog": { label: "Blog lifestyle", description: "Ambiance maison / café blogueur en lumière naturelle douce" },
+  "product-shot": { label: "Photo produit", description: "Produit isolé propre sur fond neutre, e-commerce" },
 }
 
 export default map

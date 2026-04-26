@@ -72,6 +72,14 @@ const map: LocaleCatalogMap = {
   "plasma": { label: "Plasma", description: "चमकती electric plasma" },
   "crystal-shard": { label: "Crystal के टुकड़े", description: "टूटे हुए चमकते crystal" },
   "obsidian-glass": { label: "Obsidian Glass", description: "गहरा volcanic काँच" },
+  "suede": { label: "Suede", description: "मुलायम napped चमड़ा, matte velvety सतह" },
+  "mesh": { label: "Mesh", description: "Sheer net कपड़ा, athletic / sheer-top" },
+  "patent-leather": { label: "Patent Leather", description: "अत्यधिक चमकदार परावर्ती चमड़ा" },
+  "terrazzo": { label: "Terrazzo", description: "संगमरमर/काँच के टुकड़ों वाला composite पत्थर" },
+  "iridescent": { label: "Iridescent", description: "रंग-बदलती इंद्रधनुषी सतह" },
+  "mother-of-pearl": { label: "Mother-of-Pearl", description: "Pearlescent अंदरूनी shell, इंद्रधनुषी क्रीम" },
+  "carbon-fiber": { label: "Carbon Fiber", description: "बुना हुआ काला carbon-fiber composite" },
+  "holographic-film": { label: "Holographic Film", description: "इंद्रधनुषी चमक के साथ रोशनी-अपवर्तित hologram" },
 }
 
 export default map

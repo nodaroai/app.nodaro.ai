@@ -37,6 +37,11 @@ const map: LocaleCatalogMap = {
 
   "mirror-floor": { label: "רצפת מראה", description: "משטח מראה משקף" },
   "polished-floor": { label: "רצפה מלוטשת", description: "השתקפות רצפה מלוטשת מבריקה" },
+  "chroma-green": { label: "Chroma Green", description: "Green-Screen ירוק רווי שטוח לקיינג" },
+  "chroma-blue": { label: "Chroma Blue", description: "Blue-Screen כחול רווי שטוח" },
+  "paper-roll-seamless": { label: "גליל נייר ללא תפר", description: "גליל נייר פסטל נייטרלי כללי" },
+  "tile-wall": { label: "קיר אריחים", description: "קיר אריחים מרובעים של חדר אמבטיה / מטבח" },
+  "marble-wall": { label: "קיר שיש", description: "קיר שיש יוקרתי עם ורידים" },
 }
 
 export default map

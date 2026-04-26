@@ -67,6 +67,12 @@ const map: LocaleCatalogMap = {
   "temp-5600k": { label: "5600K Lumière du jour", description: "Soleil de midi équilibré lumière du jour" },
   "temp-6500k": { label: "6500K Couvert", description: "Légère teinte bleue froide" },
   "temp-9000k": { label: "9000K Ombre", description: "Ombre bleue franchement froide" },
+  "butterfly": { label: "Lumière papillon", description: "Lumière en plongée projetant une ombre papillon sous le nez" },
+  "loop": { label: "Lumière loop", description: "Légère latérale + plongée projetant une petite boucle d'ombre sur la joue" },
+  "broad": { label: "Lumière broad", description: "Côté éclairé tourné vers la caméra, visage à l'air plus large" },
+  "short": { label: "Lumière short", description: "Côté éclairé opposé à la caméra, effet amincissant" },
+  "hatchet": { label: "Lumière hatchet", description: "Effleurement zénithal, ombre profonde du côté opposé" },
+  "clamshell": { label: "Lumière clamshell", description: "Plongée + réflecteur en dessous, beauté en sandwich" },
 }
 
 export default map

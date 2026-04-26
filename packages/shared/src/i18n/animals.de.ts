@@ -128,6 +128,11 @@ const map: LocaleCatalogMap = {
   "griffin": { label: "Greif", description: "Hybrider Greif mit Kopf, Flügeln und Krallenvorderbeinen eines Adlers und muskulösem Hinterleib eines Löwen" },
   "pegasus": { label: "Pegasus", description: "Reinweißes geflügeltes Pferd mit befiederten Schwingen, fließender Mähne und einer überirdischen Präsenz" },
   "kraken": { label: "Kraken", description: "Kolossales Meeresungeheuer Kraken mit massivem Kopf, glühenden Augen und enormen mit Saugnäpfen besetzten Tentakeln, die aus der Tiefe winden" },
+  "capybara": { label: "Wasserschwein", description: "Großes friedliches südamerikanisches Nagetier" },
+  "sloth": { label: "Faultier", description: "Langsames baumbewohnendes Säugetier mit sanftem Lächeln" },
+  "red-panda": { label: "Roter Panda", description: "Kleiner rotbrauner Bambusfresser mit Fuchsgesicht" },
+  "raven": { label: "Rabe", description: "Glänzend schwarzer Rabe mit intelligentem Blick" },
+  "axolotl": { label: "Axolotl", description: "Rosa Wasser-Salamander mit federartigen Kiemen" },
 }
 
 export default map

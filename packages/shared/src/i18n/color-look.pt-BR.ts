@@ -40,6 +40,15 @@ const map: LocaleCatalogMap = {
   "mtv-90s-vhs": { description: "Croma VHS supersaturado dos anos 90" },
   "polaroid-faded": { description: "Polaroid desbotada com tom magenta" },
   "lifestyle-warm-magazine": { description: "Grade editorial moderna e quente" },
+
+  // Additional film stocks — names kept in English
+  "kodachrome-64": { description: "Vermelhos saturados e altas-luzes âmbar, calor vintage da NatGeo" },
+  "ektachrome-100": { description: "Azuis frios e limpos, clareza de filme slide" },
+  "kodak-tri-x-400": { description: "P&B granulado puxado para fotografia de rua, 35mm áspero" },
+  "aerochrome": { description: "Folhagem rosa-magenta surreal, paisagem em cor falsa" },
+  "fuji-instax": { description: "Tons médios pastel suaves, filme instantâneo de formato quadrado" },
+  "cinestill-50d": { description: "Filme cinema diurno, azuis controlados, atmosfera Wong Kar-wai" },
+  "expired-film": { label: "Filme Vencido", description: "Mudanças de cor, magentas superexpostos e light leaks" },
 }
 
 export default map

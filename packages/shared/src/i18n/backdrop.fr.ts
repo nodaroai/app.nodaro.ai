@@ -38,6 +38,11 @@ const map: LocaleCatalogMap = {
   // Reflective
   "mirror-floor": { label: "Sol miroir", description: "Surface miroir réfléchissante" },
   "polished-floor": { label: "Sol poli", description: "Reflet de sol brillant poli" },
+  "chroma-green": { label: "Vert chroma", description: "Fond vert saturé uni pour incrustation" },
+  "chroma-blue": { label: "Bleu chroma", description: "Fond bleu saturé uni pour incrustation" },
+  "paper-roll-seamless": { label: "Rouleau papier sans couture", description: "Rouleau de papier pastel neutre générique" },
+  "tile-wall": { label: "Mur carrelé", description: "Mur de carreaux carrés salle de bain / cuisine" },
+  "marble-wall": { label: "Mur de marbre", description: "Mur de marbre veiné de luxe" },
 }
 
 export default map

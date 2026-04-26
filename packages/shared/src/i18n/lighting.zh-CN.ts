@@ -66,6 +66,14 @@ const map: LocaleCatalogMap = {
   "ratio-1-8":  { label: "1:8 光比",  description: "极致低调的明暗对比" },
   "ratio-1-16": { label: "1:16 光比", description: "单光源的电影黑色衰减" },
 
+  // Portrait setups
+  "butterfly": { label: "蝴蝶光",     description: "光从正上方打下,鼻下投出蝴蝶形阴影" },
+  "loop":      { label: "环形光",     description: "略偏侧上方,在脸颊投出小环形阴影" },
+  "broad":     { label: "宽光",       description: "受光面朝向镜头,显得脸更宽" },
+  "short":     { label: "窄光",       description: "受光面背离镜头,显瘦" },
+  "hatchet":   { label: "斧光",       description: "顶部掠射,对侧形成深邃阴影" },
+  "clamshell": { label: "蚌壳光",     description: "上方主光 + 下方反光板,夹光式美光" },
+
   // Color temperature — keep Kelvin in alphanumeric
   "temp-2700k": { description: "深琥珀色烛光 / 钨丝灯" },
   "temp-3200k": { description: "暖黄色室内灯光" },

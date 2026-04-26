@@ -40,6 +40,13 @@ const map: LocaleCatalogMap = {
   "mtv-90s-vhs": { label: "MTV 90s VHS", description: "Перенасыщенная хрома VHS 90-х" },
   "polaroid-faded": { label: "Polaroid выцветший", description: "Выцветший Polaroid с пурпурным оттенком" },
   "lifestyle-warm-magazine": { label: "Тёплый лайфстайл-журнал", description: "Современная тёплая редакторская цветокоррекция" },
+  "kodachrome-64": { description: "Насыщенные красные и янтарные света, винтажная теплота NatGeo" },
+  "ektachrome-100": { description: "Прохладные чистые синие, чёткость слайд-плёнки" },
+  "kodak-tri-x-400": { description: "Ч/Б уличная съёмка с пуш-зерном, грубый 35 мм" },
+  "aerochrome": { label: "Aerochrome / Color IR", description: "Сюрреалистичная розово-пурпурная листва, ложноцветный пейзаж" },
+  "fuji-instax": { description: "Мягкие пастельные средние тона, квадратная мгновенная плёнка" },
+  "cinestill-50d": { description: "Дневная кинематографическая плёнка, контролируемые синие, ощущение Вонг Кар-Вая" },
+  "expired-film": { label: "Просроченная плёнка", description: "Цветовые сдвиги, переэкспонированные пурпурные, световые засветки" },
 }
 
 export default map

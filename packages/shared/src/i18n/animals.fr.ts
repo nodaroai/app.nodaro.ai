@@ -128,6 +128,11 @@ const map: LocaleCatalogMap = {
   "griffin": { label: "Griffon", description: "Griffon hybride avec la tête, les ailes et les pattes avant griffues d'un aigle et le corps arrière musclé d'un lion" },
   "pegasus": { label: "Pégase", description: "Cheval ailé blanc pur aux ailes emplumées, à la crinière flottante et à la présence d'un autre monde" },
   "kraken": { label: "Kraken", description: "Bête marine kraken colossale avec une tête massive, des yeux luisants et d'énormes tentacules à ventouses se tordant des profondeurs" },
+  "capybara": { label: "Capybara", description: "Grand rongeur paisible d'Amérique du Sud" },
+  "sloth": { label: "Paresseux", description: "Mammifère arboricole lent au doux sourire" },
+  "red-panda": { label: "Panda roux", description: "Petit mangeur de bambou brun-roux au visage de renard" },
+  "raven": { label: "Corbeau", description: "Corbeau noir brillant au regard intelligent" },
+  "axolotl": { label: "Axolotl", description: "Salamandre aquatique rose aux branchies plumeuses" },
 }
 
 export default map

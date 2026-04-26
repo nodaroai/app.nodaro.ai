@@ -43,6 +43,11 @@ const map: LocaleCatalogMap = {
   // -------------------- Reflective --------------------
   "mirror-floor": { label: "Зеркальный пол", description: "Отражающая зеркальная поверхность" },
   "polished-floor": { label: "Полированный пол", description: "Глянцевое отражение полированного пола" },
+  "chroma-green": { label: "Хромакей зелёный", description: "Плоский насыщенный зелёный экран для кейинга" },
+  "chroma-blue": { label: "Хромакей синий", description: "Плоский насыщенный синий экран" },
+  "paper-roll-seamless": { label: "Бесшовный бумажный фон", description: "Универсальный пастельный нейтральный бумажный рулон" },
+  "tile-wall": { label: "Плиточная стена", description: "Стена из квадратной плитки для ванной или кухни" },
+  "marble-wall": { label: "Мраморная стена", description: "Роскошная мраморная стена с прожилками" },
 }
 
 export default map

@@ -23,6 +23,14 @@ const map: LocaleCatalogMap = {
   "pollen-light": { label: "रौशनी में पराग", description: "सूर्य की किरण में गर्म कण" },
   "water-droplets": { label: "पानी की बूँदें", description: "त्वचा या सतह पर चिपकी बूँदें" },
   "falling-ash": { label: "गिरती राख", description: "हवा में बहती बारीक धूसर राख" },
+  "fireflies": { label: "जुगनू", description: "तैरते bioluminescent कण, गर्मी की रात का जादू" },
+  "incense-smoke": { label: "अगरबत्ती का धुआँ", description: "धीरे-धीरे ऊपर उठता गाढ़ा अगरबत्ती का धुआँ" },
+  "cigarette-smoke": { label: "Cigarette का धुआँ", description: "ऊपर की ओर कुंडली मारता exhaled cigarette का धुआँ" },
+  "candle-glow": { label: "मोमबत्ती की चमक", description: "Halo के साथ गर्म मोमबत्ती की लौ का प्रकाश स्रोत" },
+  "glitter-sparkle": { label: "Glitter / चमक", description: "हवा में Sparkly कण, party माहौल" },
+  "starfield": { label: "तारों भरा आसमान", description: "तारों के साथ दिखाई देता रात का आसमान, cosmic backdrop" },
+  "dandelion-seeds": { label: "Dandelion के बीज", description: "तैरती हुई dandelion की रूई, गर्मी की हवा" },
+  "pollen-drift": { label: "पराग का बहाव", description: "Golden hour रोशनी में बारीक पीला-सुनहरा पराग" },
 }
 
 export default map

@@ -136,6 +136,34 @@ const map: LocaleCatalogMap = {
     label: "레트로 90s",
     description: "그런지와 몰 문화가 섞인 레트로 90년대입니다",
   },
+  "weirdcore": {
+    label: "위어드코어",
+    description: "초현실적인 리미널 스페이스의 불안, 글리치와 향수입니다",
+  },
+  "dreamcore": {
+    label: "드림코어",
+    description: "꿈결 같은 소프트 포커스 초현실주의, 캔디 파스텔입니다",
+  },
+  "traumacore": {
+    label: "트라우마코어",
+    description: "왜곡된 향수의 어린 시절, 멜랑콜리한 편집입니다",
+  },
+  "baddie": {
+    label: "배디",
+    description: "자신감 있고 스타일리시한 트렌디 미학, 날카로운 눈썹과 후프 귀걸이입니다",
+  },
+  "alt-girl": {
+    label: "얼트 걸",
+    description: "얼트 서브컬처 믹스, 염색한 머리, 체인, 번진 메이크업입니다",
+  },
+  "blokecore": {
+    label: "블로크코어",
+    description: "축구 저지 + 아디다스 + 대드코어의 남성 캐주얼입니다",
+  },
+  "y2k-rave": {
+    label: "Y2K 레이브",
+    description: "일본 데코라 클럽 키드, 형광 네온 레이브 스타일입니다",
+  },
 }
 
 export default map

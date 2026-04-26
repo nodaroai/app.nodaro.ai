@@ -69,6 +69,14 @@ const map: LocaleCatalogMap = {
   "pointer-stick": { label: "Указка", description: "Телескопическая указка" },
   "gavel": { label: "Судейский молоток", description: "Деревянный судейский молоток" },
   "wine-bottle": { label: "Бутылка вина", description: "Полная бутылка с фольгой на горлышке" },
+  "parasol": { label: "Зонтик от солнца", description: "Декоративный зонтик, защищающий от солнца" },
+  "locket": { label: "Медальон", description: "Открытый винтажный медальон-кулон в пальцах" },
+  "lighter": { label: "Зажигалка", description: "Хромированная зажигалка с большим пальцем у пламени" },
+  "lantern": { label: "Фонарь", description: "Винтажный ручной фонарь с тёплым янтарным свечением" },
+  "flashlight": { label: "Фонарик", description: "Современный фонарик с лучом, исследование или мистика" },
+  "compass": { label: "Компас", description: "Ручной морской компас, исследование" },
+  "bow-and-arrow": { label: "Лук со стрелой", description: "Натянутый лук с наложенной стрелой" },
+  "shield": { label: "Щит", description: "Ручной щит, средневековый или фэнтезийный" },
 }
 
 export default map

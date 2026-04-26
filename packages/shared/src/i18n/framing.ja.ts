@@ -64,6 +64,15 @@ const map: LocaleCatalogMap = {
   "three-quarter-back": { label: "後方3/4", description: "後ろからのオフアクシス" },
   "behind": { label: "真後ろ", description: "真後ろからの視点" },
   "side-back-angle": { label: "サイドバック・アングル", description: "片肩越しの3/4後方ビュー" },
+
+  // Additional composition
+  "golden-spiral": { label: "黄金螺旋", description: "フィボナッチ比の螺旋に基づく構図" },
+  "frame-within-frame": { label: "フレーム・イン・フレーム", description: "室内の建築要素で被写体を囲む構図" },
+  "s-curve": { label: "S字カーブ", description: "視線を導くしなやかな対角の流れ" },
+  "diagonal-composition": { label: "対角構図", description: "フレームを横切る強い対角線" },
+  "triangular-composition": { label: "三角構図", description: "三点による三角形の配置" },
+  "symmetrical-mirror": { label: "シンメトリー／ミラー", description: "完全な左右対称" },
+  "vignette-composition": { label: "ヴィネット", description: "周辺を強く暗くして中央に焦点を集める" },
 }
 
 export default map

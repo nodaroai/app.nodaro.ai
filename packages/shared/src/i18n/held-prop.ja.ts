@@ -69,6 +69,16 @@ const map: LocaleCatalogMap = {
   "pointer-stick": { label: "指示棒", description: "伸縮式の指示棒" },
   "gavel": { label: "ガベル（小槌）", description: "木製の司法用ガベル" },
   "wine-bottle": { label: "ワインボトル", description: "ホイル封のついた未開封のボトル" },
+
+  // Additional held props
+  "parasol": { label: "パラソル", description: "陽射しを遮る装飾的なパラソル" },
+  "locket": { label: "ロケット", description: "指で開いたヴィンテージのロケットペンダント" },
+  "lighter": { label: "ライター", description: "炎に親指を添えたクロームのライター" },
+  "lantern": { label: "ランタン", description: "暖かな琥珀色に灯るヴィンテージの手持ちランタン" },
+  "flashlight": { label: "懐中電灯", description: "モダンな懐中電灯の光線、探検／ミステリー" },
+  "compass": { label: "コンパス", description: "手持ちの航海用コンパス、探検" },
+  "bow-and-arrow": { label: "弓矢", description: "矢をつがえて引き絞った弓" },
+  "shield": { label: "盾", description: "手持ちの盾、中世／ファンタジー" },
 }
 
 export default map

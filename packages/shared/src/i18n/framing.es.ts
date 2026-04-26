@@ -59,6 +59,14 @@ const map: LocaleCatalogMap = {
   "three-quarter-back": { label: "Tres Cuartos Trasero", description: "Fuera del eje desde atrás" },
   "behind": { label: "Detrás", description: "Vista trasera directa" },
   "side-back-angle": { label: "Ángulo Lateral-Trasero", description: "Vista 3/4 desde detrás de un hombro" },
+
+  "golden-spiral": { label: "Espiral Áurea", description: "Composición sobre la espiral de proporción Fibonacci" },
+  "frame-within-frame": { label: "Cuadro Dentro de Cuadro", description: "Sujeto enmarcado por un elemento arquitectónico interior" },
+  "s-curve": { label: "Curva en S", description: "Flujo diagonal sinuoso que guía la mirada" },
+  "diagonal-composition": { label: "Diagonal", description: "Línea diagonal fuerte cortando el cuadro" },
+  "triangular-composition": { label: "Triangular", description: "Disposición triangular de tres puntos" },
+  "symmetrical-mirror": { label: "Simétrica / Espejo", description: "Simetría exacta izquierda-derecha" },
+  "vignette-composition": { label: "Viñeta", description: "Oscurecimiento periférico fuerte que enfoca el centro" },
 }
 
 export default map

@@ -39,6 +39,16 @@ const map: LocaleCatalogMap = {
   "illuminated": { label: "כתב יד מואר", description: "עלי זהב + קליגרפיה" },
   "pixar-3d": { label: "תלת-ממד Pixar", description: "אנימציית דמות מלוטשת CG" },
   "caricature": { label: "קריקטורה", description: "פורטרט מסוגנן ומוגזם" },
+  "fresco": { label: "פרסקו", description: "ציור קיר על טיח בסגנון תקרת רנסנס" },
+  "mosaic": { label: "פסיפס", description: "אמנות אריחים קטנים בטכניקת פסיפס ביזנטי" },
+  "woodcut": { label: "חיתוך עץ", description: "הדפס תבליט בקונטרסט נועז, מתקופת Dürer" },
+  "etching": { label: "תחריט", description: "הדפס intaglio עם הצללה דקה, סגנון Rembrandt" },
+  "lithograph": { label: "ליתוגרפיה", description: "הדפס אבן עם טווח טונאלי רך, סגנון Toulouse-Lautrec" },
+  "charcoal": { label: "פחם", description: "מחקר טונאלי שחור-אפור רך" },
+  "pastel": { label: "פסטל", description: "פסטלים יבשים של גיר רך" },
+  "acrylic-paint": { label: "צבע אקריליק", description: "מדיה אטומה מתייבשת מהר, קצוות חדים" },
+  "mixed-media": { label: "מדיה מעורבת", description: "שילוב מדיות, טקסטורות הטרוגניות" },
+  "manga": { label: "מאנגה", description: "אמנות פאנלים בדיו שחור-לבן עם הצללת screen-tone" },
 }
 
 export default map

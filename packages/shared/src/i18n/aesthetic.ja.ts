@@ -132,6 +132,34 @@ const map: LocaleCatalogMap = {
     label: "レトロ90s",
     description: "グランジとモールが混ざる90年代の懐かしさ",
   },
+  "weirdcore": {
+    label: "ウィアードコア",
+    description: "シュルレアリスティックなリミナルスペースの不安、グリッチとノスタルジア",
+  },
+  "dreamcore": {
+    label: "ドリームコア",
+    description: "夢のようなソフトフォーカスのシュルレアリスム、キャンディパステル",
+  },
+  "traumacore": {
+    label: "トラウマコア",
+    description: "歪められた懐かしい子供時代、メランコリックな編集",
+  },
+  "baddie": {
+    label: "バディ",
+    description: "自信あふれるトレンディな美学、シャープな眉、フープピアス",
+  },
+  "alt-girl": {
+    label: "オルトガール",
+    description: "オルタナ系サブカルチャーのミックス、染めた髪、チェーン、にじんだメイク",
+  },
+  "blokecore": {
+    label: "ブロークコア",
+    description: "サッカージャージ、アディダス、ダッドコア風のメンズカジュアル",
+  },
+  "y2k-rave": {
+    label: "Y2Kレイヴ",
+    description: "日本のデコラ系クラブキッズ、蛍光ネオンレイヴ",
+  },
 }
 
 export default map

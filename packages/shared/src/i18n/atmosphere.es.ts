@@ -23,6 +23,15 @@ const map: LocaleCatalogMap = {
   "pollen-light": { label: "Polen en la Luz", description: "Partículas cálidas en un rayo de sol" },
   "water-droplets": { label: "Gotas de Agua", description: "Gotas adheridas a la piel o superficie" },
   "falling-ash": { label: "Cenizas Cayendo", description: "Cenizas grises finas a la deriva en el aire" },
+
+  "fireflies": { label: "Luciérnagas", description: "Motas bioluminiscentes a la deriva, magia de noche de verano" },
+  "incense-smoke": { label: "Humo de Incienso", description: "Humo espeso de incienso elevándose lentamente" },
+  "cigarette-smoke": { label: "Humo de Cigarrillo", description: "Humo de cigarrillo exhalado curvándose hacia arriba" },
+  "candle-glow": { label: "Resplandor de Vela", description: "Llama cálida de vela como fuente de luz con halo" },
+  "glitter-sparkle": { label: "Brillos / Destellos", description: "Partículas brillantes en el aire, contexto de fiesta" },
+  "starfield": { label: "Campo de Estrellas", description: "Cielo nocturno visible con estrellas, fondo cósmico" },
+  "dandelion-seeds": { label: "Semillas de Diente de León", description: "Pelusa de diente de león a la deriva, brisa estival" },
+  "pollen-drift": { label: "Polen a la Deriva", description: "Polen fino dorado en luz de hora dorada" },
 }
 
 export default map

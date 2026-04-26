@@ -68,6 +68,13 @@ const map: LocaleCatalogMap = {
   "temp-5600k": { label: "5600K ضوء النهار", description: "شمس ظهر متوازنة مع ضوء النهار" },
   "temp-6500k": { label: "6500K غائم", description: "صبغة زرقاء باردة قليلا" },
   "temp-9000k": { label: "9000K ظل", description: "ظل أزرق بارد بشكل مميز" },
+
+  "butterfly": { label: "إضاءة Butterfly", description: "ضوء من فوق يلقي ظل فراشة تحت الأنف" },
+  "loop": { label: "إضاءة Loop", description: "جانب + فوق قليلا يلقي حلقة صغيرة على الخد" },
+  "broad": { label: "إضاءة Broad", description: "الجانب المضاء نحو الكاميرا، مظهر وجه أعرض" },
+  "short": { label: "إضاءة Short", description: "الجانب المضاء بعيدا عن الكاميرا، تنحيف" },
+  "hatchet": { label: "إضاءة Hatchet", description: "كشط علوي وظل عميق على الجهة المقابلة" },
+  "clamshell": { label: "إضاءة Clamshell", description: "فوق + عاكس تحت، جمال مضغوط" },
 }
 
 export default map

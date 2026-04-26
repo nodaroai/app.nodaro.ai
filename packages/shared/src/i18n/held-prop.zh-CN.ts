@@ -44,6 +44,7 @@ const map: LocaleCatalogMap = {
   "briefcase":   { label: "公文包",     description: "硬壳公文包" },
   "umbrella":    { label: "伞",         description: "撑开的黑色伞" },
   "fan-folding": { label: "折扇",       description: "展开的手绘折扇" },
+  "parasol":     { label: "阳伞",       description: "装饰性的阳伞,遮阳用" },
 
   // -------------------- Floral / Nature --------------------
   "bouquet":      { label: "花束",       description: "混合鲜花花束" },
@@ -69,6 +70,13 @@ const map: LocaleCatalogMap = {
   "pointer-stick": { label: "教鞭",       description: "可伸缩的教鞭" },
   "gavel":         { label: "法槌",       description: "木制法官法槌" },
   "wine-bottle":   { label: "葡萄酒瓶",   description: "封口完整的整瓶葡萄酒" },
+  "locket":        { label: "挂坠盒",     description: "指间打开的复古挂坠盒" },
+  "lighter":       { label: "打火机",     description: "镀铬打火机,大拇指按在火焰上" },
+  "lantern":       { label: "灯笼",       description: "复古手提灯笼,温暖的琥珀色光" },
+  "flashlight":    { label: "手电筒",     description: "现代手电筒光束,探险 / 神秘氛围" },
+  "compass":       { label: "指南针",     description: "手持航海指南针,探险感" },
+  "bow-and-arrow": { label: "弓与箭",     description: "拉满的弓,搭着箭" },
+  "shield":        { label: "盾牌",       description: "手持的盾牌,中世纪 / 奇幻风" },
 }
 
 export default map

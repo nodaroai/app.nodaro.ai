@@ -72,6 +72,14 @@ const map: LocaleCatalogMap = {
   "plasma": { label: "פלזמה", description: "פלזמה חשמלית זוהרת" },
   "crystal-shard": { label: "שברי קריסטל", description: "קריסטל זוהר מנופץ" },
   "obsidian-glass": { label: "זכוכית אובסידיאן", description: "זכוכית געשית כהה" },
+  "suede": { label: "זמש", description: "עור מנופץ רך, משטח קטיפתי מאט" },
+  "mesh": { label: "רשת", description: "בד רשת שקוף, ספורטיבי / שכבה שקופה" },
+  "patent-leather": { label: "עור פטנט", description: "עור משקף מבריק" },
+  "terrazzo": { label: "טרצו", description: "אבן מורכבת עם שברי שיש/זכוכית משובצים" },
+  "iridescent": { label: "איריסי", description: "משטח קשת מחליף צבעים" },
+  "mother-of-pearl": { label: "אם הפנינה", description: "פנים פנימיים של קונכייה איריסית בגוון שמנת" },
+  "carbon-fiber": { label: "סיבי פחמן", description: "קומפוזיט סיבי פחמן ארוג שחור" },
+  "holographic-film": { label: "פילם הולוגרפי", description: "הולוגרמה שוברת אור עם נצנוץ קשת" },
 }
 
 export default map

@@ -63,6 +63,15 @@ const map: LocaleCatalogMap = {
   "haunted-mansion": { label: "Mansión Embrujada", description: "Mansión gótica en decadencia" },
   "dreamscape": { label: "Paisaje Onírico", description: "Islas flotantes surrealistas" },
   "wasteland": { label: "Páramo Postapocalíptico", description: "Páramo oxidado y nublado" },
+
+  "balcony": { label: "Balcón", description: "Balcón de apartamento u hotel, vista urbana, íntimo" },
+  "attic": { label: "Ático", description: "Ático polvoriento con vigas de madera y techo inclinado" },
+  "basement": { label: "Sótano", description: "Sótano de concreto, tuberías expuestas, industrial tenue" },
+  "sauna": { label: "Sauna", description: "Sauna con paneles de madera, vapor, calidez íntima" },
+  "dorm-room": { label: "Habitación de Dormitorio Universitario", description: "Dormitorio universitario, cama individual, pósters, luces de hadas" },
+  "locker-room": { label: "Vestuario", description: "Vestuario de gimnasio o deportes, azulejos, bancos, espejos" },
+  "music-studio": { label: "Estudio de Música", description: "Estudio de grabación, micrófonos, espuma, mesa de control" },
+  "conservatory": { label: "Invernadero", description: "Invernadero con paredes de cristal, plantas tropicales, sol filtrado" },
 }
 
 export default map

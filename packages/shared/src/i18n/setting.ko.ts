@@ -63,6 +63,14 @@ const map: LocaleCatalogMap = {
   "haunted-mansion": { label: "유령 저택", description: "쇠락한 고딕 저택입니다" },
   "dreamscape": { label: "드림스케이프", description: "초현실적인 떠다니는 섬들입니다" },
   "wasteland": { label: "포스트 아포칼립스 황무지", description: "녹슬고 흐린 황무지입니다" },
+  "balcony": { label: "발코니", description: "도시 전망의 친밀한 아파트 / 호텔 발코니입니다" },
+  "attic": { label: "다락방", description: "비스듬한 지붕의 목재 빔이 있는 먼지 쌓인 다락방입니다" },
+  "basement": { label: "지하실", description: "어두운 산업적 분위기의 콘크리트 지하실, 노출된 파이프입니다" },
+  "sauna": { label: "사우나", description: "친밀하고 따뜻한 목재 패널 사우나, 증기가 자욱합니다" },
+  "dorm-room": { label: "기숙사 방", description: "트윈 침대, 포스터, 페어리 라이트가 있는 대학 기숙사 방입니다" },
+  "locker-room": { label: "라커룸", description: "타일과 벤치, 거울이 있는 헬스장 / 스포츠 라커룸입니다" },
+  "music-studio": { label: "음악 스튜디오", description: "마이크, 흡음 폼, 콘솔 보드가 있는 녹음 스튜디오입니다" },
+  "conservatory": { label: "온실", description: "유리벽으로 둘러싸인 온실, 열대 식물과 여과된 햇빛입니다" },
 }
 
 export default map

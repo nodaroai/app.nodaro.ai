@@ -136,6 +136,35 @@ const map: LocaleCatalogMap = {
     label: "ريترو التسعينيات",
     description: "مزيج من Grunge وأجواء مولات التسعينيات",
   },
+
+  "weirdcore": {
+    label: "Weirdcore",
+    description: "قلق فضاء انتقالي سوريالي، Glitch + حنين",
+  },
+  "dreamcore": {
+    label: "Dreamcore",
+    description: "سوريالية حلمية ناعمة التركيز، باستيل حلوى",
+  },
+  "traumacore": {
+    label: "Traumacore",
+    description: "طفولة حنينية مشوهة وتعديلات حزينة",
+  },
+  "baddie": {
+    label: "Baddie",
+    description: "أسلوب ترندي واثق، حواجب حادة وأقراط حلقية",
+  },
+  "alt-girl": {
+    label: "Alt-girl",
+    description: "مزيج ثقافة مضادة بشعر مصبوغ وسلاسل ومكياج ملطخ",
+  },
+  "blokecore": {
+    label: "Blokecore",
+    description: "كاجوال رجالي بأسلوب Dadcore: قميص كرة قدم + adidas",
+  },
+  "y2k-rave": {
+    label: "Y2K Rave",
+    description: "Decora ياباني لطفل النادي، نيون فلوريسنت لحفلات Rave",
+  },
 }
 
 export default map

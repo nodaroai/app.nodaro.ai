@@ -71,6 +71,14 @@ const map: LocaleCatalogMap = {
   "temp-5600k": { label: "5600K Luz do Dia", description: "Sol do meio-dia equilibrado para luz do dia" },
   "temp-6500k": { label: "6500K Nublado", description: "Discreto azulado" },
   "temp-9000k": { label: "9000K Sombra", description: "Tom azul nitidamente frio na sombra" },
+
+  // Additional portrait setups — names sometimes kept in English
+  "butterfly": { label: "Butterfly Lighting", description: "Luz acima projeta sombra em forma de borboleta sob o nariz" },
+  "loop": { label: "Loop Lighting", description: "Leve lateral + acima projeta pequena sombra em loop na bochecha" },
+  "broad": { label: "Broad Lighting", description: "Lado iluminado voltado para a câmera, rosto parece mais largo" },
+  "short": { label: "Short Lighting", description: "Lado iluminado afastado da câmera, efeito afinador" },
+  "hatchet": { label: "Hatchet Lighting", description: "Luz rasante de cima, sombra profunda no lado oposto" },
+  "clamshell": { label: "Clamshell Lighting", description: "Acima + rebatedor abaixo, beleza prensada como concha" },
 }
 
 export default map

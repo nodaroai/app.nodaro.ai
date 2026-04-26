@@ -23,6 +23,14 @@ const map: LocaleCatalogMap = {
   "pollen-light": { label: "光の中の花粉", description: "太陽光の中の暖かい粒子" },
   "water-droplets": { label: "水滴", description: "肌や表面にまとわりつく水滴" },
   "falling-ash": { label: "降る灰", description: "空気中を漂う細かい灰色の灰" },
+  "fireflies": { label: "ホタル", description: "漂う生物発光の光点、夏の夜の魔法" },
+  "incense-smoke": { label: "お香の煙", description: "ゆっくりと立ち上る濃いお香の煙" },
+  "cigarette-smoke": { label: "タバコの煙", description: "吐き出されたタバコの煙が上に渦を巻く" },
+  "candle-glow": { label: "ろうそくの灯", description: "ハロー付きの暖かなろうそくの炎の光源" },
+  "glitter-sparkle": { label: "グリッター／スパークル", description: "空気中の輝く粒子、パーティーの雰囲気" },
+  "starfield": { label: "星空", description: "星の見える夜空、宇宙的な背景" },
+  "dandelion-seeds": { label: "タンポポの綿毛", description: "漂うタンポポの綿毛、夏のそよ風" },
+  "pollen-drift": { label: "花粉の漂い", description: "ゴールデンアワーの光の中を漂う細かな黄金色の花粉" },
 }
 
 export default map

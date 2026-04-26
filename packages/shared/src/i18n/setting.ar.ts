@@ -59,6 +59,15 @@ const map: LocaleCatalogMap = {
   "haunted-mansion": { label: "قصر مسكون", description: "قصر قوطي متهالك" },
   "dreamscape": { label: "مشهد حلمي", description: "جزر طافية سوريالية" },
   "wasteland": { label: "Wasteland بعد المحرقة", description: "Wasteland غائم صدئ" },
+
+  "balcony": { label: "شرفة", description: "شرفة شقة / فندق بإطلالة حضرية حميمية" },
+  "attic": { label: "علية", description: "علية مغبرة بعوارض خشبية وسقف مائل" },
+  "basement": { label: "قبو", description: "قبو خرساني بأنابيب مكشوفة وضوء صناعي خافت" },
+  "sauna": { label: "ساونا", description: "ساونا بألواح خشبية وبخار ودفء حميمي" },
+  "dorm-room": { label: "غرفة سكن طلابي", description: "غرفة سكن جامعي بسرير مفرد وملصقات وأضواء سلسلة" },
+  "locker-room": { label: "غرفة خزائن", description: "غرفة خزائن صالة رياضية ببلاط ومقاعد ومرايا" },
+  "music-studio": { label: "استوديو موسيقي", description: "استوديو تسجيل بميكروفونات وإسفنج ولوحة تحكم" },
+  "conservatory": { label: "بيت زجاجي", description: "بيت زجاجي بجدران زجاجية ونباتات استوائية وشمس مفلترة" },
 }
 
 export default map

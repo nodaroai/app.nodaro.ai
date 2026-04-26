@@ -55,6 +55,9 @@ const map: LocaleCatalogMap = {
   "food-photography": { label: "Фотография еды", description: "Снимок еды сверху или под 45 градусов" },
   "real-estate": { label: "Недвижимость", description: "Широкоугольный архитектурный интерьер" },
   "sports-action": { label: "Спортивная съёмка", description: "Замёрзший спортивный момент в телеобъектив" },
+  "point-and-shoot": { label: "Мыльница / Одноразовая", description: "Эстетика одноразовой камеры, жёсткая вспышка, повседневный кадр" },
+  "lifestyle-blog": { label: "Лайфстайл-блог", description: "Мягкий естественный свет дома или у кофе, блогерская атмосфера" },
+  "product-shot": { label: "Предметная съёмка", description: "Чистый изолированный продукт на нейтральном фоне, e-commerce" },
 }
 
 export default map

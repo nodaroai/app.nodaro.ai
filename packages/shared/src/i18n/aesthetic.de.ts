@@ -36,6 +36,13 @@ const map: LocaleCatalogMap = {
   "casual-lived-in": { description: "Eingelebtes, ungestyltes Alltagsgefühl" },
   "effortless-cool": { description: "Ungekünstelte Off-Duty-French-Girl-Lässigkeit" },
   "retro-90s": { label: "Retro 90er", description: "Throwback Grunge-trifft-Mall-Neunziger" },
+  "weirdcore": { description: "Surreale Liminal-Space-Angst, Glitch + Nostalgie" },
+  "dreamcore": { description: "Traumartiger Soft-Focus-Surrealismus, zuckersüßes Pastell" },
+  "traumacore": { description: "Verzerrte nostalgische Kindheit, melancholische Edits" },
+  "baddie": { description: "Selbstbewusste gestylte trendige Ästhetik, scharfe Augenbrauen, Creolen" },
+  "alt-girl": { description: "Alt-Subkultur-Mix, gefärbte Haare, Ketten, verschmiertes Make-up" },
+  "blokecore": { description: "Fußballtrikot + Adidas + Dadcore lässige Männermode" },
+  "y2k-rave": { description: "Japanischer Decora-Club-Kid, fluoreszierender Neon-Rave" },
 }
 
 export default map

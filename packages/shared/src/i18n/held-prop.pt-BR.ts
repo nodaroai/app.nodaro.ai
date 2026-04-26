@@ -69,6 +69,16 @@ const map: LocaleCatalogMap = {
   "pointer-stick": { label: "Apontador Telescópico", description: "Apontador telescópico" },
   "gavel": { label: "Martelo de Juiz", description: "Martelo de juiz em madeira" },
   "wine-bottle": { label: "Garrafa de Vinho", description: "Garrafa cheia com lacre de papel-alumínio" },
+
+  // Additional held props
+  "parasol": { label: "Sombrinha", description: "Sombrinha decorativa protegendo do sol" },
+  "locket": { label: "Medalhão", description: "Medalhão vintage aberto pendurado nos dedos" },
+  "lighter": { label: "Isqueiro", description: "Isqueiro cromado com polegar na chama" },
+  "lantern": { label: "Lanterna", description: "Lanterna vintage de mão com brilho âmbar quente" },
+  "flashlight": { label: "Lanterna", description: "Lanterna moderna com feixe de luz, exploração ou mistério" },
+  "compass": { label: "Bússola", description: "Bússola náutica de mão, exploração" },
+  "bow-and-arrow": { label: "Arco e Flecha", description: "Arco de arquearia esticado com flecha encaixada" },
+  "shield": { label: "Escudo", description: "Escudo de mão, medieval ou fantasia" },
 }
 
 export default map

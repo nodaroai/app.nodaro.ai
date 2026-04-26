@@ -63,6 +63,14 @@ const map: LocaleCatalogMap = {
   "haunted-mansion": { label: "אחוזה רדופה", description: "אחוזה גותית מתפוררת" },
   "dreamscape": { label: "נוף חלום", description: "איים מרחפים סוריאליסטיים" },
   "wasteland": { label: "אדמת בור פוסט-אפוקליפטית", description: "אדמת בור חלודה ומעוננת" },
+  "balcony": { label: "מרפסת", description: "מרפסת של דירה / מלון, נוף עירוני, אינטימי" },
+  "attic": { label: "עליית גג", description: "עליית גג מאובקת עם קורות עץ, גג משופע" },
+  "basement": { label: "מרתף", description: "מרתף בטון, צנרת חשופה, תאורה תעשייתית עמומה" },
+  "sauna": { label: "סאונה", description: "סאונה מצופה עץ, אדים, חמימות אינטימית" },
+  "dorm-room": { label: "חדר במעונות", description: "חדר במעונות סטודנטים, מיטה יחיד, פוסטרים, אורות פיות" },
+  "locker-room": { label: "חדר הלבשה", description: "חדר הלבשה של חדר כושר / ספורט, קרמיקה, ספסלים, מראות" },
+  "music-studio": { label: "אולפן הקלטות", description: "אולפן הקלטות, מיקרופונים, ספוג, קונסולת בקרה" },
+  "conservatory": { label: "חממה זכוכית", description: "חממה עם קירות זכוכית, צמחים טרופיים, שמש מסוננת" },
 }
 
 export default map

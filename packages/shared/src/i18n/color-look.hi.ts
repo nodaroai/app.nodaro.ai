@@ -40,6 +40,13 @@ const map: LocaleCatalogMap = {
   "mtv-90s-vhs": { label: "MTV 90s VHS", description: "Oversaturated 90 के दशक का VHS chroma" },
   "polaroid-faded": { label: "Polaroid Faded", description: "Magenta-tinted faded Polaroid" },
   "lifestyle-warm-magazine": { label: "Lifestyle Warm Magazine", description: "आधुनिक warm editorial grade" },
+  "kodachrome-64": { description: "संतृप्त लाल और amber highlights, vintage NatGeo गर्माहट" },
+  "ektachrome-100": { description: "ठंडे साफ़ नीले, slide-film स्पष्टता" },
+  "kodak-tri-x-400": { description: "Pushed-grain B&W street photo, gritty 35mm" },
+  "aerochrome": { description: "Surreal गुलाबी-magenta पत्ते, false-color landscape" },
+  "fuji-instax": { description: "मुलायम pastel midtones, square-format instant film" },
+  "cinestill-50d": { description: "Daylight cinema stock, नियंत्रित नीले, Wong Kar-wai feel" },
+  "expired-film": { label: "Expired Film", description: "रंग shifts, overexposed magentas, light leaks" },
 }
 
 export default map

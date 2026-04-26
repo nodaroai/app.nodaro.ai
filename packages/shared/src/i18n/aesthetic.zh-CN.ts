@@ -139,6 +139,34 @@ const map: LocaleCatalogMap = {
     label: "90 年代复古",
     description: "Grunge 与商场风混搭的 90 年代",
   },
+  "weirdcore": {
+    label: "Weirdcore 怪核",
+    description: "超现实的阈限空间焦虑感,故障与怀旧交织",
+  },
+  "dreamcore": {
+    label: "Dreamcore 梦核",
+    description: "梦幻般柔焦的超现实,糖果粉彩",
+  },
+  "traumacore": {
+    label: "Traumacore 创伤核",
+    description: "扭曲怀旧的童年回忆,忧郁感的剪辑",
+  },
+  "baddie": {
+    label: "Baddie 自信潮女",
+    description: "自信精致的潮流美学,锐利眉形与圈形耳环",
+  },
+  "alt-girl": {
+    label: "Alt-Girl 另类少女",
+    description: "另类亚文化混搭,染发、链条与晕染妆容",
+  },
+  "blokecore": {
+    label: "Blokecore 球衣风",
+    description: "足球球衣 + Adidas + 爸爸味的男士休闲",
+  },
+  "y2k-rave": {
+    label: "Y2K Rave 千禧锐舞",
+    description: "日系装饰系俱乐部少女风,荧光霓虹锐舞感",
+  },
 }
 
 export default map

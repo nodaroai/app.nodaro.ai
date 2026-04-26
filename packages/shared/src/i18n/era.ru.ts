@@ -104,6 +104,18 @@ const map: LocaleCatalogMap = {
     label: "Ретрофутуризм",
     description: "Ностальгия по вчерашнему завтра",
   },
+  "atomic-age-50s": {
+    label: "Атомная эпоха 1950-х",
+    description: "Сай-фай футуризм 1950-х и тревога холодной войны",
+  },
+  "gen-z-2020s": {
+    label: "Поколение Z, 2020-е",
+    description: "Композиция в первую очередь под телефон, стиль с кодами TikTok, возрождение Y2K",
+  },
+  "fin-de-siecle": {
+    label: "Fin-de-siècle",
+    description: "Прекрасная эпоха, элегантность европейского рубежа веков",
+  },
 }
 
 export default map

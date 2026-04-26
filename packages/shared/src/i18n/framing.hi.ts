@@ -64,6 +64,13 @@ const map: LocaleCatalogMap = {
   "three-quarter-back": { label: "Three-Quarter Back", description: "पीछे से off-axis" },
   "behind": { label: "पीछे से", description: "सीधा rear view" },
   "side-back-angle": { label: "Side-Back Angle", description: "एक कंधे के पीछे से 3/4 view" },
+  "golden-spiral": { label: "Golden Spiral", description: "Fibonacci ratio spiral पर composition" },
+  "frame-within-frame": { label: "Frame Within a Frame", description: "अंदरूनी architectural element से framed subject" },
+  "s-curve": { label: "S-Curve", description: "नज़र को निर्देशित करता घुमावदार diagonal flow" },
+  "diagonal-composition": { label: "Diagonal", description: "Frame के पार जाती मज़बूत diagonal रेखा" },
+  "triangular-composition": { label: "Triangular", description: "तीन-बिंदु त्रिकोणीय arrangement" },
+  "symmetrical-mirror": { label: "Symmetrical / Mirror", description: "बिल्कुल बाएँ-दाएँ सममिति" },
+  "vignette-composition": { label: "Vignette", description: "केंद्र पर ध्यान केंद्रित करता भारी peripheral darkening" },
 }
 
 export default map

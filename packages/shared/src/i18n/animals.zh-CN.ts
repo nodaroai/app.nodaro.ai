@@ -66,6 +66,9 @@ const map: LocaleCatalogMap = {
   "koala":      { label: "考拉",      description: "蓬松的灰色有袋类动物,圆头、毛茸茸大耳、黑色大鼻,胸前柔软蓬松" },
   "deer":       { label: "鹿",        description: "优雅的鹿,红棕色皮毛、纤细四肢、白色喉斑——若是雄鹿则有分叉鹿角" },
   "raccoon":    { label: "浣熊",      description: "戴面具的浣熊,灰色皮毛,眼周有强盗般的黑色面罩,蓬松环纹尾" },
+  "capybara":   { label: "水豚",      description: "南美的大型温顺啮齿动物,身体壮硕,神情安详" },
+  "sloth":      { label: "树懒",      description: "行动缓慢的树栖哺乳动物,带有温柔的微笑" },
+  "red-panda":  { label: "小熊猫",    description: "小型红棕色食竹动物,狐狸脸庞" },
 
   // -------------------- Birds --------------------
   "eagle":       { label: "鹰",        description: "雄伟的鹰,深棕色身体、白色头尾、黄色弯钩喙与锋利爪子" },
@@ -78,6 +81,7 @@ const map: LocaleCatalogMap = {
   "sparrow":     { label: "麻雀",      description: "棕灰色的小麻雀,背带条纹、身形圆润紧凑,小黑眼机敏" },
   "crow":        { label: "乌鸦",      description: "通体油亮的黑色乌鸦,直粗喙、聪慧的黑眼、虹彩光泽羽毛" },
   "hummingbird": { label: "蜂鸟",      description: "迷你宝石色蜂鸟,翠绿与红宝石虹彩羽毛,长针状细喙" },
+  "raven":       { label: "渡鸦",      description: "通体油亮的黑色渡鸦,目光聪慧锐利" },
 
   // -------------------- Sea --------------------
   "dolphin":    { label: "海豚",      description: "光滑的灰色海豚,带笑脸,弯曲背鳍与有力尾鳍" },
@@ -88,6 +92,7 @@ const map: LocaleCatalogMap = {
   "jellyfish":  { label: "水母",      description: "半透明的水母,钟状身体发光,长长丝状触手拖曳" },
   "crab":       { label: "螃蟹",      description: "红壳螃蟹,宽阔的盔甲背壳,大钳与横步快走的腿" },
   "seahorse":   { label: "海马",      description: "小巧的海马,卷曲的可缠尾、马形头、精致背鳍" },
+  "axolotl":    { label: "墨西哥钝口螈", description: "粉红色的水生蝾螈,头部带有羽毛状的外鳃" },
 
   // -------------------- Small Pets --------------------
   "hamster":    { label: "仓鼠",      description: "圆滚滚的仓鼠,胖嘟嘟的颊袋、小爪与明亮的黑色珠眼" },

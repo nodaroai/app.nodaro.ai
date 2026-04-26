@@ -72,6 +72,16 @@ const map: LocaleCatalogMap = {
   "plasma": { label: "Plasma", description: "Plasma elétrico brilhando" },
   "crystal-shard": { label: "Estilhaços de Cristal", description: "Cristal estilhaçado e brilhante" },
   "obsidian-glass": { description: "Vidro vulcânico escuro" },
+
+  // Additional materials
+  "suede": { label: "Camurça", description: "Couro raspado macio, superfície aveludada e fosca" },
+  "mesh": { label: "Tela", description: "Tecido de rede transparente, atlético ou top transparente" },
+  "patent-leather": { label: "Couro Envernizado", description: "Couro envernizado de alto brilho e reflexivo" },
+  "terrazzo": { label: "Granilite", description: "Pedra composta com lascas de mármore e vidro embutidas" },
+  "iridescent": { label: "Iridescente", description: "Superfície arco-íris que muda de cor" },
+  "mother-of-pearl": { label: "Madrepérola", description: "Interior de concha perolado, creme iridescente" },
+  "carbon-fiber": { label: "Fibra de Carbono", description: "Compósito de fibra de carbono preta trançada" },
+  "holographic-film": { label: "Filme Holográfico", description: "Holograma que refrata luz com brilho arco-íris" },
 }
 
 export default map

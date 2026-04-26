@@ -39,6 +39,16 @@ const map: LocaleCatalogMap = {
   "illuminated":    { label: "彩饰手稿",       description: "金箔加书法的中世纪手稿" },
   "pixar-3d":       { label: "皮克斯 3D",      description: "精致的角色动画 CG" },
   "caricature":     { label: "漫画肖像",       description: "夸张风格化的人物肖像" },
+  "fresco":         { label: "湿壁画",         description: "文艺复兴风格的灰泥天顶画" },
+  "mosaic":         { label: "马赛克",         description: "拜占庭风格的小块镶嵌艺术" },
+  "woodcut":        { label: "木刻版画",       description: "杜勒时代的高对比凸版印刷" },
+  "etching":        { label: "蚀刻版画",       description: "伦勃朗式精细交叉线腐蚀凹版" },
+  "lithograph":     { label: "石版画",         description: "图卢兹-洛特列克风的柔和层次石版印刷" },
+  "charcoal":       { label: "炭笔画",         description: "柔软的黑灰色调研究" },
+  "pastel":         { label: "色粉画",         description: "干性介质的柔软粉彩" },
+  "acrylic-paint":  { label: "丙烯画",         description: "速干不透明介质,边缘锐利" },
+  "mixed-media":    { label: "综合材料",       description: "混合多种介质,异质肌理交织" },
+  "manga":          { label: "漫画",           description: "黑白勾线分镜,网点纸阴影" },
 }
 
 export default map

@@ -11,6 +11,9 @@ const map: LocaleCatalogMap = {
   "1980s-neon":     { label: "1980 年代霓虹",     description: "肩垫 MTV 霓虹过剩感" },
   "1990s-mall":     { label: "1990 年代商场",     description: "商场少女味 Grunge 与流行九十年代" },
   "2000s-y2k":      { label: "2000 年代狗仔 / Y2K", description: "狗仔闪光下的低腰小报时代" },
+  "atomic-age-50s": { label: "1950 年代原子时代", description: "1950 年代科幻未来感叠加冷战焦虑" },
+  "gen-z-2020s":    { label: "Z 世代 2020 年代", description: "手机优先构图,TikTok 化造型,Y2K 复兴" },
+  "fin-de-siecle":  { label: "世纪末",           description: "美好年代的世纪之交欧式优雅" },
 
   // -------------------- Pre-modern --------------------
   "medieval":     { label: "中世纪",       description: "欧洲石堡中世纪" },
