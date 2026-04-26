@@ -1039,6 +1039,122 @@
   70%, 100% { transform: perspective(800px) rotateY(360deg); }
 }
 
+/* ============================================================================
+   Additional motions (added in audit pass)
+   - breathing, creep-in, creep-out, gimbal-walk, push-pull
+   - orbit-360, spin-360
+   - ronin-glide, serpentine
+   ========================================================================== */
+
+/* Breathing — subtle vertical bob like a held camera at rest */
+.cm-motion-breathing .cm-scene { animation: cm-kf-breathing 4.2s ease-in-out infinite; }
+@keyframes cm-kf-breathing {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(0, -0.6%, 0) scale(1.012); }
+}
+
+/* Creep In / Out — same direction as push-in/pull-out but much slower & sneakier */
+.cm-motion-creep-in     .cm-scene            { animation: cm-kf-dolly-in-scene  9s linear infinite; }
+.cm-motion-creep-in     .cm-foreground-left  { animation: cm-kf-fg-dolly-in-left  9s linear infinite; }
+.cm-motion-creep-in     .cm-foreground-right { animation: cm-kf-fg-dolly-in-right 9s linear infinite; }
+.cm-motion-creep-out    .cm-scene            { animation: cm-kf-dolly-out-scene 9s linear infinite; }
+.cm-motion-creep-out    .cm-foreground-left  { animation: cm-kf-fg-dolly-out-left  9s linear infinite; }
+.cm-motion-creep-out    .cm-foreground-right { animation: cm-kf-fg-dolly-out-right 9s linear infinite; }
+
+/* Gimbal Walk — smooth walking with gentle Y bob and tiny X drift, no shake */
+.cm-motion-gimbal-walk .cm-scene { animation: cm-kf-gimbal-walk 2.8s ease-in-out infinite; }
+@keyframes cm-kf-gimbal-walk {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  25%  { transform: translate3d(-0.4%, -0.8%, 0) scale(1.005); }
+  50%  { transform: translate3d(0, 0, 0) scale(1.01); }
+  75%  { transform: translate3d(0.4%, -0.8%, 0) scale(1.005); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+/* Push-Pull — push in, then pull out, repeating (a rhythmic dolly cycle) */
+.cm-motion-push-pull .cm-scene            { animation: cm-kf-push-pull-scene  6s ease-in-out infinite; }
+.cm-motion-push-pull .cm-foreground-left  { animation: cm-kf-push-pull-fg-left  6s ease-in-out infinite; }
+.cm-motion-push-pull .cm-foreground-right { animation: cm-kf-push-pull-fg-right 6s ease-in-out infinite; }
+@keyframes cm-kf-push-pull-scene {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.18); }
+}
+@keyframes cm-kf-push-pull-fg-left {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(-12%, 4%, 0) scale(1.6); }
+}
+@keyframes cm-kf-push-pull-fg-right {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(12%, 4%, 0) scale(1.6); }
+}
+
+/*
+ * Orbit 360 — full revolution around the subject. Reuse the orbit visual
+ * convention (hide front foreground trees, show floor marker) and run the
+ * subject's Y-rotation through a full 360.
+ */
+.cm-motion-orbit-360 .cm-foreground { display: none; }
+.cm-motion-orbit-360 .cm-orbit-marker { display: block; }
+.cm-motion-orbit-360 .cm-sky,
+.cm-motion-orbit-360 .cm-ground,
+.cm-motion-orbit-360 .cm-horizon,
+.cm-motion-orbit-360 .cm-depth-far,
+.cm-motion-orbit-360 .cm-depth-near { animation: cm-kf-orbit-360-bg 6s linear infinite; }
+.cm-motion-orbit-360 .cm-subject    { animation: cm-kf-orbit-360-subj 6s linear infinite; }
+@keyframes cm-kf-orbit-360-bg {
+  0%   { transform: translate3d(0%, 0, 0); }
+  50%  { transform: translate3d(-22%, 0, 0); }
+  100% { transform: translate3d(0%, 0, 0); }
+}
+@keyframes cm-kf-orbit-360-subj {
+  0%   { transform: rotateY(0deg); }
+  100% { transform: rotateY(360deg); }
+}
+
+/* Spin 360 — camera rolls a full revolution on its own axis */
+.cm-motion-spin-360 .cm-scene { animation: cm-kf-spin-360 4s linear infinite; transform-origin: 50% 55%; }
+@keyframes cm-kf-spin-360 {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/*
+ * Ronin Glide — extremely smooth lateral track (named after the Ronin
+ * gimbal). Same direction as truck-right but no shake, longer ease, and a
+ * subtle scene-wide pan that sells "floating" smoothness.
+ */
+.cm-motion-ronin-glide .cm-scene { animation: cm-kf-ronin-glide-scene 5s ease-in-out infinite; }
+.cm-motion-ronin-glide .cm-depth-near-left,
+.cm-motion-ronin-glide .cm-depth-near-right { animation: cm-kf-ronin-glide-near 5s ease-in-out infinite; }
+@keyframes cm-kf-ronin-glide-scene {
+  0%, 100% { transform: translate3d(-3%, 0, 0); }
+  50%      { transform: translate3d(3%, 0, 0); }
+}
+@keyframes cm-kf-ronin-glide-near {
+  0%, 100% { transform: translate3d(-7%, 0, 0); }
+  50%      { transform: translate3d(7%, 0, 0); }
+}
+
+/* Serpentine — S-curve weave (snake-like). Camera drifts left/right in a
+ * sinusoidal pattern while pushing slightly forward. */
+.cm-motion-serpentine .cm-scene { animation: cm-kf-serpentine-scene 4s ease-in-out infinite; }
+.cm-motion-serpentine .cm-depth-near-left,
+.cm-motion-serpentine .cm-depth-near-right { animation: cm-kf-serpentine-near 4s ease-in-out infinite; }
+@keyframes cm-kf-serpentine-scene {
+  0%   { transform: translate3d(-4%, 0, 0) scale(1); }
+  25%  { transform: translate3d(0, -1%, 0) scale(1.03); }
+  50%  { transform: translate3d(4%, 0, 0) scale(1.05); }
+  75%  { transform: translate3d(0, 1%, 0) scale(1.03); }
+  100% { transform: translate3d(-4%, 0, 0) scale(1); }
+}
+@keyframes cm-kf-serpentine-near {
+  0%   { transform: translate3d(-9%, 0, 0); }
+  25%  { transform: translate3d(0, 0, 0); }
+  50%  { transform: translate3d(9%, 0, 0); }
+  75%  { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-9%, 0, 0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cm-root *,
   .cm-root *::before,

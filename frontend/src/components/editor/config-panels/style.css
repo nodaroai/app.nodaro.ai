@@ -1035,3 +1035,228 @@
   pointer-events: none;
   z-index: 3;
 }
+
+/* ============================================================================
+   ADDITIONS (audit pass) — paint, etching, charcoal, mosaic, manga, etc.
+   Each style overlays the base sky+sun+hills scene with a textural treatment.
+   ========================================================================== */
+
+/* Acrylic Paint — chunky brush dabs, more saturated than oil */
+.style-preview--acrylic-paint .style-preview__hills::before {
+  background:
+    radial-gradient(ellipse at 25% 35%, #4ec88a 0 22%, transparent 26%),
+    radial-gradient(ellipse at 60% 40%, #2a8a5a 0 18%, transparent 22%),
+    radial-gradient(ellipse at 80% 50%, #6ad8a0 0 16%, transparent 20%),
+    #2a7a4a;
+  filter: contrast(1.1);
+}
+.style-preview--acrylic-paint .style-preview__hills::after {
+  background:
+    radial-gradient(ellipse at 35% 30%, #1a584a 0 24%, transparent 28%),
+    radial-gradient(ellipse at 70% 35%, #245838 0 20%, transparent 24%),
+    #143828;
+}
+
+/* Caricature — exaggerated, cartoony, big sun, bold outlines */
+.style-preview--caricature .style-preview__sun {
+  width: 46%;
+  box-shadow: 0 0 0 4px #ffc857, 0 0 24px rgba(255, 200, 87, 0.7);
+}
+.style-preview--caricature .style-preview__hills::before {
+  background: #6abb3a;
+  box-shadow: inset 0 0 0 3px #1a3a1a;
+  border-radius: 60% 60% 0 0 / 80% 80% 0 0;
+}
+.style-preview--caricature .style-preview__hills::after {
+  background: #2a6a2a;
+  box-shadow: inset 0 0 0 3px #0a2a0a;
+  border-radius: 50% 50% 0 0 / 70% 70% 0 0;
+}
+
+/* Charcoal — smudgy black-on-warm-paper, soft edges */
+.style-preview--charcoal .style-preview__sky {
+  background: linear-gradient(180deg, #e8dec8 0%, #c8b898 100%);
+  filter: contrast(0.85);
+}
+.style-preview--charcoal .style-preview__sun {
+  background: radial-gradient(circle, rgba(50,30,20,0.4) 0%, rgba(50,30,20,0.1) 60%, transparent 100%);
+  box-shadow: none;
+}
+.style-preview--charcoal .style-preview__hills::before {
+  background:
+    repeating-linear-gradient(110deg, rgba(20,15,10,0.5) 0 2px, transparent 2px 5px),
+    #5a4a3a;
+}
+.style-preview--charcoal .style-preview__hills::after {
+  background:
+    repeating-linear-gradient(95deg, rgba(0,0,0,0.7) 0 2px, transparent 2px 4px),
+    #2a1f18;
+}
+
+/* Etching — fine cross-hatched lines on cream paper */
+.style-preview--etching .style-preview__sky {
+  background: linear-gradient(180deg, #f0e6d4 0%, #d4c8b0 100%);
+}
+.style-preview--etching .style-preview__sun {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #2a1810;
+}
+.style-preview--etching .style-preview__hills::before {
+  background:
+    repeating-linear-gradient(45deg, rgba(20,10,4,0.7) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(-45deg, rgba(20,10,4,0.5) 0 1px, transparent 1px 5px),
+    #b8a888;
+}
+.style-preview--etching .style-preview__hills::after {
+  background:
+    repeating-linear-gradient(35deg, rgba(20,10,4,0.85) 0 1px, transparent 1px 3px),
+    #5a4838;
+}
+
+/* Fresco — chalky pigment on lime plaster wall */
+.style-preview--fresco .style-preview__sky {
+  background: linear-gradient(180deg, #f4e8d4 0%, #e8c89a 100%);
+  filter: saturate(0.7);
+}
+.style-preview--fresco .style-preview__sun {
+  background: radial-gradient(circle, #f8d890 0%, #d8a868 70%, transparent 100%);
+  box-shadow: none;
+  filter: blur(0.6px);
+}
+.style-preview--fresco .style-preview__scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(40,30,20,0.18) 0 1.5%, transparent 2%),
+    radial-gradient(circle at 70% 60%, rgba(40,30,20,0.18) 0 2%, transparent 2.5%),
+    radial-gradient(circle at 45% 80%, rgba(40,30,20,0.18) 0 1.2%, transparent 1.7%);
+  pointer-events: none;
+  z-index: 3;
+}
+.style-preview--fresco .style-preview__hills::before {
+  background: #b88860;
+  filter: blur(0.5px);
+}
+.style-preview--fresco .style-preview__hills::after {
+  background: #6a4828;
+  filter: blur(0.5px);
+}
+
+/* Lithograph — granular dot texture, limited tonal range */
+.style-preview--lithograph .style-preview__sky {
+  background: linear-gradient(180deg, #e0e0d4 0%, #b0b0a4 100%);
+}
+.style-preview--lithograph .style-preview__sun {
+  background: radial-gradient(circle, #ddd 0%, #888 70%, transparent 100%);
+  box-shadow: none;
+}
+.style-preview--lithograph .style-preview__hills::before {
+  background:
+    radial-gradient(circle at 18% 30%, rgba(0,0,0,0.6) 0 1.2%, transparent 1.5%),
+    radial-gradient(circle at 50% 60%, rgba(0,0,0,0.6) 0 1.2%, transparent 1.5%),
+    radial-gradient(circle at 75% 40%, rgba(0,0,0,0.6) 0 1.2%, transparent 1.5%),
+    #888080;
+}
+.style-preview--lithograph .style-preview__hills::after {
+  background:
+    radial-gradient(circle at 30% 30%, rgba(0,0,0,0.85) 0 1.5%, transparent 2%),
+    radial-gradient(circle at 70% 50%, rgba(0,0,0,0.85) 0 1.5%, transparent 2%),
+    #2a2820;
+}
+
+/* Manga — high-contrast B&W with bold lines, no color */
+.style-preview--manga .style-preview__sky {
+  background: linear-gradient(180deg, #ffffff 0%, #d8d8d8 100%);
+}
+.style-preview--manga .style-preview__sun {
+  background: #fff;
+  box-shadow: 0 0 0 3px #000;
+}
+.style-preview--manga .style-preview__hills::before {
+  background:
+    repeating-linear-gradient(45deg, #000 0 1.5px, #fff 1.5px 6px),
+    #fff;
+  box-shadow: inset 0 0 0 2px #000;
+}
+.style-preview--manga .style-preview__hills::after {
+  background: #000;
+  box-shadow: inset 0 0 0 2px #fff;
+}
+
+/* Mixed Media — collage, mixed colour blocks + paper grain */
+.style-preview--mixed-media .style-preview__sky {
+  background:
+    linear-gradient(120deg, #ff6f6f 0%, #ff6f6f 28%, #f8d890 28% 55%, #6ac8d0 55% 80%, #b88be0 80% 100%);
+}
+.style-preview--mixed-media .style-preview__sun {
+  background: #ffd040;
+  box-shadow: 0 0 0 2px #1a1a1a, 4px 4px 0 #1a1a1a;
+  border-radius: 30%;
+}
+.style-preview--mixed-media .style-preview__hills::before {
+  background: repeating-linear-gradient(90deg, #5a8a4a 0 8%, #4a7a3a 8% 16%);
+  transform: rotate(-1deg);
+}
+.style-preview--mixed-media .style-preview__hills::after {
+  background:
+    repeating-linear-gradient(45deg, #2a1818 0 4%, #381818 4% 8%);
+  transform: rotate(0.6deg);
+}
+
+/* Mosaic — chunky tile grid */
+.style-preview--mosaic .style-preview__sky {
+  background: linear-gradient(180deg, #f9c37a 0%, #f28a5f 50%, #6d4273 100%);
+  mask: repeating-conic-gradient(from 0deg at 50% 50%, #000 0deg 88deg, transparent 88deg 90deg) 0 0 / 11% 11%;
+  -webkit-mask: repeating-conic-gradient(from 0deg at 50% 50%, #000 0deg 88deg, transparent 88deg 90deg) 0 0 / 11% 11%;
+}
+.style-preview--mosaic .style-preview__sun {
+  mask: repeating-conic-gradient(from 0deg at 50% 50%, #000 0deg 88deg, transparent 88deg 90deg) 0 0 / 18% 18%;
+  -webkit-mask: repeating-conic-gradient(from 0deg at 50% 50%, #000 0deg 88deg, transparent 88deg 90deg) 0 0 / 18% 18%;
+}
+.style-preview--mosaic .style-preview__hills::before {
+  background: #4a8a4a;
+  mask: repeating-conic-gradient(from 0deg at 50% 50%, #000 0deg 88deg, transparent 88deg 90deg) 0 0 / 18% 22%;
+  -webkit-mask: repeating-conic-gradient(from 0deg at 50% 50%, #000 0deg 88deg, transparent 88deg 90deg) 0 0 / 18% 22%;
+}
+.style-preview--mosaic .style-preview__hills::after {
+  background: #1a3a1a;
+  mask: repeating-conic-gradient(from 0deg at 50% 50%, #000 0deg 88deg, transparent 88deg 90deg) 0 0 / 18% 22%;
+  -webkit-mask: repeating-conic-gradient(from 0deg at 50% 50%, #000 0deg 88deg, transparent 88deg 90deg) 0 0 / 18% 22%;
+}
+
+/* Pastel — chalky soft pastels on toned paper */
+.style-preview--pastel .style-preview__sky {
+  background: linear-gradient(180deg, #ffe6c4 0%, #f8b8a0 60%, #c8a4d0 100%);
+  filter: saturate(0.85);
+}
+.style-preview--pastel .style-preview__sun {
+  background: radial-gradient(circle, #fff5d0 0%, #ffd8a0 60%, transparent 100%);
+  box-shadow: none;
+  filter: blur(1.2px);
+}
+.style-preview--pastel .style-preview__hills::before {
+  background: #b0d8a0;
+  filter: blur(0.8px);
+}
+.style-preview--pastel .style-preview__hills::after {
+  background: #6a8a78;
+  filter: blur(0.8px);
+}
+
+/* Woodcut — bold black blocks with white slashes (ukiyo-e flavour) */
+.style-preview--woodcut .style-preview__sky {
+  background:
+    repeating-linear-gradient(0deg, #1a1a1a 0 2px, #f4e6c4 2px 8px);
+}
+.style-preview--woodcut .style-preview__sun {
+  background: #f4e6c4;
+  box-shadow: 0 0 0 3px #1a1a1a;
+}
+.style-preview--woodcut .style-preview__hills::before {
+  background:
+    repeating-linear-gradient(80deg, #1a1a1a 0 2px, #4a7a3a 2px 9px);
+}
+.style-preview--woodcut .style-preview__hills::after {
+  background: #1a1a1a;
+}

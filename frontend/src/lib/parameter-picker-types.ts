@@ -1,0 +1,23 @@
+/**
+ * Lightweight set of node types that have a parameter picker registration.
+ *
+ * Imported by `input-card.tsx` (presentation runtime) so the published-app
+ * bundle doesn't drag in the full registry — which eagerly imports every
+ * preview component, picker, and catalog. The full registry is only loaded
+ * on demand by `picker-input-card.tsx` when one of these node types renders.
+ *
+ * Keep in sync with the kind:"single" + kind:"multi" entries in
+ * `parameter-picker-registry.tsx`.
+ */
+export const PARAMETER_PICKER_NODE_TYPES = new Set<string>([
+  "setting", "atmosphere", "style", "color-look", "mood", "photographer",
+  "aesthetic", "era", "photo-genre", "backdrop", "render-quality",
+  "composition-effects", "post-process-effects",
+  "camera-motion", "lens", "camera-format",
+  "pose", "material", "animal", "vehicle", "weapon", "held-prop",
+  "framing", "lighting", "person", "styling", "temporal", "exposure-settings",
+])
+
+export function isParameterPickerNode(nodeType: string | undefined | null): boolean {
+  return PARAMETER_PICKER_NODE_TYPES.has(nodeType ?? "")
+}

@@ -10,6 +10,8 @@ import { AudioUploadCard } from "./input-cards/audio-upload-card"
 import { ParameterCard } from "./input-cards/parameter-card"
 import { ListInputCard } from "./input-cards/list-input-card"
 import { LoopInputCard } from "./input-cards/loop-input-card"
+import { PickerInputCard } from "./input-cards/picker-input-card"
+import { isParameterPickerNode } from "@/lib/parameter-picker-types"
 import { inferPromptContext } from "@/lib/prompt-context"
 import { hasCredits } from "@/lib/edition"
 
@@ -53,6 +55,7 @@ export function InputCard({
   const label = getNodeLabel(node)
   const data = node.data as Record<string, unknown>
   const effectiveMaxItems = Math.min((data.maxItems as number) ?? 10, DEFAULT_SYSTEM_MAX_FANOUT)
+  const cardMeta = useWorkflowStore((s) => s.presentationSettings.cardMeta?.[node.id])
 
   const promptContext = useMemo(
     () => (nodes && edges ? inferPromptContext(node.id, nodes, edges) : null),
@@ -169,7 +172,26 @@ export function InputCard({
         />
       )
 
-    default:
+    default: {
+      // Parameter pickers (setting, mood, animal, etc.) get their own
+      // visual picker card with optional inline/modal display + allowedValues
+      // restriction set in the editor's cardMeta.
+      if (isParameterPickerNode(node.type)) {
+        return (
+          <PickerInputCard
+            nodeId={node.id}
+            label={label}
+            nodeType={node.type!}
+            data={data}
+            isFullscreen={isFullscreen}
+            inputValues={inputValues}
+            onUpdateInput={onUpdateInput}
+            readOnly={readOnly}
+            displayMode={cardMeta?.pickerMode ?? "inline"}
+            allowedValues={cardMeta?.pickerAllowedValues}
+          />
+        )
+      }
       return (
         <ParameterCard
           nodeId={node.id}
@@ -185,5 +207,6 @@ export function InputCard({
           promptHelper={promptHelperProp}
         />
       )
+    }
   }
 }

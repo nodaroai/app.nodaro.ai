@@ -334,7 +334,7 @@ export interface PresentationSettings {
   outputOrder?: string[] // node IDs in display order (legacy)
   inputItems?: PresentationItem[] // rich ordered items (groups, fields, richtext)
   outputItems?: PresentationItem[] // rich ordered items (groups, fields, richtext)
-  cardMeta?: Record<string, { title?: string; description?: string; display?: Partial<PresentationDisplay>; inputMode?: InputMode; minLines?: number }>
+  cardMeta?: Record<string, { title?: string; description?: string; display?: Partial<PresentationDisplay>; inputMode?: InputMode; minLines?: number; pickerMode?: "inline" | "modal"; pickerAllowedValues?: string[] }>
   viewMode?: PresentationViewMode // defaults to "horizontal"
   compareLeft?: string // node ID for left compare item
   compareRight?: string // node ID for right compare item

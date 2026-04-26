@@ -688,6 +688,88 @@
   --lens-rail-right-rotation: 5deg;
 }
 
+/* Vintage cinematic primes — share an 85mm-ish framing with characterful
+ * bokeh and warm/cool tints to convey their distinct flavours. */
+.lens-preview--canon-k35 {
+  --lens-subject-width: 30%;
+  --lens-front-glass-size: 71%;
+  --lens-front-accent: rgba(252, 165, 96, 0.55);
+  --lens-image-edge-opacity: 0.08;
+  --lens-image-near-size: 22%;
+  --lens-image-far-size: 17%;
+  --lens-image-far-blur: 1.6px;
+  --lens-image-bokeh-opacity: 0.62;
+  --lens-image-bokeh-blur: 3px;
+  --lens-image-bokeh-scale: 1.45;
+  --lens-subject-bottom: 24%;
+  --lens-bg-scale: 1.1;
+  --lens-bg-blur: 0.8px;
+  --lens-focus-width: 50%;
+  --lens-bokeh-opacity: 0.5;
+  --lens-vignette-opacity: 0.42;
+}
+
+.lens-preview--cooke-s4 {
+  --lens-subject-width: 30%;
+  --lens-front-glass-size: 70%;
+  --lens-front-accent: rgba(248, 113, 113, 0.4);
+  --lens-image-edge-opacity: 0.07;
+  --lens-image-near-size: 23%;
+  --lens-image-far-size: 18%;
+  --lens-image-far-blur: 1.5px;
+  --lens-image-bokeh-opacity: 0.6;
+  --lens-image-bokeh-blur: 3.4px;
+  --lens-image-bokeh-scale: 1.4;
+  --lens-subject-bottom: 23%;
+  --lens-bg-scale: 1.12;
+  --lens-bg-blur: 0.9px;
+  --lens-focus-width: 52%;
+  --lens-bokeh-opacity: 0.5;
+  --lens-vignette-opacity: 0.4;
+}
+
+/* Helios 44 — famous swirly bokeh from off-axis aberrations. Larger bokeh
+ * scale and slightly stronger vignette communicate the swirl + falloff. */
+.lens-preview--helios-44 {
+  --lens-subject-width: 28%;
+  --lens-front-glass-size: 72%;
+  --lens-front-accent: rgba(196, 181, 253, 0.5);
+  --lens-image-edge-opacity: 0.18;
+  --lens-image-near-size: 22%;
+  --lens-image-far-size: 19%;
+  --lens-image-far-blur: 1.8px;
+  --lens-image-bokeh-opacity: 0.7;
+  --lens-image-bokeh-blur: 3.6px;
+  --lens-image-bokeh-scale: 1.7;
+  --lens-subject-bottom: 25%;
+  --lens-bg-scale: 1.08;
+  --lens-bg-blur: 1px;
+  --lens-focus-width: 46%;
+  --lens-bokeh-opacity: 0.62;
+  --lens-vignette-opacity: 0.55;
+}
+
+/* Petzval — extreme swirl + sharp center. Push bokeh scale + vignette to
+ * the most dramatic of the four primes. */
+.lens-preview--petzval {
+  --lens-subject-width: 27%;
+  --lens-front-glass-size: 70%;
+  --lens-front-accent: rgba(217, 196, 138, 0.55);
+  --lens-image-edge-opacity: 0.28;
+  --lens-image-near-size: 22%;
+  --lens-image-far-size: 19%;
+  --lens-image-far-blur: 2.2px;
+  --lens-image-bokeh-opacity: 0.78;
+  --lens-image-bokeh-blur: 4px;
+  --lens-image-bokeh-scale: 1.95;
+  --lens-subject-bottom: 26%;
+  --lens-bg-scale: 1.05;
+  --lens-bg-blur: 1.2px;
+  --lens-focus-width: 38%;
+  --lens-bokeh-opacity: 0.7;
+  --lens-vignette-opacity: 0.7;
+}
+
 /* Fisheye: circular distortion and bulged subject. */
 .lens-preview--fisheye {
   --lens-subject-width: 31%;

@@ -4,7 +4,7 @@ import { useEffect, useMemo, type ReactNode } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Eye, FileText, Layers as LayersIcon } from "lucide-react"
 import { getParameterPromptHint } from "@nodaro-shared/parameter-prompt-hint"
-import { BaseNode } from "./base-node"
+import { BaseNode, type HandleConfig } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { RunNodeButton } from "./run-node-button"
@@ -21,20 +21,28 @@ interface ParameterNodeShellProps {
   readonly selected?: boolean
   readonly children: ReactNode
   readonly fluidWidth?: boolean
+  /** Override the default `in` target handle (e.g. camera-motion's startState + endState pair). */
+  readonly inputHandles?: ReadonlyArray<HandleConfig>
+  /** Floating HandleIcon labels rendered outside the node frame. */
+  readonly extraHandleIcons?: ReactNode
 }
 
-const makeHandles = (id: string) => [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-6px' }, hideHandle: true },
-  { id, type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
-] as const
+const DEFAULT_INPUT_HANDLES: ReadonlyArray<HandleConfig> = [
+  { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-6px' }, hideHandle: true },
+]
 
-export function ParameterNodeShell({ id, label, icon, handleId, selected, children, fluidWidth }: ParameterNodeShellProps) {
+const makeHandles = (handleId: string, inputHandles?: ReadonlyArray<HandleConfig>): ReadonlyArray<HandleConfig> => [
+  ...(inputHandles ?? DEFAULT_INPUT_HANDLES),
+  { id: handleId, type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+]
+
+export function ParameterNodeShell({ id, label, icon, handleId, selected, children, fluidWidth, inputHandles, extraHandleIcons }: ParameterNodeShellProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNode = useWorkflowStore((s) => s.updateNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
-  const handles = useMemo(() => makeHandles(handleId), [handleId])
+  const handles = useMemo(() => makeHandles(handleId, inputHandles), [handleId, inputHandles])
 
   // Only show "Run from here" when this parameter node feeds at least one
   // downstream node — running with no consumers is a no-op for the user.
@@ -120,6 +128,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
       </BaseNode>
 
       <HandleIcon icon={icon} color="indigo" top="20px" />
+      {extraHandleIcons}
     </div>
   )
 }
