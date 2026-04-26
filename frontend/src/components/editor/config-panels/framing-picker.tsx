@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { FramingPreview } from "./framing-preview"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface FramingPickerProps {
   readonly value: FramingValue
@@ -34,12 +35,12 @@ export const FramingPicker = memo(function FramingPicker({
   className,
 }: FramingPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("framing")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<FramingCategory, Framing[]>()
     for (const framing of FRAMINGS) {
-      if (q && !framing.label.toLowerCase().includes(q) && !framing.description.toLowerCase().includes(q)) {
+      if (!matches(framing.id, framing.label, framing.description, query)) {
         continue
       }
       const list = byCategory.get(framing.category) ?? []
@@ -50,7 +51,7 @@ export const FramingPicker = memo(function FramingPicker({
       category: cat,
       framings: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((s) => s.framings.length > 0)
 
@@ -89,6 +90,8 @@ export const FramingPicker = memo(function FramingPicker({
             field={field}
             checked={checked}
             current={current}
+            resolveLabel={resolveLabel}
+            resolveDescription={resolveDescription}
             onToggle={(next) => {
               if (next) {
                 // Enabling: auto-pick the first entry in this category as default.
@@ -117,6 +120,8 @@ interface CategorySectionProps {
   readonly field: "shotSize" | "angle" | "coverage" | "composition" | "vantage"
   readonly checked: boolean
   readonly current: string | undefined
+  readonly resolveLabel: (id: string, englishLabel: string) => string
+  readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
   readonly onPick: (id: string) => void
 }
@@ -127,6 +132,8 @@ function CategorySection({
   field,
   checked,
   current,
+  resolveLabel,
+  resolveDescription,
   onToggle,
   onPick,
 }: CategorySectionProps) {
@@ -152,13 +159,15 @@ function CategorySection({
       <div role="radiogroup" aria-label={label} className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}>
         {framings.map((framing) => {
           const selected = checked && framing.id === current
+          const entryLabel = resolveLabel(framing.id, framing.label)
+          const entryDescription = resolveDescription(framing.id, framing.description)
           return (
             <button
               key={framing.id}
               type="button"
               role="radio"
               aria-checked={selected}
-              title={checked ? framing.description : `${framing.description} (click to enable ${label})`}
+              title={checked ? entryDescription : `${entryDescription} (click to enable ${label})`}
               onClick={() => onPick(framing.id)}
               className={cn(
                 "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -174,7 +183,7 @@ function CategorySection({
                   selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               >
-                {framing.label}
+                {entryLabel}
               </span>
             </button>
           )

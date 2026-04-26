@@ -11,6 +11,7 @@ import {
 } from "@nodaro-shared/held-prop"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface HeldPropPickerProps {
   readonly value: string
@@ -79,12 +80,12 @@ export const HeldPropPicker = memo(function HeldPropPicker({
   className,
 }: HeldPropPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("held-prop")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<HeldPropCategory, HeldProp[]>()
     for (const prop of HELD_PROPS) {
-      if (q && !prop.label.toLowerCase().includes(q) && !prop.description.toLowerCase().includes(q)) {
+      if (!matches(prop.id, prop.label, prop.description, query)) {
         continue
       }
       const list = byCategory.get(prop.category) ?? []
@@ -95,7 +96,7 @@ export const HeldPropPicker = memo(function HeldPropPicker({
       category: cat,
       props: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.props.length > 0)
 
@@ -128,13 +129,15 @@ export const HeldPropPicker = memo(function HeldPropPicker({
             <div role="radiogroup" aria-label={HELD_PROP_CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
               {props.map((prop) => {
                 const selected = prop.id === value
+                const label = resolveLabel(prop.id, prop.label)
+                const description = resolveDescription(prop.id, prop.description)
                 return (
                   <button
                     key={prop.id}
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    title={prop.description}
+                    title={description}
                     onClick={() => onValueChange(prop.id)}
                     className={cn(
                       "group flex flex-col items-center gap-1 p-1.5 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -152,7 +155,7 @@ export const HeldPropPicker = memo(function HeldPropPicker({
                         selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                       )}
                     >
-                      {prop.label}
+                      {label}
                     </span>
                   </button>
                 )

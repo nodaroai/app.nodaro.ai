@@ -1,0 +1,71 @@
+import type { LocaleCatalogMap } from "./types.js"
+
+const map: LocaleCatalogMap = {
+  // Fabric
+  "silk": { label: "Soie", description: "Soie lisse et brillante" },
+  "cotton": { label: "Coton", description: "Coton mat doux" },
+  "denim": { label: "Denim", description: "Denim indigo épais" },
+  "leather": { label: "Cuir", description: "Cuir riche et souple" },
+  "velvet": { label: "Velours", description: "Velours moelleux" },
+  "satin": { label: "Satin", description: "Satin brillant" },
+  "lace": { label: "Dentelle", description: "Dentelle délicate à motifs" },
+  "wool": { label: "Laine", description: "Laine tissée chaude" },
+  "linen": { label: "Lin", description: "Lin texturé naturel" },
+  "tweed": { label: "Tweed", description: "Tweed tissé rustique" },
+  "cashmere": { label: "Cachemire", description: "Cachemire luxueux et doux" },
+  "chiffon": { label: "Mousseline", description: "Mousseline fluide et transparente" },
+  "fur": { label: "Fourrure", description: "Fourrure épaisse et moelleuse" },
+  // Metal
+  "gold": { label: "Or", description: "Or poli" },
+  "silver": { label: "Argent", description: "Argent poli" },
+  "bronze": { label: "Bronze", description: "Bronze coulé patiné" },
+  "chrome": { description: "Chrome hyper-réfléchissant" },
+  "copper": { label: "Cuivre", description: "Cuivre chaud avec patine" },
+  "brass": { label: "Laiton", description: "Laiton ancien" },
+  "steel": { label: "Acier", description: "Acier inoxydable brossé" },
+  "iron": { label: "Fer", description: "Fer forgé brut" },
+  "platinum": { label: "Platine", description: "Platine lustré" },
+  "titanium": { label: "Titane", description: "Titane mat industriel" },
+  // Stone
+  "marble": { label: "Marbre", description: "Marbre blanc veiné" },
+  "granite": { label: "Granit", description: "Granit moucheté poli" },
+  "obsidian": { label: "Obsidienne", description: "Obsidienne noire brillante" },
+  "sandstone": { label: "Grès", description: "Grès chaud stratifié" },
+  "slate": { label: "Ardoise", description: "Ardoise sombre plate" },
+  "jade": { label: "Jade", description: "Jade vert translucide" },
+  "onyx": { label: "Onyx", description: "Onyx poli rubané" },
+  "concrete": { label: "Béton", description: "Béton industriel coulé" },
+  // Wood
+  "oak": { label: "Chêne", description: "Chêne au grain riche" },
+  "mahogany": { label: "Acajou", description: "Acajou rouge profond" },
+  "walnut": { label: "Noyer", description: "Noyer foncé" },
+  "bamboo": { label: "Bambou", description: "Bambou clair segmenté" },
+  "birch": { label: "Bouleau", description: "Bouleau pâle lisse" },
+  "driftwood": { label: "Bois flotté", description: "Bois flotté patiné" },
+  // Glass / Ceramic
+  "glass": { label: "Verre", description: "Verre transparent clair" },
+  "stained-glass": { label: "Vitrail", description: "Vitrail aux tons de pierres précieuses" },
+  "crystal": { label: "Cristal", description: "Cristal facetté transparent" },
+  "porcelain": { label: "Porcelaine", description: "Porcelaine blanche lisse" },
+  "ceramic-glazed": { label: "Céramique émaillée", description: "Céramique émaillée terreuse" },
+  "terracotta": { label: "Terre cuite", description: "Terre cuite chaude non émaillée" },
+  // Natural
+  "water": { label: "Eau", description: "Eau translucide en mouvement" },
+  "fire": { label: "Feu", description: "Flamme vivante" },
+  "ice": { label: "Glace", description: "Glace cristalline translucide" },
+  "smoke": { label: "Fumée", description: "Fumée éthérée dérivante" },
+  "sand": { label: "Sable", description: "Sable granuleux fin" },
+  "moss": { label: "Mousse", description: "Mousse vivante luxuriante" },
+  "leaves": { label: "Feuillage", description: "Feuilles de plantes superposées" },
+  // Exotic
+  "holographic": { label: "Holographique", description: "Hologramme iridescent" },
+  "liquid-metal": { label: "Métal liquide", description: "Chrome liquide réfléchissant" },
+  "neon": { label: "Néon lumineux", description: "Tubes néon lumineux" },
+  "translucent": { label: "Résine translucide", description: "Résine luminescente givrée" },
+  "mirror": { label: "Miroir", description: "Surface miroir parfaite" },
+  "plasma": { label: "Plasma", description: "Plasma électrique lumineux" },
+  "crystal-shard": { label: "Éclats de cristal", description: "Cristal lumineux éclaté" },
+  "obsidian-glass": { label: "Verre d'obsidienne", description: "Verre volcanique sombre" },
+}
+
+export default map

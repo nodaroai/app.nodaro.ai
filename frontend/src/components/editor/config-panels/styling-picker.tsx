@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { HairCutBrowser } from "./hair-cut-browser"
 import { EyewearIcon, HeadwearIcon } from "./small-silhouette-icons"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface StylingPickerProps {
   readonly value: StylingValue
@@ -28,12 +29,12 @@ export const StylingPicker = memo(function StylingPicker({
   className,
 }: StylingPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("styling")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byDimension = new Map<StylingDimension, Styling[]>()
     for (const styling of STYLINGS) {
-      if (q && !styling.label.toLowerCase().includes(q) && !styling.description.toLowerCase().includes(q)) {
+      if (!matches(styling.id, styling.label, styling.description, query)) {
         continue
       }
       const list = byDimension.get(styling.dimension) ?? []
@@ -44,7 +45,7 @@ export const StylingPicker = memo(function StylingPicker({
       dimension: dim,
       entries: byDimension.get(dim) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.entries.length > 0)
 
@@ -80,6 +81,8 @@ export const StylingPicker = memo(function StylingPicker({
             field={field}
             checked={checked}
             current={current}
+            resolveLabel={resolveLabel}
+            resolveDescription={resolveDescription}
             onToggle={(next) => {
               if (next) {
                 const first = STYLINGS.find((s) => s.dimension === dimension)?.id
@@ -102,6 +105,8 @@ interface DimensionSectionProps {
   readonly field: keyof StylingValue
   readonly checked: boolean
   readonly current: string | undefined
+  readonly resolveLabel: (id: string, englishLabel: string) => string
+  readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
   readonly onPick: (id: string) => void
 }
@@ -112,6 +117,8 @@ function DimensionSection({
   field,
   checked,
   current,
+  resolveLabel,
+  resolveDescription,
   onToggle,
   onPick,
 }: DimensionSectionProps) {
@@ -158,13 +165,15 @@ function DimensionSection({
           const selected = checked && entry.id === current
           const eyewearIcon = dimension === "eyewear" ? <EyewearIcon eyewearId={entry.id} className="size-6" /> : null
           const headwearIcon = dimension === "headwear" ? <HeadwearIcon headwearId={entry.id} className="size-6" /> : null
+          const entryLabel = resolveLabel(entry.id, entry.label)
+          const entryDescription = resolveDescription(entry.id, entry.description)
           return (
             <button
               key={entry.id}
               type="button"
               role="radio"
               aria-checked={selected}
-              title={checked ? entry.description : `${entry.description} (click to enable ${label})`}
+              title={checked ? entryDescription : `${entryDescription} (click to enable ${label})`}
               onClick={() => onPick(entry.id)}
               className={cn(
                 "flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden",
@@ -181,7 +190,7 @@ function DimensionSection({
                   selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               >
-                {entry.label}
+                {entryLabel}
               </span>
             </button>
           )

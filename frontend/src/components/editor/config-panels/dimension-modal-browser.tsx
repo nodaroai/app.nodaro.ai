@@ -2,6 +2,7 @@
 
 import { type ReactNode, memo, useState } from "react"
 import { ChevronDown, Sparkles } from "lucide-react"
+import type { I18nCatalogId } from "@nodaro-shared/i18n"
 import {
   Dialog,
   DialogContent,
@@ -10,6 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { DimensionTileGrid } from "./dimension-tile-grid"
 
 export interface DimensionEntry {
@@ -43,6 +45,7 @@ export const DimensionModalBrowser = memo(function DimensionModalBrowser({
   className,
   triggerVariant = "full",
   triggerLabel = "Pick by look",
+  catalog,
 }: {
   readonly entries: ReadonlyArray<DimensionEntry>
   readonly value: string | undefined
@@ -54,10 +57,17 @@ export const DimensionModalBrowser = memo(function DimensionModalBrowser({
   readonly className?: string
   readonly triggerVariant?: "full" | "compact"
   readonly triggerLabel?: string
+  readonly catalog?: I18nCatalogId
 }) {
   const [open, setOpen] = useState(false)
+  // Always call the hook (sentinel when no catalog) so hook order stays stable.
+  const i18n = useLocalizedCatalog(catalog ?? ("__noop__" as I18nCatalogId))
   const selected = value ? entries.find((e) => e.id === value) : undefined
-  const displayLabel = selected?.label ?? placeholder
+  const displayLabel = selected
+    ? catalog
+      ? i18n.resolveLabel(selected.id, selected.label)
+      : selected.label
+    : placeholder
 
   const handlePick = (id: string | undefined) => {
     onChange(id)
@@ -115,6 +125,7 @@ export const DimensionModalBrowser = memo(function DimensionModalBrowser({
             searchPlaceholder={title}
             autoFocusSearch
             showClear
+            catalog={catalog}
           />
         </div>
       </DialogContent>

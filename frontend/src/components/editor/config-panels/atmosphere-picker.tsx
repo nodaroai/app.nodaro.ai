@@ -6,6 +6,7 @@ import { ATMOSPHERES } from "@nodaro-shared/atmosphere"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { AtmospherePreview } from "./atmosphere-preview"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface AtmospherePickerProps {
   readonly value: string
@@ -19,14 +20,11 @@ export const AtmospherePicker = memo(function AtmospherePicker({
   className,
 }: AtmospherePickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("atmosphere")
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return ATMOSPHERES
-    return ATMOSPHERES.filter(
-      (a) => a.label.toLowerCase().includes(q) || a.description.toLowerCase().includes(q),
-    )
-  }, [query])
+    return ATMOSPHERES.filter((a) => matches(a.id, a.label, a.description, query))
+  }, [query, matches])
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
@@ -50,13 +48,15 @@ export const AtmospherePicker = memo(function AtmospherePicker({
       <div role="radiogroup" aria-label="Atmosphere" className="grid grid-cols-3 gap-1.5">
         {filtered.map((atmosphere) => {
           const selected = atmosphere.id === value
+          const label = resolveLabel(atmosphere.id, atmosphere.label)
+          const description = resolveDescription(atmosphere.id, atmosphere.description)
           return (
             <button
               key={atmosphere.id}
               type="button"
               role="radio"
               aria-checked={selected}
-              title={atmosphere.description}
+              title={description}
               onClick={() => onValueChange(atmosphere.id)}
               className={cn(
                 "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -72,7 +72,7 @@ export const AtmospherePicker = memo(function AtmospherePicker({
                   selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               >
-                {atmosphere.label}
+                {label}
               </span>
             </button>
           )

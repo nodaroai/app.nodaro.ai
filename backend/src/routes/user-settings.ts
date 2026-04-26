@@ -5,9 +5,25 @@ import { SYSTEM_PROMPT_TEMPLATES } from "../config/prompt-templates.js"
 
 const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
 
+const SUPPORTED_LOCALES = [
+  "en",
+  "es",
+  "fr",
+  "de",
+  "pt-BR",
+  "ru",
+  "hi",
+  "ja",
+  "ko",
+  "zh-CN",
+  "he",
+  "ar",
+] as const
+
 const updateSettingsBody = z.object({
   publicOutputs: z.boolean().optional(),
   promptTemplates: z.record(z.string(), z.string()).optional(),
+  preferredLocale: z.enum(SUPPORTED_LOCALES).nullable().optional(),
 })
 
 export async function userSettingsRoutes(app: FastifyInstance) {
@@ -23,7 +39,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
 
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("tier, public_outputs, prompt_templates")
+      .select("tier, public_outputs, prompt_templates, preferred_locale")
       .eq("id", userId)
       .single()
 
@@ -36,6 +52,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
         tier: profile.tier,
         publicOutputs: profile.public_outputs ?? true,
         promptTemplates: (profile.prompt_templates as Record<string, string>) ?? {},
+        preferredLocale: profile.preferred_locale ?? null,
       },
     })
   })
@@ -56,7 +73,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     }
 
     const userId = req.userId
-    const { publicOutputs, promptTemplates } = parsed.data
+    const { publicOutputs, promptTemplates, preferredLocale } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({ error: "Authentication required" })
@@ -65,7 +82,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     // Fetch current profile (include public_outputs for response accuracy)
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("tier, public_outputs, prompt_templates")
+      .select("tier, public_outputs, prompt_templates, preferred_locale")
       .eq("id", userId)
       .single()
 
@@ -103,6 +120,13 @@ export async function userSettingsRoutes(app: FastifyInstance) {
       updates.prompt_templates = filtered
     }
 
+    // preferred_locale: null clears the preference (re-defaults to browser
+    // detection on the frontend); a valid string sets it. Zod enum already
+    // validated allowed values.
+    if (preferredLocale !== undefined) {
+      updates.preferred_locale = preferredLocale
+    }
+
     if (Object.keys(updates).length === 0) {
       return reply.status(400).send({ error: "No valid fields to update" })
     }
@@ -120,10 +144,14 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     // Gallery visibility setting only affects NEW jobs — existing items keep their current visibility
     const confirmedPublicOutputs = publicOutputs ?? (profile.public_outputs ?? true)
 
+    const confirmedPreferredLocale =
+      preferredLocale !== undefined ? preferredLocale : (profile.preferred_locale ?? null)
+
     return reply.send({
       data: {
         publicOutputs: confirmedPublicOutputs,
         promptTemplates: (updates.prompt_templates as Record<string, string>) ?? (profile.prompt_templates as Record<string, string>) ?? {},
+        preferredLocale: confirmedPreferredLocale,
       },
     })
   })

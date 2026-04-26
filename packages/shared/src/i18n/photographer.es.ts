@@ -1,0 +1,60 @@
+import type { LocaleCatalogMap } from "./types.js"
+
+// Note: Most labels are personal proper names — kept in English. Only translate descriptions.
+const map: LocaleCatalogMap = {
+  "tim-walker": { description: "Moda de cuento de hadas pictórica" },
+  "paolo-roversi": { description: "Resplandor Polaroid suave y etéreo" },
+  "marta-bevacqua": { description: "Retrato pictórico ensoñador" },
+  "patrick-demarchelier": { description: "Retrato de moda clásico refinado" },
+  "nick-knight": { description: "Moda vanguardista de alto brillo" },
+  "mario-testino": { description: "Moda glamorosa bañada por el sol" },
+  "steven-meisel": { description: "Editorial pulido de mediados de siglo" },
+  "helmut-newton": { description: "Provocación audaz en blanco y negro" },
+  "mario-sorrenti": { description: "Moda íntima con grano" },
+  "annie-leibovitz": { description: "Retrato de celebridad cinematográfico" },
+  "felicia-simion": { description: "Bellas artes pastorales surrealistas" },
+  "oleg-oprisco": { description: "Narrativa cinematográfica con grano fílmico" },
+  "bella-kotak": { description: "Retrato fantástico-folclórico mágico" },
+  "yigal-ozeri": { description: "Retrato pintado hiperrealista" },
+  "jimmy-marble": { description: "Editorial pastel brillante como caramelo" },
+  "rinko-kawauchi": { description: "Cotidiano tranquilo bañado en luz" },
+  "ellen-von-unwerth": { description: "Energía pin-up retro juguetona" },
+
+  "henri-cartier-bresson": { description: "Fotografía callejera del momento decisivo" },
+  "vivian-maier": { description: "Calle estadounidense de mediados de siglo" },
+  "saul-leiter": { description: "Calle pictórica a color a través del cristal" },
+  "daido-moriyama": { description: "Calle de Tokio con grano y alto contraste" },
+  "robert-capa": { description: "Fotoperiodismo de combate visceral" },
+  "sebastiao-salgado": { description: "Documental social monocromo épico" },
+  "diane-arbus": { description: "Retrato confrontacional y crudo" },
+
+  "roger-deakins": { description: "Naturalismo cinematográfico pictórico" },
+  "emmanuel-lubezki": { description: "Cinematografía flotante con luz natural" },
+  "greig-fraser": { description: "Cinematografía de género rica y táctil" },
+  "christopher-doyle": { description: "Estado de ánimo neón en mano saturado" },
+
+  "greg-rutkowski": { description: "Concept art de fantasía pictórico épico" },
+  "magali-villeneuve": { description: "Arte de personaje de fantasía heroica" },
+  "charlie-bowater": { description: "Retrato digital atmosférico" },
+  "sam-spratt": { description: "Retrato hiperrealista alegórico" },
+  "ruan-jia": { description: "Retrato de fantasía pictórico exuberante" },
+  "ilya-kuvshinov": { description: "Retrato estilizado con influencia anime" },
+  "wlop": { description: "Fantasía pictórica etérea" },
+  "artgerm": { description: "Pinup pulido inspirado en cómic" },
+
+  "makoto-shinkai": { description: "Cielo y luz cinematográficos de anime" },
+  "studio-ghibli": { description: "Calidez Ghibli pintada a mano" },
+  "alphonse-mucha": { description: "Panel decorativo art-nouveau" },
+  "carne-griffiths": { description: "Retrato botánico con tinta sangrada" },
+  "conrad-roset": { description: "Ilustración suave de figura en acuarela" },
+  "akihito-yoshida": { description: "Monocromo tranquilo de tinta y grano" },
+  "karol-bak": { description: "Musa pintada simbolista" },
+  "ismail-inceoglu": { description: "Paisaje pictórico mítico" },
+  "stefan-gesell": { description: "Retrato surreal oscuro" },
+  "andrew-atroshenko": { description: "Pintura de figura impresionista romántica" },
+  "peter-gric": { description: "Paisaje surrealista arquitectónico" },
+  "ingrid-baars": { description: "Collage escultural de moda-arte" },
+  "guido-van-helten": { description: "Retrato muralista monumental" },
+}
+
+export default map

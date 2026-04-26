@@ -1,0 +1,69 @@
+import type { LocaleCatalogMap } from "./types.js"
+
+const map: LocaleCatalogMap = {
+  // Shot size
+  "extreme-wide-shot": { label: "익스트림 와이드 샷", description: "광활한 환경 속 작은 피사체입니다" },
+  "wide-shot": { label: "와이드 샷", description: "주변 환경과 함께 보이는 전신입니다" },
+  "medium-wide-shot": { label: "미디엄 와이드", description: "무릎 위 피사체입니다" },
+  "medium-shot": { label: "미디엄 샷", description: "허리 위 피사체입니다" },
+  "medium-close-up": { label: "미디엄 클로즈업", description: "가슴 위 피사체입니다" },
+  "close-up": { label: "클로즈업", description: "프레임을 가득 채운 피사체의 얼굴입니다" },
+  "extreme-close-up": { label: "익스트림 클로즈업", description: "얼굴 일부의 타이트한 디테일입니다" },
+  "insert": { label: "인서트", description: "사물의 디테일 샷입니다" },
+  "macro": { label: "매크로", description: "작은 피사체의 극단적인 클로즈 디테일입니다" },
+  "full-shot": { label: "풀 샷", description: "머리부터 발끝까지 전신이 프레임에 들어갑니다" },
+  "cowboy-shot": { label: "카우보이 샷", description: "허벅지 중간부터 위로, 클래식한 서부극 프레이밍입니다" },
+  "head-to-knees": { label: "머리부터 무릎까지", description: "머리부터 무릎까지의 프레이밍입니다" },
+  "head-to-hip": { label: "머리부터 엉덩이까지", description: "머리부터 엉덩이까지의 프레이밍입니다" },
+  "half-body": { label: "반신", description: "허리 위의 깔끔한 인물 사진입니다" },
+
+  // Angle
+  "eye-level": { label: "눈높이", description: "피사체의 눈높이에 위치한 카메라입니다" },
+  "high-angle": { label: "하이 앵글", description: "피사체 위에서 내려다보는 카메라입니다" },
+  "low-angle": { label: "로우 앵글", description: "피사체 아래에서 올려다보는 카메라입니다" },
+  "overhead": { label: "오버헤드", description: "정수직 탑다운의 신의 시점입니다" },
+  "worms-eye-angle": { label: "웜즈 아이", description: "지면에서 위를 보는 극단적 로우 앵글입니다" },
+  "dutch-angle": { label: "더치 앵글", description: "기울어진 수평선의 캔티드 프레임입니다" },
+  "birds-eye": { label: "버즈 아이", description: "위에서 내려다보는 고고도 항공 뷰입니다" },
+  "slightly-downward": { label: "약간 내려다보는", description: "셀카 스타일의 부드러운 위 기울기입니다" },
+
+  // Coverage
+  "single": { label: "싱글", description: "한 명의 피사체만 깔끔하게 담은 샷입니다" },
+  "two-shot": { label: "투 샷", description: "두 명의 피사체가 함께 프레임에 담깁니다" },
+  "three-shot": { label: "쓰리 샷", description: "세 명의 피사체가 프레임에 담깁니다" },
+  "over-the-shoulder-framing": { label: "오버 더 숄더", description: "한 피사체의 어깨 너머로 다른 피사체를 봅니다" },
+  "reverse-shot": { label: "리버스 샷", description: "이전 샷의 반대 시점입니다" },
+  "pov-framing": { label: "POV", description: "피사체의 눈을 통해 보는 시점입니다" },
+  "selfie-framing": { label: "셀카", description: "팔 길이만큼 떨어진 셀프 포트레이트입니다" },
+  "mirror-selfie": { label: "거울 셀카", description: "거울 반사에 휴대폰이 보이는 구도입니다" },
+  "gym-mirror-selfie": { label: "헬스장 거울 셀카", description: "헬스장 거울을 통한 3/4 측후면 앵글입니다" },
+  "through-glass": { label: "유리 너머", description: "전경 유리를 통해 프레임된 구도입니다" },
+  "top-down-flat-lay": { label: "탑다운 플랫 레이", description: "표면 위 사물들의 오버헤드 배치입니다" },
+  "establishing-shot": { label: "설정 샷", description: "넓은 환경 샷, 피사체가 작게 보입니다" },
+  "dirty-single": { label: "더티 싱글", description: "가장자리에 다른 캐릭터가 살짝 보이는 싱글입니다" },
+
+  // Composition
+  "rule-of-thirds": { label: "삼분할 법칙", description: "삼분할 교차점에 위치한 피사체입니다" },
+  "centered": { label: "센터드", description: "정중앙, 좌우 대칭의 피사체입니다" },
+  "headroom-tight": { label: "헤드룸 타이트", description: "프레임 상단에 가까운 피사체의 머리입니다" },
+  "negative-space": { label: "네거티브 스페이스", description: "빈 공간과 함께 한쪽으로 치우친 피사체입니다" },
+  "leading-lines": { label: "리딩 라인", description: "시선을 피사체로 이끄는 선들입니다" },
+  "3x3-grid-collage": { label: "3×3 그리드 콜라주", description: "다양한 변형이 담긴 3×3 그리드 속 피사체입니다" },
+  "diptych": { label: "딥티크", description: "두 프레임이 나란히 놓인 구도입니다" },
+  "triptych": { label: "트립티크", description: "세 프레임으로 구성된 구도입니다" },
+  "multi-frame-mosaic": { label: "멀티 프레임 모자이크", description: "작은 타일들의 모자이크로 만든 얼굴입니다" },
+  "contact-sheet": { label: "콘택트 시트", description: "썸네일이 배열된 사진 콘택트 시트입니다" },
+  "magazine-spread": { label: "매거진 스프레드", description: "타이포그래피가 있는 두 페이지짜리 잡지 레이아웃입니다" },
+  "cutaway-cross-section": { label: "컷어웨이 / 단면도", description: "벽이 벗겨진 건축 단면도입니다" },
+
+  // Vantage
+  "front-on": { label: "정면", description: "카메라를 마주보는 피사체입니다" },
+  "three-quarter-front": { label: "3/4 정면", description: "정면에서 살짝 비스듬한 각도입니다" },
+  "profile-left": { label: "왼쪽 프로필", description: "피사체의 왼쪽에서 본 측면 뷰입니다" },
+  "profile-right": { label: "오른쪽 프로필", description: "피사체의 오른쪽에서 본 측면 뷰입니다" },
+  "three-quarter-back": { label: "3/4 후면", description: "뒤에서 비스듬히 본 각도입니다" },
+  "behind": { label: "뒤", description: "피사체의 정후면 뷰입니다" },
+  "side-back-angle": { label: "측후면 앵글", description: "한쪽 어깨 뒤에서 본 3/4 뷰입니다" },
+}
+
+export default map

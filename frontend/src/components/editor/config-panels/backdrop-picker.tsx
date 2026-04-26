@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { BackdropSwatch } from "./backdrop-swatch"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface BackdropPickerProps {
   readonly value: string
@@ -30,12 +31,12 @@ export const BackdropPicker = memo(function BackdropPicker({
   className,
 }: BackdropPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("backdrop")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<BackdropCategory, Backdrop[]>()
     for (const b of BACKDROPS) {
-      if (q && !b.label.toLowerCase().includes(q) && !b.description.toLowerCase().includes(q)) {
+      if (!matches(b.id, b.label, b.description, query)) {
         continue
       }
       const list = byCategory.get(b.category) ?? []
@@ -46,7 +47,7 @@ export const BackdropPicker = memo(function BackdropPicker({
       category: cat,
       backdrops: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.backdrops.length > 0)
 
@@ -79,13 +80,15 @@ export const BackdropPicker = memo(function BackdropPicker({
             <div role="radiogroup" aria-label={BACKDROP_CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
               {backdrops.map((b) => {
                 const selected = b.id === value
+                const label = resolveLabel(b.id, b.label)
+                const description = resolveDescription(b.id, b.description)
                 return (
                   <button
                     key={b.id}
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    title={b.description}
+                    title={description}
                     onClick={() => onValueChange(b.id)}
                     className={cn(
                       "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -101,7 +104,7 @@ export const BackdropPicker = memo(function BackdropPicker({
                         selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                       )}
                     >
-                      {b.label}
+                      {label}
                     </span>
                   </button>
                 )

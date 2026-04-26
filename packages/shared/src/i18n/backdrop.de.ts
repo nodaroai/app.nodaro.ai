@@ -1,0 +1,37 @@
+import type { LocaleCatalogMap } from "./types.js"
+
+const map: LocaleCatalogMap = {
+  "white-seamless": { label: "Weißer Hohlkehlenhintergrund", description: "Sauberes weißes Studio-Papier" },
+  "black-seamless": { label: "Schwarzer Hohlkehlenhintergrund", description: "Reiner schwarzer Studio-Hintergrund" },
+  "grey-seamless": { label: "Grauer Hohlkehlenhintergrund", description: "Neutrales mittelgraues Studio-Papier" },
+  "ivory-seamless": { label: "Elfenbein-Hohlkehlenhintergrund", description: "Warmer elfenbeinfarbener Off-White-Hintergrund" },
+  "deep-red": { label: "Tiefrot", description: "Gesättigte tiefrote Wand" },
+  "royal-blue": { label: "Königsblau", description: "Gesättigter königsblauer Hintergrund" },
+  "emerald-green": { label: "Smaragdgrün", description: "Gesättigte smaragdfarbene Wand" },
+  "dusty-pink": { label: "Altrosa", description: "Sanfter gedämpfter rosa Hintergrund" },
+  "mustard-yellow": { label: "Senfgelb", description: "Warmer senffarbener Hintergrund" },
+  "teal-textured-wall": { label: "Strukturierte Petrolwand", description: "Bemalte petrolfarbene strukturierte Wand" },
+  "red-orange-gradient": { label: "Rot-Orange-Verlauf", description: "Warmer Rot-zu-Orange-Verlauf" },
+  "pink-orange-gradient": { label: "Rosa-Orange-Verlauf", description: "Sonnenuntergangs-Rosa-zu-Orange-Verlauf" },
+  "blue-emerald-gradient": { label: "Blau-Smaragd-Verlauf", description: "Kühler Blau-zu-Smaragd-Verlauf" },
+  "sunset-gradient": { label: "Sonnenuntergangs-Verlauf", description: "Mehrfarbiger Sonnenuntergangs-Verlauf" },
+  "two-tone-split": { label: "Zweifarbig geteilt", description: "Geteilte halb-und-halb Wand" },
+  "brick-wall": { label: "Backsteinwand", description: "Sichtbare rote Backsteinwand" },
+  "concrete-wall": { label: "Betonwand", description: "Rohe Betonoberfläche" },
+  "plastered-wall": { label: "Verputzte Wand", description: "Handgekellter Putz" },
+  "peeling-paint": { label: "Abblätternde Farbe", description: "Vintage-Wand mit abblätternder Farbe" },
+  "wood-paneling": { label: "Holzvertäfelung", description: "Warme holzvertäfelte Wand" },
+  "muslin-drape": { label: "Musselin", description: "Geflecktes handbemaltes Musselin" },
+  "velvet-drape": { label: "Samtdraperie", description: "Schwerer Samtvorhang als Hintergrund" },
+  "satin-drape": { label: "Satindraperie", description: "Glänzende Satindraperie" },
+  "canvas-painted": { label: "Bemalte Leinwand", description: "Malerischer Leinwand-Hintergrund" },
+  "bokeh-blur": { label: "Bokeh-Unschärfe", description: "Unscharfes Bokeh-Feld" },
+  "neon-bokeh": { label: "Neon-Bokeh", description: "Gesättigte Neon-Bokeh-Unschärfe" },
+  "halo-glow": { label: "Heiligenschein-Leuchten", description: "Glühender kreisförmiger Heiligenschein hinter dem Kopf" },
+  "light-leak": { label: "Lichtleck", description: "Lens-Flare-Lichtleck-Streifen" },
+  "vignette-dark": { label: "Dunkle Vignette", description: "Schwere dunkle Vignettenumrandung" },
+  "mirror-floor": { label: "Spiegelboden", description: "Reflektierende verspiegelte Oberfläche" },
+  "polished-floor": { label: "Polierter Boden", description: "Glänzender polierter Bodenreflex" },
+}
+
+export default map

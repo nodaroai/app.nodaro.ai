@@ -11,6 +11,7 @@ import {
 } from "@nodaro-shared/pose"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface PosePickerProps {
   readonly value: string
@@ -29,12 +30,12 @@ export const PosePicker = memo(function PosePicker({
   className,
 }: PosePickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("pose")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<PoseCategory, Pose[]>()
     for (const pose of POSES) {
-      if (q && !pose.label.toLowerCase().includes(q) && !pose.description.toLowerCase().includes(q)) {
+      if (!matches(pose.id, pose.label, pose.description, query)) {
         continue
       }
       const list = byCategory.get(pose.category) ?? []
@@ -45,7 +46,7 @@ export const PosePicker = memo(function PosePicker({
       category: cat,
       poses: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.poses.length > 0)
 
@@ -78,13 +79,15 @@ export const PosePicker = memo(function PosePicker({
             <div role="radiogroup" aria-label={POSE_CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
               {poses.map((pose) => {
                 const selected = pose.id === value
+                const label = resolveLabel(pose.id, pose.label)
+                const description = resolveDescription(pose.id, pose.description)
                 return (
                   <button
                     key={pose.id}
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    title={pose.description}
+                    title={description}
                     onClick={() => onValueChange(pose.id)}
                     className={cn(
                       "flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden",
@@ -99,7 +102,7 @@ export const PosePicker = memo(function PosePicker({
                         selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                       )}
                     >
-                      {pose.label}
+                      {label}
                     </span>
                   </button>
                 )

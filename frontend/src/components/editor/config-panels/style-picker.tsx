@@ -6,6 +6,7 @@ import { STYLES } from "@nodaro-shared/style"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { StylePreview } from "./style-preview"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface StylePickerProps {
   readonly value: string
@@ -19,14 +20,11 @@ export const StylePicker = memo(function StylePicker({
   className,
 }: StylePickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("style")
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return STYLES
-    return STYLES.filter(
-      (s) => s.label.toLowerCase().includes(q) || s.description.toLowerCase().includes(q),
-    )
-  }, [query])
+    return STYLES.filter((s) => matches(s.id, s.label, s.description, query))
+  }, [query, matches])
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
@@ -50,13 +48,15 @@ export const StylePicker = memo(function StylePicker({
       <div role="radiogroup" aria-label="Style" className="grid grid-cols-3 gap-1.5">
         {filtered.map((style) => {
           const selected = style.id === value
+          const label = resolveLabel(style.id, style.label)
+          const description = resolveDescription(style.id, style.description)
           return (
             <button
               key={style.id}
               type="button"
               role="radio"
               aria-checked={selected}
-              title={style.description}
+              title={description}
               onClick={() => onValueChange(style.id)}
               className={cn(
                 "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -72,7 +72,7 @@ export const StylePicker = memo(function StylePicker({
                   selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               >
-                {style.label}
+                {label}
               </span>
             </button>
           )

@@ -11,6 +11,7 @@ import {
 } from "@nodaro-shared/furniture"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface FurniturePickerProps {
   readonly value: string
@@ -82,12 +83,12 @@ export const FurniturePicker = memo(function FurniturePicker({
   className,
 }: FurniturePickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("furniture")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<FurnitureSubcategory, Furniture[]>()
     for (const piece of FURNITURE) {
-      if (q && !piece.label.toLowerCase().includes(q) && !piece.description.toLowerCase().includes(q)) {
+      if (!matches(piece.id, piece.label, piece.description, query)) {
         continue
       }
       const list = byCategory.get(piece.subcategory) ?? []
@@ -98,7 +99,7 @@ export const FurniturePicker = memo(function FurniturePicker({
       subcategory: cat,
       pieces: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.pieces.length > 0)
 
@@ -135,13 +136,15 @@ export const FurniturePicker = memo(function FurniturePicker({
             >
               {pieces.map((piece) => {
                 const selected = piece.id === value
+                const label = resolveLabel(piece.id, piece.label)
+                const description = resolveDescription(piece.id, piece.description)
                 return (
                   <button
                     key={piece.id}
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    title={piece.description}
+                    title={description}
                     onClick={() => onValueChange(piece.id, piece)}
                     className={cn(
                       "group flex flex-col items-center gap-1 p-1.5 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -159,7 +162,7 @@ export const FurniturePicker = memo(function FurniturePicker({
                         selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                       )}
                     >
-                      {piece.label}
+                      {label}
                     </span>
                   </button>
                 )

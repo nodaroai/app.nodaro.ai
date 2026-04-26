@@ -2,8 +2,10 @@
 
 import { type ReactNode, useMemo, useState } from "react"
 import { Search } from "lucide-react"
+import type { I18nCatalogId } from "@nodaro-shared/i18n"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import type { DimensionEntry } from "./dimension-modal-browser"
 
 /**
@@ -12,6 +14,9 @@ import type { DimensionEntry } from "./dimension-modal-browser"
  * and inside DimensionModalBrowser's dialog content for multi-dim cases
  * (e.g. Styling.hair-cut). Keeps the visual + interaction language identical
  * across both placements so users see the same picker either way.
+ *
+ * Pass `catalog` to enable i18n: labels/descriptions auto-localize and search
+ * filters across both English and the user's current locale.
  */
 export function DimensionTileGrid({
   entries,
@@ -24,6 +29,7 @@ export function DimensionTileGrid({
   gridClassName = "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2",
   autoFocusSearch = false,
   showClear = false,
+  catalog,
 }: {
   readonly entries: ReadonlyArray<DimensionEntry>
   readonly value: string | undefined
@@ -35,18 +41,25 @@ export function DimensionTileGrid({
   readonly gridClassName?: string
   readonly autoFocusSearch?: boolean
   readonly showClear?: boolean
+  readonly catalog?: I18nCatalogId
 }) {
   const [query, setQuery] = useState("")
+  // Always call the hook to keep order stable; pass a sentinel catalog id when
+  // i18n is disabled. The resolver falls back to English when no sidecar exists.
+  const i18n = useLocalizedCatalog(catalog ?? ("__noop__" as I18nCatalogId))
 
   const filtered = useMemo<ReadonlyArray<DimensionEntry>>(() => {
     const q = query.trim().toLowerCase()
     if (!q) return entries
+    if (catalog) {
+      return entries.filter((e) => i18n.matches(e.id, e.label, e.description, query))
+    }
     return entries.filter(
       (e) =>
         e.label.toLowerCase().includes(q) ||
         e.description.toLowerCase().includes(q),
     )
-  }, [query, entries])
+  }, [query, entries, catalog, i18n])
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
@@ -70,13 +83,17 @@ export function DimensionTileGrid({
         <div role="radiogroup" className={gridClassName}>
           {filtered.map((entry) => {
             const isSelected = entry.id === value
+            const label = catalog ? i18n.resolveLabel(entry.id, entry.label) : entry.label
+            const description = catalog
+              ? i18n.resolveDescription(entry.id, entry.description)
+              : entry.description
             return (
               <button
                 key={entry.id}
                 type="button"
                 role="radio"
                 aria-checked={isSelected}
-                title={entry.description}
+                title={description}
                 onClick={() => onChange(entry.id)}
                 className={cn(
                   "group flex flex-col items-center gap-1 rounded-xl border p-2 transition-colors cursor-pointer",
@@ -99,7 +116,7 @@ export function DimensionTileGrid({
                     isSelected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                   )}
                 >
-                  {entry.label}
+                  {label}
                 </span>
               </button>
             )

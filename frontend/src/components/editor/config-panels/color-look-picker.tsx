@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { ColorLookPreview } from "./color-look-preview"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface ColorLookPickerProps {
   readonly value: string
@@ -25,12 +26,12 @@ export const ColorLookPicker = memo(function ColorLookPicker({
   className,
 }: ColorLookPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("color-look")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<ColorLookCategory, ColorLook[]>()
     for (const colorLook of COLOR_LOOKS) {
-      if (q && !colorLook.label.toLowerCase().includes(q) && !colorLook.description.toLowerCase().includes(q)) {
+      if (!matches(colorLook.id, colorLook.label, colorLook.description, query)) {
         continue
       }
       const list = byCategory.get(colorLook.category) ?? []
@@ -40,7 +41,7 @@ export const ColorLookPicker = memo(function ColorLookPicker({
     return COLOR_LOOK_CATEGORY_ORDER
       .map((cat) => ({ category: cat, colorLooks: byCategory.get(cat) ?? [] }))
       .filter((section) => section.colorLooks.length > 0)
-  }, [query])
+  }, [query, matches])
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
@@ -69,13 +70,15 @@ export const ColorLookPicker = memo(function ColorLookPicker({
           <div role="radiogroup" aria-label={COLOR_LOOK_CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
             {colorLooks.map((colorLook) => {
               const selected = colorLook.id === value
+              const label = resolveLabel(colorLook.id, colorLook.label)
+              const description = resolveDescription(colorLook.id, colorLook.description)
               return (
                 <button
                   key={colorLook.id}
                   type="button"
                   role="radio"
                   aria-checked={selected}
-                  title={colorLook.description}
+                  title={description}
                   onClick={() => onValueChange(colorLook.id)}
                   className={cn(
                     "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -91,7 +94,7 @@ export const ColorLookPicker = memo(function ColorLookPicker({
                       selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                     )}
                   >
-                    {colorLook.label}
+                    {label}
                   </span>
                 </button>
               )

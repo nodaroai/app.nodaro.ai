@@ -1,0 +1,68 @@
+import type { LocaleCatalogMap } from "./types.js"
+
+const map: LocaleCatalogMap = {
+  // Indoor
+  "coffee-shop": { label: "커피숍", description: "아늑한 카페 인테리어입니다" },
+  "library": { label: "도서관", description: "키 큰 책장이 있는 웅장한 도서관입니다" },
+  "office": { label: "모던 오피스", description: "밝고 유리 외벽의 모던 오피스입니다" },
+  "home-office": { label: "홈 오피스", description: "아늑한 홈 워크스페이스입니다" },
+  "bedroom": { label: "침실", description: "친밀한 침실입니다" },
+  "living-room": { label: "거실", description: "아늑한 가정용 거실입니다" },
+  "kitchen": { label: "주방", description: "아침 햇살이 비치는 따뜻한 가정용 주방입니다" },
+  "hotel-room": { label: "호텔 객실", description: "도시 전망의 우아한 호텔 객실입니다" },
+  "restaurant": { label: "레스토랑", description: "촛불이 켜진 친밀한 레스토랑입니다" },
+  "nightclub": { label: "나이트클럽", description: "레이저와 연기로 가득한 어두운 클럽입니다" },
+  "gym": { label: "헬스장", description: "현대적인 피트니스 헬스장입니다" },
+  "classroom": { label: "교실", description: "밝은 학교 교실입니다" },
+  "hospital": { label: "병원", description: "멸균된 병원 복도입니다" },
+  "laboratory": { label: "연구실", description: "빛나는 장비가 있는 연구실입니다" },
+  "courtroom": { label: "법정", description: "목재 패널이 있는 법정입니다" },
+  "warehouse": { label: "산업용 창고", description: "천창이 있는 거대한 창고입니다" },
+  "subway-car": { label: "지하철 객차", description: "움직이는 지하철 객차의 내부입니다" },
+  "taxi": { label: "택시 내부", description: "밤 시간 도시 택시의 뒷좌석입니다" },
+  "cathedral": { label: "대성당", description: "고딕 양식의 대성당 내부입니다" },
+  "art-gallery": { label: "아트 갤러리", description: "미니멀한 화이트 큐브 갤러리입니다" },
+
+  // Urban
+  "city-street": { label: "도시 거리", description: "활기 넘치는 도시 거리입니다" },
+  "rooftop": { label: "옥상", description: "스카이라인 너머의 옥상 테라스입니다" },
+  "back-alley": { label: "뒷골목", description: "거칠고 좁은 골목입니다" },
+  "neon-alley": { label: "네온 골목", description: "비에 젖은 네온 골목입니다" },
+  "park": { label: "도심 공원", description: "산책로가 있는 푸르른 도심 공원입니다" },
+  "backyard": { label: "뒷마당 파티오", description: "스트링 라이트가 있는 데크 파티오입니다" },
+  "highway": { label: "탁 트인 고속도로", description: "지평선까지 펼쳐지는 고속도로입니다" },
+  "bridge": { label: "현수교", description: "물 위에 걸린 긴 현수교입니다" },
+  "train-station": { label: "기차역", description: "기차가 대기 중인 플랫폼입니다" },
+  "airport": { label: "공항 터미널", description: "곡선 유리벽이 있는 광활한 터미널입니다" },
+  "parking-lot": { label: "주차장", description: "황혼 무렵의 교외 주차장입니다" },
+  "penthouse": { label: "펜트하우스", description: "스카이라인 전망의 럭셔리 펜트하우스입니다" },
+  "gas-station": { label: "주유소", description: "한밤중 외딴 고속도로의 주유소입니다" },
+
+  // Nature
+  "forest": { label: "숲속 공터", description: "햇빛이 비치는 이끼 낀 공터입니다" },
+  "beach": { label: "해변", description: "파도가 밀려오는 넓은 모래사장입니다" },
+  "mountain-peak": { label: "산 정상", description: "바위투성이 알프스 정상입니다" },
+  "desert": { label: "사막 사구", description: "바람에 깎인 사막 사구입니다" },
+  "jungle": { label: "정글", description: "울창하고 습한 정글의 내부입니다" },
+  "grassland": { label: "초원", description: "바람이 부는 탁 트인 초원입니다" },
+  "snowy-tundra": { label: "눈 덮인 툰드라", description: "얼어붙은 바람에 깎인 툰드라입니다" },
+  "lake-shore": { label: "호숫가", description: "고요한 산정 호수의 호숫가입니다" },
+  "riverbank": { label: "강둑", description: "버드나무가 늘어선 굽이진 강가입니다" },
+  "waterfall": { label: "폭포", description: "이끼 낀 절벽을 따라 쏟아지는 폭포입니다" },
+  "cave": { label: "동굴", description: "햇빛 기둥이 들어오는 바위 동굴입니다" },
+  "western-canyon": { label: "서부 협곡", description: "굽이진 강이 흐르는 붉은 사암 메사입니다" },
+
+  // Fantastical
+  "alien-planet": { label: "외계 행성", description: "쌍둥이 달이 떠 있는 다른 세계의 풍경입니다" },
+  "spaceship-interior": { label: "우주선 내부", description: "매끈한 우주선 복도입니다" },
+  "underwater": { label: "수중", description: "햇빛이 비치는 심해 장면입니다" },
+  "fantasy-castle": { label: "판타지 성", description: "광활한 성의 안뜰입니다" },
+  "medieval-village": { label: "중세 마을", description: "자갈길이 깔린 마을 광장입니다" },
+  "ancient-ruins": { label: "고대 유적", description: "덩굴이 뒤덮인 돌 유적입니다" },
+  "cyberpunk-city": { label: "사이버펑크 도시", description: "네온이 빛나는 광활한 메가시티 스카이라인입니다" },
+  "haunted-mansion": { label: "유령 저택", description: "쇠락한 고딕 저택입니다" },
+  "dreamscape": { label: "드림스케이프", description: "초현실적인 떠다니는 섬들입니다" },
+  "wasteland": { label: "포스트 아포칼립스 황무지", description: "녹슬고 흐린 황무지입니다" },
+}
+
+export default map

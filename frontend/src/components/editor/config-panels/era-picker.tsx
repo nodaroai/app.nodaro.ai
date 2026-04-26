@@ -11,6 +11,7 @@ import {
 } from "@nodaro-shared/era"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface EraPickerProps {
   readonly value: string
@@ -30,12 +31,12 @@ export const EraPicker = memo(function EraPicker({
   className,
 }: EraPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("era")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<EraCategory, Era[]>()
     for (const era of ERAS) {
-      if (q && !era.label.toLowerCase().includes(q) && !era.description.toLowerCase().includes(q)) {
+      if (!matches(era.id, era.label, era.description, query)) {
         continue
       }
       const list = byCategory.get(era.category) ?? []
@@ -46,7 +47,7 @@ export const EraPicker = memo(function EraPicker({
       category: cat,
       eras: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.eras.length > 0)
 
@@ -83,13 +84,15 @@ export const EraPicker = memo(function EraPicker({
             >
               {eras.map((era) => {
                 const selected = era.id === value
+                const label = resolveLabel(era.id, era.label)
+                const description = resolveDescription(era.id, era.description)
                 return (
                   <button
                     key={era.id}
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    title={era.description}
+                    title={description}
                     onClick={() => onValueChange(era.id)}
                     className={cn(
                       "flex flex-col items-start gap-0.5 p-2 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -104,10 +107,10 @@ export const EraPicker = memo(function EraPicker({
                         selected ? "text-[#ff0073]" : "text-gray-800 dark:text-[#E2E8F0]",
                       )}
                     >
-                      {era.label}
+                      {label}
                     </span>
                     <span className="text-[10px] leading-snug text-muted-foreground line-clamp-2 w-full">
-                      {era.description}
+                      {description}
                     </span>
                   </button>
                 )

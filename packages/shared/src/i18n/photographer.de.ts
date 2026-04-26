@@ -1,0 +1,60 @@
+import type { LocaleCatalogMap } from "./types.js"
+
+const map: LocaleCatalogMap = {
+  // Editorial / Fashion
+  "tim-walker": { description: "Malerische Märchenmode" },
+  "paolo-roversi": { description: "Sanftes, ätherisches Polaroid-Glühen" },
+  "marta-bevacqua": { description: "Verträumte malerische Porträtfotografie" },
+  "patrick-demarchelier": { description: "Verfeinertes klassisches Mode-Porträt" },
+  "nick-knight": { description: "Hochglänzende avantgardistische Mode" },
+  "mario-testino": { description: "Glamouröse, sonnendurchflutete Mode" },
+  "steven-meisel": { description: "Polierte Mid-Century-Editorial-Fotografie" },
+  "helmut-newton": { description: "Markante Schwarz-Weiß-Provokation" },
+  "mario-sorrenti": { description: "Intime, körnige Modefotografie" },
+  "annie-leibovitz": { description: "Cinematisches Promi-Porträt" },
+  "felicia-simion": { description: "Surreale pastorale Kunstfotografie" },
+  "oleg-oprisco": { description: "Cinematische Filmkorn-Erzählung" },
+  "bella-kotak": { description: "Magische, fantasy-folkloristische Porträtfotografie" },
+  "yigal-ozeri": { description: "Hyperreales gemaltes Porträt" },
+  "jimmy-marble": { description: "Pastellige, zuckersüße Editorial-Fotografie" },
+  "rinko-kawauchi": { description: "Stille, lichtdurchflutete Alltagsfotografie" },
+  "ellen-von-unwerth": { description: "Verspielte Retro-Pin-up-Energie" },
+  // Documentary / Street
+  "henri-cartier-bresson": { description: "Streetfotografie des entscheidenden Moments" },
+  "vivian-maier": { description: "Mid-Century-amerikanische Streetfotografie" },
+  "saul-leiter": { description: "Malerische Farb-Streetfotografie durch Glas" },
+  "daido-moriyama": { description: "Körnige, kontrastreiche Tokio-Streetfotografie" },
+  "robert-capa": { description: "Eindringlicher Kriegs-Fotojournalismus" },
+  "sebastiao-salgado": { description: "Epische monochrome soziale Dokumentation" },
+  "diane-arbus": { description: "Schroffes, konfrontatives Porträt" },
+  // Cinematographers
+  "roger-deakins": { description: "Malerischer kinematischer Naturalismus" },
+  "emmanuel-lubezki": { description: "Schwebende Naturlicht-Kinematografie" },
+  "greig-fraser": { description: "Reichhaltige, taktile Genre-Kinematografie" },
+  "christopher-doyle": { description: "Gesättigte Handheld-Neon-Stimmung" },
+  // Concept
+  "greg-rutkowski": { description: "Epische malerische Fantasy-Konzeptkunst" },
+  "magali-villeneuve": { description: "Heroische Fantasy-Charakterkunst" },
+  "charlie-bowater": { description: "Atmosphärische digitale Porträtfotografie" },
+  "sam-spratt": { description: "Allegorisches hyperreales Porträt" },
+  "ruan-jia": { description: "Üppiges malerisches Fantasy-Porträt" },
+  "ilya-kuvshinov": { description: "Anime-geprägtes stilisiertes Porträt" },
+  "wlop": { description: "Ätherisch malerische Fantasy" },
+  "artgerm": { description: "Polierter comicinspirierter Pinup" },
+  // Illustrators
+  "makoto-shinkai": { description: "Cinematischer Anime-Himmel und Licht" },
+  "studio-ghibli": { description: "Handgemalte Ghibli-Wärme" },
+  "alphonse-mucha": { description: "Jugendstil-Dekortafel" },
+  "carne-griffiths": { description: "Tinten-Bleed-botanisches Porträt" },
+  "conrad-roset": { description: "Sanfte Aquarellfigur" },
+  "akihito-yoshida": { description: "Stille Tinte-und-Korn-Monochromie" },
+  "karol-bak": { description: "Symbolistische gemalte Muse" },
+  "ismail-inceoglu": { description: "Mythische malerische Landschaft" },
+  "stefan-gesell": { description: "Dunkle surreale Porträtfotografie" },
+  "andrew-atroshenko": { description: "Romantische impressionistische Figur" },
+  "peter-gric": { description: "Architektonisch surrealistische Landschaft" },
+  "ingrid-baars": { description: "Skulpturale Mode-Kunst-Collage" },
+  "guido-van-helten": { description: "Monumentales Wandmaler-Porträt" },
+}
+
+export default map

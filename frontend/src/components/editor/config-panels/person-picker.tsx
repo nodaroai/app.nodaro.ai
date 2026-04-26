@@ -25,6 +25,7 @@ import {
   LipsIcon,
   BodyProportionsIcon,
 } from "./small-silhouette-icons"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface PersonPickerProps {
   readonly value: PersonValue
@@ -47,12 +48,12 @@ export const PersonPicker = memo(function PersonPicker({
   className,
 }: PersonPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("person")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byDimension = new Map<PersonDimension, Person[]>()
     for (const person of PEOPLE) {
-      if (q && !person.label.toLowerCase().includes(q) && !person.description.toLowerCase().includes(q)) {
+      if (!matches(person.id, person.label, person.description, query)) {
         continue
       }
       const list = byDimension.get(person.dimension) ?? []
@@ -63,7 +64,7 @@ export const PersonPicker = memo(function PersonPicker({
       dimension: dim,
       entries: byDimension.get(dim) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.entries.length > 0)
 
@@ -99,6 +100,8 @@ export const PersonPicker = memo(function PersonPicker({
             field={field}
             checked={checked}
             current={current}
+            resolveLabel={resolveLabel}
+            resolveDescription={resolveDescription}
             onToggle={(next) => {
               if (next) {
                 const first = PEOPLE.find((p) => p.dimension === dimension)?.id
@@ -121,6 +124,8 @@ interface DimensionSectionProps {
   readonly field: keyof PersonValue
   readonly checked: boolean
   readonly current: string | undefined
+  readonly resolveLabel: (id: string, englishLabel: string) => string
+  readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
   readonly onPick: (id: string) => void
 }
@@ -143,6 +148,8 @@ function EntryChip({
   selected,
   enabled,
   label,
+  resolveLabel,
+  resolveDescription,
   onPick,
 }: {
   readonly dimension: PersonDimension
@@ -150,16 +157,22 @@ function EntryChip({
   readonly selected: boolean
   readonly enabled: boolean
   readonly label: string
+  readonly resolveLabel: (id: string, englishLabel: string) => string
+  readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onPick: (id: string) => void
 }) {
   const swatch = getPersonSwatch(entry.id)
   const icon = renderEntryIcon(dimension, entry)
+  // Resolved label uses shortLabel as English fallback (compact display); when
+  // a localized translation exists, it takes precedence.
+  const resolvedLabel = resolveLabel(entry.id, entry.shortLabel ?? entry.label)
+  const resolvedDescription = resolveDescription(entry.id, entry.description)
   return (
     <button
       type="button"
       role="radio"
       aria-checked={selected}
-      title={enabled ? entry.description : `${entry.description} (click to enable ${label})`}
+      title={enabled ? resolvedDescription : `${resolvedDescription} (click to enable ${label})`}
       onClick={() => onPick(entry.id)}
       className={cn(
         "flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden",
@@ -176,7 +189,7 @@ function EntryChip({
           selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
         )}
       >
-        {entry.shortLabel ?? entry.label}
+        {resolvedLabel}
       </span>
     </button>
   )
@@ -188,6 +201,8 @@ function GroupedEntryGrid({
   checked,
   current,
   label,
+  resolveLabel,
+  resolveDescription,
   onPick,
 }: {
   readonly dimension: PersonDimension
@@ -195,6 +210,8 @@ function GroupedEntryGrid({
   readonly checked: boolean
   readonly current: string | undefined
   readonly label: string
+  readonly resolveLabel: (id: string, englishLabel: string) => string
+  readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onPick: (id: string) => void
 }) {
   // Build ordered group list preserving catalog order.
@@ -254,6 +271,8 @@ function GroupedEntryGrid({
                     selected={checked && entry.id === current}
                     enabled={checked}
                     label={label}
+                    resolveLabel={resolveLabel}
+                    resolveDescription={resolveDescription}
                     onPick={onPick}
                   />
                 ))}
@@ -272,6 +291,8 @@ function DimensionSection({
   field,
   checked,
   current,
+  resolveLabel,
+  resolveDescription,
   onToggle,
   onPick,
 }: DimensionSectionProps) {
@@ -305,6 +326,8 @@ function DimensionSection({
           checked={checked}
           current={current}
           label={label}
+          resolveLabel={resolveLabel}
+          resolveDescription={resolveDescription}
           onPick={onPick}
         />
       ) : (
@@ -321,6 +344,8 @@ function DimensionSection({
               selected={checked && entry.id === current}
               enabled={checked}
               label={label}
+              resolveLabel={resolveLabel}
+              resolveDescription={resolveDescription}
               onPick={onPick}
             />
           ))}

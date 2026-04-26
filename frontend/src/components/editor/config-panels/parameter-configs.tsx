@@ -115,7 +115,22 @@ import { buildExposureHints } from "@nodaro-shared/exposure-settings"
 import { getRenderQualityPromptHint } from "@nodaro-shared/render-quality"
 import { getCompositionEffectPromptHint } from "@nodaro-shared/composition-effects"
 import { getPostProcessEffectPromptHint } from "@nodaro-shared/post-process-effects"
+import { useLocaleDir } from "@/lib/locale-store"
+import { LocalePicker } from "@/components/editor/locale-picker"
 import type { ConfigProps } from "./types"
+
+/**
+ * Compact header row that mounts the locale picker at the top of each
+ * parameter-node config panel. Lets the user switch the picker language
+ * (English ↔ localized) for every i18n-aware picker in the panel below.
+ */
+function LocaleHeader() {
+  return (
+    <div className="flex items-center justify-end -mt-1 -mb-2">
+      <LocalePicker />
+    </div>
+  )
+}
 
 export function ToneConfig({ data, onUpdate }: ConfigProps<ToneData>) {
   return (
@@ -293,6 +308,7 @@ export function MotionConfig({ data, onUpdate }: ConfigProps<MotionData>) {
 }
 
 export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: ConfigProps<CameraMotionData> & { nodeId?: string }) {
+  const dir = useLocaleDir()
   const composed = composeCameraMotionHintForNode(
     data.cameraMotion,
     nodeId,
@@ -300,7 +316,8 @@ export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: Con
     edges ?? [],
   )
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={composed} />
       <p className="text-[10px] text-muted-foreground italic px-0.5">
         Connect parameter nodes to startState / endState input handles to add "beginning with…" / "ending with…" clauses to this preview.
@@ -315,9 +332,11 @@ export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: Con
 }
 
 export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
+  const dir = useLocaleDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={buildFramingHints(data)} />
       <Label>Framing</Label>
       <FramingPicker
@@ -354,8 +373,10 @@ export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
 }
 
 export function LensConfig({ data, onUpdate }: ConfigProps<LensData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getLensPromptHint(data.lens)]} />
       <Label>Lens</Label>
       <LensPicker
@@ -367,8 +388,10 @@ export function LensConfig({ data, onUpdate }: ConfigProps<LensData>) {
 }
 
 export function CameraFormatConfig({ data, onUpdate }: ConfigProps<CameraFormatData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getCameraFormatPromptHint(data.cameraFormat)]} />
       <Label>Camera / Film</Label>
       <CameraFormatPicker
@@ -380,9 +403,11 @@ export function CameraFormatConfig({ data, onUpdate }: ConfigProps<CameraFormatD
 }
 
 export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
+  const dir = useLocaleDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={buildLightingHints(data)} />
       <Label>Lighting</Label>
       <LightingPicker
@@ -417,8 +442,10 @@ export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
 }
 
 export function ColorLookConfig({ data, onUpdate }: ConfigProps<ColorLookData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getColorLookPromptHint(data.colorLook)]} />
       <Label>Color / Look</Label>
       <ColorLookPicker
@@ -430,8 +457,10 @@ export function ColorLookConfig({ data, onUpdate }: ConfigProps<ColorLookData>) 
 }
 
 export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getAtmospherePromptHint(data.atmosphere)]} />
       <Label>Atmosphere</Label>
       <AtmospherePicker
@@ -443,8 +472,10 @@ export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>
 }
 
 export function StyleConfig({ data, onUpdate }: ConfigProps<StyleData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getStylePromptHint(data.style)]} />
       <Label>Style</Label>
       <StylePicker
@@ -456,8 +487,10 @@ export function StyleConfig({ data, onUpdate }: ConfigProps<StyleData>) {
 }
 
 export function SettingConfig({ data, onUpdate }: ConfigProps<SettingData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getSettingPromptHint(data.setting)]} />
       <Label>Setting</Label>
       <SettingPicker
@@ -469,9 +502,11 @@ export function SettingConfig({ data, onUpdate }: ConfigProps<SettingData>) {
 }
 
 export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
+  const dir = useLocaleDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={buildPersonHints(data)} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="person-pre-text" className="text-xs text-muted-foreground">
@@ -547,8 +582,10 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
 }
 
 export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={buildMoodHints(data)} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="mood-pre-text" className="text-xs text-muted-foreground">
@@ -587,14 +624,17 @@ export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
         renderIcon={(entry) => <MoodEmoji moodId={entry.id} className="size-full" />}
         searchPlaceholder="Search moods"
         gridClassName="grid grid-cols-3 gap-2"
+        catalog="mood"
       />
     </div>
   )
 }
 
 export function PhotographerConfig({ data, onUpdate }: ConfigProps<PhotographerData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getPhotographerPromptHint(data.photographer)]} />
       <Label>Photographer / Artist Style</Label>
       <PhotographerPicker
@@ -606,8 +646,10 @@ export function PhotographerConfig({ data, onUpdate }: ConfigProps<PhotographerD
 }
 
 export function AestheticConfig({ data, onUpdate }: ConfigProps<AestheticData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getAestheticPromptHint(data.aesthetic)]} />
       <Label>Aesthetic / Microtrend</Label>
       <AestheticPicker
@@ -619,8 +661,10 @@ export function AestheticConfig({ data, onUpdate }: ConfigProps<AestheticData>) 
 }
 
 export function EraConfig({ data, onUpdate }: ConfigProps<EraData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getEraPromptHint(data.era)]} />
       <Label>Era / Period</Label>
       <EraPicker
@@ -632,8 +676,10 @@ export function EraConfig({ data, onUpdate }: ConfigProps<EraData>) {
 }
 
 export function PoseConfig({ data, onUpdate }: ConfigProps<PoseData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={buildPoseHints(data)} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="pose-pre-text" className="text-xs text-muted-foreground">
@@ -671,15 +717,18 @@ export function PoseConfig({ data, onUpdate }: ConfigProps<PoseData>) {
         renderIcon={(entry) => <PoseIcon poseId={entry.id} className="size-full" />}
         searchPlaceholder="Search poses"
         gridClassName="grid grid-cols-3 gap-2"
+        catalog="pose"
       />
     </div>
   )
 }
 
 export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
+  const dir = useLocaleDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={buildStylingHints(data)} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="styling-pre-text" className="text-xs text-muted-foreground">
@@ -746,9 +795,11 @@ export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
 }
 
 export function TemporalConfig({ data, onUpdate }: ConfigProps<TemporalData>) {
+  const dir = useLocaleDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={buildTemporalHints(data)} />
       <Label>Temporal</Label>
       <TemporalPicker
@@ -784,8 +835,10 @@ export function TemporalConfig({ data, onUpdate }: ConfigProps<TemporalData>) {
 }
 
 export function MaterialConfig({ data, onUpdate }: ConfigProps<MaterialData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getMaterialPromptHint(data.material)]} />
       <Label>Material</Label>
       <MaterialPicker
@@ -797,10 +850,12 @@ export function MaterialConfig({ data, onUpdate }: ConfigProps<MaterialData>) {
 }
 
 export function AnimalConfig({ data, onUpdate }: ConfigProps<AnimalData>) {
+  const dir = useLocaleDir()
   const animal = getAnimal(data.animal)
   const hint = animal ? `featuring a ${animal.label.toLowerCase()}, ${animal.description}` : ""
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[hint]} />
       <Label>Animal</Label>
       <AnimalPicker
@@ -812,10 +867,12 @@ export function AnimalConfig({ data, onUpdate }: ConfigProps<AnimalData>) {
 }
 
 export function VehicleConfig({ data, onUpdate }: ConfigProps<VehicleData>) {
+  const dir = useLocaleDir()
   const vehicle = getVehicle(data.vehicle)
   const hint = vehicle ? `featuring a ${vehicle.label.toLowerCase()}, ${vehicle.description}` : ""
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[hint]} />
       <Label>Vehicle</Label>
       <VehiclePicker
@@ -827,10 +884,12 @@ export function VehicleConfig({ data, onUpdate }: ConfigProps<VehicleData>) {
 }
 
 export function WeaponConfig({ data, onUpdate }: ConfigProps<WeaponData>) {
+  const dir = useLocaleDir()
   const weapon = getWeapon(data.weapon)
   const hint = weapon ? `with a ${weapon.label.toLowerCase()}, ${weapon.description}` : ""
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[hint]} />
       <Label>Weapon</Label>
       <WeaponPicker
@@ -842,8 +901,10 @@ export function WeaponConfig({ data, onUpdate }: ConfigProps<WeaponData>) {
 }
 
 export function PhotoGenreConfig({ data, onUpdate }: ConfigProps<PhotoGenreData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getPhotoGenrePromptHint(data.photoGenre)]} />
       <Label>Photo Genre</Label>
       <PhotoGenrePicker
@@ -855,8 +916,10 @@ export function PhotoGenreConfig({ data, onUpdate }: ConfigProps<PhotoGenreData>
 }
 
 export function BackdropConfig({ data, onUpdate }: ConfigProps<BackdropData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getBackdropPromptHint(data.backdrop)]} />
       <Label>Backdrop</Label>
       <BackdropPicker
@@ -868,8 +931,10 @@ export function BackdropConfig({ data, onUpdate }: ConfigProps<BackdropData>) {
 }
 
 export function HeldPropConfig({ data, onUpdate }: ConfigProps<HeldPropData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getHeldPropPromptHint(data.heldProp)]} />
       <Label>Held Prop</Label>
       <HeldPropPicker
@@ -881,8 +946,10 @@ export function HeldPropConfig({ data, onUpdate }: ConfigProps<HeldPropData>) {
 }
 
 export function ExposureSettingsConfig({ data, onUpdate }: ConfigProps<ExposureSettingsData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={buildExposureHints(data)} />
       <Label>Exposure Settings</Label>
       <ExposureSettingsPicker
@@ -894,8 +961,10 @@ export function ExposureSettingsConfig({ data, onUpdate }: ConfigProps<ExposureS
 }
 
 export function RenderQualityConfig({ data, onUpdate }: ConfigProps<RenderQualityData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getRenderQualityPromptHint(data.renderQuality)]} />
       <Label>Render Quality</Label>
       <RenderQualityPicker
@@ -907,8 +976,10 @@ export function RenderQualityConfig({ data, onUpdate }: ConfigProps<RenderQualit
 }
 
 export function CompositionEffectsConfig({ data, onUpdate }: ConfigProps<CompositionEffectsData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getCompositionEffectPromptHint(data.compositionEffect)]} />
       <Label>Composition Effect</Label>
       <CompositionEffectsPicker
@@ -920,8 +991,10 @@ export function CompositionEffectsConfig({ data, onUpdate }: ConfigProps<Composi
 }
 
 export function PostProcessEffectsConfig({ data, onUpdate }: ConfigProps<PostProcessEffectsData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getPostProcessEffectPromptHint(data.postProcess)]} />
       <Label>Post-Process Effect</Label>
       <PostProcessEffectsPicker

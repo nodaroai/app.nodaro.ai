@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { LightingPreview } from "./lighting-preview"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface LightingPickerProps {
   readonly value: LightingValue
@@ -34,12 +35,12 @@ export const LightingPicker = memo(function LightingPicker({
   className,
 }: LightingPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("lighting")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<LightingCategory, Lighting[]>()
     for (const lighting of LIGHTINGS) {
-      if (q && !lighting.label.toLowerCase().includes(q) && !lighting.description.toLowerCase().includes(q)) {
+      if (!matches(lighting.id, lighting.label, lighting.description, query)) {
         continue
       }
       const list = byCategory.get(lighting.category) ?? []
@@ -50,7 +51,7 @@ export const LightingPicker = memo(function LightingPicker({
       category: cat,
       lightings: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((s) => s.lightings.length > 0)
 
@@ -89,6 +90,8 @@ export const LightingPicker = memo(function LightingPicker({
             field={field}
             checked={checked}
             current={current}
+            resolveLabel={resolveLabel}
+            resolveDescription={resolveDescription}
             onToggle={(next) => {
               if (next) {
                 // Enabling: auto-pick the first entry in this category as default.
@@ -112,6 +115,8 @@ interface CategorySectionProps {
   readonly field: (typeof LIGHTING_FIELD_BY_CATEGORY)[LightingCategory]
   readonly checked: boolean
   readonly current: string | undefined
+  readonly resolveLabel: (id: string, englishLabel: string) => string
+  readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
   readonly onPick: (id: string) => void
 }
@@ -122,6 +127,8 @@ function CategorySection({
   field,
   checked,
   current,
+  resolveLabel,
+  resolveDescription,
   onToggle,
   onPick,
 }: CategorySectionProps) {
@@ -147,13 +154,15 @@ function CategorySection({
       <div role="radiogroup" aria-label={label} className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}>
         {lightings.map((lighting) => {
           const selected = checked && lighting.id === current
+          const entryLabel = resolveLabel(lighting.id, lighting.label)
+          const entryDescription = resolveDescription(lighting.id, lighting.description)
           return (
             <button
               key={lighting.id}
               type="button"
               role="radio"
               aria-checked={selected}
-              title={checked ? lighting.description : `${lighting.description} (click to enable ${label})`}
+              title={checked ? entryDescription : `${entryDescription} (click to enable ${label})`}
               onClick={() => onPick(lighting.id)}
               className={cn(
                 "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -169,7 +178,7 @@ function CategorySection({
                   selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               >
-                {lighting.label}
+                {entryLabel}
               </span>
             </button>
           )

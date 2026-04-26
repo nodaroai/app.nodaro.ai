@@ -5,6 +5,7 @@ import { Search } from "lucide-react"
 import { RENDER_QUALITIES } from "@nodaro-shared/render-quality"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface RenderQualityPickerProps {
   readonly value: string
@@ -18,14 +19,11 @@ export const RenderQualityPicker = memo(function RenderQualityPicker({
   className,
 }: RenderQualityPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("render-quality")
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return RENDER_QUALITIES
-    return RENDER_QUALITIES.filter(
-      (r) => r.label.toLowerCase().includes(q) || r.description.toLowerCase().includes(q),
-    )
-  }, [query])
+    return RENDER_QUALITIES.filter((r) => matches(r.id, r.label, r.description, query))
+  }, [query, matches])
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
@@ -49,13 +47,15 @@ export const RenderQualityPicker = memo(function RenderQualityPicker({
       <div role="radiogroup" aria-label="Render Quality" className="grid grid-cols-2 gap-1.5">
         {filtered.map((entry) => {
           const selected = entry.id === value
+          const label = resolveLabel(entry.id, entry.label)
+          const description = resolveDescription(entry.id, entry.description)
           return (
             <button
               key={entry.id}
               type="button"
               role="radio"
               aria-checked={selected}
-              title={entry.description}
+              title={description}
               onClick={() => onValueChange(entry.id)}
               className={cn(
                 "group flex flex-col items-start gap-0.5 p-2 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -70,10 +70,10 @@ export const RenderQualityPicker = memo(function RenderQualityPicker({
                   selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               >
-                {entry.label}
+                {label}
               </span>
               <span className="text-[10px] leading-snug text-muted-foreground line-clamp-2">
-                {entry.description}
+                {description}
               </span>
             </button>
           )

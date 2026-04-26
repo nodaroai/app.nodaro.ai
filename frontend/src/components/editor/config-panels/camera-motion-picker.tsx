@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { CameraMotionPreview } from "./camera-motion-preview"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface CameraMotionPickerProps {
   readonly value: string
@@ -26,12 +27,12 @@ export const CameraMotionPicker = memo(function CameraMotionPicker({
   className,
 }: CameraMotionPickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("camera-motions")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<CameraMotionCategory, CameraMotion[]>()
     for (const motion of CAMERA_MOTIONS) {
-      if (q && !motion.label.toLowerCase().includes(q) && !motion.description.toLowerCase().includes(q)) {
+      if (!matches(motion.id, motion.label, motion.description, query)) {
         continue
       }
       const list = byCategory.get(motion.category) ?? []
@@ -41,7 +42,7 @@ export const CameraMotionPicker = memo(function CameraMotionPicker({
     return CAMERA_MOTION_CATEGORY_ORDER
       .map((cat) => ({ category: cat, motions: byCategory.get(cat) ?? [] }))
       .filter((section) => section.motions.length > 0)
-  }, [query])
+  }, [query, matches])
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
@@ -70,13 +71,15 @@ export const CameraMotionPicker = memo(function CameraMotionPicker({
           <div role="radiogroup" aria-label={CAMERA_MOTION_CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
             {motions.map((motion) => {
               const selected = motion.id === value
+              const label = resolveLabel(motion.id, motion.label)
+              const description = resolveDescription(motion.id, motion.description)
               return (
                 <button
                   key={motion.id}
                   type="button"
                   role="radio"
                   aria-checked={selected}
-                  title={motion.description}
+                  title={description}
                   onClick={() => onValueChange(motion.id)}
                   className={cn(
                     "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -92,7 +95,7 @@ export const CameraMotionPicker = memo(function CameraMotionPicker({
                       selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                     )}
                   >
-                    {motion.label}
+                    {label}
                   </span>
                 </button>
               )

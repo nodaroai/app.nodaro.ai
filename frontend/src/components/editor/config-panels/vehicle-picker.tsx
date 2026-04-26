@@ -11,6 +11,7 @@ import {
 } from "@nodaro-shared/vehicles"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 
 interface VehiclePickerProps {
   readonly value: string
@@ -93,12 +94,12 @@ export const VehiclePicker = memo(function VehiclePicker({
   className,
 }: VehiclePickerProps) {
   const [query, setQuery] = useState("")
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("vehicles")
 
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const byCategory = new Map<VehicleSubcategory, Vehicle[]>()
     for (const vehicle of VEHICLES) {
-      if (q && !vehicle.label.toLowerCase().includes(q) && !vehicle.description.toLowerCase().includes(q)) {
+      if (!matches(vehicle.id, vehicle.label, vehicle.description, query)) {
         continue
       }
       const list = byCategory.get(vehicle.subcategory) ?? []
@@ -109,7 +110,7 @@ export const VehiclePicker = memo(function VehiclePicker({
       subcategory: cat,
       vehicles: byCategory.get(cat) ?? [],
     }))
-  }, [query])
+  }, [query, matches])
 
   const anyVisible = grouped.some((g) => g.vehicles.length > 0)
 
@@ -146,13 +147,15 @@ export const VehiclePicker = memo(function VehiclePicker({
             >
               {vehicles.map((vehicle) => {
                 const selected = vehicle.id === value
+                const label = resolveLabel(vehicle.id, vehicle.label)
+                const description = resolveDescription(vehicle.id, vehicle.description)
                 return (
                   <button
                     key={vehicle.id}
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    title={vehicle.description}
+                    title={description}
                     onClick={() => onValueChange(vehicle.id, vehicle)}
                     className={cn(
                       "group flex flex-col items-center gap-1 p-1.5 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
@@ -170,7 +173,7 @@ export const VehiclePicker = memo(function VehiclePicker({
                         selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
                       )}
                     >
-                      {vehicle.label}
+                      {label}
                     </span>
                   </button>
                 )

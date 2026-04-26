@@ -1,0 +1,71 @@
+import type { LocaleCatalogMap } from "./types.js"
+
+const map: LocaleCatalogMap = {
+  // Fabric
+  "silk": { label: "Seide", description: "Glatte glänzende Seide" },
+  "cotton": { label: "Baumwolle", description: "Weiche matte Baumwolle" },
+  "denim": { label: "Denim", description: "Schwerer Indigo-Denim" },
+  "leather": { label: "Leder", description: "Reichhaltiges geschmeidiges Leder" },
+  "velvet": { label: "Samt", description: "Plüschiger Samt" },
+  "satin": { label: "Satin", description: "Glänzender Satin" },
+  "lace": { label: "Spitze", description: "Zarte gemusterte Spitze" },
+  "wool": { label: "Wolle", description: "Warme gewebte Wolle" },
+  "linen": { label: "Leinen", description: "Natürliches strukturiertes Leinen" },
+  "tweed": { label: "Tweed", description: "Rustikaler gewebter Tweed" },
+  "cashmere": { label: "Kaschmir", description: "Luxuriöses weiches Kaschmir" },
+  "chiffon": { label: "Chiffon", description: "Durchscheinender fließender Chiffon" },
+  "fur": { label: "Pelz", description: "Dichter plüschiger Pelz" },
+  // Metal
+  "gold": { label: "Gold", description: "Poliertes Gold" },
+  "silver": { label: "Silber", description: "Poliertes Silber" },
+  "bronze": { label: "Bronze", description: "Patinierte gegossene Bronze" },
+  "chrome": { label: "Chrom", description: "Hyperreflektierendes Chrom" },
+  "copper": { label: "Kupfer", description: "Warmes Kupfer mit Patina" },
+  "brass": { label: "Messing", description: "Antikes Messing" },
+  "steel": { label: "Stahl", description: "Gebürsteter Edelstahl" },
+  "iron": { label: "Eisen", description: "Raues Schmiedeeisen" },
+  "platinum": { label: "Platin", description: "Glänzendes Platin" },
+  "titanium": { label: "Titan", description: "Mattes industrielles Titan" },
+  // Stone
+  "marble": { label: "Marmor", description: "Weißer Marmor mit Adern" },
+  "granite": { label: "Granit", description: "Gesprenkelter polierter Granit" },
+  "obsidian": { label: "Obsidian", description: "Glänzender schwarzer Obsidian" },
+  "sandstone": { label: "Sandstein", description: "Warmer geschichteter Sandstein" },
+  "slate": { label: "Schiefer", description: "Dunkler flacher Schiefer" },
+  "jade": { label: "Jade", description: "Durchscheinende grüne Jade" },
+  "onyx": { label: "Onyx", description: "Gebänderter polierter Onyx" },
+  "concrete": { label: "Beton", description: "Industriell gegossener Beton" },
+  // Wood
+  "oak": { label: "Eiche", description: "Reichhaltig gemaserte Eiche" },
+  "mahogany": { label: "Mahagoni", description: "Tiefrotes Mahagoni" },
+  "walnut": { label: "Nussbaum", description: "Dunkler Nussbaum" },
+  "bamboo": { label: "Bambus", description: "Heller segmentierter Bambus" },
+  "birch": { label: "Birke", description: "Helle glatte Birke" },
+  "driftwood": { label: "Treibholz", description: "Verwittertes Treibholz" },
+  // Glass / Ceramic
+  "glass": { label: "Glas", description: "Klares transparentes Glas" },
+  "stained-glass": { label: "Buntglas", description: "Juwelenfarbenes Buntglas" },
+  "crystal": { label: "Kristall", description: "Facettiertes klares Kristall" },
+  "porcelain": { label: "Porzellan", description: "Glattes weißes Porzellan" },
+  "ceramic-glazed": { label: "Glasierte Keramik", description: "Erdige glasierte Keramik" },
+  "terracotta": { label: "Terrakotta", description: "Warme unglasierte Terrakotta" },
+  // Natural
+  "water": { label: "Wasser", description: "Fließendes durchscheinendes Wasser" },
+  "fire": { label: "Feuer", description: "Lebendige Flamme" },
+  "ice": { label: "Eis", description: "Durchscheinendes kristallines Eis" },
+  "smoke": { label: "Rauch", description: "Treibender ätherischer Rauch" },
+  "sand": { label: "Sand", description: "Feiner körniger Sand" },
+  "moss": { label: "Moos", description: "Üppiges lebendiges Moos" },
+  "leaves": { label: "Blätter", description: "Geschichtete Pflanzenblätter" },
+  // Exotic
+  "holographic": { label: "Holografisch", description: "Schillerndes Hologramm" },
+  "liquid-metal": { label: "Flüssigmetall", description: "Reflektierendes Flüssigchrom" },
+  "neon": { label: "Neon-Leuchten", description: "Glühende Neonröhren" },
+  "translucent": { label: "Durchscheinendes Harz", description: "Mattiertes glühendes Harz" },
+  "mirror": { label: "Spiegel", description: "Perfekte Spiegeloberfläche" },
+  "plasma": { label: "Plasma", description: "Glühendes elektrisches Plasma" },
+  "crystal-shard": { label: "Kristallsplitter", description: "Zersplittertes glühendes Kristall" },
+  "obsidian-glass": { label: "Obsidianglas", description: "Dunkles vulkanisches Glas" },
+}
+
+export default map
