@@ -101,14 +101,14 @@ import { buildMoodHints } from "@nodaro-shared/mood"
 import { buildPoseHints } from "@nodaro-shared/pose"
 import { buildStylingHints } from "@nodaro-shared/styling"
 import { buildTemporalHints } from "@nodaro-shared/temporal"
-import { getMaterialPromptHint } from "@nodaro-shared/materials"
+import { buildMaterialHints } from "@nodaro-shared/materials"
 import { getAnimal } from "@nodaro-shared/animals"
 import { getVehicle } from "@nodaro-shared/vehicles"
 import { getWeapon } from "@nodaro-shared/weapons"
 import { getPhotoGenrePromptHint } from "@nodaro-shared/photo-genre"
 import { getBackdropPromptHint } from "@nodaro-shared/backdrop"
-import { getHeldPropPromptHint } from "@nodaro-shared/held-prop"
-import { getPhotographerPromptHint } from "@nodaro-shared/photographer"
+import { buildHeldPropHints } from "@nodaro-shared/held-prop"
+import { buildPhotographerHints } from "@nodaro-shared/photographer"
 import { buildAestheticHints } from "@nodaro-shared/aesthetic"
 import { getEraPromptHint } from "@nodaro-shared/era"
 import { buildExposureHints } from "@nodaro-shared/exposure-settings"
@@ -637,11 +637,12 @@ export function PhotographerConfig({ data, onUpdate }: ConfigProps<PhotographerD
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getPhotographerPromptHint(data.photographer)]} />
-      <Label>Photographer / Artist Style</Label>
+      <PromptInjectionPreview hints={[buildPhotographerHints(data.photographer)]} />
+      <Label>Photographer / Artist Style (pick up to 2)</Label>
       <PhotographerPicker
-        value={data.photographer || "tim-walker"}
-        onValueChange={(v) => onUpdate({ photographer: v })}
+        value={data.photographer ?? "tim-walker"}
+        onValueChange={(v) => onUpdate({ photographer: v ?? "tim-walker" })}
+        maxSelected={2}
       />
     </div>
   )
@@ -842,11 +843,12 @@ export function MaterialConfig({ data, onUpdate }: ConfigProps<MaterialData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getMaterialPromptHint(data.material)]} />
-      <Label>Material</Label>
+      <PromptInjectionPreview hints={[buildMaterialHints(data.material)]} />
+      <Label>Material (pick up to 2)</Label>
       <MaterialPicker
-        value={data.material || "silk"}
-        onValueChange={(v) => onUpdate({ material: v })}
+        value={data.material ?? "silk"}
+        onValueChange={(v) => onUpdate({ material: v ?? "silk" })}
+        maxSelected={2}
       />
     </div>
   )
@@ -938,11 +940,12 @@ export function HeldPropConfig({ data, onUpdate }: ConfigProps<HeldPropData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getHeldPropPromptHint(data.heldProp)]} />
-      <Label>Held Prop</Label>
+      <PromptInjectionPreview hints={buildHeldPropHints(data.heldProp)} />
+      <Label>Held Prop (pick up to 2)</Label>
       <HeldPropPicker
-        value={data.heldProp || "smartphone"}
-        onValueChange={(v) => onUpdate({ heldProp: v })}
+        value={data.heldProp ?? "smartphone"}
+        onValueChange={(v) => onUpdate({ heldProp: v ?? "smartphone" })}
+        maxSelected={2}
       />
     </div>
   )

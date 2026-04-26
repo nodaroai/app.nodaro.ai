@@ -130,6 +130,28 @@ export function getHeldPropPromptHint(id: string | undefined | null): string {
   return getHeldProp(id)?.promptHint ?? ""
 }
 
+/**
+ * Multi-pick: 1-2 prop ids → composite held-prop clause. Single → entry's
+ * own promptHint (which already starts with "holding..." / "carrying..."
+ * grammar). Two → emit independently, joined by buildPersonHints-style
+ * comma-join. Common combos: book + coffee, cigarette + drink, phone + bag.
+ */
+export function buildHeldPropHints(value: unknown): string[] {
+  const ids: string[] = []
+  if (typeof value === "string" && value) ids.push(value)
+  else if (Array.isArray(value)) {
+    for (const v of value) {
+      if (typeof v === "string" && v && !ids.includes(v)) ids.push(v)
+    }
+  }
+  const out: string[] = []
+  for (const id of ids) {
+    const hint = getHeldPropPromptHint(id)
+    if (hint) out.push(hint)
+  }
+  return out
+}
+
 export const HELD_PROP_IDS: ReadonlyArray<string> = HELD_PROPS.map((p) => p.id)
 
 export const HELD_PROP_CATEGORY_LABELS: Readonly<Record<HeldPropCategory, string>> = {

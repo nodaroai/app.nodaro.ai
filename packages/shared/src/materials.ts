@@ -129,6 +129,29 @@ export function getMaterialPromptHint(id: string | undefined | null): string {
   return getMaterial(id)?.promptHint ?? ""
 }
 
+/**
+ * Multi-pick: 1-2 material ids → composite material clause. Single → entry's
+ * own promptHint. Two → "made of {A} and {B}" using lowercased entry labels.
+ * Covers leather+brass handbag, wood+steel chair, glass+chrome lamp, etc.
+ */
+export function buildMaterialHints(value: unknown): string {
+  const ids: string[] = []
+  if (typeof value === "string" && value) ids.push(value)
+  else if (Array.isArray(value)) {
+    for (const v of value) {
+      if (typeof v === "string" && v && !ids.includes(v)) ids.push(v)
+    }
+  }
+  if (ids.length === 0) return ""
+  if (ids.length === 1) return getMaterialPromptHint(ids[0])
+  const labels = ids
+    .slice(0, 2)
+    .map((id) => getMaterial(id)?.label?.toLowerCase() ?? "")
+    .filter((s): s is string => Boolean(s))
+  if (labels.length < 2) return getMaterialPromptHint(ids[0])
+  return `made of ${labels[0]} and ${labels[1]}`
+}
+
 export const MATERIAL_IDS: ReadonlyArray<string> = MATERIALS.map((m) => m.id)
 
 export const MATERIAL_CATEGORY_LABELS: Readonly<Record<MaterialCategory, string>> = {

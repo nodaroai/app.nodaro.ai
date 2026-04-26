@@ -361,6 +361,55 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     description: "Architectural cross-section with walls peeled away",
     promptHint: "cutaway cross-section composition, the building's near wall peeled away to reveal the interior in dollhouse fashion, multiple rooms visible at once with floors and furnishings exposed in clean architectural section, the subject inhabiting one of the rooms",
   },
+  {
+    id: "golden-spiral",
+    label: "Golden Spiral / Fibonacci",
+    category: "composition",
+    description: "Composition on the Fibonacci spiral",
+    promptHint: "composed on the golden spiral / Fibonacci ratio, the eye guided through a nested logarithmic curve from the focal subject outward through progressively larger arcs",
+  },
+  {
+    id: "frame-within-frame",
+    label: "Frame Within a Frame",
+    category: "composition",
+    description: "Subject framed by an interior architectural element",
+    promptHint: "frame within a frame composition, the subject framed by an interior architectural element such as a doorway, window, or archway that creates a secondary border around the focal point",
+  },
+  {
+    id: "s-curve",
+    label: "S-Curve / Serpentine",
+    category: "composition",
+    description: "Sinuous diagonal flow through the frame",
+    promptHint: "S-curve serpentine composition, a sinuous diagonal flow winds through the frame, the eye guided along the curve from foreground to background",
+  },
+  {
+    id: "diagonal-composition",
+    label: "Diagonal Composition",
+    category: "composition",
+    description: "Strong diagonal line cutting across the frame",
+    promptHint: "diagonal composition, a strong diagonal line cuts across the frame from corner toward corner, generating dynamism and forward momentum",
+  },
+  {
+    id: "triangular-composition",
+    label: "Triangular Composition",
+    category: "composition",
+    description: "Three-point triangular arrangement",
+    promptHint: "triangular composition, three-point triangular arrangement of subjects or elements, the implicit triangle anchors the frame and balances visual weight",
+  },
+  {
+    id: "symmetrical-mirror",
+    label: "Symmetrical / Mirror",
+    category: "composition",
+    description: "Exact left-right symmetry",
+    promptHint: "symmetrical mirror composition, exact left-right symmetry across a central vertical axis, both halves of the frame mirror each other in shape, mass, and tone",
+  },
+  {
+    id: "vignette-composition",
+    label: "Vignette Composition",
+    category: "composition",
+    description: "Heavy peripheral darkening focuses the center",
+    promptHint: "vignette composition, heavy peripheral darkening of the frame edges and corners draws attention inward to the centered subject, the falloff is built into the staging and lighting rather than added in post",
+  },
 
   // Vantage (horizontal camera direction — azimuth around subject)
   {
