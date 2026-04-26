@@ -144,26 +144,45 @@ export function entryMatchesQuery(
 }
 
 /**
- * The actual dynamic-import switch. Vite needs a static map for code-
- * splitting per locale chunk. We expand the (catalog, locale) matrix at
- * build time using `import.meta.glob` style — but since we want this
- * shared module to also work in the backend (no Vite), we use a plain
- * dynamic import with a constructed path. Backend code never calls this
- * resolver path because i18n is frontend-only; the import is wrapped in a
- * try/catch that rejects-to-null on failure.
+ * Vite-bundled glob of every sidecar file at build time. Vite scans the
+ * pattern at build time and creates a code-split chunk per file, with the
+ * loader function wrapping a real dynamic `import()` for that chunk.
+ *
+ * We use `import.meta.glob` instead of a constructed-path `import()` because
+ * the latter (with @vite-ignore) was excluded from the build entirely and
+ * locale switching silently fell back to English in production.
+ *
+ * On non-Vite runtimes (backend / Node test), `import.meta.glob` is
+ * undefined; we guard with a try/catch and fall back to runtime dynamic
+ * imports (which still won't bundle anything but keep the API working).
  */
+type SidecarModule = { default?: LocaleCatalogMap } & Record<string, unknown>
+type SidecarLoader = () => Promise<unknown>
+
+const sidecarLoaders: Record<string, SidecarLoader> = (() => {
+  try {
+    const meta = import.meta as ImportMeta & {
+      glob?: (pattern: string) => Record<string, SidecarLoader>
+    }
+    if (typeof meta.glob === "function") {
+      return meta.glob("./*.*.ts")
+    }
+  } catch {
+    /* non-Vite runtime — fall through to empty */
+  }
+  return {}
+})()
+
 async function loadLocaleCatalog(
   catalog: I18nCatalogId,
   locale: LocaleId,
 ): Promise<LocaleCatalogMap | null> {
   if (locale === "en") return null
-  // The path is relative to this index.ts. Module file may not exist yet
-  // for catalogs/locales that haven't been translated — caller handles null.
-  const path = `./${catalog}.${locale}.js`
+  // Glob keys are like "./styling.fr.ts" (relative to this index.ts).
+  const loader = sidecarLoaders[`./${catalog}.${locale}.ts`]
+  if (!loader) return null
   try {
-    const mod = (await import(/* @vite-ignore */ path)) as {
-      default?: LocaleCatalogMap
-    } & Record<string, unknown>
+    const mod = (await loader()) as SidecarModule
     if (mod.default && typeof mod.default === "object") return mod.default
     // Fallback: convention-named export (e.g. STYLING_FR)
     const conventional = `${catalog.toUpperCase().replace(/-/g, "_")}_${locale.toUpperCase().replace(/-/g, "_")}`
