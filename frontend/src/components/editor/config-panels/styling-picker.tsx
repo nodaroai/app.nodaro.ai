@@ -11,11 +11,22 @@ import {
   type StylingDimension,
   type StylingValue,
 } from "@nodaro-shared/styling"
+import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { HairCutBrowser } from "./hair-cut-browser"
 import { EyewearIcon, HeadwearIcon } from "./small-silhouette-icons"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
+
+/** Per-dimension multi-select cap.
+ *  - jewelry: 3 (necklace + earrings + rings stacked)
+ *  - wardrobe-state: 3 (oversized + wet + ripped composes)
+ *  - hair-state: 2 (wet + windswept, messy + voluminous) */
+const MAX_SELECTED_BY_STYLING_DIMENSION: Partial<Record<StylingDimension, number>> = {
+  jewelry: 3,
+  "wardrobe-state": 3,
+  "hair-state": 2,
+}
 
 interface StylingPickerProps {
   readonly value: StylingValue
@@ -70,8 +81,10 @@ export const StylingPicker = memo(function StylingPicker({
 
       {grouped.map(({ dimension, entries }) => {
         const field = STYLING_FIELD_BY_DIMENSION[dimension]
-        const current = value[field]
-        const checked = current !== undefined && current !== ""
+        const raw = value[field]
+        const selectedIds = pickIds(raw)
+        const checked = selectedIds.length > 0
+        const maxSelected = MAX_SELECTED_BY_STYLING_DIMENSION[dimension] ?? 1
         if (query && entries.length === 0) return null
         return (
           <DimensionSection
@@ -80,7 +93,8 @@ export const StylingPicker = memo(function StylingPicker({
             entries={entries}
             field={field}
             checked={checked}
-            current={current}
+            selectedIds={selectedIds}
+            maxSelected={maxSelected}
             resolveLabel={resolveLabel}
             resolveDescription={resolveDescription}
             onToggle={(next) => {
@@ -91,7 +105,16 @@ export const StylingPicker = memo(function StylingPicker({
                 onChange({ [field]: undefined } as Partial<StylingValue>)
               }
             }}
-            onPick={(id) => onChange({ [field]: id } as Partial<StylingValue>)}
+            onPick={(id) => {
+              if (maxSelected <= 1) {
+                onChange({ [field]: id } as Partial<StylingValue>)
+                return
+              }
+              const next = togglePick(selectedIds, id, maxSelected)
+              if (next.length === 0) onChange({ [field]: undefined } as Partial<StylingValue>)
+              else if (next.length === 1) onChange({ [field]: next[0] } as Partial<StylingValue>)
+              else onChange({ [field]: next } as Partial<StylingValue>)
+            }}
           />
         )
       })}
@@ -104,7 +127,8 @@ interface DimensionSectionProps {
   readonly entries: ReadonlyArray<Styling>
   readonly field: keyof StylingValue
   readonly checked: boolean
-  readonly current: string | undefined
+  readonly selectedIds: ReadonlyArray<string>
+  readonly maxSelected: number
   readonly resolveLabel: (id: string, englishLabel: string) => string
   readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
@@ -116,15 +140,19 @@ function DimensionSection({
   entries,
   field,
   checked,
-  current,
+  selectedIds,
+  maxSelected,
   resolveLabel,
   resolveDescription,
   onToggle,
   onPick,
 }: DimensionSectionProps) {
   const id = useId()
-  const label = STYLING_DIMENSION_LABELS[dimension]
+  const baseLabel = STYLING_DIMENSION_LABELS[dimension]
+  const multi = maxSelected > 1
+  const label = multi ? `${baseLabel} (pick up to ${maxSelected})` : baseLabel
   const isHairCut = dimension === "hair-cut"
+  const hairCutCurrent = selectedIds[0]
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2 px-0.5">
@@ -149,7 +177,7 @@ function DimensionSection({
         {isHairCut && (
           <HairCutBrowser
             variant="compact"
-            value={checked ? current : undefined}
+            value={checked ? hairCutCurrent : undefined}
             onChange={(id) => {
               if (id) onPick(id)
             }}
@@ -157,12 +185,13 @@ function DimensionSection({
         )}
       </div>
       <div
-        role="radiogroup"
+        role={multi ? "group" : "radiogroup"}
         aria-label={label}
         className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}
       >
         {entries.map((entry) => {
-          const selected = checked && entry.id === current
+          const selectedIdx = selectedIds.indexOf(entry.id)
+          const selected = checked && selectedIdx >= 0
           const eyewearIcon = dimension === "eyewear" ? <EyewearIcon eyewearId={entry.id} className="size-6" /> : null
           const headwearIcon = dimension === "headwear" ? <HeadwearIcon headwearId={entry.id} className="size-6" /> : null
           const entryLabel = resolveLabel(entry.id, entry.label)
@@ -171,17 +200,25 @@ function DimensionSection({
             <button
               key={entry.id}
               type="button"
-              role="radio"
+              role={multi ? "checkbox" : "radio"}
               aria-checked={selected}
               title={checked ? entryDescription : `${entryDescription} (click to enable ${label})`}
               onClick={() => onPick(entry.id)}
               className={cn(
-                "flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden",
+                "relative flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden",
                 selected
                   ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
                   : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
               )}
             >
+              {multi && selected && (
+                <span
+                  className="absolute top-1 right-1 size-4 rounded-full bg-[#ff0073] text-white text-[9px] font-semibold flex items-center justify-center pointer-events-none"
+                  aria-hidden="true"
+                >
+                  {selectedIdx + 1}
+                </span>
+              )}
               {eyewearIcon}
               {headwearIcon}
               <span

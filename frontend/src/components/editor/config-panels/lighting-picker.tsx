@@ -11,10 +11,18 @@ import {
   type LightingCategory,
   type LightingValue,
 } from "@nodaro-shared/lighting"
+import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { LightingPreview } from "./lighting-preview"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
+
+/** Per-category multi-select cap. style (lighting style) supports 2 picks
+ *  (key + rim, soft + hard, beauty-dish + accent). All other categories
+ *  are single-select. */
+const MAX_SELECTED_BY_LIGHTING_CATEGORY: Partial<Record<LightingCategory, number>> = {
+  style: 2,
+}
 
 interface LightingPickerProps {
   readonly value: LightingValue
@@ -76,8 +84,10 @@ export const LightingPicker = memo(function LightingPicker({
 
       {grouped.map(({ category, lightings }) => {
         const field = LIGHTING_FIELD_BY_CATEGORY[category]
-        const current = value[field]
-        const checked = current !== undefined && current !== ""
+        const raw = value[field]
+        const selectedIds = pickIds(raw)
+        const checked = selectedIds.length > 0
+        const maxSelected = MAX_SELECTED_BY_LIGHTING_CATEGORY[category] ?? 1
         // Hide the whole section when searching filters everything out AND
         // the category is also empty of matches, to keep the search UX tight.
         // When there's no active query, always show every category section.
@@ -89,7 +99,8 @@ export const LightingPicker = memo(function LightingPicker({
             lightings={lightings}
             field={field}
             checked={checked}
-            current={current}
+            selectedIds={selectedIds}
+            maxSelected={maxSelected}
             resolveLabel={resolveLabel}
             resolveDescription={resolveDescription}
             onToggle={(next) => {
@@ -101,7 +112,16 @@ export const LightingPicker = memo(function LightingPicker({
                 onChange({ [field]: undefined })
               }
             }}
-            onPick={(id) => onChange({ [field]: id })}
+            onPick={(id) => {
+              if (maxSelected <= 1) {
+                onChange({ [field]: id })
+                return
+              }
+              const next = togglePick(selectedIds, id, maxSelected)
+              if (next.length === 0) onChange({ [field]: undefined })
+              else if (next.length === 1) onChange({ [field]: next[0] })
+              else onChange({ [field]: next })
+            }}
           />
         )
       })}
@@ -114,7 +134,8 @@ interface CategorySectionProps {
   readonly lightings: ReadonlyArray<Lighting>
   readonly field: (typeof LIGHTING_FIELD_BY_CATEGORY)[LightingCategory]
   readonly checked: boolean
-  readonly current: string | undefined
+  readonly selectedIds: ReadonlyArray<string>
+  readonly maxSelected: number
   readonly resolveLabel: (id: string, englishLabel: string) => string
   readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
@@ -126,14 +147,17 @@ function CategorySection({
   lightings,
   field,
   checked,
-  current,
+  selectedIds,
+  maxSelected,
   resolveLabel,
   resolveDescription,
   onToggle,
   onPick,
 }: CategorySectionProps) {
   const id = useId()
-  const label = LIGHTING_CATEGORY_LABELS[category]
+  const baseLabel = LIGHTING_CATEGORY_LABELS[category]
+  const multi = maxSelected > 1
+  const label = multi ? `${baseLabel} (pick up to ${maxSelected})` : baseLabel
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2 px-0.5">
@@ -151,26 +175,35 @@ function CategorySection({
           {label}
         </label>
       </div>
-      <div role="radiogroup" aria-label={label} className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}>
+      <div role={multi ? "group" : "radiogroup"} aria-label={label} className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}>
         {lightings.map((lighting) => {
-          const selected = checked && lighting.id === current
+          const selectedIdx = selectedIds.indexOf(lighting.id)
+          const selected = checked && selectedIdx >= 0
           const entryLabel = resolveLabel(lighting.id, lighting.label)
           const entryDescription = resolveDescription(lighting.id, lighting.description)
           return (
             <button
               key={lighting.id}
               type="button"
-              role="radio"
+              role={multi ? "checkbox" : "radio"}
               aria-checked={selected}
               title={checked ? entryDescription : `${entryDescription} (click to enable ${label})`}
               onClick={() => onPick(lighting.id)}
               className={cn(
-                "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
+                "relative group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
                 selected
                   ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
                   : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
               )}
             >
+              {multi && selected && (
+                <span
+                  className="absolute top-1 right-1 size-4 rounded-full bg-[#ff0073] text-white text-[9px] font-semibold flex items-center justify-center pointer-events-none z-10"
+                  aria-hidden="true"
+                >
+                  {selectedIdx + 1}
+                </span>
+              )}
               <LightingPreview lightingId={lighting.id} className="w-full aspect-square" />
               <span
                 className={cn(

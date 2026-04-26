@@ -62,6 +62,14 @@ export const ERAS: ReadonlyArray<Era> = [
       "set in the 1950s diner pin-up era — full circle skirts, cropped denim, leather jackets and bouffant hair in chrome diners and drive-ins, with saturated Kodachrome reds and turquoise",
   },
   {
+    id: "atomic-age-50s",
+    label: "Atomic Age 50s",
+    category: "decade-20c",
+    description: "1950s sci-fi futurism and Cold War anxiety",
+    promptHint:
+      "set in the 1950s atomic-age era — ranch-style suburban homes, atomic starburst ornaments, finned appliances, B-movie sci-fi posters and Cold War civil-defense propaganda, with bright pulpy Technicolor saturation and hard mid-century optimism shot through with quiet nuclear dread",
+  },
+  {
     id: "1960s-mod",
     label: "1960s Mod",
     category: "decade-20c",
@@ -100,6 +108,14 @@ export const ERAS: ReadonlyArray<Era> = [
     description: "Paparazzi-flash low-rise tabloid",
     promptHint:
       "set in the 2000s tabloid Y2K era — low-rise jeans, butterfly tops, trucker hats and chrome flip phones outside celebrity nightclubs, with harsh paparazzi flash, deep blacks and faint chromatic gloss",
+  },
+  {
+    id: "gen-z-2020s",
+    label: "Gen Z 2020s",
+    category: "decade-20c",
+    description: "Phone-first TikTok-coded current era",
+    promptHint:
+      "set in the Gen Z 2020s era — phone-first vertical composition, TikTok-coded styling with baggy denim, Y2K nostalgia revivals, claw clips and oversized headphones, micro-trend churn and the saturated front-camera glow of contemporary social-media aesthetics",
   },
 
   // -------------------- Pre-modern --------------------
@@ -166,6 +182,14 @@ export const ERAS: ReadonlyArray<Era> = [
     description: "Edo-period samurai-and-geisha",
     promptHint:
       "set in feudal Japan — layered kimono, wooden geta, samurai armor and paper lanterns in shoji-screened tea houses and snowy castle courtyards, with cool ink-wash color and quiet fog",
+  },
+  {
+    id: "fin-de-siecle",
+    label: "Fin-de-siècle (1895-1905)",
+    category: "pre-modern",
+    description: "Turn-of-century Belle Epoque elegance",
+    promptHint:
+      "set in the fin-de-siècle turn-of-century era — art-nouveau curves, gaslight glow, corseted high-collared gowns, top hats and cane-and-cloak in proto-modern Belle Epoque Paris and Vienna, with warm gas-flame amber color and soft sepia halation",
   },
   {
     id: "roaring-prewar",

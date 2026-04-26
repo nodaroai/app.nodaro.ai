@@ -11,10 +11,17 @@ import {
   type FramingCategory,
   type FramingValue,
 } from "@nodaro-shared/framing"
+import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { FramingPreview } from "./framing-preview"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
+
+/** Per-category multi-select cap. composition supports 2 picks
+ *  (rule-of-thirds + leading-lines, centered + negative-space). */
+const MAX_SELECTED_BY_FRAMING_CATEGORY: Partial<Record<FramingCategory, number>> = {
+  composition: 2,
+}
 
 interface FramingPickerProps {
   readonly value: FramingValue
@@ -76,8 +83,10 @@ export const FramingPicker = memo(function FramingPicker({
 
       {grouped.map(({ category, framings }) => {
         const field = FRAMING_FIELD_BY_CATEGORY[category]
-        const current = value[field]
-        const checked = current !== undefined && current !== ""
+        const raw = value[field]
+        const selectedIds = pickIds(raw)
+        const checked = selectedIds.length > 0
+        const maxSelected = MAX_SELECTED_BY_FRAMING_CATEGORY[category] ?? 1
         // Hide the whole section when searching filters everything out AND
         // the category is also empty of matches, to keep the search UX tight.
         // When there's no active query, always show every category section.
@@ -89,24 +98,28 @@ export const FramingPicker = memo(function FramingPicker({
             framings={framings}
             field={field}
             checked={checked}
-            current={current}
+            selectedIds={selectedIds}
+            maxSelected={maxSelected}
             resolveLabel={resolveLabel}
             resolveDescription={resolveDescription}
             onToggle={(next) => {
               if (next) {
-                // Enabling: auto-pick the first entry in this category as default.
-                // Use the full catalog (unfiltered by search) so toggling while
-                // searching doesn't silently fail when no matches are in scope.
                 const first = FRAMINGS.find((f) => f.category === category)?.id
                 if (first) onChange({ [field]: first })
               } else {
-                // Disabling: clear the selection for this category.
                 onChange({ [field]: undefined })
               }
             }}
-            onPick={(id) => onChange({ [field]: id })}
-            // Clicking an entry implicitly enables the section (since `value[field]`
-            // becoming non-undefined makes `checked` true on the next render).
+            onPick={(id) => {
+              if (maxSelected <= 1) {
+                onChange({ [field]: id })
+                return
+              }
+              const next = togglePick(selectedIds, id, maxSelected)
+              if (next.length === 0) onChange({ [field]: undefined })
+              else if (next.length === 1) onChange({ [field]: next[0] })
+              else onChange({ [field]: next })
+            }}
           />
         )
       })}
@@ -119,7 +132,8 @@ interface CategorySectionProps {
   readonly framings: ReadonlyArray<Framing>
   readonly field: "shotSize" | "angle" | "coverage" | "composition" | "vantage"
   readonly checked: boolean
-  readonly current: string | undefined
+  readonly selectedIds: ReadonlyArray<string>
+  readonly maxSelected: number
   readonly resolveLabel: (id: string, englishLabel: string) => string
   readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
@@ -131,14 +145,17 @@ function CategorySection({
   framings,
   field,
   checked,
-  current,
+  selectedIds,
+  maxSelected,
   resolveLabel,
   resolveDescription,
   onToggle,
   onPick,
 }: CategorySectionProps) {
   const id = useId()
-  const label = FRAMING_CATEGORY_LABELS[category]
+  const baseLabel = FRAMING_CATEGORY_LABELS[category]
+  const multi = maxSelected > 1
+  const label = multi ? `${baseLabel} (pick up to ${maxSelected})` : baseLabel
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2 px-0.5">
@@ -156,26 +173,35 @@ function CategorySection({
           {label}
         </label>
       </div>
-      <div role="radiogroup" aria-label={label} className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}>
+      <div role={multi ? "group" : "radiogroup"} aria-label={label} className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}>
         {framings.map((framing) => {
-          const selected = checked && framing.id === current
+          const selectedIdx = selectedIds.indexOf(framing.id)
+          const selected = checked && selectedIdx >= 0
           const entryLabel = resolveLabel(framing.id, framing.label)
           const entryDescription = resolveDescription(framing.id, framing.description)
           return (
             <button
               key={framing.id}
               type="button"
-              role="radio"
+              role={multi ? "checkbox" : "radio"}
               aria-checked={selected}
               title={checked ? entryDescription : `${entryDescription} (click to enable ${label})`}
               onClick={() => onPick(framing.id)}
               className={cn(
-                "group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
+                "relative group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
                 selected
                   ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
                   : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
               )}
             >
+              {multi && selected && (
+                <span
+                  className="absolute top-1 right-1 size-4 rounded-full bg-[#ff0073] text-white text-[9px] font-semibold flex items-center justify-center pointer-events-none z-10"
+                  aria-hidden="true"
+                >
+                  {selectedIdx + 1}
+                </span>
+              )}
               <FramingPreview framingId={framing.id} className="w-full aspect-square" />
               <span
                 className={cn(

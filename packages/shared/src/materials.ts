@@ -52,6 +52,9 @@ export const MATERIALS: ReadonlyArray<Material> = [
   { id: "cashmere",  label: "Cashmere",  category: "fabric", description: "Luxurious soft cashmere",    promptHint: "made of luxurious cashmere with an ultra-soft matte texture and a fine dense weave" },
   { id: "chiffon",   label: "Chiffon",   category: "fabric", description: "Sheer flowing chiffon",      promptHint: "made of sheer chiffon with a lightweight floating drape, soft translucent layers and a gentle shimmer" },
   { id: "fur",       label: "Fur",       category: "fabric", description: "Thick plush fur",            promptHint: "made of thick plush fur with long dense strands, natural variation and a soft directional flow" },
+  { id: "suede",     label: "Suede",     category: "fabric", description: "Soft napped suede",          promptHint: "made of soft napped suede with a matte velvety surface, fine fuzzy texture and a warm leather feel" },
+  { id: "mesh",      label: "Mesh",      category: "fabric", description: "See-through net mesh",       promptHint: "made of see-through net mesh with an open woven grid, sheer transparency and an athletic technical feel" },
+  { id: "patent-leather", label: "Patent Leather", category: "fabric", description: "High-gloss patent leather", promptHint: "made of high-gloss patent leather with a mirror-bright reflective surface, deep saturated color and a slick lacquered finish" },
 
   // -------------------- Metal --------------------
   { id: "gold",      label: "Gold",      category: "metal",  description: "Polished gold",              promptHint: "made of polished gold with a warm yellow metallic sheen and rich mirror-like reflections" },
@@ -74,6 +77,7 @@ export const MATERIALS: ReadonlyArray<Material> = [
   { id: "jade",          label: "Jade",          category: "stone", description: "Translucent green jade",   promptHint: "made of polished jade with a translucent green glow, fine internal veining and a smooth waxy surface" },
   { id: "onyx",          label: "Onyx",          category: "stone", description: "Banded polished onyx",     promptHint: "made of polished onyx with dramatic black-and-white banding, translucent depth and a glossy finish" },
   { id: "concrete",      label: "Concrete",      category: "stone", description: "Cast industrial concrete", promptHint: "made of cast concrete with a rough grey surface, visible formwork lines, scattered aggregate and an industrial brutalist feel" },
+  { id: "terrazzo",      label: "Terrazzo",      category: "stone", description: "Composite terrazzo with chips", promptHint: "made of polished terrazzo with embedded marble and glass chips suspended in a smooth cement matrix, a mid-century speckled surface and a glossy finish" },
 
   // -------------------- Wood --------------------
   { id: "oak",          label: "Oak",          category: "wood", description: "Rich grained oak",          promptHint: "made of rich grained oak with warm honey-brown tones, strong vertical grain lines and a satin finish" },
@@ -109,6 +113,10 @@ export const MATERIALS: ReadonlyArray<Material> = [
   { id: "plasma",        label: "Plasma",           category: "exotic", description: "Glowing electric plasma",     promptHint: "made of glowing electric plasma with arcing internal bolts, a radiant violet-pink core and a haze of ionized energy" },
   { id: "crystal-shard", label: "Crystal Shards",   category: "exotic", description: "Shattered glowing crystal",   promptHint: "made of fractured glowing crystal shards with sharp prismatic facets, internal luminescence and dynamic rainbow refraction" },
   { id: "obsidian-glass", label: "Obsidian Glass",  category: "exotic", description: "Dark volcanic glass",         promptHint: "made of dark obsidian volcanic glass with a glossy black surface, razor-sharp edges and subtle iridescent highlights" },
+  { id: "iridescent",     label: "Iridescent",      category: "exotic", description: "Color-shifting iridescent surface", promptHint: "made of iridescent rainbow-shifting surface, the kind of color play seen on oil slicks, butterfly wings and mother-of-pearl, with hues that shift as the angle changes" },
+  { id: "mother-of-pearl", label: "Mother-of-Pearl", category: "exotic", description: "Pearlescent inner shell layer", promptHint: "made of mother-of-pearl with a pearlescent cream surface, soft iridescent shimmer and the layered nacre depth seen in inlay work and fine jewelry" },
+  { id: "carbon-fiber",   label: "Carbon Fiber",    category: "exotic", description: "Woven black carbon-fiber composite", promptHint: "made of woven carbon-fiber composite with a glossy black checkered weave pattern, a hi-tech aerospace feel and subtle directional sheen" },
+  { id: "holographic-film", label: "Holographic Film", category: "exotic", description: "Light-refracting holographic film", promptHint: "made of light-refracting holographic film with a thin reflective sheet surface, prismatic rainbow shimmer and shifting spectral highlights as the angle changes" },
 ] as const
 
 const materialById = new Map<string, Material>(MATERIALS.map((m) => [m.id, m]))
