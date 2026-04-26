@@ -90,16 +90,15 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
           ) : undefined
         }
       >
-        <div className={cn(fluidWidth ? "px-3 py-3 flex flex-col gap-2 h-full" : "px-3 py-3 flex flex-col gap-2")}>
-          {/* Mode toggle (Picks / Prompt / Both) — at the TOP of the body
-              with a small margin below, so it never overlaps content. The
-              toggle row reserves its space at all times (opacity, not
-              display) — that way content placement doesn't shift when the
-              toggle fades in/out. Hidden by default; visible on hover OR
-              when the node is selected. */}
+        <div className={cn(fluidWidth ? "px-3 pt-0 pb-3 flex flex-col gap-2 h-full" : "px-3 pt-0 pb-3 flex flex-col gap-2")}>
+          {/* Mode toggle (Picks / Prompt / Both) — pinned to top of body,
+              zero padding above, zero margin below. Reserves its space via
+              opacity (not display) so content placement stays stable when
+              the toggle fades in/out. Hidden by default; visible on hover
+              OR when the node is selected. */}
           <div
             className={cn(
-              "nodrag nopan flex justify-end mb-1 transition-opacity",
+              "nodrag nopan flex justify-end mb-0 transition-opacity",
               selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
             )}
           >
