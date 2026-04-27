@@ -118,25 +118,15 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
 
-  // Measure image aspect ratio for dynamic node sizing (matches generate-image pattern)
+  // Aspect ratio captured from the rendered <img>'s onLoad — synchronous
+  // with the actual element rather than racing a side-channel preload.
+  // Reset when previewValue changes so we don't apply stale dims to a new
+  // image; the new onLoad will populate it.
   const [imgAspectRatio, setImgAspectRatio] = useState<number | undefined>()
-  useEffect(() => {
-    if (!previewValue || typeof previewValue !== "string" || !isImage) {
-      setImgAspectRatio(undefined)
-      return
-    }
-    let cancelled = false
-    const img = new window.Image()
-    const setRatio = () => {
-      if (!cancelled && img.naturalWidth > 0) {
-        setImgAspectRatio(img.naturalWidth / img.naturalHeight)
-      }
-    }
-    img.onload = setRatio
-    img.src = previewValue
-    if (img.complete) setRatio()
-    return () => { cancelled = true }
-  }, [previewValue, isImage])
+  useEffect(() => { setImgAspectRatio(undefined) }, [previewValue, isImage])
+  const handleLoadDimensions = ({ width, height }: { width: number; height: number }) => {
+    if (width > 0) setImgAspectRatio(width / height)
+  }
 
   const handleDownload = () => {
     if (!previewValue || typeof previewValue !== "string") return
@@ -200,6 +190,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
                       className="w-full h-full object-cover rounded-xl"
                       thumbnail={!useFull}
                       thumbnailWidth={320}
+                      onLoadDimensions={handleLoadDimensions}
                     />
                   ) : isVideo ? (
                     <video
@@ -207,6 +198,10 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
                       crossOrigin="anonymous"
                       className="w-full h-full object-cover rounded-xl"
                       muted
+                      onLoadedMetadata={(e) => {
+                        const v = e.currentTarget
+                        if (v.videoWidth > 0) handleLoadDimensions({ width: v.videoWidth, height: v.videoHeight })
+                      }}
                     />
                   ) : isAudio ? (
                     <div className="flex items-center justify-center rounded-xl bg-muted/10 h-[120px] px-2">

@@ -29,6 +29,14 @@ export interface GeneratedResult {
   readonly jobId: string
   readonly freecutProjectUrl?: string
   readonly filerobotDesignStateUrl?: string
+  // Natural media metadata. Populated either proactively at result-creation
+  // time (probeMediaMetadata on uploads/edits) or lazily from the rendered
+  // <img>/<video>/<audio>'s onLoad. Lets the node compute aspectRatio
+  // synchronously on result switch instead of via a side-channel preload
+  // that races the src change.
+  readonly width?: number
+  readonly height?: number
+  readonly duration?: number  // seconds, for video/audio
 }
 
 export interface ManualReferenceImage {
@@ -3895,7 +3903,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     width: 220,
     inputs: ["startFrame", "endFrame", "audio"],
     outputs: ["video"],
-    defaultData: { label: "Image to Video", provider: "veo3", model: "veo-3", duration: 5, fieldMappings: {} },
+    defaultData: { label: "Image to Video", provider: "seedance-2-fast", duration: 5, fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
     exposableFields: [
       {

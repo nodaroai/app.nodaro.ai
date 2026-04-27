@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useEffect, Suspense } from "react"
+import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, Settings, LayoutGrid, Expand, Download, Link, Type, Pencil, Aperture } from "lucide-react"
@@ -17,6 +17,7 @@ const ExtractReferencesModal = lazy(() => import("@/components/editor/extract-re
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { useProvidersCreditsSum } from "@/hooks/use-providers-credits-sum"
@@ -51,21 +52,8 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [extractedRefs, setExtractedRefs] = useState<readonly ExtractedReference[]>([])
   const useFull = useFullResolution(id)
-  const [imgAspectRatio, setImgAspectRatio] = useState<number | undefined>()
-  useEffect(() => {
-    if (!activeUrl) { setImgAspectRatio(undefined); return }
-    let cancelled = false
-    const img = new window.Image()
-    const setRatio = () => {
-      if (!cancelled && img.naturalWidth > 0) {
-        setImgAspectRatio(img.naturalWidth / img.naturalHeight)
-      }
-    }
-    img.onload = setRatio
-    img.src = activeUrl
-    if (img.complete) setRatio() // cached images may not fire onload
-    return () => { cancelled = true }
-  }, [activeUrl])
+  const { aspectRatio: imgAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
   const creditModelId = buildCreditModelIdentifier(
     nodeData.provider ?? "nano-banana-pro",
     nodeData as unknown as Record<string, unknown>,
@@ -193,6 +181,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
               className="w-full h-full object-cover rounded-xl"
               thumbnail={!useFull}
               thumbnailWidth={320}
+              onLoadDimensions={handleLoadDimensions}
             />
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button

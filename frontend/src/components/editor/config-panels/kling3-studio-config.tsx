@@ -23,11 +23,12 @@ import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
+import { FinalPromptPreview } from "./final-prompt-preview"
 import type { ConfigProps } from "./types"
 
 type Kling3Tab = "scene" | "shots" | "elements"
 
-export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField, onUpdateNode }: ConfigProps<ImageToVideoData>) {
+export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField, onUpdateNode, nodes, edges, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const { user } = useAuth()
   const allNodes = useWorkflowStore((s) => s.nodes)
@@ -40,7 +41,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
   const elementNameRefs = useRef<Record<number, HTMLInputElement | null>>({})
 
-  const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(data.provider || "minimax")
+  const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(data.provider || "seedance-2-fast")
 
   const connectedTextPrompts = useMemo(() => {
     return sources.filter((s) => s.type === "text-prompt").map((s) => ({
@@ -208,6 +209,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
 
   return (
     <div className="flex flex-col gap-4">
+      <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       {/* Connected Images */}
       {connectedImages.length > 0 && (
         <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
@@ -298,7 +300,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
             <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
               <MappableField field="provider" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
                 <Select
-                  value={data.provider || "minimax"}
+                  value={data.provider || "seedance-2-fast"}
                   onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
                 >
                   <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>

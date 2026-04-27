@@ -552,13 +552,20 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     const meta = EDITOR_META[editState.type]
     const file = new File([blob], meta.filename, { type: meta.mime })
     const { uploadFile: doUpload } = await import("@/lib/api")
-    const result = await doUpload(file)
+    const { probeMediaMetadata } = await import("@/lib/probe-media-metadata")
+    const [result, mediaMeta] = await Promise.all([doUpload(file), probeMediaMetadata(blob)])
 
     const store = usePresentationStore.getState()
     const prevOutput = (store.nodeStates[editState.nodeId]?.output ?? {}) as Record<string, unknown>
     const existing = (prevOutput.generatedResults as readonly GeneratedResult[] | undefined) ?? []
     // Seed with the original URL so first edit preserves the pre-edit result
-    const newEntry: GeneratedResult = { url: result.url, jobId: `edit-${Date.now()}`, timestamp: new Date().toISOString() }
+    const newEntry: GeneratedResult = {
+      url: result.url,
+      jobId: `edit-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      ...(mediaMeta?.width && mediaMeta?.height ? { width: mediaMeta.width, height: mediaMeta.height } : {}),
+      ...(mediaMeta?.duration !== undefined ? { duration: mediaMeta.duration } : {}),
+    }
     const generatedResults: GeneratedResult[] = existing.length === 0 && editState.url
       ? [{ url: editState.url, jobId: `original-${Date.now()}`, timestamp: new Date().toISOString() }, newEntry]
       : [...existing, newEntry]

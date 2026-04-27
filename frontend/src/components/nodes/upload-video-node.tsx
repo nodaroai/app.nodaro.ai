@@ -10,6 +10,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUpstreamUrl } from "@/hooks/use-upstream-url"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { copyToClipboard } from "@/lib/utils"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
@@ -42,11 +43,14 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
       if (!result) return
       const url = result.processedUrl ?? result.uploadResult.url
       const thumb = result.processedThumbnailUrl ?? result.uploadResult.thumbnailUrl ?? ""
+      const meta = result.uploadResult.metadata
       const newResult: GeneratedResult = {
         url,
         thumbnailUrl: thumb || undefined,
         jobId: `upload-${Date.now()}`,
         timestamp: new Date().toISOString(),
+        ...(meta?.width && meta?.height ? { width: meta.width, height: meta.height } : {}),
+        ...(meta?.durationSeconds !== undefined ? { duration: meta.durationSeconds } : {}),
       }
       updateNodeData(id, {
         assetId: result.uploadResult.assetId ?? "",
@@ -74,29 +78,17 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   const thumbnailUrl = activeResult?.thumbnailUrl ?? nodeData.thumbnailUrl
   const hasFile = Boolean(videoUrl) && !nodeData.externalUrl
   const [isDragOver, setIsDragOver] = useState(false)
-  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
-  useEffect(() => {
-    const url = thumbnailUrl || videoUrl
-    if (!url) { setMediaAspectRatio(undefined); return }
-    let cancelled = false
-    if (thumbnailUrl) {
-      const img = new window.Image()
-      img.onload = () => {
-        if (!cancelled && img.naturalWidth > 0) setMediaAspectRatio(img.naturalWidth / img.naturalHeight)
-      }
-      img.src = thumbnailUrl
-      if (img.complete && img.naturalWidth > 0) {
-        setMediaAspectRatio(img.naturalWidth / img.naturalHeight)
-      }
-    } else if (videoUrl) {
-      const vid = document.createElement("video")
-      vid.onloadedmetadata = () => {
-        if (!cancelled && vid.videoWidth > 0) setMediaAspectRatio(vid.videoWidth / vid.videoHeight)
-      }
-      vid.src = videoUrl
-    }
-    return () => { cancelled = true }
-  }, [videoUrl, thumbnailUrl])
+  // Result-stored dimensions are preferred (synchronous on switch). Legacy
+  // path (externalUrl) gets a local-state fallback populated by the rendered
+  // <video> below via onLoadedMetadata.
+  const { aspectRatio: resultRatio, onLoadDimensions: onResultLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
+  const [legacyRatio, setLegacyRatio] = useState<number | undefined>()
+  const mediaAspectRatio = resultRatio ?? legacyRatio
+  const handleLoadDimensions = ({ width, height }: { width: number; height: number }) => {
+    onResultLoadDimensions({ width, height })
+    if (!resultRatio && width > 0) setLegacyRatio(width / height)
+  }
 
   useEffect(() => {
     const v = uploadVideoRef.current
@@ -254,6 +246,10 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
               muted
               playsInline
               className="w-full h-full object-cover rounded-xl"
+              onLoadedMetadata={(e) => {
+                const v = e.currentTarget
+                if (v.videoWidth > 0) handleLoadDimensions({ width: v.videoWidth, height: v.videoHeight })
+              }}
             />
             {!shouldPlay && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

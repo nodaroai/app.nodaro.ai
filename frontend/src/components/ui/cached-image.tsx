@@ -54,12 +54,17 @@ export function CachedImage({
   onClick,
   draggable,
   onError,
+  onLoadDimensions,
   thumbnail,
   thumbnailWidth,
   ...props
 }: React.ImgHTMLAttributes<HTMLImageElement> & {
   thumbnail?: boolean
   thumbnailWidth?: number
+  /** Fires once per successful load with the rendered image's natural pixel
+   *  size. Used by media nodes to capture and persist aspect ratio on the
+   *  GeneratedResult so result-switching is synchronous. */
+  onLoadDimensions?: (dim: { width: number; height: number }) => void
 }) {
   const effectiveSrc = thumbnail && src
     ? optimizedImageUrl(src, { width: thumbnailWidth })
@@ -105,7 +110,13 @@ export function CachedImage({
       className={className}
       onClick={onClick}
       draggable={draggable}
-      onLoad={() => setLoaded(true)}
+      onLoad={(e) => {
+        setLoaded(true)
+        const img = e.currentTarget
+        if (onLoadDimensions && img.naturalWidth > 0) {
+          onLoadDimensions({ width: img.naturalWidth, height: img.naturalHeight })
+        }
+      }}
       onError={(e) => {
         // External image failed (CORP, hotlink protection, etc.) — retry via backend proxy
         if (effectiveSrc && !internal && !useProxy) {

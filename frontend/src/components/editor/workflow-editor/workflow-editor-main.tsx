@@ -32,6 +32,7 @@ import { useProjectsStore } from "@/hooks/use-projects-store";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase";
 import { StorageExceededError, uploadFile, setCurrentWorkflowId, cancelWorkflowExecution, cancelJob } from "@/lib/api";
+import { probeMediaMetadata } from "@/lib/probe-media-metadata";
 import { queryClient } from "@/lib/query-client";
 import { hasCredits } from "@/lib/edition";
 import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits";
@@ -221,7 +222,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const isManualEdit = !!manualEditNode;
       try {
         const file = new File([blob], "freecut-edit.mp4", { type: "video/mp4" });
-        const result = await uploadFile(file, user?.id);
+        // Probe video metadata in parallel with upload — by the time the upload
+        // resolves, dimensions/duration are ready to embed in the result so the
+        // node sizes correctly on first render.
+        const [result, mediaMeta] = await Promise.all([
+          uploadFile(file, user?.id),
+          probeMediaMetadata(blob),
+        ]);
         const url = result.url;
 
         // Upload project JSON to R2 for future restore
@@ -243,7 +250,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           }
         }
 
-        const newResult: GeneratedResult = { url, jobId: `freecut-edit-${Date.now()}`, timestamp: new Date().toISOString(), freecutProjectUrl: projectUrl };
+        const newResult: GeneratedResult = {
+          url,
+          jobId: `freecut-edit-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          freecutProjectUrl: projectUrl,
+          ...(mediaMeta?.width && mediaMeta?.height ? { width: mediaMeta.width, height: mediaMeta.height } : {}),
+          ...(mediaMeta?.duration !== undefined ? { duration: mediaMeta.duration } : {}),
+        };
         const freshNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId);
         const prev = freshNode ? ((freshNode.data as Record<string, unknown>).generatedResults as readonly GeneratedResult[] ?? []) : [];
         updateNodeData(nodeId, {
@@ -309,7 +323,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       try {
         const file = new File([blob], "edited-image.png", { type: "image/png" });
 
-        // Upload image and designState in parallel
+        // Upload image, designState, and probe dimensions all in parallel.
         const uploadImagePromise = uploadFile(file, user?.id);
         const uploadDesignStatePromise = designState
           ? import("@/lib/api")
@@ -326,9 +340,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               .catch(() => undefined)
           : Promise.resolve(undefined);
 
-        const [imageResult, designStateUrl] = await Promise.all([
+        const [imageResult, designStateUrl, mediaMeta] = await Promise.all([
           uploadImagePromise,
           uploadDesignStatePromise,
+          probeMediaMetadata(blob),
         ]);
         const url = imageResult.url;
 
@@ -337,6 +352,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           jobId: `image-edit-${Date.now()}`,
           timestamp: new Date().toISOString(),
           filerobotDesignStateUrl: designStateUrl,
+          ...(mediaMeta?.width && mediaMeta?.height ? { width: mediaMeta.width, height: mediaMeta.height } : {}),
         };
 
         const freshNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId);
