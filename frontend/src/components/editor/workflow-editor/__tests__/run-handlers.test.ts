@@ -1074,7 +1074,7 @@ describe("run handlers reset accumulation at execution start", () => {
     expect(patchedIds).toEqual(["sel"])
   })
 
-  it("handleRunFromHere resets only downstream executable nodes", async () => {
+  it("handleRunFromHere preserves generatedResults on downstream nodes (history kept)", async () => {
     const upstream = makeAccumulatedExecNode("up", "generate-image")
     const start = makeAccumulatedExecNode("start", "image-to-video")
     const downstream = makeAccumulatedExecNode("down", "text-to-speech")
@@ -1089,11 +1089,13 @@ describe("run handlers reset accumulation at execution start", () => {
     const ctx = makeCtx()
     await handleRunFromHere("start", ctx, "p1", vi.fn().mockResolvedValue(undefined), vi.fn())
 
+    // With preserveHistory, generatedResults is NOT cleared on subset nodes —
+    // the new run prepends to existing history via syncNodeStatesToStore.
     const patchedIds = mockUpdateNodeData.mock.calls
       .filter((c: any[]) => c[1]?.generatedResults !== undefined)
       .map((c: any[]) => c[0])
-    // Upstream out-of-subset stays accumulated (backend reads extractSavedNodeOutput).
     expect(patchedIds).not.toContain("up")
-    expect(patchedIds).toEqual(expect.arrayContaining(["start", "down"]))
+    expect(patchedIds).not.toContain("start")
+    expect(patchedIds).not.toContain("down")
   })
 })
