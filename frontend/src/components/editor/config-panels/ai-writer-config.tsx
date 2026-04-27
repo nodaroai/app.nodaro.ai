@@ -137,17 +137,6 @@ export function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>
             Settings
           </AccordionTrigger>
           <AccordionContent className="px-3 pb-3 space-y-3">
-            <div>
-              <Label className="text-xs text-muted-foreground">Provider</Label>
-              <Select value={data.provider} onValueChange={(v) => onUpdate({ provider: v as AIWriterNodeData["provider"] })}>
-                <SelectTrigger className="mt-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="claude">Claude</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             <LlmModelSelect
               feature="ai-writer"
               value={data.llmModel}

@@ -2534,7 +2534,8 @@ export type AIWriterNodeData = {
   templateId: string
   systemPrompt: string
   userInput: string
-  provider: AiWriterProvider
+  /** @deprecated Single-option dropdown ("claude") was removed; LLM is now picked via `llmModel`. Kept optional for backward compat with saved workflows. */
+  provider?: AiWriterProvider
   /** @deprecated Use llmModel instead. Kept optional for backward compat with saved workflows. */
   model?: string
   llmModel?: string
@@ -4959,7 +4960,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       templateId: "custom",
       systemPrompt: "",
       userInput: "",
-      provider: "claude",
       temperature: 0.7,
       maxTokens: 4096,
       fieldMappings: {},
