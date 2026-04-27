@@ -518,31 +518,50 @@ function BaseNodeComponent({
       ))}
 
       </div>
-      {/* Resize controls (7 of 8 NodeResizeControl positions) + custom zoom
-          corner. Replaces <NodeResizer> from @xyflow/react verbatim, only
-          dropping the bottom-left corner so we can put our zoom gesture there.
-          Behavior of the 7 controls is therefore IDENTICAL to NodeResizer
-          (XYResizer math, viewport-zoom compensation, min/max clamp,
-          aspect-ratio lock, anchored corners). */}
+      {/* Bottom-corner controls. Parameter nodes (cinematography) get the
+          zoom magnifier on one corner + a single resize dot on the other
+          (Alt-swappable). All other categories get plain resize dots on
+          both corners — no per-node zoom. */}
       {!isMobile && (isHovered || !!selected) && (
-        <>
-          {/* Hold Alt to swap: resize moves to bottom-left, zoom to bottom-right. */}
-          <NodeResizeControl
-            nodeId={id}
-            position={altPressed ? "bottom-left" : "bottom-right"}
-            minWidth={minWidth}
-            minHeight={effectiveMinHeight}
-            keepAspectRatio={!!imageAspectRatio}
-            className="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
-          />
-          <CustomHandle
-            visible
-            position={altPressed ? "bottom-right" : "bottom-left"}
-            onDragStart={handleZoomDragStart}
-            onDragMove={handleZoomDragMove}
-            onDragEnd={handleZoomDragEnd}
-          />
-        </>
+        category === "parameter" ? (
+          <>
+            {/* Hold Alt to swap: resize moves to bottom-left, zoom to bottom-right. */}
+            <NodeResizeControl
+              nodeId={id}
+              position={altPressed ? "bottom-left" : "bottom-right"}
+              minWidth={minWidth}
+              minHeight={effectiveMinHeight}
+              keepAspectRatio={!!imageAspectRatio}
+              className="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
+            />
+            <CustomHandle
+              visible
+              position={altPressed ? "bottom-right" : "bottom-left"}
+              onDragStart={handleZoomDragStart}
+              onDragMove={handleZoomDragMove}
+              onDragEnd={handleZoomDragEnd}
+            />
+          </>
+        ) : (
+          <>
+            <NodeResizeControl
+              nodeId={id}
+              position="bottom-right"
+              minWidth={minWidth}
+              minHeight={effectiveMinHeight}
+              keepAspectRatio={!!imageAspectRatio}
+              className="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
+            />
+            <NodeResizeControl
+              nodeId={id}
+              position="bottom-left"
+              minWidth={minWidth}
+              minHeight={effectiveMinHeight}
+              keepAspectRatio={!!imageAspectRatio}
+              className="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
+            />
+          </>
+        )
       )}
     </div>
     </>

@@ -4,6 +4,7 @@ import { useEffect, useRef, useMemo } from "react"
 import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon, ZoomIn, Maximize2 } from "lucide-react"
 import { useReactFlow } from "@xyflow/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { NODE_DEFINITIONS } from "@/types/nodes"
 
 interface NodeContextMenuProps {
   readonly nodeId: string
@@ -58,6 +59,17 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
     const node = nodes.find((n) => n.id === nodeId)
     const z = (node?.data as Record<string, unknown> | undefined)?.zoom
     return typeof z === "number" ? z : 1.0
+  }, [nodeId, nodes])
+
+  // Per-node zoom is only available on parameter (cinematography) nodes —
+  // matches BaseNode which renders the zoom magnifier handle for those
+  // categories only. Other nodes get plain resize on both bottom corners
+  // and the menu hides the zoom row.
+  const showZoom = useMemo(() => {
+    const node = nodes.find((n) => n.id === nodeId)
+    if (!node) return false
+    const def = NODE_DEFINITIONS.find((d) => d.type === node.type)
+    return def?.category === "parameter"
   }, [nodeId, nodes])
 
   useEffect(() => {
@@ -192,29 +204,33 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
           Set as Thumbnail
         </button>
       )}
-      {/* Zoom row: shows current zoom with - / + / reset buttons inline */}
-      <div className="flex items-center gap-1 px-3 py-1.5 text-sm">
-        <ZoomIn className="h-3.5 w-3.5" />
-        <span className="flex-1">Zoom: {Math.round(zoom * 100)}%</span>
-        {/* Fixed-width buttons so different glyph widths (−, +, ↺) and
-            disabled-state changes don't shift sibling buttons sideways. */}
-        <button
-          className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs"
-          onClick={() => handleSetZoom(Math.max(0.5, Math.round((zoom - 0.25) * 100) / 100))}
-          title="Decrease zoom"
-        >−</button>
-        <button
-          className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs"
-          onClick={() => handleSetZoom(Math.min(2.0, Math.round((zoom + 0.25) * 100) / 100))}
-          title="Increase zoom"
-        >+</button>
-        <button
-          className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
-          disabled={zoom === 1}
-          onClick={() => handleSetZoom(1)}
-          title="Reset to 100%"
-        >↺</button>
-      </div>
+      {/* Zoom row: shows current zoom with - / + / reset buttons inline.
+          Only rendered for nodes that have the zoom magnifier handle —
+          see `showZoom` above. */}
+      {showZoom && (
+        <div className="flex items-center gap-1 px-3 py-1.5 text-sm">
+          <ZoomIn className="h-3.5 w-3.5" />
+          <span className="flex-1">Zoom: {Math.round(zoom * 100)}%</span>
+          {/* Fixed-width buttons so different glyph widths (−, +, ↺) and
+              disabled-state changes don't shift sibling buttons sideways. */}
+          <button
+            className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs"
+            onClick={() => handleSetZoom(Math.max(0.5, Math.round((zoom - 0.25) * 100) / 100))}
+            title="Decrease zoom"
+          >−</button>
+          <button
+            className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs"
+            onClick={() => handleSetZoom(Math.min(2.0, Math.round((zoom + 0.25) * 100) / 100))}
+            title="Increase zoom"
+          >+</button>
+          <button
+            className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+            disabled={zoom === 1}
+            onClick={() => handleSetZoom(1)}
+            title="Reset to 100%"
+          >↺</button>
+        </div>
+      )}
       <button
         className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left"
         onClick={handleFitContent}
