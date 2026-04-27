@@ -31,7 +31,9 @@ describe("Framing vantage category", () => {
     expect(isVantageFraming("rule-of-thirds")).toBe(false) // composition
     expect(isVantageFraming(undefined)).toBe(false)
   })
-  it("has 35 total framing entries (24 original + 6 vantage + 4 reference-parity adds + 1 later add)", () => {
-    expect(FRAMINGS.length).toBe(35)
+  it("has at least the core framing entries (vantage + foundational categories)", () => {
+    // Initial set was 35 (24 original + 6 vantage + 4 reference-parity + 1 later);
+    // catalog has since grown. Use a lower-bound check so this doesn't break on every catalog expansion.
+    expect(FRAMINGS.length).toBeGreaterThanOrEqual(35)
   })
 })
