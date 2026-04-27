@@ -32,7 +32,7 @@ import type {
   ManualReferenceImage,
   ImageProvider,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, IMAGE_GEN_MODEL_IDS, IMAGE_I2I_MODELS, IMAGE_EDIT_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "./model-options"
+import { IMAGE_GEN_MODELS, IMAGE_GEN_MODEL_IDS, IMAGE_I2I_MODELS, IMAGE_EDIT_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MultiProviderPicker } from "./multi-provider-picker"
@@ -40,6 +40,11 @@ import { intersectModelOptions } from "@/lib/multi-provider/intersect-model-opti
 import { MappableField } from "./mappable-field"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { ReferenceImageList } from "./reference-image-list"
+import type { RefImageItem } from "./tag-textarea"
+import { PromptEditor } from "./prompt-editor"
+import { ReferenceSupportWarning } from "./reference-support-warning"
+import type { ConnectedReference, ReferenceSource } from "@nodaro-shared/types"
+import { DEFAULT_LABEL_BY_SOURCE } from "@nodaro-shared/types"
 import { ConnectedMediaList } from "./connected-media-list"
 import { FinalPromptPreview } from "./final-prompt-preview"
 import { ConnectedCinematographySources } from "./connected-cinematography-sources"
@@ -52,11 +57,7 @@ const MaskPainterModal = lazy(() => import("../mask-painter-modal").then(m => ({
 
 const IMAGE_SOURCE_TYPES = new Set(["upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background"])
 
-const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
-  "nano-banana-pro": 8,
-  "nano-banana-2": 4,
-}
-const DEFAULT_REF_IMAGE_MAX = 4
+// REF_IMAGE_MAX_LIMITS / DEFAULT_REF_IMAGE_MAX live in @nodaro-shared/model-constants.
 
 export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateImageData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
@@ -206,6 +207,106 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
       .map((c) => ({ id: `char_${c.id}`, url: c.referenceImageUrl!, label: c.name }))
   }, [attachedChars])
 
+  // (refImagesForAutocomplete is derived below, after connectedReferences is built.)
+
+  // Rich connectedReferences for the FinalPromptPreview — mirrors the runtime
+  // path through buildImagePrompt so the preview shows the same fidelity
+  // blocks the model will actually receive.
+  const connectedReferences = useMemo<ConnectedReference[]>(() => {
+    const wiredSourceTypeMap: Record<string, ReferenceSource> = {
+      "upload-image": "wired-image",
+      "generate-image": "wired-image",
+      "edit-image": "wired-image",
+      "image-to-image": "wired-image",
+      "modify-image": "wired-image",
+      "upscale-image": "wired-image",
+      "remove-background": "wired-image",
+      "extract-frame": "wired-image",
+      "character": "wired-character",
+      "face": "wired-face",
+      "object": "wired-object",
+      "location": "wired-location",
+      "scene": "wired-image",
+    }
+    const charCategorySource: Record<string, ReferenceSource> = {
+      face: "wired-face",
+      object: "wired-object",
+      location: "wired-location",
+    }
+
+    const map = new Map<string, ConnectedReference>()
+
+    // Manual uploads
+    const manualImgs = data.referenceImageUrls ?? []
+    for (let i = 0; i < manualImgs.length; i++) {
+      const img = manualImgs[i]
+      map.set(img.id, {
+        id: img.id,
+        defaultName: `Image ${i + 1}`,
+        source: "manual",
+        url: img.url,
+      })
+    }
+
+    // Wired upstream nodes (sources from @xyflow incoming edges)
+    for (const s of sources) {
+      if (!(s.type in wiredSourceTypeMap)) continue
+      const nd = s.nodeData ?? {}
+      const url = (nd.generatedImageUrl as string) || (nd.url as string) || (nd.referenceImageUrl as string) || ""
+      if (!url) continue
+      map.set(s.id, {
+        id: s.id,
+        defaultName: s.label || s.type,
+        source: wiredSourceTypeMap[s.type],
+        description: nd.description as string | undefined,
+        url,
+      })
+    }
+
+    // Attached character definitions (from character-definitions store)
+    for (const c of attachedChars) {
+      if (c.type !== "reference" || !c.referenceImageUrl) continue
+      map.set(`char_${c.id}`, {
+        id: `char_${c.id}`,
+        defaultName: c.name,
+        source: charCategorySource[c.category ?? ""] ?? "wired-character",
+        description: c.description,
+        url: c.referenceImageUrl,
+      })
+    }
+
+    // Apply ordering
+    const orderIds = data.referenceImageOrder ?? []
+    const ordered: ConnectedReference[] = []
+    const seen = new Set<string>()
+    for (const id of orderIds) {
+      const entry = map.get(id)
+      if (entry) {
+        ordered.push(entry)
+        seen.add(id)
+      }
+    }
+    for (const [id, entry] of map) {
+      if (!seen.has(id)) ordered.push(entry)
+    }
+    return ordered
+  }, [data.referenceImageUrls, data.referenceImageOrder, sources, attachedChars])
+
+  // Ordered reference-image list for the "@" autocomplete trigger. Derived from
+  // connectedReferences so the default label per source is preserved.
+  const refImagesForAutocomplete = useMemo<RefImageItem[]>(() => {
+    return connectedReferences.map((ref, i) => ({
+      url: ref.url,
+      label: ref.defaultName,
+      source:
+        ref.source === "manual" ? "uploaded"
+        : ref.source === "wired-image" ? "wired"
+        : "character",
+      index: i + 1,
+      defaultLabel: DEFAULT_LABEL_BY_SOURCE[ref.source],
+    }))
+  }, [connectedReferences])
+
   function handleRefImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files
     if (!files || files.length === 0) return
@@ -216,7 +317,17 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
 
   return (
     <div className="flex flex-col gap-3">
-      <FinalPromptPreview userPrompt={data.prompt} style={data.style} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
+      <FinalPromptPreview
+        userPrompt={data.prompt}
+        style={data.style}
+        negativePrompt={data.negativePrompt}
+        consumerNodeId={nodeId}
+        nodes={nodes}
+        edges={edges ?? []}
+        provider={currentProvider}
+        connectedReferences={connectedReferences}
+        identityMeta={data.identityMeta}
+      />
       {/* Provider — primary decision, determines which model-specific fields appear below */}
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <MultiProviderPicker
@@ -233,17 +344,21 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
           }
           renderHint={(p) => <ModelDescriptionHint modelId={p} />}
         />
+        <ReferenceSupportWarning
+          provider={currentProvider}
+          prompt={data.prompt}
+          attachedRefCount={connectedReferences.length}
+        />
       </MappableField>
 
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="generate-image" currentPrompt={data.prompt || ""} provider={currentProvider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
-        <TagTextarea
+        <PromptEditor
           rows={3}
           value={data.prompt}
           onChange={(v) => onUpdate({ prompt: v })}
           placeholder="Describe the image to generate..."
+          referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
         />
       </MappableField>
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -593,7 +708,16 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
 
   return (
     <div className="flex flex-col gap-3">
-      <FinalPromptPreview userPrompt={data.prompt} style={data.style} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
+      <FinalPromptPreview
+        userPrompt={data.prompt}
+        style={data.style}
+        negativePrompt={data.negativePrompt}
+        consumerNodeId={nodeId}
+        nodes={nodes}
+        edges={edges ?? []}
+        provider={data.provider}
+        characterDefs={attachedChars}
+      />
       <MappableField field="provider" label="Operation" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
           value={data.provider || "recraft-upscale"}
@@ -981,7 +1105,16 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
 
   return (
     <div className="flex flex-col gap-3">
-      <FinalPromptPreview userPrompt={data.prompt} style={data.style} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
+      <FinalPromptPreview
+        userPrompt={data.prompt}
+        style={data.style}
+        negativePrompt={data.negativePrompt}
+        consumerNodeId={nodeId}
+        nodes={nodes}
+        edges={edges ?? []}
+        provider={data.provider}
+        characterDefs={attachedChars}
+      />
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
           value={data.provider || "nano-banana"}
@@ -1484,7 +1617,16 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
 
   return (
     <div className="flex flex-col gap-3">
-      <FinalPromptPreview userPrompt={data.prompt} style={data.style} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
+      <FinalPromptPreview
+        userPrompt={data.prompt}
+        style={data.style}
+        negativePrompt={data.negativePrompt}
+        consumerNodeId={nodeId}
+        nodes={nodes}
+        edges={edges ?? []}
+        provider={data.provider}
+        characterDefs={attachedChars}
+      />
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
           value={data.provider || "nano-banana"}

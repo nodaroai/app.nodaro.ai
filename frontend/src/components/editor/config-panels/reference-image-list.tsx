@@ -64,6 +64,19 @@ function applyOrder(entryMap: Map<string, ReferenceImageEntry>, imageOrder: read
   return ordered
 }
 
+/**
+ * Build the ordered reference-image list as displayed to the user.
+ * Position in the returned array maps to the {image:N} index used in prompts.
+ */
+export function buildOrderedRefImages(
+  manualImages: readonly ManualReferenceImage[],
+  wiredImages: { id: string; url: string; label: string }[],
+  charRefImages: { id: string; url: string; label: string }[],
+  imageOrder: readonly string[],
+): ReferenceImageEntry[] {
+  return applyOrder(buildEntryMap(manualImages, wiredImages, charRefImages), imageOrder)
+}
+
 const SOURCE_BADGE: Record<string, { label: string; className: string }> = {
   uploaded: { label: "Uploaded", className: "bg-blue-500/10 text-blue-500" },
   wired: { label: "Wired", className: "bg-cyan-500/10 text-cyan-500" },

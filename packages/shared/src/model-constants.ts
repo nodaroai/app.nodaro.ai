@@ -14,13 +14,120 @@ export const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
   "qwen", "qwen-edit",
 ])
 
-// Text-to-image models that accept reference images via their API.
-// All other T2I models silently ignore reference images.
+// Image providers that natively use reference images in their API.
+// Used by `buildImagePrompt` to filter referenceImageUrls before sending,
+// and by the frontend to warn when the user has `{image:N:label}` tokens
+// in a prompt for a provider that would silently ignore them.
+//
+// Verified against backend/src/providers/kie/models.ts (inputType +
+// imageParam) and the i2i flow in backend/src/providers/kie/image.ts.
+//
+// Image providers that natively use reference images in their API.
+//
+// Two categories included:
+//  1. Direct ref support: nano-banana family (multi-ref T2I) + flux-kontext
+//     (single image edit) + all i2i/edit variants.
+//  2. Auto-switched: T2I models that have an i2i sibling — when the user
+//     attaches refs to one of these in a generate-image node, the backend
+//     route silently routes to the i2i sibling. See `T2I_TO_I2I_VARIANT`.
+//     User-facing benefit: pick GPT Image / Grok / Qwen / Seedream / Flux at
+//     the dropdown, attach refs, and they "just work".
+//
+// Excluded (no ref support and no i2i sibling — refs would be useless):
+//   imagen4, imagen4-fast, imagen4-ultra, ideogram-v3, z-image
 export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
+  // Multi-reference text-to-image
   "nano-banana",
   "nano-banana-pro",
   "nano-banana-2",
+  // T2I providers that auto-route to their i2i sibling when refs are attached
+  "gpt-image",
+  "gpt-image-2",
+  "grok",
+  "qwen",
+  "seedream",
+  "seedream-5-lite",
+  "flux",
+  "flux-flex",
+  // Image editing / image-to-image (reference = source image)
+  "nano-banana-edit",
+  "gpt-image-i2i",
+  "gpt-image-2-i2i",
+  "flux-i2i",
+  "flux-pro-i2i",
+  "flux-kontext",
+  "flux-kontext-max",
+  "ideogram-edit",
+  "ideogram-remix",
+  "ideogram-reframe",
+  "qwen-i2i",
+  "qwen-edit",
+  "seedream-edit",
+  "seedream-5-lite-i2i",
+  "grok-i2i",
+  // Upscale / background ops (source acts as the reference)
+  "recraft-remove-bg",
+  "recraft-upscale",
+  "topaz-image-upscale",
 ])
+
+/**
+ * T2I provider → i2i sibling. When a generate-image node carries reference
+ * images and the chosen provider is in this map, the backend route
+ * transparently routes to the i2i variant so the refs are actually used.
+ *
+ * The user keeps seeing the T2I name in the UI; the warning component shows
+ * an info hint that the i2i variant is being used under the hood.
+ */
+export const T2I_TO_I2I_VARIANT: Record<string, string> = {
+  "gpt-image": "gpt-image-i2i",
+  "gpt-image-2": "gpt-image-2-i2i",
+  "grok": "grok-i2i",
+  "qwen": "qwen-i2i",
+  "seedream": "seedream-edit",
+  "seedream-5-lite": "seedream-5-lite-i2i",
+  "flux": "flux-pro-i2i",
+  "flux-flex": "flux-i2i",
+}
+
+/**
+ * Maximum number of reference images each provider accepts.
+ * Sourced from the corresponding KIE.ai endpoint's documented input array
+ * size, or from the model's natural input shape (single-source i2i = 1).
+ *
+ * Providers absent from this map default to `DEFAULT_REF_IMAGE_MAX` (4).
+ * Providers absent from `MODELS_WITH_REFERENCE_IMAGE_SUPPORT` ignore
+ * reference images entirely regardless of this value.
+ */
+export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
+  // Multi-reference T2I (Nano Banana family is the only T2I family that
+  // actually accepts ref URLs via the KIE wrapper's `image_input` param).
+  "nano-banana": 8,
+  "nano-banana-pro": 8,
+  "nano-banana-2": 4,
+  // Image-to-image (multi-source array)
+  "nano-banana-edit": 8,
+  "gpt-image-i2i": 16,
+  "gpt-image-2-i2i": 16,
+  "flux-i2i": 4,
+  "flux-pro-i2i": 4,
+  "seedream-edit": 16,
+  "seedream-5-lite-i2i": 16,
+  // Single-source i2i (one input image)
+  "flux-kontext": 1,
+  "flux-kontext-max": 1,
+  "ideogram-edit": 1,
+  "ideogram-remix": 1,
+  "ideogram-reframe": 1,
+  "qwen-i2i": 1,
+  "qwen-edit": 1,
+  "grok-i2i": 1,
+  "recraft-remove-bg": 1,
+  "recraft-upscale": 1,
+  "topaz-image-upscale": 1,
+}
+
+export const DEFAULT_REF_IMAGE_MAX = 4
 
 // Variable pricing: which setting type affects cost per provider
 export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | "rendering-speed"> = {

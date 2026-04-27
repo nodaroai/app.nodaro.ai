@@ -1,8 +1,21 @@
-export type { GenericNode, GenericEdge, CharacterDef } from "./types.js"
+export type {
+  GenericNode,
+  GenericEdge,
+  CharacterDef,
+  ConnectedReference,
+  IdentityFidelity,
+  IdentityMeta,
+  ReferenceSource,
+} from "./types.js"
+
+export { DEFAULT_LABEL_BY_SOURCE } from "./types.js"
 
 export {
   NATIVE_NEGATIVE_PROMPT_MODELS,
   MODELS_WITH_REFERENCE_IMAGE_SUPPORT,
+  T2I_TO_I2I_VARIANT,
+  REF_IMAGE_MAX_LIMITS,
+  DEFAULT_REF_IMAGE_MAX,
   VARIABLE_PRICING_MODELS,
   HIGH_QUALITY_PROVIDERS,
   TWO_K_RESOLUTION_PROVIDERS,
@@ -38,6 +51,10 @@ export { buildCreditModelIdentifier, buildVideoCreditModelIdentifier } from "./c
 
 export {
   buildImagePrompt,
+  buildIdentityDirectives,
+  buildReferenceBlocks,
+  expandImageRefTokens,
+  expandImagePositionRefs,
   type BuildImagePromptConfig,
   type BuildImagePromptResult,
 } from "./prompt-builder.js"

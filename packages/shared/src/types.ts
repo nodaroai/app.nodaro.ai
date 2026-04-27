@@ -27,6 +27,56 @@ export interface CharacterDef {
 }
 
 // ---------------------------------------------------------------------------
+// Reference image metadata.
+//
+// An "identity" = (imageIndex, label) — what role this image plays at a given
+// mention. The same image can appear under multiple identities (e.g. image 1
+// used both as `:dragon` and as `:background`). Tokens in the prompt are
+// `{image:N:label}`, with `{image:N}` as a backward-compat positional ref.
+// ---------------------------------------------------------------------------
+
+export type IdentityFidelity = "strict" | "balanced" | "loose" | "custom"
+
+export type ReferenceSource =
+  | "manual"
+  | "wired-image"
+  | "wired-character"
+  | "wired-face"
+  | "wired-object"
+  | "wired-location"
+
+/** Per-identity user override stored on the consumer node. */
+export interface IdentityMeta {
+  /** 1-based position of the source image. */
+  imageIndex: number
+  /** Role label this entry covers (e.g. "object", "background", "person"). */
+  label: string
+  fidelity?: IdentityFidelity
+  /** Free-text directive used when fidelity === "custom" (replaces the preset). */
+  customText?: string
+}
+
+/** Computed view of a single connected reference, ready for the prompt builder. */
+export interface ConnectedReference {
+  id: string
+  defaultName: string
+  source: ReferenceSource
+  /** Optional rich text from upstream char/face/object/location node. */
+  description?: string
+  url: string
+}
+
+/** Default label per source — used by `@` autocomplete and inventory fallback. */
+export const DEFAULT_LABEL_BY_SOURCE: Record<ReferenceSource, string> = {
+  "manual": "object",
+  "wired-image": "object",
+  "wired-character": "person",
+  "wired-face": "face",
+  "wired-object": "object",
+  "wired-location": "background",
+}
+
+// ---------------------------------------------------------------------------
 // Scene node data — minimal interface for buildScenePrompt.
 // Frontend SceneNodeDataType satisfies this via structural subtyping.
 // Backend casts Record<string, unknown> node data to this.
