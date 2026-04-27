@@ -21,6 +21,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { MOTION_TRANSFER_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 import { buildMotionCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
@@ -28,6 +29,7 @@ const motionTransferBody = z.object({
   imageUrl: safeUrlSchema,
   videoUrl: safeUrlSchema,
   prompt: z.string().max(2500).optional(),
+  userPrompt: z.string().max(8000).optional(),
   characterOrientation: z.enum(["image", "video"]).default("image"),
   resolution: z.enum(["480p", "580p", "720p", "1080p"]).default("720p"),
   provider: z.enum(MOTION_TRANSFER_PROVIDERS).default("kling"),
@@ -73,16 +75,7 @@ export async function motionTransferRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: {
-          imageUrl,
-          videoUrl,
-          prompt,
-          characterOrientation,
-          resolution,
-          provider,
-          backgroundSource,
-          type: "motion-transfer",
-        },
+        input_data: buildJobInputData(parsed.data, "motion-transfer"),
       })
       .select("id")
       .single()

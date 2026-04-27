@@ -7,6 +7,7 @@ import { CreditsService } from "../billing/credits.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildWizardAnalyzeSystem, buildWizardGenerateSystem } from "../prompts/prompt-wizard-system.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 
@@ -21,6 +22,7 @@ const wizardAnalyzeBody = z.object({
   action: z.literal("analyze"),
   nodeType: z.string(),
   prompt: z.string().max(5000).optional(),
+  userPrompt: z.string().max(8000).optional(),
   provider: z.string().optional(),
   style: z.string().optional(),
   aspectRatio: z.string().optional(),
@@ -46,6 +48,7 @@ const wizardGenerateBody = z.object({
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
   selections: z.array(wizardSelectionSchema).min(1),
   originalPrompt: z.string().max(5000).optional(),
+  userPrompt: z.string().max(8000).optional(),
   nodeContext: nodeContextSchema,
   userPreference: z.string().max(500).optional(),
 })
@@ -124,13 +127,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: `prompt-wizard:${body.action}`,
-            nodeType: body.nodeType,
-            ...(body.action === "analyze"
-              ? { prompt: body.prompt }
-              : { selections: body.selections, originalPrompt: body.originalPrompt }),
-          },
+          input_data: buildJobInputData(parsed.data, `prompt-wizard:${body.action}`),
         })
         .select("id")
         .single()

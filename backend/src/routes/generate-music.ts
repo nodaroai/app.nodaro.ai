@@ -5,10 +5,12 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { MUSIC_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const generateMusicBody = z.object({
   prompt: z.string().min(1).max(2000),
+  userPrompt: z.string().max(8000).optional(),
   provider: z.enum(MUSIC_PROVIDERS).optional().default("minimax"),
   duration: z.number().min(1).max(30).optional(),
   genre: z.string().optional(),
@@ -58,7 +60,7 @@ export async function generateMusicRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { prompt: enrichedPrompt, provider, duration, lyrics, referenceAudioUrl, modelVersion, type: "generate-music" },
+        input_data: { ...buildJobInputData(parsed.data, "generate-music"), prompt: enrichedPrompt },
       })
       .select("id")
       .single()

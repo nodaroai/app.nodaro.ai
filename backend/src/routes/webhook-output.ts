@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const sendSchema = z.object({
   url: safeUrlSchema,
@@ -38,7 +39,7 @@ export async function webhookOutputRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         provider: "webhook-output",
-        input_data: { url, payload, type: "webhook-output" },
+        input_data: buildJobInputData(parsed.data, "webhook-output"),
       })
       .select("id")
       .single()

@@ -6,11 +6,13 @@ import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS } from "../../../packages/shared/src/model-constants.js"
 import { buildVideoCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 const textToVideoBody = z.object({
   prompt: z.string().min(1).max(2500),
+  userPrompt: z.string().max(8000).optional(),
   provider: z.enum(TEXT_TO_VIDEO_PROVIDERS).optional(),
   duration: z.number().int().min(1).max(60).optional(),
   mode: z.enum(["pro", "std"]).optional(),
@@ -85,7 +87,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, type: "text-to-video" },
+        input_data: buildJobInputData(parsed.data, "text-to-video"),
       })
       .select("id")
       .single()

@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { LIP_SYNC_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const lipSyncBody = z.object({
@@ -12,6 +13,7 @@ const lipSyncBody = z.object({
   videoUrl: safeUrlSchema.optional(),     // Video input (required for LatentSync/Video-Retalking)
   audioUrl: safeUrlSchema,                // Audio to sync
   prompt: z.string().max(500).optional(),
+  userPrompt: z.string().max(8000).optional(),
   provider: z.enum(LIP_SYNC_PROVIDERS).optional(),
   resolution: z.enum(["480p", "720p"]).optional(),
   // LatentSync params
@@ -82,13 +84,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: {
-          imageUrl, videoUrl, audioUrl, prompt, provider, resolution,
-          guidanceScale, inferenceSteps, seed,
-          pads, smooth, fps, resizeFactor,
-          enhancer, preprocess, still, poseStyle, expressionScale,
-          type: "lip-sync",
-        },
+        input_data: buildJobInputData(parsed.data, "lip-sync"),
       })
       .select("id")
       .single()

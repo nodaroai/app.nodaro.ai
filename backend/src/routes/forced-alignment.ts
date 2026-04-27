@@ -5,10 +5,12 @@ import { videoQueue } from "../lib/queue.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const forcedAlignmentBody = z.object({
   audioUrl: safeUrlSchema,
   transcript: z.string().min(1).max(50000),
+  userPrompt: z.string().max(8000).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -42,7 +44,7 @@ export async function forcedAlignmentRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { audioUrl, transcript, type: "forced-alignment" },
+        input_data: buildJobInputData(parsed.data, "forced-alignment"),
       })
       .select("id")
       .single()

@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { SUNO_MODELS } from "../../../packages/shared/src/model-constants.js"
 import { sunoStyleBoost } from "../providers/kie/suno-client.js"
 import { CreditsService } from "../billing/credits.js"
@@ -14,6 +15,7 @@ const sunoAddTrackModelEnum = z.enum(["V4_5PLUS", "V5"]).optional().default("V5"
 
 const sunoGenerateBody = z.object({
   prompt: z.string().min(1).max(3000),
+  userPrompt: z.string().max(8000).optional(),
   model: sunoModelEnum,
   lyrics: z.string().max(3000).optional(),
   style: z.string().max(500).optional(),
@@ -30,6 +32,7 @@ const sunoGenerateBody = z.object({
 
 const sunoCoverBody = z.object({
   prompt: z.string().min(1).max(3000),
+  userPrompt: z.string().max(8000).optional(),
   uploadUrl: safeUrlSchema,
   model: sunoModelEnum,
   lyrics: z.string().max(3000).optional(),
@@ -46,6 +49,7 @@ const sunoExtendBody = z.object({
   audioId: z.string().min(1),
   defaultParamFlag: z.boolean().optional().default(true),
   prompt: z.string().max(5000).optional(),
+  userPrompt: z.string().max(8000).optional(),
   model: sunoModelEnum,
   style: z.string().max(1000).optional(),
   title: z.string().max(80).optional(),
@@ -60,6 +64,7 @@ const sunoExtendBody = z.object({
 
 const sunoLyricsBody = z.object({
   prompt: z.string().min(1).max(1000),
+  userPrompt: z.string().max(8000).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -93,6 +98,7 @@ const sunoReplaceSectionBody = z.object({
   infillStartS: z.number().min(0),
   infillEndS: z.number().min(6).max(60),
   prompt: z.string().min(1).max(3000),
+  userPrompt: z.string().max(8000).optional(),
   tags: z.string().max(500),
   title: z.string().max(200).optional(),
   userId: z.string().uuid().optional(),
@@ -100,6 +106,7 @@ const sunoReplaceSectionBody = z.object({
 
 const sunoStyleBoostBody = z.object({
   content: z.string().min(1).max(3000),
+  userPrompt: z.string().max(8000).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -177,21 +184,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "suno-generate",
-            prompt,
-            model,
-            lyrics,
-            style,
-            title,
-            negativeStyle,
-            vocalGender,
-            styleWeight,
-            weirdnessConstraint,
-            audioWeight,
-            customMode,
-            instrumental,
-          },
+          input_data: buildJobInputData(parsed.data, "suno-generate"),
         })
         .select("id")
         .single()
@@ -268,19 +261,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "suno-cover",
-            prompt,
-            uploadUrl,
-            model,
-            lyrics,
-            style,
-            title,
-            negativeStyle,
-            vocalGender,
-            customMode,
-            instrumental,
-          },
+          input_data: buildJobInputData(parsed.data, "suno-cover"),
         })
         .select("id")
         .single()
@@ -355,21 +336,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "suno-extend",
-            audioId,
-            defaultParamFlag,
-            prompt,
-            model,
-            style,
-            title,
-            continueAt,
-            negativeStyle,
-            vocalGender,
-            styleWeight,
-            weirdnessConstraint,
-            audioWeight,
-          },
+          input_data: buildJobInputData(parsed.data, "suno-extend"),
         })
         .select("id")
         .single()
@@ -439,7 +406,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: { type: "suno-lyrics", prompt },
+          input_data: buildJobInputData(parsed.data, "suno-lyrics"),
         })
         .select("id")
         .single()
@@ -500,7 +467,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: { type: "suno-separate", taskId, audioId, separateType: type },
+          input_data: { ...buildJobInputData(parsed.data, "suno-separate"), separateType: type },
         })
         .select("id")
         .single()
@@ -561,7 +528,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: { type: "suno-music-video", taskId, audioId },
+          input_data: buildJobInputData(parsed.data, "suno-music-video"),
         })
         .select("id")
         .single()
@@ -623,16 +590,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "suno-mashup",
-            uploadUrlList,
-            model,
-            customMode,
-            style,
-            title,
-            negativeStyle,
-            vocalGender,
-          },
+          input_data: buildJobInputData(parsed.data, "suno-mashup"),
         })
         .select("id")
         .single()
@@ -696,16 +654,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "suno-replace-section",
-            taskId,
-            audioId,
-            infillStartS,
-            infillEndS,
-            prompt,
-            tags,
-            title,
-          },
+          input_data: buildJobInputData(parsed.data, "suno-replace-section"),
         })
         .select("id")
         .single()
@@ -770,7 +719,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: { type: "suno-style-boost", content },
+          input_data: buildJobInputData(parsed.data, "suno-style-boost"),
         })
         .select("id")
         .single()
@@ -855,12 +804,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "suno-add-instrumental",
-            taskId,
-            audioId,
-            model,
-          },
+          input_data: buildJobInputData(parsed.data, "suno-add-instrumental"),
         })
         .select("id")
         .single()
@@ -920,12 +864,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "suno-add-vocals",
-            taskId,
-            audioId,
-            model,
-          },
+          input_data: buildJobInputData(parsed.data, "suno-add-vocals"),
         })
         .select("id")
         .single()
@@ -985,11 +924,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "suno-convert-wav",
-            taskId,
-            audioId,
-          },
+          input_data: buildJobInputData(parsed.data, "suno-convert-wav"),
         })
         .select("id")
         .single()
@@ -1051,17 +986,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "suno-upload-extend",
-            uploadUrl,
-            continueAt,
-            defaultParamFlag,
-            model,
-            style,
-            title,
-            negativeStyle,
-            vocalGender,
-          },
+          input_data: buildJobInputData(parsed.data, "suno-upload-extend"),
         })
         .select("id")
         .single()

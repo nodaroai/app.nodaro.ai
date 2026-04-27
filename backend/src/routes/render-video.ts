@@ -141,6 +141,7 @@ const renderSceneGraphBody = z.object({
 
 import { PLAN_TYPES, validatePlanByType } from "../lib/plan-schemas.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const renderPlanBody = z.object({
   planType: z.enum(PLAN_TYPES),
@@ -181,19 +182,7 @@ export async function renderVideoRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         input_data: {
-          type: "render-video",
-          template: body.template,
-          fps: body.fps,
-          aspectRatio: body.aspectRatio,
-          durationSeconds: body.durationSeconds,
-          transitionStyle: body.transitionStyle,
-          transitionDurationFrames: body.transitionDurationFrames,
-          mediaAssets: body.mediaAssets,
-          audioTrackUrl: body.audioTrackUrl,
-          textOverlays: body.textOverlays,
-          captions: body.captions,
-          backgroundColor: body.backgroundColor,
-          kenBurnsEnabled: body.kenBurnsEnabled,
+          ...buildJobInputData(parsed.data, "render-video"),
           width: dimensions.width,
           height: dimensions.height,
           durationInFrames,
@@ -263,9 +252,8 @@ export async function renderVideoRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         input_data: {
-          type: "render-video",
+          ...buildJobInputData(parsed.data, "render-video"),
           mode: "scene-graph",
-          sceneGraph,
         },
       })
       .select("id")
@@ -331,10 +319,8 @@ export async function renderVideoRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         input_data: {
-          type: "render-video",
+          ...buildJobInputData(parsed.data, "render-video"),
           mode: "plan",
-          planType,
-          plan,
         },
       })
       .select("id")

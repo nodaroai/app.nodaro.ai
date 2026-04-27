@@ -4,11 +4,13 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { SCRIPT_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId } from "../../../packages/shared/src/llm-models.js"
 
 const generateScriptBody = z.object({
   prompt: z.string().min(1).max(10000),
+  userPrompt: z.string().max(8000).optional(),
   sceneCount: z.number().int().min(1).max(20).optional(),
   tone: z.string().max(200).optional(),
   targetDuration: z.number().int().min(5).max(600).optional(),
@@ -47,7 +49,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { prompt, sceneCount, tone, targetDuration, provider, llmModel, type: "generate-script" },
+        input_data: buildJobInputData(parsed.data, "generate-script"),
       })
       .select("id")
       .single()

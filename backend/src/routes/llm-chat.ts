@@ -9,10 +9,12 @@ import { llmComplete, llmStream } from "../lib/llm-client.js"
 import type { LlmContentBlock } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const llmChatBody = z.object({
   systemPrompt: z.string().max(10000),
   userInput: z.string().min(1).max(10000),
+  userPrompt: z.string().max(8000).optional(),
   referenceImageUrls: z.array(z.string().url()).max(5).optional(),
   temperature: z.number().min(0).max(2).default(0.7),
   maxTokens: z.number().min(1).max(16384).default(2048),
@@ -81,14 +83,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "llm-chat",
-            systemPrompt,
-            userInput,
-            llmModel,
-            temperature,
-            maxTokens,
-          },
+          input_data: buildJobInputData(parsed.data, "llm-chat"),
         })
         .select("id")
         .single()
@@ -203,14 +198,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "llm-chat-stream",
-            systemPrompt,
-            userInput,
-            llmModel,
-            temperature,
-            maxTokens,
-          },
+          input_data: buildJobInputData(parsed.data, "llm-chat-stream"),
         })
         .select("id")
         .single()

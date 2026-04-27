@@ -6,6 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { IMAGE_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider } from "../../../packages/shared/src/model-constants.js"
 import { buildVideoCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
@@ -14,6 +15,7 @@ const generateVideoBody = z.object({
   endFrameUrl: safeUrlSchema.optional(),
   audioUrl: safeUrlSchema.optional(),
   prompt: z.string().max(2500).optional(),
+  userPrompt: z.string().max(8000).optional(),
   provider: z.enum(IMAGE_TO_VIDEO_PROVIDERS).optional(),
   generateAudio: z.boolean().optional(),
   duration: z.number().int().min(1).max(60).optional(),
@@ -102,7 +104,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, type: "image-to-video" },
+        input_data: buildJobInputData(parsed.data, "image-to-video"),
       })
       .select("id")
       .single()

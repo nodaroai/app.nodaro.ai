@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const combineVideosBody = z.object({
   videoUrls: z.array(safeUrlSchema).min(2, "At least 2 video URLs required"),
@@ -46,7 +47,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { videoUrls, transition, transitionDuration, audioMode, trimStartFrames, trimEndFrames, type: "combine-videos" },
+        input_data: buildJobInputData(parsed.data, "combine-videos"),
       })
       .select("id")
       .single()

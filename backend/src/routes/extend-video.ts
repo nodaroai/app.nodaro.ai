@@ -15,11 +15,13 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { EXTEND_VIDEO_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const extendVideoBody = z.object({
   kieTaskId: z.string().min(1, "kieTaskId is required"),
   prompt: z.string().min(1, "prompt is required"),
+  userPrompt: z.string().max(8000).optional(),
   provider: z.enum(EXTEND_VIDEO_PROVIDERS),
   model: z.enum(["fast", "quality"]).optional(), // VEO only
   seeds: z.number().int().min(10000).max(99999).optional(), // VEO only
@@ -68,15 +70,7 @@ export async function extendVideoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: {
-          kieTaskId,
-          prompt,
-          provider,
-          model,
-          seeds,
-          quality,
-          type: "extend-video",
-        },
+        input_data: buildJobInputData(parsed.data, "extend-video"),
       })
       .select("id")
       .single()

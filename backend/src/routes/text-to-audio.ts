@@ -4,10 +4,12 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { TEXT_TO_AUDIO_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const textToAudioBody = z.object({
   prompt: z.string().min(1).max(2000),
+  userPrompt: z.string().max(8000).optional(),
   provider: z.enum(TEXT_TO_AUDIO_PROVIDERS).optional(),
   duration: z.number().min(0.5).max(30).optional(),
   loop: z.boolean().optional(),
@@ -46,7 +48,7 @@ export async function textToAudioRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { prompt, provider, duration, loop, promptInfluence, type: "text-to-audio" },
+        input_data: buildJobInputData(parsed.data, "text-to-audio"),
       })
       .select("id")
       .single()

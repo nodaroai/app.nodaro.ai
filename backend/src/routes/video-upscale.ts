@@ -20,6 +20,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { VIDEO_UPSCALE_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const videoUpscaleBody = z.object({
@@ -82,13 +83,7 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: {
-          videoUrl,
-          upscaleFactor,
-          provider,
-          kieTaskId,
-          type: "video-upscale",
-        },
+        input_data: buildJobInputData(parsed.data, "video-upscale"),
       })
       .select("id")
       .single()

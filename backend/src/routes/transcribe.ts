@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { TRANSCRIBE_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const transcribeBody = z.object({
@@ -52,7 +53,7 @@ export async function transcribeRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { audioUrl, provider, language, diarize, tagAudioEvents, type: "transcribe" },
+        input_data: buildJobInputData(parsed.data, "transcribe"),
       })
       .select("id")
       .single()

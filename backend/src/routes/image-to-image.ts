@@ -5,12 +5,14 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { IMAGE_I2I_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 import { buildCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 const imageToImageBody = z.object({
   imageUrl: safeUrlSchema,
   prompt: z.string().min(1).max(2000),
+  userPrompt: z.string().max(8000).optional(),
   provider: z.enum(IMAGE_I2I_PROVIDERS).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
   resolution: z.enum(["1K", "2K", "4K"]).optional(),
@@ -64,7 +66,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { imageUrl, prompt, provider, referenceImageUrls, type: "image-to-image" },
+        input_data: buildJobInputData(parsed.data, "image-to-image"),
       })
       .select("id")
       .single()

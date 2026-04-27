@@ -178,13 +178,18 @@ describe("POST /v1/generate-music", () => {
     const body = res.json()
     expect(body.jobId).toBe("job-1")
 
-    // The route concatenates: prompt, genre, mood, "instrumental, no vocals"
+    // input_data records the user's structured fields, their raw prompt under
+    // `userPrompt` (for debugging), AND the enriched prompt under `prompt`
+    // (which is what the provider received and what the gallery displays).
     const expectedPrompt = "background music, jazz, relaxing, instrumental, no vocals"
-
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         input_data: expect.objectContaining({
           prompt: expectedPrompt,
+          userPrompt: "background music",
+          genre: "jazz",
+          mood: "relaxing",
+          instrumental: true,
           type: "generate-music",
         }),
       })

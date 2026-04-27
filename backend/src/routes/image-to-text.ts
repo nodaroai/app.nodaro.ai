@@ -9,6 +9,7 @@ import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATUR
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const imageToTextBody = z.object({
   imageUrl: safeUrlSchema,
@@ -16,6 +17,7 @@ const imageToTextBody = z.object({
     .enum(["brief", "detailed", "structured"])
     .default("detailed"),
   customPrompt: z.string().max(2000).optional(),
+  userPrompt: z.string().max(8000).optional(),
   userId: z.string().uuid().optional(),
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
 })
@@ -75,12 +77,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "image-to-text",
-            imageUrl,
-            detailLevel,
-            customPrompt,
-          },
+          input_data: buildJobInputData(parsed.data, "image-to-text"),
         })
         .select("id")
         .single()

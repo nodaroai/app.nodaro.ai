@@ -8,10 +8,12 @@ import { createSSEStream } from "../lib/sse.js"
 import { llmComplete, llmStream } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const aiWriterBody = z.object({
   systemPrompt: z.string().max(10000),
   userInput: z.string().min(1).max(10000),
+  userPrompt: z.string().max(8000).optional(),
   temperature: z.number().min(0).max(2).default(0.7),
   maxTokens: z.number().min(1).max(16384).default(4096),
   userId: z.string().uuid().optional(),
@@ -74,14 +76,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "ai-writer",
-            systemPrompt,
-            userInput,
-            llmModel,
-            temperature,
-            maxTokens,
-          },
+          input_data: buildJobInputData(parsed.data, "ai-writer"),
         })
         .select("id")
         .single()
@@ -208,14 +203,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "ai-writer-stream",
-            systemPrompt,
-            userInput,
-            llmModel,
-            temperature,
-            maxTokens,
-          },
+          input_data: buildJobInputData(parsed.data, "ai-writer-stream"),
         })
         .select("id")
         .single()
