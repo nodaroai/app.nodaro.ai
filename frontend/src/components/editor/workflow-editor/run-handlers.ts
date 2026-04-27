@@ -394,7 +394,9 @@ export async function handleRunFromHere(
   // Only clear the scope that's actually re-running — upstream/out-of-subset
   // nodes keep their saved output so the backend orchestrator can still
   // resolve inputs from them via extractSavedNodeOutput.
-  resetNodeAccumulation(executableNodes);
+  // preserveHistory keeps `generatedResults` so the new run prepends to the
+  // existing list instead of replacing it (matches single-node Run behavior).
+  resetNodeAccumulation(executableNodes, { preserveHistory: true });
 
   // Mark nodes as pending for immediate UI feedback
   const { updateNodeData } = useWorkflowStore.getState();
@@ -858,6 +860,8 @@ interface NodeExecutionState {
   };
   error?: string;
   jobId?: string;
+  /** Per-iteration job IDs for fan-out runs (list / loop iterations). */
+  jobIds?: string[];
   nodeType?: string;
   progress?: number;
 }
@@ -932,7 +936,7 @@ function syncNodeStatesToStore(
           const alreadyHas = prevTextResults.some((r) => r.text === state.output!.text);
           if (!alreadyHas) {
             updates.generatedResults = [
-              { text: state.output.text, jobId: `exec-${node.id}`, timestamp: new Date().toISOString() },
+              { text: state.output.text, jobId: state.jobId ?? `exec-${node.id}`, timestamp: new Date().toISOString() },
               ...prevTextResults,
             ];
             updates.activeResultIndex = 0;
@@ -996,7 +1000,7 @@ function syncNodeStatesToStore(
             .map((url, i) => ({
               url,
               timestamp: new Date().toISOString(),
-              jobId: `exec-${node.id}-${i}`,
+              jobId: state.jobIds?.[i] ?? `exec-${node.id}-${i}`,
             }));
           if (newResults.length > 0) {
             updates.generatedResults = [...newResults, ...prev];
@@ -1012,7 +1016,7 @@ function syncNodeStatesToStore(
               {
                 url: outputUrl,
                 timestamp: new Date().toISOString(),
-                jobId: `exec-${node.id}`,
+                jobId: state.jobId ?? `exec-${node.id}`,
               },
               ...prev,
             ];
