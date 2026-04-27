@@ -19,6 +19,10 @@ import type { VariableDisplayMode } from "@/components/editor/config-panels/type
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
 import { MAIN_TEXT_HANDLE, TEXT_PRODUCING_SOURCE_TYPES } from "@/lib/main-text-handle"
+import { resolveNodeDefaults, rememberSelection, pickRelevantFields, isNodeDefaultType, readMemory, type AdminDefault } from "@/lib/node-defaults"
+import { queryClient } from "@/lib/query-client"
+import { queryKeys } from "@/lib/query-keys"
+import { getCachedUserId } from "@/hooks/use-auth"
 
 /**
  * Migrate legacy image node types to the new split types.
@@ -841,7 +845,17 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     if (!definition) return undefined
 
     const id = generateNodeId()
-    const nodeData = { ...definition.defaultData, ...initialData }
+
+    // Three-layer default resolution: factory ← admin DB ← user localStorage.
+    // No-op for node types not in NODE_DEFAULT_TYPES.
+    const adminDefaults = queryClient.getQueryData<AdminDefault[]>(queryKeys.nodeDefaults.all) ?? []
+    const resolvedDefaults = resolveNodeDefaults({
+      nodeType: type,
+      factory: definition.defaultData as Record<string, unknown>,
+      adminDefaults,
+      userId: getCachedUserId(),
+    })
+    const nodeData = { ...resolvedDefaults, ...initialData }
 
     // Generate fresh UUIDs for sub-workflow port IDs and routeIds
     if (type === "sub-workflow-input" || type === "sub-workflow-output") {
@@ -869,7 +883,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       id,
       type,
       position,
-      data: nodeData,
+      data: nodeData as SceneNodeData,
       ...(definition.width ? { width: definition.width } : {}),
       ...(definition.height ? { height: definition.height } : {}),
       // Sticky notes should appear behind other nodes
@@ -950,6 +964,25 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       return { nodes, isDirty: true }
     })
     if (isExecOnly) setSkipUndoCapture(false)
+
+    // Capture user memory snapshot for AI nodes (factory ← admin ← memory).
+    // Skip exec-only updates (polling/results) and unchanged snapshots so a held
+    // slider doesn't thrash localStorage.
+    if (!isExecOnly) {
+      const userId = getCachedUserId()
+      if (userId) {
+        const node = get().nodes.find((n) => n.id === nodeId)
+        if (node && isNodeDefaultType(node.type)) {
+          const snapshot = pickRelevantFields(node.type, node.data as Record<string, unknown>)
+          if (Object.keys(snapshot).length > 0) {
+            const existing = readMemory(userId)[node.type]
+            if (!existing || JSON.stringify(existing) !== JSON.stringify(snapshot)) {
+              rememberSelection(userId, node.type, snapshot)
+            }
+          }
+        }
+      }
+    }
   },
 
   updateNodeWithData: (nodeId, nodeUpdates, dataUpdates) => {

@@ -129,6 +129,11 @@ export function getCachedTier(): string {
   return cachedTier
 }
 
+/** Get the cached user id (synchronous). Returns undefined if not authenticated. */
+export function getCachedUserId(): string | undefined {
+  return cachedUser?.id
+}
+
 export function useAuth() {
   const navigate = useNavigate()
 

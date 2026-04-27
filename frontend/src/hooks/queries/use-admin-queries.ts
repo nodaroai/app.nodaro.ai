@@ -6,7 +6,12 @@ import {
 import { createClient } from "@/lib/supabase"
 import { hasAdmin } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
-import { getAuthHeaders } from "@/lib/api"
+import {
+  getAuthHeaders,
+  fetchAdminNodeDefaults,
+  updateAdminNodeDefault,
+  deleteAdminNodeDefault,
+} from "@/lib/api"
 import type { AppSettings } from "./use-app-settings-queries"
 
 // --- Types ---
@@ -719,6 +724,51 @@ export function useToggleLlmModelMutation() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.llmModels() })
+    },
+  })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Node defaults (admin)
+// ──────────────────────────────────────────────────────────────────────────
+
+export function useAdminNodeDefaults() {
+  return useQuery({
+    queryKey: queryKeys.admin.nodeDefaults(),
+    queryFn: fetchAdminNodeDefaults,
+    enabled: hasAdmin(),
+    staleTime: 30_000,
+  })
+}
+
+export function useUpdateNodeDefaultMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: {
+      nodeType: string
+      provider: string
+      qualityLevel?: string | null
+      aspectRatio?: string | null
+    }) =>
+      updateAdminNodeDefault(args.nodeType, {
+        provider: args.provider,
+        qualityLevel: args.qualityLevel,
+        aspectRatio: args.aspectRatio,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.admin.nodeDefaults() })
+      qc.invalidateQueries({ queryKey: queryKeys.nodeDefaults.all })
+    },
+  })
+}
+
+export function useResetNodeDefaultMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: deleteAdminNodeDefault,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.admin.nodeDefaults() })
+      qc.invalidateQueries({ queryKey: queryKeys.nodeDefaults.all })
     },
   })
 }

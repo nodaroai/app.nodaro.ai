@@ -158,5 +158,10 @@ export const queryKeys = {
       ["admin", "kie-credits", days] as const,
     llmModels: () => ["admin", "llm-models"] as const,
     tutorials: () => ["admin", "tutorials"] as const,
+    nodeDefaults: () => ["admin", "node-defaults"] as const,
+  },
+
+  nodeDefaults: {
+    all: ["node-defaults"] as const,
   },
 } as const
