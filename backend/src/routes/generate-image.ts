@@ -5,11 +5,13 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { IMAGE_GEN_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 import { buildCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 const generateImageBody = z.object({
   prompt: z.string().min(1).max(2000),
+  userPrompt: z.string().max(8000).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(14).optional(),
   characterDescriptions: z.array(z.string().max(500)).max(10).optional(),
   provider: z.enum(IMAGE_GEN_PROVIDERS).optional(),
@@ -69,7 +71,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { prompt, referenceImageUrls, provider, type: "generate-image" },
+        input_data: { ...buildJobInputData(parsed.data, "generate-image"), prompt },
       })
       .select("id")
       .single()

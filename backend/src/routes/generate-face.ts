@@ -6,6 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { resolveTemplate, applyTemplate } from "../config/prompt-templates.js"
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildFaceTemplateInputs } from "../../../packages/shared/src/entity-prompts.js"
 
 const generateFaceBody = z.object({
@@ -13,6 +14,7 @@ const generateFaceBody = z.object({
   description: z.string().max(2000).optional(),
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   prompt: z.string().max(4000).optional(),
+  userPrompt: z.string().max(8000).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
   provider: z.string().optional().default("nano-banana"),
   userId: z.string().uuid().optional(),
@@ -70,12 +72,7 @@ export async function generateFaceRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: {
-          prompt,
-          sourceImageUrl,
-          type: "generate-face",
-          faceData: { name, description, style },
-        },
+        input_data: { ...buildJobInputData(parsed.data, "generate-face"), prompt },
       })
       .select("id")
       .single()

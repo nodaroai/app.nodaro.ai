@@ -4,6 +4,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const extractYouTubeAudioBody = z.object({
   youtubeUrl: safeUrlSchema.refine(
@@ -48,7 +49,7 @@ export async function extractYouTubeAudioRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { youtubeUrl, type: "extract-youtube-audio" },
+        input_data: buildJobInputData(parsed.data, "extract-youtube-audio"),
       })
       .select("id")
       .single()

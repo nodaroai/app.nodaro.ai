@@ -4,9 +4,11 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const voiceRemixBody = z.object({
   text: z.string().min(1).max(5000),
+  userPrompt: z.string().max(8000).optional(),
   voiceDescription: z.string().min(1).max(1000),
   userId: z.string().uuid().optional(),
 })
@@ -41,7 +43,7 @@ export async function voiceRemixRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { text, voiceDescription, type: "voice-remix" },
+        input_data: buildJobInputData(parsed.data, "voice-remix"),
       })
       .select("id")
       .single()

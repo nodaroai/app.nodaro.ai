@@ -5,11 +5,13 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildLocationPrompt } from "../../../packages/shared/src/entity-prompts.js"
 
 const generateLocationBody = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
+  userPrompt: z.string().max(8000).optional(),
   category: z.enum(["indoor", "outdoor", "urban", "nature", "fantasy", "sci-fi", "historical", "futuristic", "other"]).optional(),
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
@@ -49,12 +51,7 @@ export async function generateLocationRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: {
-          prompt,
-          sourceImageUrl,
-          type: "generate-location",
-          locationData: { name, description, category, style },
-        },
+        input_data: { ...buildJobInputData(parsed.data, "generate-location"), prompt },
       })
       .select("id")
       .single()

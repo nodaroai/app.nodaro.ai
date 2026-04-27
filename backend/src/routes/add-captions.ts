@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const addCaptionsBody = z.object({
   videoUrl: safeUrlSchema,
@@ -44,7 +45,7 @@ export async function addCaptionsRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { ...restData, type: "add-captions" },
+        input_data: buildJobInputData(parsed.data, "add-captions"),
       })
       .select("id")
       .single()

@@ -7,9 +7,11 @@ import { CreditsService } from "../billing/credits.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const qaCheckBody = z.object({
   content: z.string().min(1).max(50000),
+  userPrompt: z.string().max(8000).optional(),
   checkType: z
     .enum(["content", "quality", "consistency", "safety"])
     .default("content"),
@@ -75,12 +77,7 @@ export async function qaCheckRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "qa-check",
-            content,
-            checkType,
-            threshold,
-          },
+          input_data: buildJobInputData(parsed.data, "qa-check"),
         })
         .select("id")
         .single()

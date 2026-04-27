@@ -5,11 +5,13 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { VIDEO_TO_VIDEO_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const videoToVideoBody = z.object({
   videoUrl: safeUrlSchema,
   prompt: z.string().max(5000).optional(),
+  userPrompt: z.string().max(8000).optional(),
   provider: z.enum(VIDEO_TO_VIDEO_PROVIDERS).optional(),
   // Wan / Wan Flash params
   duration: z.enum(["5", "10"]).optional(),
@@ -51,12 +53,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: {
-          videoUrl,
-          prompt,
-          type: "video-to-video",
-          provider: provider ?? "wan",
-        },
+        input_data: buildJobInputData(parsed.data, "video-to-video"),
       })
       .select("id")
       .single()

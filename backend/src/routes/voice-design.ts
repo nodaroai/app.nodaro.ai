@@ -4,10 +4,12 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { VOICE_DESIGN_MODELS } from "../../../packages/shared/src/model-constants.js"
 
 const voiceDesignBody = z.object({
   text: z.string().min(100).max(1000),
+  userPrompt: z.string().max(8000).optional(),
   voiceDescription: z.string().min(1).max(1000),
   model: z.enum(VOICE_DESIGN_MODELS).optional(),
   loudness: z.number().min(-1).max(1).optional(),
@@ -48,7 +50,7 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { text, voiceDescription, model, loudness, guidanceScale, seed, quality, shouldEnhance, type: "voice-design" },
+        input_data: buildJobInputData(parsed.data, "voice-design"),
       })
       .select("id")
       .single()

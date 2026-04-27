@@ -148,6 +148,7 @@ vi.mock("@/lib/api", () => ({
   textToSpeech: vi.fn(),
   generateScriptApi: vi.fn(),
   setForcePrivate: vi.fn(),
+  setUserPromptTemplate: vi.fn(),
 }))
 
 vi.mock("@/lib/prompt-templates", () => ({

@@ -4,10 +4,12 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { TTS_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const textToSpeechBody = z.object({
   text: z.string().min(1).max(5000),
+  userPrompt: z.string().max(8000).optional(),
   voice: z.string().optional(),
   provider: z.enum(TTS_PROVIDERS).optional(),
   userId: z.string().uuid().optional(),
@@ -58,12 +60,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: {
-          text, voice, provider: resolvedProvider,
-          type: "text-to-speech",
-          voiceType,
-          stability, similarityBoost, style, speed, languageCode,
-        },
+        input_data: buildJobInputData(parsed.data, "text-to-speech"),
       })
       .select("id")
       .single()

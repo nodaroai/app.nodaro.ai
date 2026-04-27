@@ -98,6 +98,140 @@ const SOCIAL_NODE_TO_PLATFORM: Record<string, string> = {
 }
 
 // ---------------------------------------------------------------------------
+// User-typed prompt template extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the user's UNRESOLVED prompt template from a source node.
+ *
+ * This is the raw text the user typed into the config panel BEFORE any
+ * variable resolution (e.g. `"a man aged {age}"`, not the resolved
+ * `"a man aged 27"` sent to the AI provider).
+ *
+ * Mirrored from the frontend `setUserPromptTemplate(...)` call site so
+ * orchestrator-driven runs land the same value in `jobs.input_data.userPrompt`
+ * as single-node Run executions. Field map matches the per-node-type prompt
+ * fields used by the frontend executor + payload-builder.
+ *
+ * Returns undefined for nodes with no user-typed prompt (FFmpeg processing,
+ * upscale, audio-isolation, voice-changer, dubbing, etc.).
+ */
+export function extractUserPromptTemplate(node: SimpleNode): string | undefined {
+  const data = node.data as Record<string, unknown>
+  const pick = (...keys: string[]): string | undefined => {
+    for (const key of keys) {
+      const value = data[key]
+      if (typeof value === "string" && value.trim().length > 0) return value
+    }
+    return undefined
+  }
+
+  switch (node.type) {
+    // --- Image generation ---
+    case "generate-image":
+    case "edit-image":
+    case "image-to-image":
+    case "modify-image":
+      return pick("prompt")
+
+    // --- Video generation ---
+    case "image-to-video":
+      // Frontend reads `motionPrompt` as a fallback for the i2v prompt field.
+      return pick("prompt", "motionPrompt")
+    case "text-to-video":
+    case "video-to-video":
+    case "lip-sync":
+    case "speech-to-video":
+    case "motion-transfer":
+    case "extend-video":
+      return pick("prompt")
+
+    // --- Entity / scene ---
+    case "character":
+    case "face":
+    case "object":
+    case "location":
+      // Entity nodes have BOTH a free-form `prompt` and a structured
+      // `description`. The route-level enrichment uses `description` first.
+      return pick("description", "prompt")
+    case "scene":
+      return pick("prompt")
+
+    // --- Audio / TTS ---
+    case "text-to-speech":
+      // `directText` is the in-node text field when textSource === "direct";
+      // `text` is the legacy field name.
+      return pick("directText", "text")
+    case "text-to-audio":
+      return pick("prompt", "text")
+    case "voice-remix":
+    case "voice-design":
+      return pick("text")
+    case "forced-alignment":
+      return pick("transcript")
+
+    // --- Music ---
+    case "generate-music":
+      return pick("prompt", "lyrics")
+
+    // --- Suno ---
+    case "suno-generate":
+    case "suno-cover":
+      return pick("prompt", "lyrics")
+    case "suno-extend":
+    case "suno-lyrics":
+    case "suno-replace-section":
+    case "suno-upload-extend":
+      return pick("prompt")
+
+    // --- Captions / FFmpeg text overlay ---
+    case "add-captions":
+      return pick("captions", "text")
+
+    // --- Script generation ---
+    case "generate-script":
+      return pick("prompt")
+
+    // --- Sync HTTP nodes (also called via fetch — included so the same
+    //     helper drives both worker-queued and sync HTTP code paths) ---
+    case "ai-writer":
+    case "llm-chat":
+      return pick("userInput", "prompt")
+    case "video-composer":
+      return pick("compositionPrompt", "prompt")
+    case "after-effects":
+      return pick("effectPrompt", "prompt")
+    case "lottie-overlay":
+      return pick("overlayPrompt", "prompt")
+    case "3d-title":
+      return pick("titlePrompt", "prompt")
+    case "motion-graphics":
+      return pick("motionPrompt", "prompt")
+    case "image-to-text":
+      return pick("customPrompt", "prompt")
+    case "suno-style-boost":
+      return pick("content", "prompt")
+    case "qa-check":
+      return pick("content")
+    case "web-scrape":
+      return pick("query", "url", "target")
+
+    // --- Social posts ---
+    case "instagram-post":
+    case "tiktok-post":
+    case "youtube-upload":
+    case "linkedin-post":
+    case "x-post":
+    case "facebook-post":
+    case "telegram-post":
+      return pick("caption", "text")
+
+    default:
+      return undefined
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Inline node types — executed in-process
 // ---------------------------------------------------------------------------
 
@@ -153,6 +287,12 @@ export async function executeNode(
     return { output: {} }
   }
 
+  // Capture the UNRESOLVED user-typed prompt template BEFORE field mapping
+  // resolution rewrites `node.data.<field>`. Plumbed down to worker / sync HTTP
+  // executors so `jobs.input_data.userPrompt` mirrors the frontend's
+  // `setUserPromptTemplate` value (the raw template, not the resolved one).
+  const userPromptTemplate = extractUserPromptTemplate(node)
+
   // --- Field mapping resolution + {} injection (centralized) ---
   const mappableFields = NODE_MAPPABLE_FIELDS[node.type]
   if (mappableFields?.length) {
@@ -185,11 +325,11 @@ export async function executeNode(
 
   // Sync HTTP nodes
   if (SYNC_HTTP_NODES.has(node.type)) {
-    return executeSyncHttpNode(node, resolvedInputs, ctx)
+    return executeSyncHttpNode(node, resolvedInputs, ctx, userPromptTemplate)
   }
 
   // Worker-queued nodes (default)
-  return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates)
+  return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate)
 }
 
 // ---------------------------------------------------------------------------
@@ -262,6 +402,7 @@ async function executeSyncHttpNode(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
   ctx: OrchestratorContext,
+  userPromptTemplate?: string,
 ): Promise<ExecuteNodeResult> {
   const route = SYNC_HTTP_ROUTES[node.type]
   if (!route) {
@@ -273,7 +414,7 @@ async function executeSyncHttpNode(
   const url = `http://localhost:${port}${route}`
 
   // Build request body from node data + resolved inputs
-  const body = buildSyncHttpBody(node, resolvedInputs, ctx)
+  const body = buildSyncHttpBody(node, resolvedInputs, ctx, userPromptTemplate)
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -325,22 +466,31 @@ export function buildSyncHttpBody(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
   ctx: OrchestratorContext,
+  userPromptTemplate?: string,
 ): Record<string, unknown> {
   const data = node.data
+  // UNRESOLVED user-typed prompt template — passed through to the internal
+  // route, which preserves it via `buildJobInputData` so single-node Run jobs
+  // and orchestrated jobs land identical `jobs.input_data.userPrompt` values.
+  // Caller (executeNode) captures this BEFORE field-mapping resolution so the
+  // raw template (not the resolved/injected version) ends up in the body.
+  const userPrompt = userPromptTemplate ?? extractUserPromptTemplate(node)
+  const withUserPrompt = <T extends Record<string, unknown>>(body: T): T =>
+    userPrompt !== undefined ? ({ ...body, userPrompt } as T) : body
 
   switch (node.type) {
     case "ai-writer":
-      return {
+      return withUserPrompt({
         systemPrompt: data.systemPrompt || data.template,
         userInput: resolvedInputs.prompt || data.userInput || data.prompt,
         userId: ctx.userId,
         llmModel: data.llmModel,
         temperature: data.temperature ?? 0.7,
         maxTokens: data.maxTokens ?? 4096,
-      }
+      })
 
     case "llm-chat":
-      return {
+      return withUserPrompt({
         systemPrompt: resolvedInputs.systemPrompt || data.systemPrompt,
         userInput: resolvedInputs.prompt || data.userInput,
         referenceImageUrls: resolvedInputs.referenceImageUrls,
@@ -348,7 +498,7 @@ export function buildSyncHttpBody(
         temperature: data.temperature ?? 0.7,
         maxTokens: data.maxTokens ?? 2048,
         userId: ctx.userId,
-      }
+      })
 
     case "video-composer": {
       // Build assets array from resolved inputs (matches frontend collectMediaAssets)
@@ -369,7 +519,7 @@ export function buildSyncHttpBody(
       if (resolvedInputs.audioUrl) {
         assets.push({ id: `aud_${assets.length}`, type: "audio", url: resolvedInputs.audioUrl })
       }
-      return {
+      return withUserPrompt({
         prompt: resolvedInputs.prompt || data.compositionPrompt || data.prompt,
         assets: assets.length > 0 ? assets : undefined,
         videoUrl: resolvedInputs.videoUrl,
@@ -380,11 +530,11 @@ export function buildSyncHttpBody(
         durationSeconds: data.durationSeconds,
         llmModel: data.llmModel,
         userId: ctx.userId,
-      }
+      })
     }
 
     case "after-effects":
-      return {
+      return withUserPrompt({
         prompt: resolvedInputs.prompt || data.effectPrompt || data.prompt,
         // Route schema requires `inputVideoUrl`; sending `videoUrl` fails Zod validation.
         inputVideoUrl: resolvedInputs.videoUrl || data.sourceVideoUrl || data.inputVideoUrl,
@@ -394,7 +544,7 @@ export function buildSyncHttpBody(
         durationSeconds: data.durationSeconds,
         llmModel: data.llmModel,
         userId: ctx.userId,
-      }
+      })
 
     case "lottie-overlay": {
       // Lottie assets come from upstream edges with targetHandle "lottie" (resolved
@@ -403,7 +553,7 @@ export function buildSyncHttpBody(
       const lottieAssets =
         resolvedInputs.lottieAssets ??
         (data.lottieAssets as Array<{ url: string; name?: string }> | undefined)
-      return {
+      return withUserPrompt({
         prompt: resolvedInputs.prompt || data.overlayPrompt || data.prompt,
         // Route schema requires `inputVideoUrl`.
         inputVideoUrl: resolvedInputs.videoUrl || data.sourceVideoUrl || data.inputVideoUrl,
@@ -414,11 +564,11 @@ export function buildSyncHttpBody(
         durationSeconds: data.durationSeconds,
         llmModel: data.llmModel,
         userId: ctx.userId,
-      }
+      })
     }
 
     case "3d-title":
-      return {
+      return withUserPrompt({
         prompt: resolvedInputs.prompt || data.titlePrompt || data.prompt,
         backgroundMediaUrl: resolvedInputs.videoUrl || resolvedInputs.imageUrl || data.backgroundMediaUrl,
         fps: data.fps,
@@ -429,10 +579,10 @@ export function buildSyncHttpBody(
         backgroundColor: data.backgroundColor,
         llmModel: data.llmModel,
         userId: ctx.userId,
-      }
+      })
 
     case "motion-graphics":
-      return {
+      return withUserPrompt({
         prompt: resolvedInputs.prompt || data.motionPrompt || data.prompt,
         fps: data.fps,
         aspectRatio: data.aspectRatio,
@@ -442,34 +592,35 @@ export function buildSyncHttpBody(
         backgroundColor: data.backgroundColor,
         llmModel: data.llmModel,
         userId: ctx.userId,
-      }
+      })
 
     case "image-to-text":
-      return {
+      return withUserPrompt({
         imageUrl: resolvedInputs.imageUrl || data.imageUrl,
         customPrompt: resolvedInputs.prompt || data.customPrompt || data.prompt,
         detailLevel: data.detailLevel || "detailed",
         llmModel: data.llmModel,
         userId: ctx.userId,
-      }
+      })
 
     case "suno-style-boost":
-      return {
+      return withUserPrompt({
         content: resolvedInputs.prompt || data.content || data.prompt,
         userId: ctx.userId,
-      }
+      })
 
     case "qa-check":
-      return {
+      return withUserPrompt({
         content: resolvedInputs.prompt || data.content,
         checkType: data.checkType || "content",
         provider: data.provider || "claude",
         threshold: data.threshold ?? 0.7,
         llmModel: data.llmModel,
         userId: ctx.userId,
-      }
+      })
 
     case "save-to-storage":
+      // No user-typed prompt — operates on upstream URLs only.
       return {
         mediaUrl: resolvedInputs.videoUrl || resolvedInputs.imageUrl || resolvedInputs.audioUrl,
         filename: data.filename,
@@ -503,7 +654,7 @@ export function buildSyncHttpBody(
       } else if (action === "post-carousel" && resolvedInputs.mediaItems?.length) {
         mediaItems = resolvedInputs.mediaItems
       }
-      return {
+      return withUserPrompt({
         platform: SOCIAL_NODE_TO_PLATFORM[node.type],
         action,
         connectionId: data.connectionId,
@@ -517,7 +668,7 @@ export function buildSyncHttpBody(
         chatId: data.chatId,
         parseMode: data.parseMode,
         userId: ctx.userId,
-      }
+      })
     }
 
     case "web-scrape": {
@@ -544,11 +695,11 @@ export function buildSyncHttpBody(
         body.target = (data.target as string) || upstreamText
         body.resultsLimit = data.resultsLimit
       }
-      return body
+      return withUserPrompt(body)
     }
 
     default:
-      return { ...data, userId: ctx.userId }
+      return withUserPrompt({ ...data, userId: ctx.userId } as Record<string, unknown>)
   }
 }
 
@@ -563,6 +714,7 @@ async function executeWorkerNode(
   edges?: SimpleEdge[],
   allNodes?: SimpleNode[],
   nodeStates?: Record<string, NodeExecutionState>,
+  userPromptTemplate?: string,
 ): Promise<ExecuteNodeResult> {
   // 1. Create placeholder job record (we need the jobId for payload building)
   const isUploadDescendant = ctx.uploadDescendantIds?.has(node.id) ?? false
@@ -612,6 +764,16 @@ async function executeWorkerNode(
   if (!inputData.imageUrl && resolvedInputs.imageUrl) inputData.imageUrl = resolvedInputs.imageUrl
   if (!inputData.videoUrl && resolvedInputs.videoUrl) inputData.videoUrl = resolvedInputs.videoUrl
   if (!inputData.audioUrl && resolvedInputs.audioUrl) inputData.audioUrl = resolvedInputs.audioUrl
+  // Capture the UNRESOLVED user-typed prompt template so single-node Run jobs
+  // and orchestrated jobs land identical `jobs.input_data.userPrompt` values
+  // (matches the frontend `setUserPromptTemplate` + `withWorkflowId` pattern).
+  // The template is captured by the caller BEFORE field-mapping rewrites
+  // `node.data.<field>`; the fallback to `extractUserPromptTemplate(node)` here
+  // covers callers that bypass `executeNode` (e.g. direct unit-test entry).
+  if (inputData.userPrompt === undefined) {
+    const template = userPromptTemplate ?? extractUserPromptTemplate(node)
+    if (template !== undefined) inputData.userPrompt = template
+  }
 
   await supabase
     .from("jobs")

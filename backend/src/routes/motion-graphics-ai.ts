@@ -14,9 +14,11 @@ import { llmComplete } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
+  userPrompt: z.string().max(8000).optional(),
   fps: z.number().min(15).max(60).default(30),
   aspectRatio: z.string().optional(),
   width: z.number().min(100).max(3840).optional(),
@@ -82,15 +84,7 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "motion-graphics",
-            prompt,
-            fps,
-            width,
-            height,
-            durationSeconds,
-            backgroundColor,
-          },
+          input_data: { ...buildJobInputData(parsed.data, "motion-graphics"), width, height, backgroundColor },
         })
         .select("id")
         .single()

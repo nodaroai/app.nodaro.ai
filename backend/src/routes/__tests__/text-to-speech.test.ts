@@ -220,16 +220,17 @@ describe("POST /v1/text-to-speech", () => {
 
     expect(res.statusCode).toBe(200)
 
-    // The route maps "elevenlabs" -> "elevenlabs-turbo" before inserting
+    // input_data preserves the user's submitted provider value verbatim.
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         input_data: expect.objectContaining({
-          provider: "elevenlabs-turbo",
+          provider: "elevenlabs",
           type: "text-to-speech",
         }),
       })
     )
 
+    // The BullMQ worker still receives the mapped "elevenlabs-turbo" provider.
     expect(videoQueue.add).toHaveBeenCalledWith(
       "text-to-speech",
       expect.objectContaining({

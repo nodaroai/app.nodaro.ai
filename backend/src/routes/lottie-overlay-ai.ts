@@ -14,6 +14,7 @@ import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const lottieAssetSchema = z.object({
   id: z.string(),
@@ -24,6 +25,7 @@ const lottieAssetSchema = z.object({
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
+  userPrompt: z.string().max(8000).optional(),
   inputVideoUrl: safeUrlSchema,
   fps: z.number().min(15).max(60).default(30),
   durationSeconds: z.number().min(1).max(300),
@@ -81,15 +83,7 @@ export async function lottieOverlayAIRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: {
-            type: "lottie-overlay",
-            prompt,
-            inputVideoUrl,
-            fps,
-            width,
-            height,
-            durationSeconds,
-          },
+          input_data: { ...buildJobInputData(parsed.data, "lottie-overlay"), width, height },
         })
         .select("id")
         .single()

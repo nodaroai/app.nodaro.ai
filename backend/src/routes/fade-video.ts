@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const fadeVideoBody = z.object({
   videoUrl: safeUrlSchema,
@@ -43,7 +44,7 @@ export async function fadeVideoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { ...restData, type: "fade-video" },
+        input_data: buildJobInputData(parsed.data, "fade-video"),
       })
       .select("id")
       .single()

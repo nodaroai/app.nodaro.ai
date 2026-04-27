@@ -92,6 +92,7 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
 
 let _currentWorkflowId: string | null = null
 let _forcePrivate = false
+let _userPromptTemplate: string | undefined = undefined
 
 /** Call from WorkflowEditor on mount/change to set the active workflow. */
 export function setCurrentWorkflowId(id: string | null) {
@@ -103,7 +104,18 @@ export function setForcePrivate(value: boolean) {
   _forcePrivate = value
 }
 
-/** Spread workflowId (and optional forcePrivate) into a body object. */
+/**
+ * Set the user-typed prompt template for the next API call (auto-resets).
+ * The frontend resolves variables before sending; this captures the
+ * unresolved template so it lands in `jobs.input_data.userPrompt` for
+ * debugging "what the user typed" vs "what was sent to the AI".
+ * Pass `undefined` for executors with no user-typed prompt at this node.
+ */
+export function setUserPromptTemplate(template: string | undefined) {
+  _userPromptTemplate = template
+}
+
+/** Spread workflowId / forcePrivate / userPrompt into a body object. */
 function withWorkflowId<T extends Record<string, unknown>>(body: T): T {
   let result = body
   if (_currentWorkflowId) {
@@ -112,6 +124,10 @@ function withWorkflowId<T extends Record<string, unknown>>(body: T): T {
   if (_forcePrivate) {
     result = { ...result, forcePrivate: true }
     _forcePrivate = false // auto-reset after use
+  }
+  if (_userPromptTemplate !== undefined) {
+    result = { ...result, userPrompt: _userPromptTemplate }
+    _userPromptTemplate = undefined // auto-reset after use
   }
   return result
 }

@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const assetTypeEnum = z.enum(["expressions", "poses", "lighting", "angles", "custom"])
 
@@ -20,6 +21,7 @@ const generateCharacterAssetBody = z.object({
   variant: z.string().min(1).max(100),
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
+  userPrompt: z.string().max(8000).optional(),
   gender: z.string().max(50).optional(),
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   baseOutfit: z.string().max(1000).optional(),
@@ -136,14 +138,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: {
-          prompt,
-          sourceImageUrl,
-          type: "generate-character-asset",
-          assetType,
-          variant,
-          characterData: { name, description, gender, style, baseOutfit },
-        },
+        input_data: { ...buildJobInputData(parsed.data, "generate-character-asset"), prompt },
       })
       .select("id")
       .single()

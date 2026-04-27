@@ -5,6 +5,7 @@ import { uploadToR2 } from "../lib/storage.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { creditGuard } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { getSizeLimit, type FileCategory } from "../utils/file-validation.js"
 
 const saveToStorageBody = z.object({
@@ -80,12 +81,7 @@ export async function saveToStorageRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: {
-          type: "save-to-storage",
-          mediaUrl,
-          filename,
-          mediaType: detectedType,
-        },
+        input_data: { ...buildJobInputData(parsed.data, "save-to-storage"), mediaType: detectedType },
       })
       .select("id")
       .single()

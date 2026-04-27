@@ -6,6 +6,7 @@ import { decryptToken, encryptToken } from "../services/social/encryption.js"
 import { refreshAccessToken, type SocialPlatform } from "../services/social/oauth.js"
 import { platformPublishers, type PublishRequest } from "../services/social/platforms/index.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { CreditsService } from "../billing/credits.js"
 import {
   INSTAGRAM_CAROUSEL_MIN_ITEMS,
@@ -149,7 +150,7 @@ export async function socialPublishRoutes(app: FastifyInstance) {
         user_id: userId,
         workflow_id: workflowId || null,
         status: "processing",
-        input_data: { platform, action, caption },
+        input_data: buildJobInputData(parsed.data, "social-publish"),
         provider: "social-publish",
         job_type: "social-publish",
       })

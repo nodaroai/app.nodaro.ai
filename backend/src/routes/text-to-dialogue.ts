@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const textToDialogueBody = z.object({
   dialogue: z.array(z.object({
@@ -13,6 +14,7 @@ const textToDialogueBody = z.object({
     (lines) => lines.reduce((sum, l) => sum + l.text.length, 0) <= 5000,
     { message: "Total dialogue text must not exceed 5000 characters" }
   ),
+  userPrompt: z.string().max(8000).optional(),
   stability: z.number().refine((v) => v === 0 || v === 0.5 || v === 1, {
     message: "Stability must be 0, 0.5, or 1",
   }).optional(),
@@ -50,7 +52,7 @@ export async function textToDialogueRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { dialogue, stability, languageCode, type: "text-to-dialogue" },
+        input_data: buildJobInputData(parsed.data, "text-to-dialogue"),
       })
       .select("id")
       .single()

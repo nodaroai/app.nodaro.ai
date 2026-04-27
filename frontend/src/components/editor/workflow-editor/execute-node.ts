@@ -58,6 +58,7 @@ import {
   generateAIWriterStream,
   llmChatStream,
   setForcePrivate,
+  setUserPromptTemplate,
   qaCheckApi,
   saveToStorageApi,
   webScrape,
@@ -467,6 +468,7 @@ export function executeNode(
       return Promise.reject(new Error("No prompt"));
     }
     const scriptData = node.data as GenerateScriptData;
+    setUserPromptTemplate(undefined);
     return runScriptGeneration(
       node.id,
       prompt,
@@ -585,6 +587,9 @@ export function executeNode(
       ancestorRefs,
     });
 
+    // Capture the user-typed template (pre-resolution) so it lands in
+    // jobs.input_data.userPrompt for debugging.
+    setUserPromptTemplate(imgData.prompt?.trim() || undefined);
     return runImageGeneration(
       node.id,
       result.prompt,
@@ -665,6 +670,7 @@ export function executeNode(
     // Collect reference images for nano-banana-edit
     const editRefUrls = orderedImageUrls.filter((url) => url !== imageUrl);
 
+    setUserPromptTemplate(editData.prompt?.trim() || undefined);
     return runEditImage(node.id, imageUrl, ctx, prompt, provider, {
       upscaleFactor: editData.upscaleFactor,
       targetResolution: editData.targetResolution,
@@ -769,6 +775,7 @@ export function executeNode(
     }
     if (!maskUrl) maskUrl = i2iData.maskUrl;
 
+    setUserPromptTemplate(i2iData.prompt?.trim() || undefined);
     return runImageToImage(
       node.id,
       imageUrl,
@@ -883,6 +890,7 @@ export function executeNode(
     }
     if (!maskUrl) maskUrl = modData.maskUrl;
 
+    setUserPromptTemplate(modData.prompt?.trim() || undefined);
     return runModifyImage(
       node.id,
       imageUrl,
@@ -914,6 +922,7 @@ export function executeNode(
       );
       return Promise.reject(new Error("No input image"));
     }
+    setUserPromptTemplate(undefined);
     return runUpscaleImage(
       node.id,
       imageUrl,
@@ -935,6 +944,7 @@ export function executeNode(
       );
       return Promise.reject(new Error("No input image"));
     }
+    setUserPromptTemplate(undefined);
     return runRemoveBackground(node.id, imageUrl, ctx);
   }
 
@@ -1041,6 +1051,7 @@ export function executeNode(
     const isSeedance2I2V = isSeedance2Provider(nodeProvider ?? "")
     const effectiveAspectRatio = i2vData.aspectRatio ?? (isSeedance2I2V ? "16:9" : undefined)
     const effectiveResolution = i2vData.resolution ?? (isSeedance2I2V ? "720p" : undefined)
+    setUserPromptTemplate(i2vData.prompt?.trim() || undefined);
     return runVideoGeneration(
       node.id,
       startFrameUrl ?? "",
@@ -1105,6 +1116,8 @@ export function executeNode(
     }
     const provider =
       typeof v2vData.provider === "string" ? v2vData.provider : undefined;
+    const v2vManualPrompt = typeof v2vData.prompt === "string" ? v2vData.prompt.trim() : undefined;
+    setUserPromptTemplate(v2vManualPrompt || undefined);
     return runVideoToVideoGeneration(
       node.id,
       sourceVideoUrl,
@@ -1199,6 +1212,7 @@ export function executeNode(
           seed: t2vRaw.seed as number | undefined,
           ...seedance2Extras,
         };
+    setUserPromptTemplate(t2vData.prompt?.trim() || undefined);
     return runTextToVideoGeneration(
       node.id,
       prompt,
@@ -1232,6 +1246,7 @@ export function executeNode(
       ...(ttsData.languageCode && { languageCode: ttsData.languageCode }),
       voiceType: (ttsData.voiceType as "premade" | "custom" | "library" | undefined) || "premade",
     };
+    setUserPromptTemplate(ttsData.directText?.trim() || undefined);
     return runTextToSpeechGeneration(
       node.id,
       text,
@@ -1256,6 +1271,7 @@ export function executeNode(
     }
     const d = node.data as GenerateMusicData;
     const refUrl = inputs.audioUrl || d.referenceAudioUrl || undefined;
+    setUserPromptTemplate(d.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1294,6 +1310,7 @@ export function executeNode(
       d.provider === "elevenlabs-sfx"
         ? { loop: d.loop, promptInfluence: d.promptInfluence }
         : undefined;
+    setUserPromptTemplate(d.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1318,6 +1335,7 @@ export function executeNode(
       );
       return Promise.reject(new Error("No audio input"));
     }
+    setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () => audioIsolationApi(audioUrl, ctx.userId),
@@ -1345,6 +1363,11 @@ export function executeNode(
       toast.error(`Node "${d.label}": no dialogue lines`);
       return Promise.reject(new Error("No dialogue lines"));
     }
+    const dialogueTemplate = (d.dialogue ?? [])
+      .map((l) => l.text)
+      .join("\n")
+      .trim();
+    setUserPromptTemplate(dialogueTemplate || undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1371,6 +1394,7 @@ export function executeNode(
       toast.error(`Node "${d.label}": no voice selected`);
       return Promise.reject(new Error("No voice selected"));
     }
+    setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1399,6 +1423,7 @@ export function executeNode(
       toast.error(`Node "${d.label}": no target language selected`);
       return Promise.reject(new Error("No target language"));
     }
+    setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1426,6 +1451,7 @@ export function executeNode(
       toast.error(`Node "${d.label}": no voice description provided`);
       return Promise.reject(new Error("No voice description"));
     }
+    setUserPromptTemplate(d.voiceDescription?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1451,6 +1477,7 @@ export function executeNode(
       toast.error(`Node "${d.label}": no voice description provided`);
       return Promise.reject(new Error("No voice description"));
     }
+    setUserPromptTemplate(d.voiceDescription?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1496,6 +1523,7 @@ export function executeNode(
       currentJobId: undefined,
     });
 
+    setUserPromptTemplate(d.transcript?.trim() || undefined);
     return new Promise<string>((resolve, reject) => {
       forcedAlignmentApi(audioUrl, alignTranscript, ctx.userId)
         .then(({ jobId }) => {
@@ -1580,6 +1608,7 @@ export function executeNode(
       return Promise.reject(new Error("No prompt"));
     }
     const hasCustomFields = !!(d.style || d.title || d.lyrics);
+    setUserPromptTemplate(d.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1619,6 +1648,7 @@ export function executeNode(
       return Promise.reject(new Error("No upload URL"));
     }
     const hasCoverCustomFields = !!(d.style || d.title || d.lyrics);
+    setUserPromptTemplate(d.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1651,6 +1681,7 @@ export function executeNode(
       );
       return Promise.reject(new Error("No audio ID"));
     }
+    setUserPromptTemplate(d.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1691,6 +1722,7 @@ export function executeNode(
       currentJobId: undefined,
     });
 
+    setUserPromptTemplate(d.prompt?.trim() || undefined);
     return new Promise<string>((resolve, reject) => {
       sunoLyricsApi({ prompt, userId: ctx.userId })
         .then(({ jobId }) => {
@@ -1824,6 +1856,7 @@ export function executeNode(
       );
       return Promise.reject(new Error("No task ID"));
     }
+    setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1856,6 +1889,7 @@ export function executeNode(
       );
       return Promise.reject(new Error("Missing taskId/audioId"));
     }
+    setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1879,6 +1913,7 @@ export function executeNode(
       toast.error(`Node "${d.label}": connect two audio sources for mashup`);
       return Promise.reject(new Error("Need two audio inputs"));
     }
+    setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1908,6 +1943,7 @@ export function executeNode(
       );
       return Promise.reject(new Error("Missing taskId/audioId"));
     }
+    setUserPromptTemplate(d.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1940,6 +1976,7 @@ export function executeNode(
       executionStatus: "running",
       generatedText: undefined,
     });
+    setUserPromptTemplate(d.content?.trim() || undefined);
     return sunoStyleBoostApi({ content, userId: ctx.userId })
       .then((result) => {
         updateNodeData(node.id, {
@@ -1969,6 +2006,7 @@ export function executeNode(
       );
       return Promise.reject(new Error("Missing taskId/audioId"));
     }
+    setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -1994,6 +2032,7 @@ export function executeNode(
       );
       return Promise.reject(new Error("Missing taskId/audioId"));
     }
+    setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -2019,6 +2058,7 @@ export function executeNode(
       );
       return Promise.reject(new Error("Missing taskId/audioId"));
     }
+    setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -2041,6 +2081,7 @@ export function executeNode(
       toast.error(`Node "${d.label}": no audio input found`);
       return Promise.reject(new Error("No audio input"));
     }
+    setUserPromptTemplate(d.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -2120,6 +2161,7 @@ export function executeNode(
           // Re-apply sync so transcribeApi's body build consumes the flag
           // before another parallel executeNode can clobber it.
           setForcePrivate(forcePrivate);
+          setUserPromptTemplate(undefined);
           return transcribeApi(
             audioUrl,
             d.provider || undefined,
@@ -2263,6 +2305,7 @@ export function executeNode(
       errorMessage: undefined,
     });
 
+    setUserPromptTemplate(itData.customPrompt?.trim() || undefined);
     return imageToTextApi(
       imageUrl,
       itData.detailLevel || "detailed",
@@ -2339,6 +2382,7 @@ export function executeNode(
       lastUserPrompt: userInput,
     });
 
+    setUserPromptTemplate(chatData.userInput?.trim() || undefined);
     return llmChatStream({
       userId: ctx.userId ?? "",
       systemPrompt: systemPrompt || "",
@@ -2456,6 +2500,7 @@ export function executeNode(
 
     const processedPrompt = writerData.systemPrompt;
 
+    setUserPromptTemplate(writerData.userInput?.trim() || undefined);
     return generateAIWriterStream({
       userId: ctx.userId ?? "",
       systemPrompt: processedPrompt,
@@ -2519,6 +2564,7 @@ export function executeNode(
       errorMessage: undefined,
     });
 
+    setUserPromptTemplate(undefined);
     return webScrape(params)
       .then((res) => {
         updateNodeData(node.id, {
@@ -2608,6 +2654,7 @@ export function executeNode(
       return Promise.reject(new Error("No audio track"));
     }
 
+    setUserPromptTemplate(lsData.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -2697,6 +2744,7 @@ export function executeNode(
       if (identityClause) prompt = `${prompt} ${identityClause}`;
     }
 
+    setUserPromptTemplate(s2vData.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -2740,6 +2788,7 @@ export function executeNode(
       return Promise.reject(new Error("No motion video"));
     }
 
+    setUserPromptTemplate(mtData.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -2771,6 +2820,7 @@ export function executeNode(
         return Promise.reject(new Error("No kieTaskId"));
       }
 
+      setUserPromptTemplate(undefined);
       return runProcessingNode(
         node.id,
         () => videoUpscaleApi({ userId: ctx.userId, provider, kieTaskId }),
@@ -2787,6 +2837,7 @@ export function executeNode(
       return Promise.reject(new Error("No video input"));
     }
 
+    setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () => videoUpscaleApi({ videoUrl, upscaleFactor: vuData.upscaleFactor || undefined, userId: ctx.userId, provider: "topaz" }),
@@ -2820,6 +2871,7 @@ export function executeNode(
       if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
     }
 
+    setUserPromptTemplate(evData.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -2862,6 +2914,7 @@ export function executeNode(
       );
       return Promise.reject(new Error("Need at least 2 videos"));
     }
+    setUserPromptTemplate(undefined);
     return runCombineVideos(
       node.id,
       videoUrls,
@@ -2905,6 +2958,7 @@ export function executeNode(
     );
     const keepOrig = d.keepOriginalAudio ?? true;
     const origVol = d.originalAudioVolume ?? d.backgroundVolume ?? 30;
+    setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -2930,6 +2984,7 @@ export function executeNode(
       return Promise.reject(new Error("No video"));
     }
     const d = node.data as TrimAudioData;
+    setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () =>
@@ -2956,6 +3011,7 @@ export function executeNode(
     }
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, { executionStatus: "running", currentJobProgress: 0 });
+    setUserPromptTemplate(undefined);
     return new Promise<string>((resolve, reject) => {
       splitMediaApi({
         videoUrl: videoUrl || undefined,
@@ -3043,6 +3099,7 @@ export function executeNode(
       return Promise.reject(new Error("No video"));
     }
     const d = node.data as TrimVideoData;
+    setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () =>

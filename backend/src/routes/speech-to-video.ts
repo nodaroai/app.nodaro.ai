@@ -5,11 +5,13 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 
 const speechToVideoBody = z.object({
   imageUrl: safeUrlSchema,
   audioUrl: safeUrlSchema,
   prompt: z.string().min(1).max(2500),
+  userPrompt: z.string().max(8000).optional(),
   resolution: z.enum(["480p", "580p", "720p"]).optional().default("480p"),
   negativePrompt: z.string().max(2500).optional(),
   seed: z.number().int().optional(),
@@ -57,11 +59,7 @@ export async function speechToVideoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: {
-          type: "speech-to-video",
-          imageUrl, audioUrl, prompt, resolution,
-          negativePrompt, seed, numFrames, fps, inferenceSteps, guidanceScale, shift,
-        },
+        input_data: buildJobInputData(parsed.data, "speech-to-video"),
       })
       .select("id")
       .single()

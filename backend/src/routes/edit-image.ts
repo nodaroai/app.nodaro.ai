@@ -5,12 +5,14 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
 import { IMAGE_EDIT_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 import { buildCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 const editImageBody = z.object({
   imageUrl: safeUrlSchema,
   prompt: z.string().max(2000).optional(),
+  userPrompt: z.string().max(8000).optional(),
   provider: z.enum(IMAGE_EDIT_PROVIDERS).optional(),
   upscaleFactor: z.enum(["1", "2", "4"]).optional(),
   targetResolution: z.enum(["2K", "4K", "8K"]).optional(),
@@ -67,7 +69,7 @@ export async function editImageRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { imageUrl, prompt, provider, upscaleFactor, targetResolution, aspectRatio, negativePrompt, style, seed, referenceImageUrls, type: "edit-image" },
+        input_data: buildJobInputData(parsed.data, "edit-image"),
       })
       .select("id")
       .single()

@@ -8,6 +8,7 @@ import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { downloadFile } from "@/components/presentation/output-cards/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { cn } from "@/lib/utils"
+import { JobConfigDisplay } from "./job-config-display"
 
 const EXTENSION_MAP = { video: "mp4", audio: "mp3", image: "png" } as const
 
@@ -35,6 +36,7 @@ export function ResultsGallery({
   }, [])
 
   const activeUrl = results[activeIndex]?.url
+  const activeJobId = results[activeIndex]?.jobId
 
   const handleCopyUrl = useCallback((url: string, idx: number) => {
     if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
@@ -147,6 +149,16 @@ export function ResultsGallery({
             <ImageIcon className="w-3.5 h-3.5 mr-2" />
             Set as Thumbnail
           </Button>
+        )}
+
+        {/* Config used to produce this result */}
+        {activeJobId && (
+          <details className="mt-1 rounded-md border border-gray-200 dark:border-[#2D2D2D] overflow-hidden group">
+            <summary className="text-xs px-3 py-1.5 cursor-pointer select-none text-gray-600 dark:text-[#94A3B8] bg-gray-50 dark:bg-[#181818] hover:bg-gray-100 dark:hover:bg-[#2D2D2D]">
+              Config used
+            </summary>
+            <JobConfigDisplay jobId={activeJobId} />
+          </details>
         )}
       </div>
     </div>
