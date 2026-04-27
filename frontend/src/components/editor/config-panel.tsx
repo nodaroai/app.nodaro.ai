@@ -592,6 +592,12 @@ export function ConfigPanel() {
   const [expandDirectorOpen, setExpandDirectorOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const isMobile = useIsMobile()
+  const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
+
+  useEffect(() => {
+    setConfigPanelFullscreen(isExpanded)
+    return () => setConfigPanelFullscreen(false)
+  }, [isExpanded, setConfigPanelFullscreen])
 
   // Mobile bottom sheet: peek (collapsed) / expanded states with bidirectional drag
   const [sheetState, setSheetState] = useState<"peek" | "expanded">("peek")

@@ -1230,7 +1230,12 @@ export function AddNodePopup({
   const popupRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const visibleNodes = useMemo(() => NODE_OPTIONS.filter((n) => !n.adminOnly || isAdmin), [isAdmin]);
+  // The "Parameter" category is currently hidden from the UI. Re-enable by
+  // dropping the `n.category !== "Parameter"` clause below.
+  const visibleNodes = useMemo(
+    () => NODE_OPTIONS.filter((n) => (!n.adminOnly || isAdmin) && n.category !== "Parameter"),
+    [isAdmin],
+  );
 
   // Compatibility filtering for smart edge-drop
   const { compatibilityNodes, isFiltered } = useMemo(() => {

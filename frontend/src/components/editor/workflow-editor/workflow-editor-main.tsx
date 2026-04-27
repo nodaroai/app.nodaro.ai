@@ -88,6 +88,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const isMobile = useIsMobile();
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
+  const configPanelFullscreen = useWorkflowStore((s) => s.configPanelFullscreen);
   const pendingNavRef = useRef<string | null>(null);
   const pollIntervalsRef = useRef<Set<ReturnType<typeof setInterval>>>(
     new Set(),
@@ -1004,7 +1005,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 <ConfigPanel />
               </EditorErrorBoundary>
             </ReactFlowProvider>
-            <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 max-w-[calc(100%-2rem)]${isMobile && selectedNodeId ? " hidden" : ""}`}>
+            <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 max-w-[calc(100%-2rem)]${isMobile && selectedNodeId ? " hidden" : ""}${configPanelFullscreen ? " hidden" : ""}`}>
               {isRunning && activeExecutionId ? (
                 <ExecutionStatusBar
                   executionId={activeExecutionId}
