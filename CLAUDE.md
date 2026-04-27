@@ -71,6 +71,7 @@
 | 9 | `model_pricing` DB table | Include actual provider cost |
 | 10 | `backend/src/billing/stripe-config.ts` | If pricing tiers or credit allocations change |
 | 11 | `frontend/src/lib/pricing-data.ts` | PRICING_TIERS if tier features/prices change |
+| 12 | `packages/shared/src/node-default-mappings.ts` | `QUALITY_MAP` + `deriveLinkedFields` if the new provider has resolution/quality variants or a linked `model` field. Otherwise the admin Node Defaults UI will accept the provider but the resolver will fall back to factory values. |
 
 **Forgetting step 3 (Zod enum) has caused the same validation bug 3 times.**
 
@@ -290,4 +291,4 @@ backend/src/
 ---
 
 *Last updated: 2026-04-27*
-*Version: 1.91.2*
+*Version: 1.92.0*

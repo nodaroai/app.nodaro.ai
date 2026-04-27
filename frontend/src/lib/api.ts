@@ -4717,3 +4717,53 @@ export async function batchExecutionEstimates(
   const { estimates } = await res.json()
   return estimates
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Node defaults (admin)
+// ──────────────────────────────────────────────────────────────────────────
+
+import type { AdminDefault } from "@/lib/node-defaults"
+
+export async function fetchNodeDefaults(): Promise<AdminDefault[]> {
+  const res = await fetch(`${API_BASE_URL}/v1/node-defaults`, {
+    headers: { ...(await getAuthHeaders()) },
+  })
+  if (!res.ok) return []
+  const { defaults } = await res.json()
+  return defaults ?? []
+}
+
+export async function fetchAdminNodeDefaults(): Promise<AdminDefault[]> {
+  const res = await fetch(`${API_BASE_URL}/v1/admin/node-defaults`, {
+    headers: { ...(await getAuthHeaders()) },
+  })
+  if (!res.ok) throw new Error(`fetchAdminNodeDefaults failed: ${res.status}`)
+  const { defaults } = await res.json()
+  return defaults ?? []
+}
+
+export async function updateAdminNodeDefault(
+  nodeType: string,
+  body: { provider: string; qualityLevel?: string | null; aspectRatio?: string | null },
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/v1/admin/node-defaults/${nodeType}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => "")
+    throw new Error(text || `updateAdminNodeDefault failed: ${res.status}`)
+  }
+}
+
+export async function deleteAdminNodeDefault(nodeType: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/v1/admin/node-defaults/${nodeType}`, {
+    method: "DELETE",
+    headers: { ...(await getAuthHeaders()) },
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => "")
+    throw new Error(text || `deleteAdminNodeDefault failed: ${res.status}`)
+  }
+}

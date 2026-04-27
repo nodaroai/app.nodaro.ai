@@ -21,6 +21,18 @@ import {
   WRAPPER_TEMPLATE_KEY,
 } from "@/lib/prompt-templates"
 import { useUserSettings, useUpdatePublicOutputsMutation, useSaveTemplatesMutation } from "@/hooks/queries/use-user-settings-queries"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { clearMemory } from "@/lib/node-defaults"
 
 const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
 
@@ -238,6 +250,49 @@ export default function SettingsPage() {
           <ChevronRight className="h-5 w-5 text-muted-foreground" />
         </Link>
       )}
+
+      {/* Defaults — reset remembered AI node selections */}
+      <div className="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-base font-semibold">Defaults</h2>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              When you create a new AI node, Nodaro remembers your last selection so you don&apos;t have to choose every time. Resetting clears all remembered selections.
+            </p>
+          </div>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" disabled={!user?.id}>
+                Reset to defaults
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset all remembered defaults?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will erase your remembered model and parameter choices for every AI node type. Existing nodes on your canvases are not affected. New nodes will start from the admin defaults.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    if (!user?.id) return
+                    clearMemory(user.id)
+                    toast.success("Remembered defaults cleared")
+                  }}
+                >
+                  Reset
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </div>
 
       {/* Prompt Templates */}
       <div className="mt-8">

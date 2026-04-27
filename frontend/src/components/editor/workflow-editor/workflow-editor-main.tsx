@@ -30,6 +30,7 @@ import { useUndoRedoSubscription } from "@/hooks/use-undo-redo";
 import { useAltKeyTracker } from "@/hooks/use-alt-key";
 import { useProjectsStore } from "@/hooks/use-projects-store";
 import { useAuth } from "@/hooks/use-auth";
+import { useNodeDefaults } from "@/hooks/use-node-defaults";
 import { createClient } from "@/lib/supabase";
 import { StorageExceededError, uploadFile, setCurrentWorkflowId, cancelWorkflowExecution, cancelJob } from "@/lib/api";
 import { probeMediaMetadata } from "@/lib/probe-media-metadata";
@@ -78,6 +79,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const fetchProjects = useProjectsStore((s) => s.fetchProjects);
   useUndoRedoSubscription();
   useAltKeyTracker();
+  // Hydrate admin node defaults into React Query cache so addNode() can read them
+  // synchronously. Cache key matches what use-workflow-store.addNode() reads.
+  useNodeDefaults();
   const navigate = useNavigate();
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
