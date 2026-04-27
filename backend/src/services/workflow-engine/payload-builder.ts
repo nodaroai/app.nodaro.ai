@@ -14,6 +14,7 @@ import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotio
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 import { composeCameraMotionHintFromConnections } from "../../../../packages/shared/src/camera-motions.js"
 import { getParameterPromptHint } from "../../../../packages/shared/src/parameter-prompt-hint.js"
+import { PARAMETER_NODE_TYPES } from "../../../../packages/shared/src/parameter-node-value.js"
 import type { CharacterDef, SceneData } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
 import { isSeedance2Provider } from "../../../../packages/shared/src/model-constants.js"
@@ -277,6 +278,12 @@ export function buildNodeRefMap(
         output = state.output.videoUrl
       } else if (state?.output?.audioUrl) {
         output = state.output.audioUrl
+      } else if (PARAMETER_NODE_TYPES.has(node.type)) {
+        // Parameter nodes (Animal, Setting, Style, etc.) don't have job outputs —
+        // derive a text hint from their picker state so {Label} refs resolve to a
+        // meaningful string. Mirrors the frontend extractNodeOutput branch at
+        // execution-graph.ts:600.
+        output = getNodePromptHint(node) || undefined
       } else {
         const saved = extractSavedNodeOutput(node)
         if (saved) {
