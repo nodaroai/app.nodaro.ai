@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useRef, useState, useEffect } from "react"
+import { memo, useRef, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Maximize2, Upload, Link, Download, Loader2, AlertCircle, X, Pencil, LayoutGrid } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -14,6 +14,7 @@ import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-edit
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { copyToClipboard } from "@/lib/utils"
 import type { UploadImageData, GeneratedResult } from "@/types/nodes"
@@ -43,10 +44,12 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
       const result = results[0]
       if (!result) return
       const url = result.processedUrl ?? result.uploadResult.url
+      const meta = result.uploadResult.metadata
       const newResult: GeneratedResult = {
         url,
         jobId: `upload-${Date.now()}`,
         timestamp: new Date().toISOString(),
+        ...(meta?.width && meta?.height ? { width: meta.width, height: meta.height } : {}),
       }
       updateNodeData(id, {
         assetId: result.uploadResult.assetId ?? "",
@@ -75,21 +78,17 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
   const imageUrl = activeResult?.url ?? nodeData.thumbnailUrl ?? nodeData.r2Url ?? nodeData.url
   const hasFile = Boolean(nodeData.r2Url || nodeData.url) && !nodeData.externalUrl
   const [isDragOver, setIsDragOver] = useState(false)
-  const [imgAspectRatio, setImgAspectRatio] = useState<number | undefined>()
-  useEffect(() => {
-    if (!imageUrl || !hasFile) { setImgAspectRatio(undefined); return }
-    let cancelled = false
-    const img = new window.Image()
-    const setRatio = () => {
-      if (!cancelled && img.naturalWidth > 0) {
-        setImgAspectRatio(img.naturalWidth / img.naturalHeight)
-      }
-    }
-    img.onload = setRatio
-    img.src = imageUrl
-    if (img.complete) setRatio()
-    return () => { cancelled = true }
-  }, [imageUrl, hasFile])
+  // Result-stored dimensions are preferred (synchronous on switch). For the
+  // legacy URL-only path (externalUrl, single-upload before result push),
+  // we keep a local-state fallback populated by the rendered img's onLoad.
+  const { aspectRatio: resultRatio, onLoadDimensions: onResultLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
+  const [legacyRatio, setLegacyRatio] = useState<number | undefined>()
+  const imgAspectRatio = resultRatio ?? legacyRatio
+  const handleLoadDimensions = ({ width, height }: { width: number; height: number }) => {
+    onResultLoadDimensions({ width, height })
+    if (!resultRatio && width > 0) setLegacyRatio(width / height)
+  }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -209,6 +208,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                 className="w-full h-full object-cover rounded-xl"
                 thumbnail={!useFull}
                 thumbnailWidth={320}
+                onLoadDimensions={handleLoadDimensions}
               />
               <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button type="button" aria-label="Remove image"

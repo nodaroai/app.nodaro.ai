@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { CachedImage } from "@/components/ui/cached-image"
 import { NodeJobProgress } from "./node-job-progress"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -114,20 +115,8 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
-  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
-  useEffect(() => {
-    const url = activeThumbnail || activeUrl
-    if (!url) { setMediaAspectRatio(undefined); return }
-    if (activeThumbnail) {
-      let cancelled = false
-      const img = new window.Image()
-      const setRatio = () => { if (!cancelled && img.naturalWidth > 0) setMediaAspectRatio(img.naturalWidth / img.naturalHeight) }
-      img.onload = setRatio
-      img.src = activeThumbnail
-      if (img.complete) setRatio()
-      return () => { cancelled = true }
-    }
-  }, [activeThumbnail, activeUrl])
+  const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
 
   useEffect(() => {
     const v = videoRef.current
@@ -370,7 +359,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
           className="w-full h-full object-cover rounded-xl"
           onLoadedMetadata={(e) => {
             const v = e.currentTarget
-            if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
+            if (v.videoWidth > 0) handleLoadDimensions({ width: v.videoWidth, height: v.videoHeight })
             if (shouldPlay) v.play().catch(() => {})
           }}
           autoPlay={shouldPlay}

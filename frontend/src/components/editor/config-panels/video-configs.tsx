@@ -48,13 +48,13 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
-  const baseDurations = KIE_VIDEO_DURATIONS[data.provider || "minimax"] || null
+  const baseDurations = KIE_VIDEO_DURATIONS[data.provider || "seedance-2-fast"] || null
   // Hailuo 2.3 Pro/Standard: 1080P only supports 6s duration
   const allowedDurations = baseDurations && (data.provider === "hailuo-2.3-pro" || data.provider === "hailuo-2.3") && data.resolution === "1080P"
     ? baseDurations.filter((d) => d <= 6)
     : baseDurations
-  const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(data.provider || "minimax")
-  const supportsReferences = PROVIDERS_WITH_REFERENCES.includes(data.provider || "minimax")
+  const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(data.provider || "seedance-2-fast")
+  const supportsReferences = PROVIDERS_WITH_REFERENCES.includes(data.provider || "seedance-2-fast")
   const isVeo = data.provider === "veo3" || data.provider === "veo3.1"
   const isVeoRefMode = isVeo && data.veoMode === "reference"
 
@@ -87,7 +87,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   const maxRefImages = data.provider === "grok-i2v" ? 6 : 3
 
   if (data.provider === "kling-3.0") {
-    return <Kling3StudioConfig data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} onUpdateNode={onUpdateNode} />
+    return <Kling3StudioConfig data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} edges={edges} onUpdateNode={onUpdateNode} nodeId={nodeId} />
   }
 
   return (
@@ -106,7 +106,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
 
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
-          value={data.provider || "minimax"}
+          value={data.provider || "seedance-2-fast"}
           onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
         >
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>

@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useEffect } from "react"
+import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Eraser, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, ImageIcon, Link, Pencil } from "lucide-react"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
@@ -13,6 +13,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { EditableNodeLabel } from "./editable-node-label"
 import type { RemoveBackgroundData } from "@/types/nodes"
@@ -36,21 +37,8 @@ function RemoveBackgroundNodeComponent({ id, data, selected }: NodeProps) {
   const credits = useModelCredits("recraft-remove-bg", 1)
   const useFull = useFullResolution(id)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
-  const [imgAspectRatio, setImgAspectRatio] = useState<number | undefined>()
-  useEffect(() => {
-    if (!activeUrl) { setImgAspectRatio(undefined); return }
-    let cancelled = false
-    const img = new window.Image()
-    const setRatio = () => {
-      if (!cancelled && img.naturalWidth > 0) {
-        setImgAspectRatio(img.naturalWidth / img.naturalHeight)
-      }
-    }
-    img.onload = setRatio
-    img.src = activeUrl
-    if (img.complete) setRatio()
-    return () => { cancelled = true }
-  }, [activeUrl])
+  const { aspectRatio: imgAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedImageUrl"))
@@ -115,6 +103,7 @@ function RemoveBackgroundNodeComponent({ id, data, selected }: NodeProps) {
             className="w-full h-full object-cover rounded-xl"
             thumbnail={!useFull}
             thumbnailWidth={320}
+            onLoadDimensions={handleLoadDimensions}
           />
         )}
 

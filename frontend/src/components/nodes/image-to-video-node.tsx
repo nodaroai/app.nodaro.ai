@@ -16,20 +16,12 @@ const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-direct
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
-import { PROVIDERS_WITH_REFERENCES, VIDEO_PROVIDER_FALLBACKS } from "../editor/config-panels/model-options"
+import { PROVIDERS_WITH_REFERENCES, PROVIDERS_WITH_END_FRAME, VIDEO_PROVIDER_FALLBACKS } from "../editor/config-panels/model-options"
 import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS } from "@nodaro-shared/model-constants"
-
-// Providers that support End Frame (second image for video ending)
-const END_FRAME_SUPPORTED_PROVIDERS = [
-  "veo3", "veo3.1",
-  "minimax",
-  "kling-turbo",
-  "kling-3.0",
-  "runway", "pika",
-]
 
 // Node types that output images
 const IMAGE_OUTPUT_TYPES = new Set([
@@ -95,23 +87,32 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
   const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
-  const provider = nodeData.provider ?? "minimax"
+  const provider = nodeData.provider ?? "seedance-2-fast"
   const credits = useModelCredits(provider, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
   const useFull = useFullResolution(id)
-  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
+  // When the active result has stored width/height (captured the first
+  // time it loaded), aspectRatio is available synchronously on switch —
+  // no race with onLoadedMetadata. handleLoadDimensions writes captured
+  // dims back to the result so subsequent switches stay synchronous.
+  const { aspectRatio: resultAspect, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
+  const [thumbAspect, setThumbAspect] = useState<number | undefined>()
   useEffect(() => {
     const url = activeThumbnail || activeUrl
-    if (!url) { setMediaAspectRatio(undefined); return }
+    if (!url) { setThumbAspect(undefined); return }
     if (activeThumbnail) {
       let cancelled = false
       const img = new window.Image()
-      const setRatio = () => { if (!cancelled && img.naturalWidth > 0) setMediaAspectRatio(img.naturalWidth / img.naturalHeight) }
+      const setRatio = () => { if (!cancelled && img.naturalWidth > 0) setThumbAspect(img.naturalWidth / img.naturalHeight) }
       img.onload = setRatio
       img.src = activeThumbnail
       if (img.complete) setRatio()
       return () => { cancelled = true }
     }
   }, [activeThumbnail, activeUrl])
+  // Prefer result-derived aspect (synchronous on switch) over the thumbnail
+  // preload (async, may not be available on switch).
+  const mediaAspectRatio = resultAspect ?? thumbAspect
 
   useEffect(() => {
     const v = videoRef.current
@@ -138,7 +139,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     ? Math.round((listCompleted / listTotal) * 100)
     : undefined
 
-  const supportsEndFrame = END_FRAME_SUPPORTED_PROVIDERS.includes(nodeData.provider)
+  const supportsEndFrame = nodeData.provider !== undefined && PROVIDERS_WITH_END_FRAME.includes(nodeData.provider)
   const isKling3 = nodeData.provider === "kling-3.0"
   const isKling3MultiShot = isKling3 && nodeData.multiShot
   const showEndFrame = supportsEndFrame && !isKling3MultiShot
@@ -150,7 +151,18 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const referencesConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "references").length
   const referencesTop = 445 * 0.70
 
-  const resultHeight = videoDimensions?.height ?? 445
+  // Synchronous videoDimensions when the active result has stored
+  // width/height — avoids the brief one-tick render at the previous
+  // result's dims that produces a visible glitch on switch. Falls
+  // through to the local state (populated by onLoadedMetadata) for
+  // first generation, when result dims aren't known yet.
+  const baseWidth = 490
+  const syncDims = (resultAspect && activeUrl)
+    ? { width: baseWidth, height: Math.max(180, Math.min(600, Math.round(baseWidth / resultAspect))) }
+    : null
+  const effectiveVideoDimensions = syncDims ?? videoDimensions
+
+  const resultHeight = effectiveVideoDimensions?.height ?? 445
   const cinematographyTop = 445 * 0.07
   const startFrameTop = 445 * 0.157
   const endFrameTop = 445 * 0.36
@@ -252,7 +264,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo || (showReferences && referencesConnectionCount > 0) || hasSeedance2Ref
 
   return (
-    <div className="relative group/node" style={{ width: (activeUrl && !showConfig) ? (videoDimensions?.width ?? 245) : 245, height: (activeUrl && !showConfig) ? (videoDimensions?.height ?? 445) : 445, minHeight: 200, overflow: 'visible', position: 'relative' }}>
+    <div className="relative group/node" style={{ width: (activeUrl && !showConfig) ? (effectiveVideoDimensions?.width ?? 245) : 245, height: (activeUrl && !showConfig) ? (effectiveVideoDimensions?.height ?? 445) : 445, minHeight: 200, overflow: 'visible', position: 'relative' }}>
     <EditableNodeLabel
       label={isKling3 ? "Kling 3.0 Studio" : nodeData.label}
       icon={<Clapperboard className="w-3.5 h-3.5" />}
@@ -327,6 +339,9 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
             const baseWidth = 490
             const baseHeight = Math.round(baseWidth / ratio)
             setVideoDimensions({ width: baseWidth, height: Math.max(180, Math.min(600, baseHeight)) })
+            // Persist true video dims to the result so subsequent switches
+            // can read aspectRatio synchronously and avoid the resize glitch.
+            if (video.videoWidth > 0) handleLoadDimensions({ width: video.videoWidth, height: video.videoHeight })
             if (shouldPlay) video.play().catch(() => {})
           }} />
         {/* Version badge */}
@@ -591,7 +606,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 autoPlay={shouldPlay} muted loop={shouldPlay} playsInline
                 onLoadedMetadata={(e) => {
                   const v = e.currentTarget
-                  if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
+                  if (v.videoWidth > 0) handleLoadDimensions({ width: v.videoWidth, height: v.videoHeight })
                   if (shouldPlay) v.play().catch(() => {})
                 }}
               />
@@ -684,6 +699,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
       style={{ top: `${startFrameTop - 14}px`, left: '-29px' }}>
       <ImageIcon className="w-3.5 h-3.5 text-white" />
+      <span className="absolute text-[9px] leading-none text-muted-foreground whitespace-nowrap pointer-events-none" style={{ right: "32px", top: "50%", transform: "translateY(-50%)" }}>Start Frame</span>
       <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">+</div>
       {startFrameConnectionCount >= 2 && (
         <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">{startFrameConnectionCount}</div>
@@ -696,6 +712,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
       style={{ top: `${endFrameTop - 14}px`, left: '-29px' }}>
       <ImageIcon className="w-3.5 h-3.5 text-white" />
+      <span className="absolute text-[9px] leading-none text-muted-foreground whitespace-nowrap pointer-events-none" style={{ right: "32px", top: "50%", transform: "translateY(-50%)" }}>End Frame</span>
     </div>
     )}
 
@@ -703,6 +720,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
       style={{ top: `${audioTop - 14}px`, left: '-29px' }}>
       <Volume2 className="w-3.5 h-3.5 text-white" />
+      <span className="absolute text-[9px] leading-none text-muted-foreground whitespace-nowrap pointer-events-none" style={{ right: "32px", top: "50%", transform: "translateY(-50%)" }}>Audio</span>
     </div>
 
     {/* references handle icon (Grok I2V / VEO reference mode) */}
@@ -710,6 +728,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
         style={{ top: `${referencesTop - 14}px`, left: '-29px' }}>
         <Images className="w-3.5 h-3.5 text-white" />
+        <span className="absolute text-[9px] leading-none text-muted-foreground whitespace-nowrap pointer-events-none" style={{ right: "32px", top: "50%", transform: "translateY(-50%)" }}>References</span>
         <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">+</div>
         {referencesConnectionCount >= 1 && (
           <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">{referencesConnectionCount}</div>
@@ -724,6 +743,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
       style={{ top: `${videoTop - 14}px`, right: '-29px' }}>
       <Clapperboard className="w-3.5 h-3.5 text-white" />
+      <span className="absolute text-[9px] leading-none text-muted-foreground whitespace-nowrap pointer-events-none" style={{ left: "32px", top: "50%", transform: "translateY(-50%)" }}>Video</span>
     </div>
 
     {/* Preview Modal */}

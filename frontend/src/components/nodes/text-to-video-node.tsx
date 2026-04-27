@@ -12,6 +12,7 @@ import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
@@ -43,20 +44,8 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const playState = nodeData.videoPlayState ?? "loop"
   const shouldPlay = videoAutoplay && playState === "loop"
-  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | undefined>()
-  useEffect(() => {
-    const url = activeThumbnail || activeUrl
-    if (!url) { setMediaAspectRatio(undefined); return }
-    if (activeThumbnail) {
-      let cancelled = false
-      const img = new window.Image()
-      const setRatio = () => { if (!cancelled && img.naturalWidth > 0) setMediaAspectRatio(img.naturalWidth / img.naturalHeight) }
-      img.onload = setRatio
-      img.src = activeThumbnail
-      if (img.complete) setRatio()
-      return () => { cancelled = true }
-    }
-  }, [activeThumbnail, activeUrl])
+  const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
 
   // Per-node playback state: seek + pause/play
   useEffect(() => {
@@ -188,7 +177,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
               playsInline
               onLoadedMetadata={(e) => {
                 const v = e.currentTarget
-                if (v.videoWidth > 0) setMediaAspectRatio(v.videoWidth / v.videoHeight)
+                if (v.videoWidth > 0) handleLoadDimensions({ width: v.videoWidth, height: v.videoHeight })
                 if (shouldPlay) v.play().catch(() => {})
               }}
             />

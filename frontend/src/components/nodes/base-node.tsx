@@ -133,9 +133,15 @@ function BaseNodeComponent({
     }
   }, [])
 
+  // Reactive subscription to the node's stored height — used to drive the
+  // auto-fit effect below so it re-runs when Fit Content clears height.
+  const storedHeight = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.height)
+
   // When image/video aspect ratio is known, update the node's explicit
   // width + height so the box matches the content. If the node has no
   // explicit width yet (never manually resized), promote it to 320px.
+  // Re-runs when height becomes undefined (Fit Content) so the node snaps
+  // back to its aspect-correct size.
   useEffect(() => {
     if (!imageAspectRatio || !id) return
     const state = useWorkflowStore.getState()
@@ -152,7 +158,7 @@ function BaseNodeComponent({
         n.id === id ? { ...n, width: w, height: correctH, className: cls } : n
       ),
     })
-  }, [imageAspectRatio, id])
+  }, [imageAspectRatio, id, storedHeight])
 
   const { isMobile } = useMobileCanvas()
   const altPressed = useAltKeyStore((s) => s.pressed)
