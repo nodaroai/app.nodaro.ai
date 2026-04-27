@@ -6,8 +6,36 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { IMAGE_GEN_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
+import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT } from "../../../packages/shared/src/model-constants.js"
 import { buildCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
+
+/**
+ * Decide whether the prompt actually addresses any reference images.
+ * `buildImagePrompt` emits the "Use these references for the output image:"
+ * header only when at least one `{image:N:label}` mention is present, so
+ * checking for that string is a reliable signal that the user wants the
+ * model to consume the attached refs (versus just having them attached).
+ */
+function promptAddressesReferences(prompt: string): boolean {
+  return prompt.includes("Use these references for the output image:")
+}
+
+/**
+ * If the user picked a T2I provider that has an i2i sibling AND the prompt
+ * mentions reference images, transparently route to the i2i variant — the
+ * T2I endpoint silently ignores ref URLs, while the i2i endpoint actually
+ * uses them.
+ */
+function resolveEffectiveProvider(
+  provider: string | undefined,
+  prompt: string,
+  referenceImageUrls: string[] | undefined,
+): string | undefined {
+  if (!provider) return provider
+  if (!referenceImageUrls?.length) return provider
+  if (!promptAddressesReferences(prompt)) return provider
+  return T2I_TO_I2I_VARIANT[provider] ?? provider
+}
 
 const generateImageBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -32,7 +60,12 @@ const generateImageBody = z.object({
 export async function generateImageRoutes(app: FastifyInstance) {
   app.post("/v1/generate-image", { preHandler: creditGuard((req) => {
     const body = req.body as Record<string, unknown>
-    const provider = (body?.provider as string) ?? "nano-banana"
+    const rawProvider = (body?.provider as string) ?? "nano-banana"
+    const prompt = (body?.prompt as string) ?? ""
+    const refs = body?.referenceImageUrls as string[] | undefined
+    // Mirror the auto-swap inside the route handler so credits are reserved
+    // for the variant we'll actually invoke.
+    const provider = resolveEffectiveProvider(rawProvider, prompt, refs) ?? rawProvider
     const quality = body?.quality as string | undefined
     const resolution = body?.resolution as string | undefined
     const renderingSpeed = body?.renderingSpeed as string | undefined
@@ -57,12 +90,18 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    // Determine model identifier for credit reservation (composite for variable pricing)
-    const modelIdentifier = buildCreditModelIdentifier(provider ?? "nano-banana", quality, resolution, renderingSpeed)
-
     // Append character descriptions to prompt
     const descSuffix = (characterDescriptions ?? []).map((d) => d).join(" ")
     const prompt = descSuffix ? `${rawPrompt}\n${descSuffix}` : rawPrompt
+
+    // Auto-route T2I providers to their i2i sibling when the user actually
+    // addresses reference images in the prompt. Without this, T2I models
+    // silently ignore attached refs because their KIE endpoints don't accept
+    // input image params.
+    const effectiveProvider = resolveEffectiveProvider(provider, prompt, referenceImageUrls)
+
+    // Determine model identifier for credit reservation (composite for variable pricing)
+    const modelIdentifier = buildCreditModelIdentifier(effectiveProvider ?? "nano-banana", quality, resolution, renderingSpeed)
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -91,7 +130,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       jobId: job.id,
       prompt,
       referenceImageUrls,
-      provider,
+      provider: effectiveProvider,
       aspectRatio,
       resolution,
       quality,

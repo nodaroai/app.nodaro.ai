@@ -23,6 +23,7 @@ interface BaseProps {
   readonly className?: string
   readonly maxLength?: number
   readonly nodeRefs?: readonly NodeRefItem[]
+  readonly referenceImages?: readonly RefImageItem[]
   readonly displayMode?: VariableDisplayMode
   readonly refMap?: Map<string, string>
 }
@@ -37,9 +38,27 @@ export interface SuggestionItem {
   tag: string
   label: string
   category: string
+  thumbnailUrl?: string
 }
 
-type TriggerChar = "[" | "<" | "/" | "{"
+/** A reference image that can be inserted into the prompt via the "@" trigger. */
+export interface RefImageItem {
+  readonly url: string
+  readonly label: string
+  readonly source: "uploaded" | "wired" | "character"
+  /** 1-based position matching {image:N} in the prompt. */
+  readonly index: number
+  /** Default role label inserted by the "@" trigger (e.g. "object", "person"). */
+  readonly defaultLabel: string
+}
+
+type TriggerChar = "[" | "<" | "/" | "{" | "@"
+
+const REF_IMAGE_SOURCE_LABEL: Record<RefImageItem["source"], string> = {
+  uploaded: "Uploaded",
+  wired: "Wired",
+  character: "Character",
+}
 
 function getAllSuggestions(): SuggestionItem[] {
   const items: SuggestionItem[] = AUDIO_TAGS.map((t) => ({
@@ -71,7 +90,7 @@ function nodeTypeCategory(type: string): string {
 }
 
 export function TagTextarea(props: TagTextareaProps) {
-  const { value, onChange, placeholder, rows, className, maxLength, nodeRefs, displayMode = "raw", refMap } = props
+  const { value, onChange, placeholder, rows, className, maxLength, nodeRefs, referenceImages, displayMode = "raw", refMap } = props
   const tagMode: "audio" | "suno" | "none" = props.tagMode ?? "none"
   const provider = props.tagMode === "audio" ? props.provider : undefined
   const customTags = props.tagMode === "suno" ? props.customTags : undefined
@@ -80,6 +99,7 @@ export function TagTextarea(props: TagTextareaProps) {
   const [filterText, setFilterText] = useState("")
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [warning, setWarning] = useState<string | null>(null)
+  const [imagePreview, setImagePreview] = useState<{ url: string; anchor: DOMRect } | null>(null)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const dropdownRef = useRef<HTMLDivElement | null>(null)
@@ -94,6 +114,16 @@ export function TagTextarea(props: TagTextareaProps) {
     }))
   }, [nodeRefs])
 
+  const refImageSuggestions = useMemo((): SuggestionItem[] => {
+    if (!referenceImages || referenceImages.length === 0) return []
+    return referenceImages.map((r) => ({
+      tag: `{image:${r.index}:${r.defaultLabel}}`,
+      label: `#${r.index} ${r.label}`,
+      category: REF_IMAGE_SOURCE_LABEL[r.source],
+      thumbnailUrl: r.url,
+    }))
+  }, [referenceImages])
+
   const filtered = useMemo(() => {
     if (!showDropdown || !triggerInfo) return []
     const q = filterText.toLowerCase()
@@ -101,6 +131,8 @@ export function TagTextarea(props: TagTextareaProps) {
     let items: readonly SuggestionItem[]
     if (triggerInfo.char === "{") {
       items = nodeRefSuggestions
+    } else if (triggerInfo.char === "@") {
+      items = refImageSuggestions
     } else if (tagMode === "suno") {
       if (!customTags) return []
       if (triggerInfo.char === "<") return []
@@ -113,7 +145,7 @@ export function TagTextarea(props: TagTextareaProps) {
 
     if (!q) return items
     return items.filter((s) => s.label.toLowerCase().includes(q) || s.category.toLowerCase().includes(q))
-  }, [showDropdown, triggerInfo, filterText, customTags, nodeRefSuggestions, tagMode])
+  }, [showDropdown, triggerInfo, filterText, customTags, nodeRefSuggestions, refImageSuggestions, tagMode])
 
   const groupedFiltered = useMemo(() => {
     const map = new Map<string, SuggestionItem[]>()
@@ -212,8 +244,9 @@ export function TagTextarea(props: TagTextareaProps) {
     const isBraceTrigger = charBefore === "{" && nodeRefs && nodeRefs.length > 0
     const isBracketTrigger = (charBefore === "[" || charBefore === "/") && tagMode !== "none"
     const isSsmlTrigger = charBefore === "<" && tagMode === "audio"
+    const isAtTrigger = charBefore === "@" && referenceImages && referenceImages.length > 0
 
-    if (isBracketTrigger || isSsmlTrigger || isBraceTrigger) {
+    if (isBracketTrigger || isSsmlTrigger || isBraceTrigger || isAtTrigger) {
       const trigger = charBefore as TriggerChar
       setTriggerInfo({ char: trigger, position: cursor - 1 })
       setFilterText("")
@@ -225,37 +258,124 @@ export function TagTextarea(props: TagTextareaProps) {
       // Update filter text
       const textSinceTrigger = newValue.slice(triggerInfo.position + 1, cursor)
 
-      // Dismiss if user typed a closing bracket/brace or went before trigger
-      const closingChars = triggerInfo.char === "{" ? "}" : triggerInfo.char === "<" ? ">" : "]"
-      if (cursor <= triggerInfo.position || textSinceTrigger.includes(closingChars)) {
+      // Dismiss if user typed a closing bracket/brace or went before trigger.
+      // "@" has no closing char — matches "{" behavior (dismiss via Escape or click-outside).
+      const closingChars =
+        triggerInfo.char === "{" ? "}"
+        : triggerInfo.char === "<" ? ">"
+        : triggerInfo.char === "@" ? null
+        : "]"
+      const hitClosing = closingChars !== null && textSinceTrigger.includes(closingChars)
+      if (cursor <= triggerInfo.position || hitClosing) {
         dismiss()
       } else {
         setFilterText(textSinceTrigger)
         setSelectedIndex(0)
       }
     }
-  }, [maxLength, onChange, showDropdown, triggerInfo, nodeRefs, tagMode, dismiss, updateDropdownPos])
+  }, [maxLength, onChange, showDropdown, triggerInfo, nodeRefs, referenceImages, tagMode, dismiss, updateDropdownPos])
+
+  // Locate every {image:N} or {image:N:label} token in the current value so
+  // navigation/deletion can treat each token as one atomic unit.
+  const findImageTokens = useCallback((): Array<{ start: number; end: number }> => {
+    const tokens: Array<{ start: number; end: number }> = []
+    for (const m of value.matchAll(/\{image:\d+(?::[a-zA-Z0-9_-]+)?\}/gi)) {
+      const start = m.index ?? 0
+      tokens.push({ start, end: start + m[0].length })
+    }
+    return tokens
+  }, [value])
+
+  const removeTokenAt = useCallback((start: number, end: number) => {
+    const newValue = value.slice(0, start) + value.slice(end)
+    onChange(newValue)
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.selectionStart = start
+        textareaRef.current.selectionEnd = start
+        textareaRef.current.focus()
+      }
+    })
+  }, [value, onChange])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!showDropdown || filtered.length === 0) return
-
-    if (e.key === "ArrowDown") {
-      e.preventDefault()
-      setSelectedIndex((i) => (i + 1) % filtered.length)
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault()
-      setSelectedIndex((i) => (i - 1 + filtered.length) % filtered.length)
-    } else if (e.key === "Enter") {
-      e.preventDefault()
-      const item = filtered[selectedIndex]
-      if (item) {
-        insertTag(item.tag)
+    // Autocomplete dropdown navigation (only when dropdown is open)
+    if (showDropdown && filtered.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault()
+        setSelectedIndex((i) => (i + 1) % filtered.length)
+        return
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault()
+        setSelectedIndex((i) => (i - 1 + filtered.length) % filtered.length)
+        return
+      } else if (e.key === "Enter") {
+        e.preventDefault()
+        const item = filtered[selectedIndex]
+        if (item) insertTag(item.tag)
+        return
+      } else if (e.key === "Escape") {
+        e.preventDefault()
+        dismiss()
+        return
       }
-    } else if (e.key === "Escape") {
-      e.preventDefault()
-      dismiss()
     }
-  }, [showDropdown, filtered, selectedIndex, insertTag, dismiss])
+
+    // Atomic image-token navigation/deletion. Only act on simple cursor
+    // movements (no selection, no modifier-key shortcuts).
+    const ta = textareaRef.current
+    if (!ta || ta.selectionStart !== ta.selectionEnd) return
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
+    const cursor = ta.selectionStart
+    const tokens = findImageTokens()
+
+    if (e.key === "Backspace") {
+      // Token immediately before cursor → delete whole token in one keystroke.
+      const tok = tokens.find((t) => t.end === cursor)
+      if (tok) {
+        e.preventDefault()
+        removeTokenAt(tok.start, tok.end)
+      }
+    } else if (e.key === "Delete") {
+      // Token immediately after cursor → delete whole token.
+      const tok = tokens.find((t) => t.start === cursor)
+      if (tok) {
+        e.preventDefault()
+        removeTokenAt(tok.start, tok.end)
+      }
+    } else if (e.key === "ArrowLeft") {
+      // Cursor at end of token → jump to start (skip over token contents).
+      const tok = tokens.find((t) => t.end === cursor)
+      if (tok) {
+        e.preventDefault()
+        ta.selectionStart = tok.start
+        ta.selectionEnd = tok.start
+      }
+    } else if (e.key === "ArrowRight") {
+      // Cursor at start of token → jump to end.
+      const tok = tokens.find((t) => t.start === cursor)
+      if (tok) {
+        e.preventDefault()
+        ta.selectionStart = tok.end
+        ta.selectionEnd = tok.end
+      }
+    }
+  }, [showDropdown, filtered, selectedIndex, insertTag, dismiss, findImageTokens, removeTokenAt])
+
+  // Snap cursor to nearest token boundary when a click lands inside a token.
+  const handleSelect = useCallback(() => {
+    const ta = textareaRef.current
+    if (!ta) return
+    if (ta.selectionStart !== ta.selectionEnd) return // user is selecting a range — leave it alone
+    const cursor = ta.selectionStart
+    const tokens = findImageTokens()
+    const inside = tokens.find((t) => cursor > t.start && cursor < t.end)
+    if (inside) {
+      const snapTo = (cursor - inside.start) < (inside.end - cursor) ? inside.start : inside.end
+      ta.selectionStart = snapTo
+      ta.selectionEnd = snapTo
+    }
+  }, [findImageTokens])
 
   // Dismiss on outside click
   useEffect(() => {
@@ -284,9 +404,11 @@ export function TagTextarea(props: TagTextareaProps) {
   }, [selectedIndex, showDropdown])
 
   const hasNodeRefs = nodeRefs && nodeRefs.length > 0
+  const hasRefImages = referenceImages && referenceImages.length > 0
+  const hasBraceTokens = hasNodeRefs || hasRefImages
   const highlightPattern = tagMode === "none"
-    ? (hasNodeRefs ? NODE_REF_PATTERN : null)
-    : (hasNodeRefs ? COMBINED_PATTERN : TAG_PATTERN)
+    ? (hasBraceTokens ? NODE_REF_PATTERN : null)
+    : (hasBraceTokens ? COMBINED_PATTERN : TAG_PATTERN)
 
   // Build highlighted backdrop content
   const highlightedContent = useMemo((): ReactNode[] => {
@@ -298,18 +420,61 @@ export function TagTextarea(props: TagTextareaProps) {
     }
     const parts: ReactNode[] = []
     let lastIndex = 0
-    let match: RegExpExecArray | null
     const re = new RegExp(highlightPattern.source, "g")
-    while ((match = re.exec(value)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push(value.slice(lastIndex, match.index))
+    for (const match of value.matchAll(re)) {
+      const matchIndex = match.index ?? 0
+      if (matchIndex > lastIndex) {
+        parts.push(value.slice(lastIndex, matchIndex))
       }
       const text = match[0]
-      const isNodeRef = text.startsWith("{")
-      parts.push(
-        <mark key={match.index} className={isNodeRef ? "node-ref-highlight" : "tag-highlight"}>{text}</mark>,
-      )
-      lastIndex = re.lastIndex
+      const imageRefMatch = text.match(/^\{image:(\d+)(?::([a-zA-Z0-9_-]+))?\}$/i)
+      if (imageRefMatch && referenceImages) {
+        const n = parseInt(imageRefMatch[1], 10)
+        const labelPart = imageRefMatch[2] ?? ""
+        const ref = n >= 1 ? referenceImages[n - 1] : undefined
+        const tokenStart = matchIndex
+        const tokenEnd = matchIndex + text.length
+        parts.push(
+          <span
+            key={matchIndex}
+            className="image-ref-pill"
+          >
+            {ref?.url && (
+              <img
+                src={ref.url}
+                alt=""
+                className="image-ref-pill__thumb"
+                onMouseEnter={(e) =>
+                  setImagePreview({ url: ref.url, anchor: e.currentTarget.getBoundingClientRect() })
+                }
+                onMouseLeave={() => setImagePreview(null)}
+              />
+            )}
+            <span className="image-ref-pill__label">
+              @image:{n}{labelPart && `:${labelPart}`}
+            </span>
+            <button
+              type="button"
+              aria-label="Remove image reference"
+              className="image-ref-pill__remove"
+              onMouseDown={(e) => {
+                // Use mousedown so the textarea doesn't reclaim focus before
+                // we can read its selection / call onChange.
+                e.preventDefault()
+                removeTokenAt(tokenStart, tokenEnd)
+              }}
+            >
+              ×
+            </button>
+          </span>,
+        )
+      } else {
+        const isNodeRef = text.startsWith("{")
+        parts.push(
+          <mark key={matchIndex} className={isNodeRef ? "node-ref-highlight" : "tag-highlight"}>{text}</mark>,
+        )
+      }
+      lastIndex = matchIndex + text.length
     }
     if (lastIndex < value.length) {
       parts.push(value.slice(lastIndex))
@@ -319,7 +484,7 @@ export function TagTextarea(props: TagTextareaProps) {
       parts.push("\n")
     }
     return parts
-  }, [value, highlightPattern])
+  }, [value, highlightPattern, referenceImages, removeTokenAt])
 
   // Sync scroll from textarea to backdrop
   const backdropRef = useRef<HTMLDivElement | null>(null)
@@ -355,7 +520,8 @@ export function TagTextarea(props: TagTextareaProps) {
           {items.map((item) => {
             const idx = filtered.indexOf(item)
             const isSelected = idx === selectedIndex
-            const isNodeRef = category !== "Audio Tags" && category !== "Suno"
+            const isRefImage = item.thumbnailUrl !== undefined
+            const isNodeRef = !isRefImage && category !== "Audio Tags" && category !== "Suno"
             return (
               <button
                 key={item.tag}
@@ -371,6 +537,25 @@ export function TagTextarea(props: TagTextareaProps) {
                   insertTag(item.tag)
                 }}
               >
+                {isRefImage && (
+                  <>
+                    <img
+                      src={item.thumbnailUrl}
+                      alt=""
+                      className="w-7 h-7 rounded object-cover shrink-0 border border-border/40"
+                    />
+                    <span className="truncate flex-1 min-w-0">{item.label}</span>
+                    <span
+                      className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
+                        isSelected
+                          ? "border-sky-400/60 bg-sky-500/20 text-sky-700 dark:text-sky-200"
+                          : "border-sky-400/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                      }`}
+                    >
+                      {item.tag}
+                    </span>
+                  </>
+                )}
                 {isNodeRef && (
                   <span
                     className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 ${
@@ -382,7 +567,7 @@ export function TagTextarea(props: TagTextareaProps) {
                     {item.tag}
                   </span>
                 )}
-                {!isNodeRef && (
+                {!isNodeRef && !isRefImage && (
                   <span className="font-mono text-[11px]">{item.tag}</span>
                 )}
               </button>
@@ -422,6 +607,7 @@ export function TagTextarea(props: TagTextareaProps) {
               onChange={handleInput}
               onKeyDown={handleKeyDown}
               onScroll={handleScroll}
+              onSelect={handleSelect}
               placeholder={placeholder}
               className={`tag-textarea-input ${className ?? ""}`}
             />
@@ -431,6 +617,39 @@ export function TagTextarea(props: TagTextareaProps) {
       )}
       {warning && (
         <p className="text-[10px] text-amber-500 mt-1">{warning}</p>
+      )}
+      {imagePreview && createPortal(
+        (() => {
+          const { url, anchor } = imagePreview
+          const PREVIEW_MAX = 220
+          const MARGIN = 8
+          const vh = window.innerHeight
+          const vw = window.innerWidth
+          // Prefer below the thumbnail; flip above if there's more headroom.
+          const spaceBelow = vh - anchor.bottom - MARGIN
+          const spaceAbove = anchor.top - MARGIN
+          const placeBelow = spaceBelow >= PREVIEW_MAX || spaceBelow >= spaceAbove
+          const top = placeBelow
+            ? anchor.bottom + MARGIN
+            : Math.max(MARGIN, anchor.top - PREVIEW_MAX - MARGIN)
+          // Keep within viewport horizontally; align left edge to the thumbnail.
+          const left = Math.min(Math.max(MARGIN, anchor.left), vw - PREVIEW_MAX - MARGIN)
+          return (
+            <div
+              style={{ position: "fixed", top, left }}
+              className="z-[10000] pointer-events-none rounded-md shadow-xl bg-popover border border-border p-1"
+              aria-hidden
+            >
+              <img
+                src={url}
+                alt=""
+                className="block rounded object-contain"
+                style={{ maxWidth: PREVIEW_MAX, maxHeight: PREVIEW_MAX }}
+              />
+            </div>
+          )
+        })(),
+        document.body,
       )}
     </div>
   )

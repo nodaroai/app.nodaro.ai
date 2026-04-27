@@ -480,6 +480,13 @@ html, body {
   pointer-events: none;
   border: 1px solid transparent; /* match textarea border space */
   border-radius: var(--radius-md);
+  /* Stack above the textarea so {image:N} thumbnails can opt back in to
+     clicks via `pointer-events: auto` — text selection still passes through
+     the rest of the backdrop because of `pointer-events: none` above. */
+  z-index: 2;
+}
+.tag-textarea-input {
+  z-index: 1;
 }
 @media (min-width: 768px) {
   .tag-textarea-backdrop {
@@ -519,6 +526,136 @@ html, body {
 .dark .node-ref-highlight {
   color: #7DD3FC;
   background: color-mix(in srgb, #38BDF8 18%, transparent);
+}
+
+/* {image:N} pill — small thumbnail + "@image:N" label.
+   Note: visual width may exceed the underlying `{image:N}` text by a few px,
+   so cursor positioning near the pill is approximate (acceptable trade-off
+   for inline image preview). */
+.image-ref-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 4px 1px 2px;
+  margin: 0 -2px;
+  border-radius: 4px;
+  background: color-mix(in srgb, #ec4899 12%, transparent);
+  color: #ec4899;
+  /* Vertically center the pill with its surrounding text — the thumbnail
+     makes the pill taller than text, so baseline alignment looks off. */
+  vertical-align: middle;
+  line-height: 1;
+}
+.dark .image-ref-pill {
+  background: color-mix(in srgb, #ec4899 22%, transparent);
+  color: #f9a8d4;
+}
+.image-ref-pill__thumb {
+  width: 1.1em;
+  height: 1.1em;
+  border-radius: 3px;
+  object-fit: cover;
+  cursor: zoom-in;
+  pointer-events: auto;
+  border: 1px solid color-mix(in srgb, #ec4899 40%, transparent);
+  flex-shrink: 0;
+}
+.image-ref-pill__thumb:hover {
+  outline: 2px solid #ec4899;
+  outline-offset: 1px;
+}
+.image-ref-pill__label {
+  font-size: 0.85em;
+  font-weight: 500;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: -0.02em;
+  background: transparent;
+  border: none;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.image-ref-pill__label:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+.image-ref-pill__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1em;
+  height: 1.1em;
+  margin-left: 1px;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.95em;
+  line-height: 1;
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s ease, background-color 0.1s ease;
+  border: none;
+  padding: 0;
+  flex-shrink: 0;
+}
+.image-ref-pill:hover .image-ref-pill__remove {
+  opacity: 0.85;
+}
+.image-ref-pill__remove:hover {
+  background: color-mix(in srgb, #ec4899 30%, transparent);
+  opacity: 1;
+}
+
+/* ── Tiptap-based PromptEditor ─────────────────────────────────────── */
+.prompt-editor {
+  cursor: text;
+}
+.prompt-editor__content {
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+@media (min-width: 768px) {
+  .prompt-editor__content {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+}
+.prompt-editor__content .ProseMirror {
+  outline: none;
+  min-height: inherit;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.prompt-editor__content .ProseMirror p {
+  margin: 0;
+  /* Reserve enough line height for image-ref pills so paragraphs without
+     pills don't visibly compress relative to those with pills, and the text
+     sits centered against the taller pill content. */
+  line-height: 1.8;
+}
+.prompt-editor__content .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--muted-foreground);
+  pointer-events: none;
+  height: 0;
+}
+/* Atomic image-ref pill inside the editor — selectable as a unit. The cursor
+   never enters the pill, so a clear ring tells the user the pill itself is
+   the active selection (Backspace/Delete will remove it). */
+.image-ref-pill--selected,
+.prompt-editor__content .ProseMirror .image-ref-pill.ProseMirror-selectednode {
+  outline: 2px solid #ec4899;
+  outline-offset: 2px;
+  background: color-mix(in srgb, #ec4899 22%, transparent);
+}
+.dark .image-ref-pill--selected,
+.dark .prompt-editor__content .ProseMirror .image-ref-pill.ProseMirror-selectednode {
+  background: color-mix(in srgb, #ec4899 35%, transparent);
 }
 
 /* Variable display mode highlights */

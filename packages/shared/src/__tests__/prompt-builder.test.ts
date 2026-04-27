@@ -454,27 +454,39 @@ describe("buildImagePrompt", () => {
       expect(result.referenceImageUrls).toEqual(refs)
     })
 
-    it("returns undefined refs for gpt-image (unsupported model)", () => {
+    it("passes refs through for gpt-image (auto-routed to i2i variant on backend)", () => {
       const refs = ["https://img.example.com/1.png"]
       const result = buildImagePrompt({
         prompt: "A scene",
         provider: "gpt-image",
         referenceImageUrls: refs,
       })
-      expect(result.referenceImageUrls).toBeUndefined()
+      // gpt-image is in MODELS_WITH_REFERENCE_IMAGE_SUPPORT because the backend
+      // route auto-routes to gpt-image-i2i when refs are addressed.
+      expect(result.referenceImageUrls).toEqual(refs)
     })
 
-    it("returns undefined refs for flux (unsupported model)", () => {
+    it("passes refs through for gpt-image-i2i (i2i variant supports refs)", () => {
+      const refs = ["https://img.example.com/1.png", "https://img.example.com/2.png"]
+      const result = buildImagePrompt({
+        prompt: "A scene",
+        provider: "gpt-image-i2i",
+        referenceImageUrls: refs,
+      })
+      expect(result.referenceImageUrls).toEqual(refs)
+    })
+
+    it("passes refs through for flux (auto-routed to flux-pro-i2i on backend)", () => {
       const refs = ["https://img.example.com/1.png"]
       const result = buildImagePrompt({
         prompt: "A scene",
         provider: "flux",
         referenceImageUrls: refs,
       })
-      expect(result.referenceImageUrls).toBeUndefined()
+      expect(result.referenceImageUrls).toEqual(refs)
     })
 
-    it("returns undefined refs for imagen4 (unsupported model)", () => {
+    it("returns undefined refs for imagen4 (no i2i sibling, refs unusable)", () => {
       const refs = ["https://img.example.com/1.png"]
       const result = buildImagePrompt({
         prompt: "A scene",
@@ -518,11 +530,11 @@ describe("buildImagePrompt", () => {
       expect(result.referenceImageUrls).toEqual(directRefs)
     })
 
-    it("ancestor refs are also filtered by model support", () => {
+    it("ancestor refs are filtered for providers without ref support and no i2i sibling", () => {
       const ancestors = ["https://img.example.com/ancestor.png"]
       const result = buildImagePrompt({
         prompt: "A scene",
-        provider: "gpt-image",
+        provider: "imagen4", // pure T2I, no i2i sibling, refs unusable
         referenceImageUrls: [],
         ancestorRefs: ancestors,
       })
@@ -531,22 +543,22 @@ describe("buildImagePrompt", () => {
   })
 
   describe("{image:N} expansion in prompt", () => {
-    it("expands {image:1} when refs are available", () => {
+    it("expands {image:1} (no label) using letter naming", () => {
       const result = buildImagePrompt({
         prompt: "{image:1} shows a cat",
         provider: "nano-banana",
         referenceImageUrls: ["https://img.example.com/1.png", "https://img.example.com/2.png"],
       })
-      expect(result.prompt).toContain("[reference image 1] shows a cat")
+      expect(result.prompt).toContain("Image A shows a cat")
     })
 
-    it("expands multiple image references", () => {
+    it("expands multiple image references with letters", () => {
       const result = buildImagePrompt({
         prompt: "{image:1} and {image:2}",
         provider: "nano-banana",
         referenceImageUrls: ["https://a.png", "https://b.png"],
       })
-      expect(result.prompt).toContain("[reference image 1] and [reference image 2]")
+      expect(result.prompt).toContain("Image A and Image B")
     })
 
     it("does not expand {image:N} for out-of-range index", () => {
@@ -565,8 +577,223 @@ describe("buildImagePrompt", () => {
         referenceImageUrls: [],
         ancestorRefs: ["https://ancestor.png"],
       })
-      expect(result.prompt).toContain("[reference image 1] from ancestor")
+      expect(result.prompt).toContain("Image A from ancestor")
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// buildImagePrompt — connectedReferences + identity-based directives
+// ---------------------------------------------------------------------------
+describe("buildImagePrompt with connectedReferences", () => {
+  it("emits NO directives when the user prompt contains no {image:N:label} mentions", () => {
+    const result = buildImagePrompt({
+      prompt: "wearing a red hat",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "img1", defaultName: "Image 1", source: "manual", url: "https://a.png" },
+        { id: "img2", defaultName: "Image 2", source: "manual", url: "https://b.png" },
+      ],
+    })
+    // No mentions = no directives. The user prompt passes through unchanged.
+    expect(result.prompt).not.toContain("Use these references for the output image:")
+    expect(result.prompt).not.toContain("Compose them naturally")
+    expect(result.prompt).toBe("wearing a red hat")
+    // URLs are still sent — the references are attached even if not mentioned.
+    expect(result.referenceImageUrls).toEqual(["https://a.png", "https://b.png"])
+  })
+
+  it("only emits directives for mentioned identities (not for attached-but-unmentioned refs)", () => {
+    const result = buildImagePrompt({
+      prompt: "{image:1:dragon} flying",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "a", defaultName: "Image 1", source: "manual", url: "https://a.png" },
+        { id: "b", defaultName: "Image 2", source: "manual", url: "https://b.png" },
+      ],
+    })
+    expect(result.prompt).toContain("- Image A (dragon) — match exactly.")
+    // Image B is attached but not mentioned → no directive about it
+    expect(result.prompt).not.toContain("Image B")
+    // But its URL is still sent to the provider
+    expect(result.referenceImageUrls).toEqual(["https://a.png", "https://b.png"])
+  })
+
+  it("emits a directive per used (image, label) identity", () => {
+    const result = buildImagePrompt({
+      prompt: "{image:1:dragon} fighting {image:2:dragon} in {image:1:background}",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "a", defaultName: "Image 1", source: "manual", url: "https://a.png" },
+        { id: "b", defaultName: "Image 2", source: "manual", url: "https://b.png" },
+      ],
+    })
+    expect(result.prompt).toContain("- Image A (dragon) — match exactly.")
+    expect(result.prompt).toContain("- Image B (dragon) — match exactly.")
+    expect(result.prompt).toContain("- Image A (background) — use as the background/setting.")
+    expect(result.prompt).toContain("Image A (dragon) fighting Image B (dragon) in Image A (background)")
+  })
+
+  it("separates directives from the user prompt and uses the composition prefix", () => {
+    const result = buildImagePrompt({
+      prompt: "{image:2:object} is riding {image:1:object} in {image:1:background}",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "a", defaultName: "Image 1", source: "manual", url: "https://a.png" },
+        { id: "b", defaultName: "Image 2", source: "manual", url: "https://b.png" },
+      ],
+    })
+    expect(result.prompt).toMatch(/^Use these references for the output image:\n/)
+    expect(result.prompt).toContain("Compose them naturally into a single image: Image B (object)")
+  })
+
+  it("identityMeta override switches a single identity to strict", () => {
+    const result = buildImagePrompt({
+      prompt: "{image:1:object}",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "a", defaultName: "Image 1", source: "manual", url: "https://a.png" },
+      ],
+      identityMeta: [
+        { imageIndex: 1, label: "object", fidelity: "strict" },
+      ],
+    })
+    expect(result.prompt).toContain("- Image A (object) — match exactly. Maintain perfect likeness.")
+  })
+
+  it("uses parenthetical form for proper-noun labels (no article needed)", () => {
+    const result = buildImagePrompt({
+      prompt: "{image:1:Danny} smiling",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "a", defaultName: "Image 1", source: "manual", url: "https://a.png" },
+      ],
+    })
+    expect(result.prompt).toContain("- Image A (Danny) — match exactly.")
+    expect(result.prompt).toContain("Image A (Danny) smiling")
+  })
+
+  it("uses scene-setting verb for background-style labels", () => {
+    const result = buildImagePrompt({
+      prompt: "{image:1:setting}",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "a", defaultName: "Image 1", source: "manual", url: "https://a.png" },
+      ],
+    })
+    expect(result.prompt).toContain("use as the background/setting.")
+  })
+
+  it("uses 'apply' verb for texture/style labels", () => {
+    const result = buildImagePrompt({
+      prompt: "{image:1:style}",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "a", defaultName: "Image 1", source: "manual", url: "https://a.png" },
+      ],
+    })
+    expect(result.prompt).toContain("apply this style.")
+  })
+
+  it("identityMeta custom replaces the directive with customText", () => {
+    const result = buildImagePrompt({
+      prompt: "{image:1:wall}",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "a", defaultName: "Image 1", source: "manual", url: "https://a.png" },
+      ],
+      identityMeta: [
+        { imageIndex: 1, label: "wall", fidelity: "custom", customText: "Use only the texture, ignore everything else." },
+      ],
+    })
+    expect(result.prompt).toContain("Use only the texture, ignore everything else.")
+    expect(result.prompt).not.toContain("Render the wall")
+  })
+
+  it("inlines the upstream description in the directive when the ref is mentioned", () => {
+    const result = buildImagePrompt({
+      prompt: "{image:1:Sarah} on a beach",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "c1", defaultName: "Sarah", source: "wired-character", description: "tall, red hair", url: "https://s.png" },
+      ],
+    })
+    // Description is folded into the parenthetical with an em-dash separator
+    expect(result.prompt).toContain("Image A (Sarah — tall, red hair)")
+  })
+
+  it("expands {image:1} (no label) to letter-named position", () => {
+    const result = buildImagePrompt({
+      prompt: "{image:1} smiling",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "c1", defaultName: "Sarah", source: "wired-character", url: "https://s.png" },
+      ],
+    })
+    expect(result.prompt).toContain("Image A smiling")
+  })
+
+  it("expands {image:1:label} to parenthetical letter form", () => {
+    const result = buildImagePrompt({
+      prompt: "{image:1:dragon} roaring",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "a", defaultName: "Image 1", source: "manual", url: "https://a.png" },
+      ],
+    })
+    expect(result.prompt).toContain("Image A (dragon) roaring")
+    expect(result.prompt).not.toContain("{image:1:dragon}")
+  })
+
+  it("sends URLs in connected-reference order", () => {
+    const result = buildImagePrompt({
+      prompt: "scene",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "a", defaultName: "A", source: "manual", url: "https://a.png" },
+        { id: "b", defaultName: "B", source: "manual", url: "https://b.png" },
+      ],
+    })
+    expect(result.referenceImageUrls).toEqual(["https://a.png", "https://b.png"])
+  })
+
+  it("ignores characterDefs when connectedReferences is provided", () => {
+    const result = buildImagePrompt({
+      prompt: "scene",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "c1", defaultName: "Sarah", source: "wired-character", url: "https://s.png" },
+      ],
+      characterDefs: [
+        { id: "ignored", name: "Ignored", type: "description", description: "should not appear" },
+      ],
+    })
+    expect(result.prompt).not.toContain("should not appear")
+    expect(result.prompt).not.toContain("Ignored")
+  })
+
+  it("does NOT emit a default-label block when image is mentioned with a different label", () => {
+    const result = buildImagePrompt({
+      prompt: "{image:1:background}",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "a", defaultName: "Image 1", source: "manual", url: "https://a.png" },
+      ],
+    })
+    // Only the "background" identity should produce a directive — no extra "object" default.
+    expect(result.prompt).toContain("- Image A (background) — use as the background/setting.")
+    expect(result.prompt).not.toContain("Image A (object)")
+  })
+
+  it("filters URLs for providers that don't support reference images", () => {
+    const result = buildImagePrompt({
+      prompt: "scene",
+      provider: "imagen4", // pure T2I, no i2i sibling — refs unusable
+      connectedReferences: [
+        { id: "c1", defaultName: "Sarah", source: "wired-character", url: "https://s.png" },
+      ],
+    })
+    expect(result.referenceImageUrls).toBeUndefined()
   })
 })
 
@@ -574,13 +801,13 @@ describe("buildImagePrompt", () => {
 // expandImagePositionRefs
 // ---------------------------------------------------------------------------
 describe("expandImagePositionRefs", () => {
-  it("replaces {image:1} with [reference image 1]", () => {
-    expect(expandImagePositionRefs("{image:1} shows", 2)).toBe("[reference image 1] shows")
+  it("replaces {image:1} with letter-named position", () => {
+    expect(expandImagePositionRefs("{image:1} shows", 2)).toBe("Image A shows")
   })
 
   it("replaces multiple valid tokens", () => {
     expect(expandImagePositionRefs("{image:1} and {image:2}", 2)).toBe(
-      "[reference image 1] and [reference image 2]",
+      "Image A and Image B",
     )
   })
 
@@ -601,14 +828,26 @@ describe("expandImagePositionRefs", () => {
   })
 
   it("is case-insensitive", () => {
-    expect(expandImagePositionRefs("{IMAGE:1}", 1)).toBe("[reference image 1]")
-    expect(expandImagePositionRefs("{Image:2}", 3)).toBe("[reference image 2]")
+    expect(expandImagePositionRefs("{IMAGE:1}", 1)).toBe("Image A")
+    expect(expandImagePositionRefs("{Image:2}", 3)).toBe("Image B")
   })
 
   it("handles adjacent tokens", () => {
     expect(expandImagePositionRefs("{image:1}{image:2}", 2)).toBe(
-      "[reference image 1][reference image 2]",
+      "Image AImage B",
     )
+  })
+
+  it("uses names when provided (legacy override)", () => {
+    expect(expandImagePositionRefs("{image:1} smiling", 2, ["Sarah", "Bob"])).toBe("Sarah smiling")
+  })
+
+  it("falls back to letter-named position when name is missing", () => {
+    expect(expandImagePositionRefs("{image:2} appears", 2, ["Sarah"])).toBe("Image B appears")
+  })
+
+  it("preserves out-of-range tokens even with names", () => {
+    expect(expandImagePositionRefs("{image:5}", 2, ["Sarah", "Bob"])).toBe("{image:5}")
   })
 })
 

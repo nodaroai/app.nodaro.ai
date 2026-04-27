@@ -12,6 +12,7 @@ import type { ScraperActorId } from "@nodaro-shared/scraper-actors"
 import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro-shared/model-constants"
 import type { ExposableField, ExposableOutput } from "@nodaro-shared/presentation-types"
 import type { ComponentMetadata } from "@nodaro-shared/component-types"
+import type { IdentityMeta } from "@nodaro-shared/types"
 import { IMAGE_STYLE_PRESETS } from "@/components/editor/config-panels/model-options"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "location" | "utility"
@@ -1029,6 +1030,8 @@ export type GenerateImageData = {
   referenceImageUrl?: string
   referenceImageUrls?: readonly ManualReferenceImage[]
   referenceImageOrder?: readonly string[]
+  /** Per-identity (imageIndex+label) user overrides for fidelity / custom text. */
+  identityMeta?: readonly IdentityMeta[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

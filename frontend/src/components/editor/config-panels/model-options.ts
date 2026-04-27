@@ -394,6 +394,8 @@ export const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
 // Model capability constants — re-exported from shared package (single source of truth)
 export {
   MODELS_WITH_REFERENCE_IMAGE_SUPPORT,
+  REF_IMAGE_MAX_LIMITS,
+  DEFAULT_REF_IMAGE_MAX,
   NATIVE_NEGATIVE_PROMPT_MODELS,
   I2I_STRENGTH_SUPPORT,
   I2I_MASK_SUPPORT,

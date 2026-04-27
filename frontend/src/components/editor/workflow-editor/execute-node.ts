@@ -193,7 +193,7 @@ import {
   runLocationGeneration,
 } from "./asset-executors";
 import { buildImagePrompt } from "@nodaro-shared/prompt-builder";
-import type { CharacterDef } from "@nodaro-shared/types";
+import type { CharacterDef, ConnectedReference, ReferenceSource } from "@nodaro-shared/types";
 import { collectIdentityLockClause } from "@nodaro-shared/identity-lock";
 import { resolveSeparator } from "@nodaro-shared/text-separators";
 import { evaluateJsonPath, stringifyPathResults } from "@nodaro-shared/json-path";
@@ -485,64 +485,117 @@ export function executeNode(
     const imgData = node.data as GenerateImageData;
     const providerKey = imgData.provider || "nano-banana-pro";
 
-    // Build a map of all available reference images by ID
-    const refUrlMap = new Map<string, string>();
+    // Build a rich, ordered list of connected references (manual + wired + char)
+    // with source-type and default-name metadata. This drives both the
+    // referenceImageUrls array sent to the provider and the fidelity blocks
+    // injected into the final prompt.
+    const refMetaMap = new Map<string, Omit<ConnectedReference, "id">>();
 
     // Manual uploads (new multi-image format)
-    for (const img of imgData.referenceImageUrls ?? []) {
-      refUrlMap.set(img.id, img.url);
+    const manualImgs = imgData.referenceImageUrls ?? [];
+    for (let i = 0; i < manualImgs.length; i++) {
+      const img = manualImgs[i];
+      refMetaMap.set(img.id, {
+        defaultName: `Image ${i + 1}`,
+        source: "manual",
+        url: img.url,
+      });
     }
     // Legacy single referenceImageUrl
-    if (imgData.referenceImageUrl && refUrlMap.size === 0) {
-      refUrlMap.set("__legacy__", imgData.referenceImageUrl);
+    if (imgData.referenceImageUrl && refMetaMap.size === 0) {
+      refMetaMap.set("__legacy__", {
+        defaultName: "Image 1",
+        source: "manual",
+        url: imgData.referenceImageUrl,
+      });
     }
-    // Wired upstream images
+    // Wired upstream images — include char/face/object/location for rich metadata
     const chainRefs =
       inputs.referenceImageUrls ??
       (inputs.imageUrl ? [inputs.imageUrl] : undefined);
     if (chainRefs) {
       const incomingEdges = edges.filter((e) => e.target === node.id);
-      const imageSourceTypes = new Set(["upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background"]);
-      const wiredSourceIds = incomingEdges
+      const wiredSourceTypeMap: Record<string, ReferenceSource> = {
+        "upload-image": "wired-image",
+        "generate-image": "wired-image",
+        "edit-image": "wired-image",
+        "image-to-image": "wired-image",
+        "modify-image": "wired-image",
+        "upscale-image": "wired-image",
+        "remove-background": "wired-image",
+        "character": "wired-character",
+        "face": "wired-face",
+        "object": "wired-object",
+        "location": "wired-location",
+      };
+      const wiredSourceNodes = incomingEdges
         .map((e) => nodes.find((n) => n.id === e.source))
-        .filter((n) => n && imageSourceTypes.has(n.type!))
-        .map((n) => n!.id);
+        .filter((n): n is WorkflowNode => Boolean(n && n.type && n.type in wiredSourceTypeMap));
       for (let i = 0; i < chainRefs.length; i++) {
-        const key = wiredSourceIds[i] ?? `wired_${i}`;
-        refUrlMap.set(key, chainRefs[i]);
+        const upstream = wiredSourceNodes[i];
+        if (upstream) {
+          const upstreamData = upstream.data as Record<string, unknown>;
+          refMetaMap.set(upstream.id, {
+            defaultName: (upstreamData.label as string) || (upstreamData.name as string) || upstream.type!,
+            source: wiredSourceTypeMap[upstream.type!],
+            description: upstreamData.description as string | undefined,
+            url: chainRefs[i],
+          });
+        } else {
+          refMetaMap.set(`wired_${i}`, {
+            defaultName: `Wired Image ${i + 1}`,
+            source: "wired-image",
+            url: chainRefs[i],
+          });
+        }
       }
     }
     const extractedRefs = (node.data as Record<string, unknown>)
       .extractedReferenceUrls as string[] | undefined;
     if (extractedRefs) {
       for (let i = 0; i < extractedRefs.length; i++) {
-        refUrlMap.set(`extracted_${i}`, extractedRefs[i]);
+        refMetaMap.set(`extracted_${i}`, {
+          defaultName: `Extracted ${i + 1}`,
+          source: "manual",
+          url: extractedRefs[i],
+        });
       }
     }
-    // Character reference images
+    // Character reference images (from character-definitions store)
     const charIds = imgData.characterDefinitionIds ?? [];
     const allCharDefs = useWorkflowStore.getState().characterDefinitions;
     const charDefs = allCharDefs.filter((c) => charIds.includes(c.id));
+    const charCategorySource: Record<string, ReferenceSource> = {
+      face: "wired-face",
+      object: "wired-object",
+      location: "wired-location",
+    };
     for (const c of charDefs) {
       if (c.type === "reference" && c.referenceImageUrl) {
-        refUrlMap.set(`char_${c.id}`, c.referenceImageUrl);
+        refMetaMap.set(`char_${c.id}`, {
+          defaultName: c.name,
+          source: charCategorySource[c.category ?? ""] ?? "wired-character",
+          description: c.description,
+          url: c.referenceImageUrl,
+        });
       }
     }
 
     // Apply ordering: use referenceImageOrder if set, otherwise default map order
     const orderIds = imgData.referenceImageOrder ?? [];
-    const orderedUrls: string[] = [];
+    const connectedReferences: ConnectedReference[] = [];
     const seen = new Set<string>();
     for (const id of orderIds) {
-      const url = refUrlMap.get(id);
-      if (url) {
-        orderedUrls.push(url);
+      const meta = refMetaMap.get(id);
+      if (meta) {
+        connectedReferences.push({ id, ...meta });
         seen.add(id);
       }
     }
-    for (const [id, url] of refUrlMap) {
-      if (!seen.has(id)) orderedUrls.push(url);
+    for (const [id, meta] of refMetaMap) {
+      if (!seen.has(id)) connectedReferences.push({ id, ...meta });
     }
+    const orderedUrls = connectedReferences.map((r) => r.url);
 
     const ancestorRefs = orderedUrls.length === 0
       ? collectAncestorRefs(node.id, nodes, edges)
@@ -580,10 +633,10 @@ export function executeNode(
       provider: providerKey,
       style: hasConnectedStyleNode(node.id, nodes, edges) ? undefined : imgData.style,
       negativePrompt: imgData.negativePrompt,
-      characterDefs: charDefs as CharacterDef[],
       userTemplates: useWorkflowStore.getState().userPromptTemplates,
       flowTemplates: useWorkflowStore.getState().flowPromptTemplates,
-      referenceImageUrls: orderedUrls,
+      connectedReferences,
+      identityMeta: imgData.identityMeta ?? [],
       ancestorRefs,
     });
 
