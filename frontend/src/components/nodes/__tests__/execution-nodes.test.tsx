@@ -73,6 +73,10 @@ vi.mock("@/hooks/use-model-credits", () => ({
   useModelCredits: () => 1,
 }))
 
+vi.mock("@/hooks/use-providers-credits-sum", () => ({
+  useProvidersCreditsSum: () => 0,
+}))
+
 vi.mock("@/components/editor/media-preview-modal", () => ({
   MediaPreviewModal: () => null,
 }))

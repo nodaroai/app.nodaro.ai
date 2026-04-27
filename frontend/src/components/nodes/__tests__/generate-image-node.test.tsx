@@ -84,6 +84,10 @@ vi.mock("@/components/editor/config-panels/helpers", () => ({
   buildCreditModelIdentifier: vi.fn(() => "nano-banana"),
 }))
 
+vi.mock("@/hooks/use-providers-credits-sum", () => ({
+  useProvidersCreditsSum: () => 0,
+}))
+
 vi.mock("@/components/editor/media-preview-modal", () => ({
   MediaPreviewModal: () => null,
 }))

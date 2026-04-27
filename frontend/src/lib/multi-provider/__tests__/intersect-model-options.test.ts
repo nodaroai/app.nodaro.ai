@@ -25,8 +25,9 @@ describe("intersectModelOptions", () => {
   })
 
   it("returns supportsReferenceImage=false when any provider lacks it", () => {
-    // flux is not in MODELS_WITH_REFERENCE_IMAGE_SUPPORT; nano-banana-pro is.
-    const result = intersectModelOptions(["nano-banana-pro", "flux"])
+    // imagen4 has no ref support and no i2i sibling, so it's excluded from
+    // MODELS_WITH_REFERENCE_IMAGE_SUPPORT. nano-banana-pro is in the set.
+    const result = intersectModelOptions(["nano-banana-pro", "imagen4"])
     expect(result.supportsReferenceImage).toBe(false)
   })
 
