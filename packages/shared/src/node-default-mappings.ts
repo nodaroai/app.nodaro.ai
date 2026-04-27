@@ -8,8 +8,8 @@ import {
   LIP_SYNC_PROVIDERS,
   TTS_PROVIDERS,
   VOICE_DESIGN_MODELS,
-} from "./model-constants"
-import { LLM_MODEL_IDS } from "./llm-models"
+} from "./model-constants.js"
+import { LLM_MODEL_IDS } from "./llm-models.js"
 
 // ──────────────────────────────────────────────────────────────────────────
 // Types

@@ -8,7 +8,7 @@ import {
   validateProviderForNodeType,
   getTargetField,
   getValidValues,
-} from "../node-default-mappings"
+} from "../node-default-mappings.js"
 
 describe("supportedDefaultDimensions", () => {
   it("image gen has both quality and aspect", () => {
