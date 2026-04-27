@@ -27,10 +27,11 @@ const CustomHandleComponent = ({
 }: CustomHandleProps) => {
   const lastDownRef = useRef<{ t: number; x: number; y: number } | null>(null)
   const dragStartRef = useRef<{ x: number; y: number; active: boolean } | null>(null)
-  // Inverse-scale to match React Flow's NodeResizeControl, which applies
-  // its own `scale: 1/viewportZoom` so the handle stays the same screen
-  // size at any canvas zoom. Without this our magnifier scales naturally
-  // with the canvas while the resize dot stays constant — visual mismatch.
+  // Match React Flow's NodeResizeControl autoScale exactly: it applies
+  // `scale: max(1/viewportZoom, 1)` — keeps handle constant when zooming
+  // OUT (zoom<1) but lets it grow naturally with the canvas when zooming
+  // IN (zoom>1, scale clamped to 1). Plain `1/viewportZoom` would shrink
+  // the magnifier at zoom>1 while the resize dot grows — visual mismatch.
   const viewportZoom = useStore((s) => s.transform[2])
 
   const handlePointerDown = useCallback((e: ReactPointerEvent) => {
@@ -89,9 +90,9 @@ const CustomHandleComponent = ({
         left: position === "bottom-left" ? -5 : undefined,
         right: position === "bottom-right" ? -5 : undefined,
         cursor: ZOOM_CURSOR,
-        // Match NodeResizeControl: keep handle at constant screen size
-        // by inverse-scaling against the canvas viewport zoom.
-        scale: viewportZoom > 0 ? String(1 / viewportZoom) : undefined,
+        // Match NodeResizeControl autoScale: max(1/zoom, 1). Constant size
+        // at zoom<=1, grows with canvas at zoom>1 (no inverse-scale).
+        scale: viewportZoom > 0 ? String(Math.max(1 / viewportZoom, 1)) : undefined,
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
