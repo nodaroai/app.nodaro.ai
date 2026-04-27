@@ -221,7 +221,9 @@ const CATEGORY_ICON_HOVER: Record<string, string> = {
 
 function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) {
   const { isAdmin } = useAuth()
-  const visibleNodes = NODE_OPTIONS.filter((n) => !n.adminOnly || isAdmin)
+  // The "Parameter" category is currently hidden from the toolbar. Re-enable
+  // by dropping the `n.category !== "Parameter"` clause below.
+  const visibleNodes = NODE_OPTIONS.filter((n) => (!n.adminOnly || isAdmin) && n.category !== "Parameter")
   const categories = Array.from(new Set(visibleNodes.map((n) => n.category)))
   return (
     <>

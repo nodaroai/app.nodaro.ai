@@ -951,11 +951,27 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   // Keyboard shortcuts
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      // Don't trigger shortcuts when typing in inputs/textareas
+      // Don't trigger shortcuts when typing in inputs/textareas/contenteditable
       const target = e.target as HTMLElement
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+      const activeEl = document.activeElement as HTMLElement | null
+      const isEditable = (el: HTMLElement | null) =>
+        !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)
+      if (isEditable(target) || isEditable(activeEl)) {
         return
       }
+
+      // Skip workflow shortcuts when a fullscreen overlay is open: config panel
+      // expanded, image edit, freecut, or any open dialog/lightbox. Lets the
+      // active overlay handle keys (arrow nav inside the modal, text selection
+      // copy, etc.) instead of moving nodes underneath. Radix Dialog unmounts
+      // on close, so a present `[role="dialog"]` indicates an open modal.
+      const storeState = useWorkflowStore.getState()
+      const overlayOpen =
+        storeState.configPanelFullscreen ||
+        storeState.freecutEdit !== null ||
+        storeState.imageEdit !== null ||
+        !!document.querySelector('[role="dialog"]')
+      if (overlayOpen) return
 
       // Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y — Redo
       if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) {
@@ -1051,6 +1067,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
       // Ctrl+C / Ctrl+X — Copy or Cut selected nodes
       if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "x")) {
+        // If there's an active text selection anywhere on the page, let the
+        // browser copy/cut the text instead of the node.
+        const sel = typeof window !== "undefined" ? window.getSelection() : null
+        if (sel && sel.toString().length > 0) return
         const state = useWorkflowStore.getState()
         const selected = state.nodes.filter((n) => n.selected && n.type !== "sticky-note")
         if (selected.length === 0) return

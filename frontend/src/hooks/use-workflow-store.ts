@@ -356,6 +356,10 @@ interface WorkflowState {
   readonly nodes: WorkflowNode[]
   readonly edges: WorkflowEdge[]
   readonly selectedNodeId: string | null
+  /** True when the config panel is in fullscreen (modal) mode. UI-only flag —
+   *  used to gate workflow keyboard shortcuts and the global Execute button. */
+  readonly configPanelFullscreen: boolean
+  readonly setConfigPanelFullscreen: (open: boolean) => void
   readonly isDirty: boolean
   readonly loadGeneration: number
   readonly saveStatus: SaveStatus
@@ -487,6 +491,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   nodes: [],
   edges: [],
   selectedNodeId: null,
+  configPanelFullscreen: false,
+  setConfigPanelFullscreen: (open) => set({ configPanelFullscreen: open }),
   isDirty: false,
   loadGeneration: 0,
   saveStatus: "idle" as SaveStatus,

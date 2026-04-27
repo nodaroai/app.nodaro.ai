@@ -38,7 +38,22 @@ export const HAIR_COLOR_SWATCH: Readonly<Record<string, SwatchValue>> = {
   "hair-gray":        { solid: "#9a9a9a" },
   "hair-salt-pepper": { gradient: "linear-gradient(135deg, #1a1a1a 0%, #1a1a1a 45%, #c0c0c0 55%, #c0c0c0 100%)" },
   "hair-white":       { solid: "#f4f3ed" },
+  "hair-silver":      { solid: "#c0c4c8" },
+  "hair-rose-gold":   { solid: "#d4a78f" },
   "hair-dyed":        { gradient: "linear-gradient(90deg, #ff0080 0%, #8a2be2 33%, #00bfff 66%, #32cd32 100%)" },
+  "hair-blue":        { solid: "#1e90ff" },
+  "hair-pastel-blue": { solid: "#a8d8e8" },
+  "hair-teal":        { solid: "#26999e" },
+  "hair-mint":        { solid: "#a8e6c5" },
+  "hair-green":       { solid: "#3aa84a" },
+  "hair-lavender":    { solid: "#b794d8" },
+  "hair-purple":      { solid: "#6b4ba8" },
+  "hair-magenta":     { solid: "#cc2c80" },
+  "hair-pink":        { solid: "#e85d8e" },
+  "hair-pastel-pink": { solid: "#f9c2cf" },
+  "hair-peach":       { solid: "#f4b896" },
+  "hair-mermaid":     { gradient: "linear-gradient(135deg, #1ec0c0 0%, #6b4ba8 50%, #e85d8e 100%)" },
+  "hair-rainbow":     { gradient: "linear-gradient(90deg, #ff0000 0%, #ff8000 16%, #ffd700 32%, #3aa84a 48%, #1e90ff 64%, #6b4ba8 80%, #cc2c80 100%)" },
 }
 
 export const SKIN_TONE_SWATCH: Readonly<Record<string, SwatchValue>> = {
@@ -52,12 +67,18 @@ export const SKIN_TONE_SWATCH: Readonly<Record<string, SwatchValue>> = {
 }
 
 export const EYE_COLOR_SWATCH: Readonly<Record<string, SwatchValue>> = {
-  "eyes-brown":  { solid: "#5a3821" },
-  "eyes-blue":   { solid: "#2f6ea8" },
-  "eyes-green":  { solid: "#3a8a4e" },
-  "eyes-hazel":  { gradient: "radial-gradient(circle, #a8853a 0%, #5a3821 100%)" },
-  "eyes-gray":   { solid: "#8a9099" },
-  "eyes-amber":  { solid: "#c88338" },
+  "eyes-brown":     { solid: "#5a3821" },
+  "eyes-blue":      { solid: "#2f6ea8" },
+  "eyes-green":     { solid: "#3a8a4e" },
+  "eyes-hazel":     { gradient: "radial-gradient(circle, #a8853a 0%, #5a3821 100%)" },
+  "eyes-gray":      { solid: "#8a9099" },
+  "eyes-amber":     { solid: "#c88338" },
+  "eyes-gold":      { solid: "#d4a93a" },
+  "eyes-silver":    { solid: "#c0c4c8" },
+  "eyes-turquoise": { solid: "#1ec0c0" },
+  "eyes-violet":    { solid: "#8e6dc6" },
+  "eyes-pink":      { solid: "#d27a8a" },
+  "eyes-red":       { solid: "#9e2828" },
 }
 
 /** Lookup across all Person color dimensions. Returns undefined when the

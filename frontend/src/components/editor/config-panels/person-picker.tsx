@@ -69,6 +69,10 @@ export const PersonPicker = memo(function PersonPicker({
   className,
 }: PersonPickerProps) {
   const [query, setQuery] = useState("")
+  /** Multi-select dims (max > 1) intentionally start empty when toggled on —
+   *  user picks what they want. We track explicit enable here so the section
+   *  stays "checked" without forcing a default selection. */
+  const [enabledMulti, setEnabledMulti] = useState<Set<PersonDimension>>(new Set())
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("person")
 
   const grouped = useMemo(() => {
@@ -112,8 +116,11 @@ export const PersonPicker = memo(function PersonPicker({
         const field = PERSON_FIELD_BY_DIMENSION[dimension]
         const raw = value[field]
         const selectedIds = pickIds(raw)
-        const checked = selectedIds.length > 0
         const maxSelected = MAX_SELECTED_BY_DIMENSION[dimension] ?? 1
+        const isMulti = maxSelected > 1
+        const checked = isMulti
+          ? enabledMulti.has(dimension) || selectedIds.length > 0
+          : selectedIds.length > 0
         if (query && entries.length === 0) return null
         return (
           <DimensionSection
@@ -128,9 +135,24 @@ export const PersonPicker = memo(function PersonPicker({
             resolveDescription={resolveDescription}
             onToggle={(next) => {
               if (next) {
-                const first = PEOPLE.find((p) => p.dimension === dimension)?.id
-                if (first) onChange({ [field]: first } as Partial<PersonValue>)
+                if (isMulti) {
+                  setEnabledMulti((s) => {
+                    const n = new Set(s)
+                    n.add(dimension)
+                    return n
+                  })
+                } else {
+                  const first = PEOPLE.find((p) => p.dimension === dimension)?.id
+                  if (first) onChange({ [field]: first } as Partial<PersonValue>)
+                }
               } else {
+                if (isMulti) {
+                  setEnabledMulti((s) => {
+                    const n = new Set(s)
+                    n.delete(dimension)
+                    return n
+                  })
+                }
                 onChange({ [field]: undefined } as Partial<PersonValue>)
               }
             }}

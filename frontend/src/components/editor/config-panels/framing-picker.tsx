@@ -43,6 +43,10 @@ export const FramingPicker = memo(function FramingPicker({
   className,
 }: FramingPickerProps) {
   const [query, setQuery] = useState("")
+  /** Multi-select dims (max > 1) intentionally start empty when toggled on —
+   *  user picks what they want. We track explicit enable here so the section
+   *  stays "checked" without forcing a default selection. */
+  const [enabledMulti, setEnabledMulti] = useState<Set<FramingCategory>>(new Set())
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("framing")
 
   const grouped = useMemo(() => {
@@ -86,8 +90,11 @@ export const FramingPicker = memo(function FramingPicker({
         const field = FRAMING_FIELD_BY_CATEGORY[category]
         const raw = value[field]
         const selectedIds = pickIds(raw)
-        const checked = selectedIds.length > 0
         const maxSelected = MAX_SELECTED_BY_FRAMING_CATEGORY[category] ?? 1
+        const isMulti = maxSelected > 1
+        const checked = isMulti
+          ? enabledMulti.has(category) || selectedIds.length > 0
+          : selectedIds.length > 0
         // Hide the whole section when searching filters everything out AND
         // the category is also empty of matches, to keep the search UX tight.
         // When there's no active query, always show every category section.
@@ -105,9 +112,24 @@ export const FramingPicker = memo(function FramingPicker({
             resolveDescription={resolveDescription}
             onToggle={(next) => {
               if (next) {
-                const first = FRAMINGS.find((f) => f.category === category)?.id
-                if (first) onChange({ [field]: first })
+                if (isMulti) {
+                  setEnabledMulti((s) => {
+                    const n = new Set(s)
+                    n.add(category)
+                    return n
+                  })
+                } else {
+                  const first = FRAMINGS.find((f) => f.category === category)?.id
+                  if (first) onChange({ [field]: first })
+                }
               } else {
+                if (isMulti) {
+                  setEnabledMulti((s) => {
+                    const n = new Set(s)
+                    n.delete(category)
+                    return n
+                  })
+                }
                 onChange({ [field]: undefined })
               }
             }}

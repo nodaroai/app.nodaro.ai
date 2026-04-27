@@ -41,6 +41,10 @@ export const StylingPicker = memo(function StylingPicker({
   className,
 }: StylingPickerProps) {
   const [query, setQuery] = useState("")
+  /** Multi-select dims (max > 1) intentionally start empty when toggled on —
+   *  user picks what they want. We track explicit enable here so the section
+   *  stays "checked" without forcing a default selection. */
+  const [enabledMulti, setEnabledMulti] = useState<Set<StylingDimension>>(new Set())
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("styling")
 
   const grouped = useMemo(() => {
@@ -84,8 +88,11 @@ export const StylingPicker = memo(function StylingPicker({
         const field = STYLING_FIELD_BY_DIMENSION[dimension]
         const raw = value[field]
         const selectedIds = pickIds(raw)
-        const checked = selectedIds.length > 0
         const maxSelected = MAX_SELECTED_BY_STYLING_DIMENSION[dimension] ?? 1
+        const isMulti = maxSelected > 1
+        const checked = isMulti
+          ? enabledMulti.has(dimension) || selectedIds.length > 0
+          : selectedIds.length > 0
         if (query && entries.length === 0) return null
         return (
           <DimensionSection
@@ -100,9 +107,24 @@ export const StylingPicker = memo(function StylingPicker({
             resolveDescription={resolveDescription}
             onToggle={(next) => {
               if (next) {
-                const first = STYLINGS.find((s) => s.dimension === dimension)?.id
-                if (first) onChange({ [field]: first } as Partial<StylingValue>)
+                if (isMulti) {
+                  setEnabledMulti((s) => {
+                    const n = new Set(s)
+                    n.add(dimension)
+                    return n
+                  })
+                } else {
+                  const first = STYLINGS.find((s) => s.dimension === dimension)?.id
+                  if (first) onChange({ [field]: first } as Partial<StylingValue>)
+                }
               } else {
+                if (isMulti) {
+                  setEnabledMulti((s) => {
+                    const n = new Set(s)
+                    n.delete(dimension)
+                    return n
+                  })
+                }
                 onChange({ [field]: undefined } as Partial<StylingValue>)
               }
             }}
