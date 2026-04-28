@@ -11,10 +11,6 @@ const projectIdParams = z.object({
   projectId: z.string().uuid(),
 })
 
-// ---------------------------------------------------------------------------
-// OpenAPI seed: GET /v1/projects/{projectId}/workflows
-// ---------------------------------------------------------------------------
-
 const WorkflowSummary = z
   .object({
     id: z.string().uuid(),

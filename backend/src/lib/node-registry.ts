@@ -1,15 +1,10 @@
-import { INPUT_FIELD_MAP, getOutputType } from "../../../packages/shared/src/presentation-utils.js"
+import type { OutputType } from "../../../packages/shared/src/presentation-utils.js"
 import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
 import {
   IMAGE_GEN_PROVIDERS,
   IMAGE_TO_VIDEO_PROVIDERS,
   TEXT_TO_VIDEO_PROVIDERS,
 } from "../../../packages/shared/src/model-constants.js"
-
-// `INPUT_FIELD_MAP` is imported as a documented hook for future enrichment
-// (auto-derived `inputSchema` from the shared map for input-type nodes).
-// Re-exported so unused-import linters don't strip it.
-export { INPUT_FIELD_MAP }
 
 export type NodeCategory =
   | "input"
@@ -31,7 +26,7 @@ export interface NodeDescriptor {
   label: string
   category: NodeCategory
   description: string
-  outputType: "image" | "video" | "audio" | "text" | "data" | "none"
+  outputType: OutputType | "none"
   /** Credit cost; undefined if free. May be a range like "1-8" if model-dependent. */
   creditCost?: number | string
   /** Input fields the node exposes for user override (subset of full config). */
@@ -47,9 +42,6 @@ export interface NodeDescriptor {
  * Add new entries when adding a new node type — see CLAUDE.md "New Node Registration".
  */
 export const NODE_REGISTRY: NodeDescriptor[] = [
-  // -------------------------------------------------------------------------
-  // Input nodes
-  // -------------------------------------------------------------------------
   {
     type: "text-prompt",
     label: "Text Prompt",
@@ -83,9 +75,6 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     inputSchema: { fields: [{ key: "url", type: "audio-url", required: true }] },
   },
 
-  // -------------------------------------------------------------------------
-  // AI generation
-  // -------------------------------------------------------------------------
   {
     type: "generate-image",
     label: "Generate Image",
@@ -170,9 +159,6 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     creditCost: 5,
   },
 
-  // -------------------------------------------------------------------------
-  // Processing (FFmpeg, 0 credits unless noted)
-  // -------------------------------------------------------------------------
   { type: "combine-videos", label: "Combine Videos", category: "processing", description: "Concatenate multiple videos.", outputType: "video" },
   { type: "merge-video-audio", label: "Merge Video + Audio", category: "processing", description: "Mux a video and an audio track.", outputType: "video" },
   { type: "trim-video", label: "Trim Video", category: "processing", description: "Trim a video by start/end seconds.", outputType: "video" },
@@ -180,58 +166,34 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "extract-frame", label: "Extract Frame", category: "processing", description: "Extract a single frame as an image.", outputType: "image" },
   { type: "add-captions", label: "Add Captions", category: "processing", description: "Burn captions into a video.", outputType: "video" },
 
-  // -------------------------------------------------------------------------
-  // Composition
-  // -------------------------------------------------------------------------
   { type: "render-video", label: "Render Video", category: "composition", description: "Render a Remotion composition to MP4.", outputType: "video", creditCost: 15 },
   { type: "after-effects", label: "After Effects", category: "composition", description: "AI-generated post-processing layer.", outputType: "video", creditCost: 2 },
   { type: "motion-graphics", label: "Motion Graphics", category: "composition", description: "AI-generated 2D motion graphics.", outputType: "video", creditCost: 2 },
   { type: "3d-title", label: "3D Title", category: "composition", description: "AI-generated 3D animated text.", outputType: "video", creditCost: 15 },
 
-  // -------------------------------------------------------------------------
-  // Triggers
-  // -------------------------------------------------------------------------
   { type: "webhook-trigger", label: "Webhook Trigger", category: "trigger", description: "Trigger the workflow via HTTP POST.", outputType: "data" },
   { type: "schedule-trigger", label: "Schedule Trigger", category: "trigger", description: "Trigger the workflow on a cron/interval.", outputType: "data" },
 
-  // -------------------------------------------------------------------------
-  // Output
-  // -------------------------------------------------------------------------
   { type: "save-to-storage", label: "Save to Storage", category: "output", description: "Persist a node output to user storage.", outputType: "none" },
   { type: "webhook-output", label: "Webhook Output", category: "output", description: "POST a node output to a URL.", outputType: "none" },
 
-  // -------------------------------------------------------------------------
-  // Control flow
-  // -------------------------------------------------------------------------
   { type: "list", label: "List", category: "control", description: "Static list of items for fan-out.", outputType: "data" },
   { type: "loop", label: "Loop", category: "control", description: "Multi-column loop / table.", outputType: "data" },
   { type: "combine-text", label: "Combine Text", category: "control", description: "Concatenate text inputs.", outputType: "text" },
   { type: "split-text", label: "Split Text", category: "control", description: "Split text by delimiter.", outputType: "text" },
 
-  // -------------------------------------------------------------------------
-  // Entities
-  // -------------------------------------------------------------------------
   { type: "character", label: "Character", category: "entity", description: "Reusable character definition with reference image.", outputType: "data" },
   { type: "face", label: "Face", category: "entity", description: "Reusable face reference.", outputType: "data" },
   { type: "object", label: "Object", category: "entity", description: "Reusable object reference.", outputType: "data" },
   { type: "location", label: "Location", category: "entity", description: "Reusable location reference.", outputType: "data" },
 ]
 
-/** Enrich descriptors with live data from credits + presentation-utils. */
+/** Enrich descriptors with live credit costs from STATIC_CREDIT_COSTS. */
 export function getEnrichedRegistry(): NodeDescriptor[] {
   return NODE_REGISTRY.map((desc) => {
-    const enriched = { ...desc }
-    if (enriched.creditCost === undefined) {
-      const cost = STATIC_CREDIT_COSTS[desc.type]
-      if (typeof cost === "number") enriched.creditCost = cost
-    }
-    // Sanity check outputType against shared logic
-    const computed = getOutputType(desc.type)
-    if (computed !== "data" && desc.outputType !== "none" && computed !== desc.outputType) {
-      // Don't override — registry wins for explicit display purposes — but this is a smell.
-      // Future: emit a warning during build.
-    }
-    return enriched
+    if (desc.creditCost !== undefined) return desc
+    const cost = STATIC_CREDIT_COSTS[desc.type]
+    return typeof cost === "number" ? { ...desc, creditCost: cost } : desc
   })
 }
 

@@ -59,10 +59,13 @@ export function getPublicAppUrl(input: AllowedOriginsInput): string {
   return "http://localhost:3000"
 }
 
-/** Convenience: compute from `config` module. */
+let cachedPublicAppUrl: string | null = null
 export function getStaticPublicAppUrl(): string {
-  return getPublicAppUrl({
-    corsOrigin: config.CORS_ORIGIN,
-    publicUrl: config.PUBLIC_URL,
-  })
+  if (cachedPublicAppUrl === null) {
+    cachedPublicAppUrl = getPublicAppUrl({
+      corsOrigin: config.CORS_ORIGIN,
+      publicUrl: config.PUBLIC_URL,
+    })
+  }
+  return cachedPublicAppUrl
 }

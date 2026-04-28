@@ -20,10 +20,6 @@ import { CreditsService } from "../billing/credits.js"
 import { invalidateBalanceCache } from "./credits.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 
-// ---------------------------------------------------------------------------
-// OpenAPI seed: POST /v1/workflows/{id}/run
-// ---------------------------------------------------------------------------
-
 openApiRegistry.registerPath({
   method: "post",
   path: "/v1/workflows/{id}/run",

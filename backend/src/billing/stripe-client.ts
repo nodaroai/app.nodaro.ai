@@ -24,8 +24,3 @@ export function getStripe(): Stripe {
   }
   return _stripe
 }
-
-/** Test-only: reset the singleton. Call from `vi.resetModules()` contexts. */
-export function _resetStripeForTest(): void {
-  _stripe = null
-}

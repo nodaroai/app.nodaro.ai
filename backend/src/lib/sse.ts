@@ -1,5 +1,6 @@
 import type { FastifyRequest, FastifyReply } from "fastify"
 import { getStaticAllowedOrigins, isOriginAllowed } from "./allowed-origins.js"
+import { firstHeaderValue } from "./request-helpers.js"
 
 // ---------------------------------------------------------------------------
 // SSE Event Protocol
@@ -51,10 +52,9 @@ export function createSSEStream(
   // @fastify/cors injects headers) are bypassed. Only reflect origins that
   // are in the allowed set (H8 fix: prevents arbitrary origin reflection).
   const corsHeaders: Record<string, string> = {}
-  const origin = req.headers.origin
-  const originStr = Array.isArray(origin) ? origin[0] : origin
-  if (isOriginAllowed(originStr, getStaticAllowedOrigins())) {
-    corsHeaders["Access-Control-Allow-Origin"] = originStr!
+  const originStr = firstHeaderValue(req.headers.origin)
+  if (originStr && isOriginAllowed(originStr, getStaticAllowedOrigins())) {
+    corsHeaders["Access-Control-Allow-Origin"] = originStr
     corsHeaders["Access-Control-Allow-Credentials"] = "true"
   }
 

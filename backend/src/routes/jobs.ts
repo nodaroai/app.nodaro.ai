@@ -7,10 +7,6 @@ const batchStatusBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(100),
 })
 
-// ---------------------------------------------------------------------------
-// OpenAPI seed: GET /v1/jobs/{id}
-// ---------------------------------------------------------------------------
-
 const JobSummary = z
   .object({
     id: z.string().uuid(),

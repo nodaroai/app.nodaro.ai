@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { warmAdminCache } from "../lib/admin-check.js"
+import { firstHeaderValue } from "../lib/request-helpers.js"
 
 /**
  * Extend Fastify request with auth data.
@@ -149,9 +150,7 @@ export function registerAuthHook(app: FastifyInstance): void {
       req.headers["x-internal-orchestrator"] !== undefined ||
       internalSecretHeader !== undefined
     if (hasInternalHeader) {
-      const provided = Array.isArray(internalSecretHeader)
-        ? internalSecretHeader[0]
-        : internalSecretHeader
+      const provided = firstHeaderValue(internalSecretHeader)
       if (typeof provided !== "string" || !constantTimeEqualStr(provided, config.INTERNAL_ORCHESTRATOR_SECRET)) {
         reply.status(403).send({
           error: { code: "forbidden", message: "Invalid internal orchestrator secret" },
@@ -162,9 +161,7 @@ export function registerAuthHook(app: FastifyInstance): void {
       if (body?.userId && typeof body.userId === "string") {
         req.userId = body.userId
       }
-      const appRunHeader = req.headers["x-app-run"]
-      const appRunValue = Array.isArray(appRunHeader) ? appRunHeader[0] : appRunHeader
-      if (appRunValue === "true") {
+      if (firstHeaderValue(req.headers["x-app-run"]) === "true") {
         req.isAppRun = true
       }
       return
