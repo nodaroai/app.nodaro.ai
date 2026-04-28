@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils"
 import { HairCutBrowser } from "./hair-cut-browser"
 import { EyewearIcon, HeadwearIcon } from "./small-silhouette-icons"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
+import { MultiPickBadge } from "./multi-pick-ui"
 
 /** Per-dimension multi-select cap.
  *  - jewelry: 3 (necklace + earrings + rings stacked)
@@ -89,8 +90,12 @@ export const StylingPicker = memo(function StylingPicker({
         const raw = value[field]
         const selectedIds = pickIds(raw)
         const maxSelected = MAX_SELECTED_BY_STYLING_DIMENSION[dimension] ?? 1
-        const isMulti = maxSelected > 1
-        const checked = isMulti
+        const isMultiCapable = maxSelected > 1
+        // Runtime mode follows data shape: array → multi, anything else → single.
+        // First pick stays single (string); pressing the `+` badge promotes to
+        // multi (array) so further picks accumulate up to maxSelected.
+        const isMultiData = Array.isArray(raw)
+        const checked = isMultiCapable
           ? enabledMulti.has(dimension) || selectedIds.length > 0
           : selectedIds.length > 0
         if (query && entries.length === 0) return null
@@ -103,11 +108,12 @@ export const StylingPicker = memo(function StylingPicker({
             checked={checked}
             selectedIds={selectedIds}
             maxSelected={maxSelected}
+            isMultiData={isMultiData}
             resolveLabel={resolveLabel}
             resolveDescription={resolveDescription}
             onToggle={(next) => {
               if (next) {
-                if (isMulti) {
+                if (isMultiCapable) {
                   setEnabledMulti((s) => {
                     const n = new Set(s)
                     n.add(dimension)
@@ -118,7 +124,7 @@ export const StylingPicker = memo(function StylingPicker({
                   if (first) onChange({ [field]: first } as Partial<StylingValue>)
                 }
               } else {
-                if (isMulti) {
+                if (isMultiCapable) {
                   setEnabledMulti((s) => {
                     const n = new Set(s)
                     n.delete(dimension)
@@ -133,11 +139,18 @@ export const StylingPicker = memo(function StylingPicker({
                 onChange({ [field]: id } as Partial<StylingValue>)
                 return
               }
+              if (!isMultiData) {
+                // Single mode in a multi-capable section: replace or clear.
+                onChange({ [field]: selectedIds[0] === id ? undefined : id } as Partial<StylingValue>)
+                return
+              }
               const next = togglePick(selectedIds, id, maxSelected)
-              if (next.length === 0) onChange({ [field]: undefined } as Partial<StylingValue>)
-              else if (next.length === 1) onChange({ [field]: next[0] } as Partial<StylingValue>)
-              else onChange({ [field]: next } as Partial<StylingValue>)
+              onChange({
+                [field]: next.length === 0 ? undefined : next,
+              } as Partial<StylingValue>)
             }}
+            onActivateMulti={(id) => onChange({ [field]: [id] } as Partial<StylingValue>)}
+            onDemoteToSingle={(id) => onChange({ [field]: id } as Partial<StylingValue>)}
           />
         )
       })}
@@ -152,10 +165,14 @@ interface DimensionSectionProps {
   readonly checked: boolean
   readonly selectedIds: ReadonlyArray<string>
   readonly maxSelected: number
+  /** True when the stored field is currently an array (multi mode). */
+  readonly isMultiData: boolean
   readonly resolveLabel: (id: string, englishLabel: string) => string
   readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
   readonly onPick: (id: string) => void
+  readonly onActivateMulti: (id: string) => void
+  readonly onDemoteToSingle: (id: string) => void
 }
 
 function DimensionSection({
@@ -165,10 +182,13 @@ function DimensionSection({
   checked,
   selectedIds,
   maxSelected,
+  isMultiData,
   resolveLabel,
   resolveDescription,
   onToggle,
   onPick,
+  onActivateMulti,
+  onDemoteToSingle,
 }: DimensionSectionProps) {
   const id = useId()
   const baseLabel = STYLING_DIMENSION_LABELS[dimension]
@@ -220,38 +240,40 @@ function DimensionSection({
           const entryLabel = resolveLabel(entry.id, entry.label)
           const entryDescription = resolveDescription(entry.id, entry.description)
           return (
-            <button
-              key={entry.id}
-              type="button"
-              role={multi ? "checkbox" : "radio"}
-              aria-checked={selected}
-              title={checked ? entryDescription : `${entryDescription} (click to enable ${label})`}
-              onClick={() => onPick(entry.id)}
-              className={cn(
-                "relative flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden",
-                selected
-                  ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
-                  : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
-              )}
-            >
-              {multi && selected && (
-                <span
-                  className="absolute top-1 right-1 size-4 rounded-full bg-[#ff0073] text-white text-[9px] font-semibold flex items-center justify-center pointer-events-none"
-                  aria-hidden="true"
-                >
-                  {selectedIdx + 1}
-                </span>
-              )}
-              {eyewearIcon}
-              {headwearIcon}
-              <FitText
-                text={entryLabel}
+            <div key={entry.id} className="relative">
+              <button
+                type="button"
+                role={multi ? "checkbox" : "radio"}
+                aria-checked={selected}
+                title={checked ? entryDescription : `${entryDescription} (click to enable ${label})`}
+                onClick={() => onPick(entry.id)}
                 className={cn(
-                  "text-[11px] font-medium leading-tight max-w-full",
-                  selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+                  "w-full flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden",
+                  selected
+                    ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
+                    : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
                 )}
-              />
-            </button>
+              >
+                {eyewearIcon}
+                {headwearIcon}
+                <FitText
+                  text={entryLabel}
+                  className={cn(
+                    "text-[11px] font-medium leading-tight max-w-full",
+                    selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+                  )}
+                />
+              </button>
+              {multi && selected && (
+                <MultiPickBadge
+                  mode={isMultiData ? "multi" : "single"}
+                  index={selectedIdx}
+                  maxSelected={maxSelected}
+                  onActivate={() => onActivateMulti(entry.id)}
+                  onDemote={() => onDemoteToSingle(entry.id)}
+                />
+              )}
+            </div>
           )
         })}
       </div>

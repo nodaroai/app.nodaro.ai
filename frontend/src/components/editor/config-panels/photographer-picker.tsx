@@ -9,14 +9,14 @@ import {
   type Photographer,
   type PhotographerCategory,
 } from "@nodaro/shared"
-import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
+import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
 
 interface PhotographerPickerProps {
-  readonly value: string | ReadonlyArray<string>
+  readonly value: string | ReadonlyArray<string> | undefined
   readonly onValueChange: (value: string | ReadonlyArray<string> | undefined) => void
   readonly className?: string
   readonly maxSelected?: number
@@ -37,18 +37,8 @@ export const PhotographerPicker = memo(function PhotographerPicker({
 }: PhotographerPickerProps) {
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("photographer")
-  const selectedIds = useMemo(() => pickIds(value), [value])
-
-  const handlePick = (id: string) => {
-    if (maxSelected <= 1) {
-      onValueChange(selectedIds[0] === id ? undefined : id)
-      return
-    }
-    const next = togglePick(selectedIds, id, maxSelected)
-    if (next.length === 0) onValueChange(undefined)
-    else if (next.length === 1) onValueChange(next[0])
-    else onValueChange(next)
-  }
+  const { selectedIds, isMulti, handlePick, activateMulti, demoteToSingle } =
+    useMultiPick(value, onValueChange, maxSelected)
 
   const grouped = useMemo(() => {
     const byCategory = new Map<PhotographerCategory, Photographer[]>()
@@ -105,39 +95,41 @@ export const PhotographerPicker = memo(function PhotographerPicker({
                 const label = resolveLabel(photographer.id, photographer.label)
                 const description = resolveDescription(photographer.id, photographer.description)
                 return (
-                  <button
-                    key={photographer.id}
-                    type="button"
-                    role={maxSelected > 1 ? "checkbox" : "radio"}
-                    aria-checked={selected}
-                    title={description}
-                    onClick={() => handlePick(photographer.id)}
-                    className={cn(
-                      "relative flex flex-col items-start gap-0.5 p-2 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
-                      selected
-                        ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
-                        : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
-                    )}
-                  >
-                    {maxSelected > 1 && selected && (
-                      <span
-                        className="absolute top-1 right-1 size-4 rounded-full bg-[#ff0073] text-white text-[9px] font-semibold flex items-center justify-center pointer-events-none"
-                        aria-hidden="true"
-                      >
-                        {selectedIdx + 1}
-                      </span>
-                    )}
-                    <FitText
-                      text={label}
+                  <div key={photographer.id} className="relative">
+                    <button
+                      type="button"
+                      role={maxSelected > 1 ? "checkbox" : "radio"}
+                      aria-checked={selected}
+                      title={description}
+                      onClick={() => handlePick(photographer.id)}
                       className={cn(
-                        "text-[11px] font-semibold leading-tight w-full",
-                        selected ? "text-[#ff0073]" : "text-gray-800 dark:text-[#E2E8F0]",
+                        "w-full flex flex-col items-start gap-0.5 p-2 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
+                        selected
+                          ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
+                          : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
                       )}
-                    />
-                    <span className="text-[10px] leading-snug text-muted-foreground line-clamp-2 w-full">
-                      {description}
-                    </span>
-                  </button>
+                    >
+                      <FitText
+                        text={label}
+                        className={cn(
+                          "text-[11px] font-semibold leading-tight w-full",
+                          selected ? "text-[#ff0073]" : "text-gray-800 dark:text-[#E2E8F0]",
+                        )}
+                      />
+                      <span className="text-[10px] leading-snug text-muted-foreground line-clamp-2 w-full">
+                        {description}
+                      </span>
+                    </button>
+                    {selected && (
+                      <MultiPickBadge
+                        mode={isMulti ? "multi" : "single"}
+                        index={selectedIdx}
+                        maxSelected={maxSelected}
+                        onActivate={() => activateMulti(photographer.id)}
+                        onDemote={() => demoteToSingle(photographer.id)}
+                      />
+                    )}
+                  </div>
                 )
               })}
             </div>

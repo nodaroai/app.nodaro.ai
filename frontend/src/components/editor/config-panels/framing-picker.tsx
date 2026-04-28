@@ -17,6 +17,7 @@ import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { FramingPreview } from "./framing-preview"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
+import { MultiPickBadge } from "./multi-pick-ui"
 
 /** Per-category multi-select cap. composition supports 2 picks
  *  (rule-of-thirds + leading-lines, centered + negative-space). */
@@ -91,8 +92,9 @@ export const FramingPicker = memo(function FramingPicker({
         const raw = value[field]
         const selectedIds = pickIds(raw)
         const maxSelected = MAX_SELECTED_BY_FRAMING_CATEGORY[category] ?? 1
-        const isMulti = maxSelected > 1
-        const checked = isMulti
+        const isMultiCapable = maxSelected > 1
+        const isMultiData = Array.isArray(raw)
+        const checked = isMultiCapable
           ? enabledMulti.has(category) || selectedIds.length > 0
           : selectedIds.length > 0
         // Hide the whole section when searching filters everything out AND
@@ -108,11 +110,12 @@ export const FramingPicker = memo(function FramingPicker({
             checked={checked}
             selectedIds={selectedIds}
             maxSelected={maxSelected}
+            isMultiData={isMultiData}
             resolveLabel={resolveLabel}
             resolveDescription={resolveDescription}
             onToggle={(next) => {
               if (next) {
-                if (isMulti) {
+                if (isMultiCapable) {
                   setEnabledMulti((s) => {
                     const n = new Set(s)
                     n.add(category)
@@ -123,7 +126,7 @@ export const FramingPicker = memo(function FramingPicker({
                   if (first) onChange({ [field]: first })
                 }
               } else {
-                if (isMulti) {
+                if (isMultiCapable) {
                   setEnabledMulti((s) => {
                     const n = new Set(s)
                     n.delete(category)
@@ -138,11 +141,15 @@ export const FramingPicker = memo(function FramingPicker({
                 onChange({ [field]: id })
                 return
               }
+              if (!isMultiData) {
+                onChange({ [field]: selectedIds[0] === id ? undefined : id })
+                return
+              }
               const next = togglePick(selectedIds, id, maxSelected)
-              if (next.length === 0) onChange({ [field]: undefined })
-              else if (next.length === 1) onChange({ [field]: next[0] })
-              else onChange({ [field]: next })
+              onChange({ [field]: next.length === 0 ? undefined : next })
             }}
+            onActivateMulti={(id) => onChange({ [field]: [id] })}
+            onDemoteToSingle={(id) => onChange({ [field]: id })}
           />
         )
       })}
@@ -157,10 +164,13 @@ interface CategorySectionProps {
   readonly checked: boolean
   readonly selectedIds: ReadonlyArray<string>
   readonly maxSelected: number
+  readonly isMultiData: boolean
   readonly resolveLabel: (id: string, englishLabel: string) => string
   readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
   readonly onPick: (id: string) => void
+  readonly onActivateMulti: (id: string) => void
+  readonly onDemoteToSingle: (id: string) => void
 }
 
 function CategorySection({
@@ -170,10 +180,13 @@ function CategorySection({
   checked,
   selectedIds,
   maxSelected,
+  isMultiData,
   resolveLabel,
   resolveDescription,
   onToggle,
   onPick,
+  onActivateMulti,
+  onDemoteToSingle,
 }: CategorySectionProps) {
   const id = useId()
   const baseLabel = FRAMING_CATEGORY_LABELS[category]
@@ -203,37 +216,39 @@ function CategorySection({
           const entryLabel = resolveLabel(framing.id, framing.label)
           const entryDescription = resolveDescription(framing.id, framing.description)
           return (
-            <button
-              key={framing.id}
-              type="button"
-              role={multi ? "checkbox" : "radio"}
-              aria-checked={selected}
-              title={checked ? entryDescription : `${entryDescription} (click to enable ${label})`}
-              onClick={() => onPick(framing.id)}
-              className={cn(
-                "relative group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
-                selected
-                  ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
-                  : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
-              )}
-            >
-              {multi && selected && (
-                <span
-                  className="absolute top-1 right-1 size-4 rounded-full bg-[#ff0073] text-white text-[9px] font-semibold flex items-center justify-center pointer-events-none z-10"
-                  aria-hidden="true"
-                >
-                  {selectedIdx + 1}
-                </span>
-              )}
-              <FramingPreview framingId={framing.id} className="w-full aspect-square" />
-              <FitText
-                text={entryLabel}
+            <div key={framing.id} className="relative">
+              <button
+                type="button"
+                role={multi ? "checkbox" : "radio"}
+                aria-checked={selected}
+                title={checked ? entryDescription : `${entryDescription} (click to enable ${label})`}
+                onClick={() => onPick(framing.id)}
                 className={cn(
-                  "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center",
-                  selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
+                  "w-full group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
+                  selected
+                    ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
+                    : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
                 )}
-              />
-            </button>
+              >
+                <FramingPreview framingId={framing.id} className="w-full aspect-square" />
+                <FitText
+                  text={entryLabel}
+                  className={cn(
+                    "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center",
+                    selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
+                  )}
+                />
+              </button>
+              {multi && selected && (
+                <MultiPickBadge
+                  mode={isMultiData ? "multi" : "single"}
+                  index={selectedIdx}
+                  maxSelected={maxSelected}
+                  onActivate={() => onActivateMulti(framing.id)}
+                  onDemote={() => onDemoteToSingle(framing.id)}
+                />
+              )}
+            </div>
           )
         })}
       </div>

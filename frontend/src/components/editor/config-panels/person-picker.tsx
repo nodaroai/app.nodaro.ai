@@ -18,6 +18,7 @@ import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { ColorSwatch } from "./color-swatch"
 import { getPersonSwatch } from "./color-swatches"
+import { MultiPickBadge } from "./multi-pick-ui"
 
 /** Compact group labels for the tab row. The catalog uses descriptive names
  *  ("Realistic — Style", "Iconic / Public Domain") that don't fit a chip. */
@@ -130,8 +131,9 @@ export const PersonPicker = memo(function PersonPicker({
         const raw = value[field]
         const selectedIds = pickIds(raw)
         const maxSelected = MAX_SELECTED_BY_DIMENSION[dimension] ?? 1
-        const isMulti = maxSelected > 1
-        const checked = isMulti
+        const isMultiCapable = maxSelected > 1
+        const isMultiData = Array.isArray(raw)
+        const checked = isMultiCapable
           ? enabledMulti.has(dimension) || selectedIds.length > 0
           : selectedIds.length > 0
         if (query && entries.length === 0) return null
@@ -146,12 +148,13 @@ export const PersonPicker = memo(function PersonPicker({
               checked={checked}
               selectedIds={selectedIds}
               maxSelected={maxSelected}
+              isMultiData={isMultiData}
               isSearching={Boolean(query)}
               resolveLabel={resolveLabel}
               resolveDescription={resolveDescription}
               onToggle={(next) => {
                 if (next) {
-                  if (isMulti) {
+                  if (isMultiCapable) {
                     setEnabledMulti((s) => {
                       const n = new Set(s)
                       n.add(dimension)
@@ -162,7 +165,7 @@ export const PersonPicker = memo(function PersonPicker({
                     if (first) onChange({ [field]: first } as Partial<PersonValue>)
                   }
                 } else {
-                  if (isMulti) {
+                  if (isMultiCapable) {
                     setEnabledMulti((s) => {
                       const n = new Set(s)
                       n.delete(dimension)
@@ -190,11 +193,17 @@ export const PersonPicker = memo(function PersonPicker({
                   }
                   return
                 }
+                if (!isMultiData) {
+                  onChange({ [field]: selectedIds[0] === id ? undefined : id } as Partial<PersonValue>)
+                  return
+                }
                 const next = togglePick(selectedIds, id, maxSelected)
-                if (next.length === 0) onChange({ [field]: undefined } as Partial<PersonValue>)
-                else if (next.length === 1) onChange({ [field]: next[0] } as Partial<PersonValue>)
-                else onChange({ [field]: next } as Partial<PersonValue>)
+                onChange({
+                  [field]: next.length === 0 ? undefined : next,
+                } as Partial<PersonValue>)
               }}
+              onActivateMulti={(id) => onChange({ [field]: [id] } as Partial<PersonValue>)}
+              onDemoteToSingle={(id) => onChange({ [field]: id } as Partial<PersonValue>)}
             />
             {isAgeCustom && (
               <div className="flex items-center gap-2 px-1 pl-6">
@@ -238,6 +247,8 @@ interface DimensionSectionProps {
   readonly checked: boolean
   readonly selectedIds: ReadonlyArray<string>
   readonly maxSelected: number
+  /** True when stored data is currently an array (multi mode). */
+  readonly isMultiData: boolean
   /** True when the user has typed into the search box. Forces the dim to
    *  render entries flat (overrides the grouped/tabbed layout) so search
    *  mode is consistent across dimensions. */
@@ -246,6 +257,8 @@ interface DimensionSectionProps {
   readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
   readonly onPick: (id: string) => void
+  readonly onActivateMulti: (id: string) => void
+  readonly onDemoteToSingle: (id: string) => void
 }
 
 function renderEntryIcon(dimension: PersonDimension, entry: Person): JSX.Element | null {
@@ -266,11 +279,15 @@ function EntryChip({
   selected,
   selectedIndex,
   multi,
+  isMultiData,
+  maxSelected,
   enabled,
   label,
   resolveLabel,
   resolveDescription,
   onPick,
+  onActivateMulti,
+  onDemoteToSingle,
 }: {
   readonly dimension: PersonDimension
   readonly entry: Person
@@ -279,11 +296,15 @@ function EntryChip({
   readonly selectedIndex: number
   /** True when this dimension allows multi-pick (>1 max). */
   readonly multi: boolean
+  readonly isMultiData: boolean
+  readonly maxSelected: number
   readonly enabled: boolean
   readonly label: string
   readonly resolveLabel: (id: string, englishLabel: string) => string
   readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onPick: (id: string) => void
+  readonly onActivateMulti: (id: string) => void
+  readonly onDemoteToSingle: (id: string) => void
 }) {
   const swatch = getPersonSwatch(entry.id)
   const icon = renderEntryIcon(dimension, entry)
@@ -292,39 +313,40 @@ function EntryChip({
   const resolvedLabel = resolveLabel(entry.id, entry.shortLabel ?? entry.label)
   const resolvedDescription = resolveDescription(entry.id, entry.description)
   return (
-    <button
-      type="button"
-      role={multi ? "checkbox" : "radio"}
-      aria-checked={selected}
-      title={enabled ? resolvedDescription : `${resolvedDescription} (click to enable ${label})`}
-      onClick={() => onPick(entry.id)}
-      className={cn(
-        "relative flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer",
-        selected
-          ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
-          : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
-      )}
-    >
-      {multi && selected && (
-        // Sticks out at the top-right corner so a long chip label can use the
-        // full chip width without colliding with the index pill.
-        <span
-          className="absolute -top-1.5 -right-1.5 size-[18px] rounded-full bg-[#ff0073] text-white text-[10px] font-semibold flex items-center justify-center pointer-events-none ring-2 ring-background z-[1]"
-          aria-hidden="true"
-        >
-          {selectedIndex + 1}
-        </span>
-      )}
-      {swatch && <ColorSwatch value={swatch} className="size-5" />}
-      {icon}
-      <FitText
-        text={resolvedLabel}
+    <div className="relative">
+      <button
+        type="button"
+        role={multi ? "checkbox" : "radio"}
+        aria-checked={selected}
+        title={enabled ? resolvedDescription : `${resolvedDescription} (click to enable ${label})`}
+        onClick={() => onPick(entry.id)}
         className={cn(
-          "text-[11px] font-medium leading-tight max-w-full",
-          selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+          "w-full flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer",
+          selected
+            ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
+            : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
         )}
-      />
-    </button>
+      >
+        {swatch && <ColorSwatch value={swatch} className="size-5" />}
+        {icon}
+        <FitText
+          text={resolvedLabel}
+          className={cn(
+            "text-[11px] font-medium leading-tight max-w-full",
+            selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+          )}
+        />
+      </button>
+      {multi && selected && (
+        <MultiPickBadge
+          mode={isMultiData ? "multi" : "single"}
+          index={selectedIndex}
+          maxSelected={maxSelected}
+          onActivate={() => onActivateMulti(entry.id)}
+          onDemote={() => onDemoteToSingle(entry.id)}
+        />
+      )}
+    </div>
   )
 }
 
@@ -343,20 +365,28 @@ function TabbedEntryGrid({
   checked,
   selectedIds,
   multi,
+  isMultiData,
+  maxSelected,
   label,
   resolveLabel,
   resolveDescription,
   onPick,
+  onActivateMulti,
+  onDemoteToSingle,
 }: {
   readonly dimension: PersonDimension
   readonly entries: ReadonlyArray<Person>
   readonly checked: boolean
   readonly selectedIds: ReadonlyArray<string>
   readonly multi: boolean
+  readonly isMultiData: boolean
+  readonly maxSelected: number
   readonly label: string
   readonly resolveLabel: (id: string, englishLabel: string) => string
   readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onPick: (id: string) => void
+  readonly onActivateMulti: (id: string) => void
+  readonly onDemoteToSingle: (id: string) => void
 }) {
   const { groupOrder, byGroup } = useMemo(() => {
     const order: string[] = []
@@ -464,11 +494,15 @@ function TabbedEntryGrid({
               selected={checked && idx >= 0}
               selectedIndex={idx}
               multi={multi}
+              isMultiData={isMultiData}
+              maxSelected={maxSelected}
               enabled={checked}
               label={label}
               resolveLabel={resolveLabel}
               resolveDescription={resolveDescription}
               onPick={onPick}
+              onActivateMulti={onActivateMulti}
+              onDemoteToSingle={onDemoteToSingle}
             />
           )
         })}
@@ -484,11 +518,14 @@ function DimensionSection({
   checked,
   selectedIds,
   maxSelected,
+  isMultiData,
   isSearching,
   resolveLabel,
   resolveDescription,
   onToggle,
   onPick,
+  onActivateMulti,
+  onDemoteToSingle,
 }: DimensionSectionProps) {
   const id = useId()
   const baseLabel = PERSON_DIMENSION_LABELS[dimension]
@@ -535,10 +572,14 @@ function DimensionSection({
           checked={checked}
           selectedIds={selectedIds}
           multi={multi}
+          isMultiData={isMultiData}
+          maxSelected={maxSelected}
           label={label}
           resolveLabel={resolveLabel}
           resolveDescription={resolveDescription}
           onPick={onPick}
+          onActivateMulti={onActivateMulti}
+          onDemoteToSingle={onDemoteToSingle}
         />
       ) : (
         <div
@@ -556,11 +597,15 @@ function DimensionSection({
                 selected={checked && idx >= 0}
                 selectedIndex={idx}
                 multi={multi}
+                isMultiData={isMultiData}
+                maxSelected={maxSelected}
                 enabled={checked}
                 label={label}
                 resolveLabel={resolveLabel}
                 resolveDescription={resolveDescription}
                 onPick={onPick}
+                onActivateMulti={onActivateMulti}
+                onDemoteToSingle={onDemoteToSingle}
               />
             )
           })}

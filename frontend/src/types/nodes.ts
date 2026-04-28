@@ -414,8 +414,9 @@ export interface AtmosphereData {
   [key: string]: unknown
   label: string
   /** Atmosphere id from ATMOSPHERES catalog. Single id or up to 2 for layered
-   *  particle effects (e.g. ["fog","god-rays"], ["dust","sun-shafts"]). */
-  atmosphere: string | ReadonlyArray<string>
+   *  particle effects (e.g. ["fog","god-rays"], ["dust","sun-shafts"]).
+   *  Undefined = user cleared all picks; the node emits no atmosphere hint. */
+  atmosphere: string | ReadonlyArray<string> | undefined
 }
 
 /** Standalone Style parameter node data. */
@@ -574,8 +575,9 @@ export interface MoodData {
   [key: string]: unknown
   label: string
   /** Mood id from MOODS catalog. Single id or up to 2 ids for blended mood
-   *  (e.g. ["smirking","aloof"] → "with a smirking and aloof expression"). */
-  mood: string | ReadonlyArray<string>
+   *  (e.g. ["smirking","aloof"] → "with a smirking and aloof expression").
+   *  Undefined = user cleared all picks; the node emits no mood hint. */
+  mood: string | ReadonlyArray<string> | undefined
   /** Free-text prepended before the mood hint. */
   preText?: string
   /** Free-text appended after the mood hint. */
@@ -589,8 +591,9 @@ export interface PhotographerData {
   [key: string]: unknown
   label: string
   /** Photographer id from PHOTOGRAPHERS catalog. Single id or up to 2 for
-   *  blended visual signatures (e.g. ["tim-walker","helmut-newton"]). */
-  photographer: string | ReadonlyArray<string>
+   *  blended visual signatures (e.g. ["tim-walker","helmut-newton"]).
+   *  Undefined = user cleared all picks. */
+  photographer: string | ReadonlyArray<string> | undefined
 }
 
 /** Standalone Aesthetic / Microtrend parameter node data. Picks ONE
@@ -600,8 +603,9 @@ export interface AestheticData {
   [key: string]: unknown
   label: string
   /** Aesthetic id from AESTHETICS catalog. Single id or up to 2 ids for an
-   *  aesthetic blend (e.g. ["y2k","dadcore"]). */
-  aesthetic: string | ReadonlyArray<string>
+   *  aesthetic blend (e.g. ["y2k","dadcore"]).
+   *  Undefined = user cleared all picks. */
+  aesthetic: string | ReadonlyArray<string> | undefined
 }
 
 /** Standalone Era / Period parameter node data. Picks ONE historical era or
@@ -647,8 +651,9 @@ export interface MaterialData {
   [key: string]: unknown
   label: string
   /** Material id from MATERIALS catalog. Single id or up to 2 for composites
-   *  (e.g. ["leather","brass"] → "made of leather and brass"). */
-  material: string | ReadonlyArray<string>
+   *  (e.g. ["leather","brass"] → "made of leather and brass").
+   *  Undefined = user cleared all picks. */
+  material: string | ReadonlyArray<string> | undefined
 }
 
 /** Standalone Animal parameter node data. Reuses the catalog from the
@@ -715,8 +720,9 @@ export interface HeldPropData {
   [key: string]: unknown
   label: string
   /** Held prop id from HELD_PROPS catalog. Single id or up to 2 for combos
-   *  (e.g. ["book","coffee-cup"], ["cigarette","wine-glass"]). */
-  heldProp: string | ReadonlyArray<string>
+   *  (e.g. ["book","coffee-cup"], ["cigarette","wine-glass"]).
+   *  Undefined = user cleared all picks. */
+  heldProp: string | ReadonlyArray<string> | undefined
 }
 
 /** Standalone Exposure Settings parameter node data. Multi-category: aperture
@@ -763,8 +769,9 @@ export interface PostProcessEffectsData {
   label: string
   /** Post-process id from POST_PROCESS_EFFECTS catalog. Single id or up to 2
    *  for layered grading (e.g. ["vignette-soft","film-grain-fine"],
-   *  ["halation-glow","bloom"]). */
-  postProcess: string | ReadonlyArray<string>
+   *  ["halation-glow","bloom"]).
+   *  Undefined = user cleared all picks. */
+  postProcess: string | ReadonlyArray<string> | undefined
 }
 
 /** Standalone Temporal parameter node data. */
