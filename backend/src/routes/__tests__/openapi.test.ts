@@ -28,4 +28,11 @@ describe("GET /v1/openapi.json", () => {
     const spec = res.json()
     expect(Object.keys(spec.paths).length).toBeGreaterThan(0)
   })
+
+  it("documents the bearerAuth security scheme", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/openapi.json" })
+    const spec = res.json()
+    expect(spec.components?.securitySchemes?.bearerAuth).toBeDefined()
+    expect(spec.components.securitySchemes.bearerAuth.type).toBe("http")
+  })
 })

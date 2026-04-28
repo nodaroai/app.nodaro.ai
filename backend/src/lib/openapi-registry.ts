@@ -26,7 +26,7 @@ export function generateOpenApiDoc() {
       title: "Nodaro API",
       version: "1.0.0",
       description:
-        "AI workflow editor backend. See https://github.com/your-org/nodaro for source.",
+        "AI workflow editor backend. See https://github.com/nodaroai/app.nodaro.ai for source.",
     },
     servers: [{ url: "/" }],
     security: [{ bearerAuth: [] }],

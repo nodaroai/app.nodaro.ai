@@ -15,16 +15,17 @@ const JobSummary = z
   .object({
     id: z.string().uuid(),
     status: z.enum(["pending", "queued", "processing", "completed", "failed", "cancelled"]),
-    progress: z.number().min(0).max(100).optional(),
-    userId: z.string().uuid(),
-    inputData: z.unknown().optional(),
-    outputData: z.unknown().optional(),
-    errorMessage: z.string().nullable().optional(),
-    cost: z.number().nullable().optional(),
-    credits: z.number().nullable().optional(),
-    createdAt: z.string(),
-    startedAt: z.string().nullable().optional(),
-    completedAt: z.string().nullable().optional(),
+    progress: z.number().min(0).max(100),
+    user_id: z.string().uuid(),
+    input_data: z.unknown(),
+    output_data: z.unknown(),
+    error_message: z.string().nullable(),
+    cost: z.number().nullable(),
+    credits: z.number().nullable(),
+    job_type: z.string().nullable(),
+    created_at: z.string(),
+    started_at: z.string().nullable(),
+    completed_at: z.string().nullable(),
   })
   .openapi("Job")
 

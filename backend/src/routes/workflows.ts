@@ -20,6 +20,7 @@ const WorkflowSummary = z
     id: z.string().uuid(),
     name: z.string(),
     projectId: z.string().uuid().nullable(),
+    userId: z.string().uuid(),
     folderId: z.string().uuid().nullable().optional(),
     description: z.string().nullable().optional(),
     isTemplate: z.boolean().optional(),
