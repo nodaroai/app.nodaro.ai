@@ -11,8 +11,10 @@ import { RunNodeButton } from "./run-node-button"
 import { useAutoMeasureForZoom } from "./use-auto-measure-for-zoom"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { cn } from "@/lib/utils"
-
-type DisplayMode = "picks" | "prompt" | "both"
+import {
+  setStickyParameterDisplayMode,
+  type ParameterDisplayMode as DisplayMode,
+} from "@/lib/parameter-node-prefs"
 
 interface ParameterNodeShellProps {
   readonly id: string
@@ -51,6 +53,8 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
 
   const node = useMemo(() => nodes.find((n) => n.id === id), [nodes, id])
   const data = (node?.data ?? {}) as Record<string, unknown>
+  // Existing nodes keep whatever mode they were saved with; the localStorage
+  // preference only seeds NEW nodes (handled in store `addNode`).
   const displayMode: DisplayMode = (data.displayMode as DisplayMode) || "picks"
   const setDisplayMode = (mode: DisplayMode) => {
     // Clear height to auto-fit the new mode's content. The
@@ -58,6 +62,10 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
     // × zoom write-back when zoom != 1.
     updateNode(id, { height: undefined })
     updateNodeData(id, { displayMode: mode })
+    // Remember the user's preference so the NEXT new parameter node spawns
+    // in this mode. Existing nodes are unaffected — they keep their own
+    // persisted displayMode.
+    setStickyParameterDisplayMode(mode)
   }
 
   // Tell ReactFlow to re-measure this node whenever the display mode changes.
@@ -199,7 +207,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
           <div ref={naturalContentRef}>
             {(displayMode === "picks" || displayMode === "both") && children}
             {(displayMode === "prompt" || displayMode === "both") && (
-              <div className={displayMode === "both" ? "mt-4" : ""}>
+              <div className={displayMode === "both" ? "mt-3" : ""}>
                 <PromptPreview text={promptText} />
               </div>
             )}

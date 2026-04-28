@@ -23,6 +23,7 @@ import { resolveNodeDefaults, rememberSelection, pickRelevantFields, isNodeDefau
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { getCachedUserId } from "@/hooks/use-auth"
+import { getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
 
 /**
  * Migrate legacy image node types to the new split types.
@@ -856,6 +857,15 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       userId: getCachedUserId(),
     })
     const nodeData = { ...resolvedDefaults, ...initialData }
+
+    // Parameter nodes: seed displayMode from the user's per-device preference
+    // so a new node opens in whatever mode (picks/prompt/both) they last used.
+    // Only applied when the caller hasn't passed an explicit displayMode; this
+    // keeps the store-level seeding decoupled from the picker UI's render-time
+    // resolution (which always trusts the saved data on existing nodes).
+    if (definition.category === "parameter" && nodeData.displayMode === undefined) {
+      nodeData.displayMode = getStickyParameterDisplayMode()
+    }
 
     // Generate fresh UUIDs for sub-workflow port IDs and routeIds
     if (type === "sub-workflow-input" || type === "sub-workflow-output") {
