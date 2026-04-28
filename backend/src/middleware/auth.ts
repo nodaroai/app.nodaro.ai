@@ -16,6 +16,12 @@ declare module "fastify" {
     isAppRun?: boolean
     creditReservation?: import("./credit-guard.js").CreditReservation
     storageSnapshot?: import("./credit-guard.js").StorageSnapshot
+    /** Set when the request is authenticated via a developer-app OAuth token. */
+    appAuthorization?: {
+      appId: string
+      authorizationId: string
+      scopes: readonly string[]
+    }
   }
 }
 
@@ -174,6 +180,58 @@ export function registerAuthHook(app: FastifyInstance): void {
 
     // Public routes: still try to resolve userId if a token is present (for optional auth)
     if (isPublic && !token) return
+
+    // --- OAuth access token path (developer apps) ---
+    if (token?.startsWith("ndr_app_")) {
+      const tokenHash = createHash("sha256").update(token).digest("hex")
+      const { data } = await supabase
+        .from("developer_app_tokens")
+        .select(`
+          id, authorization_id, expires_at, revoked_at,
+          developer_app_authorizations!inner ( id, app_id, user_id, scopes_granted, revoked_at )
+        `)
+        .eq("token_hash", tokenHash)
+        .maybeSingle()
+
+      if (!data || data.revoked_at) {
+        if (isPublic) return
+        reply.status(401).send({ error: { code: "unauthorized", message: "Invalid or revoked token" } })
+        return
+      }
+      if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) {
+        if (isPublic) return
+        reply.status(401).send({ error: { code: "unauthorized", message: "Token expired" } })
+        return
+      }
+      const authRow = data.developer_app_authorizations as unknown as {
+        id: string
+        app_id: string
+        user_id: string
+        scopes_granted: string[]
+        revoked_at: string | null
+      }
+      if (authRow.revoked_at) {
+        if (isPublic) return
+        reply.status(401).send({ error: { code: "unauthorized", message: "Authorization revoked" } })
+        return
+      }
+
+      req.userId = authRow.user_id
+      req.appAuthorization = {
+        appId: authRow.app_id,
+        authorizationId: authRow.id,
+        scopes: authRow.scopes_granted,
+      }
+
+      // Touch last_used_at (fire-and-forget — could be throttled in a follow-up)
+      supabase
+        .from("developer_app_tokens")
+        .update({ last_used_at: new Date().toISOString() })
+        .eq("id", data.id)
+        .then(() => {})
+
+      return
+    }
 
     if (token) {
       // --- JWT path: verify token ---
