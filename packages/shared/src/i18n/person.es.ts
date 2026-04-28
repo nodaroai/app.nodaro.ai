@@ -4,10 +4,6 @@ const map: LocaleCatalogMap = {
   // -------------------- Type --------------------
   "man": { label: "Hombre", description: "Hombre adulto" },
   "woman": { label: "Mujer", description: "Mujer adulta" },
-  "teen-boy": { label: "Adolescente Varón", description: "Adolescente varón" },
-  "teen-girl": { label: "Adolescente Mujer", description: "Adolescente mujer" },
-  "baby": { label: "Bebé", description: "Bebé menor de 2 años" },
-  "child": { label: "Niño", description: "Niño pequeño" },
   "non-binary": { label: "No Binario", description: "Persona no binaria" },
   "beautiful-woman": { label: "Mujer Hermosa", description: "Mujer clásicamente hermosa" },
   "girl-next-door": { label: "Chica de al Lado", description: "Amigable, accesible, encanto sano" },
@@ -356,6 +352,104 @@ const map: LocaleCatalogMap = {
 
   // -------------------- Eye Shape (round 2) --------------------
   "eye-double-eyelid": { label: "Doble Párpado", description: "Pliegue definido del párpado superior" },
+
+  // ----- New age entries -----
+  "age-toddler": { label: "Niño Pequeño", description: "Alrededor de 2-3 años" },
+  "age-young-child": { label: "Niño Joven", description: "Alrededor de 4-6 años" },
+  "age-pre-teen": { label: "Pre-adolescente", description: "Alrededor de 10-12 años" },
+  "age-early-teen": { label: "Adolescente Joven", description: "Alrededor de 13-15 años" },
+  "age-late-teen": { label: "Adolescente Mayor", description: "Alrededor de 16-19 años" },
+  "age-early-20s": { label: "Veintipocos", description: "Alrededor de 20-23 años" },
+  "age-late-20s": { label: "Veintimuchos", description: "Alrededor de 24-29 años" },
+  "age-custom": { label: "Edad personalizada...", description: "Especificar edad exacta en años" },
+
+  // ----- Primitive / Wild -----
+  "caveman": { label: "Hombre de las Cavernas", description: "Hombre primitivo de la Edad de Piedra" },
+  "cavewoman": { label: "Mujer de las Cavernas", description: "Mujer primitiva de la Edad de Piedra" },
+  "apeman": { label: "Hombre-mono", description: "Híbrido medio humano medio simio" },
+  "feral-wildman": { label: "Salvaje Feral", description: "Humano salvaje primitivo de pelo enmarañado" },
+  "neanderthal": { label: "Neandertal", description: "Especie humana premoderna" },
+
+  // ----- Fantasy -----
+  "elf": { label: "Elfo", description: "Humanoide esbelto con orejas puntiagudas" },
+  "half-elf": { label: "Semielfo", description: "Híbrido humano-elfo" },
+  "dwarf": { label: "Enano", description: "Humanoide robusto y barbudo" },
+  "orc": { label: "Orco", description: "Humanoide corpulento con colmillos" },
+  "goblin": { label: "Goblin", description: "Humanoide pequeño y travieso" },
+  "tiefling": { label: "Tiefling", description: "Humanoide con cuernos y herencia infernal" },
+  "faun": { label: "Fauno / Sátiro", description: "Humanoide con patas de cabra y cuernos" },
+  "centaur": { label: "Centauro", description: "Torso humano sobre cuerpo de caballo" },
+  "vampire": { label: "Vampiro", description: "Inmortal pálido con colmillos" },
+  "werewolf": { label: "Hombre Lobo", description: "Licántropo parcialmente transformado" },
+  "mermaid": { label: "Sirena", description: "Humanoide femenina con cola de pez" },
+  "merman": { label: "Tritón", description: "Humanoide masculino con cola de pez" },
+  "dragonkin": { label: "Estirpe de Dragón", description: "Humanoide draconiano escamoso" },
+  "wizard": { label: "Mago", description: "Lanzador de hechizos masculino con túnica" },
+  "witch": { label: "Bruja", description: "Lanzadora de hechizos femenina con túnica" },
+  "sorcerer": { label: "Hechicero", description: "Hombre mágico con túnica" },
+  "sorceress": { label: "Hechicera", description: "Mujer mágica con túnica" },
+  "knight": { label: "Caballero", description: "Guerrero con armadura completa" },
+  "barbarian": { label: "Bárbaro", description: "Guerrero corpulento vestido con pieles" },
+  "druid": { label: "Druida", description: "Místico vinculado a la naturaleza" },
+  "ranger": { label: "Explorador", description: "Arquero encapuchado del bosque" },
+  "necromancer": { label: "Nigromante", description: "Pálido lanzador de artes oscuras" },
+  "prince": { label: "Príncipe", description: "Joven hombre real" },
+  "princess": { label: "Princesa", description: "Joven mujer real" },
+
+  // ----- Mythic / Divine -----
+  "angel": { label: "Ángel", description: "Humanoide divino alado" },
+  "demon": { label: "Demonio", description: "Humanoide infernal con cuernos" },
+  "ghost": { label: "Fantasma", description: "Figura espectral translúcida" },
+  "valkyrie": { label: "Valquiria", description: "Guerrera espiritual nórdica" },
+  "god": { label: "Dios", description: "Deidad masculina" },
+  "goddess": { label: "Diosa", description: "Deidad femenina" },
+
+  // ----- Sci-Fi -----
+  "android-man": { label: "Androide (Hombre)", description: "Robot humanoide masculino" },
+  "android-woman": { label: "Androide (Mujer)", description: "Robot humanoide femenino" },
+  "android-neutral": { label: "Androide (Neutral)", description: "Robot humanoide andrógino" },
+  "cyborg": { label: "Cyborg", description: "Humano fusionado con piezas mecánicas" },
+  "robot": { label: "Robot", description: "Humanoide totalmente mecánico" },
+  "alien": { label: "Alienígena", description: "Humanoide no humano" },
+  "astronaut": { label: "Astronauta", description: "Explorador espacial con traje" },
+  "space-marine": { label: "Marine Espacial", description: "Soldado con servoarmadura" },
+  "ai-hologram": { label: "Holograma de IA", description: "Figura de luz volumétrica" },
+
+  // ----- Heroes & Villains -----
+  "superhero": { label: "Superhéroe", description: "Héroe enmascarado y con capa" },
+  "superheroine": { label: "Superheroína", description: "Heroína enmascarada y con capa" },
+  "masked-vigilante": { label: "Vigilante Enmascarado", description: "Héroe en traje oscuro" },
+  "supervillain": { label: "Supervillano", description: "Arquetipo malvado teatral" },
+  "caped-crusader": { label: "Cruzado Encapuchado", description: "Héroe oscuro con armadura y capucha" },
+  "super-soldier": { label: "Súper Soldado", description: "Guerrero patriótico con exo-armadura" },
+  "mutant": { label: "Mutante", description: "Humano con mutaciones visibles" },
+  "magical-girl": { label: "Magical Girl", description: "Heroína transformista estilo anime" },
+
+  // ----- Anime / Anthro -----
+  "catgirl": { label: "Catgirl", description: "Mujer anime con orejas y cola de gato" },
+  "catboy": { label: "Catboy", description: "Hombre anime con orejas y cola de gato" },
+  "anthro": { label: "Antropomorfo", description: "Humanoide bípedo con cabeza animal" },
+
+  // ----- Iconic / Public Domain -----
+  "sherlock-holmes": { label: "Sherlock Holmes", description: "Detective consultor victoriano" },
+  "dracula": { label: "Conde Drácula", description: "Conde vampiro gótico de Stoker" },
+  "frankenstein-monster": { label: "Monstruo de Frankenstein", description: "Criatura reanimada de Shelley" },
+  "phantom-opera": { label: "Fantasma de la Ópera", description: "Recluso operístico enmascarado de Leroux" },
+  "mr-hyde": { label: "Mr Hyde", description: "Alter ego monstruoso de Stevenson" },
+  "king-arthur": { label: "Rey Arturo", description: "Rey medieval legendario" },
+  "merlin": { label: "Merlín", description: "Mago consejero artúrico" },
+  "robin-hood": { label: "Robin Hood", description: "Arquero forajido del bosque" },
+  "joan-of-arc": { label: "Juana de Arco", description: "Doncella guerrera medieval con armadura" },
+  "cleopatra": { label: "Cleopatra", description: "Última faraona de Egipto" },
+  "captain-nemo": { label: "Capitán Nemo", description: "Capitán de submarino de Verne" },
+  "alice-wonderland": { label: "Alicia (en el País de las Maravillas)", description: "Niña del País de las Maravillas de Carroll" },
+  "peter-pan": { label: "Peter Pan", description: "El niño que nunca creció" },
+  "dorothy-oz": { label: "Dorothy (Oz)", description: "Niña de Oz con vestido azul a cuadros" },
+  "tin-man": { label: "Hombre de Hojalata", description: "Leñador de hojalata de Oz" },
+  "scarecrow-oz": { label: "Espantapájaros (Oz)", description: "Espantapájaros de paja de Oz" },
+  "cowardly-lion": { label: "León Cobarde", description: "León antropomorfo de Oz" },
+  "santa-claus": { label: "Papá Noel", description: "Repartidor de regalos de Navidad" },
+  "grim-reaper": { label: "La Parca", description: "Personificación de la Muerte" },
 }
 
 export default map

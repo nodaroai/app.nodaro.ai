@@ -4,10 +4,6 @@ const map: LocaleCatalogMap = {
   // Type
   "man": { label: "男性", description: "成人男性" },
   "woman": { label: "女性", description: "成人女性" },
-  "teen-boy": { label: "ティーンの男の子", description: "10代の男の子" },
-  "teen-girl": { label: "ティーンの女の子", description: "10代の女の子" },
-  "baby": { label: "赤ちゃん", description: "2歳未満の乳児" },
-  "child": { label: "子ども", description: "幼い子ども" },
   "non-binary": { label: "ノンバイナリー", description: "ノンバイナリーの人" },
   "beautiful-woman": { label: "美しい女性", description: "古典的に美しい女性" },
   "girl-next-door": { label: "ガール・ネクスト・ドア", description: "親しみやすく素朴で健全" },
@@ -356,6 +352,104 @@ const map: LocaleCatalogMap = {
 
   // Eye shape (additional)
   "eye-double-eyelid": { label: "二重まぶた", description: "はっきりした上瞼の二重ライン" },
+
+  // ----- New age entries -----
+  "age-toddler": { label: "幼児", description: "2〜3歳ごろ" },
+  "age-young-child": { label: "幼い子ども", description: "4〜6歳ごろ" },
+  "age-pre-teen": { label: "プレティーン", description: "10〜12歳ごろ" },
+  "age-early-teen": { label: "10代前半", description: "13〜15歳ごろ" },
+  "age-late-teen": { label: "10代後半", description: "16〜19歳ごろ" },
+  "age-early-20s": { label: "20代前半", description: "20〜23歳ごろ" },
+  "age-late-20s": { label: "20代後半", description: "24〜29歳ごろ" },
+  "age-custom": { label: "カスタム年齢...", description: "正確な年齢を年単位で指定" },
+
+  // ----- Primitive / Wild -----
+  "caveman": { label: "原始人(男)", description: "石器時代の原始的な男性" },
+  "cavewoman": { label: "原始人(女)", description: "石器時代の原始的な女性" },
+  "apeman": { label: "猿人", description: "半人半猿のハイブリッド" },
+  "feral-wildman": { label: "野生人", description: "髪の伸びた原始的な野生人間" },
+  "neanderthal": { label: "ネアンデルタール人", description: "現代以前の人類種" },
+
+  // ----- Fantasy -----
+  "elf": { label: "エルフ", description: "尖った耳のスレンダーな人型" },
+  "half-elf": { label: "ハーフエルフ", description: "人間とエルフの混血" },
+  "dwarf": { label: "ドワーフ", description: "がっしりとした髭の人型" },
+  "orc": { label: "オーク", description: "牙を持つ重量級の人型" },
+  "goblin": { label: "ゴブリン", description: "小柄でいたずら好きな人型" },
+  "tiefling": { label: "ティーフリング", description: "角を持つ地獄の血を引く人型" },
+  "faun": { label: "フォーン / サテュロス", description: "山羊の脚と角を持つ人型" },
+  "centaur": { label: "ケンタウロス", description: "馬の体に人間の上半身" },
+  "vampire": { label: "ヴァンパイア", description: "牙を持つ青白い不死者" },
+  "werewolf": { label: "狼男", description: "部分的に変身した人狼" },
+  "mermaid": { label: "人魚(女)", description: "魚の尾を持つ女性人型" },
+  "merman": { label: "人魚(男)", description: "魚の尾を持つ男性人型" },
+  "dragonkin": { label: "ドラゴンキン", description: "鱗のドラゴン様人型" },
+  "wizard": { label: "魔法使い(男)", description: "ローブ姿の男性魔術師" },
+  "witch": { label: "魔女", description: "ローブ姿の女性魔術師" },
+  "sorcerer": { label: "ソーサラー", description: "流れるローブの魔術師(男)" },
+  "sorceress": { label: "ソーサレス", description: "流れるローブの魔術師(女)" },
+  "knight": { label: "騎士", description: "プレートアーマーの戦士" },
+  "barbarian": { label: "バーバリアン", description: "毛皮を纏った屈強な戦士" },
+  "druid": { label: "ドルイド", description: "自然と結びついた神秘家" },
+  "ranger": { label: "レンジャー", description: "マントの弓使い・原野の斥候" },
+  "necromancer": { label: "ネクロマンサー", description: "青白い闇の魔術師" },
+  "prince": { label: "王子", description: "王族の若い男性" },
+  "princess": { label: "王女", description: "王族の若い女性" },
+
+  // ----- Mythic / Divine -----
+  "angel": { label: "天使", description: "翼を持つ神聖な人型" },
+  "demon": { label: "悪魔", description: "角を持つ地獄の人型" },
+  "ghost": { label: "幽霊", description: "半透明な霊の姿" },
+  "valkyrie": { label: "ヴァルキリー", description: "北欧の女戦士の精霊" },
+  "god": { label: "神(男)", description: "男性の神格" },
+  "goddess": { label: "女神", description: "女性の神格" },
+
+  // ----- Sci-Fi -----
+  "android-man": { label: "アンドロイド(男性)", description: "男性型ヒューマノイドロボット" },
+  "android-woman": { label: "アンドロイド(女性)", description: "女性型ヒューマノイドロボット" },
+  "android-neutral": { label: "アンドロイド(中性)", description: "アンドロギナス型ヒューマノイドロボット" },
+  "cyborg": { label: "サイボーグ", description: "機械パーツと融合した人間" },
+  "robot": { label: "ロボット", description: "完全機械式のヒューマノイド" },
+  "alien": { label: "エイリアン", description: "非人間型の人型" },
+  "astronaut": { label: "宇宙飛行士", description: "宇宙服の宇宙探検家" },
+  "space-marine": { label: "スペースマリーン", description: "パワーアーマーの兵士" },
+  "ai-hologram": { label: "AIホログラム", description: "立体光のフィギュア" },
+
+  // ----- Heroes & Villains -----
+  "superhero": { label: "スーパーヒーロー", description: "マスクとマントのヒーロー" },
+  "superheroine": { label: "スーパーヒロイン", description: "マスクとマントのヒロイン" },
+  "masked-vigilante": { label: "覆面自警団", description: "暗いスーツのヒーロー" },
+  "supervillain": { label: "スーパーヴィラン", description: "演劇的な悪役の典型" },
+  "caped-crusader": { label: "ケープド・クルセイダー", description: "鎧とフードのダークヒーロー" },
+  "super-soldier": { label: "スーパーソルジャー", description: "愛国的なエクソアーマーの戦士" },
+  "mutant": { label: "ミュータント", description: "目に見える変異を持つ人間" },
+  "magical-girl": { label: "魔法少女", description: "アニメ風の変身ヒロイン" },
+
+  // ----- Anime / Anthro -----
+  "catgirl": { label: "猫娘 / キャットガール", description: "猫耳と尻尾のアニメ女性" },
+  "catboy": { label: "猫男子 / キャットボーイ", description: "猫耳と尻尾のアニメ男性" },
+  "anthro": { label: "ケモノ / 擬人化動物", description: "動物頭の二足歩行人型" },
+
+  // ----- Iconic / Public Domain -----
+  "sherlock-holmes": { label: "シャーロック・ホームズ", description: "ヴィクトリア朝の諮問探偵" },
+  "dracula": { label: "ドラキュラ伯爵", description: "ストーカーのゴシック・ヴァンパイア伯爵" },
+  "frankenstein-monster": { label: "フランケンシュタインの怪物", description: "シェリーの蘇った怪物" },
+  "phantom-opera": { label: "オペラ座の怪人", description: "ルルーの仮面のオペラ隠遁者" },
+  "mr-hyde": { label: "ハイド氏", description: "スティーヴンソンの怪物的な分身" },
+  "king-arthur": { label: "アーサー王", description: "伝説の中世王" },
+  "merlin": { label: "マーリン", description: "アーサー王の魔術師顧問" },
+  "robin-hood": { label: "ロビン・フッド", description: "森の無法者弓使い" },
+  "joan-of-arc": { label: "ジャンヌ・ダルク", description: "鎧の中世の戦乙女" },
+  "cleopatra": { label: "クレオパトラ", description: "エジプト最後のファラオ" },
+  "captain-nemo": { label: "ネモ船長", description: "ヴェルヌの潜水艦船長" },
+  "alice-wonderland": { label: "アリス(不思議の国)", description: "キャロルの不思議の国の少女" },
+  "peter-pan": { label: "ピーター・パン", description: "決して大人にならない少年" },
+  "dorothy-oz": { label: "ドロシー(オズ)", description: "青いギンガムのオズの少女" },
+  "tin-man": { label: "ブリキのきこり", description: "オズのブリキ人形" },
+  "scarecrow-oz": { label: "かかし(オズ)", description: "オズのわらのかかし" },
+  "cowardly-lion": { label: "臆病なライオン", description: "オズの擬人化ライオン" },
+  "santa-claus": { label: "サンタクロース", description: "クリスマスの贈り物配達人" },
+  "grim-reaper": { label: "死神", description: "死の擬人化" },
 }
 
 export default map

@@ -73,48 +73,166 @@ export interface Person {
 
 export const PEOPLE: ReadonlyArray<Person> = [
   // -------------------- Type (primary subject descriptor) --------------------
-  { id: "man",               label: "Man",                dimension: "type", description: "Adult man",                     promptHint: "a man" },
-  { id: "woman",             label: "Woman",              dimension: "type", description: "Adult woman",                   promptHint: "a woman" },
-  { id: "teen-boy",          label: "Teen Boy",           dimension: "type", description: "Teenage boy",                   promptHint: "a teenage boy" },
-  { id: "teen-girl",         label: "Teen Girl",          dimension: "type", description: "Teenage girl",                  promptHint: "a teenage girl" },
-  { id: "baby",              label: "Baby",               dimension: "type", description: "Infant under 2",                promptHint: "a baby" },
-  { id: "child",             label: "Child",              dimension: "type", description: "Young child",                   promptHint: "a child" },
-  { id: "non-binary",        label: "Non-binary",         dimension: "type", description: "Non-binary person",             promptHint: "a non-binary person" },
-  { id: "beautiful-woman",   label: "Beautiful Woman",    dimension: "type", description: "Classically beautiful woman",   promptHint: "a beautiful woman" },
-  { id: "girl-next-door",    label: "Girl Next Door",     dimension: "type", description: "Friendly, approachable, wholesome", promptHint: "a girl-next-door type — friendly, approachable, natural beauty with wholesome charm" },
-  { id: "handsome-man",      label: "Handsome Man",       dimension: "type", description: "Classically handsome man",      promptHint: "a handsome man" },
-  { id: "boy-next-door",     label: "Boy Next Door",      dimension: "type", description: "Friendly, approachable, wholesome", promptHint: "a boy-next-door type — friendly, approachable, with wholesome charm" },
-  { id: "gentleman",         label: "Gentleman",          dimension: "type", description: "Refined, classic, polished man", promptHint: "a refined gentleman with classic elegance and polished presence" },
-  { id: "elegant-woman",     label: "Elegant Woman",      dimension: "type", description: "Poised, refined woman",         promptHint: "an elegant, poised woman" },
-  { id: "rugged-man",        label: "Rugged Man",         dimension: "type", description: "Weathered, rugged man",         promptHint: "a rugged, weathered man" },
-  { id: "bad-boy",           label: "Bad Boy",            dimension: "type", description: "Rebellious, edgy masculine",    promptHint: "a bad boy with rebellious, edgy attitude and a dangerous charm" },
-  { id: "graceful-woman",    label: "Graceful Woman",     dimension: "type", description: "Gentle, graceful woman",        promptHint: "a graceful woman" },
-  { id: "baddie",            label: "Baddie",             dimension: "type", description: "Confident, trendy, styled woman", promptHint: "a baddie — a confident, trendy woman with styled makeup and a fashion-forward look" },
-  { id: "stylish-influencer", label: "Stylish Influencer", dimension: "type", description: "Polished social-media tastemaker", promptHint: "a stylish social-media influencer — polished personal-brand styling, trend-forward outfit, expressive natural posing for the camera, the curated put-together look of a content creator" },
-  { id: "stunning-model",    label: "Stunning Model",     dimension: "type", description: "Fashion-model aesthetic",         promptHint: "a stunning fashion model with editorial poise, refined features, and high-fashion presence" },
-  { id: "supermodel",        label: "Supermodel",         dimension: "type", description: "Iconic, top-tier runway and cover star", promptHint: "a supermodel — iconic top-tier presence with magnetic statement features, a striking silhouette and the unmistakable runway-and-cover aura that commands attention" },
-  { id: "femme-fatale",      label: "Femme Fatale",       dimension: "type", description: "Alluring, dangerous noir seductress", promptHint: "a femme fatale — alluring, mysterious, and dangerous with classic noir seduction" },
-  { id: "tough-guy",         label: "Tough Guy",          dimension: "type", description: "Hardened, tough man",           promptHint: "a tough, hardened man" },
-  { id: "wise-elder",        label: "Wise Elder",         dimension: "type", description: "Aged, knowing elder",           promptHint: "a wise elder" },
-  { id: "silver-fox",        label: "Silver Fox",         dimension: "type", description: "Distinguished attractive older man", promptHint: "a silver fox — a distinguished, attractive older man with silver-gray hair and a confident magnetism" },
-  { id: "mysterious-figure", label: "Mysterious Figure",  dimension: "type", description: "Enigmatic figure",              promptHint: "a mysterious figure" },
-  { id: "femboy",            label: "Femboy",             dimension: "type", description: "Soft-feminine masculine type, gender-fluid styling", promptHint: "a femboy — soft-feminine masculine presentation with gender-fluid styling" },
-  { id: "twink",             label: "Twink",              dimension: "type", description: "Slim, smooth, youthful gay-male type", promptHint: "a twink — slim, smooth, and youthful with a soft boyish presence" },
-  { id: "soft-butch",        label: "Soft Butch",         dimension: "type", description: "Gentle masculine-of-center woman", promptHint: "a soft-butch woman — gentle masculine-of-center styling and energy" },
-  { id: "tomboy",            label: "Tomboy",             dimension: "type", description: "Boyish styling and energy on a feminine body", promptHint: "a tomboy — boyish styling and energy on a feminine body" },
-  { id: "thick",             label: "Thick",              dimension: "type", description: "Voluptuous body-positive figure with curves", promptHint: "a thick, voluptuous body-positive figure with full curves" },
-  { id: "bear",              label: "Bear",               dimension: "type", description: "Big, bearded, hairy masculine type", promptHint: "a bear — a big, bearded, hairy man with a warm masculine presence" },
+  // Type captures identity / archetype / species. Pure-age subjects (baby,
+  // child, teenager) belong in the Age dimension. Entries are tagged with a
+  // `group` so the picker renders Type as collapsible sub-sections — the
+  // catalog is large enough that flat scrolling isn't usable.
+  //
+  // Gender policy:
+  //  - For species/creatures whose silhouette doesn't depend strongly on
+  //    gender, entries are gender-neutral. The user can pair Build / Hair /
+  //    Lips for masculine/feminine cues.
+  //  - For archetypes with canonical gendered forms (wizard/witch,
+  //    sorcerer/sorceress, god/goddess, prince/princess, mer-man/mermaid),
+  //    we ship paired entries.
+
+  // ----- Realistic — Plain -----
+  { id: "man",               label: "Man",                group: "Realistic",            dimension: "type", description: "Adult man",                     promptHint: "a man" },
+  { id: "woman",             label: "Woman",              group: "Realistic",            dimension: "type", description: "Adult woman",                   promptHint: "a woman" },
+  { id: "non-binary",        label: "Non-binary",         group: "Realistic",            dimension: "type", description: "Non-binary person",             promptHint: "a non-binary person" },
+
+  // ----- Realistic — Aesthetic / archetype -----
+  { id: "beautiful-woman",   label: "Beautiful Woman",    group: "Realistic — Style",    dimension: "type", description: "Classically beautiful woman",   promptHint: "a beautiful woman" },
+  { id: "girl-next-door",    label: "Girl Next Door",     group: "Realistic — Style",    dimension: "type", description: "Friendly, approachable, wholesome", promptHint: "a girl-next-door type — friendly, approachable, natural beauty with wholesome charm" },
+  { id: "handsome-man",      label: "Handsome Man",       group: "Realistic — Style",    dimension: "type", description: "Classically handsome man",      promptHint: "a handsome man" },
+  { id: "boy-next-door",     label: "Boy Next Door",      group: "Realistic — Style",    dimension: "type", description: "Friendly, approachable, wholesome", promptHint: "a boy-next-door type — friendly, approachable, with wholesome charm" },
+  { id: "gentleman",         label: "Gentleman",          group: "Realistic — Style",    dimension: "type", description: "Refined, classic, polished man", promptHint: "a refined gentleman with classic elegance and polished presence" },
+  { id: "elegant-woman",     label: "Elegant Woman",      group: "Realistic — Style",    dimension: "type", description: "Poised, refined woman",         promptHint: "an elegant, poised woman" },
+  { id: "rugged-man",        label: "Rugged Man",         group: "Realistic — Style",    dimension: "type", description: "Weathered, rugged man",         promptHint: "a rugged, weathered man" },
+  { id: "bad-boy",           label: "Bad Boy",            group: "Realistic — Style",    dimension: "type", description: "Rebellious, edgy masculine",    promptHint: "a bad boy with rebellious, edgy attitude and a dangerous charm" },
+  { id: "graceful-woman",    label: "Graceful Woman",     group: "Realistic — Style",    dimension: "type", description: "Gentle, graceful woman",        promptHint: "a graceful woman" },
+  { id: "baddie",            label: "Baddie",             group: "Realistic — Style",    dimension: "type", description: "Confident, trendy, styled woman", promptHint: "a baddie — a confident, trendy woman with styled makeup and a fashion-forward look" },
+  { id: "stylish-influencer", label: "Stylish Influencer", group: "Realistic — Style",   dimension: "type", description: "Polished social-media tastemaker", promptHint: "a stylish social-media influencer — polished personal-brand styling, trend-forward outfit, expressive natural posing for the camera, the curated put-together look of a content creator" },
+  { id: "stunning-model",    label: "Stunning Model",     group: "Realistic — Style",    dimension: "type", description: "Fashion-model aesthetic",         promptHint: "a stunning fashion model with editorial poise, refined features, and high-fashion presence" },
+  { id: "supermodel",        label: "Supermodel",         group: "Realistic — Style",    dimension: "type", description: "Iconic, top-tier runway and cover star", promptHint: "a supermodel — iconic top-tier presence with magnetic statement features, a striking silhouette and the unmistakable runway-and-cover aura that commands attention" },
+  { id: "femme-fatale",      label: "Femme Fatale",       group: "Realistic — Style",    dimension: "type", description: "Alluring, dangerous noir seductress", promptHint: "a femme fatale — alluring, mysterious, and dangerous with classic noir seduction" },
+  { id: "tough-guy",         label: "Tough Guy",          group: "Realistic — Style",    dimension: "type", description: "Hardened, tough man",           promptHint: "a tough, hardened man" },
+  // Aesthetic archetypes that traditionally read older — hints kept gender +
+  // look-focused so the Age dimension stays in control of the literal age.
+  { id: "wise-elder",        label: "Wise Elder",         group: "Realistic — Style",    dimension: "type", description: "Knowing, sage presence",        promptHint: "a wise, sage figure with a knowing, contemplative presence" },
+  { id: "silver-fox",        label: "Silver Fox",         group: "Realistic — Style",    dimension: "type", description: "Distinguished man with silver-gray hair", promptHint: "a silver fox — a distinguished man with silver-gray hair and a confident, magnetic presence" },
+  { id: "mysterious-figure", label: "Mysterious Figure",  group: "Realistic — Style",    dimension: "type", description: "Enigmatic figure",              promptHint: "a mysterious figure" },
+  { id: "femboy",            label: "Femboy",             group: "Realistic — Style",    dimension: "type", description: "Soft-feminine masculine type, gender-fluid styling", promptHint: "a femboy — soft-feminine masculine presentation with gender-fluid styling" },
+  { id: "twink",             label: "Twink",              group: "Realistic — Style",    dimension: "type", description: "Slim, smooth, soft gay-male type", promptHint: "a twink — slim, smooth, soft masculine presence with a delicate, gender-fluid vibe" },
+  { id: "soft-butch",        label: "Soft Butch",         group: "Realistic — Style",    dimension: "type", description: "Gentle masculine-of-center woman", promptHint: "a soft-butch woman — gentle masculine-of-center styling and energy" },
+  { id: "tomboy",            label: "Tomboy",             group: "Realistic — Style",    dimension: "type", description: "Boyish styling and energy on a feminine body", promptHint: "a tomboy — boyish styling and energy on a feminine body" },
+  { id: "thick",             label: "Thick",              group: "Realistic — Style",    dimension: "type", description: "Voluptuous body-positive figure with curves", promptHint: "a thick, voluptuous body-positive figure with full curves" },
+  { id: "bear",              label: "Bear",               group: "Realistic — Style",    dimension: "type", description: "Big, bearded, hairy masculine type", promptHint: "a bear — a big, bearded, hairy man with a warm masculine presence" },
+
+  // ----- Primitive / Wild -----
+  { id: "caveman",           label: "Caveman",            group: "Primitive / Wild",     dimension: "type", description: "Stone Age primitive man",       promptHint: "a caveman — Stone Age primitive in animal furs, with shaggy hair, a heavy brow and a sturdy frame" },
+  { id: "cavewoman",         label: "Cavewoman",          group: "Primitive / Wild",     dimension: "type", description: "Stone Age primitive woman",     promptHint: "a cavewoman — Stone Age primitive in animal furs, with shaggy hair and a sturdy frame" },
+  { id: "apeman",            label: "Apeman",             group: "Primitive / Wild",     dimension: "type", description: "Half-human half-ape hybrid",    promptHint: "an apeman — half-human half-ape hybrid with simian features, broad shoulders and a heavy stooped build" },
+  { id: "feral-wildman",     label: "Feral Wild-Human",   group: "Primitive / Wild",     dimension: "type", description: "Overgrown, primal feral human", promptHint: "a feral wild-human — overgrown matted hair, primal eyes and a near-naked, bestial bearing" },
+  { id: "neanderthal",       label: "Neanderthal",        group: "Primitive / Wild",     dimension: "type", description: "Pre-modern human species",      promptHint: "a neanderthal — heavy brow, broad nose, stocky pre-modern human build with weather-toughened skin" },
+
+  // ----- Fantasy (humanoid) -----
+  { id: "elf",               label: "Elf",                group: "Fantasy",              dimension: "type", description: "Slender humanoid with pointed ears", promptHint: "an elf — slender humanoid with delicately pointed ears, fine features and an ethereal poise" },
+  { id: "half-elf",          label: "Half-Elf",           group: "Fantasy",              dimension: "type", description: "Mixed elven-human heritage",    promptHint: "a half-elf with subtly pointed ears and a graceful blend of human and elven features" },
+  { id: "dwarf",             label: "Dwarf",              group: "Fantasy",              dimension: "type", description: "Stocky mountain-folk humanoid", promptHint: "a dwarf — stocky, broad-shouldered humanoid with a thick beard and a hardy mountain-folk look" },
+  { id: "orc",               label: "Orc",                group: "Fantasy",              dimension: "type", description: "Heavyset tusked humanoid",      promptHint: "an orc — heavyset humanoid with greenish skin, jutting tusks and a brutish, battle-scarred build" },
+  { id: "goblin",            label: "Goblin",             group: "Fantasy",              dimension: "type", description: "Small, wiry humanoid",          promptHint: "a goblin — small, wiry humanoid with sharp features, oversized ears and a mischievous look" },
+  { id: "tiefling",          label: "Tiefling",           group: "Fantasy",              dimension: "type", description: "Horned humanoid with infernal heritage", promptHint: "a tiefling — humanoid with curling horns, a tail and faintly otherworldly skin tones" },
+  { id: "faun",              label: "Faun / Satyr",       group: "Fantasy",              dimension: "type", description: "Goat-legged horned humanoid",   promptHint: "a faun — humanoid with goat legs, small curling horns and a woodland presence" },
+  { id: "centaur",           label: "Centaur",            group: "Fantasy",              dimension: "type", description: "Human torso on a horse body",   promptHint: "a centaur — human torso fused to the body of a horse" },
+  { id: "vampire",           label: "Vampire",            group: "Fantasy",              dimension: "type", description: "Pale, fanged immortal",         promptHint: "a vampire — pale, fanged immortal with a pristine gothic elegance and a quiet predatory poise" },
+  { id: "werewolf",          label: "Werewolf",           group: "Fantasy",              dimension: "type", description: "Partially transformed lycanthrope", promptHint: "a werewolf — partially transformed humanoid with wolfish snout, fur, claws and a feral musculature" },
+  { id: "mermaid",           label: "Mermaid",            group: "Fantasy",              dimension: "type", description: "Female humanoid with a fish tail", promptHint: "a mermaid — humanoid woman from the waist up with a long iridescent fish tail below" },
+  { id: "merman",            label: "Merman",             group: "Fantasy",              dimension: "type", description: "Male humanoid with a fish tail", promptHint: "a merman — humanoid man from the waist up with a long iridescent fish tail below" },
+  { id: "dragonkin",         label: "Dragonkin",          group: "Fantasy",              dimension: "type", description: "Scaled draconic humanoid",      promptHint: "dragonkin — humanoid with scaled skin, ridged horns and reptilian draconic features" },
+  { id: "wizard",            label: "Wizard",             group: "Fantasy",              dimension: "type", description: "Robed male spellcaster",        promptHint: "a wizard — robed male spellcaster with arcane symbols, a long staff and a contemplative bearing" },
+  { id: "witch",             label: "Witch",              group: "Fantasy",              dimension: "type", description: "Robed female spellcaster",      promptHint: "a witch — robed female spellcaster with arcane sigils, a knowing gaze and a quietly powerful air" },
+  { id: "sorcerer",          label: "Sorcerer",           group: "Fantasy",              dimension: "type", description: "Magical man in flowing robes",  promptHint: "a sorcerer — magical man in flowing robes wreathed in arcane glow" },
+  { id: "sorceress",         label: "Sorceress",          group: "Fantasy",              dimension: "type", description: "Magical woman in flowing robes", promptHint: "a sorceress — magical woman in flowing robes wreathed in arcane glow" },
+  { id: "knight",            label: "Knight",             group: "Fantasy",              dimension: "type", description: "Plate-armoured warrior",        promptHint: "a knight in full plate armour with a heraldic surcoat and a steady warrior's stance" },
+  { id: "barbarian",         label: "Barbarian",          group: "Fantasy",              dimension: "type", description: "Brawny fur-clad warrior",       promptHint: "a barbarian — brawny warrior in furs and tribal markings, weathered and battle-ready" },
+  { id: "druid",             label: "Druid",              group: "Fantasy",              dimension: "type", description: "Nature-bound robed mystic",     promptHint: "a druid — robed nature-binder wreathed in foliage, antler accents and earthy ornaments" },
+  { id: "ranger",            label: "Ranger",             group: "Fantasy",              dimension: "type", description: "Cloaked archer / wilderness scout", promptHint: "a ranger — cloaked archer in muted leather and forest greens, alert wilderness bearing" },
+  { id: "necromancer",       label: "Necromancer",        group: "Fantasy",              dimension: "type", description: "Pale dark-arts spellcaster",    promptHint: "a necromancer — pale robed figure with dark sigils and a corpse-cold aura" },
+  { id: "prince",            label: "Prince",             group: "Fantasy",              dimension: "type", description: "Royal young man",               promptHint: "a prince — royal young man in tailored regalia with a poised, courtly bearing" },
+  { id: "princess",          label: "Princess",           group: "Fantasy",              dimension: "type", description: "Royal young woman",             promptHint: "a princess — royal young woman in flowing regalia with a poised, courtly bearing" },
+
+  // ----- Mythic / Divine -----
+  { id: "angel",             label: "Angel",              group: "Mythic / Divine",      dimension: "type", description: "Winged divine humanoid",        promptHint: "an angel — humanoid with luminous feathered wings, a soft halo of light and a serene divine presence" },
+  { id: "demon",             label: "Demon",              group: "Mythic / Divine",      dimension: "type", description: "Horned infernal humanoid",      promptHint: "a demon — horned humanoid with red or charcoal skin, infernal eyes and a smouldering aura" },
+  { id: "ghost",             label: "Ghost",              group: "Mythic / Divine",      dimension: "type", description: "Translucent spectral figure",   promptHint: "a ghost — translucent humanoid figure with a faint pale glow and a haunting drifting silhouette" },
+  { id: "valkyrie",          label: "Valkyrie",           group: "Mythic / Divine",      dimension: "type", description: "Norse warrior-spirit woman",    promptHint: "a valkyrie — armoured warrior woman with metal-feathered wings and a shield-maiden's bearing" },
+  { id: "god",               label: "God",                group: "Mythic / Divine",      dimension: "type", description: "Male deity",                    promptHint: "a god — male deity with a radiant divine aura, idealised features and an aura of immense power" },
+  { id: "goddess",           label: "Goddess",            group: "Mythic / Divine",      dimension: "type", description: "Female deity",                  promptHint: "a goddess — female deity with a radiant divine aura, idealised features and an aura of immense power" },
+
+  // ----- Sci-Fi -----
+  { id: "android-man",       label: "Android (Male)",     group: "Sci-Fi",               dimension: "type", description: "Masculine humanoid robot",      promptHint: "an android — humanoid robot with a masculine sculpt, smooth synthetic skin and visible mechanical seams" },
+  { id: "android-woman",     label: "Android (Female)",   group: "Sci-Fi",               dimension: "type", description: "Feminine humanoid robot",       promptHint: "an android — humanoid robot with a feminine sculpt, smooth synthetic skin and visible mechanical seams" },
+  { id: "android-neutral",   label: "Android (Neutral)",  group: "Sci-Fi",               dimension: "type", description: "Androgynous humanoid robot",    promptHint: "an androgynous android — humanoid robot with a neutral sculpt and exposed precision servos" },
+  { id: "cyborg",            label: "Cyborg",             group: "Sci-Fi",               dimension: "type", description: "Human fused with machine parts", promptHint: "a cyborg — human body fused with mechanical augmentations, cybernetic limbs and partial exposed circuitry" },
+  { id: "robot",             label: "Robot",              group: "Sci-Fi",               dimension: "type", description: "Fully mechanical humanoid",     promptHint: "a robot — fully mechanical humanoid with metal plating, articulated joints and glowing optical sensors" },
+  { id: "alien",             label: "Alien",              group: "Sci-Fi",               dimension: "type", description: "Non-human humanoid",            promptHint: "an alien — non-human humanoid with otherworldly facial features, unusual skin tone and unfamiliar proportions" },
+  { id: "astronaut",         label: "Astronaut",          group: "Sci-Fi",               dimension: "type", description: "Suited space explorer",         promptHint: "an astronaut in a sealed pressure suit and reflective helmet visor with mission patches across the chest" },
+  { id: "space-marine",      label: "Space Marine",       group: "Sci-Fi",               dimension: "type", description: "Power-armoured soldier",        promptHint: "a space marine in heavy power armour with a sealed helmet, reinforced shoulder pauldrons and a slung weapon harness" },
+  { id: "ai-hologram",       label: "AI Hologram",        group: "Sci-Fi",               dimension: "type", description: "Volumetric light figure",       promptHint: "an AI hologram — humanoid figure rendered as translucent volumetric light with subtle scanline shimmer" },
+
+  // ----- Heroes & Villains -----
+  { id: "superhero",         label: "Superhero",          group: "Heroes & Villains",    dimension: "type", description: "Masked caped male hero",        promptHint: "a superhero — masked, caped, in a fitted spandex suit with a chest emblem and a heroic ready stance" },
+  { id: "superheroine",      label: "Superheroine",       group: "Heroes & Villains",    dimension: "type", description: "Masked caped female hero",      promptHint: "a superheroine — masked, caped, in a fitted spandex suit with a chest emblem and a heroic ready stance" },
+  { id: "masked-vigilante",  label: "Masked Vigilante",   group: "Heroes & Villains",    dimension: "type", description: "Dark-suited masked hero",       promptHint: "a masked vigilante — dark tactical bodysuit with a half-mask covering the eyes, urban gritty aesthetic" },
+  { id: "supervillain",      label: "Supervillain",       group: "Heroes & Villains",    dimension: "type", description: "Theatrical evil archetype",     promptHint: "a supervillain — theatrical menacing costume with a sinister emblem, dramatic cape and a commanding villain bearing" },
+  { id: "caped-crusader",    label: "Caped Crusader",     group: "Heroes & Villains",    dimension: "type", description: "Armored cowled dark hero",      promptHint: "a caped crusader — armoured cowled hero in dark colors with reinforced gauntlets, utility belt and a heavy cape" },
+  { id: "super-soldier",     label: "Super-Soldier",      group: "Heroes & Villains",    dimension: "type", description: "Patriotic exo-armoured warrior", promptHint: "a super-soldier — military-grade exo-armour with patriotic markings, reinforced helm and a star-spangled emblem" },
+  { id: "mutant",            label: "Mutant",             group: "Heroes & Villains",    dimension: "type", description: "Human with one or two visible mutations", promptHint: "a mutant — human-baseline body with one or two visible mutations such as unusual skin pigmentation, glowing eyes, claws or gills" },
+  { id: "magical-girl",      label: "Magical Girl",       group: "Heroes & Villains",    dimension: "type", description: "Anime-style transforming heroine", promptHint: "a magical girl — anime-style heroine in a frilled costume with sparkles, ribbons, ornamented accessories and a transformation aura" },
+
+  // ----- Anime / Anthro -----
+  { id: "catgirl",           label: "Catgirl",            group: "Anime / Anthro",       dimension: "type", description: "Anime woman with cat ears + tail", promptHint: "a catgirl — humanoid woman with anime-style cat ears on her head and a soft cat tail" },
+  { id: "catboy",            label: "Catboy",             group: "Anime / Anthro",       dimension: "type", description: "Anime man with cat ears + tail", promptHint: "a catboy — humanoid man with anime-style cat ears on his head and a soft cat tail" },
+  { id: "anthro",            label: "Anthropomorphic",    group: "Anime / Anthro",       dimension: "type", description: "Bipedal animal-headed humanoid", promptHint: "an anthropomorphic animal humanoid — bipedal body in human stance with an animal head, fur and animal tail" },
+
+  // ----- Iconic / Public Domain -----
+  // Only public-domain figures — modern trademarked characters (Superman,
+  // Spider-Man, Yoda, Mickey, etc.) are deliberately NOT shipped as named
+  // entries. Users wanting them can type the name into the prompt; we don't
+  // ship a button.
+  { id: "sherlock-holmes",      label: "Sherlock Holmes",       group: "Iconic / Public Domain", dimension: "type", description: "Victorian consulting detective",   promptHint: "Sherlock Holmes — Victorian consulting detective in a tweed deerstalker hat and Inverness cape, pipe in hand, sharp analytical gaze" },
+  { id: "dracula",              label: "Count Dracula",         group: "Iconic / Public Domain", dimension: "type", description: "Stoker's gothic vampire count",    promptHint: "Count Dracula — gothic vampire count in formal black evening wear with a long opera cape, pale aristocratic features and pronounced fangs" },
+  { id: "frankenstein-monster", label: "Frankenstein's Monster", group: "Iconic / Public Domain", dimension: "type", description: "Shelley's reanimated creature",   promptHint: "Frankenstein's Monster — tall reanimated humanoid with a flat-topped head, bolts in the neck, sutured greenish skin and a heavy stooped frame" },
+  { id: "phantom-opera",        label: "Phantom of the Opera",  group: "Iconic / Public Domain", dimension: "type", description: "Leroux's masked operatic recluse", promptHint: "the Phantom of the Opera — masked operatic figure in formal evening wear with a stark white half-mask covering one side of the face" },
+  { id: "mr-hyde",              label: "Mr Hyde",               group: "Iconic / Public Domain", dimension: "type", description: "Stevenson's monstrous alter ego",  promptHint: "Mr Hyde — bestial transformed alter ego with a hunched ape-like frame, brutish features and a sneer of malevolent glee" },
+  { id: "king-arthur",          label: "King Arthur",           group: "Iconic / Public Domain", dimension: "type", description: "Legendary medieval king",          promptHint: "King Arthur — armoured medieval king in plate and chainmail with a regal crown, the legendary sword Excalibur at his side" },
+  { id: "merlin",               label: "Merlin",                group: "Iconic / Public Domain", dimension: "type", description: "Arthurian wizard advisor",         promptHint: "Merlin — Arthurian wizard with a long flowing white beard, deep blue robes embroidered with stars, a tall pointed hat and a gnarled wooden staff" },
+  { id: "robin-hood",           label: "Robin Hood",            group: "Iconic / Public Domain", dimension: "type", description: "Forest outlaw archer",             promptHint: "Robin Hood — forest outlaw archer in green tunic and hood with a longbow and quiver of arrows, leather boots and a roguish grin" },
+  { id: "joan-of-arc",          label: "Joan of Arc",           group: "Iconic / Public Domain", dimension: "type", description: "Medieval warrior-maid in armour",  promptHint: "Joan of Arc — medieval warrior-maid in shining plate armour over a white surcoat, holding a banner, short cropped hair and a determined holy expression" },
+  { id: "cleopatra",            label: "Cleopatra",             group: "Iconic / Public Domain", dimension: "type", description: "Last pharaoh of Egypt",            promptHint: "Cleopatra — Egyptian pharaoh-queen in pleated white linen and a broad gold collar, kohl-lined almond eyes, a black bobbed wig and a golden uraeus diadem" },
+  { id: "captain-nemo",         label: "Captain Nemo",          group: "Iconic / Public Domain", dimension: "type", description: "Verne's submarine captain",        promptHint: "Captain Nemo — 19th-century submarine captain in a dark double-breasted naval coat, peaked cap and a stern mariner's bearing" },
+  { id: "alice-wonderland",     label: "Alice (Wonderland)",    group: "Iconic / Public Domain", dimension: "type", description: "Carroll's Wonderland girl",        promptHint: "Alice from Wonderland — young girl in a blue dress with a white pinafore apron, long blonde hair tied back with a black bow and white knee-high stockings" },
+  { id: "peter-pan",            label: "Peter Pan",             group: "Iconic / Public Domain", dimension: "type", description: "Boy who never grew up",            promptHint: "Peter Pan — boyish figure in a green tunic and tights with a pointed feathered cap, mischievous grin and a youthful adventurous bearing" },
+  { id: "dorothy-oz",           label: "Dorothy (Oz)",          group: "Iconic / Public Domain", dimension: "type", description: "Oz girl in blue gingham",          promptHint: "Dorothy from Oz — young girl in a blue and white gingham dress with brown pigtail braids tied with ribbons and ruby slippers" },
+  { id: "tin-man",              label: "Tin Man",               group: "Iconic / Public Domain", dimension: "type", description: "Oz tin woodsman",                  promptHint: "the Tin Man from Oz — humanoid figure made of riveted tin plates with a funnel-shaped hat, an axe in hand and an oil-can at the belt" },
+  { id: "scarecrow-oz",         label: "Scarecrow (Oz)",        group: "Iconic / Public Domain", dimension: "type", description: "Oz straw scarecrow",               promptHint: "the Scarecrow from Oz — straw-stuffed humanoid in a ragged farmer's outfit and floppy pointed hat with a painted burlap face and patched clothes" },
+  { id: "cowardly-lion",        label: "Cowardly Lion",         group: "Iconic / Public Domain", dimension: "type", description: "Oz anthropomorphic lion",          promptHint: "the Cowardly Lion from Oz — anthropomorphic bipedal lion with a thick mane, expressive humanlike face and a fretful, timid posture" },
+  { id: "santa-claus",          label: "Santa Claus",           group: "Iconic / Public Domain", dimension: "type", description: "Christmas gift-giver",              promptHint: "Santa Claus — jolly bearded old man in a red coat trimmed with white fur, a wide black belt, red trousers and tall black boots, carrying a sack of toys" },
+  { id: "grim-reaper",          label: "Grim Reaper",           group: "Iconic / Public Domain", dimension: "type", description: "Personification of Death",         promptHint: "the Grim Reaper — tall hooded skeletal figure in a tattered black robe, bony hands gripping a long wooden scythe, face hidden in shadow" },
 
   // -------------------- Age --------------------
-  { id: "age-baby",     label: "Baby",         dimension: "age", description: "Under 2 years old",       promptHint: "a baby under 2 years old" },
-  { id: "age-child",    label: "Child",        dimension: "age", description: "Around 5-12 years old",   promptHint: "around 8 years old" },
-  { id: "age-teen",     label: "Teenager",     dimension: "age", description: "13-19 years old",         promptHint: "in their late teens" },
-  { id: "age-20s",      label: "20s",          dimension: "age", description: "Twenties",                promptHint: "in their 20s" },
-  { id: "age-30s",      label: "30s",          dimension: "age", description: "Thirties",                promptHint: "in their 30s" },
-  { id: "age-40s",      label: "40s",          dimension: "age", description: "Forties",                 promptHint: "in their 40s" },
-  { id: "age-50s",      label: "50s",          dimension: "age", description: "Fifties",                 promptHint: "in their 50s" },
-  { id: "age-60s",      label: "60s",          dimension: "age", description: "Sixties",                 promptHint: "in their 60s" },
-  { id: "age-elderly",  label: "Elderly",      dimension: "age", description: "70 and older",            promptHint: "elderly, in their 70s or older" },
+  // Young ages get finer splits — a 2yo, 5yo, and 8yo look very different;
+  // 14yo vs 18yo vs 22yo vs 28yo all read distinct on screen. From 30 onward
+  // a single decade bucket reads close enough. Custom age lets the user
+  // dial in any specific number for full control.
+  { id: "age-baby",         label: "Baby",            dimension: "age", description: "Newborn / infant under 1",  promptHint: "a baby under 1 year old" },
+  { id: "age-toddler",      label: "Toddler",         dimension: "age", description: "Around 2-3 years old",      promptHint: "a toddler around 2-3 years old" },
+  { id: "age-young-child",  label: "Young Child",     dimension: "age", description: "Around 4-6 years old",      promptHint: "a young child around 5 years old" },
+  { id: "age-child",        label: "Child",           dimension: "age", description: "Around 7-9 years old",      promptHint: "a child around 8 years old" },
+  { id: "age-pre-teen",     label: "Pre-Teen",        dimension: "age", description: "Around 10-12 years old",    promptHint: "a pre-teen around 11 years old" },
+  { id: "age-early-teen",   label: "Early Teen",      dimension: "age", description: "Around 13-15 years old",    promptHint: "in their early teens, around 14 years old" },
+  { id: "age-late-teen",    label: "Late Teen",       dimension: "age", description: "Around 16-19 years old",    promptHint: "in their late teens, around 17 years old" },
+  { id: "age-teen",         label: "Teenager (any)",  dimension: "age", description: "Anywhere in 13-19",         promptHint: "a teenager, somewhere in their teens" },
+  { id: "age-early-20s",    label: "Early 20s",       dimension: "age", description: "Around 20-23 years old",    promptHint: "in their early 20s, around 21 years old" },
+  { id: "age-late-20s",     label: "Late 20s",        dimension: "age", description: "Around 24-29 years old",    promptHint: "in their late 20s, around 27 years old" },
+  { id: "age-20s",          label: "20s (any)",       dimension: "age", description: "Anywhere in their twenties", promptHint: "in their 20s" },
+  { id: "age-30s",          label: "30s",             dimension: "age", description: "Thirties",                  promptHint: "in their 30s" },
+  { id: "age-40s",          label: "40s",             dimension: "age", description: "Forties",                   promptHint: "in their 40s" },
+  { id: "age-50s",          label: "50s",             dimension: "age", description: "Fifties",                   promptHint: "in their 50s" },
+  { id: "age-60s",          label: "60s",             dimension: "age", description: "Sixties",                   promptHint: "in their 60s" },
+  { id: "age-elderly",      label: "Elderly",         dimension: "age", description: "70 and older",              promptHint: "elderly, in their 70s or older" },
+  { id: "age-custom",       label: "Custom age...",   dimension: "age", description: "Specify an exact age in years", promptHint: "" },
 
   // -------------------- Ethnicity --------------------
   // Asian (generic + East / South / Southeast breakouts + national-level splits)
@@ -529,7 +647,12 @@ export const PERSON_FIELD_BY_DIMENSION: Record<
  */
 export interface PersonValue {
   type?: string
+  /** Selected age preset id (e.g. `"age-30s"`). When set to the special
+   *  `"age-custom"` sentinel, the literal age in years is read from
+   *  `customAge` and the hint is generated at build time. */
   age?: string
+  /** Specific age in years. Only consulted when `age === "age-custom"`. */
+  customAge?: number
   /** Single id, or an array of up to 2 ids for mixed heritage (e.g.
    *  ["slavic","mediterranean"] → "of mixed Slavic and Mediterranean heritage"). */
   ethnicity?: string | ReadonlyArray<string>
@@ -679,6 +802,32 @@ function buildEyeColorHints(value: unknown): string[] {
 }
 
 /**
+ * Age hint with optional custom-numeric override. When the user picks the
+ * "age-custom" sentinel and provides a specific number, generate a phrase
+ * tuned to the life stage (toddler / child / teen wording for the lower
+ * ranges, plain "{N} years old" for adults). Otherwise return the catalog
+ * entry's static promptHint.
+ *
+ * Custom number is clamped to a sane range and rejected if non-finite.
+ */
+export function buildAgeHint(
+  ageId: string | undefined | null,
+  customAge: number | undefined | null,
+): string {
+  if (ageId !== "age-custom") return getPersonPromptHint(ageId)
+  if (typeof customAge !== "number" || !Number.isFinite(customAge)) return ""
+  const n = Math.max(0, Math.min(120, Math.round(customAge)))
+  if (n === 0) return "a newborn under 1 year old"
+  if (n === 1) return "around 1 year old"
+  if (n < 4) return `a toddler around ${n} years old`
+  if (n < 7) return `a young child around ${n} years old`
+  if (n < 10) return `a child around ${n} years old`
+  if (n < 13) return `a pre-teen around ${n} years old`
+  if (n < 20) return `${n} years old, in their teens`
+  return `${n} years old`
+}
+
+/**
  * Multi-pick "state" dims (distinctive-features, lip-state, eye-state,
  * skin-texture) — independent flags rather than mutually exclusive. Each
  * entry's promptHint is a standalone "with X" / "wearing X" / "staring X"
@@ -706,6 +855,13 @@ export function buildPersonHints(
   for (const dimension of PERSON_DIMENSION_ORDER) {
     const field = PERSON_FIELD_BY_DIMENSION[dimension]
     const raw = data[field]
+    if (dimension === "age") {
+      const ageId = typeof raw === "string" ? raw : undefined
+      const customAge = typeof data.customAge === "number" ? data.customAge : undefined
+      const h = buildAgeHint(ageId, customAge)
+      if (h) hints.push(h)
+      continue
+    }
     if (dimension === "ethnicity") {
       const h = buildEthnicityHint(raw)
       if (h) hints.push(h)

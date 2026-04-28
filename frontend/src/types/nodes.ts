@@ -451,8 +451,11 @@ export interface PersonData {
   label: string
   /** Primary subject descriptor (Man, Beautiful Woman, Rugged Man, etc.). */
   type?: string
-  /** Age range (20s, 30s, teen, elderly). */
+  /** Age range (20s, 30s, teen, elderly). Set to `"age-custom"` to use the
+   *  literal value in `customAge` for fully specific control. */
   age?: string
+  /** Specific age in years. Only consulted when `age === "age-custom"`. */
+  customAge?: number
   /** Ethnicity / cultural descriptor. Single id or up to 2 ids for mixed
    *  heritage (e.g. ["slavic","mediterranean"]). */
   ethnicity?: string | ReadonlyArray<string>

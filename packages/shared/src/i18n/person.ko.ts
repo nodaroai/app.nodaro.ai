@@ -4,10 +4,6 @@ const map: LocaleCatalogMap = {
   // -------------------- Type --------------------
   "man": { label: "남성", description: "성인 남성입니다" },
   "woman": { label: "여성", description: "성인 여성입니다" },
-  "teen-boy": { label: "10대 소년", description: "10대 소년입니다" },
-  "teen-girl": { label: "10대 소녀", description: "10대 소녀입니다" },
-  "baby": { label: "아기", description: "2세 미만의 영아입니다" },
-  "child": { label: "어린이", description: "어린 아이입니다" },
   "non-binary": { label: "논바이너리", description: "논바이너리인 사람입니다" },
   "beautiful-woman": { label: "아름다운 여성", description: "고전적으로 아름다운 여성입니다" },
   "girl-next-door": { label: "옆집 소녀", description: "친근하고 다가가기 쉬우며 건강한 매력을 지녔습니다" },
@@ -356,6 +352,104 @@ const map: LocaleCatalogMap = {
 
   // -------------------- Eye Shape (additional) --------------------
   "eye-double-eyelid": { label: "쌍꺼풀", description: "또렷한 윗눈꺼풀 라인입니다" },
+
+  // ----- New age entries -----
+  "age-toddler": { label: "유아", description: "2~3세 정도" },
+  "age-young-child": { label: "어린아이", description: "4~6세 정도" },
+  "age-pre-teen": { label: "10대 직전", description: "10~12세 정도" },
+  "age-early-teen": { label: "10대 초반", description: "13~15세 정도" },
+  "age-late-teen": { label: "10대 후반", description: "16~19세 정도" },
+  "age-early-20s": { label: "20대 초반", description: "20~23세 정도" },
+  "age-late-20s": { label: "20대 후반", description: "24~29세 정도" },
+  "age-custom": { label: "사용자 정의 나이...", description: "정확한 나이를 연 단위로 지정" },
+
+  // ----- Primitive / Wild -----
+  "caveman": { label: "원시인(남)", description: "석기 시대의 원시 남성" },
+  "cavewoman": { label: "원시인(여)", description: "석기 시대의 원시 여성" },
+  "apeman": { label: "원숭이 인간", description: "반인반원 하이브리드" },
+  "feral-wildman": { label: "야생 인간", description: "머리가 길게 자란 원시적 야생인" },
+  "neanderthal": { label: "네안데르탈인", description: "근현대 이전 인류 종" },
+
+  // ----- Fantasy -----
+  "elf": { label: "엘프", description: "뾰족한 귀의 날렵한 인간형" },
+  "half-elf": { label: "하프엘프", description: "인간-엘프 혼혈" },
+  "dwarf": { label: "드워프", description: "다부지고 수염이 있는 인간형" },
+  "orc": { label: "오크", description: "송곳니를 가진 무거운 인간형" },
+  "goblin": { label: "고블린", description: "작고 장난기 많은 인간형" },
+  "tiefling": { label: "티플링", description: "뿔과 지옥의 혈통을 가진 인간형" },
+  "faun": { label: "파운 / 사티로스", description: "염소 다리와 뿔을 가진 인간형" },
+  "centaur": { label: "켄타우로스", description: "말 몸에 인간의 상반신" },
+  "vampire": { label: "뱀파이어", description: "송곳니를 가진 창백한 불사자" },
+  "werewolf": { label: "늑대인간", description: "부분 변신한 라이칸트로프" },
+  "mermaid": { label: "인어(여)", description: "물고기 꼬리를 가진 여성 인간형" },
+  "merman": { label: "인어(남)", description: "물고기 꼬리를 가진 남성 인간형" },
+  "dragonkin": { label: "드래곤킨", description: "비늘이 있는 용 같은 인간형" },
+  "wizard": { label: "마법사(남)", description: "로브를 입은 남성 주문 시전자" },
+  "witch": { label: "마녀", description: "로브를 입은 여성 주문 시전자" },
+  "sorcerer": { label: "소서러", description: "흐르는 로브를 입은 마법 남성" },
+  "sorceress": { label: "소서리스", description: "흐르는 로브를 입은 마법 여성" },
+  "knight": { label: "기사", description: "판금 갑옷을 입은 전사" },
+  "barbarian": { label: "바바리안", description: "가죽을 두른 강인한 전사" },
+  "druid": { label: "드루이드", description: "자연과 결속된 신비주의자" },
+  "ranger": { label: "레인저", description: "망토를 두른 궁수 / 황야 정찰병" },
+  "necromancer": { label: "네크로맨서", description: "창백한 흑마법 시전자" },
+  "prince": { label: "왕자", description: "왕가의 젊은 남성" },
+  "princess": { label: "공주", description: "왕가의 젊은 여성" },
+
+  // ----- Mythic / Divine -----
+  "angel": { label: "천사", description: "날개 달린 신성한 인간형" },
+  "demon": { label: "악마", description: "뿔이 달린 지옥의 인간형" },
+  "ghost": { label: "유령", description: "반투명한 영적 형상" },
+  "valkyrie": { label: "발키리", description: "북유럽 전사 영혼 여성" },
+  "god": { label: "남신", description: "남성 신격" },
+  "goddess": { label: "여신", description: "여성 신격" },
+
+  // ----- Sci-Fi -----
+  "android-man": { label: "안드로이드(남)", description: "남성형 휴머노이드 로봇" },
+  "android-woman": { label: "안드로이드(여)", description: "여성형 휴머노이드 로봇" },
+  "android-neutral": { label: "안드로이드(중성)", description: "중성형 휴머노이드 로봇" },
+  "cyborg": { label: "사이보그", description: "기계 부품과 결합된 인간" },
+  "robot": { label: "로봇", description: "완전 기계식 휴머노이드" },
+  "alien": { label: "외계인", description: "비인간 휴머노이드" },
+  "astronaut": { label: "우주비행사", description: "우주복을 입은 우주 탐험가" },
+  "space-marine": { label: "스페이스 마린", description: "강화 갑옷을 입은 군인" },
+  "ai-hologram": { label: "AI 홀로그램", description: "체적 빛으로 만들어진 형상" },
+
+  // ----- Heroes & Villains -----
+  "superhero": { label: "슈퍼히어로", description: "마스크와 망토의 영웅" },
+  "superheroine": { label: "슈퍼히로인", description: "마스크와 망토의 여성 영웅" },
+  "masked-vigilante": { label: "복면 자경단원", description: "어두운 슈트의 영웅" },
+  "supervillain": { label: "슈퍼빌런", description: "연극적 악당 원형" },
+  "caped-crusader": { label: "케이프드 크루세이더", description: "갑옷과 후드의 어두운 영웅" },
+  "super-soldier": { label: "슈퍼 솔저", description: "애국적 외골격 갑옷의 전사" },
+  "mutant": { label: "뮤턴트", description: "눈에 보이는 돌연변이를 가진 인간" },
+  "magical-girl": { label: "마법소녀", description: "변신하는 애니메이션 풍 여주인공" },
+
+  // ----- Anime / Anthro -----
+  "catgirl": { label: "캣걸 / 고양이 소녀", description: "고양이 귀와 꼬리를 가진 애니풍 여성" },
+  "catboy": { label: "캣보이 / 고양이 소년", description: "고양이 귀와 꼬리를 가진 애니풍 남성" },
+  "anthro": { label: "수인 / 의인화 동물", description: "동물 머리의 이족 보행 인간형" },
+
+  // ----- Iconic / Public Domain -----
+  "sherlock-holmes": { label: "셜록 홈즈", description: "빅토리아 시대 자문 탐정" },
+  "dracula": { label: "드라큘라 백작", description: "스토커의 고딕 뱀파이어 백작" },
+  "frankenstein-monster": { label: "프랑켄슈타인의 괴물", description: "셸리의 되살아난 피조물" },
+  "phantom-opera": { label: "오페라의 유령", description: "르루의 가면 쓴 오페라 은둔자" },
+  "mr-hyde": { label: "하이드 씨", description: "스티븐슨의 괴물 같은 분신" },
+  "king-arthur": { label: "아서 왕", description: "전설적인 중세 왕" },
+  "merlin": { label: "멀린", description: "아서 왕의 마법사 조언자" },
+  "robin-hood": { label: "로빈 후드", description: "숲의 무법자 궁수" },
+  "joan-of-arc": { label: "잔 다르크", description: "갑옷의 중세 여전사" },
+  "cleopatra": { label: "클레오파트라", description: "이집트 최후의 파라오" },
+  "captain-nemo": { label: "네모 선장", description: "베른의 잠수함 선장" },
+  "alice-wonderland": { label: "이상한 나라의 앨리스", description: "캐럴의 이상한 나라 소녀" },
+  "peter-pan": { label: "피터 팬", description: "절대 자라지 않는 소년" },
+  "dorothy-oz": { label: "도로시(오즈)", description: "파란 깅엄 옷의 오즈 소녀" },
+  "tin-man": { label: "양철 나무꾼", description: "오즈의 양철 인형" },
+  "scarecrow-oz": { label: "허수아비(오즈)", description: "오즈의 짚 허수아비" },
+  "cowardly-lion": { label: "겁쟁이 사자", description: "오즈의 의인화 사자" },
+  "santa-claus": { label: "산타클로스", description: "크리스마스 선물을 주는 노인" },
+  "grim-reaper": { label: "그림 리퍼 / 사신", description: "죽음의 의인화" },
 }
 
 export default map
