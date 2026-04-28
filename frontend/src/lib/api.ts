@@ -3786,6 +3786,91 @@ export async function deleteApiToken(id: string): Promise<{ success: boolean }> 
   })
 }
 
+// ---------------------------------------------------------------------------
+// Developer Apps (OAuth)
+// ---------------------------------------------------------------------------
+
+export type DeveloperAppStatus = "active" | "suspended" | "pending_review"
+
+export interface DeveloperApp {
+  id: string
+  name: string
+  description: string | null
+  logoUrl: string | null
+  homepageUrl: string | null
+  redirectUris: string[]
+  allowedOrigins: string[]
+  scopesRequested: string[]
+  clientId: string
+  status: DeveloperAppStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateDeveloperAppResult extends DeveloperApp {
+  /** Plaintext client secret — shown ONCE at creation, never returned again */
+  clientSecret: string
+}
+
+export interface CreateDeveloperAppInput {
+  name: string
+  description?: string
+  homepageUrl?: string
+  logoUrl?: string
+  redirectUris: string[]
+  allowedOrigins?: string[]
+  scopesRequested: string[]
+}
+
+export type UpdateDeveloperAppInput = Partial<CreateDeveloperAppInput>
+
+export async function listDeveloperApps(): Promise<{ data: DeveloperApp[] }> {
+  return apiRequest("/v1/developer-apps", "Failed to list developer apps")
+}
+
+export async function getDeveloperApp(id: string): Promise<{ data: DeveloperApp }> {
+  return apiRequest(
+    `/v1/developer-apps/${encodeURIComponent(id)}`,
+    "Failed to load developer app",
+  )
+}
+
+export async function createDeveloperApp(
+  input: CreateDeveloperAppInput,
+): Promise<{ data: CreateDeveloperAppResult }> {
+  return apiRequest("/v1/developer-apps", "Failed to create developer app", {
+    method: "POST",
+    body: input,
+  })
+}
+
+export async function updateDeveloperApp(
+  id: string,
+  input: UpdateDeveloperAppInput,
+): Promise<{ data: DeveloperApp }> {
+  return apiRequest(
+    `/v1/developer-apps/${encodeURIComponent(id)}`,
+    "Failed to update developer app",
+    { method: "PATCH", body: input },
+  )
+}
+
+export async function deleteDeveloperApp(id: string): Promise<{ success: boolean }> {
+  return apiRequest(
+    `/v1/developer-apps/${encodeURIComponent(id)}`,
+    "Failed to delete developer app",
+    { method: "DELETE" },
+  )
+}
+
+export async function rotateDeveloperAppSecret(id: string): Promise<{ clientSecret: string }> {
+  return apiRequest(
+    `/v1/developer-apps/${encodeURIComponent(id)}/rotate-secret`,
+    "Failed to rotate client secret",
+    { method: "POST" },
+  )
+}
+
 // ---------- Social Media ----------
 
 export async function socialPublishApi(params: {

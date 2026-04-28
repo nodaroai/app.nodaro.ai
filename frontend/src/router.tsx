@@ -28,6 +28,8 @@ const PresentPage = lazy(() => import("@/routes/present-page"))
 const AppRunnerPage = lazy(() => import("@/routes/app-runner-page"))
 const EmbedPage = lazy(() => import("@/routes/embed-page"))
 const ApiSettingsPage = lazy(() => import("@/app/(dashboard)/settings/api/page"))
+const DeveloperAppsPage = lazy(() => import("@/app/(dashboard)/settings/developer-apps/page"))
+const DeveloperAppDetailPage = lazy(() => import("@/app/(dashboard)/settings/developer-apps/detail/page"))
 const IntegrationsPage = lazy(() => import("@/app/(dashboard)/integrations/page"))
 const AppsPage = lazy(() => import("@/app/(dashboard)/apps/page"))
 const AppAnalyticsPage = lazy(() => import("@/app/(dashboard)/apps/analytics-page"))
@@ -139,6 +141,14 @@ export const router = createBrowserRouter([
       {
         path: "/settings/api",
         element: <SuspenseWrapper><ApiSettingsPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/settings/developer-apps",
+        element: <SuspenseWrapper><DeveloperAppsPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/settings/developer-apps/:id",
+        element: <SuspenseWrapper><DeveloperAppDetailPage /></SuspenseWrapper>,
       },
       {
         path: "/executions",
