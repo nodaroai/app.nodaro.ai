@@ -29,7 +29,7 @@ import type {
   GeneratedScript,
   GeneratedScriptResult,
 } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS } from "./model-options"
+import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, getVideoResolutionOptions } from "./model-options"
 import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS } from "@nodaro-shared/model-constants"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
@@ -47,6 +47,24 @@ import { PromptHelperButton } from "./prompt-helper-button"
 export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
+
+  const currentI2VProvider = data.provider || "seedance-2-fast"
+
+  // Fail-safe: when the current provider doesn't expose a resolution lever
+  // (or the cached value isn't in its valid set), clear/snap so admin
+  // defaults and stale state can't poison the request payload. Provider list
+  // for video has per-provider conditional dropdowns with hard-coded options
+  // — getVideoResolutionOptions mirrors them as the single source of truth.
+  useEffect(() => {
+    const opts = getVideoResolutionOptions(currentI2VProvider)
+    if (opts) {
+      if (data.resolution && !opts.some((o) => o.value === data.resolution)) {
+        onUpdate({ resolution: opts[0]?.value })
+      }
+    } else if (data.resolution !== undefined) {
+      onUpdate({ resolution: undefined })
+    }
+  }, [currentI2VProvider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const baseDurations = KIE_VIDEO_DURATIONS[data.provider || "seedance-2-fast"] || null
   // Hailuo 2.3 Pro/Standard: 1080P only supports 6s duration
@@ -902,6 +920,20 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
   const currentProvider = data.provider || "seedance-2-fast"
   const allowedDurations = KIE_T2V_DURATIONS[currentProvider] || null
   const isSeedance2 = isSeedance2Provider(currentProvider)
+
+  // Fail-safe: keep `data.resolution` consistent with the current provider's
+  // valid set, or clear it when the provider has no resolution lever.
+  // See ImageToVideoConfig for the rationale.
+  useEffect(() => {
+    const opts = getVideoResolutionOptions(currentProvider)
+    if (opts) {
+      if (data.resolution && !opts.some((o) => o.value === data.resolution)) {
+        onUpdate({ resolution: opts[0]?.value })
+      }
+    } else if (data.resolution !== undefined) {
+      onUpdate({ resolution: undefined })
+    }
+  }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const connectedRefImages = useMemo(() => {
     return sources.filter((s) => s.targetHandle === "reference-images").map((s) => ({

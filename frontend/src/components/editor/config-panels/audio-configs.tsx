@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useCallback } from "react"
+import { useMemo, useCallback, useEffect } from "react"
 import { Plus, Trash2, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
@@ -873,6 +873,20 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
 export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<LipSyncData>) {
   const provider = data.provider || "kling-avatar"
   const isKie = !REPLICATE_LIP_SYNC_PROVIDERS.has(provider as never)
+
+  // Fail-safe: only KIE providers expose the resolution lever. When the user
+  // switches to a Replicate provider (or the cached resolution isn't in the
+  // valid set 480p/720p), clear/snap so the lip-sync route's Zod enum doesn't
+  // see a stale value.
+  useEffect(() => {
+    if (!isKie) {
+      if (data.resolution !== undefined) onUpdate({ resolution: undefined })
+      return
+    }
+    if (data.resolution && data.resolution !== "480p" && data.resolution !== "720p") {
+      onUpdate({ resolution: "720p" })
+    }
+  }, [provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col gap-3">

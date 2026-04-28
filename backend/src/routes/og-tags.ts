@@ -6,8 +6,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-// APP_URL derived from CORS_ORIGIN or defaults to production
-const APP_URL = process.env.CORS_ORIGIN?.split(",")[0]?.trim() || "https://app.nodaro.ai"
+import { getStaticPublicAppUrl } from "../lib/allowed-origins.js"
 
 const slugParams = z.object({ slug: z.string().min(1) })
 
@@ -44,6 +43,7 @@ export async function ogTagsRoutes(app: FastifyInstance) {
         .send(buildHtml({ slug, title: "Nodaro App", description: "AI-powered app on Nodaro.ai" }))
     }
 
+    // TODO(oss): make site name + tagline configurable via SITE_NAME / SITE_TAGLINE env vars
     const title = (appRow.name as string) || "Nodaro App"
     const description = (appRow.description as string) || "AI-powered app on Nodaro.ai"
 
@@ -88,7 +88,7 @@ function extractMediaUrl(data: Record<string, unknown>): string | null {
 }
 
 function buildHtml(opts: { slug: string; title: string; description: string; imageUrl?: string | null }): string {
-  const appUrl = `${APP_URL}/app/${escapeHtml(opts.slug)}`
+  const appUrl = `${getStaticPublicAppUrl()}/app/${escapeHtml(opts.slug)}`
   const title = escapeHtml(opts.title)
   const description = escapeHtml(opts.description)
 

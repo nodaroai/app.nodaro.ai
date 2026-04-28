@@ -1,6 +1,11 @@
 /** Workflow execution statuses that indicate an active (non-terminal) execution. */
 export const ACTIVE_EXECUTION_STATUSES = ["pending", "running", "stopping"] as const
 
+/** Node's `IncomingHttpHeaders` types header values as `string | string[] | undefined`. Take the first. */
+export function firstHeaderValue(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v
+}
+
 /**
  * Extracts an optional workflowId from the raw request body.
  * The field is NOT part of any Zod schema — it's injected by the frontend

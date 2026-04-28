@@ -100,11 +100,22 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
     if (data.aspectRatio && !aspectValues.includes(data.aspectRatio)) {
       updates.aspectRatio = aspectValues[0] || "1:1"
     }
-    if (data.resolution && resolutionOptions && !resolutionOptions.some((o) => o.value === data.resolution)) {
-      updates.resolution = resolutionOptions[0]?.value
+    // Resolution: if provider exposes this lever, snap to a valid option;
+    // if it does NOT, clear the stale value so the backend Zod enum
+    // (1K|2K|4K) doesn't reject what the provider doesn't even use.
+    if (resolutionOptions) {
+      if (data.resolution && !resolutionOptions.some((o) => o.value === data.resolution)) {
+        updates.resolution = resolutionOptions[0]?.value
+      }
+    } else if (data.resolution !== undefined) {
+      updates.resolution = undefined
     }
-    if (data.quality && qualityOptions && !qualityOptions.some((o) => o.value === data.quality)) {
-      updates.quality = qualityOptions[0]?.value
+    if (qualityOptions) {
+      if (data.quality && !qualityOptions.some((o) => o.value === data.quality)) {
+        updates.quality = qualityOptions[0]?.value
+      }
+    } else if (data.quality !== undefined) {
+      updates.quality = undefined
     }
     if (!supportsRefImage && data.referenceImageUrl) {
       updates.referenceImageUrl = undefined
@@ -116,7 +127,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
-  }, [providersList]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [providersList, currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Migrate legacy single referenceImageUrl to new multi-image format
   useEffect(() => {
@@ -672,6 +683,23 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
     const updates: Partial<ModifyImageData> = {}
     if (data.aspectRatio && !validValues.includes(data.aspectRatio)) {
       updates.aspectRatio = validValues[0] || "1:1"
+    }
+    // Resolution / quality fail-safe: snap invalid values to a valid option
+    // when the provider exposes the lever, otherwise clear the stale value
+    // so the backend route's Zod enum doesn't reject it.
+    if (resolutionOptions) {
+      if (data.resolution && !resolutionOptions.some((o) => o.value === data.resolution)) {
+        updates.resolution = resolutionOptions[0]?.value
+      }
+    } else if (data.resolution !== undefined) {
+      updates.resolution = undefined
+    }
+    if (qualityOptions) {
+      if (data.quality && !qualityOptions.some((o) => o.value === data.quality)) {
+        updates.quality = qualityOptions[0]?.value
+      }
+    } else if (data.quality !== undefined) {
+      updates.quality = undefined
     }
     if (!supportsRefImage && data.referenceImageUrl) {
       updates.referenceImageUrl = undefined

@@ -11,7 +11,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { stripe } from "../billing/stripe-client.js"
+import { getStripe } from "../billing/stripe-client.js"
 import { PRICE_TO_PLAN, getTierFromPriceId, TIER_CREDITS, TIER_STORAGE_LIMITS, TOP_UPS } from "../billing/stripe-config.js"
 import { ensureStripeCustomer } from "../billing/provision-credits.js"
 
@@ -127,7 +127,7 @@ export async function billingRoutes(app: FastifyInstance) {
           .eq("id", userId)
           .single()
 
-        const customer = await stripe.customers.create({
+        const customer = await getStripe().customers.create({
           email: profile?.email ?? undefined,
           metadata: { userId },
         })
@@ -140,7 +140,7 @@ export async function billingRoutes(app: FastifyInstance) {
         ? `${baseUrl}/billing?topup=true`
         : `${baseUrl}/billing?success=true`
 
-      const session = await stripe.checkout.sessions.create({
+      const session = await getStripe().checkout.sessions.create({
         customer: stripeCustomerId ?? undefined,
         mode: checkoutMode,
         line_items: [{ price: priceId, quantity: 1 }],
@@ -177,7 +177,7 @@ export async function billingRoutes(app: FastifyInstance) {
     }
 
     try {
-      const portalSession = await stripe.billingPortal.sessions.create({
+      const portalSession = await getStripe().billingPortal.sessions.create({
         customer: customer.stripe_customer_id,
         return_url: `${getOrigin(req)}/billing`,
       })
@@ -228,13 +228,13 @@ export async function billingRoutes(app: FastifyInstance) {
 
     try {
       // Get the subscription to find the item ID
-      const stripeSub = await stripe.subscriptions.retrieve(sub.stripe_subscription_id)
+      const stripeSub = await getStripe().subscriptions.retrieve(sub.stripe_subscription_id)
       const itemId = stripeSub.items.data[0]?.id
       if (!itemId) {
         return reply.status(500).send({ error: "Could not find subscription item" })
       }
 
-      const updated = await stripe.subscriptions.update(
+      const updated = await getStripe().subscriptions.update(
         sub.stripe_subscription_id,
         {
           items: [{ id: itemId, price: newPriceId }],

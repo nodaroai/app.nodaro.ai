@@ -139,10 +139,11 @@ export function resolveNodeDefaults<T extends Record<string, unknown>>(
     if (dims.quality && admin.quality_level) {
       const mapped = mapQuality(admin.provider, admin.quality_level)
       if (mapped !== undefined) {
-        // Some providers expose this as `resolution`, others as `quality` — set
-        // both; the runtime config panel reads whichever applies.
-        result.resolution = mapped
-        result.quality = mapped
+        // Write to ONLY the field this provider actually uses. Setting both
+        // poisons whichever field the provider doesn't expose, e.g. writing
+        // "medium" into `resolution` for gpt-image trips the route's
+        // resolution enum (1K|2K|4K) at generate-time.
+        result[mapped.field] = mapped.value
       }
     }
     if (dims.aspectRatio && admin.aspect_ratio) {

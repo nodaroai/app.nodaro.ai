@@ -52,22 +52,34 @@ describe("supportedDefaultDimensions", () => {
 })
 
 describe("mapQuality", () => {
-  it("maps nano-banana-pro 3 levels", () => {
-    expect(mapQuality("nano-banana-pro", "low")).toBe("1K")
-    expect(mapQuality("nano-banana-pro", "mid")).toBe("2K")
-    expect(mapQuality("nano-banana-pro", "high")).toBe("4K")
+  it("maps nano-banana-pro 3 levels onto resolution", () => {
+    expect(mapQuality("nano-banana-pro", "low")).toEqual({ field: "resolution", value: "1K" })
+    expect(mapQuality("nano-banana-pro", "mid")).toEqual({ field: "resolution", value: "2K" })
+    expect(mapQuality("nano-banana-pro", "high")).toEqual({ field: "resolution", value: "4K" })
   })
 
-  it("collapses gpt-image low to medium", () => {
-    expect(mapQuality("gpt-image", "low")).toBe("medium")
-    expect(mapQuality("gpt-image", "mid")).toBe("medium")
-    expect(mapQuality("gpt-image", "high")).toBe("high")
+  it("collapses gpt-image low to medium on the quality field", () => {
+    expect(mapQuality("gpt-image", "low")).toEqual({ field: "quality", value: "medium" })
+    expect(mapQuality("gpt-image", "mid")).toEqual({ field: "quality", value: "medium" })
+    expect(mapQuality("gpt-image", "high")).toEqual({ field: "quality", value: "high" })
   })
 
-  it("flux caps at 2K", () => {
-    expect(mapQuality("flux", "low")).toBe("1K")
-    expect(mapQuality("flux", "mid")).toBe("2K")
-    expect(mapQuality("flux", "high")).toBe("2K")
+  it("flux caps at 2K on the resolution field", () => {
+    expect(mapQuality("flux", "low")).toEqual({ field: "resolution", value: "1K" })
+    expect(mapQuality("flux", "mid")).toEqual({ field: "resolution", value: "2K" })
+    expect(mapQuality("flux", "high")).toEqual({ field: "resolution", value: "2K" })
+  })
+
+  it("gpt-image-2 maps to resolution (NOT quality) — its config panel uses 1K/2K/4K", () => {
+    expect(mapQuality("gpt-image-2", "low")).toEqual({ field: "resolution", value: "1K" })
+    expect(mapQuality("gpt-image-2", "mid")).toEqual({ field: "resolution", value: "2K" })
+    expect(mapQuality("gpt-image-2", "high")).toEqual({ field: "resolution", value: "4K" })
+  })
+
+  it("seedream uses basic/high on the quality field", () => {
+    expect(mapQuality("seedream", "low")).toEqual({ field: "quality", value: "basic" })
+    expect(mapQuality("seedream", "mid")).toEqual({ field: "quality", value: "basic" })
+    expect(mapQuality("seedream", "high")).toEqual({ field: "quality", value: "high" })
   })
 
   it("returns undefined for providers not in the map", () => {
