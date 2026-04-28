@@ -128,29 +128,53 @@ export function validateProviderForNodeType(
 // ──────────────────────────────────────────────────────────────────────────
 
 /**
- * Per-provider mapping from semantic quality level to concrete value.
+ * Each provider stores its quality lever on a different field of node data:
+ *  - `resolution` (1K/2K/4K, 720p/1080p, …) — most image + video providers
+ *  - `quality` (medium/high, basic/high) — gpt-image, seedream
+ *
+ * Mapping a semantic level (low/mid/high) to a concrete value is meaningless
+ * without knowing WHICH field it belongs to, because writing "medium" into
+ * `resolution` (or "2K" into `quality`) trips the route's Zod enum at
+ * generate-time. Each entry pairs the field with the per-level values built
+ * from frontend/src/components/editor/config-panels/model-options.ts.
+ *
  * Providers absent from this table return `undefined` from `mapQuality`,
  * letting the caller fall back to the factory default value.
  *
- * Built from frontend/src/components/editor/config-panels/model-options.ts.
  * When a provider has fewer than 3 levels, semantic levels collapse onto
- * the closest concrete value (e.g. gpt-image only has medium/high → low maps to medium).
+ * the closest concrete value (e.g. gpt-image only has medium/high → low maps
+ * to medium).
  */
-const QUALITY_MAP: Record<string, Partial<Record<QualityLevel, string>>> = {
-  // Image gen — resolution-style
-  "nano-banana-pro": { low: "1K", mid: "2K", high: "4K" },
-  "nano-banana-2":   { low: "1K", mid: "2K", high: "4K" },
-  "flux":            { low: "1K", mid: "2K", high: "2K" },
-  "flux-flex":       { low: "1K", mid: "2K", high: "2K" },
-  "gpt-image":       { low: "medium", mid: "medium", high: "high" },
-  "gpt-image-2":     { low: "medium", mid: "medium", high: "high" },
-  // Video gen — common resolution lever (provider param names vary; runtime panel
-  // owns the actual field name, this is the value)
-  "veo3":            { low: "720p", mid: "1080p", high: "1080p" },
-  "veo3.1":          { low: "720p", mid: "1080p", high: "1080p" },
-  "kling":           { low: "720p", mid: "1080p", high: "1080p" },
-  "kling-3.0":       { low: "720p", mid: "1080p", high: "1080p" },
-  "seedance-2-fast": { low: "720p", mid: "1080p", high: "1080p" },
+export type QualityField = "resolution" | "quality"
+
+interface QualityMapping {
+  field: QualityField
+  values: Partial<Record<QualityLevel, string>>
+}
+
+const QUALITY_MAP: Record<string, QualityMapping> = {
+  // Image gen — resolution-style (1K/2K/4K)
+  "nano-banana-pro":     { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  "nano-banana-2":       { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  "flux":                { field: "resolution", values: { low: "1K", mid: "2K", high: "2K" } },
+  "flux-flex":           { field: "resolution", values: { low: "1K", mid: "2K", high: "2K" } },
+  "flux-i2i":            { field: "resolution", values: { low: "1K", mid: "2K", high: "2K" } },
+  "flux-pro-i2i":        { field: "resolution", values: { low: "1K", mid: "2K", high: "2K" } },
+  "gpt-image-2":         { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  "gpt-image-2-i2i":     { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  // Image gen — quality-style (medium/high or basic/high)
+  "gpt-image":           { field: "quality",    values: { low: "medium", mid: "medium", high: "high" } },
+  "gpt-image-i2i":       { field: "quality",    values: { low: "medium", mid: "medium", high: "high" } },
+  "seedream":            { field: "quality",    values: { low: "basic",  mid: "basic",  high: "high" } },
+  "seedream-edit":       { field: "quality",    values: { low: "basic",  mid: "basic",  high: "high" } },
+  "seedream-5-lite":     { field: "quality",    values: { low: "basic",  mid: "basic",  high: "high" } },
+  "seedream-5-lite-i2i": { field: "quality",    values: { low: "basic",  mid: "basic",  high: "high" } },
+  // Video gen — resolution-style (720p/1080p)
+  "veo3":                { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
+  "veo3.1":              { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
+  "kling":               { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
+  "kling-3.0":           { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
+  "seedance-2-fast":     { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
 }
 
 const ASPECT_PASSTHROUGH_PROVIDERS = new Set([
@@ -160,8 +184,15 @@ const ASPECT_PASSTHROUGH_PROVIDERS = new Set([
   ...IMAGE_TO_VIDEO_PROVIDERS,
 ])
 
-export function mapQuality(provider: string, level: QualityLevel): string | undefined {
-  return QUALITY_MAP[provider]?.[level]
+export interface MappedQuality {
+  field: QualityField
+  value: string
+}
+
+export function mapQuality(provider: string, level: QualityLevel): MappedQuality | undefined {
+  const m = QUALITY_MAP[provider]
+  const value = m?.values[level]
+  return value === undefined ? undefined : { field: m!.field, value }
 }
 
 export function mapAspectRatio(

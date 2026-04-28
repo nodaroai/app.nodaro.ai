@@ -44,13 +44,12 @@
 - Admin-related code must be gated behind `hasAdmin()`
 
 ### Coding Standards
-- **Backend**: Fastify plugin pattern (NOT Express Router)
-- **Frontend**: Vite + React Router 7 + shadcn/ui + Tailwind
-- **State**: React Query (server state) + Zustand (UI state) + React Flow (canvas state)
-- **Validation**: Zod schemas on all API endpoints
-- **Immutability**: Never mutate objects/arrays -- always create new copies
-- **File size**: 200-400 lines typical, 800 max
-- **No console.log in production code**
+- Backend: Fastify plugin pattern (NOT Express Router). Zod schemas on every endpoint.
+- Frontend state: React Query (server) + Zustand (UI) + React Flow (canvas).
+- Never mutate objects/arrays — always copy.
+- File size: 200–400 lines typical, 800 max.
+- No `console.log` in production code.
+- Stack: Vite 6 / React Router 7 / shadcn/ui / Tailwind frontend; Fastify + BullMQ (Redis) backend; Supabase Postgres; Cloudflare R2; Stripe.
 
 ### Provider Enum Sync (CRITICAL)
 
@@ -60,7 +59,7 @@
 |------|------|----------------|
 | 1 | `frontend/src/types/nodes.ts` | TypeScript type for node data |
 | 2 | `frontend/src/components/editor/config-panels/*.tsx` | `<SelectItem>` options (split by node category) |
-| 2b | `frontend/src/components/editor/config-panels/model-options.ts` | `IMAGE_ASPECT_RATIOS`, `IMAGE_RESOLUTION_OPTIONS`, `IMAGE_QUALITY_OPTIONS` if image model |
+| 2b | `frontend/src/components/editor/config-panels/model-options.ts` | `IMAGE_ASPECT_RATIOS`, `IMAGE_RESOLUTION_OPTIONS`, `IMAGE_QUALITY_OPTIONS` if image model; `VIDEO_RESOLUTION_OPTIONS` if video model. ⚠️ These registries are the **single source of truth** consumed by both the dropdown rendering AND the fail-safe `useEffect` (step 12b). A provider rendered in JSX but missing from the registry won't have its stale state cleared. |
 | 3 | `backend/src/routes/<node-type>.ts` | **Zod validation schema** ⚠️ MOST COMMONLY FORGOTTEN |
 | 4 | `backend/src/providers/kie/*.ts` or `replicate/*.ts` | Provider implementation |
 | 5 | `backend/src/providers/kie/models.ts` | KIE model config (cost, params) |
@@ -71,10 +70,13 @@
 | 9 | `supabase/migrations/NNN_*.sql` | **Write a migration with `INSERT INTO model_pricing ... ON CONFLICT DO NOTHING`** — must include the base identifier AND every composite (e.g. `:2K`, `:4K`, `:economy`, `:premium`). Without this row the model is invisible in `/admin/models` and `/admin/llm-models`. ⚠️ STATIC_CREDIT_COSTS is only a runtime fallback — the admin UI reads from the DB only. |
 | 10 | `backend/src/billing/stripe-config.ts` | If pricing tiers or credit allocations change |
 | 11 | `frontend/src/lib/pricing-data.ts` | PRICING_TIERS if tier features/prices change |
-| 12 | `packages/shared/src/node-default-mappings.ts` | `QUALITY_MAP` + `deriveLinkedFields` if the new provider has resolution/quality variants or a linked `model` field. Otherwise the admin Node Defaults UI will accept the provider but the resolver will fall back to factory values. |
+| 12 | `packages/shared/src/node-default-mappings.ts` | `QUALITY_MAP` + `deriveLinkedFields` if the new provider has resolution/quality variants or a linked `model` field. Each `QUALITY_MAP` entry MUST declare `field: "resolution" \| "quality"` — providers with `resolution` levers (1K/2K/4K, 720p/1080p) and `quality` levers (medium/high, basic/high) write to DIFFERENT fields on node data, and the admin-defaults resolver writes to ONLY the declared field. Without a correct `field`, the resolver poisons the wrong field and the route's Zod enum rejects the request at generate-time. |
+| 12b | Config panel for the node type | Provider-aware dropdowns MUST have a `useEffect([currentProvider])` that snaps `data.<field>` to the first valid option when invalid for the current provider, AND clears (`undefined`) when the current provider doesn't expose that lever at all. Without this, admin defaults or persisted workflow data carry stale values across providers and trip the route's Zod enum. Reference implementations: `image-configs.tsx::GenerateImageConfig`/`ModifyImageConfig`, `video-configs.tsx::ImageToVideoConfig`/`TextToVideoConfig`, `audio-configs.tsx::LipSyncConfig`. |
 
 **Forgetting step 3 (Zod enum) has caused the same validation bug 3 times.**
 **Forgetting step 9 (DB seed migration) means the model never appears in `/admin/models`** — `STATIC_CREDIT_COSTS` will still charge correctly, but admins cannot see or override the price. Audit gap with `audit-credits` skill before shipping.
+**Forgetting step 12 `field` discriminator** silently writes a quality value (e.g. `"medium"`) into `data.resolution` for providers that don't use it, then the route's `resolution: z.enum(["1K","2K","4K"])` rejects the request — and vice versa.
+**Forgetting step 12b fail-safe `useEffect`** means a node configured for provider A still carries A's resolution after the user switches to provider B; the dropdown hides while data persists, and B's Zod enum rejects A's value at generate-time.
 
 ### New Node Registration (CRITICAL)
 
@@ -92,7 +94,7 @@
 | 8 | `frontend/src/components/editor/add-node-popup.tsx` | `NODE_OPTIONS` (popup/context menu) |
 | 9 | `frontend/src/components/editor/node-toolbar.tsx` | Sidebar node list ⚠️ **SEPARATE from popup** |
 | 10 | `frontend/src/components/editor/editor-toolbar.tsx` | Reset/clear `switch` case |
-| 11 | `frontend/src/components/editor/config-panels/<cat>-configs.tsx` | Config component |
+| 11 | `frontend/src/components/editor/config-panels/<cat>-configs.tsx` | Config component. If it exposes provider-aware dropdowns (resolution, quality, aspect ratio, voice, etc.), MUST include the fail-safe `useEffect([currentProvider])` from Provider Enum Sync step 12b — snap stale values to the first valid option, clear when the provider has no such lever. |
 | 12 | `frontend/src/components/editor/config-panels/index.ts` | Export |
 | 13 | `frontend/src/components/editor/config-panel.tsx` | Import, display name, button type set, render conditional |
 | 14 | `frontend/src/lib/api.ts` | API client function |
@@ -107,195 +109,32 @@
 ***REDACTED-OSS-SCRUB***
 
 ### Database Rules
-- RLS on all tables
-- Use `SECURITY DEFINER` functions for service-role operations
-- **NEVER create RLS policies on `profiles` that query `profiles`** (infinite recursion)
-- Use `is_admin()` SECURITY DEFINER function for admin checks
-- All credit operations must be atomic (use RPC functions with FOR UPDATE locks)
+- RLS on every table.
+- **NEVER create RLS policies on `profiles` that query `profiles`** — infinite recursion. Use the `is_admin()` SECURITY DEFINER function instead.
+- All credit operations must be atomic (RPC functions with `FOR UPDATE` locks).
+***REDACTED-OSS-SCRUB***
 
 ---
 
-## Tech Stack
+## Architecture Rules (non-obvious)
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | Vite 6, React Router 7, React Flow, shadcn/ui, Tailwind |
-| Backend | Fastify (Node.js/TypeScript), BullMQ (Redis) |
-| Database | Supabase (PostgreSQL + Auth + Realtime) |
-| Storage | Cloudflare R2 (S3-compatible) |
-| Auth | Supabase Auth (Google OAuth) + JWT middleware (`middleware/auth.ts`, 5-min SHA-256 token cache) + dev-app OAuth (`ndr_app_<64hex>` access tokens, 90-day TTL) + API tokens (`ndr_<64hex>`) — `req.appAuthorization.scopes` enforces scoped access |
-| Payments | Stripe |
-
----
-
-## Database Tables
-
-| Table | Key Columns | Notes |
-|-------|-------------|-------|
-| `profiles` | id, email, tier, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, role, public_outputs, current_period_end, subscription_ended_at | Extends auth.users |
-| `projects` | id, user_id, name, settings | |
-| `workflows` | id, project_id, user_id, nodes (JSONB), edges (JSONB), source_prompt | React Flow data |
-| `jobs` | id, workflow_id, user_id, status, progress, input_data, output_data, provider, provider_cost, is_public, should_watermark, workflow_execution_id | Execution records |
-| `workflow_executions` | id, workflow_id, user_id, status, trigger_type, trigger_data, node_states (JSONB), total_nodes, completed_nodes, failed_nodes, total_credits_used | Backend execution tracking |
-| `workflow_triggers` | id, workflow_id, user_id, type, config (JSONB), is_active, webhook_token | Webhook + schedule triggers |
-| `assets` | id, user_id, job_id, type, r2_key, r2_url, size_bytes | Generated files |
-| `characters` | id, project_id, name, description, reference_image_url, visual_traits (JSONB) | Per-project |
-| `style_presets` | id, name, settings (JSONB), is_system, user_id | System + user-created |
-| `usage_logs` | id, user_id, job_id, action, provider, credits_used, cost_usd | Billing audit |
-| `model_pricing` | model_identifier (PK), credit_cost, is_enabled, tier_restriction | Credit costs |
-| `app_settings` | key (unique), value (JSONB) | ai_provider, cost_markup_percent |
-| `credit_transactions` | id, user_id, amount, credit_type, source, job_id | Audit log |
-| `voice_clones` | id, user_id, name, elevenlabs_voice_id, sample_audio_url | Custom cloned voices |
-| `stripe_customers` | id, user_id, stripe_customer_id | Supabase <> Stripe mapping |
-| `subscriptions` | id, stripe_subscription_id, stripe_price_id, tier, status, current_period_start/end, canceled_at | Synced from Stripe |
-| `transactions` | id, stripe_transaction_id, type, amount_usd, credits_granted | Payment history |
-| `social_connections` | id, user_id, platform, platform_user_id, access_token_encrypted, refresh_token_encrypted, token_expires_at, scopes, metadata | OAuth tokens (AES-256-GCM encrypted), one per user+platform |
-| `published_apps` | id, workflow_id, user_id, name, slug, version, nodes (JSONB), edges (JSONB), metadata, status | Versioned mini-app snapshots |
-| `credit_anomalies` | id, user_id, job_id, model, expected_credits, actual_credits, status | Credit charge anomaly tracking |
-| `kie_credit_snapshots` | id, balance, timestamp | KIE.ai account balance history (hourly) |
-| `tutorials` | id, title, description, video_url, thumbnail_url, category, sort_order, is_enabled, created_at, updated_at | Admin-managed video tutorials |
-| `developer_apps` | id, owner_user_id, name, description, logo_url, homepage_url, allowed_origins (text[]), redirect_uris (text[]), client_id (unique), client_secret_hash (bcrypt), scopes_requested (text[]), status | OAuth app registrations; client_id is `app_<32hex>`. Hard cap 5 apps per user. |
-| `developer_app_authorizations` | id, app_id, user_id, scopes_granted (text[]), revoked_at | User's consent grant for an app. Unique on (app_id, user_id) — one grant per app per user. |
-| `developer_app_tokens` | id, authorization_id, token_hash (sha256), token_prefix, expires_at, last_used_at, revoked_at | OAuth access tokens. Plaintext format `ndr_app_<64hex>`. 90-day TTL. |
-
----
-
-## Project Structure
-
-```
-frontend/src/
-  main.tsx                — Vite entry point
-  router.tsx              — React Router config (createBrowserRouter)
-  app/(auth)/             — Login, signup
-  app/(dashboard)/        — Projects, workflows, billing, settings, library, integrations
-  app/(admin)/            — Admin panel (cloud/business only): pricing, jobs, models, reports, settings, usage, users, credit-audit, kie-credits, alerts, apps, subscriptions
-  app/pricing/            — Pricing page (Stripe Checkout)
-  app/gallery/            — Public community gallery
-  routes/                 — Route wrapper components (workflow-editor-page, etc.)
-  layouts/                — DashboardLayout, AdminLayout
-  components/nodes/       — 100+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, extend-video-node, extract-frame-node, webhook-trigger-node, schedule-trigger-node, social-node, speech-to-video-node, sora-storyboard-node, sora-character-node, 13 suno-*-nodes, preview-node, json-process-node)
-  components/editor/
-    config-panel.tsx      — Thin dispatcher (~520 lines), delegates to config-panels/
-    config-panels/        — 24 files: per-category node config components (image, video, audio, composition, entity, trigger, social, etc.) + tag-textarea.tsx (autocomplete for audio tags & Suno metatags) + prompt-helper-dialog.tsx (AI prompt enhancement) + aspect-ratio-selector.tsx (visual SVG tile grid) + llm-model-select.tsx (tiered model dropdown)
-    remotion-player-preview.tsx — Generic @remotion/player wrapper (lazy-loaded)
-    after-effects-player-preview.tsx — AE composition preview (shows when sourceVideo exists)
-    motion-graphics-player-preview.tsx — MG composition preview (always available)
-    workflow-editor/      — 13 files: DAG execution engine, node executors, polling, main component
-    editor-error-boundary.tsx — React error boundary for Canvas + ConfigPanel
-  components/presentation/ — App runner / presentation mode (presentation-view, node-picker-dialog, node-config-modal, node-section, sortable-card-wrapper)
-  components/credits/     — CreditBalance, GenerateButton, etc.
-  components/ui/          — shadcn/ui
-  hooks/                  — useModelCredits, undo-flags (shared skip flag), use-undo-redo, use-workflow-store, etc.
-  lib/api.ts              — API client (includes `setCurrentWorkflowId` + `withWorkflowId` for tagging single-node jobs)
-  lib/stripe.ts           — Stripe.js singleton
-  lib/edition.ts          — Edition helpers
-  lib/audio-tags.ts       — Audio tags, SSML breaks, model-aware language lists (getLanguagesForModel, ALL_LANGUAGES)
-  lib/suno-tags.ts        — Suno metatags for lyrics autocomplete ([Verse], [Chorus], genres, etc.)
-  lib/pricing-data.ts     — Tier/model pricing constants
-  lib/social-media-specs.ts — Platform labels, action specs, character limits
-  components/integrations/ — Platform OAuth connect/disconnect cards
-  types/nodes.ts          — Node data types
-
-packages/shared/          — Shared pure logic between frontend & backend (model-constants, prompt-templates, ancestor-refs, credit-identifiers, prompt-builder, llm-models, types, presentation-utils)
-packages/remotion/        — Remotion compositions (slideshow, explainer, social-reel, documentary, scene-graph, after-effects, lottie-overlay, 3d-title, motion-graphics, composite)
-
-docs/                     — Public documentation (GitHub Pages); contains only nodes/ subfolder — NO pricing, KIE, or internal data
-specs/                    — Internal specs (FULL_SPEC, BILLING, adding-a-new-node, new-kie-models-spec, etc.) — NOT public
-
-backend/src/
-  server.ts               — Entry point
-  app.ts                  — Fastify app + route registration
-  worker.ts               — BullMQ job processor (video-worker)
-  render-worker.ts        — BullMQ render worker (Remotion, concurrency:1)
-  orchestrator.ts         — BullMQ workflow orchestrator entry point (concurrency:2)
-  routes/                 — 95 API route files (jobs, workflows, projects, admin-*, billing, stripe-webhook, gallery, download, user-settings, ai-writer, prompt-helper, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones, voice-changer, dubbing, voice-remix, voice-design, forced-alignment, extend-video, workflow-execution, webhook-triggers, social-auth, social-publish, speech-to-video, sora-storyboard, suno, published-apps, app-runner, app-analytics, admin-subscription-health, admin-credit-audit, admin-credit-anomalies, cancel-jobs)
-  prompts/                — AI system prompts (after-effects-system.ts, lottie-overlay-system.ts, three-d-title-system.ts, motion-graphics-system.ts)
-  utils/watermark.ts      — Image + video watermark functions
-  providers/              — AI provider abstraction; KIE clients: `client.ts` (core + VEO), `kontext-client.ts` (Flux Kontext), `runway-client.ts` (Runway + Aleph), `luma-client.ts` (Luma Modify), `kling3-client.ts` (Kling 3.0), `suno-client.ts` (Suno ops), `credit-lookup.ts` (credit audit)
-  billing/                — Credits, Stripe, cleanup (see Credit System)
-  services/workflow-engine/ — Backend workflow orchestration (8 files: types, execution-graph, input-resolver, output-extractor, payload-builder, node-executor, inline-executor, sub-workflow-handler)
-  services/social/        — Social media OAuth + publishing (encryption, oauth, platforms/)
-  workers/orchestrator-worker.ts — Main orchestrator BullMQ worker
-  middleware/             — credit-guard.ts, auth.ts (JWT verification + 5-min SHA-256 cache)
-  lib/config.ts           — Env config + edition helpers
-  lib/llm-client.ts       — Unified LLM client (KIE.ai chat-completions/messages/responses + Anthropic fallback)
-  lib/request-helpers.ts  — `extractWorkflowId(body)` — reads optional workflowId from request body for single-node job tracking
-  lib/admin-check.ts      — Shared cached admin check (30s TTL)
-  lib/app-settings.ts     — Settings cache (60s TTL, stampede-safe)
-  lib/orchestration-queue.ts — BullMQ queue for workflow orchestration
-  lib/schedule-cron.ts    — Cron/interval scheduler for workflow triggers (60s check interval)
-```
-
----
-
-## Technical Decisions
-
-| Decision | Choice | Reason |
-|----------|--------|--------|
-| Backend language | TypeScript (Node.js) | Same as frontend, BullMQ native |
-| Backend framework | Fastify | Fast, TypeScript-first, plugin system |
-| Job queue | BullMQ | Best for Node.js, excellent dashboard |
-| Execution model | Frontend DAG + Backend Orchestrator | Frontend: browser-based DAG engine; Backend: BullMQ orchestrator for autonomous/triggered execution |
-| Realtime updates | Polling (MVP) → SSE (Phase 2) | No extra infra needed |
-| Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
-| Credit pricing | 1 credit = $0.02 | Composite model identifiers for variable pricing (e.g., `"gpt-image:high"`, `"flux:2K"`); `VARIABLE_PRICING_MODELS` in `model-options.ts`; `buildCreditModelIdentifier()` in helpers.ts + route handlers; dynamic markup via `cost_markup_percent` app setting; credit anomaly tracking via `credit_anomalies` table; FFmpeg processing nodes tiered: light 1 CR (trim, fade, loop, transcode, adjust-volume, trim-audio), medium 2 CR (resize, speed-ramp, merge, mix, social-format), heavy 3 CR (combine-videos, add-captions); entity nodes (character, face, object, location) support model selection for reference image generation |
-| Voice Extractor | ElevenLabs via KIE.ai | Isolates voice from any audio, removes background noise |
-| Speech-to-Text | ElevenLabs STT via KIE.ai | Transcription with diarization + audio event tagging (provider option on transcribe node) |
-| Text-to-Dialogue | ElevenLabs Dialogue V3 via KIE.ai | Multi-speaker TTS — each dialogue line gets a different voice, outputs single audio file |
-| Video composition | Remotion (`packages/remotion/`) | Scene graph renderer + after-effects renderer + lottie-overlay renderer + 3d-title renderer + motion-graphics renderer + composite renderer + legacy template converters via BullMQ worker |
-| AI composition | Claude Sonnet → Scene Graph JSON | Natural language → track-based video composition (2 credits) |
-| After Effects | Claude Sonnet → Effect Plan JSON | AI-generated post-processing (color grade, vignette, grain, noise, letterbox, animated-blur, trail, motion-blur) applied to video (2 credits), CSS `filter:blur()` for motion-blur, OffthreadVideo ghost layers for trail |
-| Lottie Overlay | Claude Sonnet → Overlay Plan JSON | AI-placed timed Lottie animations over video (2 credits), `@remotion/lottie` + `delayRender`/`continueRender` per overlay |
-| 3D Title | Claude Sonnet → 3D Title Plan JSON | AI-generated animated 3D text scenes with camera, lighting, particles (3 credits), `@remotion/three` + Three.js + `@react-three/drei`, max 60s |
-| Motion Graphics | Claude Sonnet → Motion Graphics Plan JSON | AI-generated 2D motion graphics: lower thirds, title cards, kinetic typography, animated shapes/SVG paths (2 credits), pure Remotion primitives + `FONT_MAP` |
-| Composite | Client-side plan builder → Composite Plan JSON | Multi-layer video compositor: PiP, split screen, overlays with positioning/opacity/blend modes (0 credits), no AI, no backend route — plan built entirely in frontend DAG executor |
-| Multi-plan rendering | `POST /v1/render-video/plan` | Generic `{ planType, plan }` envelope — any composer node can feed plans to Render Video |
-| Video extend | VEO Extend + Runway Extend via KIE.ai | `POST /v1/extend-video` (40/32 credits), requires upstream `kieTaskId` from VEO/Runway generation; new `extend-video` node type with provider-specific params (model/seeds for VEO, quality for Runway) |
-| Media processing | FFmpeg in worker | 13 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale, extract-frame), 0 credits |
-| Image generation | Per-model params via `model-options.ts` | Config panel layout: Provider → Prompt → Style → Negative Prompt → Assets → Model Settings; style uses `IMAGE_STYLE_PRESETS` dropdown (16 presets) + "Custom..." free text; aspect ratios, resolution (Flux/Nano Banana 2), quality (GPT Image/Seedream) filtered per provider; Nano Banana v1 uses `image_size` (not `aspect_ratio`) and has no `resolution`; Nano Banana 2 uses native `aspect_ratio` with 1K/2K/4K resolution; `output_format` only sent to Nano Banana family; Flux Kontext/Max use own aspect ratio set (1:1, 16:9, 9:16, 4:3, 3:4, 21:9); style appended to prompt at execution; `negative_prompt` sent natively for imagen4/ideogram/qwen, appended as "Avoid: ..." for others; Ideogram uses `reference_image_urls` for character refs; reference image UI hidden for models that don't support it (`MODELS_WITH_REFERENCE_IMAGE_SUPPORT`: nano-banana, nano-banana-pro, ideogram only) |
-| LLM routing | KIE.ai unified client + Anthropic fallback | `packages/shared/src/llm-models.ts` (model registry), `backend/src/lib/llm-client.ts` (`llmComplete()` + `llmStream()`, 3 format adapters: chat-completions, messages, responses); 7 models across 3 tiers (economy/standard/premium); all 11 LLM routes + translate migrated; `LlmModelSelect` component in all LLM config panels; `LlmFeature` type covers 11 features; `buildLlmCreditIdentifier()` for tiered pricing; `resolveLlmCreditId()` reads `llmModel` from raw body before Zod strips it |
-| AI prompt wizard | LLM-powered interactive prompt builder | `POST /v1/prompt-helper/wizard` — two-action flow (analyze + generate); `PromptHelperButton` (pink sparkles, gated behind `hasCredits()` + `isWizardSupported()`); three-phase `PromptHelperDialog` (Input → Review Form → Result); AI picks 3-5 categories per node type (image 7, video 6, music 6, audio 4) and generates pre-filled questions with curated options; reference image role assignment (multi-select); model recommendation with one-click Apply; categories + provider capabilities in `packages/shared/src/prompt-wizard-categories.ts`; default model `gemini-3-flash` (economy tier); 2 credits per full wizard flow |
-| Translation | Gemini Flash via KIE.ai | Creative prompt translation (migrated from Replicate to unified LLM client) |
-| Composition preview | `@remotion/player` in frontend | Lazy-loaded Player preview for After Effects + Motion Graphics config panels; `@remotion-pkg` Vite alias resolves `packages/remotion/src`; `resolve.dedupe` prevents duplicate remotion bundles |
-| Undo/redo | Zustand snapshot stack (50 max), 300ms debounce | `undo-flags.ts` shared skip flag prevents execution updates (status/progress/results via `EXECUTION_DATA_KEYS`) from creating undo entries; `_isRestoring` flag prevents restore from triggering subscription; `loadGeneration` counter clears history only on workflow load/switch, not on auto-save `markClean()` |
-| Settings cache | 60s TTL, stampede-safe | Reduce DB queries, mutex prevents stampede |
-| TTS models | ElevenLabs v3 (default), Turbo v2.5, Multilingual v2 | v3 (`eleven_v3`) supports `[audio tags]` for emotions/SFX; v2 models don't — worker `stripAudioTags()` removes `[...]` before sending to v2; v3 always routes through direct ElevenLabs API (never KIE); frontend `TagTextarea` shows persistent warning when audio tags + v2 model |
-| TTS languages | Model-aware lists in `audio-tags.ts` | `getLanguagesForModel(provider)` returns correct set per model: Multilingual v2 = 29, Flash v2.5 = 32, v3 = 46 (adds Hebrew, Thai, Bengali, etc.); `ALL_LANGUAGES` for non-model-specific dropdowns (dialogue, dubbing, voice browser) |
-| Voice browser | ElevenLabs v2 API → VoiceBrowser dialog | `GET /v1/voices` (public, 6hr cache, stampede-safe), `useVoices()` hook, dialog with search/gender/accent/age/language/sort filters + audio preview; `DIALOGUE_VOICE_IDS` restricts dialogue node to 20 supported voices; fallback to static 52-voice list when no API key |
-| Voice cloning | ElevenLabs Instant Clone → direct TTS | `POST /v1/voice-clones` (multipart, 5 credits), `voice_clones` DB table with RLS; custom voices use `directElevenLabsTTS()` bypassing KIE.ai; TTS node `voiceType: "premade" \| "custom"` field; Voice Browser "My Voices" tab with record/upload UI (MediaRecorder API) |
-| Voice Changer | ElevenLabs Speech-to-Speech direct API | `POST /v1/voice-changer` (4 credits), audio input + target voice → audio output preserving emotion/delivery; uses `POST /v1/speech-to-speech/{voice_id}` multipart sync API |
-| Dubbing | ElevenLabs Dubbing direct API | `POST /v1/dubbing` (8 credits), audio + target language → translated audio preserving speaker identity; async with polling (`startDubbing` → `waitForDubbing` → `downloadDubbedAudio`) |
-| Voice Remix | ElevenLabs Text-to-Voice direct API | `POST /v1/voice-remix` (4 credits), natural language voice description + preview text → audio preview; uses `POST /v1/text-to-voice/create-previews` |
-| Voice Design | ElevenLabs Text-to-Voice Design direct API | `POST /v1/voice-design` (5 credits), full controls: model (multilingual v2/english v2/turbo v2.5), loudness, guidance_scale, seed, quality, should_enhance; outputs audio + `generatedVoiceId`; uses `POST /v1/text-to-voice/design`; node has dual output handles (`audio` + `voiceId`) |
-| Forced Alignment | ElevenLabs Forced Alignment direct API | `POST /v1/forced-alignment` (3 credits), audio + transcript → word-level timestamps JSON; output is data (not audio) |
-| Suno metatags | `suno-tags.ts` + `TagTextarea` | Autocomplete for `[Verse]`, `[Chorus]`, genre tags, etc. in lyrics fields; `TagTextarea` component with portal-rendered dropdown, supports both Suno metatags and ElevenLabs audio tags via `customTags` prop |
-| Aspect ratio selector | Visual SVG tile grid | `AspectRatioSelector` component with dynamically generated SVG ratio icons; responsive grid (2-col ≤2 options, 3-col otherwise); ARIA `radiogroup`; used across all image/video/composition config panels replacing plain `<Select>` dropdowns |
-| Canvas layout | ELKjs layered algorithm | `elkjs` replaces custom tidy-up; uses `node.measured` dimensions for size-aware layout; `elk.algorithm: "layered"`, direction RIGHT, orthogonal edge routing; supports selection-mode (2+ selected) or all-nodes mode; sticky notes excluded |
-| Flexible app I/O | Curated presentation inputs/outputs | Nodes opt in via `presentationInput`/`presentationOutput` flags on node data; `NodePickerDialog` for selection; `@dnd-kit/sortable` drag-and-drop ordering; `presentationSettings.inputOrder`/`outputOrder`/`cardMeta` in workflow store |
-| Tier-based parallelism | `TIER_PARALLELISM` in `stripe-config.ts` / `pricing-data.ts` | Per-execution concurrency limit by user tier: free=2, basic=4, standard=6, pro=10, business=12. Backend orchestrator fetches `profiles.tier` at execution start; frontend fan-out reads cached tier from `use-auth.ts`. Self-hosted editions (community/business) get env ceiling (default 12). `MAX_CONCURRENT_NODES_PER_EXECUTION` env var acts as hard ceiling. |
-| Workflow orchestrator | BullMQ `"workflow-orchestration"` queue | Server-side DAG execution: topological sort → level-by-level parallel execution → per-node state tracking; 3 execution categories: worker-queued (40+ types via existing BullMQ queues), sync HTTP (13 routes: 7 AI + 6 social via internal fetch), inline (combine-text, split-text, composite); concurrency 2; 30min per-node timeout, 60min per-workflow; two stop modes: "cancelled" (immediate) and "stopping" (finish current level then stop) |
-| Webhook triggers | Token-based auth, no user auth needed | `POST /v1/webhooks/:token` (public route), 32-byte hex token per trigger, rate limited 10/min per token; creates execution + enqueues orchestrator |
-| Schedule triggers | Cron expressions + interval strings | `schedule-cron.ts` checks every 60s, supports 5-field cron + simple intervals ("5m", "1h", "1d"); respects `maxExecutions` limit; skips if workflow already running |
-| Sub-workflow execution | Recursive with depth limit 5 | `sub-workflow-handler.ts`: loads referenced workflow, filters to selected route's reachable nodes (BFS), executes with same orchestrator logic; cycle detection via `workflowId:routeId` set |
-| Single-node execution history | Jobs tagged with workflowId | Frontend `setCurrentWorkflowId()` + `withWorkflowId()` inject workflowId into all job-creating API calls; backend `extractWorkflowId(req.body)` reads it before Zod strips it; `GET /v1/workflows/:id/executions` merges `workflow_executions` + standalone `jobs` (where `workflow_execution_id IS NULL`); standalone jobs shown as `triggerType: "single-node"` with synthetic nodeStates |
-| Shared package | `packages/shared/` with relative imports | Deduplicates ~500 lines of pure logic (prompt building, model constants, templates, ancestor refs, credit identifiers) between frontend DAG executor and backend orchestrator. Frontend resolves via Vite alias; backend uses relative imports (NOT path aliases — `tsc` doesn't rewrite them). Backend `rootDir: ".."` so dist output is `dist/backend/src/`. Dockerfile copies `packages/shared/` into build stages. |
-| Sora Characters | KIE.ai `sora-2-characters` + `sora-2-characters-pro` | `sora-character` node: extract reusable `character_id` from video (standard: upload clip, pro: reference Sora task ID + timestamps). Output is non-URL string (follows voice-design pattern). `character_id_list` (max 5) supported on Sora I2V/T2V/Storyboard via `characters` input handle with multi-connection aggregation. 5 credits per extraction. |
-| Social media publishing | OAuth 2.0 + platform APIs | 6 platforms: Instagram, TikTok, YouTube, LinkedIn, X, Facebook. OAuth popup flow with PKCE (X), CSRF state param. Tokens AES-256-GCM encrypted at rest (`SOCIAL_ENCRYPTION_KEY`). `social_connections` table (1 account per user+platform). Publishing via sync HTTP nodes in orchestrator. 1 credit per post. |
-| FreeCut editor | Iframe + postMessage bridge | `freecut-editor-modal.tsx` embeds FreeCut; universal "Edit in FreeCut" scissors button on all 22 video nodes; `freecutEdit` store state triggers modal; edited video uploaded to R2 as new result version; 0 credits |
-| Deployment | Railway + single Dockerfile | `dev` branch → staging (`next.nodaro.ai`); `main` branch → production (`app.nodaro.ai`). Single multi-stage Dockerfile at repo root builds backend, frontend, and Remotion. Caddy reverse proxy in front. **When adding new `VITE_*` env vars, always add both `ARG` and `ENV` lines to the Dockerfile** — Vite inlines them at build time, so they must be present during Docker build. |
-
----
-
-## Active TODOs
-- [ ] Phase 6 Templates (preset workflow templates)
-- [ ] Version history per node
-- [ ] /v1/available-models endpoint (filter by edition + API keys)
-- [ ] Build from Prompt: MVP + Director Mode versions
-- [ ] Shot Node as companion to Scene Node ("Director Mode")
-- [x] OSS Phase 1: backend cleanup — 2026-04-28 (allowed-origins helper, GET /v1/nodes, OpenAPI seed, .env.example, docker-compose.community.yml, lazy stripe-client init)
-- [x] OSS Phase 2: developer apps + OAuth — 2026-04-28 (developer_apps schema, scopes, dynamic CORS, /v1/oauth/* routes, auth middleware OAuth path, frontend management UI + consent screen). **Pending:** apply migration `093_developer_apps.sql` to staging Supabase.
-- [ ] OSS Phase 3: @nodaro/shared + @nodaro/client npm packages
-- [ ] OSS Phase 4: deployment + integration documentation
+| Area | Rule |
+|------|------|
+| `packages/shared/` | Pure logic shared between frontend + backend. Frontend imports via Vite alias `@nodaro-shared/*`. Backend uses RELATIVE imports — `tsc` doesn't rewrite path aliases. Backend `rootDir: ".."` so dist output is `dist/backend/src/`. Dockerfile must copy `packages/shared/` into every build stage. |
+***REDACTED-OSS-SCRUB***
+| Credit pricing | 1 credit = $0.02. Composite identifiers for variable pricing (`"gpt-image:high"`, `"flux:2K"`) — `VARIABLE_PRICING_MODELS` in `model-options.ts`, `buildCreditModelIdentifier()` in `helpers.ts` + route handlers. `STATIC_CREDIT_COSTS` is a runtime fallback only — admin UI reads from the `model_pricing` DB table. |
+| LLM routing | All LLM calls go through `backend/src/lib/llm-client.ts` (`llmComplete()` / `llmStream()`). Model registry: `packages/shared/src/llm-models.ts`. Tiered pricing via `buildLlmCreditIdentifier()`. `resolveLlmCreditId()` reads `llmModel` from RAW body before Zod strips it. |
+| Workflow orchestrator | BullMQ `"workflow-orchestration"` queue. Topological sort → level-by-level parallel execution. 3 execution categories: worker-queued (existing BullMQ queues), sync HTTP (internal fetch with service-role auth), inline (combine-text, split-text, composite). Per-node timeout 30min, per-workflow 60min. Stop modes: `"cancelled"` (immediate) vs `"stopping"` (finish current level). |
+| Tier parallelism | `TIER_PARALLELISM` in `stripe-config.ts` + `pricing-data.ts`: free=2, basic=4, standard=6, pro=10, business=12. Self-hosted editions read `MAX_CONCURRENT_NODES_PER_EXECUTION` env (default 12) as hard ceiling. |
+| Single-node execution history | Frontend `setCurrentWorkflowId()` + `withWorkflowId()` inject workflowId into all job-creating API calls. Backend `extractWorkflowId(req.body)` reads it BEFORE Zod strips it. Standalone jobs (no `workflow_execution_id`) merged into execution lists as `triggerType: "single-node"`. |
+| Watermark | Decision stored on `jobs.should_watermark` at credit reservation (NOT read from `profiles.tier` at processing time — prevents tier-upgrade bypass). |
+| Webhook triggers | Public route `POST /v1/webhooks/:token` — 32-byte hex token IS auth. Rate-limited 10/min per token. |
+| Image generation params | Per-provider param routing in `model-options.ts`: Nano Banana v1 uses `image_size` (no `resolution`); Nano Banana 2 + Pro use `aspect_ratio` + 1K/2K/4K resolution; `output_format` only sent to Nano Banana family; Flux Kontext/Max have their own aspect ratio set; `negative_prompt` sent natively for imagen4/ideogram/qwen, appended as "Avoid: …" for others. |
+| TTS v3 vs v2 | ElevenLabs v3 supports `[audio tags]` and routes through direct ElevenLabs API (never KIE). v2 models go via KIE; worker `stripAudioTags()` removes `[…]` before sending. |
+| Deployment | Railway + single multi-stage Dockerfile at repo root. `dev` → `next.nodaro.ai` (staging), `main` → `app.nodaro.ai` (prod). New `VITE_*` env vars MUST get both `ARG` and `ENV` lines in the Dockerfile — Vite inlines them at build time. |
+| Auth + OAuth | 4 auth modes in `middleware/auth.ts`: Supabase JWT (`eyJ...`), OAuth dev-app token (`ndr_app_<64hex>`, 90-day TTL — sets `req.appAuthorization{appId, scopes}`), API token (`ndr_<64hex>`, legacy), internal RPC (`X-Internal-Orchestrator-Secret`). Resolution order: public route → internal-secret → `ndr_app_` → JWT → 401. Scope enforcement via `requireScope(req.appAuthorization?.scopes ?? [], scope)` — Supabase JWT path is no-op (user owns resources). 8 scopes in `lib/scopes.ts`. |
+| Dynamic CORS | `lib/dynamic-origins.ts` — async DB-backed allowlist (60s cache, stampede-safe). Combines `getStaticAllowedOrigins()` (PUBLIC_URL + CORS_ORIGIN env) with `developer_apps.allowed_origins`. Cache invalidated on dev-app create/update/delete. Both `app.ts` CORS (async-promise form — NOT callback-form, double-fires) and `sse.ts createSSEStream` (now async) consume `isOriginAllowedDynamic()`. |
+| Developer apps | `developer_apps` + `developer_app_authorizations` + `developer_app_tokens` tables. `POST /v1/developer-apps` (JWT) returns plaintext `clientSecret` ONCE. `POST /v1/oauth/authorize` (JWT) → one-shot code (10-min TTL) → `POST /v1/oauth/token` (client credentials) → `access_token`. RFC 7009 `revoke`. Public `GET /v1/oauth/app-info?client_id=` for consent screens. Service-role supabase imports allow-listed in `scripts/check-admin-client-import.mjs` (every query scoped by `owner_user_id` in-handler). |
 
 ---
 

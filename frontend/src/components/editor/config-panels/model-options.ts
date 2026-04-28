@@ -344,6 +344,57 @@ export const IMAGE_RESOLUTION_OPTIONS: Record<string, readonly { value: string; 
   "gpt-image-2-i2i": NANO_BANANA_RESOLUTIONS,
 }
 
+// =============================================================================
+// VIDEO MODEL RESOLUTIONS (must match the hardcoded options in video-configs.tsx)
+// Providers with no entry have no resolution lever — `data.resolution` should
+// be cleared when the user lands on them so backend Zod doesn't see stale
+// values. Case-sensitive: hailuo uses uppercase ("768P", "1080P"), everything
+// else is lowercase ("720p", "1080p").
+// =============================================================================
+const VIDEO_480_720 = [
+  { value: "480p", label: "480p" },
+  { value: "720p", label: "720p" },
+] as const
+const VIDEO_720_1080 = [
+  { value: "720p", label: "720p" },
+  { value: "1080p", label: "1080p" },
+] as const
+const VIDEO_480_720_1080 = [
+  { value: "480p", label: "480p" },
+  { value: "720p", label: "720p" },
+  { value: "1080p", label: "1080p" },
+] as const
+const HAILUO_PRO_RESOLUTIONS = [
+  { value: "768P", label: "768P" },
+  { value: "1080P", label: "1080P (6s max)" },
+] as const
+const HAILUO_STANDARD_RESOLUTIONS = [
+  { value: "512P", label: "512P" },
+  { value: "768P", label: "768P" },
+] as const
+
+export const VIDEO_RESOLUTION_OPTIONS: Record<string, readonly { value: string; label: string }[]> = {
+  "grok-i2v": VIDEO_480_720,
+  "seedance": VIDEO_480_720_1080,
+  "seedance-2": VIDEO_480_720,
+  "seedance-2-fast": VIDEO_480_720,
+  "wan-i2v": VIDEO_720_1080,
+  "wan": VIDEO_720_1080,
+  "wan-turbo": VIDEO_480_720,
+  "hailuo-2.3-pro": HAILUO_PRO_RESOLUTIONS,
+  "hailuo-2.3": HAILUO_PRO_RESOLUTIONS,
+  "hailuo-standard": HAILUO_STANDARD_RESOLUTIONS,
+  "bytedance-lite": VIDEO_480_720_1080,
+  "bytedance-pro": VIDEO_480_720_1080,
+  "bytedance-pro-fast": VIDEO_720_1080,
+}
+
+export function getVideoResolutionOptions(
+  provider: string,
+): readonly { value: string; label: string }[] | undefined {
+  return VIDEO_RESOLUTION_OPTIONS[provider]
+}
+
 // Models that support quality selection
 const GPT_IMAGE_QUALITY = [
   { value: "medium", label: "Medium (Balanced)" },
