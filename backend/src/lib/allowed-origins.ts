@@ -45,3 +45,24 @@ export function getStaticAllowedOrigins(): string[] {
   }
   return cached
 }
+
+/**
+ * The "front door" URL of this Nodaro instance — used in OG tags, embed redirects,
+ * email links, etc. Order: PUBLIC_URL > first CORS_ORIGIN > localhost dev.
+ */
+export function getPublicAppUrl(input: AllowedOriginsInput): string {
+  if (input.publicUrl) return input.publicUrl
+  if (input.corsOrigin) {
+    const first = input.corsOrigin.split(",")[0]?.trim()
+    if (first) return first
+  }
+  return "http://localhost:3000"
+}
+
+/** Convenience: compute from `config` module. */
+export function getStaticPublicAppUrl(): string {
+  return getPublicAppUrl({
+    corsOrigin: config.CORS_ORIGIN,
+    publicUrl: config.PUBLIC_URL,
+  })
+}

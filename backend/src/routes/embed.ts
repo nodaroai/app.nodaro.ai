@@ -6,7 +6,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { config } from "../lib/config.js"
+import { getStaticPublicAppUrl } from "../lib/allowed-origins.js"
 
 const slugParams = z.object({
   slug: z.string().min(1),
@@ -47,7 +47,7 @@ export async function embedRoutes(app: FastifyInstance) {
     const frameAncestors = origins.join(" ")
 
     // Determine the frontend URL
-    const appUrl = config.PUBLIC_URL || "https://app.nodaro.ai"
+    const appUrl = getStaticPublicAppUrl()
     const theme = (req.query as Record<string, string>).theme ?? "dark"
     const embedUrl = `${appUrl}/embed/${encodeURIComponent(slug)}?theme=${encodeURIComponent(theme)}`
 

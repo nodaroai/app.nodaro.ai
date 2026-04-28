@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { computeAllowedOrigins, isOriginAllowed } from "../allowed-origins.js"
+import { computeAllowedOrigins, isOriginAllowed, getPublicAppUrl } from "../allowed-origins.js"
 
 describe("computeAllowedOrigins", () => {
   it("returns localhost dev origins by default", () => {
@@ -52,5 +52,26 @@ describe("isOriginAllowed", () => {
 
   it("returns false for undefined origin", () => {
     expect(isOriginAllowed(undefined, ["https://a.com"])).toBe(false)
+  })
+})
+
+describe("getPublicAppUrl", () => {
+  it("returns PUBLIC_URL when set", () => {
+    expect(getPublicAppUrl({ publicUrl: "https://my.example.com", corsOrigin: "" }))
+      .toBe("https://my.example.com")
+  })
+
+  it("falls back to first CORS_ORIGIN entry if PUBLIC_URL is empty", () => {
+    expect(getPublicAppUrl({ publicUrl: "", corsOrigin: "https://a.com,https://b.com" }))
+      .toBe("https://a.com")
+  })
+
+  it("falls back to localhost dev URL if both empty", () => {
+    expect(getPublicAppUrl({ publicUrl: "", corsOrigin: "" })).toBe("http://localhost:3000")
+  })
+
+  it("never returns nodaro.ai", () => {
+    const url = getPublicAppUrl({ publicUrl: "", corsOrigin: "" })
+    expect(url).not.toMatch(/nodaro\.ai/)
   })
 })
