@@ -7,7 +7,7 @@ import {
   SETTING_CATEGORY_LABELS,
   type Setting,
   type SettingCategory,
-} from "@nodaro-shared/setting"
+} from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

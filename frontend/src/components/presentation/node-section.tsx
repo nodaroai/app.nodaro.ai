@@ -13,8 +13,8 @@ import {
 } from "@dnd-kit/sortable"
 import { Button } from "@/components/ui/button"
 import type { WorkflowNode } from "@/types/nodes"
-import type { PresentationItem } from "@nodaro-shared/presentation-types"
-import { getItemSortId } from "@nodaro-shared/presentation-utils"
+import type { PresentationItem } from "@nodaro/shared"
+import { getItemSortId } from "@nodaro/shared"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { SortableCardWrapper } from "./sortable-card-wrapper"
 

@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Film } from "lucide-react"
-import { getCameraFormat, getCameraFormatLabel } from "@nodaro-shared/camera-format"
+import { getCameraFormat, getCameraFormatLabel } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { CameraFormatPreview } from "@/components/editor/config-panels/camera-format-preview"
 import type { CameraFormatData } from "@/types/nodes"

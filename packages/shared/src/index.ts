@@ -38,16 +38,51 @@ export {
   EXTEND_VIDEO_PROVIDERS,
   LIP_SYNC_PROVIDERS,
   REPLICATE_LIP_SYNC_PROVIDERS,
+  VIDEO_INPUT_LIP_SYNC_PROVIDERS,
+  FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS,
   MOTION_TRANSFER_PROVIDERS,
   TTS_PROVIDERS,
   TEXT_TO_AUDIO_PROVIDERS,
   MUSIC_PROVIDERS,
   TRANSCRIBE_PROVIDERS,
   SCRIPT_PROVIDERS,
+  AI_WRITER_PROVIDERS,
+  QA_CHECK_PROVIDERS,
   SUNO_MODELS,
   VOICE_DESIGN_MODELS,
+  MODIFY_IMAGE_PROVIDERS,
+  UPSCALE_IMAGE_PROVIDERS,
+  I2I_MASK_SUPPORT,
+  I2I_STRENGTH_SUPPORT,
+  SEED_SUPPORT,
+  RENDERING_SPEED_SUPPORT,
+  GUIDANCE_SCALE_SUPPORT,
   SEEDANCE_2_REF_LIMITS,
   isSeedance2Provider,
+} from "./model-constants.js"
+
+export type {
+  ImageGenProvider,
+  ImageI2IProvider,
+  ImageEditProvider,
+  ImageToVideoProvider,
+  TextToVideoProvider,
+  VideoToVideoProvider,
+  VideoUpscaleProvider,
+  ExtendVideoProvider,
+  LipSyncProvider,
+  MotionTransferProviderType,
+  TtsProvider,
+  TextToAudioProvider,
+  MusicProvider,
+  TranscribeProvider,
+  ScriptProvider,
+  AiWriterProvider,
+  QaCheckProvider,
+  SunoModel,
+  VoiceDesignModel,
+  ModifyImageProvider,
+  UpscaleImageProvider,
 } from "./model-constants.js"
 
 export {
@@ -83,6 +118,10 @@ export {
   expandImageRefTokens,
   expandImagePositionRefs,
   buildScenePrompt,
+  SCENE_PROMPT_MAX_LENGTH,
+  SHOT_LABELS,
+  MOVEMENT_LABELS,
+  truncateText,
   type BuildImagePromptConfig,
   type BuildImagePromptResult,
 } from "./prompt-builder.js"
@@ -97,6 +136,9 @@ export {
   getInputFieldSchema,
   flattenItems,
   migrateToItems,
+  validateNoNestedGroups,
+  cleanOrphanedItems,
+  getItemSortId,
   type OutputType,
   type InputFieldSchema,
 } from "./presentation-utils.js"
@@ -159,6 +201,7 @@ export {
   parseListExpression,
   selectListItems,
   describeEdgeBehavior,
+  isDefaultSelectorConfig,
 } from "./edge-range.js"
 export type { SelectorMode, OutputMode, SelectorFields } from "./edge-range.js"
 
@@ -272,6 +315,7 @@ export {
   getAtmosphere,
   getAtmosphereLabel,
   getAtmospherePromptHint,
+  buildAtmosphereHints,
 } from "./atmosphere.js"
 export type { Atmosphere } from "./atmosphere.js"
 
@@ -334,6 +378,7 @@ export {
   getPostProcessEffect,
   getPostProcessEffectLabel,
   getPostProcessEffectPromptHint,
+  buildPostProcessHints,
 } from "./post-process-effects.js"
 export type { PostProcessEffect } from "./post-process-effects.js"
 
@@ -343,9 +388,12 @@ export {
 } from "./parameter-node-value.js"
 
 export {
+  INPUT_FIELD_MAP,
   OUTPUT_FIELD_MAP,
   mergeExposedSettings,
   type ComponentMetadata,
+  type ComponentHandle,
+  type ExposedSetting,
 } from "./component-types.js"
 
 export {
@@ -357,7 +405,15 @@ export {
 export {
   NODE_DEFAULT_TYPES,
   validateProviderForNodeType,
+  supportedDefaultDimensions,
+  getValidValues,
+  getTargetField,
+  mapAspectRatio,
+  mapQuality,
+  deriveLinkedFields,
   type NodeDefaultType,
+  type QualityLevel,
+  type SemanticAspectRatio,
 } from "./node-default-mappings.js"
 
 export { NODE_MAPPABLE_FIELDS } from "./node-mappable-fields.js"
@@ -366,9 +422,23 @@ export {
   PROVIDER_CAPABILITIES,
   REFERENCE_IMAGE_ROLES,
   getCategoriesForNodeType,
+  isWizardSupported,
+  type WizardQuestion,
+  type WizardCategory,
+  type WizardOption,
+  type WizardSelection,
+  type RecommendedModel,
+  type ModelChange,
 } from "./prompt-wizard-categories.js"
 
-export { resolveScraperCreditId, type ScraperActorId } from "./scraper-actors.js"
+export {
+  resolveScraperCreditId,
+  buildScraperCreditId,
+  isScraperActor,
+  SCRAPER_ACTOR_LABELS,
+  SCRAPER_CREDIT_COSTS,
+  type ScraperActorId,
+} from "./scraper-actors.js"
 
 export { VARIABLES_HANDLE_ID, buildConditionVariables } from "./condition-variables.js"
 
@@ -384,4 +454,195 @@ export { resolveSourceThroughConnectedList } from "./list-source-resolver.js"
 
 export { zipMergeLists } from "./list-merge.js"
 
-export { PLATFORM_SPECS } from "./social-media-specs.js"
+export {
+  PLATFORM_SPECS,
+  PLATFORM_LABELS,
+  CONTENT_TYPES_BY_PLATFORM,
+} from "./social-media-specs.js"
+export type {
+  SocialMediaPlatform,
+  SocialMediaContentType,
+  SocialMediaSpec,
+} from "./social-media-specs.js"
+
+// Parameter-node dimensions (frontend pickers + backend hints)
+export {
+  AESTHETICS,
+  AESTHETIC_CATEGORY_LABELS,
+  AESTHETIC_CATEGORY_ORDER,
+  getAesthetic,
+  getAestheticLabel,
+  getAestheticPromptHint,
+  buildAestheticHints,
+} from "./aesthetic.js"
+export type { Aesthetic, AestheticCategory } from "./aesthetic.js"
+
+export {
+  ANIMALS,
+  ANIMAL_SUBCATEGORY_LABELS,
+  ANIMAL_SUBCATEGORY_ORDER,
+  getAnimal,
+  getAnimalLabel,
+} from "./animals.js"
+export type { Animal, AnimalSubcategory } from "./animals.js"
+
+export {
+  BACKDROPS,
+  BACKDROP_CATEGORY_LABELS,
+  BACKDROP_CATEGORY_ORDER,
+  getBackdrop,
+  getBackdropLabel,
+  getBackdropPromptHint,
+} from "./backdrop.js"
+export type { Backdrop, BackdropCategory } from "./backdrop.js"
+
+export {
+  ERAS,
+  ERA_CATEGORY_LABELS,
+  ERA_CATEGORY_ORDER,
+  getEra,
+  getEraLabel,
+  getEraPromptHint,
+} from "./era.js"
+export type { Era, EraCategory } from "./era.js"
+
+export {
+  FURNITURE,
+  FURNITURE_SUBCATEGORY_LABELS,
+  FURNITURE_SUBCATEGORY_ORDER,
+  getFurniture,
+  getFurnitureLabel,
+} from "./furniture.js"
+export type { Furniture, FurnitureSubcategory } from "./furniture.js"
+
+export {
+  HELD_PROPS,
+  HELD_PROP_CATEGORY_LABELS,
+  HELD_PROP_CATEGORY_ORDER,
+  getHeldProp,
+  getHeldPropLabel,
+  getHeldPropPromptHint,
+  buildHeldPropHints,
+} from "./held-prop.js"
+export type { HeldProp, HeldPropCategory } from "./held-prop.js"
+
+export {
+  MATERIALS,
+  MATERIAL_CATEGORY_LABELS,
+  MATERIAL_CATEGORY_ORDER,
+  getMaterial,
+  getMaterialLabel,
+  getMaterialPromptHint,
+  buildMaterialHints,
+} from "./materials.js"
+export type { Material, MaterialCategory } from "./materials.js"
+
+export {
+  MOODS,
+  MOOD_CATEGORY_LABELS,
+  MOOD_CATEGORY_ORDER,
+  getMood,
+  getMoodLabel,
+  getMoodPromptHint,
+  buildMoodHints,
+} from "./mood.js"
+export type { Mood, MoodCategory, MoodValue } from "./mood.js"
+
+export {
+  PEOPLE,
+  PERSON_DIMENSION_ORDER,
+  PERSON_DIMENSION_LABELS,
+  PERSON_FIELD_BY_DIMENSION,
+  getPerson,
+  getPersonLabel,
+  getPersonPromptHint,
+  buildPersonHints,
+} from "./person.js"
+export type { Person, PersonDimension, PersonValue } from "./person.js"
+
+export {
+  PHOTO_GENRES,
+  PHOTO_GENRE_CATEGORY_LABELS,
+  PHOTO_GENRE_CATEGORY_ORDER,
+  getPhotoGenre,
+  getPhotoGenreLabel,
+  getPhotoGenrePromptHint,
+} from "./photo-genre.js"
+export type { PhotoGenre, PhotoGenreCategory } from "./photo-genre.js"
+
+export {
+  PHOTOGRAPHERS,
+  PHOTOGRAPHER_CATEGORY_LABELS,
+  PHOTOGRAPHER_CATEGORY_ORDER,
+  getPhotographer,
+  getPhotographerLabel,
+  getPhotographerPromptHint,
+  buildPhotographerHints,
+} from "./photographer.js"
+export type { Photographer, PhotographerCategory } from "./photographer.js"
+
+export {
+  POSES,
+  POSE_CATEGORY_LABELS,
+  POSE_CATEGORY_ORDER,
+  getPose,
+  getPoseLabel,
+  getPosePromptHint,
+  buildPoseHints,
+} from "./pose.js"
+export type { Pose, PoseCategory, PoseValue } from "./pose.js"
+
+export {
+  SETTINGS,
+  SETTING_CATEGORY_LABELS,
+  getSetting,
+  getSettingLabel,
+  getSettingPromptHint,
+} from "./setting.js"
+export type { Setting, SettingCategory } from "./setting.js"
+
+export {
+  STYLINGS,
+  STYLING_DIMENSION_LABELS,
+  STYLING_DIMENSION_ORDER,
+  STYLING_FIELD_BY_DIMENSION,
+  getStyling,
+  getStylingLabel,
+  getStylingPromptHint,
+  buildStylingHints,
+} from "./styling.js"
+export type { Styling, StylingDimension, StylingValue } from "./styling.js"
+
+export {
+  VEHICLES,
+  VEHICLE_SUBCATEGORY_LABELS,
+  VEHICLE_SUBCATEGORY_ORDER,
+  getVehicle,
+  getVehicleLabel,
+} from "./vehicles.js"
+export type { Vehicle, VehicleSubcategory } from "./vehicles.js"
+
+export {
+  WEAPONS,
+  WEAPON_SUBCATEGORY_LABELS,
+  WEAPON_SUBCATEGORY_ORDER,
+  getWeapon,
+  getWeaponLabel,
+} from "./weapons.js"
+export type { Weapon, WeaponSubcategory } from "./weapons.js"
+
+// Multi-pick utilities
+export { pickIds, togglePick } from "./multi-pick.js"
+
+// i18n
+export {
+  LANGUAGES,
+  getLocaleDirection,
+  ensureLocaleCatalogLoaded,
+  resolveLabel,
+  resolveDescription,
+  entryMatchesQuery,
+  type LocaleId,
+  type LocaleDirection,
+  type I18nCatalogId,
+} from "./i18n/index.js"

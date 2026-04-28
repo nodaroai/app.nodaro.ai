@@ -83,10 +83,14 @@ vi.mock("@/hooks/use-model-credits", () => ({
   useModelCredits: () => 1,
 }))
 
-vi.mock("@nodaro-shared/llm-models", () => ({
-  buildLlmCreditIdentifier: () => "qa-check",
-  LLM_FEATURE_DEFAULTS: { "qa-check": "gemini-3-flash" },
-}))
+vi.mock("@nodaro/shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/shared")>()
+  return {
+    ...actual,
+    buildLlmCreditIdentifier: () => "qa-check",
+    LLM_FEATURE_DEFAULTS: { "qa-check": "gemini-3-flash" },
+  }
+})
 
 // ---------------------------------------------------------------------------
 // Component imports (after all mocks)

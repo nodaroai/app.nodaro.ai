@@ -9,7 +9,7 @@ import {
   supportedDefaultDimensions,
   getTargetField,
   getValidValues,
-} from "@nodaro-shared/node-default-mappings"
+} from "@nodaro/shared"
 
 export interface AdminDefault {
   node_type: string

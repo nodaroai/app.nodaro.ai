@@ -3,7 +3,7 @@ import {
   IMAGE_RESOLUTION_OPTIONS,
   IMAGE_QUALITY_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { MODELS_WITH_REFERENCE_IMAGE_SUPPORT } from "@nodaro-shared/model-constants"
+import { MODELS_WITH_REFERENCE_IMAGE_SUPPORT } from "@nodaro/shared"
 
 type Option = { value: string; label: string }
 

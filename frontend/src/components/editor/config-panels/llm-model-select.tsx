@@ -1,6 +1,6 @@
 import { Select, SelectContent, SelectTrigger, SelectValue, SelectItemWithMeta } from "@/components/ui/select"
-import { LLM_MODELS, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
-import type { LlmTier, LlmFeature } from "@nodaro-shared/llm-models"
+import { LLM_MODELS, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import type { LlmTier, LlmFeature } from "@nodaro/shared"
 import { ModelDescriptionHint } from "./model-description-hint"
 
 const TIER_LABELS: Record<LlmTier, string> = {

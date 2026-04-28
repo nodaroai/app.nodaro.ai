@@ -1,4 +1,4 @@
-import { getVehicle, type VehicleSubcategory } from "@nodaro-shared/vehicles"
+import { getVehicle, type VehicleSubcategory } from "@nodaro/shared"
 
 const VEHICLE_EMOJI: Record<string, string> = {
   // classic

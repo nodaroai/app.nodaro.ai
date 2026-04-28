@@ -7,7 +7,7 @@ import {
   useToggleLlmModelMutation,
   type AdminLlmModel,
 } from "@/hooks/queries/use-admin-queries"
-import type { LlmTier } from "@nodaro-shared/llm-models"
+import type { LlmTier } from "@nodaro/shared"
 
 // ── Badge colors ────────────────────────────────────────────────────
 

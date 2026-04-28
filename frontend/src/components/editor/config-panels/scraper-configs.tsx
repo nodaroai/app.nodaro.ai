@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro-shared/scraper-actors"
+import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
 import type { WebScrapeNodeData } from "@/types/nodes"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"

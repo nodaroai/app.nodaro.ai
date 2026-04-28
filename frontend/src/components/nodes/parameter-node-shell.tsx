@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Eye, FileText, Layers as LayersIcon } from "lucide-react"
-import { getParameterPromptHint } from "@nodaro-shared/parameter-prompt-hint"
+import { getParameterPromptHint } from "@nodaro/shared"
 import { BaseNode, type HandleConfig } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"

@@ -1,5 +1,5 @@
-import { composeCameraMotionHintFromConnections } from "@nodaro-shared/camera-motions"
-import { getParameterPromptHint } from "@nodaro-shared/parameter-prompt-hint"
+import { composeCameraMotionHintFromConnections } from "@nodaro/shared"
+import { getParameterPromptHint } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 /**
@@ -8,7 +8,7 @@ import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
  * clauses into a consumer's prompt) and the camera-motion config panel
  * preview (so users can see exactly what the connected nodes will contribute).
  *
- * Single source of truth lives in `@nodaro-shared/parameter-prompt-hint` so
+ * Single source of truth lives in `@nodaro/shared` so
  * the frontend DAG executor and backend orchestrator emit identical text.
  * Camera-motion is composed by `composeCameraMotionHintForNode` below; this
  * dispatcher only needs the static-text (data-only) variant.

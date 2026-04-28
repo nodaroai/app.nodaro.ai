@@ -41,8 +41,8 @@ import { ReferenceImageList } from "./reference-image-list"
 import type { RefImageItem } from "./tag-textarea"
 import { PromptEditor } from "./prompt-editor"
 import { ReferenceSupportWarning } from "./reference-support-warning"
-import type { ConnectedReference, ReferenceSource } from "@nodaro-shared/types"
-import { DEFAULT_LABEL_BY_SOURCE } from "@nodaro-shared/types"
+import type { ConnectedReference, ReferenceSource } from "@nodaro/shared"
+import { DEFAULT_LABEL_BY_SOURCE } from "@nodaro/shared"
 import { ConnectedMediaList } from "./connected-media-list"
 import { FinalPromptPreview } from "./final-prompt-preview"
 import { ConnectedCinematographySources } from "./connected-cinematography-sources"
@@ -55,7 +55,7 @@ const MaskPainterModal = lazy(() => import("../mask-painter-modal").then(m => ({
 
 const IMAGE_SOURCE_TYPES = new Set(["upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background"])
 
-// REF_IMAGE_MAX_LIMITS / DEFAULT_REF_IMAGE_MAX live in @nodaro-shared/model-constants.
+// REF_IMAGE_MAX_LIMITS / DEFAULT_REF_IMAGE_MAX live in @nodaro/shared (model-constants).
 
 export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateImageData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])

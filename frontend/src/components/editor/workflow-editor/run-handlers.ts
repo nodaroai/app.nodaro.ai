@@ -17,8 +17,8 @@ import {
   getFanOutMultiplier,
   type ExecutionContext,
 } from "./types";
-import { COMPOSER_PLAN_MAP } from "@nodaro-shared/model-constants";
-import { expandItemsWithRepeat } from "@nodaro-shared/repeat-types";
+import { COMPOSER_PLAN_MAP } from "@nodaro/shared";
+import { expandItemsWithRepeat } from "@nodaro/shared";
 import { collapseExpandedClones } from "./execution-graph";
 import { getListInputForNode } from "./node-input-resolver";
 import { executeNode, rejectAllManualEdits } from "./execute-node";

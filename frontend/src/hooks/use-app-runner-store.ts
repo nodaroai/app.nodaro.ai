@@ -17,8 +17,8 @@ import {
   type AppRun,
   batchExecutionEstimates,
 } from "@/lib/api"
-import { buildProgressSegments, calculateCombinedProgress, type ProgressSegment, CATEGORY_DURATION_DEFAULTS } from "@nodaro-shared/progress-curve"
-import { getOutputNodes } from "@nodaro-shared/presentation-utils"
+import { buildProgressSegments, calculateCombinedProgress, type ProgressSegment, CATEGORY_DURATION_DEFAULTS } from "@nodaro/shared"
+import { getOutputNodes } from "@nodaro/shared"
 
 export type AppRunnerStatus = "idle" | "loading" | "running" | "completed" | "failed"
 

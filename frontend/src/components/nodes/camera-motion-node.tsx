@@ -3,7 +3,7 @@
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Video, Frame, Sparkles } from "lucide-react"
-import { getCameraMotion, getCameraMotionLabel } from "@nodaro-shared/camera-motions"
+import { getCameraMotion, getCameraMotionLabel } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { HandleIcon } from "./handle-icon"
 import { CameraMotionPreview } from "@/components/editor/config-panels/camera-motion-preview"

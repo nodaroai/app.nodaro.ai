@@ -10,7 +10,7 @@ import {
   type ExposureSettings,
   type ExposureCategory,
   type ExposureValue,
-} from "@nodaro-shared/exposure-settings"
+} from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

@@ -10,8 +10,8 @@ import {
   getPerson,
   getPersonLabel,
   type PersonDimension,
-} from "@nodaro-shared/person"
-import { pickIds } from "@nodaro-shared/multi-pick"
+} from "@nodaro/shared"
+import { pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { getPersonEntryIcon } from "./person-styling-icon"
 import type { PersonData } from "@/types/nodes"

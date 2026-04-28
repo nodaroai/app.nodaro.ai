@@ -1717,7 +1717,7 @@ export async function sendWebhookOutput(data: { url: string; payload: Record<str
 }
 
 export async function webScrape(params: {
-  actor: import("@nodaro-shared/scraper-actors").ScraperActorId
+  actor: import("@nodaro/shared").ScraperActorId
   url?: string
   mode?: "page" | "site"
   query?: string

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { Pencil, X } from "lucide-react"
-import { pickIds } from "@nodaro-shared/multi-pick"
+import { pickIds } from "@nodaro/shared"
 import {
   Dialog,
   DialogContent,

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
-import { spliceDelimitedRows } from "@nodaro-shared/loop-delimiter"
+import { spliceDelimitedRows } from "@nodaro/shared"
 import { Plus, X, Upload, Film, Maximize2, Download, Link, Link2, GripVertical } from "lucide-react"
 import {
   DndContext,

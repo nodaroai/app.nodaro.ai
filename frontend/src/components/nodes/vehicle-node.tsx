@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Car } from "lucide-react"
-import { getVehicle, getVehicleLabel } from "@nodaro-shared/vehicles"
+import { getVehicle, getVehicleLabel } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { VehicleData } from "@/types/nodes"
 

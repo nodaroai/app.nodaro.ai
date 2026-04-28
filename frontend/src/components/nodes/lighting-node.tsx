@@ -10,7 +10,7 @@ import {
   getLighting,
   getLightingLabel,
   type LightingCategory,
-} from "@nodaro-shared/lighting"
+} from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { LightingPreview } from "@/components/editor/config-panels/lighting-preview"
 import type { LightingData } from "@/types/nodes"

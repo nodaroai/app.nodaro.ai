@@ -1,6 +1,6 @@
 // Core template functions — re-exported from shared package (single source of truth)
-export { applyTemplate } from "@nodaro-shared/prompt-templates"
-import { resolveTemplate as sharedResolveTemplate } from "@nodaro-shared/prompt-templates"
+export { applyTemplate } from "@nodaro/shared"
+import { resolveTemplate as sharedResolveTemplate } from "@nodaro/shared"
 
 export interface PromptTemplateInfo {
   readonly label: string

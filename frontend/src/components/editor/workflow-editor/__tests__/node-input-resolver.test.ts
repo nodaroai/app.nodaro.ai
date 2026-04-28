@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { selectListItems } from "@nodaro-shared/edge-range"
+import { selectListItems } from "@nodaro/shared"
 
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: {

@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatus, getExecutionEstimate } from "@/lib/api";
-import { calculateProgress } from "@nodaro-shared/progress-curve";
+import { calculateProgress } from "@nodaro/shared";
 import type { GeneratedResult } from "@/types/nodes";
 import {
   WorkflowStaleError,

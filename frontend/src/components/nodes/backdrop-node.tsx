@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { LayoutDashboard } from "lucide-react"
-import { getBackdrop, getBackdropLabel } from "@nodaro-shared/backdrop"
+import { getBackdrop, getBackdropLabel } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { BackdropSwatch } from "@/components/editor/config-panels/backdrop-swatch"
 import type { BackdropData } from "@/types/nodes"

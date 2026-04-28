@@ -13,7 +13,7 @@ import { useEdges } from "@xyflow/react"
 import { getPublishedApp, estimateComponentCredits } from "@/lib/api"
 import type { ConfigProps } from "./types"
 import type { ComponentNodeData } from "@/types/nodes"
-import type { ComponentMetadata, ExposedSetting } from "@nodaro-shared/component-types"
+import type { ComponentMetadata, ExposedSetting } from "@nodaro/shared"
 
 export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<ComponentNodeData> & { nodeId?: string }) {
   const nodeData = data as ComponentNodeData

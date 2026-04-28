@@ -3,8 +3,8 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Sparkles } from "lucide-react"
-import { getPostProcessEffect, getPostProcessEffectLabel } from "@nodaro-shared/post-process-effects"
-import { pickIds } from "@nodaro-shared/multi-pick"
+import { getPostProcessEffect, getPostProcessEffectLabel } from "@nodaro/shared"
+import { pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { PostProcessEffectsData } from "@/types/nodes"
 

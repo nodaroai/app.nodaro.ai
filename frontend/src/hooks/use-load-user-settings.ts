@@ -3,7 +3,7 @@ import { useAuth } from "./use-auth"
 import { useWorkflowStore } from "./use-workflow-store"
 import { useUserSettings } from "./queries/use-user-settings-queries"
 import { useLocaleStore } from "@/lib/locale-store"
-import type { LocaleId } from "@nodaro-shared/i18n"
+import type { LocaleId } from "@nodaro/shared"
 
 export function useLoadUserSettings() {
   const { user } = useAuth()

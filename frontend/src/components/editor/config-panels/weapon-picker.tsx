@@ -8,7 +8,7 @@ import {
   WEAPON_SUBCATEGORY_ORDER,
   type Weapon,
   type WeaponSubcategory,
-} from "@nodaro-shared/weapons"
+} from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

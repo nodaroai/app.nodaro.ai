@@ -5,7 +5,7 @@ import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "
 import { prefetchModelCredits } from "@/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
-import { filterCloneNodes } from "@nodaro-shared/clone-utils"
+import { filterCloneNodes } from "@nodaro/shared"
 
 interface StillRunningJob {
   readonly nodeId: string

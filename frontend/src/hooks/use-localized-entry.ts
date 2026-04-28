@@ -22,7 +22,7 @@ import {
   resolveDescription as sharedResolveDescription,
   entryMatchesQuery,
   type I18nCatalogId,
-} from "@nodaro-shared/i18n"
+} from "@nodaro/shared"
 import { useUserLocale } from "@/lib/locale-store"
 
 export function useLocalizedCatalog(catalog: I18nCatalogId) {

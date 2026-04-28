@@ -7,7 +7,7 @@ import { StatusBadge } from "./output-cards/shared"
 import type { OutputCardActions } from "./output-cards/shared"
 import { Progress } from "@/components/ui/progress"
 import { FieldBadge } from "./field-badge"
-import type { ExposableField } from "@nodaro-shared/presentation-types"
+import type { ExposableField } from "@nodaro/shared"
 
 export interface FieldBadgeEntry {
   id: string

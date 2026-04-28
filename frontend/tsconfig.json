@@ -15,8 +15,7 @@
     "incremental": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@remotion-pkg/*": ["../packages/remotion/src/*"],
-      "@nodaro-shared/*": ["../packages/shared/src/*"]
+      "@remotion-pkg/*": ["../packages/remotion/src/*"]
     }
   },
   "include": [

@@ -9,7 +9,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { estimateNodeCredits } from "@/components/editor/workflow-editor/types"
-import { SCRAPER_ACTOR_LABELS } from "@nodaro-shared/scraper-actors"
+import { SCRAPER_ACTOR_LABELS } from "@nodaro/shared"
 import type { WebScrapeNodeData } from "@/types/nodes"
 
 const HANDLES = [

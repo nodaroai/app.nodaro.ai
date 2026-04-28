@@ -2,8 +2,8 @@
 
 import { type ReactNode, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import type { I18nCatalogId } from "@nodaro-shared/i18n"
-import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
+import type { I18nCatalogId } from "@nodaro/shared"
+import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

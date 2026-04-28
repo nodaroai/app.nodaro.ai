@@ -1,4 +1,4 @@
-import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, TextToVideoProvider, VideoToVideoProvider } from "@nodaro-shared/model-constants"
+import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, TextToVideoProvider, VideoToVideoProvider } from "@nodaro/shared"
 
 export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string; desc: string }[] = [
   { value: "flux", label: "Flux", desc: "Photorealistic, highest quality output" },
@@ -453,8 +453,8 @@ export {
   SEED_SUPPORT,
   RENDERING_SPEED_SUPPORT,
   GUIDANCE_SCALE_SUPPORT,
-} from "@nodaro-shared/model-constants"
-import { STYLES } from "@nodaro-shared/style"
+} from "@nodaro/shared"
+import { STYLES } from "@nodaro/shared"
 
 /** Inline Style dropdown options for image config panels. Derived from the
  *  canonical STYLES catalog so the dropdown and the standalone Style node

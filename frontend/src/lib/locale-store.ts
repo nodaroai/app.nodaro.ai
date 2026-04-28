@@ -12,7 +12,7 @@
  */
 
 import { create } from "zustand"
-import { LANGUAGES, type LocaleId, type LocaleDirection, getLocaleDirection } from "@nodaro-shared/i18n"
+import { LANGUAGES, type LocaleId, type LocaleDirection, getLocaleDirection } from "@nodaro/shared"
 
 const STORAGE_KEY = "nodaro:preferred-locale"
 

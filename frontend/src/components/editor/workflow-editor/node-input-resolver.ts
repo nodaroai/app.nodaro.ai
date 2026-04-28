@@ -12,13 +12,13 @@ import type {
 } from "@/types/nodes";
 import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
-import { PARAMETER_NODE_TYPES } from "@nodaro-shared/parameter-node-value";
-import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro-shared/edge-range";
-import { splitByLoopDelimiter } from "@nodaro-shared/loop-delimiter";
-import { extractAllGeneratedResults, extractGeneratedJsonAsList } from "@nodaro-shared/generated-results";
-import { SOCIAL_POST_NODE_TYPES } from "@nodaro-shared/social-post";
-import { resolveSourceThroughConnectedList } from "@nodaro-shared/list-source-resolver";
-import { VARIABLES_HANDLE_ID } from "@nodaro-shared/condition-variables";
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared";
+import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro/shared";
+import { splitByLoopDelimiter } from "@nodaro/shared";
+import { extractAllGeneratedResults, extractGeneratedJsonAsList } from "@nodaro/shared";
+import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared";
+import { resolveSourceThroughConnectedList } from "@nodaro/shared";
+import { VARIABLES_HANDLE_ID } from "@nodaro/shared";
 export { resolveSourceThroughConnectedList };
 
 /** Follow teleport chain to find the original non-teleport source node. */
