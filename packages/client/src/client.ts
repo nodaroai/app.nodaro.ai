@@ -43,7 +43,11 @@ export class NodaroClient {
   constructor(opts: ClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, "")  // strip trailing slash
     this.auth = opts.auth
-    this.fetch = opts.fetch ?? globalThis.fetch
+    // Bind native fetch to globalThis: when stored as a class field and
+    // called via `this.fetch(...)`, browsers throw "Illegal invocation"
+    // because native fetch requires its `this` to be the global object.
+    // Custom fetches passed by the caller are left as-is.
+    this.fetch = opts.fetch ?? globalThis.fetch.bind(globalThis)
     this.timeoutMs = opts.timeoutMs ?? 60_000
 
     this.workflows = new WorkflowsResource(this)
