@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "npm -w @nodaro/shared run build",
     "dev": "tsx watch src/server.ts",
+    "prebuild": "npm -w @nodaro/shared run build",
     "build": "tsc",
     "start": "node dist/server.js",
     "worker": "tsx watch src/worker.ts",
@@ -12,6 +14,7 @@
     "lint": "eslint src/",
     "lint:tenant-scope": "node scripts/check-tenant-scope.mjs",
     "lint:admin-client-import": "node scripts/check-admin-client-import.mjs",
+    "pretest": "npm -w @nodaro/shared run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
