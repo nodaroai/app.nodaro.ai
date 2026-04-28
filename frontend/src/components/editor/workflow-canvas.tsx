@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useMemo, useRef, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { buildRangeLabel as buildRangeLabelShared, type SelectorMode } from "@nodaro-shared/edge-range"
+import { buildRangeLabel as buildRangeLabelShared, type SelectorMode } from "@nodaro/shared"
 import {
   ReactFlow,
   MiniMap,

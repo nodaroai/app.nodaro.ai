@@ -1,7 +1,7 @@
 // Re-export shared buildScenePrompt (single source of truth for both frontend and backend)
-export { buildScenePrompt, SCENE_PROMPT_MAX_LENGTH as PROMPT_MAX_LENGTH } from "@nodaro-shared/prompt-builder"
+export { buildScenePrompt, SCENE_PROMPT_MAX_LENGTH as PROMPT_MAX_LENGTH } from "@nodaro/shared"
 
-import { SHOT_LABELS, MOVEMENT_LABELS, truncateText } from "@nodaro-shared/prompt-builder"
+import { SHOT_LABELS, MOVEMENT_LABELS, truncateText } from "@nodaro/shared"
 import type { SceneNodeDataType } from "@/types/nodes"
 
 /**

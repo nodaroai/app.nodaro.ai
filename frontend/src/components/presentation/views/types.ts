@@ -1,7 +1,7 @@
 import type { DragEndEvent } from "@dnd-kit/core"
 import type { SensorDescriptor, SensorOptions } from "@dnd-kit/core"
 import type { WorkflowNode } from "@/types/nodes"
-import type { PresentationItem } from "@nodaro-shared/presentation-types"
+import type { PresentationItem } from "@nodaro/shared"
 import type { OutputStatus } from "../output-cards/shared"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 

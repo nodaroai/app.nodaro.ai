@@ -7,12 +7,12 @@ import type {
   TextToAudioProvider, MusicProvider, TranscribeProvider,
   LipSyncProvider, ScriptProvider, AiWriterProvider, QaCheckProvider,
   SunoModel, VoiceDesignModel,
-} from "@nodaro-shared/model-constants"
-import type { ScraperActorId } from "@nodaro-shared/scraper-actors"
-import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro-shared/model-constants"
-import type { ExposableField, ExposableOutput } from "@nodaro-shared/presentation-types"
-import type { ComponentMetadata } from "@nodaro-shared/component-types"
-import type { IdentityMeta } from "@nodaro-shared/types"
+} from "@nodaro/shared"
+import type { ScraperActorId } from "@nodaro/shared"
+import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro/shared"
+import type { ExposableField, ExposableOutput } from "@nodaro/shared"
+import type { ComponentMetadata } from "@nodaro/shared"
+import type { IdentityMeta } from "@nodaro/shared"
 import { IMAGE_STYLE_PRESETS } from "@/components/editor/config-panels/model-options"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "location" | "utility"

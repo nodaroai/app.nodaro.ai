@@ -8,7 +8,7 @@ import {
   FURNITURE_SUBCATEGORY_ORDER,
   type Furniture,
   type FurnitureSubcategory,
-} from "@nodaro-shared/furniture"
+} from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

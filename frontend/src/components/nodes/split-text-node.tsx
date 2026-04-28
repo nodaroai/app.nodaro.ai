@@ -10,7 +10,7 @@ import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { SplitTextData } from "@/types/nodes"
-import { SEPARATOR_DISPLAY } from "@nodaro-shared/text-separators"
+import { SEPARATOR_DISPLAY } from "@nodaro/shared"
 
 function resolveSeparatorLabel(separator: string | undefined, customSeparator: string | undefined): string {
   const raw = separator || "newline"

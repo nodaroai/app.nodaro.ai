@@ -1,0 +1,85 @@
+export { createClient, NodaroClient } from "./client.js"
+export type { ClientOptions } from "./client.js"
+
+export {
+  type Auth,
+  StaticTokenAuth,
+  CallbackAuth,
+  supabaseAuth,
+} from "./auth.js"
+
+export {
+  NodaroError,
+  UnauthorizedError,
+  ForbiddenError,
+  NotFoundError,
+  RateLimitedError,
+  InsufficientCreditsError,
+  StorageExceededError,
+  throwFromResponse,
+} from "./errors.js"
+
+// Re-export selected types from @nodaro/shared for convenience
+export type { GenericNode, GenericEdge } from "@nodaro/shared"
+
+// --- Resource classes (re-exported so consumers can typecheck `client.workflows`, etc.) ---
+export { WorkflowsResource } from "./resources/workflows.js"
+export { ProjectsResource } from "./resources/projects.js"
+export { JobsResource } from "./resources/jobs.js"
+export { ExecutionsResource } from "./resources/executions.js"
+export { NodesResource } from "./resources/nodes.js"
+export { DeveloperAppsResource } from "./resources/developer-apps.js"
+export { OAuthResource } from "./resources/oauth.js"
+
+// --- Resource type definitions ---
+export type {
+  Workflow,
+  ListWorkflowsParams,
+  CreateWorkflowInput,
+  UpdateWorkflowInput,
+  RunWorkflowParams,
+  RunWorkflowResult,
+} from "./resources/workflows.js"
+
+export type {
+  Project,
+  CreateProjectInput,
+  UpdateProjectInput,
+} from "./resources/projects.js"
+
+export type { Job, JobStatus, CancelJobResult } from "./resources/jobs.js"
+
+export type {
+  WorkflowExecution,
+  WorkflowExecutionSummary,
+  NodeExecutionState,
+  ExecutionStatus,
+  ExecutionTriggerType,
+  ListExecutionsForWorkflowParams,
+  ListExecutionsPage,
+  CancelExecutionParams,
+} from "./resources/executions.js"
+
+export type {
+  NodeDescriptor,
+  NodeCategory,
+  OutputType,
+  NodeInputField,
+  NodeInputSchema,
+} from "./resources/nodes.js"
+
+export type {
+  DeveloperApp,
+  DeveloperAppScope,
+  DeveloperAppStatus,
+  CreateDeveloperAppInput,
+  UpdateDeveloperAppInput,
+  CreateDeveloperAppResult,
+  RotateSecretResult,
+} from "./resources/developer-apps.js"
+
+export type {
+  ExchangeCodeInput,
+  AccessTokenResponse,
+  OAuthAppInfo,
+} from "./resources/oauth.js"

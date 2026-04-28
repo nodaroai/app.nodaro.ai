@@ -1,4 +1,4 @@
-import { getWeapon, type WeaponSubcategory } from "@nodaro-shared/weapons"
+import { getWeapon, type WeaponSubcategory } from "@nodaro/shared"
 
 const WEAPON_EMOJI: Record<string, string> = {
   // swords

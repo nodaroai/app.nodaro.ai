@@ -1,50 +1,80 @@
-# ── Stage 1: Build backend ────────────────────────────────────────────
-FROM node:22-alpine AS backend-builder
+# syntax=docker/dockerfile:1.6
+# ── Stage 1: Install workspace deps ───────────────────────────────────
+# Runs `npm ci` once at the workspace root so all packages share a
+# single hoisted node_modules tree (with @nodaro/shared symlinked into
+# root node_modules/@nodaro/shared → ../../packages/shared).
+FROM node:22-alpine AS deps
 
 RUN apk add --no-cache libc6-compat python3
+
+# node:22-alpine ships with npm 10.9.x which has stricter lockfile
+# validation than npm 11. Our package-lock.json was generated with
+# npm 11 (which respects root `overrides` differently), so we use
+# corepack to pin npm@11 inside the build image.
+RUN corepack enable npm && corepack prepare npm@11.12.1 --activate
 
 ENV YOUTUBE_DL_SKIP_PYTHON_CHECK=1
 ENV YOUTUBE_DL_SKIP_DOWNLOAD=1
 
-WORKDIR /app/backend
-COPY backend/package*.json ./
+WORKDIR /app
+
+# Copy ONLY package manifests first to maximise Docker layer caching.
+COPY package.json package-lock.json ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/remotion/package.json ./packages/remotion/
+COPY backend/package.json ./backend/
+COPY frontend/package.json ./frontend/
+
+# Install all workspaces (incl. dev deps — needed for tsc/tsup/vite builds).
 RUN npm ci
-COPY backend/ ./
 
-# Shared package needed by backend (relative imports from payload-builder.ts)
-COPY packages/shared/ /app/packages/shared/
+# ── Stage 2: Build @nodaro/shared (tsup) ──────────────────────────────
+FROM deps AS shared-build
 
+WORKDIR /app
+COPY packages/shared/src ./packages/shared/src
+COPY packages/shared/tsconfig.json ./packages/shared/
+COPY packages/shared/tsup.config.ts ./packages/shared/
+
+WORKDIR /app/packages/shared
 RUN npm run build
 
-# ── Stage 2: Install Remotion package deps ─────────────────────────────
-FROM node:22-alpine AS remotion-builder
+# ── Stage 3: Build backend (tsc) ──────────────────────────────────────
+# Backend imports @nodaro/shared by package name. Resolution walks from
+# backend/src/* up to /app/node_modules/@nodaro/shared (workspace symlink
+# created by stage 1's `npm ci`), then through packages/shared/package.json
+# main/module fields → packages/shared/dist/index.{cjs,js}.
+FROM deps AS backend-build
 
-RUN apk add --no-cache libc6-compat
+WORKDIR /app
+# Bring in the freshly built shared dist so the symlinked package resolves.
+COPY --from=shared-build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=shared-build /app/packages/shared/package.json ./packages/shared/package.json
 
-WORKDIR /app/packages/remotion
-COPY packages/remotion/package*.json ./
-RUN npm ci
-COPY packages/remotion/ ./
+# Backend source.
+COPY backend/ ./backend/
 
-# ── Stage 3: Build frontend ──────────────────────────────────────────
-FROM node:22-alpine AS frontend-builder
+WORKDIR /app/backend
+RUN npm run build
 
-RUN apk add --no-cache libc6-compat
+# ── Stage 4: Build frontend (vite) ────────────────────────────────────
+# Vite resolves @nodaro/shared via the same workspace symlink. The
+# @remotion-pkg alias resolves to packages/remotion/src directly.
+FROM deps AS frontend-build
 
-WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm ci
-COPY frontend/ ./
+WORKDIR /app
+# Shared dist (Vite imports it as @nodaro/shared from package main/module).
+COPY --from=shared-build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=shared-build /app/packages/shared/package.json ./packages/shared/package.json
 
-# Remotion package source + deps needed for @remotion-pkg TypeScript path alias
-COPY --from=remotion-builder /app/packages/remotion/src /app/packages/remotion/src
-COPY --from=remotion-builder /app/packages/remotion/node_modules /app/packages/remotion/node_modules
+# Remotion package source (Vite alias `@remotion-pkg` points at src/).
+COPY packages/remotion/ ./packages/remotion/
 
-# Shared package source needed for @nodaro-shared Vite alias
-COPY packages/shared/src /app/packages/shared/src
+# Frontend source.
+COPY frontend/ ./frontend/
 
-# Railway passes service variables as Docker build args.
-# Vite inlines VITE_* env vars at build time.
+# Railway passes service variables as Docker build args. Vite inlines
+# VITE_* env vars at build time, so they MUST be defined here.
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_APP_URL
@@ -63,10 +93,45 @@ ENV VITE_STRIPE_PUBLISHABLE_KEY=$VITE_STRIPE_PUBLISHABLE_KEY
 ENV VITE_FREECUT_URL=$VITE_FREECUT_URL
 ENV VITE_AUDIOMASS_URL=$VITE_AUDIOMASS_URL
 
+WORKDIR /app/frontend
 RUN npm run build
 
-# ── Stage 4: Production runner ───────────────────────────────────────
-# Debian slim (glibc) — required for Remotion's chrome-headless-shell binary.
+# ── Stage 5: Production runtime deps ──────────────────────────────────
+# Re-run `npm ci` with --omit=dev so the runner only ships production
+# packages. Crucially, this MUST use the same OS/libc as the runner
+# (node:22-slim → glibc) so platform-specific native deps (sharp,
+# @img/sharp-libvips-*) install the correct linux-arm64/linux-x64
+# binaries rather than the alpine-musl variants used by the build
+# stages above.
+FROM node:22-slim AS prod-deps
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Match the npm version used in the deps stage (see comment in stage 1)
+# so `npm ci --omit=dev` can read the same lockfile.
+RUN corepack enable npm && corepack prepare npm@11.12.1 --activate
+
+ENV YOUTUBE_DL_SKIP_PYTHON_CHECK=1
+ENV YOUTUBE_DL_SKIP_DOWNLOAD=1
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/remotion/package.json ./packages/remotion/
+COPY backend/package.json ./backend/
+COPY frontend/package.json ./frontend/
+
+RUN npm ci --omit=dev
+
+# Ensure backend/node_modules exists even if all backend deps got hoisted
+# to the root (avoids COPY failures in the runner stage).
+RUN mkdir -p /app/backend/node_modules
+
+# ── Stage 6: Production runner ────────────────────────────────────────
+# Debian slim (glibc) — required for Remotion's chrome-headless-shell.
 # Alpine (musl) is incompatible with Chrome/Chromium glibc binaries.
 FROM node:22-slim AS runner
 
@@ -90,16 +155,42 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-# Backend: compiled JS + production dependencies
-COPY --chown=node:node --from=backend-builder /app/backend/dist ./backend/dist
-COPY --chown=node:node --from=backend-builder /app/backend/node_modules ./backend/node_modules
-COPY --chown=node:node --from=backend-builder /app/backend/package.json ./backend/package.json
+# 1. Workspace manifests (so Node's resolver sees the workspace layout).
+COPY --chown=node:node --from=prod-deps /app/package.json ./package.json
+COPY --chown=node:node --from=prod-deps /app/package-lock.json ./package-lock.json
 
-# Remotion: source + node_modules (bundled at runtime by @remotion/bundler)
-COPY --chown=node:node --from=remotion-builder /app/packages/remotion ./packages/remotion
+# 2. Hoisted production node_modules (incl. @nodaro/shared workspace
+#    symlink → ../../packages/shared). Docker COPY preserves symlinks
+#    when the source is a directory tree containing them.
+COPY --chown=node:node --from=prod-deps /app/node_modules ./node_modules
 
-# Frontend: Vite static build + Caddy config
-COPY --chown=node:node --from=frontend-builder /app/frontend/dist ./frontend/dist
+# 3. Workspace package manifests (so Node's resolver knows the layout).
+COPY --chown=node:node --from=prod-deps /app/packages/shared/package.json ./packages/shared/package.json
+COPY --chown=node:node --from=prod-deps /app/packages/remotion/package.json ./packages/remotion/package.json
+COPY --chown=node:node --from=prod-deps /app/backend/package.json ./backend/package.json
+COPY --chown=node:node --from=prod-deps /app/frontend/package.json ./frontend/package.json
+
+# 3b. Backend's nested node_modules — npm hoists most packages to the
+#     root, but some (e.g. backend's stripe@20) get nested under
+#     backend/ when version constraints conflict with another workspace.
+#     The frontend nested node_modules is not copied: frontend is shipped
+#     as static vite-built assets, not a Node runtime, so its deps aren't
+#     needed. (Remotion has no version conflicts thanks to root react@19
+#     overrides, so its node_modules is empty in prod-deps.)
+COPY --chown=node:node --from=prod-deps /app/backend/node_modules ./backend/node_modules
+
+# 4. Built @nodaro/shared dist (resolved via the workspace symlink).
+COPY --chown=node:node --from=shared-build /app/packages/shared/dist ./packages/shared/dist
+
+# 5. Backend compiled JS (flat dist/server.js because tsconfig rootDir = ./src).
+COPY --chown=node:node --from=backend-build /app/backend/dist ./backend/dist
+
+# 6. Remotion package source — bundled at runtime by @remotion/bundler.
+COPY --chown=node:node --from=frontend-build /app/packages/remotion/src ./packages/remotion/src
+COPY --chown=node:node --from=frontend-build /app/packages/remotion/tsconfig.json ./packages/remotion/tsconfig.json
+
+# 7. Frontend Vite static build + Caddy config.
+COPY --chown=node:node --from=frontend-build /app/frontend/dist ./frontend/dist
 COPY frontend/Caddyfile /etc/caddy/Caddyfile
 
 # Startup script: run backend + worker + Caddy
@@ -120,16 +211,16 @@ fi
 # Start backend API server on fixed internal port
 cd /app/backend
 export BACKEND_PORT=9000
-PORT=$BACKEND_PORT node dist/backend/src/server.js &
+PORT=$BACKEND_PORT node dist/server.js &
 
 # Start BullMQ worker (job processor)
-node dist/backend/src/worker.js &
+node dist/worker.js &
 
 # Start BullMQ render worker (Remotion video rendering)
-node dist/backend/src/render-worker.js &
+node dist/render-worker.js &
 
 # Start BullMQ orchestrator worker (workflow execution)
-node dist/backend/src/orchestrator.js &
+node dist/orchestrator.js &
 
 # Wait for backend to be ready before accepting traffic
 echo "Waiting for backend on port 9000..."

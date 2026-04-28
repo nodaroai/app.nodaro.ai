@@ -8,8 +8,8 @@ import {
   PHOTOGRAPHER_CATEGORY_ORDER,
   type Photographer,
   type PhotographerCategory,
-} from "@nodaro-shared/photographer"
-import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
+} from "@nodaro/shared"
+import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { resolveNodeInputs, getListInputForNode } from "../input-resolver.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"
-import { selectListItems } from "../../../../../packages/shared/src/edge-range.js"
+import { selectListItems } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -11,7 +11,7 @@ import { MOTION_GRAPHICS_SYSTEM_PROMPT } from "../prompts/motion-graphics-system
 import { validateMotionGraphicsPlan } from "../lib/motion-graphics-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
+import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"

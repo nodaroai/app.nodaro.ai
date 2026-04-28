@@ -8,7 +8,7 @@ import {
   VEHICLE_SUBCATEGORY_ORDER,
   type Vehicle,
   type VehicleSubcategory,
-} from "@nodaro-shared/vehicles"
+} from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

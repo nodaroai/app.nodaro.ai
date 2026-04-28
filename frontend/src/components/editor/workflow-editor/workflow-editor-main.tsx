@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "react";
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry";
 import { useNavigate } from "react-router-dom";
-import { isExpandedClone } from "@nodaro-shared/clone-utils";
+import { isExpandedClone } from "@nodaro/shared";
 import { ReactFlowProvider } from "@xyflow/react";
 import {
   Play,
@@ -61,7 +61,7 @@ import { handleGenerateCharacterAsset, handleGenerateObjectAsset, handleGenerate
 import { handleCreateNodesFromWriter as createNodesFromWriter, handleRunAllWriterImageNodes as runAllWriterImageNodes } from "./ai-writer-handlers";
 import { resolveManualEdit } from "./execute-node";
 import { extractNodeOutput } from "./execution-graph";
-import { getOutputType } from "@nodaro-shared/presentation-utils";
+import { getOutputType } from "@nodaro/shared";
 import { FreeCutImportPicker } from "../freecut-import-picker";
 import type { ManualEditData, GeneratedResult } from "@/types/nodes";
 const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));

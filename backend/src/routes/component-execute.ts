@@ -2,11 +2,11 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { executeAppRun } from "../services/app-execution.js"
-import { OUTPUT_FIELD_MAP } from "../../../packages/shared/src/component-types.js"
-import type { ComponentMetadata } from "../../../packages/shared/src/component-types.js"
+import { OUTPUT_FIELD_MAP } from "@nodaro/shared"
+import type { ComponentMetadata } from "@nodaro/shared"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
-import { buildCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
+import { buildCreditModelIdentifier } from "@nodaro/shared"
 
 
 const bodySchema = z.object({

@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Camera } from "lucide-react"
-import { getPhotoGenre, getPhotoGenreLabel } from "@nodaro-shared/photo-genre"
+import { getPhotoGenre, getPhotoGenreLabel } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { PhotoGenreData } from "@/types/nodes"
 

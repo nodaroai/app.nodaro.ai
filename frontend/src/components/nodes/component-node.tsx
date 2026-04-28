@@ -15,7 +15,7 @@ import { copyToClipboard } from "@/lib/utils"
 import { isImageUrl, isVideoUrl, isAudioUrl } from "@/lib/media-type"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ComponentNodeData } from "@/types/nodes"
-import type { ComponentHandle } from "@nodaro-shared/component-types"
+import type { ComponentHandle } from "@nodaro/shared"
 
 const HANDLE_TYPE_ICON: Record<ComponentHandle["type"], React.ReactNode> = {
   image: <ImageIcon />,

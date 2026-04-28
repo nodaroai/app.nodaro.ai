@@ -1,10 +1,10 @@
-import type { OutputType } from "../../../packages/shared/src/presentation-utils.js"
+import type { OutputType } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
 import {
   IMAGE_GEN_PROVIDERS,
   IMAGE_TO_VIDEO_PROVIDERS,
   TEXT_TO_VIDEO_PROVIDERS,
-} from "../../../packages/shared/src/model-constants.js"
+} from "@nodaro/shared"
 
 export type NodeCategory =
   | "input"

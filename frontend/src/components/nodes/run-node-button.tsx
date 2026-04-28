@@ -6,7 +6,7 @@ import { hasCredits } from "@/lib/edition"
 import { cancelJob } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getListInputForNode } from "@/components/editor/workflow-editor/node-input-resolver"
-import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro-shared/repeat-types"
+import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 interface RunNodeButtonProps {

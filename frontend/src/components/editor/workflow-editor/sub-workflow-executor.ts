@@ -7,7 +7,7 @@ import { isExecutableNode, type ExecutionContext } from "./types"
 import { executeNode } from "./execute-node"
 import { getListInputForNode } from "./node-input-resolver"
 import { executeNodeForList } from "./list-execution"
-import { expandItemsWithRepeat } from "@nodaro-shared/repeat-types"
+import { expandItemsWithRepeat } from "@nodaro/shared"
 
 const MAX_DEPTH = 5
 

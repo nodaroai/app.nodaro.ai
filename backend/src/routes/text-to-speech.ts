@@ -5,7 +5,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { TTS_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
+import { TTS_PROVIDERS } from "@nodaro/shared"
 
 const textToSpeechBody = z.object({
   text: z.string().min(1).max(5000),

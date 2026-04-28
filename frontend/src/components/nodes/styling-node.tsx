@@ -10,7 +10,7 @@ import {
   getStyling,
   getStylingLabel,
   type StylingDimension,
-} from "@nodaro-shared/styling"
+} from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { getStylingEntryIcon } from "./person-styling-icon"
 import type { StylingData } from "@/types/nodes"

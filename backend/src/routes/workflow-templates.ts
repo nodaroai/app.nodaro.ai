@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowCredits } from "../billing/credits.js"
-import { getNodeResult, getOutputType } from "../../../packages/shared/src/presentation-utils.js"
+import { getNodeResult, getOutputType } from "@nodaro/shared"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 
 // ---------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 import type { WorkflowNode } from "@/types/nodes"
-import type { PresentationItem } from "@nodaro-shared/presentation-types"
+import type { PresentationItem } from "@nodaro/shared"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { getNodeLabel, getNodeResult } from "@/lib/presentation-utils"
-import { migrateToItems } from "@nodaro-shared/presentation-utils"
+import { migrateToItems } from "@nodaro/shared"
 
 /** Resolve input items from settings — prefer inputItems, fallback to migrated inputOrder */
 export function resolveInputItems(settings: PresentationSettings): PresentationItem[] | null {

@@ -3,10 +3,10 @@
  * These run synchronously in the orchestrator process.
  */
 
-import { ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-constants.js"
-import { resolveSeparator } from "../../../../packages/shared/src/text-separators.js"
-import { evaluateJsonPath, stringifyPathResults } from "../../../../packages/shared/src/json-path.js"
-import { evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, type JsonFilter } from "../../../../packages/shared/src/json-evaluator.js"
+import { ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared"
+import { resolveSeparator } from "@nodaro/shared"
+import { evaluateJsonPath, stringifyPathResults } from "@nodaro/shared"
+import { evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, type JsonFilter } from "@nodaro/shared"
 import {
   tryParseJson,
   evaluateCondition,
@@ -14,12 +14,12 @@ import {
   resolveConditionValue,
   type FilterListCondition,
   type RouterConditionGroup,
-} from "../../../../packages/shared/src/filter-condition.js"
-import { sortListItems, type SortType, type SortDirection } from "../../../../packages/shared/src/list-sort.js"
-import { spreadJsonArrayIfSingleton } from "../../../../packages/shared/src/generated-results.js"
-import { zipMergeLists } from "../../../../packages/shared/src/list-merge.js"
-import { resolveSourceThroughConnectedList } from "../../../../packages/shared/src/list-source-resolver.js"
-import { buildConditionVariables, VARIABLES_HANDLE_ID } from "../../../../packages/shared/src/condition-variables.js"
+} from "@nodaro/shared"
+import { sortListItems, type SortType, type SortDirection } from "@nodaro/shared"
+import { spreadJsonArrayIfSingleton } from "@nodaro/shared"
+import { zipMergeLists } from "@nodaro/shared"
+import { resolveSourceThroughConnectedList } from "@nodaro/shared"
+import { buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro/shared"
 
 // Re-export for tests and downstream consumers.
 export type { FilterListCondition }

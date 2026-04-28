@@ -21,7 +21,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 import { PROVIDERS_WITH_REFERENCES, PROVIDERS_WITH_END_FRAME, VIDEO_PROVIDER_FALLBACKS } from "../editor/config-panels/model-options"
-import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS } from "@nodaro-shared/model-constants"
+import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS } from "@nodaro/shared"
 
 // Node types that output images
 const IMAGE_OUTPUT_TYPES = new Set([

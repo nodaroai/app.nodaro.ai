@@ -18,7 +18,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { TextToVideoData } from "@/types/nodes"
 import { VIDEO_PROVIDER_FALLBACKS } from "../editor/config-panels/model-options"
-import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS } from "@nodaro-shared/model-constants"
+import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS } from "@nodaro/shared"
 
 function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as TextToVideoData

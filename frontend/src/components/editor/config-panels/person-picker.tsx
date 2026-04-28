@@ -10,13 +10,26 @@ import {
   type Person,
   type PersonDimension,
   type PersonValue,
-} from "@nodaro-shared/person"
-import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
+} from "@nodaro/shared"
+import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { ColorSwatch } from "./color-swatch"
 import { getPersonSwatch } from "./color-swatches"
+
+/** Compact group labels for the tab row. The catalog uses descriptive names
+ *  ("Realistic — Style", "Iconic / Public Domain") that don't fit a chip. */
+const COMPACT_GROUP_LABELS: Record<string, string> = {
+  "Realistic — Style": "Style",
+  "Iconic / Public Domain": "Iconic",
+  "Primitive / Wild": "Primitive",
+  "Mythic / Divine": "Mythic",
+  "Heroes & Villains": "Heroes",
+  "Anime / Anthro": "Anime",
+}
+const compactGroupLabel = (g: string): string => COMPACT_GROUP_LABELS[g] ?? g
 
 /** Per-dimension multi-select cap.
  *  - ethnicity: 2 (mixed heritage)
@@ -133,6 +146,7 @@ export const PersonPicker = memo(function PersonPicker({
               checked={checked}
               selectedIds={selectedIds}
               maxSelected={maxSelected}
+              isSearching={Boolean(query)}
               resolveLabel={resolveLabel}
               resolveDescription={resolveDescription}
               onToggle={(next) => {
@@ -224,6 +238,10 @@ interface DimensionSectionProps {
   readonly checked: boolean
   readonly selectedIds: ReadonlyArray<string>
   readonly maxSelected: number
+  /** True when the user has typed into the search box. Forces the dim to
+   *  render entries flat (overrides the grouped/tabbed layout) so search
+   *  mode is consistent across dimensions. */
+  readonly isSearching: boolean
   readonly resolveLabel: (id: string, englishLabel: string) => string
   readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
@@ -281,15 +299,17 @@ function EntryChip({
       title={enabled ? resolvedDescription : `${resolvedDescription} (click to enable ${label})`}
       onClick={() => onPick(entry.id)}
       className={cn(
-        "relative flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden",
+        "relative flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer",
         selected
           ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
           : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
       )}
     >
       {multi && selected && (
+        // Sticks out at the top-right corner so a long chip label can use the
+        // full chip width without colliding with the index pill.
         <span
-          className="absolute top-1 right-1 size-4 rounded-full bg-[#ff0073] text-white text-[9px] font-semibold flex items-center justify-center pointer-events-none"
+          className="absolute -top-1.5 -right-1.5 size-[18px] rounded-full bg-[#ff0073] text-white text-[10px] font-semibold flex items-center justify-center pointer-events-none ring-2 ring-background z-[1]"
           aria-hidden="true"
         >
           {selectedIndex + 1}
@@ -308,7 +328,16 @@ function EntryChip({
   )
 }
 
-function GroupedEntryGrid({
+/**
+ * Tab-style grouped picker: a horizontal row of group buttons across the top,
+ * the active group's entries shown in a chip grid below. Replaces the older
+ * accordion (which let multiple groups open at once and hid the user's pick
+ * inside collapsed sections).
+ *
+ * Single-pick dims show a small pink dot on the tab containing the current
+ * pick. Multi-pick dims show a numeric count badge on each tab.
+ */
+function TabbedEntryGrid({
   dimension,
   entries,
   checked,
@@ -329,91 +358,121 @@ function GroupedEntryGrid({
   readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onPick: (id: string) => void
 }) {
-  // Build ordered group list preserving catalog order.
-  const groupOrder: string[] = []
-  const byGroup = new Map<string, Person[]>()
-  for (const e of entries) {
-    const g = e.group ?? "Other"
-    if (!byGroup.has(g)) {
-      groupOrder.push(g)
-      byGroup.set(g, [])
+  const { groupOrder, byGroup } = useMemo(() => {
+    const order: string[] = []
+    const map = new Map<string, Person[]>()
+    for (const e of entries) {
+      const g = e.group ?? "Other"
+      if (!map.has(g)) {
+        order.push(g)
+        map.set(g, [])
+      }
+      map.get(g)!.push(e)
     }
-    byGroup.get(g)!.push(e)
-  }
+    return { groupOrder: order, byGroup: map }
+  }, [entries])
 
-  // Groups containing any selected pick start open; other groups closed. With
-  // multi-select, both picks' groups open so users can see what they've chosen.
-  const activeGroups = useMemo(() => {
-    const set = new Set<string>()
+  // Per-group selected count for the badge / has-pick indicator on each tab.
+  const groupCounts = useMemo(() => {
+    const m = new Map<string, number>()
     for (const id of selectedIds) {
       const g = entries.find((e) => e.id === id)?.group
-      if (g) set.add(g)
+      if (g) m.set(g, (m.get(g) ?? 0) + 1)
     }
-    return set
+    return m
   }, [selectedIds, entries])
-  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(activeGroups))
-  const toggleGroup = (g: string) => setOpenGroups((prev) => {
-    const next = new Set(prev)
-    if (next.has(g)) next.delete(g)
-    else next.add(g)
-    return next
+
+  // Initial active tab: the group containing the current pick (or first
+  // pick for multi). Falls back to the first group with content.
+  const [activeGroup, setActiveGroup] = useState<string>(() => {
+    for (const id of selectedIds) {
+      const g = entries.find((e) => e.id === id)?.group
+      if (g) return g
+    }
+    return groupOrder[0] ?? ""
   })
 
+  // If the user picks an entry while a different tab is active (rare — the
+  // chip lives inside the currently-active tab), we don't auto-jump. But if
+  // the catalog reshapes (filter changes the available groups) and the
+  // active tab disappears, snap to the first available group.
+  const activeExists = byGroup.has(activeGroup)
+  const effectiveActive = activeExists ? activeGroup : groupOrder[0] ?? ""
+
+  const activeEntries = byGroup.get(effectiveActive) ?? []
+
   return (
-    <div role="radiogroup" aria-label={label} className={cn("flex flex-col gap-1 transition-opacity", !checked && "opacity-40")}>
-      {groupOrder.map((group) => {
-        const list = byGroup.get(group)!
-        const isOpen = openGroups.has(group)
-        const groupSelectedCount = list.reduce(
-          (n, e) => (selectedIds.includes(e.id) ? n + 1 : n),
-          0,
-        )
-        const hasCurrent = groupSelectedCount > 0
-        return (
-          <div key={group} className="rounded-md border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
+    <div className={cn("flex flex-col gap-2 transition-opacity", !checked && "opacity-40")}>
+      {/* Group tabs — underline style (active group sits on a pink underline,
+          inactive groups are bare text). Reads cleaner than boxed buttons
+          when there are 7+ groups stacking. */}
+      <div
+        role="tablist"
+        aria-label={`${label} groups`}
+        className="flex flex-wrap gap-x-3 gap-y-1 border-b border-gray-200 dark:border-[#2D2D2D]"
+      >
+        {groupOrder.map((g) => {
+          const c = groupCounts.get(g) ?? 0
+          const active = g === effectiveActive
+          const hasPick = c > 0
+          return (
             <button
+              key={g}
               type="button"
-              onClick={() => toggleGroup(group)}
+              role="tab"
+              aria-selected={active}
+              onClick={() => setActiveGroup(g)}
               className={cn(
-                "w-full flex items-center justify-between gap-2 px-2 py-1.5 text-[11px] font-medium transition-colors",
-                hasCurrent
-                  ? "bg-[#ff0073]/8 text-[#ff0073]"
-                  : "bg-gray-50 dark:bg-[#161616] text-gray-700 dark:text-[#E2E8F0] hover:bg-gray-100 dark:hover:bg-[#1a1a1a]",
+                "relative -mb-px inline-flex items-center gap-1.5 px-1 pt-1 pb-1.5 text-[11px] font-medium transition-colors border-b-2 whitespace-nowrap",
+                active
+                  ? "border-[#ff0073] text-[#ff0073]"
+                  : hasPick
+                  ? "border-transparent text-[#ff0073]/80 hover:border-[#ff0073]/40 hover:text-[#ff0073]"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40",
               )}
-              aria-expanded={isOpen}
             >
-              <span className="truncate text-left flex-1">{group}</span>
-              <span className="text-[10px] text-muted-foreground shrink-0">
-                {list.length}
-                {hasCurrent ? ` · ${groupSelectedCount} selected` : ""}
-              </span>
-              <span className="text-muted-foreground shrink-0">{isOpen ? "▾" : "▸"}</span>
+              <span>{compactGroupLabel(g)}</span>
+              {multi && c > 0 && (
+                <span
+                  className="inline-flex items-center justify-center min-w-[15px] h-[15px] px-[4px] rounded-full bg-[#ff0073] text-white text-[9px] font-semibold leading-none"
+                  aria-label={`${c} selected`}
+                >
+                  {c}
+                </span>
+              )}
+              {!multi && hasPick && !active && (
+                <span className="inline-block size-1.5 rounded-full bg-[#ff0073]" aria-hidden="true" />
+              )}
             </button>
-            {isOpen && (
-              <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-white dark:bg-[#0f0f0f]">
-                {list.map((entry) => {
-                  const idx = selectedIds.indexOf(entry.id)
-                  return (
-                    <EntryChip
-                      key={entry.id}
-                      dimension={dimension}
-                      entry={entry}
-                      selected={checked && idx >= 0}
-                      selectedIndex={idx}
-                      multi={multi}
-                      enabled={checked}
-                      label={label}
-                      resolveLabel={resolveLabel}
-                      resolveDescription={resolveDescription}
-                      onPick={onPick}
-                    />
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
+
+      {/* Entries of the active group */}
+      <div
+        role={multi ? "group" : "radiogroup"}
+        aria-label={`${label} — ${effectiveActive}`}
+        className="grid grid-cols-3 gap-1.5"
+      >
+        {activeEntries.map((entry) => {
+          const idx = selectedIds.indexOf(entry.id)
+          return (
+            <EntryChip
+              key={entry.id}
+              dimension={dimension}
+              entry={entry}
+              selected={checked && idx >= 0}
+              selectedIndex={idx}
+              multi={multi}
+              enabled={checked}
+              label={label}
+              resolveLabel={resolveLabel}
+              resolveDescription={resolveDescription}
+              onPick={onPick}
+            />
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -425,6 +484,7 @@ function DimensionSection({
   checked,
   selectedIds,
   maxSelected,
+  isSearching,
   resolveLabel,
   resolveDescription,
   onToggle,
@@ -435,29 +495,41 @@ function DimensionSection({
   const multi = maxSelected > 1
   const label = multi ? `${baseLabel} (pick up to ${maxSelected})` : baseLabel
   // Ethnicity (39 entries / 6 region groups) and Type (60+ entries spanning
-  // realistic, primitive, fantasy, mythic, sci-fi, heroes, anime) are both
-  // too long to scan flat — render them as collapsible two-level pickers
-  // (group header → specific entries inside). Other dims stay flat.
-  const useGrouped = dimension === "ethnicity" || dimension === "type"
+  // realistic, primitive, fantasy, mythic, sci-fi, heroes, anime) get the
+  // tabbed two-level picker — flat scrolling 70 entries doesn't read.
+  // While the user is searching, override grouping with a flat result grid
+  // so matches don't hide behind tabs.
+  const useGrouped = (dimension === "ethnicity" || dimension === "type") && !isSearching
+  const switchId = `${id}-${field}`
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2 px-0.5">
-        <input
-          type="checkbox"
-          id={`${id}-${field}`}
-          checked={checked}
-          onChange={(e) => onToggle(e.target.checked)}
-          className="rounded border-muted-foreground/40"
-        />
+    <div className="flex flex-col gap-2">
+      {/* Branded headline as a settings row: label on the left, Switch on
+          the right, space between. Reads like a standard "section · toggle"
+          control instead of a centered banner. */}
+      <div className="flex items-center justify-between gap-2 px-0.5">
         <label
-          htmlFor={`${id}-${field}`}
-          className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground select-none cursor-pointer"
+          htmlFor={switchId}
+          className={cn(
+            "text-[18px] font-semibold uppercase tracking-wide select-none cursor-pointer transition-colors",
+            checked ? "text-[#ff0073]" : "text-muted-foreground/60",
+          )}
         >
-          {label}
+          {baseLabel}
+          {multi && checked && (
+            <span className="ml-2 text-[10px] font-normal normal-case tracking-normal text-muted-foreground">
+              pick up to {maxSelected}
+            </span>
+          )}
         </label>
+        <Switch
+          id={switchId}
+          checked={checked}
+          onCheckedChange={(next) => onToggle(next)}
+          aria-label={`Enable ${baseLabel}`}
+        />
       </div>
       {useGrouped ? (
-        <GroupedEntryGrid
+        <TabbedEntryGrid
           dimension={dimension}
           entries={entries}
           checked={checked}

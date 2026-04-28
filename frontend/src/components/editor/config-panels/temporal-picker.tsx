@@ -10,7 +10,7 @@ import {
   type Temporal,
   type TemporalCategory,
   type TemporalValue,
-} from "@nodaro-shared/temporal"
+} from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

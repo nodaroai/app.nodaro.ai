@@ -6,26 +6,26 @@
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "./types.js"
 
 // Shared logic from packages/shared — single source of truth
-import { collectAncestorRefs as sharedCollectAncestorRefs } from "../../../../packages/shared/src/ancestor-refs.js"
-import { buildImagePrompt, buildScenePrompt } from "../../../../packages/shared/src/prompt-builder.js"
-import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "../../../../packages/shared/src/identity-lock.js"
-import { resolveTemplate, applyTemplate } from "../../../../packages/shared/src/prompt-templates.js"
-import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
-import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
-import { composeCameraMotionHintFromConnections } from "../../../../packages/shared/src/camera-motions.js"
-import { getParameterPromptHint } from "../../../../packages/shared/src/parameter-prompt-hint.js"
-import { PARAMETER_NODE_TYPES } from "../../../../packages/shared/src/parameter-node-value.js"
-import type { CharacterDef, SceneData } from "../../../../packages/shared/src/types.js"
-import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
-import { isSeedance2Provider } from "../../../../packages/shared/src/model-constants.js"
-import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "../../../../packages/shared/src/model-constants.js"
-import { buildLlmCreditIdentifier } from "../../../../packages/shared/src/llm-models.js"
+import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared"
+import { buildImagePrompt, buildScenePrompt } from "@nodaro/shared"
+import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@nodaro/shared"
+import { resolveTemplate, applyTemplate } from "@nodaro/shared"
+import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "@nodaro/shared"
+import { resolveNodeRefs } from "@nodaro/shared"
+import { composeCameraMotionHintFromConnections } from "@nodaro/shared"
+import { getParameterPromptHint } from "@nodaro/shared"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
+import type { CharacterDef, SceneData } from "@nodaro/shared"
+import { PLATFORM_SPECS } from "@nodaro/shared"
+import { isSeedance2Provider } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared"
+import { buildLlmCreditIdentifier } from "@nodaro/shared"
 import {
   buildCharacterPrompt,
   buildObjectPrompt,
   buildLocationPrompt,
   buildFaceTemplateInputs,
-} from "../../../../packages/shared/src/entity-prompts.js"
+} from "@nodaro/shared"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
 

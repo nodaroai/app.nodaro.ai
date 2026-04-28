@@ -8,7 +8,7 @@ import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import type { MotionGraphicsData } from "@/types/nodes"
 
 function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {

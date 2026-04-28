@@ -5,7 +5,7 @@ import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, useStore
 import { X, ChevronDown } from "lucide-react"
 import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { parseListExpression, describeEdgeBehavior, type SelectorMode } from "@nodaro-shared/edge-range"
+import { parseListExpression, describeEdgeBehavior, type SelectorMode } from "@nodaro/shared"
 import type { CSSProperties } from "react"
 
 type AnimatedFlowEdgeData = {

@@ -3,8 +3,8 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { HandMetal } from "lucide-react"
-import { getHeldProp, getHeldPropLabel } from "@nodaro-shared/held-prop"
-import { pickIds } from "@nodaro-shared/multi-pick"
+import { getHeldProp, getHeldPropLabel } from "@nodaro/shared"
+import { pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { HeldPropData } from "@/types/nodes"
 

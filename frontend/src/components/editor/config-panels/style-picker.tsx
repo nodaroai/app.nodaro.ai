@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { STYLES } from "@nodaro-shared/style"
+import { STYLES } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

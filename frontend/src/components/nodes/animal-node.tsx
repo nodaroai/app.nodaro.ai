@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { PawPrint } from "lucide-react"
-import { getAnimal, getAnimalLabel } from "@nodaro-shared/animals"
+import { getAnimal, getAnimalLabel } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { AnimalData } from "@/types/nodes"
 

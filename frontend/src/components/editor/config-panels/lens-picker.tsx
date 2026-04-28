@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { LENSES } from "@nodaro-shared/lens"
+import { LENSES } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

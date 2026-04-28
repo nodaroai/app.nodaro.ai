@@ -6,8 +6,8 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT } from "../../../packages/shared/src/model-constants.js"
-import { buildCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
+import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT } from "@nodaro/shared"
+import { buildCreditModelIdentifier } from "@nodaro/shared"
 
 /**
  * Decide whether the prompt actually addresses any reference images.
@@ -43,7 +43,11 @@ const generateImageBody = z.object({
   referenceImageUrls: z.array(safeUrlSchema).max(14).optional(),
   characterDescriptions: z.array(z.string().max(500)).max(10).optional(),
   provider: z.enum(IMAGE_GEN_PROVIDERS).optional(),
+  // "auto" is gpt-image-2 specific (KIE constrains it to 1K) — keeping the
+  // enum permissive here and letting the per-provider config / fail-safe in
+  // model-options.ts gate it on the correct providers.
   aspectRatio: z.enum([
+    "auto",
     "1:1", "16:9", "9:16", "4:3", "3:4",
     "3:2", "2:3", "5:4", "4:5", "21:9",
   ]).optional(),

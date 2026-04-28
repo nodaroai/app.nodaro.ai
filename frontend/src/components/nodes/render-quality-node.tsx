@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Cpu } from "lucide-react"
-import { getRenderQuality, getRenderQualityLabel } from "@nodaro-shared/render-quality"
+import { getRenderQuality, getRenderQualityLabel } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { RenderQualityData } from "@/types/nodes"
 

@@ -9,7 +9,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
-import { VARIABLES_HANDLE_ID } from "@nodaro-shared/condition-variables"
+import { VARIABLES_HANDLE_ID } from "@nodaro/shared"
 import type { FilterListNodeData } from "@/types/nodes"
 
 function FilterListNodeComponent({ id, data, selected }: NodeProps) {

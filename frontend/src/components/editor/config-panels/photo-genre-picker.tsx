@@ -8,7 +8,7 @@ import {
   PHOTO_GENRE_CATEGORY_ORDER,
   type PhotoGenre,
   type PhotoGenreCategory,
-} from "@nodaro-shared/photo-genre"
+} from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

@@ -22,8 +22,8 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { MOTION_TRANSFER_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
-import { buildMotionCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
+import { MOTION_TRANSFER_PROVIDERS } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier } from "@nodaro/shared"
 
 const motionTransferBody = z.object({
   imageUrl: safeUrlSchema,

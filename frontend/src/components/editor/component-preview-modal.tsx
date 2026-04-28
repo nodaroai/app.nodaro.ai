@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { APP_CATEGORIES, CATEGORY_COLORS, OUTPUT_TYPE_ICON } from "@/lib/app-categories"
 import type { AppBrowseCard } from "@/lib/api"
-import type { ComponentMetadata } from "@nodaro-shared/component-types"
+import type { ComponentMetadata } from "@nodaro/shared"
 
 interface ComponentPreviewModalProps {
   card: AppBrowseCard | null

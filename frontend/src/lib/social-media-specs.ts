@@ -5,4 +5,4 @@ export {
   type SocialMediaPlatform,
   type SocialMediaContentType,
   type SocialMediaSpec,
-} from "@nodaro-shared/social-media-specs"
+} from "@nodaro/shared"

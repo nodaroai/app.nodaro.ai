@@ -6,7 +6,7 @@
 
 import type { WorkflowNode, WorkflowEdge, LoopNodeData } from "@/types/nodes"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
-import { resolveNodeRefs } from "@nodaro-shared/node-refs"
+import { resolveNodeRefs } from "@nodaro/shared"
 
 export interface NodeRefItem {
   id: string
