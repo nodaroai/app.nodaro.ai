@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { openApiRegistry } from "../lib/openapi-registry.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -8,6 +9,50 @@ const workflowIdParams = z.object({
 
 const projectIdParams = z.object({
   projectId: z.string().uuid(),
+})
+
+// ---------------------------------------------------------------------------
+// OpenAPI seed: GET /v1/projects/{projectId}/workflows
+// ---------------------------------------------------------------------------
+
+const WorkflowSummary = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string(),
+    projectId: z.string().uuid().nullable(),
+    folderId: z.string().uuid().nullable().optional(),
+    description: z.string().nullable().optional(),
+    isTemplate: z.boolean().optional(),
+    version: z.number().int().optional(),
+    thumbnailUrl: z.string().nullable().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("WorkflowSummary")
+
+openApiRegistry.registerPath({
+  method: "get",
+  path: "/v1/projects/{projectId}/workflows",
+  description: "List the authenticated user's workflows for a given project.",
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      projectId: z.string().uuid(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "List of workflows",
+      content: {
+        "application/json": {
+          schema: z.object({
+            data: z.array(WorkflowSummary),
+          }),
+        },
+      },
+    },
+    401: { description: "Unauthorized" },
+  },
 })
 
 const createWorkflowBody = z.object({

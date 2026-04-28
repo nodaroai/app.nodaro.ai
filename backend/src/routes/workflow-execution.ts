@@ -18,6 +18,69 @@ import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { CreditsService } from "../billing/credits.js"
 import { invalidateBalanceCache } from "./credits.js"
+import { openApiRegistry } from "../lib/openapi-registry.js"
+
+// ---------------------------------------------------------------------------
+// OpenAPI seed: POST /v1/workflows/{id}/run
+// ---------------------------------------------------------------------------
+
+openApiRegistry.registerPath({
+  method: "post",
+  path: "/v1/workflows/{id}/run",
+  description: "Start a workflow execution. Returns the executionId for polling.",
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              nodeIds: z
+                .array(z.string())
+                .optional()
+                .openapi({
+                  description:
+                    "Optional subset of node IDs to execute. If omitted, the full workflow is executed.",
+                }),
+            })
+            .openapi({
+              description: "Optional execution overrides. Pass an empty body to run the full workflow.",
+            }),
+        },
+      },
+    },
+  },
+  responses: {
+    202: {
+      description: "Execution accepted",
+      content: {
+        "application/json": {
+          schema: z.object({
+            executionId: z.string().uuid(),
+            status: z.enum(["pending", "running"]),
+          }),
+        },
+      },
+    },
+    401: { description: "Unauthorized" },
+    404: { description: "Workflow not found" },
+    409: {
+      description: "Workflow already has an active execution",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.object({
+              code: z.literal("already_running"),
+              message: z.string(),
+            }),
+            executionId: z.string().uuid(),
+          }),
+        },
+      },
+    },
+  },
+})
 
 /**
  * Refund any reserved credit holds for the given job IDs. Best-effort —

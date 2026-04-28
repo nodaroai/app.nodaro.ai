@@ -1,9 +1,53 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { openApiRegistry } from "../lib/openapi-registry.js"
 
 const batchStatusBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(100),
+})
+
+// ---------------------------------------------------------------------------
+// OpenAPI seed: GET /v1/jobs/{id}
+// ---------------------------------------------------------------------------
+
+const JobSummary = z
+  .object({
+    id: z.string().uuid(),
+    status: z.enum(["pending", "queued", "processing", "completed", "failed", "cancelled"]),
+    progress: z.number().min(0).max(100).optional(),
+    userId: z.string().uuid(),
+    inputData: z.unknown().optional(),
+    outputData: z.unknown().optional(),
+    errorMessage: z.string().nullable().optional(),
+    cost: z.number().nullable().optional(),
+    credits: z.number().nullable().optional(),
+    createdAt: z.string(),
+    startedAt: z.string().nullable().optional(),
+    completedAt: z.string().nullable().optional(),
+  })
+  .openapi("Job")
+
+openApiRegistry.registerPath({
+  method: "get",
+  path: "/v1/jobs/{id}",
+  description: "Get the status and result of a single job.",
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+  },
+  responses: {
+    200: {
+      description: "Job details",
+      content: {
+        "application/json": {
+          schema: z.object({ data: JobSummary }),
+        },
+      },
+    },
+    401: { description: "Unauthorized" },
+    404: { description: "Job not found" },
+  },
 })
 // Job type from database
 export interface JobRecord {

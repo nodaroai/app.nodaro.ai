@@ -121,6 +121,7 @@ import { adminNodeDefaultsRoutes } from "./routes/admin-node-defaults.js"
 import { tutorialsRoutes } from "./routes/tutorials.js"
 import { adminTutorialsRoutes } from "./routes/admin-tutorials.js"
 import { executionStatsRoutes } from "./routes/execution-stats.js"
+import { openapiRoutes } from "./routes/openapi.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
@@ -257,6 +258,7 @@ export async function buildApp() {
   await app.register(adminNodeDefaultsRoutes)
   await app.register(tutorialsRoutes)
   await app.register(adminTutorialsRoutes)
+  await app.register(openapiRoutes)
 
   return app
 }
