@@ -639,10 +639,12 @@ export {
   LANGUAGES,
   getLocaleDirection,
   ensureLocaleCatalogLoaded,
+  registerSidecarLoaders,
   resolveLabel,
   resolveDescription,
   entryMatchesQuery,
   type LocaleId,
   type LocaleDirection,
   type I18nCatalogId,
+  type SidecarLoader,
 } from "./i18n/index.js"
