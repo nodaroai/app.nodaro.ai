@@ -129,11 +129,12 @@ export async function buildApp() {
   const app = Fastify({ logger: true, bodyLimit: 1_048_576 }) // 1 MB for JSON endpoints
 
   await app.register(cors, {
-    origin: async (origin, cb) => {
-      // Same-origin / curl requests have no Origin header — allow them
-      if (!origin) return cb(null, true)
-      const ok = await isOriginAllowedDynamic(origin)
-      return cb(null, ok)
+    // Same-origin / curl requests have no Origin header — allow them.
+    // Use the async-promise form (NOT callback form) — @fastify/cors invokes
+    // both the cb and resolves the promise if you return one, double-firing.
+    origin: async (origin: string | undefined) => {
+      if (!origin) return true
+      return isOriginAllowedDynamic(origin)
     },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
