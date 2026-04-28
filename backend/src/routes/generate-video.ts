@@ -7,8 +7,8 @@ import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { IMAGE_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider } from "../../../packages/shared/src/model-constants.js"
-import { buildVideoCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
+import { IMAGE_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider } from "@nodaro/shared"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 
 const generateVideoBody = z.object({
   imageUrl: safeUrlSchema.optional(),  // Optional in VEO REFERENCE_2_VIDEO mode

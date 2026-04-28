@@ -3,8 +3,8 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowCredits } from "../billing/credits.js"
 import { invalidateAppCache } from "./app-runner.js"
-import { getNodeResult, getOutputType } from "../../../packages/shared/src/presentation-utils.js"
-import { calculateMonetizationMarkup, calculateMonetizedCost } from "../../../packages/shared/src/monetization.js"
+import { getNodeResult, getOutputType } from "@nodaro/shared"
+import { calculateMonetizationMarkup, calculateMonetizedCost } from "@nodaro/shared"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 
 const VALID_CATEGORIES = [

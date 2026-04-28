@@ -4,7 +4,7 @@ import {
   getCategoriesForNodeType,
   PROVIDER_CAPABILITIES,
   REFERENCE_IMAGE_ROLES,
-} from "../../../packages/shared/src/prompt-wizard-categories.js"
+} from "@nodaro/shared"
 
 interface WizardAnalyzeContext {
   nodeType: string

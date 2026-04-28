@@ -6,11 +6,13 @@ export type {
   IdentityFidelity,
   IdentityMeta,
   ReferenceSource,
+  SceneData,
 } from "./types.js"
 
 export { DEFAULT_LABEL_BY_SOURCE } from "./types.js"
 
 export {
+  CREDIT_BASE_USD,
   NATIVE_NEGATIVE_PROMPT_MODELS,
   MODELS_WITH_REFERENCE_IMAGE_SUPPORT,
   T2I_TO_I2I_VARIANT,
@@ -25,6 +27,27 @@ export {
   VIDEO_VARIABLE_PRICING,
   VIDEO_DURATION_TIERS,
   ASPECT_RATIO_DIMENSIONS,
+  COMPOSER_PLAN_MAP,
+  IMAGE_GEN_PROVIDERS,
+  IMAGE_I2I_PROVIDERS,
+  IMAGE_EDIT_PROVIDERS,
+  IMAGE_TO_VIDEO_PROVIDERS,
+  TEXT_TO_VIDEO_PROVIDERS,
+  VIDEO_TO_VIDEO_PROVIDERS,
+  VIDEO_UPSCALE_PROVIDERS,
+  EXTEND_VIDEO_PROVIDERS,
+  LIP_SYNC_PROVIDERS,
+  REPLICATE_LIP_SYNC_PROVIDERS,
+  MOTION_TRANSFER_PROVIDERS,
+  TTS_PROVIDERS,
+  TEXT_TO_AUDIO_PROVIDERS,
+  MUSIC_PROVIDERS,
+  TRANSCRIBE_PROVIDERS,
+  SCRIPT_PROVIDERS,
+  SUNO_MODELS,
+  VOICE_DESIGN_MODELS,
+  SEEDANCE_2_REF_LIMITS,
+  isSeedance2Provider,
 } from "./model-constants.js"
 
 export {
@@ -47,7 +70,11 @@ export {
   type IdentityLockMode,
 } from "./identity-lock.js"
 
-export { buildCreditModelIdentifier, buildVideoCreditModelIdentifier } from "./credit-identifiers.js"
+export {
+  buildCreditModelIdentifier,
+  buildVideoCreditModelIdentifier,
+  buildMotionCreditModelIdentifier,
+} from "./credit-identifiers.js"
 
 export {
   buildImagePrompt,
@@ -55,6 +82,7 @@ export {
   buildReferenceBlocks,
   expandImageRefTokens,
   expandImagePositionRefs,
+  buildScenePrompt,
   type BuildImagePromptConfig,
   type BuildImagePromptResult,
 } from "./prompt-builder.js"
@@ -67,6 +95,8 @@ export {
   getNodeResult,
   getNodeLabel,
   getInputFieldSchema,
+  flattenItems,
+  migrateToItems,
   type OutputType,
   type InputFieldSchema,
 } from "./presentation-utils.js"
@@ -83,6 +113,7 @@ export {
   LLM_FEATURE_DEFAULTS,
   getLlmModel,
   getLlmTier,
+  calculateLlmCost,
   buildLlmCreditIdentifier,
   resolveLlmCreditId,
   type LlmTier,
@@ -129,7 +160,7 @@ export {
   selectListItems,
   describeEdgeBehavior,
 } from "./edge-range.js"
-export type { SelectorMode, OutputMode } from "./edge-range.js"
+export type { SelectorMode, OutputMode, SelectorFields } from "./edge-range.js"
 
 export { REPEATABLE_NODE_TYPES, REPEAT_PLACEHOLDER, PROVIDER_PLACEHOLDER_PREFIX, encodeProviderItem, decodeProviderItem, getEffectiveRepeatCount, expandItemsWithRepeat } from "./repeat-types.js"
 
@@ -310,3 +341,47 @@ export {
   PARAMETER_NODE_TYPES,
   getParameterValue,
 } from "./parameter-node-value.js"
+
+export {
+  OUTPUT_FIELD_MAP,
+  mergeExposedSettings,
+  type ComponentMetadata,
+} from "./component-types.js"
+
+export {
+  SOCIAL_POST_NODE_TYPES,
+  INSTAGRAM_CAROUSEL_MIN_ITEMS,
+  INSTAGRAM_CAROUSEL_MAX_ITEMS,
+} from "./social-post.js"
+
+export {
+  NODE_DEFAULT_TYPES,
+  validateProviderForNodeType,
+  type NodeDefaultType,
+} from "./node-default-mappings.js"
+
+export { NODE_MAPPABLE_FIELDS } from "./node-mappable-fields.js"
+
+export {
+  PROVIDER_CAPABILITIES,
+  REFERENCE_IMAGE_ROLES,
+  getCategoriesForNodeType,
+} from "./prompt-wizard-categories.js"
+
+export { resolveScraperCreditId, type ScraperActorId } from "./scraper-actors.js"
+
+export { VARIABLES_HANDLE_ID, buildConditionVariables } from "./condition-variables.js"
+
+export { extractAllGeneratedResults, extractGeneratedJsonAsList, spreadJsonArrayIfSingleton } from "./generated-results.js"
+
+export { getParameterPromptHint } from "./parameter-prompt-hint.js"
+
+export { resolveFieldMappings } from "./resolve-field-mappings.js"
+
+export { resolveNodeRefs } from "./node-refs.js"
+
+export { resolveSourceThroughConnectedList } from "./list-source-resolver.js"
+
+export { zipMergeLists } from "./list-merge.js"
+
+export { PLATFORM_SPECS } from "./social-media-specs.js"

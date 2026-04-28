@@ -8,8 +8,8 @@
  */
 
 import { config } from "./config.js"
-import { getLlmModel, LLM_FEATURE_DEFAULTS, calculateLlmCost } from "../../../packages/shared/src/llm-models.js"
-import type { LlmModelDef, LlmFeature } from "../../../packages/shared/src/llm-models.js"
+import { getLlmModel, LLM_FEATURE_DEFAULTS, calculateLlmCost } from "@nodaro/shared"
+import type { LlmModelDef, LlmFeature } from "@nodaro/shared"
 import { getAnthropicClient } from "./anthropic.js"
 import { KIE_API_BASE } from "../providers/kie/client.js"
 

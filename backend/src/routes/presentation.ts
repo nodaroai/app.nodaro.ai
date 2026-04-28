@@ -272,7 +272,7 @@ export async function presentationRoutes(app: FastifyInstance) {
     if (runTarget === "sub-workflow" && subWorkflowNodeId) {
       nodeIds = [subWorkflowNodeId]
     } else if (runTarget === "route" && selectedRouteId) {
-      const { getRouteReachableNodeIds } = await import("../../../packages/shared/src/route-filter.js")
+      const { getRouteReachableNodeIds } = await import("@nodaro/shared")
       const wfNodes = (workflow.nodes ?? []) as Array<{ id: string; type?: string; data: Record<string, unknown> }>
       const wfEdges = (workflow.edges ?? []) as Array<{ source: string; target: string }>
       const reachable = getRouteReachableNodeIds(wfNodes, wfEdges, selectedRouteId)

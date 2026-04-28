@@ -5,7 +5,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { VOICE_DESIGN_MODELS } from "../../../packages/shared/src/model-constants.js"
+import { VOICE_DESIGN_MODELS } from "@nodaro/shared"
 
 const voiceDesignBody = z.object({
   text: z.string().min(100).max(1000),

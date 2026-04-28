@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase.js"
 import { getAppSettings } from "../lib/app-settings.js"
-import { CREDIT_BASE_USD } from "../../../packages/shared/src/model-constants.js"
+import { CREDIT_BASE_USD } from "@nodaro/shared"
 
 /**
  * Compute actual credits from provider cost in USD.

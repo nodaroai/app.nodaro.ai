@@ -6,7 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { buildCharacterPrompt } from "../../../packages/shared/src/entity-prompts.js"
+import { buildCharacterPrompt } from "@nodaro/shared"
 
 const generateCharacterBody = z.object({
   name: z.string().min(1).max(200),

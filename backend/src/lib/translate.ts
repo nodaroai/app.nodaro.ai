@@ -1,5 +1,5 @@
 import { llmComplete } from "./llm-client.js"
-import { LLM_FEATURE_DEFAULTS } from "../../../packages/shared/src/llm-models.js"
+import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 
 export async function translateToEnglish(text: string): Promise<string> {
   const nonAsciiRatio = (text.match(/[^\x00-\x7F]/g) || []).length / text.length

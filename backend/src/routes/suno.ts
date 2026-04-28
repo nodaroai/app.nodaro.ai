@@ -6,7 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { SUNO_MODELS } from "../../../packages/shared/src/model-constants.js"
+import { SUNO_MODELS } from "@nodaro/shared"
 import { sunoStyleBoost } from "../providers/kie/suno-client.js"
 import { CreditsService } from "../billing/credits.js"
 

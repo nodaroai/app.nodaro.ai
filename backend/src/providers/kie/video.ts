@@ -16,7 +16,7 @@ import type {
   ProviderResult,
   ProviderOptions,
 } from "../provider.interface.js"
-import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider } from "../../../../packages/shared/src/model-constants.js"
+import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider } from "@nodaro/shared"
 import {
   createSanitizedError,
   runKieTask,

@@ -21,8 +21,8 @@ import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mapp
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
-import { mergeExposedSettings } from "../../../../packages/shared/src/component-types.js"
-import type { ComponentMetadata } from "../../../../packages/shared/src/component-types.js"
+import { mergeExposedSettings } from "@nodaro/shared"
+import type { ComponentMetadata } from "@nodaro/shared"
 import type {
   SimpleNode,
   SimpleEdge,

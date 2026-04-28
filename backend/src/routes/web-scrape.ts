@@ -5,7 +5,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { CreditsService } from "../billing/credits.js"
 import { runScraper } from "../providers/apify/scraper.js"
 import { fetchRssItems } from "../providers/rss/parser.js"
-import { resolveScraperCreditId } from "../../../packages/shared/src/scraper-actors.js"
+import { resolveScraperCreditId } from "@nodaro/shared"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
