@@ -118,6 +118,7 @@ import { promptHelperRoutes } from "./routes/prompt-helper.js"
 import { adminLlmModelsRoutes } from "./routes/admin-llm-models.js"
 import { nodeDefaultsRoutes } from "./routes/node-defaults.js"
 import { nodesRoutes } from "./routes/nodes.js"
+import { oauthRoutes } from "./routes/oauth.js"
 import { adminNodeDefaultsRoutes } from "./routes/admin-node-defaults.js"
 import { tutorialsRoutes } from "./routes/tutorials.js"
 import { adminTutorialsRoutes } from "./routes/admin-tutorials.js"
@@ -261,6 +262,7 @@ export async function buildApp() {
   await app.register(adminLlmModelsRoutes)
   await app.register(nodeDefaultsRoutes)
   await app.register(nodesRoutes)
+  await app.register(oauthRoutes)
   await app.register(adminNodeDefaultsRoutes)
   await app.register(tutorialsRoutes)
   await app.register(adminTutorialsRoutes)

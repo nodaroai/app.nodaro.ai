@@ -101,6 +101,8 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { method: "GET", path: "/v1/nodes/", prefix: true },
   { method: "GET", path: "/v1/openapi.json" },
   { method: "GET", path: "/v1/templates/", prefix: true },
+  { method: "POST", path: "/v1/oauth/token" },
+  { method: "POST", path: "/v1/oauth/revoke" },
   // IMPORTANT: trailing slash is deliberate — "/v1/api/" matches "/v1/api/run", "/v1/api/schema", etc.
   // but NOT "/v1/api-tokens" (CRUD routes that require JWT auth).
   // These routes authenticate via Bearer token (API token), not JWT.
