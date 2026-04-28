@@ -3,15 +3,15 @@
 import { type ReactNode, useMemo, useState } from "react"
 import { Search } from "lucide-react"
 import type { I18nCatalogId } from "@nodaro/shared"
-import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import type { DimensionEntry } from "./dimension-modal-browser"
+import { MultiPickBadge, useMultiPick, type MultiPickValue } from "./multi-pick-ui"
 
 /** Multi-pick value: undefined / single id / array of ids (1..maxSelected). */
-export type DimensionPickValue = string | ReadonlyArray<string> | undefined
+export type DimensionPickValue = MultiPickValue
 
 /**
  * Search-first tile grid for picking one entry from a list of dimension
@@ -57,18 +57,8 @@ export function DimensionTileGrid({
   // i18n is disabled. The resolver falls back to English when no sidecar exists.
   const i18n = useLocalizedCatalog(catalog ?? ("__noop__" as I18nCatalogId))
 
-  const selectedIds = useMemo(() => pickIds(value), [value])
-
-  const handlePick = (id: string) => {
-    if (maxSelected <= 1) {
-      onChange(selectedIds[0] === id ? undefined : id)
-      return
-    }
-    const next = togglePick(selectedIds, id, maxSelected)
-    if (next.length === 0) onChange(undefined)
-    else if (next.length === 1) onChange(next[0])
-    else onChange(next)
-  }
+  const { selectedIds, isMulti, handlePick, activateMulti, demoteToSingle } =
+    useMultiPick(value, onChange, maxSelected)
 
   const filtered = useMemo<ReadonlyArray<DimensionEntry>>(() => {
     const q = query.trim().toLowerCase()
@@ -115,44 +105,46 @@ export function DimensionTileGrid({
               ? i18n.resolveDescription(entry.id, entry.description)
               : entry.description
             return (
-              <button
-                key={entry.id}
-                type="button"
-                role={maxSelected > 1 ? "checkbox" : "radio"}
-                aria-checked={isSelected}
-                title={description}
-                onClick={() => handlePick(entry.id)}
-                className={cn(
-                  "relative group flex flex-col items-center gap-1 rounded-xl border p-2 transition-colors cursor-pointer",
-                  isSelected
-                    ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
-                    : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
-                )}
-              >
-                {maxSelected > 1 && isSelected && (
-                  <span
-                    className="absolute top-1 right-1 size-4 rounded-full bg-[#ff0073] text-white text-[9px] font-semibold flex items-center justify-center pointer-events-none"
-                    aria-hidden="true"
-                  >
-                    {selectedIndex + 1}
-                  </span>
-                )}
-                <div
+              <div key={entry.id} className="relative">
+                <button
+                  type="button"
+                  role={maxSelected > 1 ? "checkbox" : "radio"}
+                  aria-checked={isSelected}
+                  title={description}
+                  onClick={() => handlePick(entry.id)}
                   className={cn(
-                    "size-14 flex items-center justify-center",
-                    isSelected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+                    "w-full group flex flex-col items-center gap-1 rounded-xl border p-2 transition-colors cursor-pointer",
+                    isSelected
+                      ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
+                      : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
                   )}
                 >
-                  {renderIcon(entry, isSelected)}
-                </div>
-                <FitText
-                  text={label}
-                  className={cn(
-                    "text-[10px] font-medium leading-tight text-center",
-                    isSelected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
-                  )}
-                />
-              </button>
+                  <div
+                    className={cn(
+                      "size-14 flex items-center justify-center",
+                      isSelected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+                    )}
+                  >
+                    {renderIcon(entry, isSelected)}
+                  </div>
+                  <FitText
+                    text={label}
+                    className={cn(
+                      "text-[10px] font-medium leading-tight text-center",
+                      isSelected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+                    )}
+                  />
+                </button>
+                {isSelected && (
+                  <MultiPickBadge
+                    mode={isMulti ? "multi" : "single"}
+                    index={selectedIndex}
+                    maxSelected={maxSelected}
+                    onActivate={() => activateMulti(entry.id)}
+                    onDemote={() => demoteToSingle(entry.id)}
+                  />
+                )}
+              </div>
             )
           })}
         </div>

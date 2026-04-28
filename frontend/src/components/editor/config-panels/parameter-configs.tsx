@@ -464,8 +464,8 @@ export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>
       <PromptInjectionPreview hints={buildAtmosphereHints(data.atmosphere)} />
       <Label>Atmosphere (pick up to 2)</Label>
       <AtmospherePicker
-        value={data.atmosphere ?? "clear"}
-        onValueChange={(v) => onUpdate({ atmosphere: v ?? "clear" })}
+        value={data.atmosphere}
+        onValueChange={(v) => onUpdate({ atmosphere: v })}
         maxSelected={2}
       />
     </div>
@@ -622,8 +622,8 @@ export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
           "with a X and Y expression". Numbered tile badges show pick order. */}
       <DimensionTileGrid
         entries={MOODS}
-        value={data.mood ?? "calm"}
-        onChange={(v) => onUpdate({ mood: v ?? "calm" })}
+        value={data.mood}
+        onChange={(v) => onUpdate({ mood: v })}
         renderIcon={(entry) => <MoodEmoji moodId={entry.id} className="size-full" />}
         searchPlaceholder="Search moods"
         gridClassName="grid grid-cols-3 gap-2"
@@ -642,8 +642,8 @@ export function PhotographerConfig({ data, onUpdate }: ConfigProps<PhotographerD
       <PromptInjectionPreview hints={[buildPhotographerHints(data.photographer)]} />
       <Label>Photographer / Artist Style (pick up to 2)</Label>
       <PhotographerPicker
-        value={data.photographer ?? "tim-walker"}
-        onValueChange={(v) => onUpdate({ photographer: v ?? "tim-walker" })}
+        value={data.photographer}
+        onValueChange={(v) => onUpdate({ photographer: v })}
         maxSelected={2}
       />
     </div>
@@ -658,8 +658,8 @@ export function AestheticConfig({ data, onUpdate }: ConfigProps<AestheticData>) 
       <PromptInjectionPreview hints={[buildAestheticHints(data.aesthetic)]} />
       <Label>Aesthetic / Microtrend (pick up to 2)</Label>
       <AestheticPicker
-        value={data.aesthetic ?? "y2k"}
-        onValueChange={(v) => onUpdate({ aesthetic: v ?? "y2k" })}
+        value={data.aesthetic}
+        onValueChange={(v) => onUpdate({ aesthetic: v })}
         maxSelected={2}
       />
     </div>
@@ -848,8 +848,8 @@ export function MaterialConfig({ data, onUpdate }: ConfigProps<MaterialData>) {
       <PromptInjectionPreview hints={[buildMaterialHints(data.material)]} />
       <Label>Material (pick up to 2)</Label>
       <MaterialPicker
-        value={data.material ?? "silk"}
-        onValueChange={(v) => onUpdate({ material: v ?? "silk" })}
+        value={data.material}
+        onValueChange={(v) => onUpdate({ material: v })}
         maxSelected={2}
       />
     </div>
@@ -945,8 +945,8 @@ export function HeldPropConfig({ data, onUpdate }: ConfigProps<HeldPropData>) {
       <PromptInjectionPreview hints={buildHeldPropHints(data.heldProp)} />
       <Label>Held Prop (pick up to 2)</Label>
       <HeldPropPicker
-        value={data.heldProp ?? "smartphone"}
-        onValueChange={(v) => onUpdate({ heldProp: v ?? "smartphone" })}
+        value={data.heldProp}
+        onValueChange={(v) => onUpdate({ heldProp: v })}
         maxSelected={2}
       />
     </div>
@@ -1006,8 +1006,8 @@ export function PostProcessEffectsConfig({ data, onUpdate }: ConfigProps<PostPro
       <PromptInjectionPreview hints={buildPostProcessHints(data.postProcess)} />
       <Label>Post-Process Effect (pick up to 2)</Label>
       <PostProcessEffectsPicker
-        value={data.postProcess ?? "vignette-soft"}
-        onValueChange={(v) => onUpdate({ postProcess: v ?? "vignette-soft" })}
+        value={data.postProcess}
+        onValueChange={(v) => onUpdate({ postProcess: v })}
         maxSelected={2}
       />
     </div>
