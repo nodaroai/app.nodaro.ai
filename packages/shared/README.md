@@ -22,4 +22,4 @@ The exports are re-used by `@nodaro/client` and the official Nodaro frontend. Mo
 
 ## License
 
-Apache-2.0 — see the repository root LICENSE.
+Sustainable Use License — see the repository root LICENSE.

@@ -1,14 +1,10 @@
 # Nodaro
 
-Open-source AI workflow editor. Compose text-to-image, image-to-video, audio synthesis, video composition, and LLM nodes into multi-step DAGs that run autonomously on a server.
-
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![npm @nodaro/client](https://img.shields.io/npm/v/@nodaro/client.svg?label=%40nodaro%2Fclient)](https://www.npmjs.com/package/@nodaro/client)
-[![npm @nodaro/shared](https://img.shields.io/npm/v/@nodaro/shared.svg?label=%40nodaro%2Fshared)](https://www.npmjs.com/package/@nodaro/shared)
+AI workflow editor. Compose text-to-image, image-to-video, audio synthesis, video composition, and LLM nodes into multi-step DAGs that run autonomously on a server.
 
 [**Hosted version: nodaro.ai**](https://nodaro.ai) · [**Documentation**](docs/README.md) · [**SDK**](docs/sdk-quickstart.md)
 
-## Why Nodaro
+## Features
 
 - **100+ AI nodes** — image gen, video gen, audio synthesis, lip sync, music, LLMs, social-publish
 - **Visual editor** with full React Flow canvas, OR fully **headless API** for your own frontends
@@ -31,10 +27,6 @@ Open `http://localhost:3000`. Full guide: [Community Edition Quickstart](docs/co
 
 ### 2. SDK against the hosted API
 
-```bash
-npm install @nodaro/client
-```
-
 ```typescript
 import { createClient, StaticTokenAuth } from "@nodaro/client"
 
@@ -49,7 +41,7 @@ const exec = await nodaro.workflows.run(workflowId)
 
 Full guide: [SDK Quickstart](docs/sdk-quickstart.md).
 
-### 3. Hosted product (closed)
+### 3. Hosted product
 
 [nodaro.ai](https://nodaro.ai) — managed instance with credits, billing, and zero-ops setup.
 
@@ -57,7 +49,7 @@ Full guide: [SDK Quickstart](docs/sdk-quickstart.md).
 
 | Edition | Self-hosted | Admin panel | Credits + billing | Use case |
 |---------|-------------|-------------|-------------------|----------|
-| **Community** | Yes | No | No | OSS / local / single-team |
+| **Community** | Yes | No | No | Local / single-team |
 | **Business** | Yes | Yes | No | Self-hosted with user mgmt |
 | **Cloud** | No | Yes | Yes | Powers nodaro.ai |
 
@@ -73,17 +65,18 @@ Set `EDITION=community|business|cloud` to switch.
 
 See [Architecture](docs/architecture.md) for the full system overview.
 
-## Contributing
-
-We welcome PRs! See [Contributing](docs/contributing.md) for the dev environment setup and standards.
+## Project structure
 
 The repository is a monorepo with npm workspaces:
-- `backend/` — Fastify API
+
+- `backend/` — Fastify API + workers
 - `frontend/` — Vite SPA (visual editor + presentation mode + admin)
-- `packages/shared/` — pure-logic types, model registries (publishes as `@nodaro/shared`)
-- `packages/client/` — typed REST SDK (publishes as `@nodaro/client`)
+- `packages/shared/` — pure-logic types, model registries, prompt helpers
+- `packages/client/` — typed REST SDK
 - `packages/remotion/` — Remotion video compositions
+
+See [Contributing](docs/contributing.md) for dev environment setup and standards.
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+Sustainable Use License — see [LICENSE](LICENSE).

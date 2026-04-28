@@ -15,7 +15,7 @@ when run, a Fastify backend takes the DAG, topologically sorts it, and
 hands node-level work to BullMQ workers (or, for sync routes, runs it
 inline). External AI providers (KIE.ai, Replicate, Anthropic,
 ElevenLabs) do the heavy lifting; outputs land in S3-compatible
-storage. The same backend serves three tiers — Community (open-source,
+storage. The same backend serves three tiers — Community (self-hosted,
 no billing), Business (admin panel), Cloud (full SaaS with credits and
 Stripe) — and three authentication modes (Supabase JWT, API token,
 OAuth-app token).
@@ -258,7 +258,7 @@ not in the global hook.
 
 Three editions live in the same codebase:
 
-- **Community** (`EDITION=community`, default) — fully open-source.
+- **Community** (`EDITION=community`, default) — self-hostable.
   No admin panel. No credit ledger. No Stripe. Anyone who signs up
   becomes a regular user.
 - **Business** (`EDITION=business`) — adds the admin panel + user

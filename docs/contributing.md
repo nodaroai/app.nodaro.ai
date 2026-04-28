@@ -1,9 +1,11 @@
 # Contributing to Nodaro
 
-Thanks for your interest in contributing. Nodaro is an open-source AI
-workflow editor — anyone can run their own copy, build apps on top of
-the REST API, or send patches upstream. This document is the entry
-point for the third group: people who want to land code in this repo.
+Thanks for your interest in contributing. Nodaro is a source-available
+AI workflow editor — under the [Sustainable Use License](../LICENSE),
+anyone can run their own copy for personal or internal-business use,
+build apps on top of the REST API, or send patches upstream. This
+document is the entry point for the third group: people who want to
+land code in this repo.
 
 If you instead want to *use* Nodaro on your own server, start at the
 [Community Edition Quickstart](./community-edition-quickstart.md). For
@@ -314,11 +316,12 @@ In practice this means:
 
 ## 11. License
 
-Nodaro is [Apache 2.0](../LICENSE) licensed. By contributing, you
-agree that your contributions are licensed under the same terms —
-this is the standard "inbound = outbound" model. There is **no
-CLA**; the Apache 2.0 license itself includes the necessary patent
-grant.
+Nodaro is licensed under the [Sustainable Use License](../LICENSE)
+(source-available, allows personal + internal-business use +
+self-hosting; prohibits commercial hosted-service offerings to third
+parties). By contributing, you agree that your contributions are
+licensed under the same terms — the standard "inbound = outbound"
+model. No CLA required.
 
 If you're contributing on behalf of an employer, double-check that
 your employer's IP policy allows you to do so. The
