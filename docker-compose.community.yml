@@ -32,14 +32,13 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${PUBLIC_URL:-http://localhost:8000}
+        VITE_API_URL: ${PUBLIC_URL:-http://localhost:3000}
         VITE_EDITION: community
         VITE_SUPABASE_URL: ${SUPABASE_URL}
         VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
     restart: unless-stopped
     ports:
-      - "3000:3000"   # frontend
-      - "8000:8000"   # backend API
+      - "3000:3000"   # Caddy serves both frontend + /v1/* API on the same port
     environment:
       EDITION: community
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
@@ -63,10 +62,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
 volumes:
   redis-data:

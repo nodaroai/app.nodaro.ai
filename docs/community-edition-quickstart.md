@@ -34,7 +34,9 @@ AI provider key (KIE_API_KEY, REPLICATE_API_TOKEN, or ANTHROPIC_API_KEY).
 docker compose -f docker-compose.community.yml up
 ```
 
-Wait for `nodaro-1` to log `server listening on 8000`.
+Wait for `nodaro-1` to log `server listening on http://0.0.0.0:9000` (backend), then visit http://localhost:3000.
+
+Initial Docker build takes ~5-10 minutes (Node deps, Remotion bundling, frontend build). Subsequent boots are seconds.
 
 ## 5. Open the editor
 
