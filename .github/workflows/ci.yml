@@ -20,10 +20,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install dependencies
+          cache-dependency-path: package-lock.json
+      - name: Install workspace dependencies
         run: npm ci
-        working-directory: frontend
+      - name: Build shared packages
+        run: npm run build:packages
       - name: Run tests with coverage
         run: npm run test:coverage
         working-directory: frontend
@@ -56,10 +57,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: backend/package-lock.json
-      - name: Install dependencies
+          cache-dependency-path: package-lock.json
+      - name: Install workspace dependencies
         run: npm ci
-        working-directory: backend
+      - name: Build shared packages
+        run: npm run build:packages
       - name: Run tests with coverage
         run: npm run test:coverage
         working-directory: backend
@@ -87,15 +89,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install frontend dependencies
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install workspace dependencies
         run: npm ci
-        working-directory: frontend
-      - name: Install remotion package dependencies
-        run: npm ci
-        working-directory: packages/remotion
-      - name: Install backend dependencies
-        run: npm ci
-        working-directory: backend
+      - name: Build shared packages
+        run: npm run build:packages
       - name: Typecheck frontend
         run: npx tsc --noEmit
         working-directory: frontend

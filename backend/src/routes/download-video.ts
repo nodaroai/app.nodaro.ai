@@ -3,10 +3,11 @@ import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { randomUUID } from "node:crypto"
 import { tmpdir } from "node:os"
-import { join, resolve, dirname } from "node:path"
+import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import { promises as fs } from "node:fs"
 import { spawn } from "node:child_process"
+import { createRequire } from "node:module"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
 
 const SUPPORTED_HOSTNAMES = [
@@ -44,9 +45,13 @@ const activeDownloads = new Map<string, ActiveDownload>()
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const isWindows = process.platform === "win32"
-const YT_DLP_BIN = resolve(
-  __dirname,
-  `../../node_modules/youtube-dl-exec/bin/yt-dlp${isWindows ? ".exe" : ""}`,
+// Resolve via Node's module lookup so workspace hoisting (deps land in
+// the workspace root, not backend/node_modules) doesn't break the path.
+const require = createRequire(import.meta.url)
+const ytDlpExecPkgJson = require.resolve("youtube-dl-exec/package.json")
+const YT_DLP_BIN = join(
+  dirname(ytDlpExecPkgJson),
+  `bin/yt-dlp${isWindows ? ".exe" : ""}`,
 )
 
 function findVideoFile(baseName: string, expectedPath: string): Promise<string> {

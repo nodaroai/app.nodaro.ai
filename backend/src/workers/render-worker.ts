@@ -11,6 +11,7 @@ import { createReadStream, statSync } from "node:fs"
 import { randomUUID } from "node:crypto"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
+import { createRequire } from "node:module"
 import { readdir, stat, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { validatePlanByType } from "../lib/plan-schemas.js"
@@ -102,6 +103,13 @@ const REMOTION_PKG_DIR = join(
   "../../../packages/remotion",
 )
 
+// Resolve react/react-dom/scheduler via Node module lookup so workspace
+// hoisting (deps land in the workspace root, not packages/remotion/node_modules)
+// doesn't break the de-duplication aliases used by the 3D bundle.
+const requireFromHere = createRequire(import.meta.url)
+const resolvePkgDir = (pkg: string): string =>
+  dirname(requireFromHere.resolve(`${pkg}/package.json`))
+
 async function bundleEntry(
   entryFile: string,
   label: string,
@@ -119,21 +127,18 @@ async function bundleEntry(
     // they break Remotion's own module resolution.
     ...(useR3FAliases
       ? {
-          webpackOverride: (config) => {
-            const nodeModules = join(REMOTION_PKG_DIR, "node_modules")
-            return {
-              ...config,
-              resolve: {
-                ...config.resolve,
-                alias: {
-                  ...(config.resolve?.alias ?? {}),
-                  react: join(nodeModules, "react"),
-                  "react-dom": join(nodeModules, "react-dom"),
-                  scheduler: join(nodeModules, "scheduler"),
-                },
+          webpackOverride: (config) => ({
+            ...config,
+            resolve: {
+              ...config.resolve,
+              alias: {
+                ...(config.resolve?.alias ?? {}),
+                react: resolvePkgDir("react"),
+                "react-dom": resolvePkgDir("react-dom"),
+                scheduler: resolvePkgDir("scheduler"),
               },
-            }
-          },
+            },
+          }),
         }
       : {}),
     onProgress: (progress: number) => {
