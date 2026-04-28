@@ -1,5 +1,12 @@
 import { throwFromResponse } from "./errors.js"
 import type { Auth } from "./auth.js"
+import { WorkflowsResource } from "./resources/workflows.js"
+import { ProjectsResource } from "./resources/projects.js"
+import { JobsResource } from "./resources/jobs.js"
+import { ExecutionsResource } from "./resources/executions.js"
+import { NodesResource } from "./resources/nodes.js"
+import { DeveloperAppsResource } from "./resources/developer-apps.js"
+import { OAuthResource } from "./resources/oauth.js"
 
 export interface ClientOptions {
   /** Backend base URL, e.g. "https://nodaro.example.com" or empty string for same-origin. */
@@ -25,11 +32,27 @@ export class NodaroClient {
   readonly fetch: typeof fetch
   readonly timeoutMs: number
 
+  readonly workflows: WorkflowsResource
+  readonly projects: ProjectsResource
+  readonly jobs: JobsResource
+  readonly executions: ExecutionsResource
+  readonly nodes: NodesResource
+  readonly developerApps: DeveloperAppsResource
+  readonly oauth: OAuthResource
+
   constructor(opts: ClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, "")  // strip trailing slash
     this.auth = opts.auth
     this.fetch = opts.fetch ?? globalThis.fetch
     this.timeoutMs = opts.timeoutMs ?? 60_000
+
+    this.workflows = new WorkflowsResource(this)
+    this.projects = new ProjectsResource(this)
+    this.jobs = new JobsResource(this)
+    this.executions = new ExecutionsResource(this)
+    this.nodes = new NodesResource(this)
+    this.developerApps = new DeveloperAppsResource(this)
+    this.oauth = new OAuthResource(this)
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
