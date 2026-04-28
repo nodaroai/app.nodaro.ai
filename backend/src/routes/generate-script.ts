@@ -5,8 +5,8 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { SCRIPT_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
-import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId } from "../../../packages/shared/src/llm-models.js"
+import { SCRIPT_PROVIDERS } from "@nodaro/shared"
+import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId } from "@nodaro/shared"
 
 const generateScriptBody = z.object({
   prompt: z.string().min(1).max(10000),

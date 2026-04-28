@@ -18,7 +18,7 @@ import { toast } from "sonner"
 import { getMyApps, updateApp, deactivateApp, getMonetizationDefaults } from "@/lib/api"
 import type { AppBrowseCard, PublishedApp } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
-import { calculateMonetizedCost } from "@nodaro-shared/monetization"
+import { calculateMonetizedCost } from "@nodaro/shared"
 import { OUTPUT_TYPE_COLORS, APP_CATEGORIES, OUTPUT_TYPES, OUTPUT_TYPE_ICON } from "@/lib/app-categories"
 import { AppMarketplaceCard, AppMarketplaceCardSkeleton } from "@/components/apps/app-marketplace-card"
 import { ComponentPreviewModal } from "./component-preview-modal"
@@ -29,7 +29,7 @@ import {
   type AppBrowseParams,
 } from "@/hooks/queries/use-app-marketplace-queries"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import type { ComponentMetadata } from "@nodaro-shared/component-types"
+import type { ComponentMetadata } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Types

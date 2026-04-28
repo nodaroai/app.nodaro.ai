@@ -45,8 +45,8 @@ import { isMediaUrl } from "@/lib/media-type"
 import { AndOrToggle, ConditionRowEditor } from "./condition-row-editor"
 import { getPreviewItemKey } from "@/lib/preview-items"
 import { downloadFile } from "@/components/presentation/output-cards/shared"
-import { SCRAPER_OUTPUT_FIELDS } from "@nodaro-shared/scraper-output-schemas"
-import { buildExpressionFromVisual, type FilterOperator } from "@nodaro-shared/json-evaluator"
+import { SCRAPER_OUTPUT_FIELDS } from "@nodaro/shared"
+import { buildExpressionFromVisual, type FilterOperator } from "@nodaro/shared"
 import {
   Accordion,
   AccordionContent,

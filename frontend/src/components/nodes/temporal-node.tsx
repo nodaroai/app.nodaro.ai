@@ -10,7 +10,7 @@ import {
   getTemporal,
   getTemporalLabel,
   type TemporalCategory,
-} from "@nodaro-shared/temporal"
+} from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { TemporalPreview } from "@/components/editor/config-panels/temporal-preview"
 import type { TemporalData } from "@/types/nodes"

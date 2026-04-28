@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Hourglass } from "lucide-react"
-import { getEra, getEraLabel } from "@nodaro-shared/era"
+import { getEra, getEraLabel } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { EraData } from "@/types/nodes"
 

@@ -18,7 +18,7 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { EditableNodeLabel } from "./editable-node-label"
-import { I2I_MASK_SUPPORT } from "@nodaro-shared/model-constants"
+import { I2I_MASK_SUPPORT } from "@nodaro/shared"
 import type { ImageToImageData } from "@/types/nodes"
 
 function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {

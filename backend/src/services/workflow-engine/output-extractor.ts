@@ -14,10 +14,10 @@ import {
   AUDIO_SOURCE_TYPES,
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
-import { COMPOSER_PLAN_MAP } from "../../../../packages/shared/src/model-constants.js"
-import { buildScenePrompt } from "../../../../packages/shared/src/prompt-builder.js"
-import type { SceneData } from "../../../../packages/shared/src/types.js"
-import { extractAllGeneratedResults } from "../../../../packages/shared/src/generated-results.js"
+import { COMPOSER_PLAN_MAP } from "@nodaro/shared"
+import { buildScenePrompt } from "@nodaro/shared"
+import type { SceneData } from "@nodaro/shared"
+import { extractAllGeneratedResults } from "@nodaro/shared"
 
 export { extractAllGeneratedResults }
 

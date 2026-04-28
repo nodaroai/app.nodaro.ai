@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Languages, Check } from "lucide-react"
-import { LANGUAGES, type LocaleId } from "@nodaro-shared/i18n"
+import { LANGUAGES, type LocaleId } from "@nodaro/shared"
 import { useLocaleStore } from "@/lib/locale-store"
 import { useAuth } from "@/hooks/use-auth"
 import { useUpdatePreferredLocaleMutation } from "@/hooks/queries/use-user-settings-queries"

@@ -2,7 +2,7 @@ import type { MediaItem, PublishRequest, PublishResult, PlatformPublisher } from
 import {
   INSTAGRAM_CAROUSEL_MIN_ITEMS,
   INSTAGRAM_CAROUSEL_MAX_ITEMS,
-} from "../../../../../packages/shared/src/social-post.js"
+} from "@nodaro/shared"
 
 const GRAPH_API = "https://graph.facebook.com/v25.0"
 

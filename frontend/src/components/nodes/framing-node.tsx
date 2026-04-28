@@ -10,7 +10,7 @@ import {
   getFraming,
   getFramingLabel,
   type FramingCategory,
-} from "@nodaro-shared/framing"
+} from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { FramingPreview } from "@/components/editor/config-panels/framing-preview"
 import type { FramingData } from "@/types/nodes"

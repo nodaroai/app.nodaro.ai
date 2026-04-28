@@ -11,15 +11,15 @@ import type {
   ResolvedInputs,
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, getPrimaryOutput } from "./output-extractor.js"
-import { extractGeneratedJsonAsList } from "../../../../packages/shared/src/generated-results.js"
+import { extractGeneratedJsonAsList } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
-import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
-import { resolveIndex, selectListItems, type SelectorFields } from "../../../../packages/shared/src/edge-range.js"
-import { splitByLoopDelimiter } from "../../../../packages/shared/src/loop-delimiter.js"
-import { SOCIAL_POST_NODE_TYPES } from "../../../../packages/shared/src/social-post.js"
-import { PARAMETER_NODE_TYPES } from "../../../../packages/shared/src/parameter-node-value.js"
+import { resolveNodeRefs } from "@nodaro/shared"
+import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro/shared"
+import { splitByLoopDelimiter } from "@nodaro/shared"
+import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
 
 /**
  * Resolve a node's primary output from execution state or source node data.

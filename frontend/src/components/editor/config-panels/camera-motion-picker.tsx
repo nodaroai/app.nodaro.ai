@@ -8,7 +8,7 @@ import {
   CAMERA_MOTION_CATEGORY_LABELS,
   type CameraMotion,
   type CameraMotionCategory,
-} from "@nodaro-shared/camera-motions"
+} from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

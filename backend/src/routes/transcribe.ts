@@ -6,7 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { TRANSCRIBE_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
+import { TRANSCRIBE_PROVIDERS } from "@nodaro/shared"
 
 const transcribeBody = z.object({
   audioUrl: safeUrlSchema,

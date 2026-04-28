@@ -31,9 +31,9 @@ import {
   getInputFieldSchema,
   flattenItems,
   migrateToItems,
-} from "../../../packages/shared/src/presentation-utils.js"
-import type { PresentationItem } from "../../../packages/shared/src/presentation-types.js"
-import type { GenericNode, GenericEdge } from "../../../packages/shared/src/types.js"
+} from "@nodaro/shared"
+import type { PresentationItem } from "@nodaro/shared"
+import type { GenericNode, GenericEdge } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Rate limiter (in-memory, per token hash)

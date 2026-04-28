@@ -3,7 +3,7 @@
 import { useMemo } from "react"
 import { AlertTriangle } from "lucide-react"
 import { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX } from "./model-options"
-import { T2I_TO_I2I_VARIANT } from "@nodaro-shared/model-constants"
+import { T2I_TO_I2I_VARIANT } from "@nodaro/shared"
 
 const IMAGE_TOKEN_RE = /\{image:(\d+)(?::([a-zA-Z0-9_-]+))?\}/gi
 

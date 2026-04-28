@@ -2,8 +2,8 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { ATMOSPHERES } from "@nodaro-shared/atmosphere"
-import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
+import { ATMOSPHERES } from "@nodaro/shared"
+import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

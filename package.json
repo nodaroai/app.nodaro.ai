@@ -1,15 +1,30 @@
 {
   "name": "nodaro-ai",
   "private": true,
+  "workspaces": [
+    "packages/*",
+    "backend",
+    "frontend"
+  ],
   "scripts": {
     "dev": "cd frontend && npm run dev",
-    "build": "cd frontend && npm run build",
+    "build": "npm -w @nodaro/shared run build && cd frontend && npm run build",
     "lint": "cd frontend && npm run lint",
     "start": "cd frontend && npm run start",
-    "test": "cd frontend && npm test && cd ../backend && npm test",
-    "test:coverage": "cd frontend && npm run test:coverage && cd ../backend && npm run test:coverage"
+    "test": "npm -ws --if-present run test",
+    "test:coverage": "npm -ws --if-present run test:coverage",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "npm run build && changeset publish"
   },
-  "dependencies": {
+  "devDependencies": {
+    "@changesets/cli": "^2.27.0",
     "@playwright/test": "^1.58.2"
+  },
+  "overrides": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
   }
 }

@@ -9,8 +9,8 @@ import { TIER_PARALLELISM } from "@/lib/pricing-data";
 import { hasCredits } from "@/lib/edition";
 import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
-import { REPEAT_PLACEHOLDER, decodeProviderItem } from "@nodaro-shared/repeat-types";
-import { settledWithLimit } from "@nodaro-shared/settled-with-limit";
+import { REPEAT_PLACEHOLDER, decodeProviderItem } from "@nodaro/shared";
+import { settledWithLimit } from "@nodaro/shared";
 import { setSuppressToasts } from "./poll-job";
 
 /**

@@ -6,10 +6,10 @@ import { cn } from "@/lib/utils"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { collectCinematographyHints, hasConnectedStyleNode } from "@/lib/cinematography-hints"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs"
-import { getStylePromptHint } from "@nodaro-shared/style"
-import { buildImagePrompt, buildIdentityDirectives } from "@nodaro-shared/prompt-builder"
-import { collectIdentityLockClause } from "@nodaro-shared/identity-lock"
-import type { CharacterDef, ConnectedReference, IdentityMeta } from "@nodaro-shared/types"
+import { getStylePromptHint } from "@nodaro/shared"
+import { buildImagePrompt, buildIdentityDirectives } from "@nodaro/shared"
+import { collectIdentityLockClause } from "@nodaro/shared"
+import type { CharacterDef, ConnectedReference, IdentityMeta } from "@nodaro/shared"
 
 interface FinalPromptPreviewProps {
   /** User's prompt text (from `data.prompt` or equivalent). */

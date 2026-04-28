@@ -7,7 +7,7 @@
  */
 
 import { supabase } from "../lib/supabase.js"
-import { CATEGORY_DURATION_DEFAULTS } from "../../../packages/shared/src/progress-curve.js"
+import { CATEGORY_DURATION_DEFAULTS } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Node categories that should NOT be tracked (no meaningful duration signal)

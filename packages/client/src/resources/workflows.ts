@@ -1,0 +1,125 @@
+import type { NodaroClient } from "../client.js"
+import type { GenericNode, GenericEdge } from "@nodaro/shared"
+
+/**
+ * Workflow metadata + (when fetched as a single record) full nodes/edges/settings.
+ *
+ * The list endpoint returns metadata only; `get`, `create`, and `update` return the
+ * full record. `nodes`, `edges`, `settings`, and `sourcePrompt` are present only on
+ * full records.
+ */
+export interface Workflow {
+  id: string
+  projectId: string | null
+  userId: string
+  name: string
+  description?: string | null
+  folderId?: string | null
+  isTemplate?: boolean
+  version?: number
+  thumbnailUrl?: string | null
+  /** Present on full record reads (`get`, `create`, `update`); omitted in list responses. */
+  nodes?: GenericNode[]
+  /** Present on full record reads (`get`, `create`, `update`); omitted in list responses. */
+  edges?: GenericEdge[]
+  /** Present on full record reads (`get`, `create`, `update`); omitted in list responses. */
+  settings?: Record<string, unknown>
+  /** Present on full record reads (`get`, `create`, `update`); omitted in list responses. */
+  sourcePrompt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ListWorkflowsParams {
+  /** Required — list endpoint is `/v1/projects/:projectId/workflows`. */
+  projectId: string
+}
+
+export interface CreateWorkflowInput {
+  /** Required — workflow is created under this project. */
+  projectId: string
+  name: string
+  description?: string
+  folderId?: string | null
+  nodes?: GenericNode[]
+  edges?: GenericEdge[]
+  settings?: Record<string, unknown>
+  sourcePrompt?: string
+}
+
+export interface UpdateWorkflowInput {
+  name?: string
+  description?: string
+  folderId?: string | null
+  nodes?: GenericNode[]
+  edges?: GenericEdge[]
+  settings?: Record<string, unknown>
+  sourcePrompt?: string
+  thumbnailUrl?: string | null
+}
+
+export interface RunWorkflowParams {
+  /** Optional subset of node IDs to execute. Omit to run the full workflow. */
+  nodeIds?: string[]
+}
+
+export interface RunWorkflowResult {
+  executionId: string
+  status: "pending" | "running"
+}
+
+export class WorkflowsResource {
+  constructor(private client: NodaroClient) {}
+
+  /** List workflows for a project. Returns metadata only — `nodes`/`edges` are not included. */
+  list(params: ListWorkflowsParams): Promise<{ data: Workflow[] }> {
+    return this.client.request(
+      "GET",
+      `/v1/projects/${encodeURIComponent(params.projectId)}/workflows`,
+    )
+  }
+
+  /** Get a workflow including its full nodes/edges/settings. */
+  get(id: string): Promise<{ data: Workflow }> {
+    return this.client.request("GET", `/v1/workflows/${encodeURIComponent(id)}`)
+  }
+
+  /**
+   * Create a workflow under a project. Returns the full record.
+   * NOTE: server route is `POST /v1/projects/:projectId/workflows`.
+   */
+  create(input: CreateWorkflowInput): Promise<{ data: Workflow }> {
+    const { projectId, ...body } = input
+    return this.client.request(
+      "POST",
+      `/v1/projects/${encodeURIComponent(projectId)}/workflows`,
+      { body },
+    )
+  }
+
+  /** Patch a workflow. Returns the full updated record. */
+  update(id: string, input: UpdateWorkflowInput): Promise<{ data: Workflow }> {
+    return this.client.request(
+      "PATCH",
+      `/v1/workflows/${encodeURIComponent(id)}`,
+      { body: input },
+    )
+  }
+
+  /** Delete a workflow. Returns `{ success: true }`. */
+  delete(id: string): Promise<{ success: true }> {
+    return this.client.request("DELETE", `/v1/workflows/${encodeURIComponent(id)}`)
+  }
+
+  /**
+   * Run a workflow. Returns the executionId for polling via
+   * `client.executions.get(executionId)`.
+   */
+  run(id: string, params: RunWorkflowParams = {}): Promise<RunWorkflowResult> {
+    return this.client.request(
+      "POST",
+      `/v1/workflows/${encodeURIComponent(id)}/run`,
+      { body: params },
+    )
+  }
+}

@@ -40,9 +40,13 @@ vi.mock("../types", () => ({
   },
 }))
 
-vi.mock("@nodaro-shared/progress-curve", () => ({
-  calculateProgress: (_elapsed: number, _estimate: number) => 0,
-}))
+vi.mock("@nodaro/shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/shared")>()
+  return {
+    ...actual,
+    calculateProgress: (_elapsed: number, _estimate: number) => 0,
+  }
+})
 
 import { pollJobToCompletion, pollJobWithNodeUpdate } from "../poll-job"
 import type { ExecutionContext } from "../types"

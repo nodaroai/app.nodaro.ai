@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/select"
 import { CachedImage } from "@/components/ui/cached-image"
 import { toast } from "sonner"
-import { spliceDelimitedRows } from "@nodaro-shared/loop-delimiter"
+import { spliceDelimitedRows } from "@nodaro/shared"
 import { uploadAudio, fetchYouTubeOEmbed, extractYouTubeAudioApi, getJobStatus, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
 import type { DownloadProgressEvent } from "@/lib/api"
 import {

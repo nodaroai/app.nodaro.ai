@@ -13,8 +13,8 @@ import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { hasCredits } from "../lib/config.js"
 import { CreditsService } from "../billing/credits.js"
-import { flattenItems } from "../../../packages/shared/src/presentation-utils.js"
-import type { PresentationItem } from "../../../packages/shared/src/presentation-types.js"
+import { flattenItems } from "@nodaro/shared"
+import type { PresentationItem } from "@nodaro/shared"
 import { executeAppRun } from "../services/app-execution.js"
 
 // In-memory cache for published app data (30min TTL — explicit invalidation on publish)
@@ -319,7 +319,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const snapshotSettings = (appRow.snapshot_settings ?? {}) as Record<string, unknown>
     const presSettings = snapshotSettings.presentationSettings as { runTarget?: string; selectedRouteId?: string } | undefined
     if (presSettings?.runTarget === "route" && presSettings?.selectedRouteId) {
-      const { getRouteReachableNodeIds } = await import("../../../packages/shared/src/route-filter.js")
+      const { getRouteReachableNodeIds } = await import("@nodaro/shared")
       const nodes = (appRow.snapshot_nodes ?? []) as Array<{ id: string; type?: string; data: Record<string, unknown> }>
       const edges = (appRow.snapshot_edges ?? []) as Array<{ source: string; target: string }>
       const reachable = getRouteReachableNodeIds(nodes, edges, presSettings.selectedRouteId)

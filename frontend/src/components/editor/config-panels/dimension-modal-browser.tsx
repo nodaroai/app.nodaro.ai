@@ -2,7 +2,7 @@
 
 import { type ReactNode, memo, useState } from "react"
 import { ChevronDown, Sparkles } from "lucide-react"
-import type { I18nCatalogId } from "@nodaro-shared/i18n"
+import type { I18nCatalogId } from "@nodaro/shared"
 import {
   Dialog,
   DialogContent,

@@ -6,7 +6,7 @@ vi.mock("../llm-client.js", () => ({
   llmComplete: llmCompleteMock,
 }))
 
-vi.mock("../../../../packages/shared/src/llm-models.js", () => ({
+vi.mock("@nodaro/shared", () => ({
   LLM_FEATURE_DEFAULTS: { translate: "gemini-flash" },
 }))
 

@@ -10,7 +10,7 @@ import {
   getExposure,
   getExposureLabel,
   type ExposureCategory,
-} from "@nodaro-shared/exposure-settings"
+} from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { ExposureSettingsData } from "@/types/nodes"
 

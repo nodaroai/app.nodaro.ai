@@ -14,7 +14,7 @@ import { runVeoExtendTask, runVeo1080pTask, runVeo4kTask } from "../../providers
 
 import { runRunwayExtendTask } from "../../providers/kie/runway-client.js"
 import { replicateLipSync } from "../../providers/replicate/lip-sync.js"
-import { REPLICATE_LIP_SYNC_PROVIDERS } from "../../../../packages/shared/src/model-constants.js"
+import { REPLICATE_LIP_SYNC_PROVIDERS } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import {

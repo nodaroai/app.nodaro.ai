@@ -8,8 +8,8 @@ import {
   HELD_PROP_CATEGORY_ORDER,
   type HeldProp,
   type HeldPropCategory,
-} from "@nodaro-shared/held-prop"
-import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
+} from "@nodaro/shared"
+import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"

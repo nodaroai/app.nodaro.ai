@@ -10,8 +10,8 @@ import {
   type Styling,
   type StylingDimension,
   type StylingValue,
-} from "@nodaro-shared/styling"
-import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
+} from "@nodaro/shared"
+import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

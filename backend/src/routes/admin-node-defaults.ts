@@ -7,7 +7,7 @@ import {
   NODE_DEFAULT_TYPES,
   validateProviderForNodeType,
   type NodeDefaultType,
-} from "../../../packages/shared/src/node-default-mappings.js"
+} from "@nodaro/shared"
 
 const upsertBody = z.object({
   provider: z.string().min(1),

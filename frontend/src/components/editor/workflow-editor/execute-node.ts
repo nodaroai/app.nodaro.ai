@@ -64,7 +64,7 @@ import {
   webScrape,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
-import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider } from "@nodaro-shared/model-constants";
+import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider } from "@nodaro/shared";
 import { getAIWriterTemplate } from "@/lib/ai-writer-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import type {
@@ -192,22 +192,22 @@ import {
   runObjectGeneration,
   runLocationGeneration,
 } from "./asset-executors";
-import { buildImagePrompt } from "@nodaro-shared/prompt-builder";
-import type { CharacterDef, ConnectedReference, ReferenceSource } from "@nodaro-shared/types";
-import { collectIdentityLockClause } from "@nodaro-shared/identity-lock";
-import { resolveSeparator } from "@nodaro-shared/text-separators";
-import { evaluateJsonPath, stringifyPathResults } from "@nodaro-shared/json-path";
-import { spreadJsonArrayIfSingleton } from "@nodaro-shared/generated-results";
-import { zipMergeLists } from "@nodaro-shared/list-merge";
-import { evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList } from "@nodaro-shared/json-evaluator";
+import { buildImagePrompt } from "@nodaro/shared";
+import type { CharacterDef, ConnectedReference, ReferenceSource } from "@nodaro/shared";
+import { collectIdentityLockClause } from "@nodaro/shared";
+import { resolveSeparator } from "@nodaro/shared";
+import { evaluateJsonPath, stringifyPathResults } from "@nodaro/shared";
+import { spreadJsonArrayIfSingleton } from "@nodaro/shared";
+import { zipMergeLists } from "@nodaro/shared";
+import { evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList } from "@nodaro/shared";
 import {
   tryParseJson,
   evaluateCondition,
   evaluateConditionGroup,
   resolveConditionValue,
-} from "@nodaro-shared/filter-condition";
-import { sortListItems } from "@nodaro-shared/list-sort";
-import { buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro-shared/condition-variables";
+} from "@nodaro/shared";
+import { sortListItems } from "@nodaro/shared";
+import { buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro/shared";
 import { collectCinematographyHints, hasConnectedStyleNode, STILL_IMAGE_EXCLUDE_TYPES } from "@/lib/cinematography-hints";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 

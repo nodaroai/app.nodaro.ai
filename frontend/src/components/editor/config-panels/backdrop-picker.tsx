@@ -8,7 +8,7 @@ import {
   BACKDROP_CATEGORY_ORDER,
   type Backdrop,
   type BackdropCategory,
-} from "@nodaro-shared/backdrop"
+} from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

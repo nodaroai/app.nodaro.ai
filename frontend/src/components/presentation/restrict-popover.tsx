@@ -1,6 +1,6 @@
 import { useMemo } from "react"
 import { Filter } from "lucide-react"
-import type { ExposableField } from "@nodaro-shared/presentation-types"
+import type { ExposableField } from "@nodaro/shared"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"

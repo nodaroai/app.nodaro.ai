@@ -11,7 +11,7 @@ import {
   getValidValues,
   getTargetField,
   type NodeDefaultType,
-} from "@nodaro-shared/node-default-mappings"
+} from "@nodaro/shared"
 import type { AdminDefault } from "@/lib/node-defaults"
 import {
   Select,

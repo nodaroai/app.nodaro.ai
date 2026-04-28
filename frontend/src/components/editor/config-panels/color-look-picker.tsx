@@ -8,7 +8,7 @@ import {
   COLOR_LOOK_CATEGORY_LABELS,
   type ColorLook,
   type ColorLookCategory,
-} from "@nodaro-shared/color-look"
+} from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

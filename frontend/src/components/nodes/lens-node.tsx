@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Aperture } from "lucide-react"
-import { getLens, getLensLabel } from "@nodaro-shared/lens"
+import { getLens, getLensLabel } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { LensPreview } from "@/components/editor/config-panels/lens-preview"
 import type { LensData } from "@/types/nodes"

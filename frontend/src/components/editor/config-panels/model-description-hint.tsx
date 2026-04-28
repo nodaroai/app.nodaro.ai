@@ -1,5 +1,5 @@
 import { MODEL_DESCRIPTIONS } from "./model-options"
-import { LLM_MODELS } from "@nodaro-shared/llm-models"
+import { LLM_MODELS } from "@nodaro/shared"
 
 const ALL_DESCRIPTIONS: Record<string, string> = {
   ...MODEL_DESCRIPTIONS,

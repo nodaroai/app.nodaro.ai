@@ -2,8 +2,8 @@ import { supabase } from "../lib/supabase.js"
 import { hasCredits } from "../lib/config.js"
 import { getAppSettings } from "../lib/app-settings.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
-import { buildLlmCreditIdentifier } from "../../../packages/shared/src/llm-models.js"
+import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "@nodaro/shared"
+import { buildLlmCreditIdentifier } from "@nodaro/shared"
 
 // ============================================================
 // Types

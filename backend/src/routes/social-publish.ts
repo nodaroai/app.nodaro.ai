@@ -11,7 +11,7 @@ import { CreditsService } from "../billing/credits.js"
 import {
   INSTAGRAM_CAROUSEL_MIN_ITEMS,
   INSTAGRAM_CAROUSEL_MAX_ITEMS,
-} from "../../../packages/shared/src/social-post.js"
+} from "@nodaro/shared"
 
 const VALID_ACTIONS = [
   "post-image", "post-reel", "post-story", "post-carousel",

@@ -17,7 +17,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro-shared/llm-models"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import type { GenerateScriptData, GeneratedScriptResult } from "@/types/nodes"
 
 function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {

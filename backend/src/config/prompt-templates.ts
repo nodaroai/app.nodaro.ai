@@ -12,7 +12,7 @@ import {
   DEFAULT_TEMPLATES,
   resolveTemplate,
   applyTemplate,
-} from "../../../packages/shared/src/prompt-templates.js"
+} from "@nodaro/shared"
 
 export const SYSTEM_PROMPT_TEMPLATES = DEFAULT_TEMPLATES
 export { resolveTemplate, applyTemplate }

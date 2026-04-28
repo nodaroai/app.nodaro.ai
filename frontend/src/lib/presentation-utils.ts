@@ -14,4 +14,4 @@ export {
   getInputFieldSchema,
   type OutputType,
   type InputFieldSchema,
-} from "@nodaro-shared/presentation-utils"
+} from "@nodaro/shared"

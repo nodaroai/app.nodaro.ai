@@ -1,4 +1,4 @@
-import type { ExposableField } from "@nodaro-shared/presentation-types"
+import type { ExposableField } from "@nodaro/shared"
 
 interface FieldBadgeProps {
   readonly field: ExposableField

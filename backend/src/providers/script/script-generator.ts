@@ -1,5 +1,5 @@
 import { llmComplete } from "../../lib/llm-client.js"
-import { getLlmModel, LLM_FEATURE_DEFAULTS } from "../../../../packages/shared/src/llm-models.js"
+import { getLlmModel, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 
 export interface ScriptSceneCharacter {
   readonly name: string

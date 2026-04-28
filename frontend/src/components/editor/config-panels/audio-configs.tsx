@@ -56,7 +56,7 @@ import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { ProviderAudioTagWarning } from "./provider-audio-tag-warning"
 import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
-import { REPLICATE_LIP_SYNC_PROVIDERS } from "@nodaro-shared/model-constants"
+import { REPLICATE_LIP_SYNC_PROVIDERS } from "@nodaro/shared"
 import type { ConfigProps } from "./types"
 
 export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToSpeechData>) {

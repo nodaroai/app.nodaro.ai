@@ -6,7 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { buildLocationPrompt } from "../../../packages/shared/src/entity-prompts.js"
+import { buildLocationPrompt } from "@nodaro/shared"
 
 const generateLocationBody = z.object({
   name: z.string().min(1).max(200),

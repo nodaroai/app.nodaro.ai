@@ -2,8 +2,8 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { POST_PROCESS_EFFECTS } from "@nodaro-shared/post-process-effects"
-import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
+import { POST_PROCESS_EFFECTS } from "@nodaro/shared"
+import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

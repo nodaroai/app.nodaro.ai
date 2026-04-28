@@ -8,8 +8,8 @@ import {
   MATERIAL_CATEGORY_ORDER,
   type Material,
   type MaterialCategory,
-} from "@nodaro-shared/materials"
-import { pickIds, togglePick } from "@nodaro-shared/multi-pick"
+} from "@nodaro/shared"
+import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"

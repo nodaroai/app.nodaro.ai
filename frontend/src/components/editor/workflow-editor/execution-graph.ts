@@ -1,9 +1,9 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildScenePrompt } from "@/lib/prompt-builder";
-import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro-shared/ancestor-refs";
-import { isExpandedClone } from "@nodaro-shared/clone-utils";
-import { PARAMETER_NODE_TYPES } from "@nodaro-shared/parameter-node-value";
-import { getParameterPromptHint } from "@nodaro-shared/parameter-prompt-hint";
+import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared";
+import { isExpandedClone } from "@nodaro/shared";
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared";
+import { getParameterPromptHint } from "@nodaro/shared";
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -795,7 +795,7 @@ export function collectMediaAssets(
 }
 
 // Re-export shared constant for local use and external imports
-import { ASPECT_RATIO_DIMENSIONS } from "@nodaro-shared/model-constants";
+import { ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared";
 export { ASPECT_RATIO_DIMENSIONS };
 
 export function buildAutoComposition(
