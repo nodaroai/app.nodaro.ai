@@ -29,8 +29,18 @@ interface RequestOptions {
 export class NodaroClient {
   readonly baseUrl: string
   readonly auth: Auth
-  readonly fetch: typeof fetch
   readonly timeoutMs: number
+  private readonly fetchOverride: typeof fetch | undefined
+
+  /**
+   * Resolved lazily so consumers can swap `globalThis.fetch` after the
+   * client has been constructed (e.g. test mocks). Always rebound to the
+   * global object — native fetch throws "Illegal invocation" when its
+   * `this` is anything else.
+   */
+  get fetch(): typeof fetch {
+    return this.fetchOverride ?? globalThis.fetch.bind(globalThis)
+  }
 
   readonly workflows: WorkflowsResource
   readonly projects: ProjectsResource
@@ -43,11 +53,7 @@ export class NodaroClient {
   constructor(opts: ClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, "")  // strip trailing slash
     this.auth = opts.auth
-    // Bind native fetch to globalThis: when stored as a class field and
-    // called via `this.fetch(...)`, browsers throw "Illegal invocation"
-    // because native fetch requires its `this` to be the global object.
-    // Custom fetches passed by the caller are left as-is.
-    this.fetch = opts.fetch ?? globalThis.fetch.bind(globalThis)
+    this.fetchOverride = opts.fetch
     this.timeoutMs = opts.timeoutMs ?? 60_000
 
     this.workflows = new WorkflowsResource(this)
