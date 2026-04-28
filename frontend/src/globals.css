@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "tw-animate-css/dist/tw-animate.css";
+@import "tw-animate-css";
 
 /* Self-hosted Geist fonts — served from /fonts/ to eliminate the
    JS → CSS → woff2 waterfall that @fontsource-variable introduced. */
