@@ -1,0 +1,31 @@
+# Nodaro
+
+> AI workflow editor: compose text-to-image, image-to-video, audio synthesis, video composition, and LLM nodes into multi-step DAGs that run autonomously on a server.
+
+Nodaro is a Fastify backend + Vite/React frontend, source-available under the [Sustainable Use License](https://github.com/nodaroai/app.nodaro.ai/blob/main/LICENSE). The backend is REST-first; the included visual editor is one of many possible clients. A typed SDK (`@nodaro/client`) and OAuth 2.0 third-party-app system mean any developer can build alternative frontends, automations, or integrations on top of a hosted Nodaro instance.
+
+## Quickstart
+
+- [Community Edition Quickstart](https://nodaroai.github.io/app.nodaro.ai/community-edition-quickstart.md): self-host Nodaro in 5 steps using Docker Compose
+- [Architecture](https://nodaroai.github.io/app.nodaro.ai/architecture.md): system overview — frontend, backend, workers, auth modes, edition tiers
+- [Deployment](https://nodaroai.github.io/app.nodaro.ai/deployment.md): full self-hosting guide with reverse proxy, scaling, backups
+
+## SDK
+
+- [SDK Quickstart](https://nodaroai.github.io/app.nodaro.ai/sdk-quickstart.md): install `@nodaro/client`, three auth modes, error handling, common recipes
+- [SDK Reference](https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md): every public export — `createClient`, auth providers, error classes, 7 resource classes (workflows, projects, jobs, executions, nodes, developerApps, oauth)
+
+## API & integrations
+
+- [API Integration](https://nodaroai.github.io/app.nodaro.ai/api-integration.md): server-to-server via API tokens (`ndr_<64hex>`), 4 public endpoints, sync vs async, webhooks, rate limits
+- [OAuth Flow](https://nodaroai.github.io/app.nodaro.ai/oauth-flow.md): RFC 6749 authorization-code flow for third-party apps acting on behalf of users — app registration, scope vocabulary (8 scopes), code exchange, token revocation (RFC 7009)
+- [Node Reference](https://nodaroai.github.io/app.nodaro.ai/nodes/README.md): every supported node type with parameters, providers, and examples
+
+## Contributing
+
+- [Contributing](https://nodaroai.github.io/app.nodaro.ai/contributing.md): dev environment setup, coding standards, branching, testing, releasing
+
+## Optional
+
+- [Repository](https://github.com/nodaroai/app.nodaro.ai): source code, issues, PRs
+- [Hosted version](https://nodaro.ai): managed instance with credits + billing

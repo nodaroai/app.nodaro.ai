@@ -7,10 +7,14 @@
     "frontend"
   ],
   "scripts": {
+    "build:packages": "npm -w @nodaro/shared run build && npm -w @nodaro/client run build",
+    "predev": "npm run build:packages",
     "dev": "cd frontend && npm run dev",
-    "build": "npm -w @nodaro/shared run build && cd frontend && npm run build",
+    "prebuild": "npm run build:packages",
+    "build": "cd frontend && npm run build",
     "lint": "cd frontend && npm run lint",
     "start": "cd frontend && npm run start",
+    "pretest": "npm run build:packages",
     "test": "npm -ws --if-present run test",
     "test:coverage": "npm -ws --if-present run test:coverage",
     "changeset": "changeset",

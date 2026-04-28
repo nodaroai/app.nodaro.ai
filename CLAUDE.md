@@ -136,8 +136,9 @@
 | Dynamic CORS | `lib/dynamic-origins.ts` — async DB-backed allowlist (60s cache, stampede-safe). Combines `getStaticAllowedOrigins()` (PUBLIC_URL + CORS_ORIGIN env) with `developer_apps.allowed_origins`. Cache invalidated on dev-app create/update/delete. Both `app.ts` CORS (async-promise form — NOT callback-form, double-fires) and `sse.ts createSSEStream` (now async) consume `isOriginAllowedDynamic()`. |
 | Developer apps | `developer_apps` + `developer_app_authorizations` + `developer_app_tokens` tables. `POST /v1/developer-apps` (JWT) returns plaintext `clientSecret` ONCE. `POST /v1/oauth/authorize` (JWT) → one-shot code (10-min TTL) → `POST /v1/oauth/token` (client credentials) → `access_token`. RFC 7009 `revoke`. Public `GET /v1/oauth/app-info?client_id=` for consent screens. Service-role supabase imports allow-listed in `scripts/check-admin-client-import.mjs` (every query scoped by `owner_user_id` in-handler). |
 | `@nodaro/shared` + `@nodaro/client` | Public npm packages. `@nodaro/shared` exports types + model registries + prompt helpers (re-used by backend, frontend, client SDK). `@nodaro/client` is the typed REST client (createClient + 7 resources). Workspaces under `packages/`. Backend imports use `@nodaro/shared` (workspace symlink); frontend uses both via npm + `@nodaro/client` for the executions resource (incremental dogfood). Build via `tsup` (dual ESM+CJS). Releases via changesets — see `.changeset/`. |
+| Documentation | `docs/` is published via GitHub Pages (public). `specs/` is internal planning (NOT public). LICENSE is Apache 2.0. Public docs cover: deployment, architecture, OAuth flow, API integration, SDK quickstart + reference, contributing. The `.gitignore` rule for `ARCHITECTURE.md` is anchored to repo root (`/ARCHITECTURE.md`) so it does NOT silently match `docs/architecture.md` on case-insensitive filesystems. |
 
 ---
 
 *Last updated: 2026-04-28*
-*Version: 1.95.0*
+*Version: 1.96.0*
