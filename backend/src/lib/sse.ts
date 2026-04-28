@@ -1,17 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify"
-import { config } from "./config.js"
-
-// Build allowed origins set (mirrors CORS config in app.ts)
-const allowedOrigins = new Set([
-  "http://localhost:3000",
-  "https://app.nodaro.ai",
-])
-if (config.CORS_ORIGIN) {
-  for (const o of config.CORS_ORIGIN.split(",")) {
-    const trimmed = o.trim()
-    if (trimmed) allowedOrigins.add(trimmed)
-  }
-}
+import { getStaticAllowedOrigins, isOriginAllowed } from "./allowed-origins.js"
 
 // ---------------------------------------------------------------------------
 // SSE Event Protocol
@@ -64,8 +52,9 @@ export function createSSEStream(
   // are in the allowed set (H8 fix: prevents arbitrary origin reflection).
   const corsHeaders: Record<string, string> = {}
   const origin = req.headers.origin
-  if (origin && allowedOrigins.has(origin)) {
-    corsHeaders["Access-Control-Allow-Origin"] = origin
+  const originStr = Array.isArray(origin) ? origin[0] : origin
+  if (isOriginAllowed(originStr, getStaticAllowedOrigins())) {
+    corsHeaders["Access-Control-Allow-Origin"] = originStr!
     corsHeaders["Access-Control-Allow-Credentials"] = "true"
   }
 
