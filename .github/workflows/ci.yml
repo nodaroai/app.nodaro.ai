@@ -21,6 +21,8 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: package-lock.json
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
       - name: Install workspace dependencies
         run: npm ci
       - name: Build shared packages
@@ -58,6 +60,8 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: package-lock.json
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
       - name: Install workspace dependencies
         run: npm ci
       - name: Build shared packages
@@ -91,6 +95,8 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: package-lock.json
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
       - name: Install workspace dependencies
         run: npm ci
       - name: Build shared packages
