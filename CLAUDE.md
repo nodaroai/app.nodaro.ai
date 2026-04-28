@@ -99,6 +99,7 @@
 | 16 | `frontend/src/components/editor/workflow-editor/execute-node.ts` | DAG execution block |
 | 17 | `frontend/src/components/editor/workflow-editor/execution-graph.ts` | `extractNodeOutput()` |
 | 18 | `frontend/src/components/editor/workflow-editor/node-input-resolver.ts` | Input source mapping |
+| 19 | `backend/src/lib/node-registry.ts` | `NODE_REGISTRY` entry — descriptor (label, category, outputType, optional creditCost/inputSchema/providers/capabilities) for `GET /v1/nodes` discovery API |
 
 **Steps 8 and 9 are separate node lists — missing either means the node won't appear in that UI.**
 
@@ -287,8 +288,12 @@ backend/src/
 - [ ] /v1/available-models endpoint (filter by edition + API keys)
 - [ ] Build from Prompt: MVP + Director Mode versions
 - [ ] Shot Node as companion to Scene Node ("Director Mode")
+- [x] OSS Phase 1: backend cleanup — 2026-04-28 (allowed-origins helper, GET /v1/nodes, OpenAPI seed, .env.example, docker-compose.community.yml, lazy stripe-client init)
+- [ ] OSS Phase 2: developer apps registration + OAuth
+- [ ] OSS Phase 3: @nodaro/shared + @nodaro/client npm packages
+- [ ] OSS Phase 4: deployment + integration documentation
 
 ---
 
-*Last updated: 2026-04-27*
-*Version: 1.92.0*
+*Last updated: 2026-04-28*
+*Version: 1.93.0*
