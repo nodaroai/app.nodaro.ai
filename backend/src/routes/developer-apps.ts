@@ -231,7 +231,7 @@ export async function developerAppRoutes(app: FastifyInstance) {
 export async function findAppByClientId(clientId: string) {
   const { data } = await supabase
     .from("developer_apps")
-    .select("id, owner_user_id, client_id, client_secret_hash, redirect_uris, allowed_origins, scopes_requested, status")
+    .select("id, owner_user_id, client_id, client_secret_hash, redirect_uris, allowed_origins, scopes_requested, status, name, description, logo_url, homepage_url")
     .eq("client_id", clientId)
     .eq("status", "active")
     .single()

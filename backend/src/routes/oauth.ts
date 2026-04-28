@@ -32,6 +32,26 @@ function hashToken(plaintext: string): string {
 }
 
 export async function oauthRoutes(app: FastifyInstance) {
+  // GET /v1/oauth/app-info?client_id=<id> — public, returns app metadata for consent screens
+  app.get("/v1/oauth/app-info", async (req, reply) => {
+    const clientId = (req.query as Record<string, string>)?.client_id
+    if (!clientId || typeof clientId !== "string") {
+      return reply.status(400).send({ error: { code: "validation_error", message: "client_id query param required" } })
+    }
+    const dApp = await findAppByClientId(clientId)
+    if (!dApp) {
+      return reply.status(404).send({ error: { code: "not_found", message: "Unknown client_id or app suspended" } })
+    }
+    // Return only public-safe fields — no secret, no full origin list, no owner_user_id
+    return reply.send({
+      name: (dApp as Record<string, unknown>).name ?? "Unnamed App",
+      description: (dApp as Record<string, unknown>).description ?? null,
+      logoUrl: (dApp as Record<string, unknown>).logo_url ?? null,
+      homepageUrl: (dApp as Record<string, unknown>).homepage_url ?? null,
+      scopesRequested: dApp.scopes_requested,
+    })
+  })
+
   // POST /v1/oauth/authorize — frontend sends here AFTER user clicks "Allow"
   // on the consent screen. Caller must be authenticated as a Supabase user.
   app.post("/v1/oauth/authorize", async (req, reply) => {

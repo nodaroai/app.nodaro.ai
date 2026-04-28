@@ -3871,6 +3871,54 @@ export async function rotateDeveloperAppSecret(id: string): Promise<{ clientSecr
   )
 }
 
+// ---------- OAuth Consent Screen ----------
+
+/** Public-safe app metadata returned by GET /v1/oauth/app-info — no secrets, no owner info. */
+export interface OAuthAppInfo {
+  name: string
+  description: string | null
+  logoUrl: string | null
+  homepageUrl: string | null
+  scopesRequested: string[]
+}
+
+/**
+ * Fetch public app metadata for the OAuth consent screen.
+ * No auth required — client_id is public by OAuth design.
+ */
+export async function getOAuthAppInfo(clientId: string): Promise<OAuthAppInfo> {
+  return apiRequest(
+    `/v1/oauth/app-info?client_id=${encodeURIComponent(clientId)}`,
+    "Failed to load app info",
+    { skipAuth: true },
+  )
+}
+
+export interface OAuthAuthorizeInput {
+  clientId: string
+  redirectUri: string
+  scopes: string[]
+  state?: string
+}
+
+export interface OAuthAuthorizeResult {
+  code: string
+  state: string | null
+  redirectUri: string
+}
+
+/**
+ * Issue an authorization code after the user clicks "Allow" on the consent screen.
+ * Requires the user's Supabase JWT (the user must be logged in).
+ */
+export async function oauthAuthorize(input: OAuthAuthorizeInput): Promise<OAuthAuthorizeResult> {
+  return apiRequest(
+    "/v1/oauth/authorize",
+    "Authorization failed",
+    { method: "POST", body: input },
+  )
+}
+
 // ---------- Social Media ----------
 
 export async function socialPublishApi(params: {

@@ -119,4 +119,17 @@ describe("oauth routes", () => {
     expect(res.statusCode).toBe(401)
     expect(res.json().error).toBe("invalid_client")
   })
+
+  it("GET /v1/oauth/app-info returns 400 when client_id query param is missing", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/oauth/app-info" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("GET /v1/oauth/app-info returns 404 when app doesn't exist", async () => {
+    vi.mocked(findAppByClientId).mockResolvedValueOnce(null)
+    const res = await app.inject({ method: "GET", url: "/v1/oauth/app-info?client_id=app_nonexistent" })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+  })
 })

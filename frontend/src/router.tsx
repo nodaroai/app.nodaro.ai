@@ -39,6 +39,9 @@ const TemplatesPage = lazy(() => import("@/app/(dashboard)/templates/page"))
 const LoginPage = lazy(() => import("@/app/(auth)/login/page"))
 const SignupPage = lazy(() => import("@/app/(auth)/signup/page"))
 
+// OAuth consent screen (lazy — public route, no chrome)
+const OAuthAuthorizePage = lazy(() => import("@/app/oauth/authorize/page"))
+
 // Admin layout + all admin pages (lazy — admin-only, most users never visit)
 const AdminLayout = lazy(() => import("@/layouts/admin-layout"))
 const AdminDashboard = lazy(() => import("@/app/(admin)/admin/page"))
@@ -112,6 +115,11 @@ export const router = createBrowserRouter([
   {
     path: "/embed/:slug",
     element: <SuspenseWrapper><EmbedPage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/oauth/authorize",
+    element: <SuspenseWrapper><OAuthAuthorizePage /></SuspenseWrapper>,
     errorElement: <RouteErrorBoundary />,
   },
   {
