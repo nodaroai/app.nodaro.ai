@@ -1346,8 +1346,8 @@ export class CreditsService {
             .eq("user_id", userId)
             .single()
           if (custRow?.stripe_customer_id) {
-            const { stripe } = await import("./stripe-client.js")
-            const subs = await stripe.subscriptions.list({
+            const { getStripe } = await import("./stripe-client.js")
+            const subs = await getStripe().subscriptions.list({
               customer: custRow.stripe_customer_id,
               status: "active",
               limit: 1,

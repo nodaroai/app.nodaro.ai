@@ -10,7 +10,7 @@
  */
 
 import type { FastifyInstance, FastifyRequest } from "fastify"
-import { stripe } from "../billing/stripe-client.js"
+import { getStripe } from "../billing/stripe-client.js"
 import {
   handleSubscriptionCreated,
   handleSubscriptionUpdated,
@@ -69,7 +69,7 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
     // Verify webhook signature
     let event: Stripe.Event
     try {
-      event = stripe.webhooks.constructEvent(rawBody, signature, WEBHOOK_SECRET)
+      event = getStripe().webhooks.constructEvent(rawBody, signature, WEBHOOK_SECRET)
     } catch (err) {
       console.error("[stripe-webhook] Signature verification failed:", (err as Error).message)
       return reply.status(401).send({ error: "Invalid signature" })
@@ -181,7 +181,7 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
 /** Retrieve line items from a checkout session for top-up credit resolution. */
 async function getSessionLineItems(sessionId: string): Promise<Array<{ priceId: string }>> {
   try {
-    const lineItems = await stripe.checkout.sessions.listLineItems(sessionId, { limit: 10 })
+    const lineItems = await getStripe().checkout.sessions.listLineItems(sessionId, { limit: 10 })
     return lineItems.data.map((item) => ({
       priceId: item.price?.id ?? "",
     }))
