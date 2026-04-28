@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
-import { stripe } from "../billing/stripe-client.js"
+import { getStripe } from "../billing/stripe-client.js"
 import { getTierFromPriceId } from "../billing/stripe-config.js"
 
 // ============================================================
@@ -155,7 +155,7 @@ export async function adminSubscriptionHealthRoutes(app: FastifyInstance) {
     // Fetch active subscription from Stripe
     let subs
     try {
-      subs = await stripe.subscriptions.list({
+      subs = await getStripe().subscriptions.list({
         customer: custRow.stripe_customer_id,
         status: "active",
         limit: 1,

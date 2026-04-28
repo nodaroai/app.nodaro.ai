@@ -20,18 +20,20 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 
-vi.mock("@/billing/stripe-client.js", () => ({
-  stripe: {
-    billingPortal: {
-      sessions: {
-        create: vi.fn(),
-      },
-    },
-    subscriptions: {
-      retrieve: vi.fn(),
-      update: vi.fn(),
+const mockStripe = {
+  billingPortal: {
+    sessions: {
+      create: vi.fn(),
     },
   },
+  subscriptions: {
+    retrieve: vi.fn(),
+    update: vi.fn(),
+  },
+}
+
+vi.mock("@/billing/stripe-client.js", () => ({
+  getStripe: () => mockStripe,
 }))
 
 vi.mock("@/billing/stripe-config.js", () => ({
@@ -105,7 +107,9 @@ vi.mock("@/routes/credits.js", () => ({
 
 import { billingRoutes } from "../billing.js"
 import { supabase } from "../../lib/supabase.js"
-import { stripe } from "../../billing/stripe-client.js"
+import { getStripe } from "../../billing/stripe-client.js"
+
+const stripe = getStripe()
 
 // ---------------------------------------------------------------------------
 // Test app setup

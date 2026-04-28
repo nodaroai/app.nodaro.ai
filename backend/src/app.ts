@@ -1,6 +1,6 @@
 import Fastify from "fastify"
 import cors from "@fastify/cors"
-import { config } from "./lib/config.js"
+import { getStaticAllowedOrigins } from "./lib/allowed-origins.js"
 import { healthRoutes } from "./routes/health.js"
 import { projectRoutes } from "./routes/projects.js"
 import { workflowRoutes } from "./routes/workflows.js"
@@ -116,30 +116,21 @@ import { saveToStorageRoutes } from "./routes/save-to-storage.js"
 import { promptHelperRoutes } from "./routes/prompt-helper.js"
 import { adminLlmModelsRoutes } from "./routes/admin-llm-models.js"
 import { nodeDefaultsRoutes } from "./routes/node-defaults.js"
+import { nodesRoutes } from "./routes/nodes.js"
 import { adminNodeDefaultsRoutes } from "./routes/admin-node-defaults.js"
 import { tutorialsRoutes } from "./routes/tutorials.js"
 import { adminTutorialsRoutes } from "./routes/admin-tutorials.js"
 import { executionStatsRoutes } from "./routes/execution-stats.js"
+import { openapiRoutes } from "./routes/openapi.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true, bodyLimit: 1_048_576 }) // 1 MB for JSON endpoints
 
-  // Build CORS origin whitelist: always include localhost for dev, plus
-  // any origins from CORS_ORIGIN env var (comma-separated).
-  const allowedOrigins = new Set([
-    "http://localhost:3000",
-    "https://app.nodaro.ai",
-  ])
-  if (config.CORS_ORIGIN) {
-    for (const o of config.CORS_ORIGIN.split(",")) {
-      const trimmed = o.trim()
-      if (trimmed) allowedOrigins.add(trimmed)
-    }
-  }
+  const allowedOrigins = getStaticAllowedOrigins()
 
   await app.register(cors, {
-    origin: [...allowedOrigins],
+    origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -263,9 +254,11 @@ export async function buildApp() {
   await app.register(promptHelperRoutes)
   await app.register(adminLlmModelsRoutes)
   await app.register(nodeDefaultsRoutes)
+  await app.register(nodesRoutes)
   await app.register(adminNodeDefaultsRoutes)
   await app.register(tutorialsRoutes)
   await app.register(adminTutorialsRoutes)
+  await app.register(openapiRoutes)
 
   return app
 }
