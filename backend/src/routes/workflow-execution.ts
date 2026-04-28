@@ -19,6 +19,7 @@ import { checkIsAdmin } from "../lib/admin-check.js"
 import { CreditsService } from "../billing/credits.js"
 import { invalidateBalanceCache } from "./credits.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
+import { requireScope } from "../lib/scopes.js"
 
 openApiRegistry.registerPath({
   method: "post",
@@ -139,6 +140,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    if (req.appAuthorization) {
+      const err = requireScope(req.appAuthorization.scopes, "workflows:execute")
+      if (err) return reply.status(err.statusCode).send(err.body)
     }
 
     const paramsParsed = workflowIdParams.safeParse(req.params)
@@ -315,7 +321,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
-    const sse = createSSEStream(req, reply)
+    const sse = await createSSEStream(req, reply)
 
     // Send current DB state as initial metadata so late-connecting clients
     // never miss state that was written before the SSE connection opened.

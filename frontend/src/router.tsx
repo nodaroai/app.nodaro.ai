@@ -28,6 +28,8 @@ const PresentPage = lazy(() => import("@/routes/present-page"))
 const AppRunnerPage = lazy(() => import("@/routes/app-runner-page"))
 const EmbedPage = lazy(() => import("@/routes/embed-page"))
 const ApiSettingsPage = lazy(() => import("@/app/(dashboard)/settings/api/page"))
+const DeveloperAppsPage = lazy(() => import("@/app/(dashboard)/settings/developer-apps/page"))
+const DeveloperAppDetailPage = lazy(() => import("@/app/(dashboard)/settings/developer-apps/detail/page"))
 const IntegrationsPage = lazy(() => import("@/app/(dashboard)/integrations/page"))
 const AppsPage = lazy(() => import("@/app/(dashboard)/apps/page"))
 const AppAnalyticsPage = lazy(() => import("@/app/(dashboard)/apps/analytics-page"))
@@ -36,6 +38,9 @@ const TemplatesPage = lazy(() => import("@/app/(dashboard)/templates/page"))
 // Auth pages (lazy — rarely revisited)
 const LoginPage = lazy(() => import("@/app/(auth)/login/page"))
 const SignupPage = lazy(() => import("@/app/(auth)/signup/page"))
+
+// OAuth consent screen (lazy — public route, no chrome)
+const OAuthAuthorizePage = lazy(() => import("@/app/oauth/authorize/page"))
 
 // Admin layout + all admin pages (lazy — admin-only, most users never visit)
 const AdminLayout = lazy(() => import("@/layouts/admin-layout"))
@@ -113,6 +118,11 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorBoundary />,
   },
   {
+    path: "/oauth/authorize",
+    element: <SuspenseWrapper><OAuthAuthorizePage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
     element: <DashboardLayout />,
     errorElement: <RouteErrorBoundary />,
     children: [
@@ -139,6 +149,14 @@ export const router = createBrowserRouter([
       {
         path: "/settings/api",
         element: <SuspenseWrapper><ApiSettingsPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/settings/developer-apps",
+        element: <SuspenseWrapper><DeveloperAppsPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/settings/developer-apps/:id",
+        element: <SuspenseWrapper><DeveloperAppDetailPage /></SuspenseWrapper>,
       },
       {
         path: "/executions",

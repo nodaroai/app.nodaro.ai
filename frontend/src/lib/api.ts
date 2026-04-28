@@ -3786,6 +3786,139 @@ export async function deleteApiToken(id: string): Promise<{ success: boolean }> 
   })
 }
 
+// ---------------------------------------------------------------------------
+// Developer Apps (OAuth)
+// ---------------------------------------------------------------------------
+
+export type DeveloperAppStatus = "active" | "suspended" | "pending_review"
+
+export interface DeveloperApp {
+  id: string
+  name: string
+  description: string | null
+  logoUrl: string | null
+  homepageUrl: string | null
+  redirectUris: string[]
+  allowedOrigins: string[]
+  scopesRequested: string[]
+  clientId: string
+  status: DeveloperAppStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateDeveloperAppResult extends DeveloperApp {
+  /** Plaintext client secret — shown ONCE at creation, never returned again */
+  clientSecret: string
+}
+
+export interface CreateDeveloperAppInput {
+  name: string
+  description?: string
+  homepageUrl?: string
+  logoUrl?: string
+  redirectUris: string[]
+  allowedOrigins?: string[]
+  scopesRequested: string[]
+}
+
+export type UpdateDeveloperAppInput = Partial<CreateDeveloperAppInput>
+
+export async function listDeveloperApps(): Promise<{ data: DeveloperApp[] }> {
+  return apiRequest("/v1/developer-apps", "Failed to list developer apps")
+}
+
+export async function getDeveloperApp(id: string): Promise<{ data: DeveloperApp }> {
+  return apiRequest(
+    `/v1/developer-apps/${encodeURIComponent(id)}`,
+    "Failed to load developer app",
+  )
+}
+
+export async function createDeveloperApp(
+  input: CreateDeveloperAppInput,
+): Promise<{ data: CreateDeveloperAppResult }> {
+  return apiRequest("/v1/developer-apps", "Failed to create developer app", {
+    method: "POST",
+    body: input,
+  })
+}
+
+export async function updateDeveloperApp(
+  id: string,
+  input: UpdateDeveloperAppInput,
+): Promise<{ data: DeveloperApp }> {
+  return apiRequest(
+    `/v1/developer-apps/${encodeURIComponent(id)}`,
+    "Failed to update developer app",
+    { method: "PATCH", body: input },
+  )
+}
+
+export async function deleteDeveloperApp(id: string): Promise<{ success: boolean }> {
+  return apiRequest(
+    `/v1/developer-apps/${encodeURIComponent(id)}`,
+    "Failed to delete developer app",
+    { method: "DELETE" },
+  )
+}
+
+export async function rotateDeveloperAppSecret(id: string): Promise<{ clientSecret: string }> {
+  return apiRequest(
+    `/v1/developer-apps/${encodeURIComponent(id)}/rotate-secret`,
+    "Failed to rotate client secret",
+    { method: "POST" },
+  )
+}
+
+// ---------- OAuth Consent Screen ----------
+
+/** Public-safe app metadata returned by GET /v1/oauth/app-info — no secrets, no owner info. */
+export interface OAuthAppInfo {
+  name: string
+  description: string | null
+  logoUrl: string | null
+  homepageUrl: string | null
+  scopesRequested: string[]
+}
+
+/**
+ * Fetch public app metadata for the OAuth consent screen.
+ * No auth required — client_id is public by OAuth design.
+ */
+export async function getOAuthAppInfo(clientId: string): Promise<OAuthAppInfo> {
+  return apiRequest(
+    `/v1/oauth/app-info?client_id=${encodeURIComponent(clientId)}`,
+    "Failed to load app info",
+    { skipAuth: true },
+  )
+}
+
+export interface OAuthAuthorizeInput {
+  clientId: string
+  redirectUri: string
+  scopes: string[]
+  state?: string
+}
+
+export interface OAuthAuthorizeResult {
+  code: string
+  state: string | null
+  redirectUri: string
+}
+
+/**
+ * Issue an authorization code after the user clicks "Allow" on the consent screen.
+ * Requires the user's Supabase JWT (the user must be logged in).
+ */
+export async function oauthAuthorize(input: OAuthAuthorizeInput): Promise<OAuthAuthorizeResult> {
+  return apiRequest(
+    "/v1/oauth/authorize",
+    "Authorization failed",
+    { method: "POST", body: input },
+  )
+}
+
 // ---------- Social Media ----------
 
 export async function socialPublishApi(params: {

@@ -1,6 +1,6 @@
 import Fastify from "fastify"
 import cors from "@fastify/cors"
-import { getStaticAllowedOrigins } from "./lib/allowed-origins.js"
+import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
 import { healthRoutes } from "./routes/health.js"
 import { projectRoutes } from "./routes/projects.js"
 import { workflowRoutes } from "./routes/workflows.js"
@@ -34,6 +34,7 @@ import { generateMusicRoutes } from "./routes/generate-music.js"
 import { uploadRoutes } from "./routes/upload.js"
 import { mediaProcessRoutes } from "./routes/media-process.js"
 import { youtubeAudioRoutes } from "./routes/youtube-audio.js"
+import { developerAppRoutes } from "./routes/developer-apps.js"
 import { downloadVideoRoutes } from "./routes/download-video.js"
 import { extractYouTubeAudioRoutes } from "./routes/extract-youtube-audio.js"
 import { textToAudioRoutes } from "./routes/text-to-audio.js"
@@ -117,6 +118,7 @@ import { promptHelperRoutes } from "./routes/prompt-helper.js"
 import { adminLlmModelsRoutes } from "./routes/admin-llm-models.js"
 import { nodeDefaultsRoutes } from "./routes/node-defaults.js"
 import { nodesRoutes } from "./routes/nodes.js"
+import { oauthRoutes } from "./routes/oauth.js"
 import { adminNodeDefaultsRoutes } from "./routes/admin-node-defaults.js"
 import { tutorialsRoutes } from "./routes/tutorials.js"
 import { adminTutorialsRoutes } from "./routes/admin-tutorials.js"
@@ -127,10 +129,14 @@ import { registerAuthHook } from "./middleware/auth.js"
 export async function buildApp() {
   const app = Fastify({ logger: true, bodyLimit: 1_048_576 }) // 1 MB for JSON endpoints
 
-  const allowedOrigins = getStaticAllowedOrigins()
-
   await app.register(cors, {
-    origin: allowedOrigins,
+    // Same-origin / curl requests have no Origin header — allow them.
+    // Use the async-promise form (NOT callback form) — @fastify/cors invokes
+    // both the cb and resolves the promise if you return one, double-firing.
+    origin: async (origin: string | undefined) => {
+      if (!origin) return true
+      return isOriginAllowedDynamic(origin)
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -171,6 +177,7 @@ export async function buildApp() {
   await app.register(uploadRoutes)
   await app.register(mediaProcessRoutes)
   await app.register(youtubeAudioRoutes)
+  await app.register(developerAppRoutes)
   await app.register(downloadVideoRoutes)
   await app.register(extractYouTubeAudioRoutes)
   await app.register(textToAudioRoutes)
@@ -255,6 +262,7 @@ export async function buildApp() {
   await app.register(adminLlmModelsRoutes)
   await app.register(nodeDefaultsRoutes)
   await app.register(nodesRoutes)
+  await app.register(oauthRoutes)
   await app.register(adminNodeDefaultsRoutes)
   await app.register(tutorialsRoutes)
   await app.register(adminTutorialsRoutes)

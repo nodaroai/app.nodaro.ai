@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify"
-import { getStaticAllowedOrigins, isOriginAllowed } from "./allowed-origins.js"
+import { isOriginAllowedDynamic } from "./dynamic-origins.js"
 import { firstHeaderValue } from "./request-helpers.js"
 
 // ---------------------------------------------------------------------------
@@ -37,23 +37,23 @@ const KEEPALIVE_INTERVAL_MS = 15_000
  * Usage:
  * ```ts
  * app.get("/v1/my-stream", async (req, reply) => {
- *   const sse = createSSEStream(req, reply)
+ *   const sse = await createSSEStream(req, reply)
  *   sse.sendEvent({ type: "token", data: "hello" })
  *   sse.close()
  * })
  * ```
  */
-export function createSSEStream(
+export async function createSSEStream(
   req: FastifyRequest,
   reply: FastifyReply,
-): SSEController {
+): Promise<SSEController> {
   // -- Headers ---------------------------------------------------------------
   // Because we write to reply.raw directly, Fastify's onSend hooks (where
   // @fastify/cors injects headers) are bypassed. Only reflect origins that
   // are in the allowed set (H8 fix: prevents arbitrary origin reflection).
   const corsHeaders: Record<string, string> = {}
   const originStr = firstHeaderValue(req.headers.origin)
-  if (originStr && isOriginAllowed(originStr, getStaticAllowedOrigins())) {
+  if (originStr && await isOriginAllowedDynamic(originStr)) {
     corsHeaders["Access-Control-Allow-Origin"] = originStr
     corsHeaders["Access-Control-Allow-Credentials"] = "true"
   }

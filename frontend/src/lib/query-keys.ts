@@ -126,6 +126,13 @@ export const queryKeys = {
     list: () => ["api-tokens", "list"] as const,
   },
 
+  // Developer Apps (OAuth)
+  developerApps: {
+    all: ["developer-apps"] as const,
+    list: () => ["developer-apps", "list"] as const,
+    detail: (id: string) => ["developer-apps", "detail", id] as const,
+  },
+
   // Tutorials
   tutorials: {
     all: ["tutorials"] as const,
