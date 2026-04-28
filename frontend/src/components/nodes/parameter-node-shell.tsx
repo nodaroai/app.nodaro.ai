@@ -199,7 +199,9 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
           <div ref={naturalContentRef}>
             {(displayMode === "picks" || displayMode === "both") && children}
             {(displayMode === "prompt" || displayMode === "both") && (
-              <PromptPreview text={promptText} />
+              <div className={displayMode === "both" ? "mt-4" : ""}>
+                <PromptPreview text={promptText} />
+              </div>
             )}
           </div>
         </div>

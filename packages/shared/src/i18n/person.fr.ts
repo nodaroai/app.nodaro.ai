@@ -410,11 +410,10 @@ const map: LocaleCatalogMap = {
   "caped-crusader": { label: "Croisé encapé", description: "Héros sombre en armure et cape" },
   "super-soldier": { label: "Super-soldat", description: "Guerrier patriotique en exo-armure" },
   "mutant": { label: "Mutant", description: "Humain avec une ou deux mutations visibles" },
-  "magical-girl": { label: "Magical Girl", description: "Héroïne transformiste de style anime" },
-
-  // ----- New Type — Anime / Anthro -----
-  "catgirl": { label: "Catgirl", description: "Femme anime aux oreilles et queue de chat" },
-  "catboy": { label: "Catboy", description: "Homme anime aux oreilles et queue de chat" },
+  "magical-girl": { label: "Magical Girl", description: "Archétype d'héroïne transformiste" },
+  // ----- New Type — Hybrid / Anthro -----
+  "catgirl": { label: "Catgirl", description: "Femme aux oreilles et queue de chat" },
+  "catboy": { label: "Catboy", description: "Homme aux oreilles et queue de chat" },
   "anthro": { label: "Anthropomorphe", description: "Humanoïde bipède à tête d'animal" },
 
   // ----- New Type — Iconic / Public Domain -----
@@ -437,6 +436,55 @@ const map: LocaleCatalogMap = {
   "cowardly-lion": { label: "Lion poltron", description: "Lion anthropomorphe d'Oz" },
   "santa-claus": { label: "Père Noël", description: "Donneur de cadeaux de Noël" },
   "grim-reaper": { label: "Faucheuse", description: "Personnification de la Mort" },
+  // ----- New Type — Warriors / Martial -----
+  "ninja": { description: "Assassin shinobi furtif" },
+  "kunoichi": { description: "Femme ninja" },
+  "samurai-man": { label: "Samouraï (homme)", description: "Guerrier japonais blindé masculin" },
+  "samurai-woman": { label: "Samouraï (femme)", description: "Femme samouraï (onna-musha)" },
+  "samurai": { label: "Samouraï", description: "Guerrier japonais blindé" },
+  "karate-fighter": { label: "Karatéka", description: "Pratiquant de karaté en kimono" },
+  "kung-fu-master": { label: "Maître de kung-fu", description: "Adepte d'arts martiaux chinois" },
+  "shaolin-monk": { label: "Moine Shaolin", description: "Moine guerrier bouddhiste" },
+  "sumo-wrestler": { label: "Lutteur de sumo", description: "Combattant japonais de sumo" },
+  "gladiator": { label: "Gladiateur", description: "Combattant d'arène romain" },
+  "spartan-warrior": { label: "Guerrier spartiate", description: "Hoplite grec ancien" },
+  "viking-warrior": { label: "Guerrier viking", description: "Pillard nordique" },
+  "mongol-warrior": { label: "Guerrier mongol", description: "Archer à cheval des steppes" },
+  "centurion": { description: "Officier légionnaire romain" },
+  "crusader": { label: "Croisé", description: "Chevalier croisé médiéval" },
+  "pirate": { description: "Pirate / boucanier de l'âge d'or" },
+  "musketeer": { label: "Mousquetaire", description: "Bretteur français du XVIIe siècle" },
+
+  // ----- New Type — Professions / Roles -----
+  "police-officer": { label: "Policier(ère)", description: "Officier de police en uniforme" },
+  "policeman": { label: "Policier", description: "Policier homme" },
+  "policewoman": { label: "Policière", description: "Policière femme" },
+  "firefighter": { label: "Pompier", description: "Sapeur-pompier en tenue" },
+  "doctor": { label: "Médecin", description: "Médecin en blouse blanche" },
+  "surgeon": { label: "Chirurgien(ne)", description: "Chirurgien de bloc opératoire" },
+  "nurse": { label: "Infirmier(ère)", description: "Personnel infirmier d'hôpital" },
+  "chef": { label: "Chef cuisinier", description: "Cuisinier en uniforme" },
+  "teacher": { label: "Enseignant(e)", description: "Éducateur en classe" },
+  "priest": { label: "Prêtre", description: "Prêtre catholique" },
+  "nun": { label: "Religieuse", description: "Religieuse catholique" },
+  "soldier": { label: "Soldat", description: "Militaire moderne" },
+  "lawyer": { label: "Avocat(e)", description: "Avocat en costume" },
+  "judge": { label: "Juge", description: "Magistrat en robe" },
+  "scientist": { label: "Scientifique", description: "Chercheur en blouse" },
+  "pilot": { label: "Pilote", description: "Pilote de ligne" },
+  "flight-attendant": { label: "Hôte(sse) de l'air", description: "Membre d'équipage de cabine" },
+  "construction-worker": { label: "Ouvrier du bâtiment", description: "Bâtisseur avec casque" },
+  "businessman": { label: "Homme d'affaires", description: "Homme en costume" },
+  "businesswoman": { label: "Femme d'affaires", description: "Femme en tailleur" },
+  "farmer": { label: "Agriculteur(trice)", description: "Travailleur agricole" },
+  "mechanic": { label: "Mécanicien(ne)", description: "Mécanicien auto/industriel" },
+  "artist": { label: "Artiste", description: "Peintre / artiste visuel" },
+  "musician": { label: "Musicien(ne)", description: "Interprète avec instrument" },
+  "athlete": { label: "Athlète", description: "Sportif professionnel" },
+  "detective": { label: "Détective", description: "Enquêteur en civil" },
+  "journalist": { label: "Journaliste", description: "Reporter avec carnet" },
+  "barista": { description: "Serveur de café" },
+
 }
 
 export default map

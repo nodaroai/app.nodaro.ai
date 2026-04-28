@@ -81,7 +81,7 @@ export const AestheticPicker = memo(function AestheticPicker({
       {grouped.map(({ category, aesthetics }) => {
         if (aesthetics.length === 0) return null
         return (
-          <div key={category} className="flex flex-col gap-1.5">
+          <div key={category} className="flex flex-col gap-1.5 mt-5 pt-5 border-t-[3px] border-border/40">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
               {AESTHETIC_CATEGORY_LABELS[category]}
             </div>

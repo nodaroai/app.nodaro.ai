@@ -2313,14 +2313,10 @@ export interface Job {
   job_type?: string | null        // Job type (e.g. "generate-image")
 }
 
+/** Delegates to `nodaroClient.jobs.get` (Phase 3 SDK dogfooding). */
 export async function getJobStatus(jobId: string): Promise<Job> {
-  const authHeaders = await getAuthHeaders()
-  const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}`, {
-    headers: authHeaders,
-  })
-  if (!res.ok) throw new Error(`Failed to get job status (HTTP ${res.status})`)
-  const body = await res.json()
-  return body.data
+  const { data } = await nodaroClient.jobs.get(jobId)
+  return data as Job
 }
 
 export async function getJobs(userId?: string, cursor?: string, limit?: number): Promise<{
@@ -2861,18 +2857,16 @@ export async function getWorkflowCostSummary(jobIds: readonly string[]): Promise
   return res.json()
 }
 
-// Cancel job functions
-export async function cancelJob(jobId: string, userId?: string): Promise<{ success: boolean; cancelled: number }> {
-  const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}/cancel`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify({ userId }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to cancel job")
-  }
-  return res.json()
+/**
+ * Delegates to `nodaroClient.jobs.cancel` (Phase 3 SDK dogfooding).
+ * The legacy `userId` parameter is unused — the backend derives ownership
+ * from the auth token; left for back-compat with existing callers.
+ */
+export async function cancelJob(
+  jobId: string,
+  _userId?: string,
+): Promise<{ success: boolean; cancelled: number }> {
+  return nodaroClient.jobs.cancel(jobId)
 }
 
 export async function cancelAllJobs(userId: string): Promise<{ success: boolean; cancelled: number }> {
@@ -3790,88 +3784,45 @@ export async function deleteApiToken(id: string): Promise<{ success: boolean }> 
 }
 
 // ---------------------------------------------------------------------------
-// Developer Apps (OAuth)
+// Developer Apps (OAuth) — delegates to @nodaro/client SDK
 // ---------------------------------------------------------------------------
 
-export type DeveloperAppStatus = "active" | "suspended" | "pending_review"
+export type {
+  DeveloperApp,
+  DeveloperAppStatus,
+  DeveloperAppScope,
+  CreateDeveloperAppInput,
+  UpdateDeveloperAppInput,
+  CreateDeveloperAppResult,
+} from "@nodaro/client"
 
-export interface DeveloperApp {
-  id: string
-  name: string
-  description: string | null
-  logoUrl: string | null
-  homepageUrl: string | null
-  redirectUris: string[]
-  allowedOrigins: string[]
-  scopesRequested: string[]
-  clientId: string
-  status: DeveloperAppStatus
-  createdAt: string
-  updatedAt: string
+export function listDeveloperApps() {
+  return nodaroClient.developerApps.list()
 }
 
-export interface CreateDeveloperAppResult extends DeveloperApp {
-  /** Plaintext client secret — shown ONCE at creation, never returned again */
-  clientSecret: string
+export function getDeveloperApp(id: string) {
+  return nodaroClient.developerApps.get(id)
 }
 
-export interface CreateDeveloperAppInput {
-  name: string
-  description?: string
-  homepageUrl?: string
-  logoUrl?: string
-  redirectUris: string[]
-  allowedOrigins?: string[]
-  scopesRequested: string[]
+export function createDeveloperApp(
+  input: import("@nodaro/client").CreateDeveloperAppInput,
+) {
+  return nodaroClient.developerApps.create(input)
 }
 
-export type UpdateDeveloperAppInput = Partial<CreateDeveloperAppInput>
-
-export async function listDeveloperApps(): Promise<{ data: DeveloperApp[] }> {
-  return apiRequest("/v1/developer-apps", "Failed to list developer apps")
-}
-
-export async function getDeveloperApp(id: string): Promise<{ data: DeveloperApp }> {
-  return apiRequest(
-    `/v1/developer-apps/${encodeURIComponent(id)}`,
-    "Failed to load developer app",
-  )
-}
-
-export async function createDeveloperApp(
-  input: CreateDeveloperAppInput,
-): Promise<{ data: CreateDeveloperAppResult }> {
-  return apiRequest("/v1/developer-apps", "Failed to create developer app", {
-    method: "POST",
-    body: input,
-  })
-}
-
-export async function updateDeveloperApp(
+export function updateDeveloperApp(
   id: string,
-  input: UpdateDeveloperAppInput,
-): Promise<{ data: DeveloperApp }> {
-  return apiRequest(
-    `/v1/developer-apps/${encodeURIComponent(id)}`,
-    "Failed to update developer app",
-    { method: "PATCH", body: input },
-  )
+  input: import("@nodaro/client").UpdateDeveloperAppInput,
+) {
+  return nodaroClient.developerApps.update(id, input)
 }
 
-export async function deleteDeveloperApp(id: string): Promise<{ success: boolean }> {
-  return apiRequest(
-    `/v1/developer-apps/${encodeURIComponent(id)}`,
-    "Failed to delete developer app",
-    { method: "DELETE" },
-  )
+export function deleteDeveloperApp(id: string) {
+  return nodaroClient.developerApps.delete(id)
 }
 
-export async function rotateDeveloperAppSecret(id: string): Promise<{ clientSecret: string }> {
-  return apiRequest(
-    `/v1/developer-apps/${encodeURIComponent(id)}/rotate-secret`,
-    "Failed to rotate client secret",
-    { method: "POST" },
-  )
+export function rotateDeveloperAppSecret(id: string) {
+  return nodaroClient.developerApps.rotateSecret(id)
 }
 
 // ---------- OAuth Consent Screen ----------

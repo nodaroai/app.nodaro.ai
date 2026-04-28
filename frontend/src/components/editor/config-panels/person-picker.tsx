@@ -28,7 +28,9 @@ const COMPACT_GROUP_LABELS: Record<string, string> = {
   "Primitive / Wild": "Primitive",
   "Mythic / Divine": "Mythic",
   "Heroes & Villains": "Heroes",
-  "Anime / Anthro": "Anime",
+  "Hybrid / Anthro": "Anthro",
+  "Warriors / Martial": "Warriors",
+  "Professions / Roles": "Professions",
 }
 const compactGroupLabel = (g: string): string => COMPACT_GROUP_LABELS[g] ?? g
 
@@ -539,11 +541,13 @@ function DimensionSection({
   const useGrouped = (dimension === "ethnicity" || dimension === "type") && !isSearching
   const switchId = `${id}-${field}`
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 border-t-[3px] border-border/40">
       {/* Branded headline as a settings row: label on the left, Switch on
           the right, space between. Reads like a standard "section · toggle"
-          control instead of a centered banner. */}
-      <div className="flex items-center justify-between gap-2 px-0.5">
+          control instead of a centered banner.
+          border-t on the wrapper + mt-5 on the header give a clear visual
+          divider with breathing room before each section title. */}
+      <div className="flex items-center justify-between gap-2 px-0.5 mt-5">
         <label
           htmlFor={switchId}
           className={cn(

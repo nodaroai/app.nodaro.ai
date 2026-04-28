@@ -372,14 +372,12 @@ describe("getJobStatus", () => {
 
     const result = await getJobStatus("j1")
 
-    expect(mock).toHaveBeenCalledWith(
-      "/v1/jobs/j1",
-      expect.objectContaining({
-        headers: { Authorization: "Bearer tok-xyz" },
-      }),
-    )
-    // No explicit method = GET
-    expect(mock.mock.calls[0][1].method).toBeUndefined()
+    // Delegates to nodaroClient.jobs.get, which sets method explicitly.
+    expect(mock.mock.calls[0][0]).toBe("/v1/jobs/j1")
+    expect(mock.mock.calls[0][1].method).toBe("GET")
+    expect(mock.mock.calls[0][1].headers).toMatchObject({
+      Authorization: "Bearer tok-xyz",
+    })
     expect(result).toEqual(jobData)
   })
 })

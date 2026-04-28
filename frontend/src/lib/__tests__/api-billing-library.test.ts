@@ -150,20 +150,21 @@ describe("deleteJob", () => {
 // ---------------------------------------------------------------------------
 
 describe("cancelJob", () => {
-  it("sends POST /v1/jobs/:jobId/cancel with userId body", async () => {
+  it("sends POST /v1/jobs/:jobId/cancel with auth header", async () => {
     sessionWith("tok-cancel")
     const payload = { success: true, cancelled: 1 }
     const mock = mockFetchJson(payload)
     vi.stubGlobal("fetch", mock)
 
-    const result = await cancelJob("j-10", "u-5")
+    const result = await cancelJob("j-10")
 
-    expect(mock).toHaveBeenCalledWith(
-      "/v1/jobs/j-10/cancel",
-      expect.objectContaining({ method: "POST" }),
-    )
-    const body = JSON.parse(mock.mock.calls[0][1].body as string)
-    expect(body).toEqual({ userId: "u-5" })
+    // Delegates to nodaroClient.jobs.cancel; backend derives ownership
+    // from the auth token (no userId body needed).
+    expect(mock.mock.calls[0][0]).toBe("/v1/jobs/j-10/cancel")
+    expect(mock.mock.calls[0][1].method).toBe("POST")
+    expect(mock.mock.calls[0][1].headers).toMatchObject({
+      Authorization: "Bearer tok-cancel",
+    })
     expect(result).toEqual(payload)
   })
 

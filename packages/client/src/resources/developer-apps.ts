@@ -14,7 +14,7 @@ export type DeveloperAppScope =
   | "credits:read"
   | "apps:read"
 
-export type DeveloperAppStatus = "active" | "suspended" | "pending"
+export type DeveloperAppStatus = "active" | "suspended" | "pending_review"
 
 export interface DeveloperApp {
   id: string

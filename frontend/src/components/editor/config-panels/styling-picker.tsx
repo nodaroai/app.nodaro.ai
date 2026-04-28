@@ -197,8 +197,8 @@ function DimensionSection({
   const isHairCut = dimension === "hair-cut"
   const hairCutCurrent = selectedIds[0]
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between gap-2 px-0.5">
+    <div className="flex flex-col gap-1.5 border-t-[3px] border-border/40">
+      <div className="flex items-center justify-between gap-2 px-0.5 mt-5">
         <div className="flex items-center gap-2">
           <input
             type="checkbox"
