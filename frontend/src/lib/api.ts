@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase"
+import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 
@@ -3458,31 +3459,34 @@ export async function runWorkflow(workflowId: string, nodeIds?: string[]): Promi
   return res.json() as Promise<{ executionId: string }>
 }
 
-/** Get execution status + node states. */
+/**
+ * Get execution status + node states.
+ *
+ * Delegates to `nodaroClient.executions.get` (Phase 3 SDK dogfooding).
+ * The SDK's `WorkflowExecution` type is structurally compatible — the only
+ * differences are stricter `errorMessage`/`nodeStates` nullability and an
+ * extra `userId`/`updatedAt` — neither of which matters for current call
+ * sites. Cast keeps the local `WorkflowExecution` contract stable.
+ */
 export async function getWorkflowExecution(executionId: string): Promise<WorkflowExecution> {
-  const json = await apiRequest<{ data: WorkflowExecution }>(
-    `/v1/workflow-executions/${encodeURIComponent(executionId)}`,
-    "Failed to fetch execution",
-  )
-  return json.data
+  const { data } = await nodaroClient.executions.get(executionId)
+  return data as unknown as WorkflowExecution
 }
 
-/** Cancel an active execution immediately. */
-export function cancelWorkflowExecution(executionId: string): Promise<void> {
-  return apiRequest(
-    `/v1/workflow-executions/${encodeURIComponent(executionId)}/cancel`,
-    "Failed to cancel execution",
-    { method: "POST" },
-  )
+/**
+ * Cancel an active execution immediately.
+ * Delegates to `nodaroClient.executions.cancel` (Phase 3 SDK dogfooding).
+ */
+export async function cancelWorkflowExecution(executionId: string): Promise<void> {
+  await nodaroClient.executions.cancel(executionId)
 }
 
-/** Stop after the current node finishes (sets status to "stopping"). */
-export function stopWorkflowExecution(executionId: string): Promise<void> {
-  return apiRequest(
-    `/v1/workflow-executions/${encodeURIComponent(executionId)}/cancel`,
-    "Failed to stop execution",
-    { method: "POST", body: { mode: "after_current" } },
-  )
+/**
+ * Stop after the current node finishes (sets status to "stopping").
+ * Delegates to `nodaroClient.executions.cancel` with `mode: "after_current"`.
+ */
+export async function stopWorkflowExecution(executionId: string): Promise<void> {
+  await nodaroClient.executions.cancel(executionId, { mode: "after_current" })
 }
 
 /** Node execution state from the backend orchestrator. */
@@ -3572,21 +3576,20 @@ export async function streamWorkflowExecution(
   }
 }
 
-/** List executions for a workflow. */
-export function listWorkflowExecutions(
+/**
+ * List executions for a workflow.
+ *
+ * Delegates to `nodaroClient.executions.listForWorkflow` (Phase 3 SDK
+ * dogfooding). The SDK returns `WorkflowExecutionSummary[]` which is a
+ * structural subset of the local `WorkflowExecution[]` shape — the cast
+ * preserves the existing return contract for callers.
+ */
+export async function listWorkflowExecutions(
   workflowId: string,
   opts?: { limit?: number; cursor?: string; status?: string; source?: "editor" | "all" },
 ): Promise<{ data: WorkflowExecution[]; nextCursor?: string }> {
-  const params = new URLSearchParams()
-  if (opts?.limit) params.set("limit", String(opts.limit))
-  if (opts?.cursor) params.set("cursor", opts.cursor)
-  if (opts?.status) params.set("status", opts.status)
-  if (opts?.source) params.set("source", opts.source)
-
-  return apiRequest(
-    `/v1/workflows/${encodeURIComponent(workflowId)}/executions?${params}`,
-    "Failed to list executions",
-  )
+  const page = await nodaroClient.executions.listForWorkflow(workflowId, opts ?? {})
+  return page as unknown as { data: WorkflowExecution[]; nextCursor?: string }
 }
 
 // --- Global Executions ---
