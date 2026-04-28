@@ -21,6 +21,7 @@ WORKDIR /app
 # Copy ONLY package manifests first to maximise Docker layer caching.
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/client/package.json ./packages/client/
 COPY packages/remotion/package.json ./packages/remotion/
 COPY backend/package.json ./backend/
 COPY frontend/package.json ./frontend/
@@ -39,6 +40,22 @@ COPY packages/shared/tsup.config.ts ./packages/shared/
 WORKDIR /app/packages/shared
 RUN npm run build
 
+# ── Stage 2b: Build @nodaro/client (tsup) ─────────────────────────────
+# Frontend imports @nodaro/client from node_modules (workspace symlink).
+# Client depends on @nodaro/shared, so shared/dist must be in place first.
+FROM deps AS client-build
+
+WORKDIR /app
+COPY --from=shared-build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=shared-build /app/packages/shared/package.json ./packages/shared/package.json
+
+COPY packages/client/src ./packages/client/src
+COPY packages/client/tsconfig.json ./packages/client/
+COPY packages/client/tsup.config.ts ./packages/client/
+
+WORKDIR /app/packages/client
+RUN npm run build
+
 # ── Stage 3: Build backend (tsc) ──────────────────────────────────────
 # Backend imports @nodaro/shared by package name. Resolution walks from
 # backend/src/* up to /app/node_modules/@nodaro/shared (workspace symlink
@@ -55,7 +72,10 @@ COPY --from=shared-build /app/packages/shared/package.json ./packages/shared/pac
 COPY backend/ ./backend/
 
 WORKDIR /app/backend
-RUN npm run build
+# Skip the `prebuild` lifecycle hook (which would re-run tsup against
+# packages/shared/src — but src isn't copied to this stage; the prebuilt
+# dist is already in place from shared-build above).
+RUN npx tsc
 
 # ── Stage 4: Build frontend (vite) ────────────────────────────────────
 # Vite resolves @nodaro/shared via the same workspace symlink. The
@@ -66,6 +86,10 @@ WORKDIR /app
 # Shared dist (Vite imports it as @nodaro/shared from package main/module).
 COPY --from=shared-build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=shared-build /app/packages/shared/package.json ./packages/shared/package.json
+
+# Client dist (Vite imports @nodaro/client via workspace symlink → dist).
+COPY --from=client-build /app/packages/client/dist ./packages/client/dist
+COPY --from=client-build /app/packages/client/package.json ./packages/client/package.json
 
 # Remotion package source (Vite alias `@remotion-pkg` points at src/).
 COPY packages/remotion/ ./packages/remotion/
@@ -94,7 +118,14 @@ ENV VITE_FREECUT_URL=$VITE_FREECUT_URL
 ENV VITE_AUDIOMASS_URL=$VITE_AUDIOMASS_URL
 
 WORKDIR /app/frontend
-RUN npm run build
+# Skip the `prebuild` lifecycle hook (would re-run tsup for shared+client
+# but src dirs aren't copied; prebuilt dists are already in place).
+# Skip `tsc --noEmit` here too — npm's hoisting in this Docker layer
+# can produce duplicate copies of peer-dep packages (e.g. @tiptap/core
+# in both /app/node_modules and /app/frontend/node_modules), which tsc
+# treats as distinct types. Vite's resolver dedupes correctly. Type
+# errors are caught by CI's typecheck job, not the Docker build.
+RUN npx vite build
 
 # ── Stage 5: Production runtime deps ──────────────────────────────────
 # Re-run `npm ci` with --omit=dev so the runner only ships production
@@ -120,6 +151,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/client/package.json ./packages/client/
 COPY packages/remotion/package.json ./packages/remotion/
 COPY backend/package.json ./backend/
 COPY frontend/package.json ./frontend/
