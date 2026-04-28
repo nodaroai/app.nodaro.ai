@@ -115,6 +115,26 @@ describe("resolveNodeDefaults", () => {
     expect(out.model).toBe("gemini-2.5-flash-image")
     expect(out.resolution).toBe("4K")
     expect(out.aspectRatio).toBe("16:9")
+    // Regression: must NOT also pollute `quality` with "4K" — that trips
+    // the route's quality enum (medium|high|basic) when the user runs the node.
+    expect(out.quality).toBeUndefined()
+  })
+
+  it("quality-style providers (gpt-image) write quality, not resolution", () => {
+    const admin: AdminDefault[] = [
+      { node_type: "generate-image", provider: "gpt-image", quality_level: "mid", aspect_ratio: null },
+    ]
+    const factory: Record<string, unknown> = { provider: "flux" }
+    const out = resolveNodeDefaults({
+      nodeType: "generate-image",
+      factory,
+      adminDefaults: admin,
+    })
+    expect(out.provider).toBe("gpt-image")
+    expect(out.quality).toBe("medium")
+    // Regression: must NOT also pollute `resolution` with "medium" — that trips
+    // the route's resolution enum (1K|2K|4K).
+    expect(out.resolution).toBeUndefined()
   })
 
   it("user memory overrides admin", () => {
