@@ -94,7 +94,18 @@ export function useUserLocale(): LocaleId {
   return useLocaleStore((s) => s.locale)
 }
 
-/** Convenience hook: reading direction. */
+/** Convenience hook: reading direction.
+ *
+ * Deliberately pinned to `"ltr"` for now — we ship Hebrew / Arabic translations
+ * but do NOT flip the overall layout. Bidi rendering inside text elements
+ * still works automatically (the browser handles RTL characters), and the
+ * picker / config panels read the same regardless of locale (label on the
+ * left, control on the right, tabs in catalog order).
+ *
+ * To re-enable RTL layout for he/ar, swap the body for
+ * `useLocaleStore((s) => s.dir)` — every consumer already plumbs `dir`
+ * through to the relevant container.
+ */
 export function useLocaleDir(): LocaleDirection {
-  return useLocaleStore((s) => s.dir)
+  return "ltr"
 }

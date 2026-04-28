@@ -196,7 +196,10 @@ const GPT_IMAGE_RATIOS = [
 ] as const
 
 // GPT Image 2 supports: auto, 1:1, 9:16, 16:9, 4:3, 3:4
-// Constraints: 1:1 cannot use 4K; "auto" limited to 1K
+// (per https://docs.kie.ai/market/gpt/gpt-image-2-text-to-image.md)
+// Constraints — enforced via the resolution fail-safe in image-configs.tsx:
+//   • aspect_ratio = auto → resolution must be 1K
+//   • aspect_ratio = 1:1  → resolution cannot be 4K
 const GPT_IMAGE_2_RATIOS = [
   { value: "auto", label: "Auto" },
   { value: "1:1", label: "1:1 (Square)" },

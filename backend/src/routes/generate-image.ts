@@ -43,7 +43,11 @@ const generateImageBody = z.object({
   referenceImageUrls: z.array(safeUrlSchema).max(14).optional(),
   characterDescriptions: z.array(z.string().max(500)).max(10).optional(),
   provider: z.enum(IMAGE_GEN_PROVIDERS).optional(),
+  // "auto" is gpt-image-2 specific (KIE constrains it to 1K) — keeping the
+  // enum permissive here and letting the per-provider config / fail-safe in
+  // model-options.ts gate it on the correct providers.
   aspectRatio: z.enum([
+    "auto",
     "1:1", "16:9", "9:16", "4:3", "3:4",
     "3:2", "2:3", "5:4", "4:5", "21:9",
   ]).optional(),

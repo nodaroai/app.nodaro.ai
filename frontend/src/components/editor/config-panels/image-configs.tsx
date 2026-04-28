@@ -117,6 +117,20 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
     } else if (data.quality !== undefined) {
       updates.quality = undefined
     }
+    // KIE constraints for gpt-image-2 (per docs.kie.ai gpt-image-2 spec):
+    //   • aspect_ratio = auto → resolution must be 1K
+    //   • aspect_ratio = 1:1 → resolution cannot be 4K
+    // Apply silently here so the user can't get a 400 at generate-time.
+    const isGptImage2 = currentProvider === "gpt-image-2" || currentProvider === "gpt-image-2-i2i"
+    if (isGptImage2) {
+      const ar = updates.aspectRatio ?? data.aspectRatio
+      const res = updates.resolution ?? data.resolution
+      if (ar === "auto" && res !== "1K") {
+        updates.resolution = "1K"
+      } else if (ar === "1:1" && res === "4K") {
+        updates.resolution = "2K"
+      }
+    }
     if (!supportsRefImage && data.referenceImageUrl) {
       updates.referenceImageUrl = undefined
     }
@@ -127,7 +141,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
-  }, [providersList, currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [providersList, currentProvider, data.aspectRatio]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Migrate legacy single referenceImageUrl to new multi-image format
   useEffect(() => {
@@ -701,6 +715,18 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
     } else if (data.quality !== undefined) {
       updates.quality = undefined
     }
+    // KIE constraints for gpt-image-2-i2i (per docs):
+    //   • aspect_ratio = auto → resolution must be 1K
+    //   • aspect_ratio = 1:1 → resolution cannot be 4K
+    if (currentProvider === "gpt-image-2-i2i") {
+      const ar = updates.aspectRatio ?? data.aspectRatio
+      const res = updates.resolution ?? data.resolution
+      if (ar === "auto" && res !== "1K") {
+        updates.resolution = "1K"
+      } else if (ar === "1:1" && res === "4K") {
+        updates.resolution = "2K"
+      }
+    }
     if (!supportsRefImage && data.referenceImageUrl) {
       updates.referenceImageUrl = undefined
     }
@@ -710,7 +736,7 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
-  }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentProvider, data.aspectRatio]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [isCustomStyle, setIsCustomStyle] = useState(
     () => !!data.style && !IMAGE_STYLE_PRESETS.some((p) => p.value === data.style)

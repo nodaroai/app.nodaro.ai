@@ -18,7 +18,11 @@ const imageToImageBody = z.object({
   resolution: z.enum(["1K", "2K", "4K"]).optional(),
   quality: z.enum(["medium", "high", "basic"]).optional(),
   strength: z.number().min(0).max(1).optional(),
+  // "auto" is gpt-image-2 specific (KIE constrains it to 1K) — kept here
+  // for symmetry with generate-image; per-provider gating lives in the
+  // frontend config panels' fail-safe.
   aspectRatio: z.enum([
+    "auto",
     "1:1", "16:9", "9:16", "4:3", "3:4",
     "3:2", "2:3", "5:4", "4:5", "21:9",
   ]).optional(),

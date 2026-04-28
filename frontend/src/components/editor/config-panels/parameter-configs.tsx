@@ -540,6 +540,7 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
         value={{
           type: data.type,
           age: data.age,
+          customAge: data.customAge,
           ethnicity: data.ethnicity,
           build: data.build,
           bodyProportions: data.bodyProportions,
