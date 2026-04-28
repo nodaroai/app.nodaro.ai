@@ -367,6 +367,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "llm-chat": 5,                 // standard
   "llm-chat:economy": 3,
   "llm-chat:premium": 15,
+  "translate": 1,                // internal utility (replicate i2i prompt translation)
+  "translate:economy": 1,
+  "translate:premium": 3,
   "scene-graph-ai": 10,          // standard
   "scene-graph-ai:economy": 5,
   "scene-graph-ai:premium": 30,
