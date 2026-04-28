@@ -4,10 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "npm -w @nodaro/shared run build && npm -w @nodaro/client run build",
     "dev": "vite",
+    "prebuild": "npm -w @nodaro/shared run build && npm -w @nodaro/client run build",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "lint": "eslint",
+    "pretest": "npm -w @nodaro/shared run build && npm -w @nodaro/client run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

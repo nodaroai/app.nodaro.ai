@@ -1,7 +1,7 @@
 .claude/
 .superpowers/
 CLAUDE.md
-ARCHITECTURE.md
+/ARCHITECTURE.md
 architecture-graph.html
 node_modules/
 .next/

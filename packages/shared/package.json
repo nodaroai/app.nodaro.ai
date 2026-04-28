@@ -12,6 +12,9 @@
       "require": "./dist/index.cjs"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": ["dist", "README.md", "src"],
   "publishConfig": {
     "access": "public"

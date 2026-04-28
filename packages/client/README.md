@@ -115,4 +115,4 @@ More resources (assets, credits, social-publish, triggers) coming as the SDK mat
 
 ## License
 
-Apache-2.0 — see the repository root LICENSE.
+Sustainable Use License — see the repository root LICENSE.
