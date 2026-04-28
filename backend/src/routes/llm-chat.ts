@@ -213,7 +213,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      const sse = createSSEStream(req, reply)
+      const sse = await createSSEStream(req, reply)
 
       sse.sendEvent({
         type: "metadata",

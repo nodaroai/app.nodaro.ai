@@ -71,6 +71,17 @@ const ALLOWED_PATHS = [
   // req.userId flow.
   /^src\/routes\/api-tokens\.ts$/,
 
+  // Developer apps CRUD: every read/write scopes by `.eq("owner_user_id",
+  // req.userId)` in-handler (audited 2026-04-28). Service-role required
+  // for atomic count+insert under the 5-app per-user cap.
+  /^src\/routes\/developer-apps\.ts$/,
+
+  // OAuth: /v1/oauth/token is authenticated by client_id+client_secret,
+  // not a user JWT — no user context to drive RLS. Token revocation is
+  // RFC 7009 (no info leak about whether token existed). Per-call ownership
+  // is enforced via bcrypt-verify of the client secret.
+  /^src\/routes\/oauth\.ts$/,
+
   // Embeds / og-tags: fetch public-facing metadata by id, not user-scoped.
   /^src\/routes\/embed\.ts$/,
   /^src\/routes\/og-tags\.ts$/,

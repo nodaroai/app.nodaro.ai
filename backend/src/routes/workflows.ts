@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
+import { requireScope } from "../lib/scopes.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -112,6 +113,11 @@ export async function workflowRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    if (req.appAuthorization) {
+      const err = requireScope(req.appAuthorization.scopes, "workflows:read")
+      if (err) return reply.status(err.statusCode).send(err.body)
     }
 
     const parsed = projectIdParams.safeParse(req.params)

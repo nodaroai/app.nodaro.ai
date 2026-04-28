@@ -11,10 +11,15 @@ vi.mock("@/lib/supabase.js", () => ({
     from: vi.fn(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({
         data: null,
         error: { code: "PGRST116" },
       }),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: null,
+      }),
+      then: vi.fn(),
     })),
     auth: {
       getUser: vi.fn().mockResolvedValue({
@@ -113,6 +118,18 @@ describe("auth middleware", () => {
         headers: { authorization: "Bearer invalid-token-abc" },
       })
       expect(res.statusCode).toBe(401)
+    })
+  })
+
+  describe("OAuth access token path", () => {
+    it("returns 401 when ndr_app_ token doesn't resolve to a row", async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: "/v1/jobs/123",
+        headers: { authorization: "Bearer ndr_app_invalidtokenxxxxxx" },
+      })
+      expect(res.statusCode).toBe(401)
+      expect(res.json().error.code).toBe("unauthorized")
     })
   })
 })

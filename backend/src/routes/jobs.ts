@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
+import { requireScope } from "../lib/scopes.js"
 
 const batchStatusBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(100),
@@ -122,6 +123,11 @@ export async function jobRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    if (req.appAuthorization) {
+      const err = requireScope(req.appAuthorization.scopes, "jobs:read")
+      if (err) return reply.status(err.statusCode).send(err.body)
     }
 
     const { id } = req.params

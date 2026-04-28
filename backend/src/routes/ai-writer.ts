@@ -225,7 +225,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       const usageLogId = reservation?.usageLogId
 
       // Open SSE stream -- from here on, errors go through the stream
-      const sse = createSSEStream(req, reply)
+      const sse = await createSSEStream(req, reply)
 
       sse.sendEvent({
         type: "metadata",
