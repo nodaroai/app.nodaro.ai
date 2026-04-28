@@ -1,4 +1,8 @@
 import "./globals.css"
+// Wire i18n sidecar loaders into @nodaro/shared at startup. Must run BEFORE
+// any picker that calls useLocalizedCatalog; mounted at the top of the
+// entry file so the registry is populated before React mounts.
+import "@/lib/i18n-bootstrap"
 
 // Auto-reload on stale chunks after deployment.
 // Vite fires this when any preloaded JS/CSS dep returns 404.
