@@ -66,6 +66,16 @@ function PersonNodeComponent({ id, data, selected }: NodeProps) {
             // features): primary label on the main line, additional picks
             // stacked underneath with a "+ " prefix so the chip stays narrow.
             const extraIds = entryIds.slice(1)
+            // Age + "age-custom" sentinel: show the user-typed number directly
+            // ("8", "42") so the card reads as the actual age, not the
+            // placeholder "Custom age…".
+            const isAgeCustom = dimension === "age" && entryId === "age-custom"
+            const customAgeNum =
+              typeof nodeData.customAge === "number" ? nodeData.customAge : undefined
+            const primaryLabel =
+              isAgeCustom && customAgeNum !== undefined
+                ? `${customAgeNum}`
+                : getPersonLabel(entryId)
             return (
               <div key={dimension} className="flex flex-col gap-0.5 min-w-0">
                 {/* Top row holds the dim label + entry name; the icon sits on
@@ -77,7 +87,7 @@ function PersonNodeComponent({ id, data, selected }: NodeProps) {
                       {PERSON_DIMENSION_LABELS[dimension]}
                     </p>
                     <p className="text-foreground text-sm font-medium leading-tight truncate">
-                      {getPersonLabel(entryId)}
+                      {primaryLabel}
                     </p>
                     {extraIds.map((extraId) => (
                       <p
@@ -95,10 +105,16 @@ function PersonNodeComponent({ id, data, selected }: NodeProps) {
                     </div>
                   )}
                 </div>
-                {entry?.description && entryIds.length === 1 && (
-                  <p className="text-muted-foreground text-[10.5px] leading-snug">
-                    {entry.description}
-                  </p>
+                {entryIds.length === 1 && (
+                  isAgeCustom && customAgeNum !== undefined ? (
+                    <p className="text-muted-foreground text-[10.5px] leading-snug">
+                      Custom age
+                    </p>
+                  ) : entry?.description ? (
+                    <p className="text-muted-foreground text-[10.5px] leading-snug">
+                      {entry.description}
+                    </p>
+                  ) : null
                 )}
               </div>
             )

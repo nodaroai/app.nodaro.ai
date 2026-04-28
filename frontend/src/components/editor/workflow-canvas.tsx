@@ -1210,6 +1210,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const currentSelectedForArrow = useWorkflowStore.getState().selectedNodeId
       if (currentSelectedForArrow && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault()
+        // Capture-phase + stopPropagation prevents React Flow's built-in
+        // keyboard nudge from also firing on the currently-selected node when
+        // we're using arrows to navigate to the neighbor instead of moving.
+        e.stopPropagation()
         const current = getNode(currentSelectedForArrow)
         if (current) {
           const cx = current.position.x + (current.measured?.width ?? 200) / 2
@@ -1275,8 +1279,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
     }
-    document.addEventListener("keydown", handleKeyDown)
-    return () => document.removeEventListener("keydown", handleKeyDown)
+    // Capture phase so the handler runs BEFORE React Flow's per-node arrow
+    // nudge listener — required for the settings-panel-open arrow-nav branch
+    // to stopPropagation and prevent the current node from being moved while
+    // selection jumps to the neighbor.
+    document.addEventListener("keydown", handleKeyDown, true)
+    return () => document.removeEventListener("keydown", handleKeyDown, true)
   }, [selectedNodeId, duplicateNode, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment, alignmentEnabled, computeGuides, getNode])
 
   // Listen for pan-to events dispatched from teleporter config panel "Pan to" buttons
