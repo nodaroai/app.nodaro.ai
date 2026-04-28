@@ -3,10 +3,6 @@ import type { LocaleCatalogMap } from "./types.js"
 const map: LocaleCatalogMap = {
   "man": { label: "رجل", description: "رجل بالغ" },
   "woman": { label: "امرأة", description: "امرأة بالغة" },
-  "teen-boy": { label: "فتى مراهق", description: "فتى مراهق" },
-  "teen-girl": { label: "فتاة مراهقة", description: "فتاة مراهقة" },
-  "baby": { label: "رضيع", description: "رضيع تحت السنتين" },
-  "child": { label: "طفل", description: "طفل صغير" },
   "non-binary": { label: "غير ثنائي", description: "شخص غير ثنائي" },
   "beautiful-woman": { label: "امرأة جميلة", description: "امرأة جميلة كلاسيكيا" },
   "girl-next-door": { label: "فتاة الجوار", description: "ودودة، قابلة للتقارب، صحية" },
@@ -339,6 +335,104 @@ const map: LocaleCatalogMap = {
   "feature-nostril-piercing": { label: "Piercing الأنف", description: "Stud أو حلقة فردية في فتحة الأنف" },
 
   "eye-double-eyelid": { label: "جفن مزدوج", description: "تجعد جفن علوي محدد" },
+
+  // ----- New age entries -----
+  "age-toddler": { label: "طفل صغير", description: "حوالي 2-3 سنوات" },
+  "age-young-child": { label: "طفل يافع", description: "حوالي 4-6 سنوات" },
+  "age-pre-teen": { label: "ما قبل المراهقة", description: "حوالي 10-12 سنة" },
+  "age-early-teen": { label: "مراهق مبكر", description: "حوالي 13-15 سنة" },
+  "age-late-teen": { label: "مراهق متأخر", description: "حوالي 16-19 سنة" },
+  "age-early-20s": { label: "أوائل العشرينات", description: "حوالي 20-23 سنة" },
+  "age-late-20s": { label: "أواخر العشرينات", description: "حوالي 24-29 سنة" },
+  "age-custom": { label: "عمر مخصص...", description: "تحديد عمر دقيق بالسنوات" },
+
+  // ----- Primitive / Wild -----
+  "caveman": { label: "رجل الكهف", description: "رجل بدائي من العصر الحجري" },
+  "cavewoman": { label: "امرأة الكهف", description: "امرأة بدائية من العصر الحجري" },
+  "apeman": { label: "إنسان قرد", description: "هجين نصف بشري نصف قرد" },
+  "feral-wildman": { label: "إنسان متوحش", description: "إنسان بري بدائي بشعر متشابك" },
+  "neanderthal": { label: "نياندرتال", description: "نوع بشري ما قبل الحديث" },
+
+  // ----- Fantasy -----
+  "elf": { label: "قزم نبيل (Elf)", description: "كائن نحيل بآذان مدببة" },
+  "half-elf": { label: "نصف قزم", description: "هجين بشري-قزم" },
+  "dwarf": { label: "قزم", description: "كائن قصير ملتح" },
+  "orc": { label: "أورك", description: "كائن ضخم ذو أنياب" },
+  "goblin": { label: "غوبلن", description: "كائن صغير ماكر" },
+  "tiefling": { label: "تيفلينغ", description: "كائن بقرون وميراث جهنمي" },
+  "faun": { label: "فاون / ساتير", description: "كائن بأرجل ماعز وقرون" },
+  "centaur": { label: "قنطور", description: "جذع بشري على جسد حصان" },
+  "vampire": { label: "مصاص دماء", description: "خالد شاحب بأنياب" },
+  "werewolf": { label: "مذؤوب", description: "متحول جزئيا إلى ذئب" },
+  "mermaid": { label: "حورية البحر", description: "أنثى بذيل سمكة" },
+  "merman": { label: "تريتون", description: "ذكر بذيل سمكة" },
+  "dragonkin": { label: "دراجونكين", description: "كائن تنيني الملامح" },
+  "wizard": { label: "ساحر", description: "ساحر ذكر بعباءة" },
+  "witch": { label: "ساحرة", description: "ساحرة أنثى بعباءة" },
+  "sorcerer": { label: "مشعوذ", description: "رجل سحري بعباءة" },
+  "sorceress": { label: "مشعوذة", description: "امرأة سحرية بعباءة" },
+  "knight": { label: "فارس", description: "محارب بدرع كامل" },
+  "barbarian": { label: "بربري", description: "محارب قوي بفراء" },
+  "druid": { label: "درويد", description: "متصوف مرتبط بالطبيعة" },
+  "ranger": { label: "حارس", description: "رامي سهام بعباءة" },
+  "necromancer": { label: "مستحضر الأرواح", description: "ساحر شاحب للفنون المظلمة" },
+  "prince": { label: "أمير", description: "شاب ملكي" },
+  "princess": { label: "أميرة", description: "شابة ملكية" },
+
+  // ----- Mythic / Divine -----
+  "angel": { label: "ملاك", description: "كائن إلهي بأجنحة" },
+  "demon": { label: "شيطان", description: "كائن جهنمي بقرون" },
+  "ghost": { label: "شبح", description: "شبح شفاف" },
+  "valkyrie": { label: "فالكيري", description: "محاربة شمالية" },
+  "god": { label: "إله", description: "إله ذكر" },
+  "goddess": { label: "إلهة", description: "إلهة أنثى" },
+
+  // ----- Sci-Fi -----
+  "android-man": { label: "أندرويد (ذكر)", description: "روبوت ذكوري" },
+  "android-woman": { label: "أندرويد (أنثى)", description: "روبوت أنثوي" },
+  "android-neutral": { label: "أندرويد (محايد)", description: "روبوت محايد" },
+  "cyborg": { label: "سايبورغ", description: "بشري مدمج بأجزاء آلية" },
+  "robot": { label: "روبوت", description: "كائن آلي بالكامل" },
+  "alien": { label: "كائن فضائي", description: "كائن غير بشري" },
+  "astronaut": { label: "رائد فضاء", description: "مستكشف فضائي ببدلة" },
+  "space-marine": { label: "مارينز فضائي", description: "جندي بدرع آلي" },
+  "ai-hologram": { label: "هولوغرام ذكاء اصطناعي", description: "شخصية من ضوء حجمي" },
+
+  // ----- Heroes & Villains -----
+  "superhero": { label: "بطل خارق", description: "بطل مقنع بعباءة" },
+  "superheroine": { label: "بطلة خارقة", description: "بطلة مقنعة بعباءة" },
+  "masked-vigilante": { label: "حارس ملثم", description: "بطل ببدلة سوداء" },
+  "supervillain": { label: "شرير خارق", description: "نموذج شر مسرحي" },
+  "caped-crusader": { label: "محارب صليبي بعباءة", description: "بطل مظلم بدرع وقلنسوة" },
+  "super-soldier": { label: "جندي خارق", description: "محارب بدرع خارجي وطني" },
+  "mutant": { label: "متحول", description: "بشري بطفرات مرئية" },
+  "magical-girl": { label: "فتاة سحرية", description: "بطلة متحولة بأسلوب أنمي" },
+
+  // ----- Anime / Anthro -----
+  "catgirl": { label: "كات غيرل", description: "أنثى بآذان وذيل قطة" },
+  "catboy": { label: "كات بوي", description: "ذكر بآذان وذيل قطة" },
+  "anthro": { label: "متحول حيواني", description: "كائن بشري برأس حيوان" },
+
+  // ----- Iconic / Public Domain -----
+  "sherlock-holmes": { label: "شيرلوك هولمز", description: "محقق فيكتوري" },
+  "dracula": { label: "الكونت دراكولا", description: "كونت مصاص دماء قوطي" },
+  "frankenstein-monster": { label: "وحش فرانكنشتاين", description: "مخلوق معاد إحياؤه" },
+  "phantom-opera": { label: "شبح الأوبرا", description: "متعزل أوبرالي ملثم" },
+  "mr-hyde": { label: "السيد هايد", description: "النصف الوحشي للدكتور جيكل" },
+  "king-arthur": { label: "الملك آرثر", description: "ملك قروسطي أسطوري" },
+  "merlin": { label: "ميرلين", description: "ساحر مستشار آرثري" },
+  "robin-hood": { label: "روبن هود", description: "رامي سهام خارج عن القانون" },
+  "joan-of-arc": { label: "جان دارك", description: "محاربة قروسطية بدرع" },
+  "cleopatra": { label: "كليوباترا", description: "آخر ملكات مصر" },
+  "captain-nemo": { label: "الكابتن نيمو", description: "قائد غواصة لفيرن" },
+  "alice-wonderland": { label: "أليس (في بلاد العجائب)", description: "فتاة بلاد العجائب لكارول" },
+  "peter-pan": { label: "بيتر بان", description: "الصبي الذي لم يكبر" },
+  "dorothy-oz": { label: "دوروثي (أوز)", description: "فتاة أوز بفستان أزرق" },
+  "tin-man": { label: "الرجل القصدير", description: "حطاب قصدير من أوز" },
+  "scarecrow-oz": { label: "الفزاعة (أوز)", description: "فزاعة قش من أوز" },
+  "cowardly-lion": { label: "الأسد الجبان", description: "أسد متحول من أوز" },
+  "santa-claus": { label: "بابا نويل", description: "موزع هدايا الكريسماس" },
+  "grim-reaper": { label: "ملاك الموت", description: "تجسيد الموت" },
 }
 
 export default map

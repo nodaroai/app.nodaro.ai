@@ -4,10 +4,6 @@ const map: LocaleCatalogMap = {
   // -------------------- Type --------------------
   "man": { label: "पुरुष", description: "वयस्क पुरुष" },
   "woman": { label: "महिला", description: "वयस्क महिला" },
-  "teen-boy": { label: "किशोर लड़का", description: "किशोरावस्था का लड़का" },
-  "teen-girl": { label: "किशोर लड़की", description: "किशोरावस्था की लड़की" },
-  "baby": { label: "शिशु", description: "2 साल से कम का शिशु" },
-  "child": { label: "बच्चा", description: "छोटा बच्चा" },
   "non-binary": { label: "Non-binary", description: "Non-binary व्यक्ति" },
   "beautiful-woman": { label: "सुंदर महिला", description: "क्लासिक रूप से सुंदर महिला" },
   "girl-next-door": { label: "Girl Next Door", description: "मित्रवत, सुलभ, स्वस्थ" },
@@ -356,6 +352,104 @@ const map: LocaleCatalogMap = {
 
   // -------------------- Eye Shape (Round 2) --------------------
   "eye-double-eyelid": { label: "Double Eyelid", description: "परिभाषित ऊपरी पलक crease" },
+
+  // ----- New age entries -----
+  "age-toddler": { label: "नन्हा बच्चा", description: "लगभग 2-3 वर्ष" },
+  "age-young-child": { label: "छोटा बच्चा", description: "लगभग 4-6 वर्ष" },
+  "age-pre-teen": { label: "Pre-Teen", description: "लगभग 10-12 वर्ष" },
+  "age-early-teen": { label: "नवयुवा किशोर", description: "लगभग 13-15 वर्ष" },
+  "age-late-teen": { label: "वरिष्ठ किशोर", description: "लगभग 16-19 वर्ष" },
+  "age-early-20s": { label: "20 के शुरुआती वर्ष", description: "लगभग 20-23 वर्ष" },
+  "age-late-20s": { label: "20 के अंतिम वर्ष", description: "लगभग 24-29 वर्ष" },
+  "age-custom": { label: "कस्टम आयु...", description: "वर्षों में सटीक आयु निर्दिष्ट करें" },
+
+  // ----- Primitive / Wild -----
+  "caveman": { label: "Caveman", description: "पाषाण युग का आदिम पुरुष" },
+  "cavewoman": { label: "Cavewoman", description: "पाषाण युग की आदिम महिला" },
+  "apeman": { label: "Apeman", description: "आधा-मानव आधा-वानर hybrid" },
+  "feral-wildman": { label: "Feral Wild-Human", description: "प्रचंड आदिम वन्य मानव" },
+  "neanderthal": { label: "Neanderthal", description: "पूर्व-आधुनिक मानव प्रजाति" },
+
+  // ----- Fantasy -----
+  "elf": { label: "Elf", description: "नुकीले कानों वाला पतला humanoid" },
+  "half-elf": { label: "Half-Elf", description: "मानव-elf hybrid" },
+  "dwarf": { label: "Dwarf", description: "मोटा दाढ़ी वाला humanoid" },
+  "orc": { label: "Orc", description: "दाँत वाला विशाल humanoid" },
+  "goblin": { label: "Goblin", description: "छोटा शरारती humanoid" },
+  "tiefling": { label: "Tiefling", description: "सींगों वाला नारकीय humanoid" },
+  "faun": { label: "Faun / Satyr", description: "बकरी पैरों और सींगों वाला humanoid" },
+  "centaur": { label: "Centaur", description: "घोड़े के शरीर पर मानव torso" },
+  "vampire": { label: "Vampire", description: "नुकीले दाँतों वाला पीला अमर" },
+  "werewolf": { label: "Werewolf", description: "आंशिक रूप से बदला हुआ lycanthrope" },
+  "mermaid": { label: "Mermaid", description: "मछली पूँछ वाली स्त्री humanoid" },
+  "merman": { label: "Merman", description: "मछली पूँछ वाला पुरुष humanoid" },
+  "dragonkin": { label: "Dragonkin", description: "शल्की draconian humanoid" },
+  "wizard": { label: "जादूगर (पुरुष)", description: "वस्त्रधारी पुरुष मंत्र-जाप करने वाला" },
+  "witch": { label: "जादूगरनी / डायन", description: "वस्त्रधारी स्त्री मंत्र-जाप करने वाली" },
+  "sorcerer": { label: "Sorcerer", description: "बहती वस्त्रों में जादुई पुरुष" },
+  "sorceress": { label: "Sorceress", description: "बहती वस्त्रों में जादुई स्त्री" },
+  "knight": { label: "Knight (शूरवीर)", description: "Plate armour में योद्धा" },
+  "barbarian": { label: "Barbarian", description: "खाल पहना हुआ हृष्ट-पुष्ट योद्धा" },
+  "druid": { label: "Druid", description: "प्रकृति से जुड़ा वस्त्रधारी रहस्यवादी" },
+  "ranger": { label: "Ranger", description: "लबादा-पहना तीरंदाज / जंगली स्काउट" },
+  "necromancer": { label: "Necromancer", description: "पीला dark-arts spellcaster" },
+  "prince": { label: "राजकुमार", description: "राजसी युवक" },
+  "princess": { label: "राजकुमारी", description: "राजसी युवती" },
+
+  // ----- Mythic / Divine -----
+  "angel": { label: "देवदूत", description: "पंखों वाला दिव्य humanoid" },
+  "demon": { label: "राक्षस / दैत्य", description: "सींगों वाला नारकीय humanoid" },
+  "ghost": { label: "भूत / आत्मा", description: "पारभासी spectral आकृति" },
+  "valkyrie": { label: "Valkyrie", description: "नॉर्स योद्धा-आत्मा स्त्री" },
+  "god": { label: "देवता", description: "पुरुष देवता" },
+  "goddess": { label: "देवी", description: "स्त्री देवी" },
+
+  // ----- Sci-Fi -----
+  "android-man": { label: "Android (पुरुष)", description: "पुरुष humanoid robot" },
+  "android-woman": { label: "Android (स्त्री)", description: "स्त्री humanoid robot" },
+  "android-neutral": { label: "Android (तटस्थ)", description: "androgynous humanoid robot" },
+  "cyborg": { label: "Cyborg", description: "मशीनी पुर्जों से जुड़ा मानव" },
+  "robot": { label: "Robot", description: "पूर्ण रूप से मशीनी humanoid" },
+  "alien": { label: "Alien", description: "गैर-मानव humanoid" },
+  "astronaut": { label: "Astronaut", description: "Suit पहना अंतरिक्ष यात्री" },
+  "space-marine": { label: "Space Marine", description: "Power armour में सैनिक" },
+  "ai-hologram": { label: "AI Hologram", description: "Volumetric प्रकाश आकृति" },
+
+  // ----- Heroes & Villains -----
+  "superhero": { label: "Superhero", description: "मास्क और कैप वाला नायक" },
+  "superheroine": { label: "Superheroine", description: "मास्क और कैप वाली नायिका" },
+  "masked-vigilante": { label: "Masked Vigilante", description: "गहरे suit में नायक" },
+  "supervillain": { label: "Supervillain", description: "नाटकीय खलनायक archetype" },
+  "caped-crusader": { label: "Caped Crusader", description: "कवच और cowl में अंधेरा नायक" },
+  "super-soldier": { label: "Super-Soldier", description: "देशभक्त exo-armour में योद्धा" },
+  "mutant": { label: "Mutant", description: "दृश्य mutations वाला मानव" },
+  "magical-girl": { label: "Magical Girl", description: "Anime-style transforming heroine" },
+
+  // ----- Anime / Anthro -----
+  "catgirl": { label: "Catgirl", description: "बिल्ली के कान + पूँछ वाली anime महिला" },
+  "catboy": { label: "Catboy", description: "बिल्ली के कान + पूँछ वाला anime पुरुष" },
+  "anthro": { label: "Anthropomorphic", description: "द्विपाद पशु-headed humanoid" },
+
+  // ----- Iconic / Public Domain -----
+  "sherlock-holmes": { label: "Sherlock Holmes", description: "Victorian consulting detective" },
+  "dracula": { label: "Count Dracula", description: "Stoker का gothic vampire count" },
+  "frankenstein-monster": { label: "Frankenstein's Monster", description: "Shelley का पुनर्जीवित प्राणी" },
+  "phantom-opera": { label: "Phantom of the Opera", description: "Leroux का masked operatic recluse" },
+  "mr-hyde": { label: "Mr Hyde", description: "Stevenson का राक्षसी alter ego" },
+  "king-arthur": { label: "King Arthur", description: "लीजेंडरी मध्यकालीन राजा" },
+  "merlin": { label: "Merlin", description: "Arthurian wizard सलाहकार" },
+  "robin-hood": { label: "Robin Hood", description: "जंगल का outlaw archer" },
+  "joan-of-arc": { label: "Joan of Arc", description: "कवच में मध्यकालीन योद्धा युवती" },
+  "cleopatra": { label: "Cleopatra", description: "मिस्र की अंतिम महारानी" },
+  "captain-nemo": { label: "Captain Nemo", description: "Verne का submarine captain" },
+  "alice-wonderland": { label: "Alice (Wonderland)", description: "Carroll की Wonderland की लड़की" },
+  "peter-pan": { label: "Peter Pan", description: "वह लड़का जो कभी बड़ा नहीं हुआ" },
+  "dorothy-oz": { label: "Dorothy (Oz)", description: "Blue gingham में Oz की लड़की" },
+  "tin-man": { label: "Tin Man", description: "Oz का tin woodsman" },
+  "scarecrow-oz": { label: "Scarecrow (Oz)", description: "Oz का straw scarecrow" },
+  "cowardly-lion": { label: "Cowardly Lion", description: "Oz का anthropomorphic शेर" },
+  "santa-claus": { label: "Santa Claus", description: "क्रिसमस उपहार-दाता" },
+  "grim-reaper": { label: "Grim Reaper", description: "मृत्यु का व्यक्तित्व" },
 }
 
 export default map

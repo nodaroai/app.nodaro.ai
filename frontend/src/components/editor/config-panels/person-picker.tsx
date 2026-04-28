@@ -122,51 +122,95 @@ export const PersonPicker = memo(function PersonPicker({
           ? enabledMulti.has(dimension) || selectedIds.length > 0
           : selectedIds.length > 0
         if (query && entries.length === 0) return null
+        const isAge = dimension === "age"
+        const isAgeCustom = isAge && value.age === "age-custom"
         return (
-          <DimensionSection
-            key={dimension}
-            dimension={dimension}
-            entries={entries}
-            field={field}
-            checked={checked}
-            selectedIds={selectedIds}
-            maxSelected={maxSelected}
-            resolveLabel={resolveLabel}
-            resolveDescription={resolveDescription}
-            onToggle={(next) => {
-              if (next) {
-                if (isMulti) {
-                  setEnabledMulti((s) => {
-                    const n = new Set(s)
-                    n.add(dimension)
-                    return n
-                  })
+          <div key={dimension} className="flex flex-col gap-1.5">
+            <DimensionSection
+              dimension={dimension}
+              entries={entries}
+              field={field}
+              checked={checked}
+              selectedIds={selectedIds}
+              maxSelected={maxSelected}
+              resolveLabel={resolveLabel}
+              resolveDescription={resolveDescription}
+              onToggle={(next) => {
+                if (next) {
+                  if (isMulti) {
+                    setEnabledMulti((s) => {
+                      const n = new Set(s)
+                      n.add(dimension)
+                      return n
+                    })
+                  } else {
+                    const first = PEOPLE.find((p) => p.dimension === dimension)?.id
+                    if (first) onChange({ [field]: first } as Partial<PersonValue>)
+                  }
                 } else {
-                  const first = PEOPLE.find((p) => p.dimension === dimension)?.id
-                  if (first) onChange({ [field]: first } as Partial<PersonValue>)
+                  if (isMulti) {
+                    setEnabledMulti((s) => {
+                      const n = new Set(s)
+                      n.delete(dimension)
+                      return n
+                    })
+                  }
+                  // Clearing the age dim also clears any custom-age number so
+                  // a stale value can't leak back if the user re-enables age.
+                  if (isAge) {
+                    onChange({ age: undefined, customAge: undefined } as Partial<PersonValue>)
+                  } else {
+                    onChange({ [field]: undefined } as Partial<PersonValue>)
+                  }
                 }
-              } else {
-                if (isMulti) {
-                  setEnabledMulti((s) => {
-                    const n = new Set(s)
-                    n.delete(dimension)
-                    return n
-                  })
+              }}
+              onPick={(id) => {
+                if (maxSelected <= 1) {
+                  // Switching off the custom-age sentinel drops customAge so
+                  // the number doesn't silently linger when an Age preset is
+                  // chosen instead.
+                  if (isAge && id !== "age-custom" && value.customAge !== undefined) {
+                    onChange({ age: id, customAge: undefined } as Partial<PersonValue>)
+                  } else {
+                    onChange({ [field]: id } as Partial<PersonValue>)
+                  }
+                  return
                 }
-                onChange({ [field]: undefined } as Partial<PersonValue>)
-              }
-            }}
-            onPick={(id) => {
-              if (maxSelected <= 1) {
-                onChange({ [field]: id } as Partial<PersonValue>)
-                return
-              }
-              const next = togglePick(selectedIds, id, maxSelected)
-              if (next.length === 0) onChange({ [field]: undefined } as Partial<PersonValue>)
-              else if (next.length === 1) onChange({ [field]: next[0] } as Partial<PersonValue>)
-              else onChange({ [field]: next } as Partial<PersonValue>)
-            }}
-          />
+                const next = togglePick(selectedIds, id, maxSelected)
+                if (next.length === 0) onChange({ [field]: undefined } as Partial<PersonValue>)
+                else if (next.length === 1) onChange({ [field]: next[0] } as Partial<PersonValue>)
+                else onChange({ [field]: next } as Partial<PersonValue>)
+              }}
+            />
+            {isAgeCustom && (
+              <div className="flex items-center gap-2 px-1 pl-6">
+                <label className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+                  Age (years)
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={120}
+                  inputMode="numeric"
+                  className="h-7 w-20 text-xs"
+                  value={value.customAge ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value
+                    if (raw === "") {
+                      onChange({ customAge: undefined } as Partial<PersonValue>)
+                      return
+                    }
+                    const n = parseInt(raw, 10)
+                    if (Number.isFinite(n)) {
+                      onChange({ customAge: n } as Partial<PersonValue>)
+                    }
+                  }}
+                  placeholder="e.g. 8"
+                  aria-label="Custom age in years"
+                />
+              </div>
+            )}
+          </div>
         )
       })}
     </div>
@@ -390,10 +434,11 @@ function DimensionSection({
   const baseLabel = PERSON_DIMENSION_LABELS[dimension]
   const multi = maxSelected > 1
   const label = multi ? `${baseLabel} (pick up to ${maxSelected})` : baseLabel
-  // Ethnicity has 39 entries across 6 groups — render as collapsible two-level
-  // picker (region header → specific entries inside). Other dims stay as flat
-  // chip grids since their entry counts are small enough.
-  const useGrouped = dimension === "ethnicity"
+  // Ethnicity (39 entries / 6 region groups) and Type (60+ entries spanning
+  // realistic, primitive, fantasy, mythic, sci-fi, heroes, anime) are both
+  // too long to scan flat — render them as collapsible two-level pickers
+  // (group header → specific entries inside). Other dims stay flat.
+  const useGrouped = dimension === "ethnicity" || dimension === "type"
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2 px-0.5">
