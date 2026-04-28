@@ -1,0 +1,72 @@
+# Nodaro Community Edition — minimal docker-compose
+#
+# Prerequisites:
+#   1. Create a Supabase project at https://supabase.com (free tier OK)
+#   2. Run the SQL migrations in supabase/migrations/ via the Supabase SQL editor
+#   3. Copy .env.example to .env and fill in SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+#      SUPABASE_ANON_KEY
+#   4. Generate two secrets:
+#        echo "INTERNAL_ORCHESTRATOR_SECRET=$(openssl rand -hex 32)" >> .env
+#        echo "SOCIAL_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env
+#
+# Run:    docker compose -f docker-compose.community.yml up
+# Logs:   docker compose -f docker-compose.community.yml logs -f
+# Stop:   docker compose -f docker-compose.community.yml down
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  nodaro:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${PUBLIC_URL:-http://localhost:8000}
+        VITE_EDITION: community
+        VITE_SUPABASE_URL: ${SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"   # frontend
+      - "8000:8000"   # backend API
+    environment:
+      EDITION: community
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      REDIS_URL: redis://redis:6379
+      INTERNAL_ORCHESTRATOR_SECRET: ${INTERNAL_ORCHESTRATOR_SECRET}
+      SOCIAL_ENCRYPTION_KEY: ${SOCIAL_ENCRYPTION_KEY}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-nodaro-assets}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+      KIE_API_KEY: ${KIE_API_KEY:-}
+      REPLICATE_API_TOKEN: ${REPLICATE_API_TOKEN:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      APIFY_API_TOKEN: ${APIFY_API_TOKEN:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redis-data:
