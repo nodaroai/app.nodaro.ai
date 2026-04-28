@@ -123,7 +123,7 @@
 | Backend | Fastify (Node.js/TypeScript), BullMQ (Redis) |
 | Database | Supabase (PostgreSQL + Auth + Realtime) |
 | Storage | Cloudflare R2 (S3-compatible) |
-| Auth | Supabase Auth (Google OAuth) + JWT middleware (`middleware/auth.ts`, 5-min SHA-256 token cache) |
+| Auth | Supabase Auth (Google OAuth) + JWT middleware (`middleware/auth.ts`, 5-min SHA-256 token cache) + dev-app OAuth (`ndr_app_<64hex>` access tokens, 90-day TTL) + API tokens (`ndr_<64hex>`) — `req.appAuthorization.scopes` enforces scoped access |
 | Payments | Stripe |
 
 ---
@@ -154,6 +154,9 @@
 | `credit_anomalies` | id, user_id, job_id, model, expected_credits, actual_credits, status | Credit charge anomaly tracking |
 | `kie_credit_snapshots` | id, balance, timestamp | KIE.ai account balance history (hourly) |
 | `tutorials` | id, title, description, video_url, thumbnail_url, category, sort_order, is_enabled, created_at, updated_at | Admin-managed video tutorials |
+| `developer_apps` | id, owner_user_id, name, description, logo_url, homepage_url, allowed_origins (text[]), redirect_uris (text[]), client_id (unique), client_secret_hash (bcrypt), scopes_requested (text[]), status | OAuth app registrations; client_id is `app_<32hex>`. Hard cap 5 apps per user. |
+| `developer_app_authorizations` | id, app_id, user_id, scopes_granted (text[]), revoked_at | User's consent grant for an app. Unique on (app_id, user_id) — one grant per app per user. |
+| `developer_app_tokens` | id, authorization_id, token_hash (sha256), token_prefix, expires_at, last_used_at, revoked_at | OAuth access tokens. Plaintext format `ndr_app_<64hex>`. 90-day TTL. |
 
 ---
 
@@ -290,11 +293,11 @@ backend/src/
 - [ ] Build from Prompt: MVP + Director Mode versions
 - [ ] Shot Node as companion to Scene Node ("Director Mode")
 - [x] OSS Phase 1: backend cleanup — 2026-04-28 (allowed-origins helper, GET /v1/nodes, OpenAPI seed, .env.example, docker-compose.community.yml, lazy stripe-client init)
-- [ ] OSS Phase 2: developer apps registration + OAuth
+- [x] OSS Phase 2: developer apps + OAuth — 2026-04-28 (developer_apps schema, scopes, dynamic CORS, /v1/oauth/* routes, auth middleware OAuth path, frontend management UI + consent screen). **Pending:** apply migration `093_developer_apps.sql` to staging Supabase.
 - [ ] OSS Phase 3: @nodaro/shared + @nodaro/client npm packages
 - [ ] OSS Phase 4: deployment + integration documentation
 
 ---
 
 *Last updated: 2026-04-28*
-*Version: 1.93.0*
+*Version: 1.94.0*
