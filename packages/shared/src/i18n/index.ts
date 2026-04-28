@@ -144,28 +144,40 @@ export function entryMatchesQuery(
 }
 
 /**
- * Vite-bundled glob of every sidecar file at build time. Vite scans the
- * pattern at build time and REPLACES this call with a static object literal
- * mapping each matched path to a code-split loader function. At runtime
- * `import.meta.glob` does not exist as a real function — the syntax is a
- * compile-time marker; do NOT guard on `typeof === "function"` because that
- * check is false at runtime even in Vite-built output.
+ * Sidecar loader registry. Populated by the consuming app via
+ * `registerSidecarLoaders` at startup.
  *
- * On non-Vite runtimes (backend / Node tests) the call throws (`glob` is
- * undefined). We catch and fall back to an empty loader map; backend code
- * never resolves picker labels so this is harmless.
+ * Why externalised: this package is bundled by tsup for npm publish, and
+ * `tsup` does NOT expand Vite's `import.meta.glob`. Calling it from inside
+ * the bundled module yields an empty loader map at runtime → all pickers
+ * silently fall back to English regardless of the user's locale.
+ *
+ * The frontend (which is processed by Vite) owns the glob — see
+ * `frontend/src/lib/i18n-bootstrap.ts`. Backend / Node tests don't need
+ * picker translations and simply skip registration.
+ *
+ * Keys are file paths relative to `packages/shared/src/i18n/`, e.g.
+ * `"./person.ja.ts"`.
  */
 type SidecarModule = { default?: LocaleCatalogMap } & Record<string, unknown>
-type SidecarLoader = () => Promise<unknown>
+export type SidecarLoader = () => Promise<unknown>
 
 let sidecarLoaders: Record<string, SidecarLoader> = {}
-try {
-  // Vite replaces this call with a static object literal at build time.
-  sidecarLoaders = (import.meta as ImportMeta & {
-    glob: (pattern: string) => Record<string, SidecarLoader>
-  }).glob("./*.*.ts")
-} catch {
-  /* not in Vite (Node / tests) — leave empty */
+
+/**
+ * Register the map of locale-sidecar loaders. Call once at app startup
+ * before any picker mounts.
+ *
+ * In Vite-processed code:
+ * ```ts
+ * import { registerSidecarLoaders } from "@nodaro/shared"
+ * registerSidecarLoaders(
+ *   import.meta.glob("../../packages/shared/src/i18n/*.*.ts"),
+ * )
+ * ```
+ */
+export function registerSidecarLoaders(loaders: Record<string, SidecarLoader>): void {
+  sidecarLoaders = loaders
 }
 
 async function loadLocaleCatalog(
@@ -173,8 +185,14 @@ async function loadLocaleCatalog(
   locale: LocaleId,
 ): Promise<LocaleCatalogMap | null> {
   if (locale === "en") return null
-  // Glob keys are like "./styling.fr.ts" (relative to this index.ts).
-  const loader = sidecarLoaders[`./${catalog}.${locale}.ts`]
+  // Match by suffix so the registry survives different glob roots —
+  // frontend's bootstrap globs from a different relative path than
+  // this file lives at, so keys look like ".../i18n/person.ja.ts".
+  const suffix = `${catalog}.${locale}.ts`
+  const matchKey = Object.keys(sidecarLoaders).find((k) =>
+    k.endsWith(`/${suffix}`) || k === `./${suffix}`,
+  )
+  const loader = matchKey ? sidecarLoaders[matchKey] : undefined
   if (!loader) return null
   try {
     const mod = (await loader()) as SidecarModule
