@@ -193,8 +193,8 @@ function CategorySection({
   const multi = maxSelected > 1
   const label = multi ? `${baseLabel} (pick up to ${maxSelected})` : baseLabel
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2 px-0.5">
+    <div className="flex flex-col gap-1.5 border-t-[3px] border-border/40">
+      <div className="flex items-center gap-2 px-0.5 mt-5">
         <input
           type="checkbox"
           id={`${id}-${field}`}
