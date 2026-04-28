@@ -1,6 +1,6 @@
 import Fastify from "fastify"
 import cors from "@fastify/cors"
-import { getStaticAllowedOrigins } from "./lib/allowed-origins.js"
+import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
 import { healthRoutes } from "./routes/health.js"
 import { projectRoutes } from "./routes/projects.js"
 import { workflowRoutes } from "./routes/workflows.js"
@@ -127,10 +127,13 @@ import { registerAuthHook } from "./middleware/auth.js"
 export async function buildApp() {
   const app = Fastify({ logger: true, bodyLimit: 1_048_576 }) // 1 MB for JSON endpoints
 
-  const allowedOrigins = getStaticAllowedOrigins()
-
   await app.register(cors, {
-    origin: allowedOrigins,
+    origin: async (origin, cb) => {
+      // Same-origin / curl requests have no Origin header — allow them
+      if (!origin) return cb(null, true)
+      const ok = await isOriginAllowedDynamic(origin)
+      return cb(null, ok)
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,

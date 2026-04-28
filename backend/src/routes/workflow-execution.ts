@@ -315,7 +315,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
-    const sse = createSSEStream(req, reply)
+    const sse = await createSSEStream(req, reply)
 
     // Send current DB state as initial metadata so late-connecting clients
     // never miss state that was written before the SSE connection opened.
