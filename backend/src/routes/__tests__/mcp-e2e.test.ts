@@ -16,27 +16,42 @@ vi.hoisted(() => {
 // the insert returns a fake row without hitting a real DB.
 // All other endpoints in this test (well-known, /mcp 401) don't touch supabase.
 // ---------------------------------------------------------------------------
-vi.mock("../../lib/supabase.js", () => ({
-  supabase: {
-    from: vi.fn().mockReturnValue({
-      insert: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({
-            data: {
-              id: "00000000-0000-0000-0000-000000000001",
-              client_id: "ndr_dcr_e2e_test_client",
-              created_at: new Date().toISOString(),
-            },
-            error: null,
-          }),
+vi.mock("../../lib/supabase.js", () => {
+  // DCR's countOpenRegistrations() chain: from().select(...).eq().eq().is().gte().overlaps()
+  const countChain: Record<string, unknown> = {}
+  countChain.eq = vi.fn(() => countChain)
+  countChain.is = vi.fn(() => countChain)
+  countChain.gte = vi.fn(() => countChain)
+  countChain.overlaps = vi.fn(() => Promise.resolve({ count: 0, error: null }))
+
+  // Insert chain: from().insert().select().single()
+  const insertChain = {
+    select: vi.fn(() => ({
+      single: vi.fn(() =>
+        Promise.resolve({
+          data: {
+            id: "00000000-0000-0000-0000-000000000001",
+            client_id: "ndr_dcr_e2e_test_client",
+            created_at: new Date().toISOString(),
+          },
+          error: null,
         }),
-      }),
-    }),
-    auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+      ),
+    })),
+  }
+
+  return {
+    supabase: {
+      from: vi.fn(() => ({
+        select: vi.fn(() => countChain),
+        insert: vi.fn(() => insertChain),
+      })),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+      },
     },
-  },
-}))
+  }
+})
 
 import { buildApp } from "../../app.js"
 
