@@ -82,6 +82,19 @@ const ALLOWED_PATHS = [
   // is enforced via bcrypt-verify of the client secret.
   /^src\/routes\/oauth\.ts$/,
 
+  // OAuth Dynamic Client Registration (RFC 7591): /v1/oauth/register creates
+  // developer_apps rows with owner_user_id=NULL — there's no user context at
+  // registration time (the row is claimed by a user during the OAuth consent
+  // step). Allowlist gate (MCP_DCR_ALLOWLIST) and per-call rate limiting are
+  // the abuse mitigations.
+  /^src\/routes\/oauth-register\.ts$/,
+
+  // Credits balance/transactions: reads profiles/usage_logs scoped by
+  // req.userId in-handler. Cloud-edition only (gated by hasCredits()).
+  // Service-role required because profile/usage_logs RLS denies even self-reads
+  // by design (every credit query goes through service-role helpers).
+  /^src\/routes\/credits-balance\.ts$/,
+
   // Embeds / og-tags: fetch public-facing metadata by id, not user-scoped.
   /^src\/routes\/embed\.ts$/,
   /^src\/routes\/og-tags\.ts$/,
