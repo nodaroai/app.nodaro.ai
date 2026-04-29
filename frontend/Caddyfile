@@ -1,4 +1,6 @@
 {
+	# Caddy global config. Updated 2026-04-29 — force redeploy after
+	# /.well-known/oauth-* handle blocks were added.
 	auto_https off
 	admin off
 }
