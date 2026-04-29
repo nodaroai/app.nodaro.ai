@@ -1,28 +1,18 @@
 /**
  * Single-job widget templates for image/video/audio/generic outputs.
  *
- * Each widget renders a card showing model + parameter badges, a progress
- * bar (driven by `notifications/progress` events), the media preview once
- * available, and two action buttons (Open in Nodaro, Re-run). The runtime
- * JS uses `document.createElement` + `textContent` + `setAttribute` ONLY —
- * never raw HTML assignment (snapshot tests in
- * `__tests__/single-job.test.ts` guard this).
+ * The widget is a STATIC template registered as an MCP UI resource at
+ * `ui://nodaro/widget/job-{kind}`. The host fetches it once via
+ * `resources/read`, renders it inside a sandboxed iframe, then delivers the
+ * per-call data via `ui/notifications/tool-input` and
+ * `ui/notifications/tool-result` events. Progress notifications arrive via
+ * `notifications/progress`. The widget uses these event streams (NOT
+ * embedded init data) to populate itself.
  *
- * Init data flows through `embedInitData` which escapes `</script>` to
- * prevent JSON breakout from a maliciously crafted prompt.
+ * Same DOM-construction safety rules apply: `document.createElement` +
+ * `textContent` + `setAttribute` ONLY — never raw HTML assignment.
  */
 import { uiProtocolShim } from "./_common.js"
-import { embedInitData } from "./builder.js"
-
-interface SingleJobInitData {
-  jobId: string
-  prompt: string
-  model: string
-  aspectRatio?: string
-  resolution?: string
-  duration?: number
-  outputUrl?: string
-}
 
 const SHARED_CSS = `
   :root { color-scheme: light dark; }
@@ -41,23 +31,23 @@ const SHARED_CSS = `
   .status { font-size: 13px; opacity: 0.85; }
 `
 
-// Helper that emits the shared scaffold + JS for media-type-specific preview.
-// Each builder injects its media-element creation logic via a string parameter.
-function buildSingleJobWidget(
-  data: SingleJobInitData,
-  mediaKind: "image" | "video" | "audio" | "generic",
-): string {
+type MediaKind = "image" | "video" | "audio" | "generic"
+
+/**
+ * Builds the static widget HTML for a given media kind. Called once per kind
+ * at server startup by the resource registrar.
+ */
+export function buildSingleJobWidget(mediaKind: MediaKind): string {
   return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8" />
 <style>${SHARED_CSS}</style>
-${embedInitData({ ...data, mediaKind })}
 ${uiProtocolShim()}
 </head>
 <body>
 <div class="card">
   <div class="meta" id="meta"></div>
-  <div class="status" id="status"></div>
+  <div class="status" id="status">Initializing…</div>
   <div class="progress" id="progress"><div id="bar"></div></div>
   <div class="preview" id="preview" hidden></div>
   <div class="actions">
@@ -67,29 +57,34 @@ ${uiProtocolShim()}
 </div>
 <script>
   (function() {
-    var INIT = window.__INIT__;
+    var MEDIA_KIND = ${JSON.stringify(mediaKind)};
+    var state = { jobId: null, prompt: null, model: null, aspectRatio: null, resolution: null, duration: null };
+
     var metaEl = document.getElementById('meta');
     var statusEl = document.getElementById('status');
     var progEl = document.getElementById('progress');
     var barEl = document.getElementById('bar');
     var previewEl = document.getElementById('preview');
 
-    [INIT.model, INIT.aspectRatio, INIT.resolution, INIT.duration ? INIT.duration + 's' : null].forEach(function(v) {
-      if (!v) return;
-      var span = document.createElement('span');
-      span.className = 'badge';
-      span.textContent = String(v);
-      metaEl.appendChild(span);
-    });
+    function renderMeta() {
+      while (metaEl.firstChild) metaEl.removeChild(metaEl.firstChild);
+      var values = [state.model, state.aspectRatio, state.resolution, state.duration ? state.duration + 's' : null];
+      values.forEach(function(v) {
+        if (!v) return;
+        var span = document.createElement('span');
+        span.className = 'badge';
+        span.textContent = String(v);
+        metaEl.appendChild(span);
+      });
+    }
 
     function showMedia(url) {
       while (previewEl.firstChild) previewEl.removeChild(previewEl.firstChild);
       var media;
-      if (INIT.mediaKind === 'video') { media = document.createElement('video'); media.controls = true; }
-      else if (INIT.mediaKind === 'audio') { media = document.createElement('audio'); media.controls = true; }
-      else if (INIT.mediaKind === 'image') { media = document.createElement('img'); media.setAttribute('alt', ''); }
+      if (MEDIA_KIND === 'video') { media = document.createElement('video'); media.controls = true; }
+      else if (MEDIA_KIND === 'audio') { media = document.createElement('audio'); media.controls = true; }
+      else if (MEDIA_KIND === 'image') { media = document.createElement('img'); media.setAttribute('alt', ''); }
       else {
-        // generic — show text link
         media = document.createElement('a');
         media.setAttribute('href', url);
         media.setAttribute('target', '_blank');
@@ -102,50 +97,76 @@ ${uiProtocolShim()}
       statusEl.textContent = 'Done';
     }
 
-    if (INIT.outputUrl) {
-      showMedia(INIT.outputUrl);
-    } else {
+    // Tool args arrive BEFORE the result — we know prompt/model up front.
+    window.addEventListener('mcp-tool-input', function(e) {
+      var args = (e.detail && e.detail.arguments) || {};
+      state.prompt = args.prompt || state.prompt;
+      state.model = args.model || state.model;
+      state.aspectRatio = args.aspect_ratio || args.aspectRatio || state.aspectRatio;
+      state.resolution = args.resolution || state.resolution;
+      state.duration = args.duration || state.duration;
+      renderMeta();
       statusEl.textContent = 'Generating…';
-    }
+    });
 
+    // Tool result arrives once the server has created the job and returned
+    // the jobId via structuredContent.
+    window.addEventListener('mcp-tool-result', function(e) {
+      var sc = (e.detail && e.detail.structuredContent) || {};
+      if (sc.jobId) state.jobId = sc.jobId;
+      if (sc.model) state.model = sc.model;
+      if (sc.aspectRatio) state.aspectRatio = sc.aspectRatio;
+      if (sc.resolution) state.resolution = sc.resolution;
+      if (sc.duration) state.duration = sc.duration;
+      if (sc.outputUrl) {
+        showMedia(sc.outputUrl);
+      } else {
+        statusEl.textContent = 'Generating…';
+      }
+      renderMeta();
+    });
+
+    // Bridged from progress-emitter via host-forwarded notifications/progress.
+    window.addEventListener('mcp-progress', function(e) {
+      var p = e.detail || {};
+      if (state.jobId && p.progressToken && p.progressToken !== state.jobId) return;
+      var pct = (p.progress || 0) * 100;
+      barEl.style.width = pct.toFixed(1) + '%';
+      statusEl.textContent = 'Generating… ' + Math.round(pct) + '%' + (p.message ? ' — ' + p.message : '');
+    });
+
+    // Re-run: orchestrator path is to push a chat message asking Claude to
+    // call the tool again with the same args. (App-callable tool variants are
+    // a future enhancement.)
     document.getElementById('btn-open').addEventListener('click', function() {
       window.NodaroMCP.openLink('https://app.nodaro.ai/library');
     });
     document.getElementById('btn-rerun').addEventListener('click', function() {
-      var toolName = INIT.mediaKind === 'video' ? 'generate_video' : INIT.mediaKind === 'audio' ? 'generate_music' : 'generate_image';
-      window.NodaroMCP.suggestTool(toolName, { prompt: INIT.prompt, model: INIT.model });
-    });
-
-    window.addEventListener('mcp-progress', function(e) {
-      var p = e.detail;
-      if (!p || p.progressToken !== INIT.jobId) return;
-      barEl.style.width = ((p.progress || 0) * 100).toFixed(1) + '%';
-      statusEl.textContent = 'Generating… ' + Math.round((p.progress || 0) * 100) + '%' + (p.message ? ' — ' + p.message : '');
-    });
-
-    window.addEventListener('mcp-ui-message', function(e) {
-      var msg = e.detail;
-      if (!msg.content || !msg.content[0]) return;
-      var text = msg.content[0].text || '';
-      var url = text.match(/^asset_url:\\s*(https?:\\/\\/[^\\s]+)/);
-      if (url) showMedia(url[1]);
+      var toolName = MEDIA_KIND === 'video' ? 'generate_video' :
+                     MEDIA_KIND === 'audio' ? 'generate_music' :
+                     'generate_image';
+      window.NodaroMCP.suggestTool(toolName, { prompt: state.prompt || '', model: state.model || undefined });
     });
   })();
 </script>
 </body></html>`
 }
 
-export function buildImageWidget(data: SingleJobInitData): string {
-  return buildSingleJobWidget(data, "image")
-}
-export function buildVideoWidget(data: SingleJobInitData): string {
-  return buildSingleJobWidget(data, "video")
-}
-export function buildAudioWidget(data: SingleJobInitData): string {
-  return buildSingleJobWidget(data, "audio")
-}
-export function buildGenericJobWidget(data: SingleJobInitData): string {
-  return buildSingleJobWidget(data, "generic")
+export type SingleJobInitData = {
+  jobId: string
+  prompt: string
+  model: string
+  aspectRatio?: string
+  resolution?: string
+  duration?: number
+  outputUrl?: string
 }
 
-export type { SingleJobInitData }
+// Back-compat aliases — callers that still reference the old per-call
+// builders get a stub that delegates to the static template builder. The
+// per-call init data is no longer baked into HTML; it flows via tool-result.
+export const buildImageWidget = (_d?: SingleJobInitData): string => buildSingleJobWidget("image")
+export const buildVideoWidget = (_d?: SingleJobInitData): string => buildSingleJobWidget("video")
+export const buildAudioWidget = (_d?: SingleJobInitData): string => buildSingleJobWidget("audio")
+export const buildGenericJobWidget = (_d?: SingleJobInitData): string =>
+  buildSingleJobWidget("generic")

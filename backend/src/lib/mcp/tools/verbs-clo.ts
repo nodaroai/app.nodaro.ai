@@ -56,6 +56,12 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         destructiveHint: false,
         openWorldHint: true,
       },
+    _meta: {
+      ui: {
+        resourceUri: "ui://nodaro/widget/job-image",
+        visibility: ["model", "app"],
+      },
+    },
     },
     async (args) => {
       const isAsset = args.kind === "asset"
@@ -100,7 +106,6 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         session,
         widgetKind: "image",
         widgetData: {
-          jobId,
           prompt: args.description ?? args.name,
           model: args.model ?? "nano-banana",
         },
@@ -149,6 +154,12 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         destructiveHint: false,
         openWorldHint: true,
       },
+    _meta: {
+      ui: {
+        resourceUri: "ui://nodaro/widget/job-image",
+        visibility: ["model", "app"],
+      },
+    },
     },
     async (args) => {
       const isAsset = args.kind === "asset"
@@ -192,7 +203,6 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         session,
         widgetKind: "image",
         widgetData: {
-          jobId,
           prompt: args.description ?? args.name,
           model: args.model ?? "nano-banana",
         },
@@ -242,6 +252,12 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         destructiveHint: false,
         openWorldHint: true,
       },
+    _meta: {
+      ui: {
+        resourceUri: "ui://nodaro/widget/job-image",
+        visibility: ["model", "app"],
+      },
+    },
     },
     async (args) => {
       const isAsset = args.kind === "asset"
@@ -285,7 +301,6 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         session,
         widgetKind: "image",
         widgetData: {
-          jobId,
           prompt: args.description ?? args.name,
           model: args.model ?? "nano-banana",
         },

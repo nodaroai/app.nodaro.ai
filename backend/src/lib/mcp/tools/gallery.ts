@@ -4,8 +4,7 @@ import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
-import { buildUIResource } from "../widgets/builder.js"
-import { buildGalleryWidget, type GalleryItem } from "../widgets/gallery.js"
+import { type GalleryItem } from "../widgets/gallery.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
@@ -140,6 +139,12 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
           kind: z.enum(["image", "video", "audio"]).optional(),
         },
         annotations: { readOnlyHint: true },
+      _meta: {
+        ui: {
+          resourceUri: "ui://nodaro/widget/gallery",
+          visibility: ["model", "app"],
+        },
+      },
       },
       async (args) => {
         const limit = args.limit ?? 20
@@ -183,25 +188,14 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
         const items = rows
           .map(rowToGalleryItem)
           .filter((item): item is GalleryItem => item !== null)
-        const widgetHtml = buildGalleryWidget({
-          items,
-          nextCursor,
-          totalCount: items.length,
-        })
-        const resource = buildUIResource({
-          uri: "ui://nodaro/gallery",
-          content: { type: "rawHtml", htmlString: widgetHtml },
-          csp: {
-            resourceDomains: ["https://assets.nodaro.ai", "https://*.r2.cloudflarestorage.com"],
-          },
-        }) as {
-          type: "resource"
-          resource: { uri: string; text: string; mimeType?: string }
-          _meta?: Record<string, unknown>
-        }
 
         return {
-          content: [{ type: "text", text }, resource],
+          content: [{ type: "text" as const, text }],
+          structuredContent: {
+            items: items as unknown as Record<string, unknown>[],
+            nextCursor,
+            totalCount: items.length,
+          },
         }
       },
     )
@@ -217,6 +211,12 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
           cursor: z.string().optional(),
         },
         annotations: { readOnlyHint: true },
+      _meta: {
+        ui: {
+          resourceUri: "ui://nodaro/widget/gallery",
+          visibility: ["model", "app"],
+        },
+      },
       },
       async (args) => {
         const limit = args.limit ?? 50
@@ -259,25 +259,13 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
             .map((item) => ({ ...item, favorited: true }))
         }
 
-        const widgetHtml = buildGalleryWidget({
-          items,
-          nextCursor,
-          totalCount: items.length,
-        })
-        const resource = buildUIResource({
-          uri: "ui://nodaro/gallery",
-          content: { type: "rawHtml", htmlString: widgetHtml },
-          csp: {
-            resourceDomains: ["https://assets.nodaro.ai", "https://*.r2.cloudflarestorage.com"],
-          },
-        }) as {
-          type: "resource"
-          resource: { uri: string; text: string; mimeType?: string }
-          _meta?: Record<string, unknown>
-        }
-
         return {
-          content: [{ type: "text", text }, resource],
+          content: [{ type: "text" as const, text }],
+          structuredContent: {
+            items: items as unknown as Record<string, unknown>[],
+            nextCursor,
+            totalCount: items.length,
+          },
         }
       },
     )
