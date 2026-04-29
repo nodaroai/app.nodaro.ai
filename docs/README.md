@@ -10,6 +10,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Self-host Nodaro for my team** → [Community Edition Quickstart](./community-edition-quickstart.md)
 - **Build a server-side integration** → [API Integration](./api-integration.md) → [OAuth Flow](./oauth-flow.md)
 - **Build a custom frontend** → [SDK Quickstart](./sdk-quickstart.md) → [SDK Reference](./sdk-reference.md)
+- **Connect an AI client (Claude.ai, Cursor, Cline, Continue, Goose) via MCP** → [MCP](./mcp/index.md)
 - **Contribute to Nodaro** → [Architecture](./architecture.md) → [Contributing](./contributing.md)
 
 ## Editions
