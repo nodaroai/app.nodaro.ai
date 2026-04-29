@@ -66,6 +66,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         destructiveHint: false,
         openWorldHint: true,
       },
+    _meta: {
+      ui: {
+        resourceUri: "ui://nodaro/widget/job-video",
+        visibility: ["model", "app"],
+      },
+    },
     },
     async (args) => {
       const compositePrompt = buildCompositePrompt(args.prompt, args.structured)
@@ -97,7 +103,6 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         session,
         widgetKind: "video",
         widgetData: {
-          jobId,
           prompt: compositePrompt,
           model: args.model ?? "text-to-video",
           aspectRatio: args.aspect_ratio,
@@ -149,6 +154,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         destructiveHint: false,
         openWorldHint: true,
       },
+    _meta: {
+      ui: {
+        resourceUri: "ui://nodaro/widget/job-video",
+        visibility: ["model", "app"],
+      },
+    },
     },
     async (args) => {
       const imageUrl =
@@ -196,7 +207,6 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         session,
         widgetKind: "video",
         widgetData: {
-          jobId,
           prompt: args.prompt ?? "(animate image)",
           model: args.model ?? "image-to-video",
           aspectRatio: args.aspect_ratio,
@@ -226,6 +236,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         destructiveHint: false,
         openWorldHint: true,
       },
+    _meta: {
+      ui: {
+        resourceUri: "ui://nodaro/widget/job-video",
+        visibility: ["model", "app"],
+      },
+    },
     },
     async (args) => {
       const payload = {
@@ -255,7 +271,6 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         session,
         widgetKind: "video",
         widgetData: {
-          jobId,
           prompt: args.prompt,
           model: args.model,
         },
@@ -291,6 +306,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         destructiveHint: false,
         openWorldHint: true,
       },
+    _meta: {
+      ui: {
+        resourceUri: "ui://nodaro/widget/job-video",
+        visibility: ["model", "app"],
+      },
+    },
     },
     async (args) => {
       const videoUrls: string[] = []
@@ -342,7 +363,6 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         session,
         widgetKind: "video",
         widgetData: {
-          jobId,
           prompt: `Combine ${videoUrls.length} videos`,
           model: "combine-videos",
         },
@@ -372,6 +392,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         destructiveHint: false,
         openWorldHint: true,
       },
+    _meta: {
+      ui: {
+        resourceUri: "ui://nodaro/widget/job-video",
+        visibility: ["model", "app"],
+      },
+    },
     },
     async (args) => {
       const videoUrl =
@@ -419,7 +445,6 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         session,
         widgetKind: "video",
         widgetData: {
-          jobId,
           prompt: args.text,
           model: "add-captions",
         },
@@ -445,6 +470,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         destructiveHint: false,
         openWorldHint: true,
       },
+    _meta: {
+      ui: {
+        resourceUri: "ui://nodaro/widget/job-image",
+        visibility: ["model", "app"],
+      },
+    },
     },
     async (args) => {
       const videoUrl =
@@ -488,7 +519,6 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         session,
         widgetKind: "image",
         widgetData: {
-          jobId,
           prompt: `Extract frame from ${videoUrl}`,
           model: "extract-frame",
         },

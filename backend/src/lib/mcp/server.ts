@@ -12,6 +12,7 @@ import { registerGallery } from "./tools/gallery.js"
 import { registerDynamicTools } from "./tools/dynamic.js"
 import { registerTaskHandlers } from "./tasks.js"
 import { startProgressEmitter } from "./progress-emitter.js"
+import { registerWidgetResources } from "./widgets/registrar.js"
 import type { Scope } from "../scopes.js"
 
 interface BuildOpts {
@@ -76,6 +77,10 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
       },
     },
   )
+
+  // Register UI resource templates BEFORE tools, so tool _meta.ui.resourceUri
+  // references resolve cleanly when the host calls resources/read.
+  registerWidgetResources(server)
 
   registerPing(server, session)
   registerVerbs({ server, session, fastify: opts.fastify })

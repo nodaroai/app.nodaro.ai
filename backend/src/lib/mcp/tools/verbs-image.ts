@@ -113,6 +113,12 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           destructiveHint: false,
           openWorldHint: true,
         },
+      _meta: {
+        ui: {
+          resourceUri: "ui://nodaro/widget/job-image",
+          visibility: ["model", "app"],
+        },
+      },
       },
       async (args) => {
         const compositePrompt = buildCompositePrompt(args.prompt, args.structured)
@@ -145,7 +151,6 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           session,
           widgetKind: "image",
           widgetData: {
-            jobId,
             prompt: compositePrompt,
             model: args.model,
             aspectRatio: args.aspect_ratio,
@@ -191,6 +196,12 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           destructiveHint: false,
           openWorldHint: true,
         },
+      _meta: {
+        ui: {
+          resourceUri: "ui://nodaro/widget/job-image",
+          visibility: ["model", "app"],
+        },
+      },
       },
       async (args) => {
         const imageUrl =
@@ -245,7 +256,6 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           session,
           widgetKind: "image",
           widgetData: {
-            jobId,
             prompt: compositePrompt,
             model: args.model ?? "image-to-image",
             aspectRatio: args.aspect_ratio,
