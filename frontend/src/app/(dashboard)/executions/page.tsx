@@ -33,13 +33,13 @@ import { queryKeys } from "@/lib/query-keys"
 import { useGlobalExecutions } from "@/hooks/queries/use-execution-queries"
 import {
   STATUS_COLORS,
-  TRIGGER_LABELS,
   NODE_STATUS_DOT,
   formatRelativeTime,
   formatDuration,
   formatNodeType,
   type NodeState,
 } from "@/components/editor/execution-utils"
+import { TriggerBadge } from "@/components/library/triggers/TriggerBadge"
 import { ExecutionDetailModal } from "@/components/editor/execution-detail-modal"
 import { useBackToClose } from "@/hooks/use-back-to-close"
 import { getJobStatus, type GlobalExecution } from "@/lib/api"
@@ -396,9 +396,7 @@ function GlobalExecutionRow({
           </td>
         )}
         <td className="px-4 py-3">
-          <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
-            {TRIGGER_LABELS[exec.triggerType] ?? exec.triggerType}
-          </span>
+          <TriggerBadge triggerType={exec.triggerType} mcpClient={exec.mcpClient} />
         </td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-2">

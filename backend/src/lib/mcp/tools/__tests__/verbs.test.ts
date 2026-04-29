@@ -1,9 +1,14 @@
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import { registerVerbs } from "../verbs.js"
 import { newSession } from "../../session.js"
+import { _resetRegistry } from "../../tasks.js"
 import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools } from "./_helpers.js"
+
+beforeEach(() => {
+  _resetRegistry()
+})
 
 /**
  * v1.1 generation verbs.
@@ -86,6 +91,9 @@ describe("generate_image verb", () => {
     expect(received.body?.prompt).toBe("a knight Mood: epic.")
     expect(received.body?.mcp_client).toBe("Claude")
     expect(received.body?.userId).toBe("u1")
+    // v1.2: result includes a widget UI resource alongside text.
+    expect(result.content.length).toBe(2)
+    expect((result.content[1] as { type: string }).type).toBe("resource")
   })
 
   it("returns isError when /v1/generate-image responds 400", async () => {

@@ -3369,7 +3369,9 @@ export interface WorkflowExecution {
   id: string
   workflowId: string
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'stopping'
-  triggerType: 'manual' | 'webhook' | 'schedule' | 'single-node' | 'app_run'
+  triggerType: 'manual' | 'webhook' | 'schedule' | 'single-node' | 'app_run' | 'mcp'
+  /** MCP client name (e.g. "Claude", "Cursor") when the execution was triggered via the MCP server. */
+  mcpClient?: string | null
   triggerData?: Record<string, unknown>
   nodeStates?: Record<string, unknown>
   totalNodes: number

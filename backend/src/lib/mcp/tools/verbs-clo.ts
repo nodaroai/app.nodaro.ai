@@ -2,54 +2,14 @@ import { z } from "zod"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { config } from "../../config.js"
 import type { RegisterOpts } from "./verbs-image.js"
+import {
+  parseJobId,
+  errorResult,
+  parseFailure,
+  jobResultWithWidget,
+} from "./_verb-helpers.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
-
-interface ParsedJobBody {
-  jobId?: string
-  job_id?: string
-  id?: string
-}
-
-function parseJobId(body: string): string | null {
-  try {
-    const parsed = JSON.parse(body) as ParsedJobBody
-    return parsed.jobId ?? parsed.job_id ?? parsed.id ?? null
-  } catch {
-    return null
-  }
-}
-
-function jobResult(jobId: string, label: string) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: `Submitted ${label} job ${jobId}. Track via tasks/get with task_id=${jobId} or open: https://app.nodaro.ai/library/jobs/${jobId}`,
-      },
-    ],
-    _meta: { task_id: jobId },
-  }
-}
-
-function errorResult(statusCode: number, body: string) {
-  return {
-    content: [{ type: "text" as const, text: `Error from Nodaro: ${statusCode} ${body}` }],
-    isError: true,
-  }
-}
-
-function parseFailure(body: string) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: `Submitted but couldn't parse job_id from response: ${body}`,
-      },
-    ],
-    isError: true,
-  }
-}
 
 const STYLE = z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional()
 
@@ -134,7 +94,17 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) return parseFailure(res.body)
-      return jobResult(jobId, isAsset ? "character asset" : "character")
+      return jobResultWithWidget({
+        jobId,
+        label: isAsset ? "character asset" : "character",
+        session,
+        widgetKind: "image",
+        widgetData: {
+          jobId,
+          prompt: args.description ?? args.name,
+          model: args.model ?? "nano-banana",
+        },
+      })
     },
   )
 
@@ -216,7 +186,17 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) return parseFailure(res.body)
-      return jobResult(jobId, isAsset ? "location asset" : "location")
+      return jobResultWithWidget({
+        jobId,
+        label: isAsset ? "location asset" : "location",
+        session,
+        widgetKind: "image",
+        widgetData: {
+          jobId,
+          prompt: args.description ?? args.name,
+          model: args.model ?? "nano-banana",
+        },
+      })
     },
   )
 
@@ -299,7 +279,17 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) return parseFailure(res.body)
-      return jobResult(jobId, isAsset ? "object asset" : "object")
+      return jobResultWithWidget({
+        jobId,
+        label: isAsset ? "object asset" : "object",
+        session,
+        widgetKind: "image",
+        widgetData: {
+          jobId,
+          prompt: args.description ?? args.name,
+          model: args.model ?? "nano-banana",
+        },
+      })
     },
   )
 }

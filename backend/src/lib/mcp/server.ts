@@ -9,6 +9,8 @@ import { registerComponents } from "./tools/components.js"
 import { registerApps } from "./tools/apps.js"
 import { registerModels } from "./tools/models.js"
 import { registerGallery } from "./tools/gallery.js"
+import { registerTaskHandlers } from "./tasks.js"
+import { startProgressEmitter } from "./progress-emitter.js"
 import type { Scope } from "../scopes.js"
 
 interface BuildOpts {
@@ -55,7 +57,23 @@ export function buildMcpServer(opts: BuildOpts): McpServer {
   const session = newSession(opts)
   const server = new McpServer(
     { name: "nodaro-mcp", version: "1.0.0" },
-    { capabilities: { tools: { listChanged: false } } },
+    {
+      // v1.2: declare `tasks` capability so the SDK accepts our `tasks/*`
+      // request handlers. Without this, `Server.assertRequestHandlerCapability`
+      // throws "Server does not support tasks capability" the moment a
+      // client invokes one of the four task methods. The empty objects
+      // (per `ServerTasksCapabilitySchema`) are a positive presence signal —
+      // every key is optional but the parent object MUST exist.
+      capabilities: {
+        tools: { listChanged: false },
+        tasks: {
+          list: {},
+          cancel: {},
+          requests: { tools: { call: {} } },
+        },
+        experimental: {},
+      },
+    },
   )
 
   registerPing(server, session)
@@ -66,6 +84,13 @@ export function buildMcpServer(opts: BuildOpts): McpServer {
   registerApps({ server, session, fastify: opts.fastify })
   registerModels({ server, session, fastify: opts.fastify })
   registerGallery({ server, session, fastify: opts.fastify })
+
+  // v1.2: tasks/* + notifications/progress wiring. Tasks are registered
+  // against the session's userId (via a thunk so the closure stays
+  // consistent), and the emitter polls Supabase every second to bridge
+  // BullMQ progress writes onto MCP `notifications/progress`.
+  registerTaskHandlers(server, () => session.userId)
+  startProgressEmitter(server)
 
   return server
 }

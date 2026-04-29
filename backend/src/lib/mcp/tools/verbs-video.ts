@@ -4,54 +4,14 @@ import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { config } from "../../config.js"
 import type { RegisterOpts } from "./verbs-image.js"
+import {
+  parseJobId,
+  errorResult,
+  parseFailure,
+  jobResultWithWidget,
+} from "./_verb-helpers.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
-
-interface ParsedJobBody {
-  jobId?: string
-  job_id?: string
-  id?: string
-}
-
-function parseJobId(body: string): string | null {
-  try {
-    const parsed = JSON.parse(body) as ParsedJobBody
-    return parsed.jobId ?? parsed.job_id ?? parsed.id ?? null
-  } catch {
-    return null
-  }
-}
-
-function jobResult(jobId: string, label: string) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: `Submitted ${label} job ${jobId}. Track via tasks/get with task_id=${jobId} or open: https://app.nodaro.ai/library/jobs/${jobId}`,
-      },
-    ],
-    _meta: { task_id: jobId },
-  }
-}
-
-function errorResult(statusCode: number, body: string) {
-  return {
-    content: [{ type: "text" as const, text: `Error from Nodaro: ${statusCode} ${body}` }],
-    isError: true,
-  }
-}
-
-function parseFailure(body: string) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: `Submitted but couldn't parse job_id from response: ${body}`,
-      },
-    ],
-    isError: true,
-  }
-}
 
 const StructuredFields = z
   .object({
@@ -131,7 +91,19 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) return parseFailure(res.body)
-      return jobResult(jobId, "text-to-video")
+      return jobResultWithWidget({
+        jobId,
+        label: "text-to-video",
+        session,
+        widgetKind: "video",
+        widgetData: {
+          jobId,
+          prompt: compositePrompt,
+          model: args.model ?? "text-to-video",
+          aspectRatio: args.aspect_ratio,
+          duration: args.duration,
+        },
+      })
     },
   )
 
@@ -218,7 +190,19 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) return parseFailure(res.body)
-      return jobResult(jobId, "image-to-video")
+      return jobResultWithWidget({
+        jobId,
+        label: "image-to-video",
+        session,
+        widgetKind: "video",
+        widgetData: {
+          jobId,
+          prompt: args.prompt ?? "(animate image)",
+          model: args.model ?? "image-to-video",
+          aspectRatio: args.aspect_ratio,
+          duration: args.duration,
+        },
+      })
     },
   )
 
@@ -265,7 +249,17 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) return parseFailure(res.body)
-      return jobResult(jobId, "video extend")
+      return jobResultWithWidget({
+        jobId,
+        label: "video extend",
+        session,
+        widgetKind: "video",
+        widgetData: {
+          jobId,
+          prompt: args.prompt,
+          model: args.model,
+        },
+      })
     },
   )
 
@@ -342,7 +336,17 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) return parseFailure(res.body)
-      return jobResult(jobId, "combine videos")
+      return jobResultWithWidget({
+        jobId,
+        label: "combine videos",
+        session,
+        widgetKind: "video",
+        widgetData: {
+          jobId,
+          prompt: `Combine ${videoUrls.length} videos`,
+          model: "combine-videos",
+        },
+      })
     },
   )
 
@@ -409,7 +413,17 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) return parseFailure(res.body)
-      return jobResult(jobId, "add captions")
+      return jobResultWithWidget({
+        jobId,
+        label: "add captions",
+        session,
+        widgetKind: "video",
+        widgetData: {
+          jobId,
+          prompt: args.text,
+          model: "add-captions",
+        },
+      })
     },
   )
 
@@ -468,7 +482,17 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) return parseFailure(res.body)
-      return jobResult(jobId, "extract frame")
+      return jobResultWithWidget({
+        jobId,
+        label: "extract frame",
+        session,
+        widgetKind: "image",
+        widgetData: {
+          jobId,
+          prompt: `Extract frame from ${videoUrl}`,
+          model: "extract-frame",
+        },
+      })
     },
   )
 }
