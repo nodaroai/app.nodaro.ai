@@ -1,0 +1,387 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`workflow widget > embeds pre-loaded node states into INIT data 1`] = `
+"<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8" />
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
+  .header { font-weight: 600; margin-bottom: 12px; }
+  .nodes { display: flex; flex-direction: column; gap: 4px; }
+  .node { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; background: rgba(127,127,127,0.08); }
+  .node.running { background: rgba(91,157,255,0.15); }
+  .node.done { background: rgba(91,210,127,0.15); }
+  .node.failed { background: rgba(255,91,91,0.15); }
+  .pill { width: 8px; height: 8px; border-radius: 50%; background: #999; flex-shrink: 0; }
+  .node.running .pill { background: #5b9dff; animation: pulse 1.5s infinite; }
+  .node.done .pill { background: #5bd27f; }
+  .node.failed .pill { background: #ff5b5b; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.5 } }
+  .label { flex: 1; }
+  .progress { font-size: 12px; opacity: 0.7; margin-top: 12px; }
+  .outputs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 12px; }
+  .outputs img, .outputs video { width: 100%; border-radius: 6px; display: block; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  button { padding: 6px 14px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; }
+</style>
+<script>window.__INIT__ = {"executionId":"e-2","name":"Test","nodeStates":[{"id":"n1","label":"Generate image","status":"done"},{"id":"n2","label":"Animate it","status":"running"}]};</script>
+<script>
+    (function() {
+      'use strict';
+      var nextId = 1;
+      var pending = new Map();
+
+      function send(method, params) {
+        var id = nextId++;
+        return new Promise(function(resolve, reject) {
+          pending.set(id, { resolve: resolve, reject: reject });
+          window.parent.postMessage({ jsonrpc: '2.0', id: id, method: method, params: params }, '*');
+          setTimeout(function() {
+            if (pending.has(id)) { pending.delete(id); reject(new Error('ui/* timeout')); }
+          }, 30000);
+        });
+      }
+
+      function notify(method, params) {
+        window.parent.postMessage({ jsonrpc: '2.0', method: method, params: params }, '*');
+      }
+
+      window.addEventListener('message', function(e) {
+        var data = e.data;
+        if (!data || data.jsonrpc !== '2.0') return;
+        if (data.id && pending.has(data.id)) {
+          var p = pending.get(data.id);
+          pending.delete(data.id);
+          if (data.error) p.reject(new Error(data.error.message || 'ui error'));
+          else p.resolve(data.result);
+          return;
+        }
+        if (data.method === 'ui/message' && data.params) {
+          window.dispatchEvent(new CustomEvent('mcp-ui-message', { detail: data.params }));
+        }
+        if (data.method === 'notifications/progress' && data.params) {
+          window.dispatchEvent(new CustomEvent('mcp-progress', { detail: data.params }));
+        }
+      });
+
+      window.addEventListener('DOMContentLoaded', function() {
+        send('ui/initialize', {
+          appInfo: { name: 'nodaro-mcp', version: '1.0.0' },
+          appCapabilities: { tools: { listChanged: false }, experimental: {} },
+          protocolVersion: '2025-11-21'
+        }).catch(function(err) { console.warn('ui/initialize failed:', err); });
+      });
+
+      window.NodaroMCP = {
+        openLink: function(url) {
+          notify('ui/message', {
+            role: 'user',
+            content: [{ type: 'text', text: 'Open ' + url + ' in a new tab.' }]
+          });
+        },
+        useAsset: function(assetId, kind) {
+          notify('ui/message', {
+            role: 'user',
+            content: [{ type: 'text', text: 'Use the ' + kind + ' with id ' + assetId + ' as a reference. The user clicked the Use button.' }]
+          });
+        },
+        suggestTool: function(toolName, paramsHint) {
+          notify('ui/message', {
+            role: 'user',
+            content: [{ type: 'text', text: 'Run ' + toolName + ' with these parameters: ' + JSON.stringify(paramsHint) }]
+          });
+        }
+      };
+    })();
+  </script>
+</head>
+<body>
+<div class="header" id="header"></div>
+<div class="nodes" id="nodes"></div>
+<div class="progress" id="progress">Starting…</div>
+<div class="outputs" id="outputs"></div>
+<div class="actions">
+  <button id="btn-open">Open in Nodaro</button>
+</div>
+<script>
+  (function() {
+    var INIT = window.__INIT__;
+    var headerEl = document.getElementById('header');
+    var nodesEl = document.getElementById('nodes');
+    var progressEl = document.getElementById('progress');
+    var outputsEl = document.getElementById('outputs');
+
+    headerEl.textContent = INIT.name;
+
+    // Track node order via an array so we render in insertion order; a
+    // companion map gives O(1) lookup when an update arrives.
+    var nodeOrder = [];
+    var nodeMap = {};
+    (INIT.nodeStates || []).forEach(function(n) {
+      nodeOrder.push(n.id);
+      nodeMap[n.id] = n;
+    });
+
+    function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+
+    function renderNodes() {
+      clear(nodesEl);
+      nodeOrder.forEach(function(id) {
+        var n = nodeMap[id];
+        if (!n) return;
+        var row = document.createElement('div');
+        row.className = 'node ' + n.status;
+        var pill = document.createElement('span');
+        pill.className = 'pill';
+        var label = document.createElement('span');
+        label.className = 'label';
+        label.textContent = n.label;
+        row.appendChild(pill);
+        row.appendChild(label);
+        nodesEl.appendChild(row);
+      });
+    }
+
+    function addOutput(kind, url) {
+      var el;
+      if (kind === 'video') { el = document.createElement('video'); el.controls = true; }
+      else if (kind === 'audio') { el = document.createElement('audio'); el.controls = true; }
+      else { el = document.createElement('img'); el.setAttribute('alt', ''); }
+      el.setAttribute('src', url);
+      outputsEl.appendChild(el);
+    }
+
+    document.getElementById('btn-open').addEventListener('click', function() {
+      window.NodaroMCP.openLink('https://app.nodaro.ai/library/executions/' + INIT.executionId);
+    });
+
+    if (INIT.outputs) INIT.outputs.forEach(function(o) { addOutput(o.kind, o.url); });
+    renderNodes();
+
+    window.addEventListener('mcp-ui-message', function(e) {
+      var msg = e.detail;
+      if (!msg || !msg.content || !msg.content[0]) return;
+      var text = msg.content[0].text || '';
+
+      var nodeUpdate = text.match(/^node:([^:]+):(queued|running|done|failed)(?::(.*))?$/);
+      if (nodeUpdate) {
+        var id = nodeUpdate[1];
+        var status = nodeUpdate[2];
+        var lbl = nodeUpdate[3] || (nodeMap[id] && nodeMap[id].label) || id;
+        if (!nodeMap[id]) nodeOrder.push(id);
+        nodeMap[id] = { id: id, label: lbl, status: status };
+        renderNodes();
+        return;
+      }
+
+      var prog = text.match(/^progress:\\s*([\\d.]+)\\s*\\|\\s*(.+)$/);
+      if (prog) {
+        progressEl.textContent = 'Step: ' + prog[2] + ' (' + Math.round(parseFloat(prog[1]) * 100) + '%)';
+        return;
+      }
+
+      var output = text.match(/^output:(image|video|audio):(https?:\\/\\/[^\\s]+)$/);
+      if (output) {
+        addOutput(output[1], output[2]);
+        progressEl.textContent = 'Done';
+      }
+    });
+  })();
+</script>
+</body></html>"
+`;
+
+exports[`workflow widget > renders empty state 1`] = `
+"<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8" />
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
+  .header { font-weight: 600; margin-bottom: 12px; }
+  .nodes { display: flex; flex-direction: column; gap: 4px; }
+  .node { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; background: rgba(127,127,127,0.08); }
+  .node.running { background: rgba(91,157,255,0.15); }
+  .node.done { background: rgba(91,210,127,0.15); }
+  .node.failed { background: rgba(255,91,91,0.15); }
+  .pill { width: 8px; height: 8px; border-radius: 50%; background: #999; flex-shrink: 0; }
+  .node.running .pill { background: #5b9dff; animation: pulse 1.5s infinite; }
+  .node.done .pill { background: #5bd27f; }
+  .node.failed .pill { background: #ff5b5b; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.5 } }
+  .label { flex: 1; }
+  .progress { font-size: 12px; opacity: 0.7; margin-top: 12px; }
+  .outputs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 12px; }
+  .outputs img, .outputs video { width: 100%; border-radius: 6px; display: block; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  button { padding: 6px 14px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; }
+</style>
+<script>window.__INIT__ = {"executionId":"e-1","name":"Marketing Video Generator"};</script>
+<script>
+    (function() {
+      'use strict';
+      var nextId = 1;
+      var pending = new Map();
+
+      function send(method, params) {
+        var id = nextId++;
+        return new Promise(function(resolve, reject) {
+          pending.set(id, { resolve: resolve, reject: reject });
+          window.parent.postMessage({ jsonrpc: '2.0', id: id, method: method, params: params }, '*');
+          setTimeout(function() {
+            if (pending.has(id)) { pending.delete(id); reject(new Error('ui/* timeout')); }
+          }, 30000);
+        });
+      }
+
+      function notify(method, params) {
+        window.parent.postMessage({ jsonrpc: '2.0', method: method, params: params }, '*');
+      }
+
+      window.addEventListener('message', function(e) {
+        var data = e.data;
+        if (!data || data.jsonrpc !== '2.0') return;
+        if (data.id && pending.has(data.id)) {
+          var p = pending.get(data.id);
+          pending.delete(data.id);
+          if (data.error) p.reject(new Error(data.error.message || 'ui error'));
+          else p.resolve(data.result);
+          return;
+        }
+        if (data.method === 'ui/message' && data.params) {
+          window.dispatchEvent(new CustomEvent('mcp-ui-message', { detail: data.params }));
+        }
+        if (data.method === 'notifications/progress' && data.params) {
+          window.dispatchEvent(new CustomEvent('mcp-progress', { detail: data.params }));
+        }
+      });
+
+      window.addEventListener('DOMContentLoaded', function() {
+        send('ui/initialize', {
+          appInfo: { name: 'nodaro-mcp', version: '1.0.0' },
+          appCapabilities: { tools: { listChanged: false }, experimental: {} },
+          protocolVersion: '2025-11-21'
+        }).catch(function(err) { console.warn('ui/initialize failed:', err); });
+      });
+
+      window.NodaroMCP = {
+        openLink: function(url) {
+          notify('ui/message', {
+            role: 'user',
+            content: [{ type: 'text', text: 'Open ' + url + ' in a new tab.' }]
+          });
+        },
+        useAsset: function(assetId, kind) {
+          notify('ui/message', {
+            role: 'user',
+            content: [{ type: 'text', text: 'Use the ' + kind + ' with id ' + assetId + ' as a reference. The user clicked the Use button.' }]
+          });
+        },
+        suggestTool: function(toolName, paramsHint) {
+          notify('ui/message', {
+            role: 'user',
+            content: [{ type: 'text', text: 'Run ' + toolName + ' with these parameters: ' + JSON.stringify(paramsHint) }]
+          });
+        }
+      };
+    })();
+  </script>
+</head>
+<body>
+<div class="header" id="header"></div>
+<div class="nodes" id="nodes"></div>
+<div class="progress" id="progress">Starting…</div>
+<div class="outputs" id="outputs"></div>
+<div class="actions">
+  <button id="btn-open">Open in Nodaro</button>
+</div>
+<script>
+  (function() {
+    var INIT = window.__INIT__;
+    var headerEl = document.getElementById('header');
+    var nodesEl = document.getElementById('nodes');
+    var progressEl = document.getElementById('progress');
+    var outputsEl = document.getElementById('outputs');
+
+    headerEl.textContent = INIT.name;
+
+    // Track node order via an array so we render in insertion order; a
+    // companion map gives O(1) lookup when an update arrives.
+    var nodeOrder = [];
+    var nodeMap = {};
+    (INIT.nodeStates || []).forEach(function(n) {
+      nodeOrder.push(n.id);
+      nodeMap[n.id] = n;
+    });
+
+    function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+
+    function renderNodes() {
+      clear(nodesEl);
+      nodeOrder.forEach(function(id) {
+        var n = nodeMap[id];
+        if (!n) return;
+        var row = document.createElement('div');
+        row.className = 'node ' + n.status;
+        var pill = document.createElement('span');
+        pill.className = 'pill';
+        var label = document.createElement('span');
+        label.className = 'label';
+        label.textContent = n.label;
+        row.appendChild(pill);
+        row.appendChild(label);
+        nodesEl.appendChild(row);
+      });
+    }
+
+    function addOutput(kind, url) {
+      var el;
+      if (kind === 'video') { el = document.createElement('video'); el.controls = true; }
+      else if (kind === 'audio') { el = document.createElement('audio'); el.controls = true; }
+      else { el = document.createElement('img'); el.setAttribute('alt', ''); }
+      el.setAttribute('src', url);
+      outputsEl.appendChild(el);
+    }
+
+    document.getElementById('btn-open').addEventListener('click', function() {
+      window.NodaroMCP.openLink('https://app.nodaro.ai/library/executions/' + INIT.executionId);
+    });
+
+    if (INIT.outputs) INIT.outputs.forEach(function(o) { addOutput(o.kind, o.url); });
+    renderNodes();
+
+    window.addEventListener('mcp-ui-message', function(e) {
+      var msg = e.detail;
+      if (!msg || !msg.content || !msg.content[0]) return;
+      var text = msg.content[0].text || '';
+
+      var nodeUpdate = text.match(/^node:([^:]+):(queued|running|done|failed)(?::(.*))?$/);
+      if (nodeUpdate) {
+        var id = nodeUpdate[1];
+        var status = nodeUpdate[2];
+        var lbl = nodeUpdate[3] || (nodeMap[id] && nodeMap[id].label) || id;
+        if (!nodeMap[id]) nodeOrder.push(id);
+        nodeMap[id] = { id: id, label: lbl, status: status };
+        renderNodes();
+        return;
+      }
+
+      var prog = text.match(/^progress:\\s*([\\d.]+)\\s*\\|\\s*(.+)$/);
+      if (prog) {
+        progressEl.textContent = 'Step: ' + prog[2] + ' (' + Math.round(parseFloat(prog[1]) * 100) + '%)';
+        return;
+      }
+
+      var output = text.match(/^output:(image|video|audio):(https?:\\/\\/[^\\s]+)$/);
+      if (output) {
+        addOutput(output[1], output[2]);
+        progressEl.textContent = 'Done';
+      }
+    });
+  })();
+</script>
+</body></html>"
+`;
