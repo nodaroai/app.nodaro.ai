@@ -70,9 +70,11 @@ describe("browse_gallery tool", () => {
     expect(result.content[0]?.text).toContain("g1: image")
     expect(result.content[0]?.text).toContain("nano-banana")
     expect(result.content[0]?.text).toContain("2026-04-29")
-    // v1.2: a UI resource is returned alongside the text content.
-    expect(result.content.length).toBe(2)
-    expect((result.content[1] as { type: string }).type).toBe("resource")
+    // Per MCP Apps: text + structuredContent (iframe template at
+    // ui://nodaro/widget/gallery consumes the items array).
+    expect(result.content.length).toBe(1)
+    const sc = (result as { structuredContent?: Record<string, unknown> }).structuredContent
+    expect(Array.isArray(sc?.items)).toBe(true)
   })
 
   it("does NOT register without assets:read scope", async () => {

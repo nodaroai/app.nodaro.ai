@@ -2,10 +2,19 @@
  * Returns inline JS implementing the MCP UI client protocol over
  * window.parent.postMessage. Loaded inline in every widget HTML.
  *
- * Wire format reference (extracted from [redacted-reference]'s production bundle, see
- * specs/superpowers/oss-readiness/06-mcp-server.md A2):
- *   ui/initialize: widget → host on iframe load
- *   ui/message: widget → host with {role: "user", content: [...]} for actions
+ * Wire format per the canonical MCP Apps spec (SEP-1865):
+ *   ui/initialize          — widget → host on iframe load (handshake)
+ *   ui/notifications/initialized      — widget → host (post-init)
+ *   ui/notifications/tool-input       — host → widget (tool args, before run)
+ *   ui/notifications/tool-input-partial — host → widget (streaming args)
+ *   ui/notifications/tool-result      — host → widget (full tool result)
+ *   ui/notifications/tool-cancelled   — host → widget (run cancelled)
+ *   ui/notifications/host-context-changed — host → widget (theme/locale)
+ *   ui/message             — widget → host (push content into chat input)
+ *   notifications/progress — host → widget (progress updates)
+ *
+ * The shim re-emits inbound notifications as DOM CustomEvents so individual
+ * widget scripts can hook in without re-parsing the postMessage envelope.
  */
 export function uiProtocolShim(): string {
   return `<script>
@@ -32,27 +41,48 @@ export function uiProtocolShim(): string {
       window.addEventListener('message', function(e) {
         var data = e.data;
         if (!data || data.jsonrpc !== '2.0') return;
-        if (data.id && pending.has(data.id)) {
+        if (typeof data.id !== 'undefined' && pending.has(data.id)) {
           var p = pending.get(data.id);
           pending.delete(data.id);
           if (data.error) p.reject(new Error(data.error.message || 'ui error'));
           else p.resolve(data.result);
           return;
         }
-        if (data.method === 'ui/message' && data.params) {
-          window.dispatchEvent(new CustomEvent('mcp-ui-message', { detail: data.params }));
-        }
-        if (data.method === 'notifications/progress' && data.params) {
-          window.dispatchEvent(new CustomEvent('mcp-progress', { detail: data.params }));
+        if (!data.method) return;
+        // Re-emit known MCP Apps host notifications as DOM CustomEvents.
+        var eventMap = {
+          'ui/notifications/tool-input':         'mcp-tool-input',
+          'ui/notifications/tool-input-partial': 'mcp-tool-input-partial',
+          'ui/notifications/tool-result':        'mcp-tool-result',
+          'ui/notifications/tool-cancelled':     'mcp-tool-cancelled',
+          'ui/notifications/host-context-changed': 'mcp-host-context-changed',
+          'ui/message':                          'mcp-ui-message',
+          'notifications/progress':              'mcp-progress'
+        };
+        var eventName = eventMap[data.method];
+        if (eventName) {
+          window.dispatchEvent(new CustomEvent(eventName, { detail: data.params || {} }));
         }
       });
 
+      // Lifecycle: ui/initialize → ui/notifications/initialized.
+      // Per SEP-1865 the host responds to ui/initialize with {hostContext},
+      // then we MUST send the initialized notification before any further
+      // requests. tool-input/tool-result notifications follow.
       window.addEventListener('DOMContentLoaded', function() {
         send('ui/initialize', {
-          appInfo: { name: 'nodaro-mcp', version: '1.0.0' },
-          appCapabilities: { tools: { listChanged: false }, experimental: {} },
-          protocolVersion: '2025-11-21'
-        }).catch(function(err) { console.warn('ui/initialize failed:', err); });
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'nodaro-mcp', version: '1.0.0' }
+        }).then(function(result) {
+          window.__MCP_HOST_CONTEXT__ = (result && result.hostContext) || {};
+          notify('ui/notifications/initialized', {});
+          window.dispatchEvent(new CustomEvent('mcp-ready', { detail: window.__MCP_HOST_CONTEXT__ }));
+        }).catch(function(err) {
+          console.warn('ui/initialize failed (probably standalone):', err && err.message);
+          // Still emit mcp-ready so widgets render in standalone mode.
+          window.dispatchEvent(new CustomEvent('mcp-ready', { detail: {} }));
+        });
       });
 
       window.NodaroMCP = {

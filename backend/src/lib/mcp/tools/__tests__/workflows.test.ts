@@ -107,11 +107,11 @@ describe("run_workflow tool", () => {
     expect(received?.userId).toBe("u1")
     expect(received?.mcp_client).toBe("Claude")
 
-    // 2 content items now: text + workflow widget resource
-    expect(result.content.length).toBe(2)
-    const widget = result.content[1] as { type: string; resource?: { uri?: string } }
-    expect(widget.type).toBe("resource")
-    expect(widget.resource?.uri).toBe("ui://nodaro/workflow/e-1")
+    // Per MCP Apps spec: text + structuredContent. The iframe template lives
+    // at ui://nodaro/widget/workflow (declared on tool _meta.ui.resourceUri).
+    expect(result.content.length).toBe(1)
+    const sc = (result as { structuredContent?: Record<string, unknown> }).structuredContent
+    expect(sc?.executionId).toBe("e-1")
   })
 
   it("does NOT register without workflows:execute scope", async () => {

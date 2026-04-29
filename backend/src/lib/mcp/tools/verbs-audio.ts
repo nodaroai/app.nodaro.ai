@@ -35,6 +35,12 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         destructiveHint: false,
         openWorldHint: true,
       },
+    _meta: {
+      ui: {
+        resourceUri: "ui://nodaro/widget/job-audio",
+        visibility: ["model", "app"],
+      },
+    },
     },
     async (args) => {
       const payload = {
@@ -65,7 +71,6 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         session,
         widgetKind: "audio",
         widgetData: {
-          jobId,
           prompt: args.prompt,
           model: args.model,
           duration: args.duration,
@@ -104,6 +109,12 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         destructiveHint: false,
         openWorldHint: true,
       },
+    _meta: {
+      ui: {
+        resourceUri: "ui://nodaro/widget/job-audio",
+        visibility: ["model", "app"],
+      },
+    },
     },
     async (args) => {
       const payload = {
@@ -136,7 +147,6 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         session,
         widgetKind: "audio",
         widgetData: {
-          jobId,
           prompt: args.text,
           model: args.model ?? "elevenlabs",
         },
@@ -159,6 +169,12 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         destructiveHint: false,
         openWorldHint: true,
       },
+    _meta: {
+      ui: {
+        resourceUri: "ui://nodaro/widget/job-audio",
+        visibility: ["model", "app"],
+      },
+    },
     },
     async (args) => {
       const payload = {
@@ -183,7 +199,6 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         session,
         widgetKind: "audio",
         widgetData: {
-          jobId,
           prompt: args.youtube_url,
           model: "youtube-audio",
         },

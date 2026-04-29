@@ -91,9 +91,14 @@ describe("generate_image verb", () => {
     expect(received.body?.prompt).toBe("a knight Mood: epic.")
     expect(received.body?.mcp_client).toBe("Claude")
     expect(received.body?.userId).toBe("u1")
-    // v1.2: result includes a widget UI resource alongside text.
-    expect(result.content.length).toBe(2)
-    expect((result.content[1] as { type: string }).type).toBe("resource")
+    // Per MCP Apps spec: tool returns text + structuredContent. The iframe
+    // (registered at ui://nodaro/widget/job-image via tool _meta.ui.resourceUri)
+    // consumes structuredContent through the host's tool-result event.
+    expect(result.content.length).toBe(1)
+    expect((result.content[0] as { type: string }).type).toBe("text")
+    const sc = (result as { structuredContent?: Record<string, unknown> }).structuredContent
+    expect(sc?.jobId).toBe("j-123")
+    expect(sc?.prompt).toBe("a knight Mood: epic.")
   })
 
   it("returns isError when /v1/generate-image responds 400", async () => {

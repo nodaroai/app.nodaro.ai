@@ -1,28 +1,20 @@
 /**
  * Workflow widget — vertical list of node status pills + outputs gallery for
- * multi-step DAG runs. Returned alongside text from `run_workflow`,
- * `run_app`, and dynamic `app_<slug>` / `component_<slug>` tools.
+ * multi-step DAG runs.
  *
- * Live updates: subscribes to `mcp-ui-message` events forwarded from the
- * orchestrator's `executionEvents` bridge (see `progress-emitter.ts` v2.0).
- * Wire format is text-based for simplicity:
- *   - `node:<nodeId>:<status>:<label?>`  → pill state change
- *   - `progress:<fraction>|<message>`    → step progress text
- *   - `output:<kind>:<url>`              → append to outputs grid
+ * Static template registered at `ui://nodaro/widget/workflow`. The host
+ * delivers per-call data via:
+ *   - `ui/notifications/tool-input`       — initial workflow_id / inputs
+ *   - `ui/notifications/tool-result`      — execution_id + initial nodeStates
+ *   - `ui/message`                        — bridged `node:*`, `progress:*`,
+ *                                           `output:*` text events from the
+ *                                           orchestrator's executionEvents
+ *                                           channel (see progress-emitter.ts)
  *
- * Same DOM-construction safety rules as the single-job widgets:
- * `document.createElement` + `textContent` + `setAttribute` only — never
- * raw HTML assignment. The snapshot test guards.
+ * DOM-construction safety: `document.createElement` + `textContent` +
+ * `setAttribute` only.
  */
 import { uiProtocolShim } from "./_common.js"
-import { embedInitData } from "./builder.js"
-
-interface WorkflowInitData {
-  executionId: string
-  name: string
-  nodeStates?: Array<{ id: string; label: string; status: "queued" | "running" | "done" | "failed" }>
-  outputs?: Array<{ url: string; kind: "image" | "video" | "audio" }>
-}
 
 const WF_CSS = `
   :root { color-scheme: light dark; }
@@ -47,16 +39,15 @@ const WF_CSS = `
   button { padding: 6px 14px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; }
 `
 
-export function buildWorkflowWidget(data: WorkflowInitData): string {
+export function buildWorkflowWidgetTemplate(): string {
   return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8" />
 <style>${WF_CSS}</style>
-${embedInitData(data)}
 ${uiProtocolShim()}
 </head>
 <body>
-<div class="header" id="header"></div>
+<div class="header" id="header">Workflow</div>
 <div class="nodes" id="nodes"></div>
 <div class="progress" id="progress">Starting…</div>
 <div class="outputs" id="outputs"></div>
@@ -65,29 +56,19 @@ ${uiProtocolShim()}
 </div>
 <script>
   (function() {
-    var INIT = window.__INIT__;
     var headerEl = document.getElementById('header');
     var nodesEl = document.getElementById('nodes');
     var progressEl = document.getElementById('progress');
     var outputsEl = document.getElementById('outputs');
 
-    headerEl.textContent = INIT.name;
-
-    // Track node order via an array so we render in insertion order; a
-    // companion map gives O(1) lookup when an update arrives.
-    var nodeOrder = [];
-    var nodeMap = {};
-    (INIT.nodeStates || []).forEach(function(n) {
-      nodeOrder.push(n.id);
-      nodeMap[n.id] = n;
-    });
+    var state = { executionId: null, nodeOrder: [], nodeMap: {} };
 
     function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
 
     function renderNodes() {
       clear(nodesEl);
-      nodeOrder.forEach(function(id) {
-        var n = nodeMap[id];
+      state.nodeOrder.forEach(function(id) {
+        var n = state.nodeMap[id];
         if (!n) return;
         var row = document.createElement('div');
         row.className = 'node ' + n.status;
@@ -111,25 +92,46 @@ ${uiProtocolShim()}
       outputsEl.appendChild(el);
     }
 
+    function ingestInitialNodeStates(list) {
+      if (!Array.isArray(list)) return;
+      list.forEach(function(n) {
+        if (!n || !n.id) return;
+        if (state.nodeMap[n.id]) return;
+        state.nodeOrder.push(n.id);
+        state.nodeMap[n.id] = { id: n.id, label: n.label || n.id, status: n.status || 'queued' };
+      });
+      renderNodes();
+    }
+
     document.getElementById('btn-open').addEventListener('click', function() {
       window.NodaroMCP.openLink('https://app.nodaro.ai/library');
     });
 
-    if (INIT.outputs) INIT.outputs.forEach(function(o) { addOutput(o.kind, o.url); });
-    renderNodes();
+    window.addEventListener('mcp-tool-result', function(e) {
+      var sc = (e.detail && e.detail.structuredContent) || {};
+      if (sc.executionId) state.executionId = sc.executionId;
+      if (sc.name) headerEl.textContent = sc.name;
+      ingestInitialNodeStates(sc.nodeStates);
+      if (Array.isArray(sc.outputs)) sc.outputs.forEach(function(o) { addOutput(o.kind, o.url); });
+    });
 
+    // Live updates from progress-emitter bridged into the iframe via
+    // ui/message text events. Wire format:
+    //   node:<id>:<status>:<label?>
+    //   progress:<fraction>|<message>
+    //   output:<kind>:<url>
     window.addEventListener('mcp-ui-message', function(e) {
-      var msg = e.detail;
-      if (!msg || !msg.content || !msg.content[0]) return;
+      var msg = e.detail || {};
+      if (!msg.content || !msg.content[0]) return;
       var text = msg.content[0].text || '';
 
       var nodeUpdate = text.match(/^node:([^:]+):(queued|running|done|failed)(?::(.*))?$/);
       if (nodeUpdate) {
         var id = nodeUpdate[1];
         var status = nodeUpdate[2];
-        var lbl = nodeUpdate[3] || (nodeMap[id] && nodeMap[id].label) || id;
-        if (!nodeMap[id]) nodeOrder.push(id);
-        nodeMap[id] = { id: id, label: lbl, status: status };
+        var lbl = nodeUpdate[3] || (state.nodeMap[id] && state.nodeMap[id].label) || id;
+        if (!state.nodeMap[id]) state.nodeOrder.push(id);
+        state.nodeMap[id] = { id: id, label: lbl, status: status };
         renderNodes();
         return;
       }
@@ -151,4 +153,19 @@ ${uiProtocolShim()}
 </body></html>`
 }
 
-export type { WorkflowInitData }
+export interface WorkflowInitData {
+  executionId: string
+  name: string
+  nodeStates?: Array<{
+    id: string
+    label: string
+    status: "queued" | "running" | "done" | "failed"
+  }>
+  outputs?: Array<{ url: string; kind: "image" | "video" | "audio" }>
+}
+
+// Back-compat alias for older callers in tools/workflows.ts and dynamic.ts
+// that still pass per-call init data. The template is now static and the
+// data flows via tool-result events.
+export const buildWorkflowWidget = (_d?: WorkflowInitData): string =>
+  buildWorkflowWidgetTemplate()

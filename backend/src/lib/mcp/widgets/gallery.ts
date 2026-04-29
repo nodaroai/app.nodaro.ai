@@ -1,31 +1,15 @@
 /**
  * Gallery widget — paginated grid + per-thumbnail Use button + fullscreen
- * detail view. The detail view is internal SPA routing within the same iframe
- * (no separate widget resource), so the host renders only one widget per
- * `browse_gallery` / `list_favorites` call.
+ * detail view. Static template registered at `ui://nodaro/widget/gallery`.
  *
- * Same DOM-construction safety rules as `single-job.ts` — runtime JS uses
- * `document.createElement` + `textContent` + `setAttribute` ONLY.
+ * Per-call data (the gallery items) arrives via
+ * `ui/notifications/tool-result` as structuredContent: { items, nextCursor,
+ * totalCount }.
+ *
+ * DOM-construction safety: `document.createElement` + `textContent` +
+ * `setAttribute` only.
  */
 import { uiProtocolShim } from "./_common.js"
-import { embedInitData } from "./builder.js"
-
-interface GalleryItem {
-  jobId: string
-  kind: "image" | "video" | "audio"
-  prompt: string
-  model: string
-  thumbnailUrl: string
-  assetUrl: string
-  createdAt: string
-  favorited: boolean
-}
-
-interface GalleryInitData {
-  items: GalleryItem[]
-  nextCursor: string | null
-  totalCount: number
-}
 
 const GALLERY_CSS = `
   :root { color-scheme: light dark; }
@@ -40,6 +24,7 @@ const GALLERY_CSS = `
   .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(127,127,127,0.3); cursor: pointer; }
   .dot.active { background: currentColor; }
   .footer { margin-top: 12px; opacity: 0.7; font-size: 12px; text-align: center; }
+  .empty { text-align: center; padding: 32px 0; opacity: 0.7; }
   .detail { padding: 16px; }
   .detail .preview { width: 100%; max-height: 70vh; }
   .detail .preview img, .detail .preview video, .detail .preview audio { width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
@@ -48,20 +33,19 @@ const GALLERY_CSS = `
   button { padding: 6px 14px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; }
 `
 
-export function buildGalleryWidget(data: GalleryInitData): string {
+export function buildGalleryWidgetTemplate(): string {
   return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8" />
 <style>${GALLERY_CSS}</style>
-${embedInitData(data)}
 ${uiProtocolShim()}
 </head>
 <body>
-<div id="root"></div>
+<div id="root"><div class="empty">Loading…</div></div>
 <script>
   (function() {
-    var INIT = window.__INIT__;
     var ITEMS_PER_PAGE = 12;
+    var data = { items: [], nextCursor: null, totalCount: 0 };
     var state = { page: 0, view: 'grid', selectedId: null };
     var root = document.getElementById('root');
 
@@ -69,14 +53,21 @@ ${uiProtocolShim()}
 
     function render() {
       clear(root);
+      if (!data.items.length) {
+        var empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No items yet.';
+        root.appendChild(empty);
+        return;
+      }
       if (state.view === 'detail') renderDetail();
       else renderGrid();
     }
 
     function renderGrid() {
-      var totalPages = Math.max(1, Math.ceil(INIT.items.length / ITEMS_PER_PAGE));
+      var totalPages = Math.max(1, Math.ceil(data.items.length / ITEMS_PER_PAGE));
       var start = state.page * ITEMS_PER_PAGE;
-      var pageItems = INIT.items.slice(start, start + ITEMS_PER_PAGE);
+      var pageItems = data.items.slice(start, start + ITEMS_PER_PAGE);
 
       var grid = document.createElement('div');
       grid.className = 'grid';
@@ -129,13 +120,13 @@ ${uiProtocolShim()}
 
       var footer = document.createElement('div');
       footer.className = 'footer';
-      var more = INIT.nextCursor ? ', ' + INIT.totalCount + ' total — more available' : '';
-      footer.textContent = INIT.items.length + ' shown' + more;
+      var more = data.nextCursor ? ', ' + data.totalCount + ' total — more available' : '';
+      footer.textContent = data.items.length + ' shown' + more;
       root.appendChild(footer);
     }
 
     function renderDetail() {
-      var item = INIT.items.find(function(it) { return it.jobId === state.selectedId; });
+      var item = data.items.find(function(it) { return it.jobId === state.selectedId; });
       if (!item) { state.view = 'grid'; render(); return; }
 
       var detail = document.createElement('div');
@@ -168,7 +159,7 @@ ${uiProtocolShim()}
         var label = document.createElement('strong');
         label.textContent = pair[0];
         line.appendChild(label);
-        line.appendChild(document.createTextNode(pair[1]));
+        line.appendChild(document.createTextNode(pair[1] || ''));
         meta.appendChild(line);
       });
       detail.appendChild(meta);
@@ -187,10 +178,38 @@ ${uiProtocolShim()}
       root.appendChild(detail);
     }
 
-    render();
+    window.addEventListener('mcp-tool-result', function(e) {
+      var sc = (e.detail && e.detail.structuredContent) || {};
+      if (Array.isArray(sc.items)) data.items = sc.items;
+      if (typeof sc.nextCursor !== 'undefined') data.nextCursor = sc.nextCursor;
+      if (typeof sc.totalCount === 'number') data.totalCount = sc.totalCount;
+      state.page = 0;
+      state.view = 'grid';
+      state.selectedId = null;
+      render();
+    });
   })();
 </script>
 </body></html>`
 }
 
-export type { GalleryItem, GalleryInitData }
+export interface GalleryItem {
+  jobId: string
+  kind: "image" | "video" | "audio"
+  prompt: string
+  model: string
+  thumbnailUrl: string
+  assetUrl: string
+  createdAt: string
+  favorited: boolean
+}
+
+export interface GalleryInitData {
+  items: GalleryItem[]
+  nextCursor: string | null
+  totalCount: number
+}
+
+// Back-compat alias for callers that still pass per-call data.
+export const buildGalleryWidget = (_d?: GalleryInitData): string =>
+  buildGalleryWidgetTemplate()

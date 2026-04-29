@@ -40,8 +40,6 @@ import { sanitizeSlug, dedupeSlugs } from "../slug-sanitizer.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { McpSession } from "../session.js"
 import { registerTask } from "../tasks.js"
-import { buildWorkflowWidget } from "../widgets/workflow.js"
-import { buildUIResource } from "../widgets/builder.js"
 import { config } from "../../config.js"
 import type { ComponentMetadata } from "@nodaro/shared"
 
@@ -121,6 +119,12 @@ function registerComponentTool(
         `Run "${row.name}" component (your saved component). Returns _meta.task_id; track via tasks/get.`,
       inputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    _meta: {
+      ui: {
+        resourceUri: "ui://nodaro/widget/workflow",
+        visibility: ["model", "app"],
+      },
+    },
     },
     async (args: Record<string, unknown>) => {
       // Component route routes by slug, NOT by id. If the row has no slug
@@ -171,22 +175,15 @@ function registerComponentTool(
       }
       registerTask({ taskId: execId, userId: session.userId, kind: "component" })
 
-      const widget = buildUIResource({
-        uri: `ui://nodaro/workflow/${execId}`,
-        content: {
-          type: "rawHtml",
-          htmlString: buildWorkflowWidget({ executionId: execId, name: row.name }),
-        },
-        csp: { resourceDomains: ["https://assets.nodaro.ai"] },
-      })
+      // Iframe template at ui://nodaro/widget/workflow consumes structuredContent.
       return {
         content: [
           {
-            type: "text",
+            type: "text" as const,
             text: `Started component "${row.name}" (job ${execId}). Track via tasks/get.`,
           },
-          widget,
         ],
+        structuredContent: { executionId: execId, name: row.name },
         _meta: { task_id: execId },
       }
     },
@@ -219,6 +216,12 @@ function registerAppTool(
         row.description ?? `Run "${row.name}" published app (your published app).`,
       inputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    _meta: {
+      ui: {
+        resourceUri: "ui://nodaro/widget/workflow",
+        visibility: ["model", "app"],
+      },
+    },
     },
     async (args: Record<string, unknown>) => {
       if (!row.slug) {
@@ -262,22 +265,14 @@ function registerAppTool(
       }
       registerTask({ taskId: execId, userId: session.userId, kind: "app" })
 
-      const widget = buildUIResource({
-        uri: `ui://nodaro/workflow/${execId}`,
-        content: {
-          type: "rawHtml",
-          htmlString: buildWorkflowWidget({ executionId: execId, name: row.name }),
-        },
-        csp: { resourceDomains: ["https://assets.nodaro.ai"] },
-      })
       return {
         content: [
           {
-            type: "text",
+            type: "text" as const,
             text: `Started app "${row.name}" (execution ${execId}). Open: https://app.nodaro.ai/apps/${row.slug}/runs/${execId}`,
           },
-          widget,
         ],
+        structuredContent: { executionId: execId, name: row.name },
         _meta: { task_id: execId },
       }
     },

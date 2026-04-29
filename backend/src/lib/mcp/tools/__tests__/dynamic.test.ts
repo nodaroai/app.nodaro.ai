@@ -211,8 +211,11 @@ describe("registerDynamicTools — component dispatch", () => {
     })
     expect(result.isError).toBeUndefined()
     expect((result._meta as Record<string, unknown>)?.task_id).toBe("job-abc")
-    // 2 content items: text + workflow widget resource
-    expect(result.content.length).toBe(2)
+    // Per MCP Apps: text + structuredContent (iframe template at
+    // ui://nodaro/widget/workflow consumes structuredContent.executionId).
+    expect(result.content.length).toBe(1)
+    const sc = (result as { structuredContent?: Record<string, unknown> }).structuredContent
+    expect(sc?.executionId).toBe("job-abc")
     expect(received?.appSlug).toBe("marketing-video")
     expect(received?.mcp_client).toBe("Claude")
     expect(received?.userId).toBe("u1")
@@ -280,7 +283,9 @@ describe("registerDynamicTools — app dispatch", () => {
     })
     expect(result.isError).toBeUndefined()
     expect((result._meta as Record<string, unknown>)?.task_id).toBe("exec-xyz")
-    expect(result.content.length).toBe(2)
+    expect(result.content.length).toBe(1)
+    const sc = (result as { structuredContent?: Record<string, unknown> }).structuredContent
+    expect(sc?.executionId).toBe("exec-xyz")
     expect(receivedUrl).toBe("/v1/app/photo-editor/run")
     expect(received?.inputOverrides).toEqual({ "n-1": { value: "hello" } })
     expect(received?.mcp_client).toBe("Cursor")

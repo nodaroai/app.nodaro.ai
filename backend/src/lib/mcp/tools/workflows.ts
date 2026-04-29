@@ -6,8 +6,6 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { config } from "../../config.js"
 import { registerTask } from "../tasks.js"
-import { buildWorkflowWidget } from "../widgets/workflow.js"
-import { buildUIResource } from "../widgets/builder.js"
 
 const readGate: ToolGate = { required: ["workflows:read"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -99,6 +97,12 @@ export function registerWorkflows({
           destructiveHint: false,
           openWorldHint: true,
         },
+      _meta: {
+        ui: {
+          resourceUri: "ui://nodaro/widget/workflow",
+          visibility: ["model", "app"],
+        },
+      },
       },
       async (args) => {
         const payload = {
@@ -154,26 +158,17 @@ export function registerWorkflows({
 
         registerTask({ taskId: executionId, userId: session.userId, kind: "workflow" })
 
-        const widget = buildUIResource({
-          uri: `ui://nodaro/workflow/${executionId}`,
-          content: {
-            type: "rawHtml",
-            htmlString: buildWorkflowWidget({
-              executionId,
-              name: workflowName,
-            }),
-          },
-          csp: { resourceDomains: ["https://assets.nodaro.ai"] },
-        })
-
+        // Iframe template lives at ui://nodaro/widget/workflow (declared on
+        // tool _meta.ui.resourceUri). Per-call data flows through
+        // ui/notifications/tool-result via this structuredContent.
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: `Started workflow execution ${executionId}. Track via tasks/get with task_id=${executionId}.`,
             },
-            widget,
           ],
+          structuredContent: { executionId, name: workflowName },
           _meta: { task_id: executionId },
         }
       },

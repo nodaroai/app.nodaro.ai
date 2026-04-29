@@ -1,19 +1,18 @@
 /**
- * Shared helpers for verb tools — JSON-RPC response builders, job-id parsing,
- * and v1.2 widget integration. The widget integration registers an MCP task
- * (so `tasks/get` works) and wraps the appropriate widget HTML alongside the
- * text response so the host can render the inline preview.
+ * Shared helpers for verb tools — JSON-RPC response builders + job-id parsing.
+ *
+ * Widget rendering: per the MCP Apps spec (SEP-1865), tools that produce UI
+ * declare `_meta.ui.resourceUri` on the tool definition (in `verbs-*.ts`).
+ * This module is responsible for the tool RESULT shape: text content + a
+ * `structuredContent` payload that the iframe consumes via the host's
+ * `ui/notifications/tool-result` event.
+ *
+ * The `widgetKind` parameter routes the task into the in-process registry
+ * (so `tasks/get` can look up the job's media kind) AND chooses the
+ * structuredContent shape the iframe expects.
  */
 import type { McpSession } from "../session.js"
 import { registerTask } from "../tasks.js"
-import { buildUIResource } from "../widgets/builder.js"
-import {
-  buildImageWidget,
-  buildVideoWidget,
-  buildAudioWidget,
-  buildGenericJobWidget,
-  type SingleJobInitData,
-} from "../widgets/single-job.js"
 
 interface ParsedJobBody {
   jobId?: string
@@ -51,7 +50,7 @@ export function parseFailure(body: string) {
   }
 }
 
-type WidgetKind = "image" | "video" | "audio" | "generic"
+export type WidgetKind = "image" | "video" | "audio" | "generic"
 
 const TASK_KIND_MAP: Record<WidgetKind, "image" | "video" | "audio"> = {
   image: "image",
@@ -60,81 +59,65 @@ const TASK_KIND_MAP: Record<WidgetKind, "image" | "video" | "audio"> = {
   generic: "image", // map generic → image for task registry (jobs.kind enum has no generic)
 }
 
+export interface SingleJobStructuredContent {
+  jobId: string
+  prompt?: string
+  model?: string
+  aspectRatio?: string
+  resolution?: string
+  duration?: number
+  outputUrl?: string
+}
+
 interface JobResultOpts {
   jobId: string
   label: string
   session: McpSession
   widgetKind?: WidgetKind
-  widgetData?: SingleJobInitData
+  /**
+   * Per-call data delivered to the iframe via tool-result. The iframe's
+   * widget script reads this from `e.detail.structuredContent` on the
+   * `mcp-tool-result` event.
+   */
+  widgetData?: Omit<SingleJobStructuredContent, "jobId">
 }
 
 /**
- * SDK-compatible content item shape. The MCP SDK exposes a discriminated
- * union for `content[]` items (text/image/audio/resource/resource_link).
- * We're producing text + resource — type both literally so the SDK accepts
- * the return value without a wider unknown cast.
+ * Build the standard verb-tool result: text + structuredContent + task_id.
  *
- * Note: the SDK requires `resource.text` (not optional) for `rawHtml`-flavored
- * resources, so we type it as required here.
- */
-type ContentItem =
-  | { type: "text"; text: string }
-  | {
-      type: "resource"
-      resource: {
-        uri: string
-        text: string
-        mimeType?: string
-        _meta?: Record<string, unknown>
-      }
-    }
-
-/**
- * Build the standard v1.2 verb result: text content + widget UI resource +
- * `_meta.task_id` envelope. Registers the task with the in-process registry
- * so `tasks/get` can look it up later.
- *
- * If `widgetKind`/`widgetData` are omitted we fall back to a text-only result
- * (legacy v1.1 shape) — useful for verbs that don't need a preview yet.
+ * Returns the canonical MCP Apps shape — the host will look at the tool's
+ * `_meta.ui.resourceUri` (declared on tool definition) to fetch the iframe
+ * template, then deliver this `structuredContent` to that iframe via
+ * `ui/notifications/tool-result`.
  */
 export function jobResultWithWidget(opts: JobResultOpts) {
   const { jobId, label, session, widgetKind, widgetData } = opts
-  if (widgetKind && widgetData) {
+  if (widgetKind) {
     registerTask({
       taskId: jobId,
       userId: session.userId,
       kind: TASK_KIND_MAP[widgetKind],
     })
   }
-  const text: ContentItem = {
-    type: "text",
+
+  const text = {
+    type: "text" as const,
     text: `Submitted ${label} job ${jobId}. Track via tasks/get with task_id=${jobId}. Once it lands you'll find it at the top of https://app.nodaro.ai/library .`,
   }
-  if (!widgetKind || !widgetData) {
+
+  if (!widgetKind) {
     return { content: [text], _meta: { task_id: jobId } }
   }
-  const widgetHtml = buildWidgetHtml(widgetKind, widgetData)
-  const resource = buildUIResource({
-    uri: `ui://nodaro/job-${widgetKind}/${jobId}`,
-    content: { type: "rawHtml", htmlString: widgetHtml },
-    csp: { resourceDomains: ["https://assets.nodaro.ai", "https://*.r2.cloudflarestorage.com"] },
-  }) as ContentItem
-  return {
-    content: [text, resource],
-    _meta: { task_id: jobId },
-  }
-}
 
-function buildWidgetHtml(kind: WidgetKind, data: SingleJobInitData): string {
-  switch (kind) {
-    case "image":
-      return buildImageWidget(data)
-    case "video":
-      return buildVideoWidget(data)
-    case "audio":
-      return buildAudioWidget(data)
-    case "generic":
-      return buildGenericJobWidget(data)
+  const structuredContent: SingleJobStructuredContent = {
+    jobId,
+    ...widgetData,
+  }
+
+  return {
+    content: [text],
+    structuredContent: structuredContent as unknown as Record<string, unknown>,
+    _meta: { task_id: jobId },
   }
 }
 
