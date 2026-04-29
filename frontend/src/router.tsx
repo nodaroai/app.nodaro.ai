@@ -42,6 +42,9 @@ const SignupPage = lazy(() => import("@/app/(auth)/signup/page"))
 // OAuth consent screen (lazy — public route, no chrome)
 const OAuthAuthorizePage = lazy(() => import("@/app/oauth/authorize/page"))
 
+// MCP marketing landing page (lazy — public route, no chrome)
+const McpPage = lazy(() => import("@/app/mcp/page"))
+
 // Admin layout + all admin pages (lazy — admin-only, most users never visit)
 const AdminLayout = lazy(() => import("@/layouts/admin-layout"))
 const AdminDashboard = lazy(() => import("@/app/(admin)/admin/page"))
@@ -120,6 +123,11 @@ export const router = createBrowserRouter([
   {
     path: "/oauth/authorize",
     element: <SuspenseWrapper><OAuthAuthorizePage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/mcp",
+    element: <SuspenseWrapper><McpPage /></SuspenseWrapper>,
     errorElement: <RouteErrorBoundary />,
   },
   {

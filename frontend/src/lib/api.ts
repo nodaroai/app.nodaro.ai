@@ -3836,6 +3836,12 @@ export interface OAuthAppInfo {
   logoUrl: string | null
   homepageUrl: string | null
   scopesRequested: string[]
+  /**
+   * How the app was registered. Defaults to "user" for legacy/dashboard-registered apps.
+   * "dynamic_mcp" = registered via RFC 7591 Dynamic Client Registration — the consent
+   * UI should warn the user that the displayed name is self-reported.
+   */
+  kind?: "user" | "dynamic_mcp" | "first_party_mcp" | string
 }
 
 /**
