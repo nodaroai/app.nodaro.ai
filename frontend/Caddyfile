@@ -24,6 +24,21 @@
 		}
 	}
 
+	# OAuth discovery endpoints (RFC 8414 + RFC 9728) MUST be served by the
+	# backend, not the SPA fallback. Without this, MCP clients (Claude.ai etc.)
+	# probing app.nodaro.ai/.well-known/oauth-authorization-server get HTML
+	# back and can't parse it — the OAuth handshake fails before it starts.
+	handle /.well-known/oauth-authorization-server {
+		request_header -X-Internal-Orchestrator
+		request_header -X-Internal-Orchestrator-Secret
+		reverse_proxy 127.0.0.1:9000
+	}
+	handle /.well-known/oauth-protected-resource {
+		request_header -X-Internal-Orchestrator
+		request_header -X-Internal-Orchestrator-Secret
+		reverse_proxy 127.0.0.1:9000
+	}
+
 	# OG meta tags for social sharing bots (Telegram, WhatsApp, Twitter, Facebook, etc.)
 	@social_bot {
 		path /app/*
