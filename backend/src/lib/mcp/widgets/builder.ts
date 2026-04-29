@@ -2,17 +2,25 @@
  * Builder for MCP UI resources — wraps an HTML payload (or an external iframe
  * URL) into the SDK-friendly resource shape that `tools/call` returns alongside
  * text content. The host (Claude.ai or another MCP client) renders the
- * resource into an iframe scoped by `_meta["ui/csp"]`.
+ * resource into an iframe scoped by `resource._meta.csp`.
  *
  * MIME type `text/html;profile=mcp-app` signals to the host that the payload
  * follows the MCP App protocol (ui/initialize + ui/message handshake — see
  * `_common.ts`).
+ *
+ * Wire shape (per Claude.ai's MCP Apps spec — confirmed against host bundle):
+ *   `_meta` lives INSIDE `resource`, not as a sibling of `type`.
+ *   CSP keys are `connectDomains` / `resourceDomains` (NOT `connect-src` etc).
+ *   When the metadata shape is wrong, Claude silently falls back to text
+ *   rendering and the widget shows as raw HTML.
  */
 type ResourceContent = { type: "rawHtml"; htmlString: string } | { type: "externalUrl"; iframeUrl: string }
 
 interface CSPDeclaration {
-  connectSrc?: string[]
-  resourceSrc?: string[]
+  connectDomains?: string[]
+  resourceDomains?: string[]
+  frameDomains?: string[]
+  baseUriDomains?: string[]
 }
 
 interface BuildResourceOpts {
@@ -32,23 +40,40 @@ interface BuildResourceOpts {
  */
 export interface UIResource {
   type: "resource"
-  resource: { uri: string; text: string; mimeType: string }
-  _meta: { "ui/csp": { "connect-src": string[]; "resource-src": string[] } }
+  resource: {
+    uri: string
+    text: string
+    mimeType: string
+    _meta?: {
+      csp?: {
+        connectDomains?: string[]
+        resourceDomains?: string[]
+        frameDomains?: string[]
+        baseUriDomains?: string[]
+      }
+    }
+  }
 }
 
 export function buildUIResource(opts: BuildResourceOpts): UIResource {
+  const cspMeta: UIResource["resource"]["_meta"] = opts.csp
+    ? {
+        csp: {
+          ...(opts.csp.connectDomains?.length ? { connectDomains: opts.csp.connectDomains } : {}),
+          ...(opts.csp.resourceDomains?.length ? { resourceDomains: opts.csp.resourceDomains } : {}),
+          ...(opts.csp.frameDomains?.length ? { frameDomains: opts.csp.frameDomains } : {}),
+          ...(opts.csp.baseUriDomains?.length ? { baseUriDomains: opts.csp.baseUriDomains } : {}),
+        },
+      }
+    : undefined
+
   return {
     type: "resource",
     resource: {
       uri: opts.uri,
       mimeType: "text/html;profile=mcp-app",
       text: opts.content.type === "rawHtml" ? opts.content.htmlString : "",
-    },
-    _meta: {
-      "ui/csp": {
-        "connect-src": opts.csp?.connectSrc ?? [],
-        "resource-src": opts.csp?.resourceSrc ?? [],
-      },
+      ...(cspMeta ? { _meta: cspMeta } : {}),
     },
   }
 }
