@@ -43,8 +43,13 @@ const envSchema = z.object({
   FFMPEG_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(4),
   /** Shared secret for authenticating internal orchestrator → API calls (replaces the unreliable `req.ip === 127.0.0.1` check). MUST be set to ≥32 random bytes hex. In Docker, start.sh auto-generates one if unset so all sibling processes inherit the same value. */
   INTERNAL_ORCHESTRATOR_SECRET: z.string().min(32, "INTERNAL_ORCHESTRATOR_SECRET must be at least 32 characters (use `openssl rand -hex 32`)"),
-  /** Master feature flag for the MCP server. Default false; set to true once v1.2 ships. */
-  MCP_ENABLED: z.coerce.boolean().default(false),
+  /** Master feature flag for the MCP server. Default false; set to true once v1.2 ships.
+   *  Strict parsing: only "true" or "1" are truthy; anything else (incl. "false", "0", "", or unset) is false.
+   *  z.coerce.boolean() would be wrong here — Boolean("false") === true, so MCP_ENABLED=false would silently enable. */
+  MCP_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
   /** Dynamic Client Registration mode. "allowlist" = only allow known MCP clients (Claude/Cursor/etc); "open" = allow any client_name. */
   MCP_DYNAMIC_REGISTRATION: z.enum(["allowlist", "open"]).default("allowlist"),
   /** Comma-separated allowlist of MCP client_name values that may register dynamically. Only used when MCP_DYNAMIC_REGISTRATION="allowlist". */
