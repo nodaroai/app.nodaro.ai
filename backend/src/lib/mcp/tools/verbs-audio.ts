@@ -36,6 +36,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
     _meta: {
+      "ui/resourceUri": "ui://nodaro/widget/job-audio",
       ui: {
         resourceUri: "ui://nodaro/widget/job-audio",
         visibility: ["model", "app"],
@@ -110,6 +111,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
     _meta: {
+      "ui/resourceUri": "ui://nodaro/widget/job-audio",
       ui: {
         resourceUri: "ui://nodaro/widget/job-audio",
         visibility: ["model", "app"],
@@ -170,6 +172,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
     _meta: {
+      "ui/resourceUri": "ui://nodaro/widget/job-audio",
       ui: {
         resourceUri: "ui://nodaro/widget/job-audio",
         visibility: ["model", "app"],

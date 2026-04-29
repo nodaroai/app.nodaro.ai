@@ -77,9 +77,14 @@ export function uiProtocolShim(): string {
       // tear the iframe down before tool-result arrives.
       window.addEventListener('DOMContentLoaded', function() {
         send('ui/initialize', {
-          protocolVersion: '2025-06-18',
+          // Stable spec version (matches [redacted-reference] + canonical examples).
+          // Older 2025-* versions cause Claude.ai web to drop the handshake.
+          protocolVersion: '2026-01-26',
+          // Only declare what we actually support. We do NOT expose app-side
+          // tools (the iframe doesn't register any), so omit "tools" —
+          // declaring an empty/false tools.listChanged confused some hosts
+          // into expecting an app->host tools/list response that never arrives.
           appCapabilities: {
-            tools: { listChanged: false },
             availableDisplayModes: ['inline', 'fullscreen']
           },
           appInfo: { name: 'nodaro-mcp', version: '1.0.0' }
