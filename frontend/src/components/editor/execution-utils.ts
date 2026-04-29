@@ -14,6 +14,7 @@ export const TRIGGER_LABELS: Record<string, string> = {
   schedule: "Schedule",
   "single-node": "Single Node",
   app_run: "App Run",
+  mcp: "via MCP",
 }
 
 export function formatRelativeTime(dateString: string): string {

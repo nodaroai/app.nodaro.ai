@@ -273,7 +273,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // lookup needs the same fallback so a list row's `id` works uniformly.
     const { data: job, error: jobError } = await supabase
       .from("jobs")
-      .select("id, workflow_id, user_id, workflow_execution_id, status, provider, input_data, credits, error_message, started_at, completed_at, created_at, updated_at")
+      .select("id, workflow_id, user_id, workflow_execution_id, status, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at, updated_at")
       .eq("id", parsed.data.id)
       .eq("user_id", req.userId)
       .is("workflow_execution_id", null)
@@ -559,7 +559,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // --- Source 1: workflow_executions ---
     let execQuery = supabase
       .from("workflow_executions")
-      .select("id, status, trigger_type, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, started_at, completed_at, created_at")
+      .select("id, status, trigger_type, mcp_client, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, started_at, completed_at, created_at")
       .eq("workflow_id", workflowId)
       .eq("user_id", req.userId)
       .order("created_at", { ascending: false })
@@ -585,7 +585,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // --- Source 2: standalone jobs (single-node runs with no execution record) ---
     let jobsQuery = supabase
       .from("jobs")
-      .select("id, status, provider, input_data, credits, error_message, started_at, completed_at, created_at")
+      .select("id, status, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
       .eq("workflow_id", workflowId)
       .eq("user_id", req.userId)
       .is("workflow_execution_id", null)
@@ -684,7 +684,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // --- Source 1: workflow_executions ---
     let execQuery = supabase
       .from("workflow_executions")
-      .select("id, workflow_id, user_id, status, trigger_type, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, started_at, completed_at, created_at")
+      .select("id, workflow_id, user_id, status, trigger_type, mcp_client, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, started_at, completed_at, created_at")
       .order("created_at", { ascending: false })
       .limit(limit + 1)
 
@@ -705,7 +705,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // --- Source 2: standalone jobs (single-node runs) ---
     let jobsQuery = supabase
       .from("jobs")
-      .select("id, workflow_id, user_id, status, input_data, credits, error_message, started_at, completed_at, created_at")
+      .select("id, workflow_id, user_id, status, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
       .is("workflow_execution_id", null)
       .not("workflow_id", "is", null)
       .order("created_at", { ascending: false })
@@ -782,6 +782,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         id: row.id,
         status: row.status,
         triggerType: row.triggerType,
+        mcpClient: row.mcpClient,
         nodeStates: row.nodeStates,
         totalNodes: row.totalNodes,
         completedNodes: row.completedNodes,
@@ -816,6 +817,7 @@ function toExecutionResponse(row: Record<string, unknown>) {
     userId: row.user_id,
     status: row.status,
     triggerType: row.trigger_type,
+    mcpClient: (row.mcp_client as string | null | undefined) ?? null,
     triggerData: row.trigger_data,
     nodeStates: row.node_states,
     totalNodes: row.total_nodes,
@@ -835,6 +837,7 @@ function toExecutionSummary(row: Record<string, unknown>) {
     id: row.id,
     status: row.status,
     triggerType: row.trigger_type,
+    mcpClient: (row.mcp_client as string | null | undefined) ?? null,
     nodeStates: row.node_states,
     totalNodes: row.total_nodes,
     completedNodes: row.completed_nodes,
@@ -868,11 +871,14 @@ function jobToExecutionSummary(row: Record<string, unknown>) {
     ? (inputData.componentName as string) ?? "Component"
     : (inputData.type as string) ?? (provider ?? "unknown")
   const mappedStatus = JOB_STATUS_MAP[row.status as string] ?? (row.status as string)
+  const mcpClient = (row.mcp_client as string | null | undefined) ?? null
 
   return {
     id: row.id,
     status: mappedStatus,
-    triggerType: "single-node",
+    // Single-node jobs triggered via MCP show the "via Claude/Cursor/..." badge
+    triggerType: mcpClient ? "mcp" : "single-node",
+    mcpClient,
     nodeStates: {
       [row.id as string]: {
         status: mappedStatus,

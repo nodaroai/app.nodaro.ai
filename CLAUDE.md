@@ -140,5 +140,5 @@
 
 ---
 
-*Last updated: 2026-04-28*
-*Version: 1.96.0*
+*Last updated: 2026-04-29*
+*Version: 1.97.0*

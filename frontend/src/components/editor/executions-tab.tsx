@@ -12,9 +12,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { ExecutionDetailModal } from "./execution-detail-modal"
+import { TriggerBadge } from "@/components/library/triggers/TriggerBadge"
 import {
   STATUS_COLORS,
-  TRIGGER_LABELS,
   NODE_STATUS_DOT,
   JOB_TYPE_LABELS,
   formatRelativeTime,
@@ -498,9 +498,7 @@ function ExecutionRow({
           )}
         </td>
         <td className="px-4 py-3">
-          <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
-            {TRIGGER_LABELS[exec.triggerType] ?? exec.triggerType}
-          </span>
+          <TriggerBadge triggerType={exec.triggerType} mcpClient={exec.mcpClient} />
         </td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-2">
