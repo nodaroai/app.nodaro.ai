@@ -131,9 +131,16 @@ import { openapiRoutes } from "./routes/openapi.js"
 import { registerAuthHook } from "./middleware/auth.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
 import rateLimit from "@fastify/rate-limit"
+import formbody from "@fastify/formbody"
 
 export async function buildApp() {
   const app = Fastify({ logger: true, bodyLimit: 1_048_576 }) // 1 MB for JSON endpoints
+
+  // application/x-www-form-urlencoded body parser — required by OAuth-spec
+  // clients (Claude.ai etc.) that POST to /v1/oauth/token with form-encoded
+  // bodies per RFC 6749 §3.2. Without this, Fastify's default JSON parser
+  // drops the body and Zod sees undefined fields.
+  await app.register(formbody)
 
   await app.register(cors, {
     // Same-origin / curl requests have no Origin header — allow them.
