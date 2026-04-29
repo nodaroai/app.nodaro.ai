@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildLocationPrompt } from "@nodaro/shared"
 
@@ -44,6 +45,7 @@ export async function generateLocationRoutes(app: FastifyInstance) {
 
     const prompt = buildLocationPrompt({ name, description, category, style })
 
+    const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
@@ -52,6 +54,7 @@ export async function generateLocationRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         input_data: { ...buildJobInputData(parsed.data, "generate-location"), prompt },
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
       .select("id")
       .single()
