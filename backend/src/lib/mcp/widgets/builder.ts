@@ -2,17 +2,20 @@
  * Builder for MCP UI resources — wraps an HTML payload (or an external iframe
  * URL) into the SDK-friendly resource shape that `tools/call` returns alongside
  * text content. The host (Claude.ai or another MCP client) renders the
- * resource into an iframe scoped by `resource._meta.csp`.
+ * resource into an iframe scoped by `resource._meta.ui.csp`.
  *
  * MIME type `text/html;profile=mcp-app` signals to the host that the payload
  * follows the MCP App protocol (ui/initialize + ui/message handshake — see
  * `_common.ts`).
  *
- * Wire shape (per Claude.ai's MCP Apps spec — confirmed against host bundle):
- *   `_meta` lives INSIDE `resource`, not as a sibling of `type`.
- *   CSP keys are `connectDomains` / `resourceDomains` (NOT `connect-src` etc).
- *   When the metadata shape is wrong, Claude silently falls back to text
- *   rendering and the widget shows as raw HTML.
+ * Wire shape (per the canonical MCP Apps spec — modelcontextprotocol/ext-apps):
+ *   `_meta` lives INSIDE the `resource` object (not a sibling of `type`).
+ *   All Apps metadata MUST be wrapped under a `ui` key:
+ *     `_meta: { ui: { csp: {...}, permissions: {...}, domain, prefersBorder } }`
+ *   CSP subkeys are `connectDomains` / `resourceDomains` / `frameDomains` /
+ *   `baseUriDomains` (CSP-DOMAIN style, NOT CSP-DIRECTIVE style like
+ *   `connect-src`). When `_meta.ui` is missing, hosts fall back to plain-text
+ *   rendering and the widget shows up in chat as raw HTML.
  */
 type ResourceContent = { type: "rawHtml"; htmlString: string } | { type: "externalUrl"; iframeUrl: string }
 
@@ -45,27 +48,33 @@ export interface UIResource {
     text: string
     mimeType: string
     _meta?: {
-      csp?: {
-        connectDomains?: string[]
-        resourceDomains?: string[]
-        frameDomains?: string[]
-        baseUriDomains?: string[]
+      ui?: {
+        csp?: {
+          connectDomains?: string[]
+          resourceDomains?: string[]
+          frameDomains?: string[]
+          baseUriDomains?: string[]
+        }
+        prefersBorder?: boolean
       }
     }
   }
 }
 
 export function buildUIResource(opts: BuildResourceOpts): UIResource {
-  const cspMeta: UIResource["resource"]["_meta"] = opts.csp
+  const cspBlock = opts.csp
     ? {
-        csp: {
-          ...(opts.csp.connectDomains?.length ? { connectDomains: opts.csp.connectDomains } : {}),
-          ...(opts.csp.resourceDomains?.length ? { resourceDomains: opts.csp.resourceDomains } : {}),
-          ...(opts.csp.frameDomains?.length ? { frameDomains: opts.csp.frameDomains } : {}),
-          ...(opts.csp.baseUriDomains?.length ? { baseUriDomains: opts.csp.baseUriDomains } : {}),
-        },
+        ...(opts.csp.connectDomains?.length ? { connectDomains: opts.csp.connectDomains } : {}),
+        ...(opts.csp.resourceDomains?.length ? { resourceDomains: opts.csp.resourceDomains } : {}),
+        ...(opts.csp.frameDomains?.length ? { frameDomains: opts.csp.frameDomains } : {}),
+        ...(opts.csp.baseUriDomains?.length ? { baseUriDomains: opts.csp.baseUriDomains } : {}),
       }
-    : undefined
+    : null
+
+  const uiMeta =
+    cspBlock && Object.keys(cspBlock).length > 0
+      ? { ui: { csp: cspBlock, prefersBorder: true } }
+      : { ui: { prefersBorder: true } }
 
   return {
     type: "resource",
@@ -73,7 +82,7 @@ export function buildUIResource(opts: BuildResourceOpts): UIResource {
       uri: opts.uri,
       mimeType: "text/html;profile=mcp-app",
       text: opts.content.type === "rawHtml" ? opts.content.htmlString : "",
-      ...(cspMeta ? { _meta: cspMeta } : {}),
+      _meta: uiMeta,
     },
   }
 }
