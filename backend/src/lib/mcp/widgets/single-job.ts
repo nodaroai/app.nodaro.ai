@@ -188,8 +188,22 @@ ${uiProtocolShim()}
         barEl.style.width = pct.toFixed(1) + '%';
         statusEl.textContent = 'Generating… ' + Math.round(pct) + '%';
       }
-      if (sc.outputUrl) {
-        showMedia(sc.outputUrl);
+      // Fall back to scanning raw output_data if normalised outputUrl is null.
+      var resolvedUrl = sc.outputUrl;
+      if (!resolvedUrl && sc.outputData && typeof sc.outputData === 'object') {
+        var od = sc.outputData;
+        resolvedUrl =
+          od.imageUrl || od.videoUrl || od.audioUrl ||
+          od.outputUrl || od.url ||
+          (od.imageUrls && od.imageUrls[0]) ||
+          (od.videoUrls && od.videoUrls[0]) ||
+          (od.audioUrls && od.audioUrls[0]) ||
+          (Array.isArray(od.outputs) && od.outputs[0] && (od.outputs[0].url || od.outputs[0].imageUrl || od.outputs[0].videoUrl)) ||
+          null;
+      }
+
+      if (resolvedUrl) {
+        showMedia(resolvedUrl);
         stopPolling();
         return;
       }
@@ -198,8 +212,10 @@ ${uiProtocolShim()}
         stopPolling();
         return;
       }
-      if (sc.status === 'completed' && !sc.outputUrl) {
-        // Completed but no media URL — generic kind. Just stop spinning.
+      if (sc.status === 'completed' && !resolvedUrl) {
+        // Completed but the URL field wasn't where we expected — log to console
+        // so the user can inspect via DevTools, and stop polling.
+        console.warn('[nodaro-widget] completed without URL; output_data=', sc.outputData);
         statusEl.textContent = 'Done — see Nodaro library.';
         stopPolling();
       }
