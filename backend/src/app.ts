@@ -130,6 +130,7 @@ import { executionStatsRoutes } from "./routes/execution-stats.js"
 import { openapiRoutes } from "./routes/openapi.js"
 import { registerAuthHook } from "./middleware/auth.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
+import rateLimit from "@fastify/rate-limit"
 
 export async function buildApp() {
   const app = Fastify({ logger: true, bodyLimit: 1_048_576 }) // 1 MB for JSON endpoints
@@ -150,6 +151,26 @@ export async function buildApp() {
   // Restrict mcp.*.nodaro.ai to MCP-only paths (404s anything else).
   // Registered BEFORE the auth hook so 404'd requests don't waste a DB lookup.
   registerMcpHostFilter(app)
+
+  // Rate limiter — opt-in per-route via { config: { rateLimit: {...} } }.
+  // Currently used by /v1/oauth/register (10/min/IP) to mitigate unauthenticated
+  // DCR abuse. Other routes don't apply rate limiting unless they declare it.
+  // In-memory store; switch to Redis when we add multi-replica scale.
+  await app.register(rateLimit, {
+    global: false,
+    keyGenerator: (req) => {
+      const xff = req.headers["x-forwarded-for"]
+      if (typeof xff === "string" && xff.length > 0) return xff.split(",")[0]!.trim()
+      return req.ip || "unknown"
+    },
+    errorResponseBuilder: (_req, context) => ({
+      statusCode: 429,
+      error: {
+        code: "rate_limit_exceeded",
+        message: `Too many requests. Retry in ${Math.ceil(context.ttl / 1000)}s.`,
+      },
+    }),
+  })
 
   registerAuthHook(app)
 
