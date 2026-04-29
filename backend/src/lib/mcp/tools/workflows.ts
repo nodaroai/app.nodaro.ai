@@ -5,6 +5,9 @@ import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { config } from "../../config.js"
+import { registerTask } from "../tasks.js"
+import { buildWorkflowWidget } from "../widgets/workflow.js"
+import { buildUIResource } from "../widgets/builder.js"
 
 const readGate: ToolGate = { required: ["workflows:read"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -120,6 +123,7 @@ export function registerWorkflows({
           }
         }
         let executionId: string | undefined
+        let workflowName: string | undefined
         try {
           const body = JSON.parse(res.body) as { executionId?: string }
           executionId = body.executionId
@@ -137,12 +141,38 @@ export function registerWorkflows({
             isError: true,
           }
         }
+
+        // Best-effort name lookup for the widget header. If the row was
+        // deleted between run-creation and now (race), we fall back to a
+        // generic "Workflow" label rather than failing the tool call.
+        const { data: wf } = await supabase
+          .from("workflows")
+          .select("name")
+          .eq("id", args.workflow_id)
+          .maybeSingle()
+        workflowName = (wf?.name as string | undefined) ?? "Workflow"
+
+        registerTask({ taskId: executionId, userId: session.userId, kind: "workflow" })
+
+        const widget = buildUIResource({
+          uri: `ui://nodaro/workflow/${executionId}`,
+          content: {
+            type: "rawHtml",
+            htmlString: buildWorkflowWidget({
+              executionId,
+              name: workflowName,
+            }),
+          },
+          csp: { resourceSrc: ["https://assets.nodaro.ai"] },
+        })
+
         return {
           content: [
             {
               type: "text",
               text: `Started workflow execution ${executionId}. Track via tasks/get with task_id=${executionId}.`,
             },
+            widget,
           ],
           _meta: { task_id: executionId },
         }

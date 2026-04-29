@@ -69,13 +69,25 @@ describe("list_workflows tool", () => {
 })
 
 describe("run_workflow tool", () => {
-  it("calls /v1/workflows/:id/run and returns _meta.task_id", async () => {
+  it("calls /v1/workflows/:id/run and returns _meta.task_id + workflow widget", async () => {
     const fastify = Fastify()
     let received: Record<string, unknown> | undefined
     fastify.post("/v1/workflows/:id/run", async (req) => {
       received = req.body as Record<string, unknown>
       return { executionId: "e-1", status: "pending" }
     })
+
+    // The widget header pulls workflows.name; stub the name lookup.
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi
+            .fn()
+            .mockResolvedValue({ data: { name: "My Flow" }, error: null }),
+        }),
+      }),
+    })
+
     const server = buildServer()
     registerWorkflows({
       server,
@@ -94,6 +106,12 @@ describe("run_workflow tool", () => {
     expect((result._meta as Record<string, unknown>)?.task_id).toBe("e-1")
     expect(received?.userId).toBe("u1")
     expect(received?.mcp_client).toBe("Claude")
+
+    // 2 content items now: text + workflow widget resource
+    expect(result.content.length).toBe(2)
+    const widget = result.content[1] as { type: string; resource?: { uri?: string } }
+    expect(widget.type).toBe("resource")
+    expect(widget.resource?.uri).toBe("ui://nodaro/workflow/e-1")
   })
 
   it("does NOT register without workflows:execute scope", async () => {
