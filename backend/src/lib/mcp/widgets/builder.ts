@@ -21,13 +21,28 @@ interface BuildResourceOpts {
   csp?: CSPDeclaration
 }
 
-export function buildUIResource(opts: BuildResourceOpts): unknown {
+/**
+ * The MCP SDK's `tools/call` content union accepts a `resource` shape with
+ * `text: string` REQUIRED (not optional). We type the return concretely so
+ * callers (gallery / single-job / workflow) don't need to cast.
+ *
+ * For `externalUrl` content we synthesize an empty-text resource — the SDK
+ * doesn't accept `text: undefined`, and an empty string is harmless because
+ * the host resolves the iframe via `resource.uri`, not the inline HTML.
+ */
+export interface UIResource {
+  type: "resource"
+  resource: { uri: string; text: string; mimeType: string }
+  _meta: { "ui/csp": { "connect-src": string[]; "resource-src": string[] } }
+}
+
+export function buildUIResource(opts: BuildResourceOpts): UIResource {
   return {
     type: "resource",
     resource: {
       uri: opts.uri,
       mimeType: "text/html;profile=mcp-app",
-      text: opts.content.type === "rawHtml" ? opts.content.htmlString : undefined,
+      text: opts.content.type === "rawHtml" ? opts.content.htmlString : "",
     },
     _meta: {
       "ui/csp": {

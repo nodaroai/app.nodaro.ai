@@ -1,7 +1,30 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import Fastify from "fastify"
-import { buildMcpServer } from "../server.js"
 import { type Scope } from "../../scopes.js"
+
+// The dynamic tool factory queries published_apps; stub supabase so the
+// (per-user) lookup returns no rows in this skeleton-level test.
+vi.mock("../../supabase.js", () => ({
+  supabase: {
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    }),
+  },
+}))
+
+const { buildMcpServer } = await import("../server.js")
 
 /**
  * The SDK's tools/list handler is registered on the underlying `Server` instance
@@ -16,7 +39,9 @@ type ToolsListHandler = (
   extra: Record<string, unknown>,
 ) => Promise<{ tools: { name: string }[] }>
 
-async function listToolsOnServer(server: ReturnType<typeof buildMcpServer>): Promise<{ name: string }[]> {
+async function listToolsOnServer(
+  server: Awaited<ReturnType<typeof buildMcpServer>>,
+): Promise<{ name: string }[]> {
   const inner = (server as unknown as {
     server: { _requestHandlers: Map<string, ToolsListHandler> }
   }).server
@@ -29,7 +54,7 @@ async function listToolsOnServer(server: ReturnType<typeof buildMcpServer>): Pro
 describe("buildMcpServer skeleton", () => {
   it("registers a 'ping' placeholder tool", async () => {
     const fastify = Fastify()
-    const server = buildMcpServer({
+    const server = await buildMcpServer({
       userId: "user-1",
       scopes: ["jobs:read"] as Scope[],
       clientName: "Test",
@@ -42,7 +67,7 @@ describe("buildMcpServer skeleton", () => {
 
   it("registers ping even when no scopes are granted (gate is empty)", async () => {
     const fastify = Fastify()
-    const server = buildMcpServer({
+    const server = await buildMcpServer({
       userId: "user-1",
       scopes: [] as Scope[],
       clientName: "Test",
