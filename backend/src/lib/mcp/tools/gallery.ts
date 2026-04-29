@@ -287,7 +287,7 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
         const { data, error } = await supabase
           .from("jobs")
           .select(
-            "id, status, job_type, input_data, output_data, created_at, completed_at, credits, display_cost, user_id",
+            "id, status, progress, job_type, input_data, output_data, created_at, completed_at, credits, display_cost, user_id",
           )
           .eq("id", args.job_id)
           .eq("user_id", session.userId)
@@ -304,8 +304,36 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
             isError: true,
           }
         }
+
+        // Extract the public asset URL from output_data (varies by job_type:
+        // imageUrl / videoUrl / audioUrl / outputUrl). The widget polls this
+        // tool every 2s and reads structuredContent to update its preview.
+        const out = (data.output_data ?? {}) as Record<string, unknown>
+        const outputUrl =
+          (out.imageUrl as string | undefined) ??
+          (out.videoUrl as string | undefined) ??
+          (out.audioUrl as string | undefined) ??
+          (out.outputUrl as string | undefined) ??
+          null
+        const assetKind = out.imageUrl
+          ? "image"
+          : out.videoUrl
+            ? "video"
+            : out.audioUrl
+              ? "audio"
+              : null
+
         return {
           content: [{ type: "text", text: JSON.stringify({ data }, null, 2) }],
+          structuredContent: {
+            jobId: data.id,
+            status: data.status,
+            progress: data.progress ?? 0,
+            outputUrl,
+            assetKind,
+            jobType: data.job_type,
+            completedAt: data.completed_at,
+          },
         }
       },
     )

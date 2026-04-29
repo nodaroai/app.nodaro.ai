@@ -110,7 +110,9 @@ ${uiProtocolShim()}
     });
 
     // Tool result arrives once the server has created the job and returned
-    // the jobId via structuredContent.
+    // the jobId via structuredContent. We then start polling get_asset until
+    // the job lands — stateless HTTP transport can't deliver async progress
+    // notifications, so polling via tools/call is the only path that works.
     window.addEventListener('mcp-tool-result', function(e) {
       var sc = (e.detail && e.detail.structuredContent) || {};
       if (sc.jobId) state.jobId = sc.jobId;
@@ -120,19 +122,87 @@ ${uiProtocolShim()}
       if (sc.duration) state.duration = sc.duration;
       if (sc.outputUrl) {
         showMedia(sc.outputUrl);
-      } else {
+      } else if (state.jobId) {
         statusEl.textContent = 'Generating…';
+        startPolling();
       }
       renderMeta();
     });
 
     // Bridged from progress-emitter via host-forwarded notifications/progress.
+    // Currently a no-op for stateless HTTP transport but kept for forward
+    // compatibility (e.g. session-based connections in future MCP clients).
     window.addEventListener('mcp-progress', function(e) {
       var p = e.detail || {};
       if (state.jobId && p.progressToken && p.progressToken !== state.jobId) return;
-      var pct = (p.progress || 0) * 100;
+      var pct = (p.progress || 0);
+      // Spec ambiguity: progress may be 0-1 or 0-100. Normalise.
+      if (pct > 1) pct = pct;
+      else pct = pct * 100;
       barEl.style.width = pct.toFixed(1) + '%';
       statusEl.textContent = 'Generating… ' + Math.round(pct) + '%' + (p.message ? ' — ' + p.message : '');
+    });
+
+    // ── Poll loop: tools/call get_asset every 2s until terminal ──
+    var pollTimer = null;
+    var pollAttempt = 0;
+    var POLL_MS = 2000;
+    var MAX_POLL_MS = 5 * 60 * 1000; // give up after 5 minutes
+
+    function startPolling() {
+      if (pollTimer) return;
+      pollAttempt = 0;
+      pollOnce();
+      pollTimer = setInterval(pollOnce, POLL_MS);
+    }
+    function stopPolling() {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    }
+    function pollOnce() {
+      pollAttempt++;
+      if (pollAttempt * POLL_MS > MAX_POLL_MS) {
+        stopPolling();
+        statusEl.textContent = 'Still working — check Nodaro library.';
+        return;
+      }
+      if (!state.jobId) return;
+      // Use a unique JSON-RPC id per poll so the protocol shim can route
+      // the response back to us via its pending-request map.
+      var reqId = 'poll-' + state.jobId + '-' + pollAttempt;
+      window.parent.postMessage({
+        jsonrpc: '2.0', id: reqId,
+        method: 'tools/call',
+        params: { name: 'get_asset', arguments: { job_id: state.jobId } }
+      }, '*');
+    }
+    // The shim turns inbound non-id'd messages into custom events; for our
+    // poll responses (which DO have an id) we listen directly on message.
+    window.addEventListener('message', function(ev) {
+      var data = ev.data;
+      if (!data || data.jsonrpc !== '2.0' || !data.id) return;
+      if (typeof data.id !== 'string' || data.id.indexOf('poll-') !== 0) return;
+      if (data.error) { return; }
+      var sc = (data.result && data.result.structuredContent) || {};
+      if (typeof sc.progress === 'number') {
+        var pct = sc.progress > 1 ? sc.progress : sc.progress * 100;
+        barEl.style.width = pct.toFixed(1) + '%';
+        statusEl.textContent = 'Generating… ' + Math.round(pct) + '%';
+      }
+      if (sc.outputUrl) {
+        showMedia(sc.outputUrl);
+        stopPolling();
+        return;
+      }
+      if (sc.status === 'failed' || sc.status === 'cancelled') {
+        statusEl.textContent = 'Job ' + sc.status;
+        stopPolling();
+        return;
+      }
+      if (sc.status === 'completed' && !sc.outputUrl) {
+        // Completed but no media URL — generic kind. Just stop spinning.
+        statusEl.textContent = 'Done — see Nodaro library.';
+        stopPolling();
+      }
     });
 
     // Re-run: orchestrator path is to push a chat message asking Claude to
