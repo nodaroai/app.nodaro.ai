@@ -98,6 +98,7 @@ export function registerWorkflows({
           openWorldHint: true,
         },
       _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/workflow",
         ui: {
           resourceUri: "ui://nodaro/widget/workflow",
           visibility: ["model", "app"],
