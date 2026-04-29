@@ -129,6 +129,7 @@ import { adminTutorialsRoutes } from "./routes/admin-tutorials.js"
 import { executionStatsRoutes } from "./routes/execution-stats.js"
 import { openapiRoutes } from "./routes/openapi.js"
 import { registerAuthHook } from "./middleware/auth.js"
+import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true, bodyLimit: 1_048_576 }) // 1 MB for JSON endpoints
@@ -145,6 +146,10 @@ export async function buildApp() {
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
+
+  // Restrict mcp.*.nodaro.ai to MCP-only paths (404s anything else).
+  // Registered BEFORE the auth hook so 404'd requests don't waste a DB lookup.
+  registerMcpHostFilter(app)
 
   registerAuthHook(app)
 
