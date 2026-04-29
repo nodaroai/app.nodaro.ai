@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 
 const assetTypeEnum = z.enum(["timeOfDay", "weather", "angles", "custom"])
@@ -121,6 +122,7 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
 
     const prompt = buildVariantPrompt(assetType, variant, name, description, category, style)
 
+    const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
@@ -129,6 +131,7 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         input_data: { ...buildJobInputData(parsed.data, "generate-location-asset"), prompt },
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
       .select("id")
       .single()

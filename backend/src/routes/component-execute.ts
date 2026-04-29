@@ -7,6 +7,7 @@ import type { ComponentMetadata } from "@nodaro/shared"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
 import { buildCreditModelIdentifier } from "@nodaro/shared"
+import { extractMcpClient } from "../lib/extract-mcp-client.js"
 
 
 const bodySchema = z.object({
@@ -61,6 +62,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     }
 
     // Create wrapper job
+    const mcpClient = extractMcpClient(req.body)
     const { data: wrapperJob, error: jobError } = await supabase
       .from("jobs")
       .insert({
@@ -75,6 +77,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
           inputs: inputOverrides ?? {},
         },
         ...(workflowId ? { workflow_id: workflowId } : {}),
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
       .select("id")
       .single()

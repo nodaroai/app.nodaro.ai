@@ -127,6 +127,11 @@ export {
 } from "./prompt-builder.js"
 
 export {
+  renderStructuredFields,
+  type StructuredPromptFields,
+} from "./prompt-builder-structured-fields.js"
+
+export {
   INPUT_NODE_TYPES,
   getInputNodes,
   getOutputNodes,

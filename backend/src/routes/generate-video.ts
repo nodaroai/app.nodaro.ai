@@ -6,6 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { IMAGE_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
@@ -97,6 +98,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       (referenceVideoUrls?.length ?? 0) > 0,
     )
 
+    const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
@@ -105,6 +107,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         input_data: buildJobInputData(parsed.data, "image-to-video"),
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
       .select("id")
       .single()

@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { TTS_PROVIDERS } from "@nodaro/shared"
 
@@ -53,6 +54,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
     const resolvedProvider = provider === "elevenlabs" ? "elevenlabs-turbo" : (provider ?? "elevenlabs-turbo")
     const modelIdentifier = resolvedProvider
 
+    const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
@@ -61,6 +63,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         input_data: buildJobInputData(parsed.data, "text-to-speech"),
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
       .select("id")
       .single()

@@ -1,12 +1,27 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import type { FastifyInstance } from "fastify"
 import { newSession, type McpSession } from "./session.js"
 import { passesGate, type ToolGate } from "./tool-schemas.js"
+import { registerVerbs } from "./tools/verbs.js"
+import { registerJobs } from "./tools/jobs.js"
+import { registerWorkflows } from "./tools/workflows.js"
+import { registerComponents } from "./tools/components.js"
+import { registerApps } from "./tools/apps.js"
+import { registerModels } from "./tools/models.js"
+import { registerGallery } from "./tools/gallery.js"
 import type { Scope } from "../scopes.js"
 
 interface BuildOpts {
   userId: string
   scopes: Scope[]
   clientName: string
+  /**
+   * Fastify instance for `app.inject()`-based dispatch from verb tools to the
+   * underlying `/v1/...` routes. Routed-through requests carry the
+   * internal-orchestrator-secret header, so the auth middleware accepts
+   * `userId` from the request body.
+   */
+  fastify: FastifyInstance
 }
 
 /**
@@ -23,6 +38,18 @@ interface BuildOpts {
  * don't appear in `tools/list`. The placeholder `ping` tool has an empty gate
  * (always visible) and exists primarily as a connectivity check — clients can
  * call it to verify the OAuth token resolved to the expected Nodaro user.
+ *
+ * Tool families wired in (v1.1):
+ *  - `ping` — diagnostic, always visible
+ *  - generation verbs (image/video/audio/character/location/object) gated by
+ *    `workflows:execute`
+ *  - jobs / workflows / components / apps / models / gallery — gated per
+ *    family by `jobs:read`, `workflows:read`, `assets:read`, `apps:read`,
+ *    `credits:read` (cloud-only) as appropriate. See each `tools/*.ts` file
+ *    for the exact gate.
+ *
+ * Note: `swap_face` is intentionally NOT registered — the underlying
+ * `/v1/swap-face` route does not exist in the codebase. v1.2+ may revisit.
  */
 export function buildMcpServer(opts: BuildOpts): McpServer {
   const session = newSession(opts)
@@ -30,7 +57,16 @@ export function buildMcpServer(opts: BuildOpts): McpServer {
     { name: "nodaro-mcp", version: "1.0.0" },
     { capabilities: { tools: { listChanged: false } } },
   )
+
   registerPing(server, session)
+  registerVerbs({ server, session, fastify: opts.fastify })
+  registerJobs({ server, session, fastify: opts.fastify })
+  registerWorkflows({ server, session, fastify: opts.fastify })
+  registerComponents({ server, session, fastify: opts.fastify })
+  registerApps({ server, session, fastify: opts.fastify })
+  registerModels({ server, session, fastify: opts.fastify })
+  registerGallery({ server, session, fastify: opts.fastify })
+
   return server
 }
 
