@@ -132,4 +132,47 @@ describe("oauth routes", () => {
     expect(res.statusCode).toBe(404)
     expect(res.json().error.code).toBe("not_found")
   })
+
+  it("GET /v1/oauth/app-info returns kind=dynamic_mcp for a DCR-registered app", async () => {
+    vi.mocked(findAppByClientId).mockResolvedValueOnce({
+      id: "app_dyn_1",
+      owner_user_id: null,
+      client_id: "app_dyn_1",
+      client_secret_hash: "hash",
+      redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+      allowed_origins: ["https://claude.ai"],
+      scopes_requested: ["workflows:read"],
+      status: "active",
+      name: "Claude",
+      description: null,
+      logo_url: null,
+      homepage_url: null,
+      kind: "dynamic_mcp",
+    } as unknown as ReturnType<typeof findAppByClientId> extends Promise<infer T> ? T : never)
+    const res = await app.inject({ method: "GET", url: "/v1/oauth/app-info?client_id=app_dyn_1" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().kind).toBe("dynamic_mcp")
+    expect(res.json().name).toBe("Claude")
+  })
+
+  it("GET /v1/oauth/app-info returns kind=user as fallback when column is missing", async () => {
+    vi.mocked(findAppByClientId).mockResolvedValueOnce({
+      id: "app_legacy",
+      owner_user_id: "user-1",
+      client_id: "app_legacy",
+      client_secret_hash: "hash",
+      redirect_uris: ["https://example.com/cb"],
+      allowed_origins: ["https://example.com"],
+      scopes_requested: ["workflows:read"],
+      status: "active",
+      name: "Legacy App",
+      description: null,
+      logo_url: null,
+      homepage_url: null,
+      // kind intentionally omitted
+    } as unknown as ReturnType<typeof findAppByClientId> extends Promise<infer T> ? T : never)
+    const res = await app.inject({ method: "GET", url: "/v1/oauth/app-info?client_id=app_legacy" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().kind).toBe("user")
+  })
 })

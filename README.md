@@ -45,6 +45,11 @@ Full guide: [SDK Quickstart](docs/sdk-quickstart.md).
 
 [nodaro.ai](https://nodaro.ai) — managed instance with credits, billing, and zero-ops setup.
 
+## MCP Integration
+
+Drive Nodaro tools from any MCP-compatible AI client. Paste `https://mcp.nodaro.ai/mcp`
+into Claude.ai / Cursor / Cline / Continue.dev / Goose. See [docs/mcp/](./docs/mcp/index.md).
+
 ## Editions
 
 | Edition | Self-hosted | Admin panel | Credits + billing | Use case |
