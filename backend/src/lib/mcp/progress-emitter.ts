@@ -28,12 +28,18 @@
  * a fraction without ambiguity.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { completeTask, _activeTaskIds } from "./tasks.js"
+import { completeTask, _activeTaskIds, getTask } from "./tasks.js"
+import { executionEvents, type ExecutionEvent } from "../execution-events.js"
+import type { NodeExecutionStatus } from "../../services/workflow-engine/types.js"
 
 const POLL_INTERVAL_MS = 1000
 
 let pollHandle: ReturnType<typeof setInterval> | null = null
 const lastProgressByTask = new Map<string, number>()
+/** Per-execution last-seen status for each node, so we only emit on transitions. */
+const lastNodeStatus = new Map<string, Map<string, NodeExecutionStatus>>()
+/** Per-server attached executionEvents listeners (so we can clean them up). */
+const attachedListeners = new Map<string, (event: ExecutionEvent) => void>()
 
 /**
  * Start the polling loop bound to a single `McpServer` instance.
@@ -49,6 +55,7 @@ export function startProgressEmitter(server: McpServer): void {
 
   pollHandle = setInterval(() => {
     void runPollCycle(server)
+    void attachNewExecutionListeners(server)
   }, POLL_INTERVAL_MS)
   // Don't keep the Node process alive solely for this poll loop — the
   // request lifecycle should drive when we run.
@@ -60,7 +67,123 @@ export function stopProgressEmitter(): void {
     clearInterval(pollHandle)
     pollHandle = null
   }
+  for (const [executionId, listener] of attachedListeners) {
+    executionEvents.off(executionId, listener)
+  }
+  attachedListeners.clear()
   lastProgressByTask.clear()
+  lastNodeStatus.clear()
+}
+
+/**
+ * For each tracked workflow/component/app task we haven't yet attached a
+ * listener for, subscribe to executionEvents. This bridges the orchestrator's
+ * per-node updates to MCP `ui/message` notifications so the workflow widget
+ * receives `node:<id>:<status>` events live.
+ *
+ * We treat the workflow taskId == executionId for workflow + app tasks. For
+ * component tasks, the taskId is the wrapper jobId — different from the
+ * inner execution. We can't easily learn the inner executionId from here
+ * without an extra DB hop, so component live-update is a best-effort
+ * future addition; the basic widget still renders + tracks via tasks/get.
+ */
+async function attachNewExecutionListeners(server: McpServer): Promise<void> {
+  for (const taskId of _activeTaskIds()) {
+    if (attachedListeners.has(taskId)) continue
+    const task = getTask(taskId)
+    if (!task) continue
+    if (task.kind !== "workflow" && task.kind !== "app") continue
+
+    const listener = (event: ExecutionEvent): void => {
+      void emitExecutionUiMessages(server, event)
+    }
+    executionEvents.on(taskId, listener)
+    attachedListeners.set(taskId, listener)
+  }
+}
+
+/**
+ * Map a {@link ExecutionEvent} to one or more `ui/message` notifications.
+ * The widget protocol is text-based for simplicity (see workflow.ts):
+ *   - node:<nodeId>:<queued|running|done|failed>:<label?>
+ *   - output:image|video|audio:<url>
+ */
+async function emitExecutionUiMessages(
+  server: McpServer,
+  event: ExecutionEvent,
+): Promise<void> {
+  const lastByNode = lastNodeStatus.get(event.executionId) ?? new Map<string, NodeExecutionStatus>()
+  lastNodeStatus.set(event.executionId, lastByNode)
+
+  for (const [nodeId, state] of Object.entries(event.nodeStates)) {
+    if (lastByNode.get(nodeId) === state.status) continue
+    lastByNode.set(nodeId, state.status)
+    const widgetStatus = mapStatusToWidget(state.status)
+    if (!widgetStatus) continue
+    const label = state.nodeType ?? nodeId
+    await sendUiMessage(server, `node:${nodeId}:${widgetStatus}:${label}`)
+
+    // When a media-producing node completes, also emit an output: message
+    // so the widget can render the asset in its outputs grid.
+    if (state.status === "completed" && state.output) {
+      const url =
+        state.output.imageUrl ??
+        state.output.videoUrl ??
+        state.output.audioUrl ??
+        null
+      const kind = state.output.imageUrl
+        ? "image"
+        : state.output.videoUrl
+          ? "video"
+          : state.output.audioUrl
+            ? "audio"
+            : null
+      if (url && kind) {
+        await sendUiMessage(server, `output:${kind}:${url}`)
+      }
+    }
+  }
+}
+
+function mapStatusToWidget(
+  status: NodeExecutionStatus,
+): "queued" | "running" | "done" | "failed" | null {
+  switch (status) {
+    case "pending":
+      return "queued"
+    case "running":
+      return "running"
+    case "completed":
+    case "skipped":
+      return "done"
+    case "failed":
+      return "failed"
+    default:
+      return null
+  }
+}
+
+async function sendUiMessage(server: McpServer, text: string): Promise<void> {
+  const params = {
+    role: "user" as const,
+    content: [{ type: "text", text }],
+  }
+  const flatNotify = (server as unknown as {
+    notification?: (n: { method: string; params: unknown }) => Promise<void>
+  }).notification
+  if (typeof flatNotify === "function") {
+    await flatNotify.call(server, { method: "ui/message", params })
+    return
+  }
+  const innerNotify = (server as unknown as {
+    server?: { notification?: (n: { method: string; params: unknown }) => Promise<void> }
+  }).server?.notification
+  if (typeof innerNotify === "function") {
+    await innerNotify.call(
+      (server as unknown as { server: unknown }).server,
+      { method: "ui/message", params },
+    )
+  }
 }
 
 async function runPollCycle(server: McpServer): Promise<void> {

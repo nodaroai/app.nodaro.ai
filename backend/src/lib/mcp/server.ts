@@ -9,6 +9,7 @@ import { registerComponents } from "./tools/components.js"
 import { registerApps } from "./tools/apps.js"
 import { registerModels } from "./tools/models.js"
 import { registerGallery } from "./tools/gallery.js"
+import { registerDynamicTools } from "./tools/dynamic.js"
 import { registerTaskHandlers } from "./tasks.js"
 import { startProgressEmitter } from "./progress-emitter.js"
 import type { Scope } from "../scopes.js"
@@ -53,7 +54,7 @@ interface BuildOpts {
  * Note: `swap_face` is intentionally NOT registered — the underlying
  * `/v1/swap-face` route does not exist in the codebase. v1.2+ may revisit.
  */
-export function buildMcpServer(opts: BuildOpts): McpServer {
+export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   const session = newSession(opts)
   const server = new McpServer(
     { name: "nodaro-mcp", version: "1.0.0" },
@@ -84,6 +85,13 @@ export function buildMcpServer(opts: BuildOpts): McpServer {
   registerApps({ server, session, fastify: opts.fastify })
   registerModels({ server, session, fastify: opts.fastify })
   registerGallery({ server, session, fastify: opts.fastify })
+
+  // v2.0: per-user dynamic tools (`component_<slug>`, `app_<slug>`). Capped
+  // 15 + 15 = 30 dynamic tools per session. Async because it queries
+  // published_apps before tools/list responds; making buildMcpServer
+  // async lets the caller await registration so tools/list is correct on
+  // the very first request.
+  await registerDynamicTools({ server, session, fastify: opts.fastify })
 
   // v1.2: tasks/* + notifications/progress wiring. Tasks are registered
   // against the session's userId (via a thunk so the closure stays

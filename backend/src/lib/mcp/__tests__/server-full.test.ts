@@ -1,7 +1,42 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import Fastify from "fastify"
-import { buildMcpServer } from "../server.js"
 import { type Scope } from "../../scopes.js"
+
+// Stub supabase so dynamic-tool factory queries return empty rows by default,
+// keeping tool counts deterministic. Individual tests override this via
+// `setDynamicRows` for the dynamic-tools assertion below.
+const dynamicRowsByKind = vi.hoisted(() => ({
+  app: [] as Array<Record<string, unknown>>,
+  component: [] as Array<Record<string, unknown>>,
+}))
+
+vi.mock("../../supabase.js", () => ({
+  supabase: {
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockImplementation(() => ({
+          eq: vi.fn().mockImplementation((_col: string, kindVal: string) => ({
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn(async (n: number) => ({
+                    data: (kindVal === "component"
+                      ? dynamicRowsByKind.component
+                      : dynamicRowsByKind.app
+                    ).slice(0, n),
+                    error: null,
+                  })),
+                }),
+              }),
+            }),
+          })),
+        })),
+      }),
+    }),
+  },
+}))
+
+const { buildMcpServer } = await import("../server.js")
 
 /**
  * Inspects the SDK's internal `_requestHandlers` Map to invoke `tools/list`
@@ -14,7 +49,7 @@ type ToolsListHandler = (
 ) => Promise<{ tools: { name: string }[] }>
 
 async function listTools(
-  server: ReturnType<typeof buildMcpServer>,
+  server: Awaited<ReturnType<typeof buildMcpServer>>,
 ): Promise<{ name: string }[]> {
   const inner = (server as unknown as {
     server: { _requestHandlers: Map<string, ToolsListHandler> }
@@ -39,7 +74,7 @@ const ALL_GRANTED: Scope[] = [
 describe("buildMcpServer full catalog (v1.1)", () => {
   it("with all scopes granted, registers the full v1.1 tool catalog", async () => {
     const fastify = Fastify()
-    const server = buildMcpServer({
+    const server = await buildMcpServer({
       userId: "u1",
       scopes: ALL_GRANTED,
       clientName: "Claude",
@@ -103,7 +138,7 @@ describe("buildMcpServer full catalog (v1.1)", () => {
 
   it("with only jobs:read, registers ping + jobs tools and nothing else", async () => {
     const fastify = Fastify()
-    const server = buildMcpServer({
+    const server = await buildMcpServer({
       userId: "u1",
       scopes: ["jobs:read"],
       clientName: "Test",
@@ -138,7 +173,7 @@ describe("buildMcpServer full catalog (v1.1)", () => {
 
   it("with no scopes, registers only the unscoped tools (ping, list_models)", async () => {
     const fastify = Fastify()
-    const server = buildMcpServer({
+    const server = await buildMcpServer({
       userId: "u1",
       scopes: [],
       clientName: "Test",
@@ -153,5 +188,37 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names).not.toContain("generate_image")
     expect(names).not.toContain("check_balance")
     expect(tools).toHaveLength(2)
+  })
+
+  it("v2.0: surfaces dynamic per-user tools (component_<slug>, app_<slug>) in tools/list", async () => {
+    dynamicRowsByKind.component = [
+      {
+        id: "c1",
+        name: "Marketing Video",
+        slug: "marketing-video",
+        publish_type: "component",
+        description: "x",
+        component_metadata: { inputs: [], outputs: [], exposedSettings: [] },
+      },
+    ]
+    dynamicRowsByKind.app = [
+      { id: "a1", name: "Photo Editor", slug: "photo-editor", publish_type: "app" },
+    ]
+    try {
+      const fastify = Fastify()
+      const server = await buildMcpServer({
+        userId: "u1",
+        scopes: ALL_GRANTED,
+        clientName: "Claude",
+        fastify,
+      })
+      const tools = await listTools(server)
+      const names = tools.map((t) => t.name)
+      expect(names).toContain("component_marketing_video")
+      expect(names).toContain("app_photo_editor")
+    } finally {
+      dynamicRowsByKind.component = []
+      dynamicRowsByKind.app = []
+    }
   })
 })
