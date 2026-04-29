@@ -57,7 +57,7 @@ export async function registerMcpRoute(app: FastifyInstance): Promise<void> {
       ? await resolveClientName(req.appAuthorization.appId)
       : "Nodaro Web"
 
-    const server = buildMcpServer({ userId: req.userId, scopes, clientName })
+    const server = buildMcpServer({ userId: req.userId, scopes, clientName, fastify: app })
     await handleMcpRequest(server, req, reply)
   })
 }

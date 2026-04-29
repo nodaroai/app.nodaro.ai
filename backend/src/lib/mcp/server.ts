@@ -1,12 +1,21 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import type { FastifyInstance } from "fastify"
 import { newSession, type McpSession } from "./session.js"
 import { passesGate, type ToolGate } from "./tool-schemas.js"
+import { registerVerbs } from "./tools/verbs.js"
 import type { Scope } from "../scopes.js"
 
 interface BuildOpts {
   userId: string
   scopes: Scope[]
   clientName: string
+  /**
+   * Fastify instance for `app.inject()`-based dispatch from verb tools to the
+   * underlying `/v1/...` routes. Routed-through requests carry the
+   * internal-orchestrator-secret header, so the auth middleware accepts
+   * `userId` from the request body.
+   */
+  fastify: FastifyInstance
 }
 
 /**
@@ -31,6 +40,7 @@ export function buildMcpServer(opts: BuildOpts): McpServer {
     { capabilities: { tools: { listChanged: false } } },
   )
   registerPing(server, session)
+  registerVerbs({ server, session, fastify: opts.fastify })
   return server
 }
 
