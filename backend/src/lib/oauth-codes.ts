@@ -7,19 +7,31 @@ interface CodeEntry {
   userId: string
   scopes: string[]
   redirectUri: string
+  codeChallenge?: string
+  codeChallengeMethod?: "S256"
   expiresAt: number
 }
 
-interface IssueInput {
+export interface IssueInput {
   appId: string
   userId: string
   scopes: string[]
   redirectUri: string
+  codeChallenge?: string
+  codeChallengeMethod?: "S256"
+}
+
+export interface RedeemedGrant {
+  appId: string
+  userId: string
+  scopes: string[]
+  redirectUri: string
+  codeChallenge?: string
+  codeChallengeMethod?: "S256"
 }
 
 const store = new Map<string, CodeEntry>()
 
-/** Periodic eviction of expired codes (every 60s). */
 setInterval(() => {
   const now = Date.now()
   for (const [code, entry] of store) {
@@ -38,12 +50,13 @@ export function issueCode(input: IssueInput): string {
 
 /**
  * Redeems a code. Returns null if the code is missing, expired, already used,
- * or the redirectUri doesn't match.
+ * or the redirectUri doesn't match. Returns the stored PKCE challenge so the
+ * caller can verify code_verifier.
  */
-export function redeemCode(code: string, redirectUri: string): IssueInput | null {
+export function redeemCode(code: string, redirectUri: string): RedeemedGrant | null {
   const entry = store.get(code)
   if (!entry) return null
-  store.delete(code)  // one-shot — delete before checks
+  store.delete(code)
   if (Date.now() > entry.expiresAt) return null
   if (entry.redirectUri !== redirectUri) return null
   return {
@@ -51,10 +64,11 @@ export function redeemCode(code: string, redirectUri: string): IssueInput | null
     userId: entry.userId,
     scopes: entry.scopes,
     redirectUri: entry.redirectUri,
+    codeChallenge: entry.codeChallenge,
+    codeChallengeMethod: entry.codeChallengeMethod,
   }
 }
 
-/** Test-only: clear the store. */
 export function _resetForTest(): void {
   store.clear()
 }
