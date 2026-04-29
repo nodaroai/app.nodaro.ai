@@ -86,22 +86,37 @@ export function registerWidgetResources(server: McpServer): void {
         title: w.name,
         description: w.description,
         mimeType: "text/html;profile=mcp-app",
+        // Listing-level _meta as static default (per spec). Hosts may pre-fetch
+        // / audit the security config without calling resources/read first.
+        _meta: {
+          ui: {
+            csp: WIDGET_CSP,
+            prefersBorder: true,
+          },
+        },
       },
-      async (uri) => ({
-        contents: [
-          {
-            uri: uri.href,
-            mimeType: "text/html;profile=mcp-app",
-            text: w.build(),
-            _meta: {
-              ui: {
-                csp: WIDGET_CSP,
-                prefersBorder: true,
+      async (uri) => {
+        // Log so we can verify in Railway whether Claude is actually invoking
+        // resources/read — if these never appear in production logs, the host
+        // isn't opting into MCP Apps for our tools.
+        // eslint-disable-next-line no-console
+        console.log(`[mcp] resources/read ${uri.href}`)
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              mimeType: "text/html;profile=mcp-app",
+              text: w.build(),
+              _meta: {
+                ui: {
+                  csp: WIDGET_CSP,
+                  prefersBorder: true,
+                },
               },
             },
-          },
-        ],
-      }),
+          ],
+        }
+      },
     )
   }
 }
