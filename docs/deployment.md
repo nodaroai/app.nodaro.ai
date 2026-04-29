@@ -358,6 +358,50 @@ your needs and restart.
 If you're still stuck, file an issue with the Docker logs at
 <https://github.com/nodaroai/app.nodaro.ai/issues>.
 
+## 10. MCP integration (optional)
+
+The MCP (Model Context Protocol) server lets Claude.ai, Cursor, Cline,
+Continue.dev, Goose, and any MCP-compatible client drive Nodaro tools on
+a user's behalf via OAuth. It is gated behind `MCP_ENABLED` (default
+`false`) and lives at the `mcp.nodaro.ai/mcp` subdomain.
+
+**To enable on a hosted instance:**
+
+1. **Add a custom subdomain** for `mcp.<your-domain>` pointing at the
+   same backend service. On Railway:
+   ```bash
+   railway domain add mcp.your-domain.com --service backend
+   ```
+   Or in the Railway dashboard: Project → backend service → Settings →
+   Domains → Add custom domain. Add the CNAME at your DNS provider (no
+   Cloudflare proxy — proxies break long-lived SSE connections).
+
+2. **Set env vars on the backend service.** Only `MCP_ENABLED` is required —
+   the other two have safe defaults you typically don't need to change:
+   ```
+   MCP_ENABLED=true                              # required (default: false)
+   ```
+   Optional overrides:
+   ```
+   MCP_DYNAMIC_REGISTRATION=open                 # default: "allowlist" (recommended)
+   MCP_DCR_ALLOWLIST=Claude,Cursor,Cline,Continue,Goose,YourCustomClient
+                                                 # default already includes the 5 popular clients
+   ```
+
+3. **Verify discovery endpoints** are reachable:
+   ```bash
+   curl https://mcp.your-domain.com/.well-known/oauth-protected-resource
+   curl https://your-domain.com/.well-known/oauth-authorization-server
+   ```
+   Both should return JSON with 200 status.
+
+4. **Add the connector** in your MCP client. In Claude.ai: Settings →
+   Connectors → Add custom connector → URL `https://mcp.your-domain.com/mcp`.
+
+The MCP feature ships incrementally over phases v1.0 → v3.0. v1.0 (auth
+skeleton) shows a single placeholder `ping` tool; later phases add the
+real generation tools, gallery, dynamic per-user tools, and widgets.
+
 ## See also
 
 - [Community Edition Quickstart](./community-edition-quickstart.md) —

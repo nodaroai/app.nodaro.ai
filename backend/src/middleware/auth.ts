@@ -110,6 +110,17 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { method: "POST", path: "/v1/oauth/token" },
   { method: "POST", path: "/v1/oauth/revoke" },
   { method: "GET", path: "/v1/oauth/app-info" },
+  { method: "POST", path: "/v1/oauth/register" },
+  { method: "GET", path: "/.well-known/oauth-authorization-server" },
+  { method: "GET", path: "/.well-known/oauth-protected-resource" },
+  // /mcp must be "public" so a missing/invalid token falls through to the
+  // route handler, which attaches the WWW-Authenticate Bearer challenge with
+  // resource="https://mcp.nodaro.ai/mcp" — required by MCP clients (RFC 9728)
+  // to discover OAuth via /.well-known/oauth-protected-resource.
+  // Valid ndr_app_* and Supabase JWT tokens still resolve userId in the middleware
+  // (per existing public-route token-handling logic).
+  { method: "POST", path: "/mcp" },
+  { method: "GET", path: "/mcp" },
   // IMPORTANT: trailing slash is deliberate — "/v1/api/" matches "/v1/api/run", "/v1/api/schema", etc.
   // but NOT "/v1/api-tokens" (CRUD routes that require JWT auth).
   // These routes authenticate via Bearer token (API token), not JWT.
