@@ -4,6 +4,7 @@ import { Loader2, ShieldCheck, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 import { getOAuthAppInfo, oauthAuthorize, type OAuthAppInfo } from "@/lib/api"
+import { McpConsentNotice } from "@/components/oauth/McpConsentNotice"
 import { toast } from "sonner"
 
 const SCOPE_DESCRIPTIONS: Record<string, string> = {
@@ -164,6 +165,8 @@ export default function OAuthAuthorizePage() {
         {appInfo.description && (
           <p className="text-xs text-muted-foreground mb-4">{appInfo.description}</p>
         )}
+
+        <McpConsentNotice kind={appInfo.kind ?? "user"} clientName={appInfo.name} />
 
         <div className="my-6">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Permissions</p>
