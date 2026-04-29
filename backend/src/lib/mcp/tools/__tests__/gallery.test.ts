@@ -70,6 +70,9 @@ describe("browse_gallery tool", () => {
     expect(result.content[0]?.text).toContain("g1: image")
     expect(result.content[0]?.text).toContain("nano-banana")
     expect(result.content[0]?.text).toContain("2026-04-29")
+    // v1.2: a UI resource is returned alongside the text content.
+    expect(result.content.length).toBe(2)
+    expect((result.content[1] as { type: string }).type).toBe("resource")
   })
 
   it("does NOT register without assets:read scope", async () => {
@@ -90,7 +93,8 @@ describe("browse_gallery tool", () => {
 
 describe("list_favorites tool", () => {
   it("returns favorited job_ids", async () => {
-    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+    // Two from() calls: first hits gallery_favorites, second hydrates jobs.
+    const favoritesChain = {
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           order: vi.fn().mockReturnValue({
@@ -104,7 +108,15 @@ describe("list_favorites tool", () => {
           }),
         }),
       }),
-    })
+    }
+    const jobsChain = {
+      select: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ data: [], error: null }),
+      }),
+    }
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(favoritesChain)
+      .mockReturnValueOnce(jobsChain)
     const server = buildServer()
     registerGallery({ server, session: readSession(), fastify: Fastify() })
     const result = await callTool(server, "list_favorites", {})
