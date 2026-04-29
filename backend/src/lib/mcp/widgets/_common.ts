@@ -69,11 +69,20 @@ export function uiProtocolShim(): string {
       // Per SEP-1865 the host responds to ui/initialize with {hostContext},
       // then we MUST send the initialized notification before any further
       // requests. tool-input/tool-result notifications follow.
+      //
+      // Field names: spec requires "appCapabilities" + "appInfo" (NOT
+      // "capabilities" + "clientInfo" — that's the standard MCP initialize
+      // shape, but the ui/initialize handshake uses Apps-specific names).
+      // Mismatch causes Claude.ai web to reject the handshake silently and
+      // tear the iframe down before tool-result arrives.
       window.addEventListener('DOMContentLoaded', function() {
         send('ui/initialize', {
           protocolVersion: '2025-06-18',
-          capabilities: {},
-          clientInfo: { name: 'nodaro-mcp', version: '1.0.0' }
+          appCapabilities: {
+            tools: { listChanged: false },
+            availableDisplayModes: ['inline', 'fullscreen']
+          },
+          appInfo: { name: 'nodaro-mcp', version: '1.0.0' }
         }).then(function(result) {
           window.__MCP_HOST_CONTEXT__ = (result && result.hostContext) || {};
           notify('ui/notifications/initialized', {});
