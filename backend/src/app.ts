@@ -119,6 +119,9 @@ import { adminLlmModelsRoutes } from "./routes/admin-llm-models.js"
 import { nodeDefaultsRoutes } from "./routes/node-defaults.js"
 import { nodesRoutes } from "./routes/nodes.js"
 import { oauthRoutes } from "./routes/oauth.js"
+import { registerOauthRegister } from "./routes/oauth-register.js"
+import { registerWellKnown } from "./routes/well-known.js"
+import { registerMcpRoute } from "./routes/mcp.js"
 import { adminNodeDefaultsRoutes } from "./routes/admin-node-defaults.js"
 import { tutorialsRoutes } from "./routes/tutorials.js"
 import { adminTutorialsRoutes } from "./routes/admin-tutorials.js"
@@ -263,6 +266,9 @@ export async function buildApp() {
   await app.register(nodeDefaultsRoutes)
   await app.register(nodesRoutes)
   await app.register(oauthRoutes)
+  await registerOauthRegister(app)
+  await registerWellKnown(app)
+  await registerMcpRoute(app)
   await app.register(adminNodeDefaultsRoutes)
   await app.register(tutorialsRoutes)
   await app.register(adminTutorialsRoutes)
