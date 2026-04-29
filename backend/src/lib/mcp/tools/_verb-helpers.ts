@@ -104,7 +104,7 @@ export function jobResultWithWidget(opts: JobResultOpts) {
   }
   const text: ContentItem = {
     type: "text",
-    text: `Submitted ${label} job ${jobId}. Track via tasks/get with task_id=${jobId} or open: https://app.nodaro.ai/library/jobs/${jobId}`,
+    text: `Submitted ${label} job ${jobId}. Track via tasks/get with task_id=${jobId}. Once it lands you'll find it at the top of https://app.nodaro.ai/library .`,
   }
   if (!widgetKind || !widgetData) {
     return { content: [text], _meta: { task_id: jobId } }
@@ -143,7 +143,7 @@ export function jobResult(jobId: string, label: string) {
     content: [
       {
         type: "text" as const,
-        text: `Submitted ${label} job ${jobId}. Track via tasks/get with task_id=${jobId} or open: https://app.nodaro.ai/library/jobs/${jobId}`,
+        text: `Submitted ${label} job ${jobId}. Track via tasks/get with task_id=${jobId}. Once it lands you'll find it at the top of https://app.nodaro.ai/library .`,
       },
     ],
     _meta: { task_id: jobId },

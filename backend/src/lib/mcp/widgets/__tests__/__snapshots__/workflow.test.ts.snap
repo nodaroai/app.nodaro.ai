@@ -154,7 +154,7 @@ exports[`workflow widget > embeds pre-loaded node states into INIT data 1`] = `
     }
 
     document.getElementById('btn-open').addEventListener('click', function() {
-      window.NodaroMCP.openLink('https://app.nodaro.ai/library/executions/' + INIT.executionId);
+      window.NodaroMCP.openLink('https://app.nodaro.ai/library');
     });
 
     if (INIT.outputs) INIT.outputs.forEach(function(o) { addOutput(o.kind, o.url); });
@@ -347,7 +347,7 @@ exports[`workflow widget > renders empty state 1`] = `
     }
 
     document.getElementById('btn-open').addEventListener('click', function() {
-      window.NodaroMCP.openLink('https://app.nodaro.ai/library/executions/' + INIT.executionId);
+      window.NodaroMCP.openLink('https://app.nodaro.ai/library');
     });
 
     if (INIT.outputs) INIT.outputs.forEach(function(o) { addOutput(o.kind, o.url); });

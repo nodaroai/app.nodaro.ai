@@ -181,7 +181,7 @@ ${uiProtocolShim()}
       actions.appendChild(useBtn);
       var openBtn = document.createElement('button');
       openBtn.textContent = 'Open in Nodaro';
-      openBtn.addEventListener('click', function() { window.NodaroMCP.openLink('https://app.nodaro.ai/library/jobs/' + item.jobId); });
+      openBtn.addEventListener('click', function() { window.NodaroMCP.openLink('https://app.nodaro.ai/library'); });
       actions.appendChild(openBtn);
       detail.appendChild(actions);
       root.appendChild(detail);
