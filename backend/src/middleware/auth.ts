@@ -111,6 +111,10 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { method: "POST", path: "/v1/oauth/revoke" },
   { method: "GET", path: "/v1/oauth/app-info" },
   { method: "POST", path: "/v1/oauth/register" },
+  // GET /v1/oauth/authorize 302-redirects to the frontend consent UI.
+  // OAuth-spec-compliant clients (Claude.ai etc) hit this without a Bearer
+  // token, so the route must be public.
+  { method: "GET", path: "/v1/oauth/authorize" },
   { method: "GET", path: "/.well-known/oauth-authorization-server" },
   { method: "GET", path: "/.well-known/oauth-protected-resource" },
   // /mcp must be "public" so a missing/invalid token falls through to the

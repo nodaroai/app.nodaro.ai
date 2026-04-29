@@ -3864,6 +3864,10 @@ export interface OAuthAuthorizeInput {
   redirectUri: string
   scopes: string[]
   state?: string
+  /** PKCE code_challenge (RFC 7636), forwarded verbatim from the OAuth client. */
+  codeChallenge?: string
+  /** PKCE code_challenge_method — only "S256" is accepted server-side. */
+  codeChallengeMethod?: "S256"
 }
 
 export interface OAuthAuthorizeResult {

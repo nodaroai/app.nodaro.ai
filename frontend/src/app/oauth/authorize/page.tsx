@@ -28,6 +28,9 @@ export default function OAuthAuthorizePage() {
   const scopeStr = params.get("scope") ?? ""
   const state = params.get("state") ?? ""
   const responseType = params.get("response_type") ?? "code"
+  // PKCE (RFC 7636) — Claude.ai and most modern MCP clients send these.
+  const codeChallenge = params.get("code_challenge") ?? ""
+  const codeChallengeMethod = params.get("code_challenge_method") ?? ""
 
   const [appInfo, setAppInfo] = useState<OAuthAppInfo | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -85,6 +88,8 @@ export default function OAuthAuthorizePage() {
         redirectUri,
         scopes: requestedScopes,
         state: state || undefined,
+        codeChallenge: codeChallenge || undefined,
+        codeChallengeMethod: codeChallengeMethod === "S256" ? "S256" : undefined,
       })
       const url = new URL(result.redirectUri)
       url.searchParams.set("code", result.code)
