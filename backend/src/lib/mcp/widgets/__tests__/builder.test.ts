@@ -6,19 +6,23 @@ describe("buildUIResource", () => {
     const r = buildUIResource({
       uri: "ui://nodaro/test",
       content: { type: "rawHtml", htmlString: "<h1>hi</h1>" },
-      csp: { resourceSrc: ["https://assets.nodaro.ai"] },
+      csp: { resourceDomains: ["https://assets.nodaro.ai"] },
     }) as { resource: { mimeType: string; text: string } }
     expect(r.resource.mimeType).toBe("text/html;profile=mcp-app")
     expect(r.resource.text).toBe("<h1>hi</h1>")
   })
 
-  it("declares CSP in _meta", () => {
+  it("declares CSP at resource._meta.csp with connectDomains/resourceDomains keys", () => {
     const r = buildUIResource({
       uri: "ui://test",
       content: { type: "rawHtml", htmlString: "" },
-      csp: { resourceSrc: ["https://x.example"] },
-    }) as { _meta: { "ui/csp": { "resource-src": string[] } } }
-    expect(r._meta["ui/csp"]["resource-src"]).toEqual(["https://x.example"])
+      csp: { resourceDomains: ["https://x.example"], connectDomains: ["https://api.example"] },
+    })
+    expect(r.resource._meta?.csp?.resourceDomains).toEqual(["https://x.example"])
+    expect(r.resource._meta?.csp?.connectDomains).toEqual(["https://api.example"])
+    // _meta MUST be inside resource, not at outer level (Claude.ai falls back
+    // to text rendering if it's a sibling of `type`).
+    expect((r as unknown as Record<string, unknown>)._meta).toBeUndefined()
   })
 })
 

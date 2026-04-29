@@ -163,7 +163,7 @@ export function registerWorkflows({
               name: workflowName,
             }),
           },
-          csp: { resourceSrc: ["https://assets.nodaro.ai"] },
+          csp: { resourceDomains: ["https://assets.nodaro.ai"] },
         })
 
         return {
