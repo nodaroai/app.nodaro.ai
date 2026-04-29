@@ -109,7 +109,7 @@ ${uiProtocolShim()}
     }
 
     document.getElementById('btn-open').addEventListener('click', function() {
-      window.NodaroMCP.openLink('https://app.nodaro.ai/library/jobs/' + INIT.jobId);
+      window.NodaroMCP.openLink('https://app.nodaro.ai/library');
     });
     document.getElementById('btn-rerun').addEventListener('click', function() {
       var toolName = INIT.mediaKind === 'video' ? 'generate_video' : INIT.mediaKind === 'audio' ? 'generate_music' : 'generate_image';

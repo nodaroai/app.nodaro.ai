@@ -112,7 +112,7 @@ ${uiProtocolShim()}
     }
 
     document.getElementById('btn-open').addEventListener('click', function() {
-      window.NodaroMCP.openLink('https://app.nodaro.ai/library/executions/' + INIT.executionId);
+      window.NodaroMCP.openLink('https://app.nodaro.ai/library');
     });
 
     if (INIT.outputs) INIT.outputs.forEach(function(o) { addOutput(o.kind, o.url); });
