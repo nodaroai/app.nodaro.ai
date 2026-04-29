@@ -177,7 +177,7 @@ function registerComponentTool(
           type: "rawHtml",
           htmlString: buildWorkflowWidget({ executionId: execId, name: row.name }),
         },
-        csp: { resourceSrc: ["https://assets.nodaro.ai"] },
+        csp: { resourceDomains: ["https://assets.nodaro.ai"] },
       })
       return {
         content: [
@@ -268,7 +268,7 @@ function registerAppTool(
           type: "rawHtml",
           htmlString: buildWorkflowWidget({ executionId: execId, name: row.name }),
         },
-        csp: { resourceSrc: ["https://assets.nodaro.ai"] },
+        csp: { resourceDomains: ["https://assets.nodaro.ai"] },
       })
       return {
         content: [

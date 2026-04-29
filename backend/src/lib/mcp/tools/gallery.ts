@@ -192,7 +192,7 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
           uri: "ui://nodaro/gallery",
           content: { type: "rawHtml", htmlString: widgetHtml },
           csp: {
-            resourceSrc: ["https://assets.nodaro.ai", "https://*.r2.cloudflarestorage.com"],
+            resourceDomains: ["https://assets.nodaro.ai", "https://*.r2.cloudflarestorage.com"],
           },
         }) as {
           type: "resource"
@@ -268,7 +268,7 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
           uri: "ui://nodaro/gallery",
           content: { type: "rawHtml", htmlString: widgetHtml },
           csp: {
-            resourceSrc: ["https://assets.nodaro.ai", "https://*.r2.cloudflarestorage.com"],
+            resourceDomains: ["https://assets.nodaro.ai", "https://*.r2.cloudflarestorage.com"],
           },
         }) as {
           type: "resource"

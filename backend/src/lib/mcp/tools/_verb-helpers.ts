@@ -81,8 +81,12 @@ type ContentItem =
   | { type: "text"; text: string }
   | {
       type: "resource"
-      resource: { uri: string; text: string; mimeType?: string }
-      _meta?: Record<string, unknown>
+      resource: {
+        uri: string
+        text: string
+        mimeType?: string
+        _meta?: Record<string, unknown>
+      }
     }
 
 /**
@@ -113,7 +117,7 @@ export function jobResultWithWidget(opts: JobResultOpts) {
   const resource = buildUIResource({
     uri: `ui://nodaro/job-${widgetKind}/${jobId}`,
     content: { type: "rawHtml", htmlString: widgetHtml },
-    csp: { resourceSrc: ["https://assets.nodaro.ai", "https://*.r2.cloudflarestorage.com"] },
+    csp: { resourceDomains: ["https://assets.nodaro.ai", "https://*.r2.cloudflarestorage.com"] },
   }) as ContentItem
   return {
     content: [text, resource],
