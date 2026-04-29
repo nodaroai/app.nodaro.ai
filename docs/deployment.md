@@ -376,11 +376,16 @@ a user's behalf via OAuth. It is gated behind `MCP_ENABLED` (default
    Domains → Add custom domain. Add the CNAME at your DNS provider (no
    Cloudflare proxy — proxies break long-lived SSE connections).
 
-2. **Set env vars on the backend service:**
+2. **Set env vars on the backend service.** Only `MCP_ENABLED` is required —
+   the other two have safe defaults you typically don't need to change:
    ```
-   MCP_ENABLED=true
-   MCP_DYNAMIC_REGISTRATION=allowlist            # or "open" for self-hosters
-   MCP_DCR_ALLOWLIST=Claude,Cursor,Cline,Continue,Goose
+   MCP_ENABLED=true                              # required (default: false)
+   ```
+   Optional overrides:
+   ```
+   MCP_DYNAMIC_REGISTRATION=open                 # default: "allowlist" (recommended)
+   MCP_DCR_ALLOWLIST=Claude,Cursor,Cline,Continue,Goose,YourCustomClient
+                                                 # default already includes the 5 popular clients
    ```
 
 3. **Verify discovery endpoints** are reachable:
