@@ -1,7 +1,10 @@
 import type { FC } from "react"
 
+export type DeveloperAppKind = "user" | "dynamic_mcp" | "first_party_mcp"
+
 export interface McpConsentNoticeProps {
-  kind: "user" | "dynamic_mcp" | "first_party_mcp" | string
+  // `& {}` keeps autocomplete for known kinds while allowing forward-compat string values.
+  kind: DeveloperAppKind | (string & {})
   clientName: string
 }
 

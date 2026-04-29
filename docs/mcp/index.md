@@ -30,6 +30,12 @@ Sign in with your Nodaro account, consent, and the tools appear inline.
 - [Goose](./connecting-goose.md)
 - [Build your own MCP-compatible client](./build-your-own-client.md)
 
+## Under the hood
+
+OAuth flow under the hood: see [OAuth flow](../oauth-flow.md). MCP-specific
+client onboarding lives here; the OAuth handshake itself is the same
+authorization-code + PKCE flow Nodaro uses for any third-party app.
+
 ## Troubleshooting
 
 See [troubleshooting](./troubleshooting.md).
