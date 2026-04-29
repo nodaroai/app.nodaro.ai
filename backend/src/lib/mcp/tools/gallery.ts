@@ -314,6 +314,7 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
           (out.videoUrl as string | undefined) ??
           (out.audioUrl as string | undefined) ??
           (out.outputUrl as string | undefined) ??
+          (out.url as string | undefined) ??
           null
         const assetKind = out.imageUrl
           ? "image"
@@ -322,6 +323,17 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
             : out.audioUrl
               ? "audio"
               : null
+
+        // Debug: log to Railway when a completed job has no URL we can find,
+        // so we can see what shape output_data actually has in production.
+        if (data.status === "completed" && !outputUrl) {
+          // eslint-disable-next-line no-console
+          console.log(
+            `[mcp] get_asset ${args.job_id} completed but no URL found. ` +
+              `job_type=${data.job_type} output_data keys=${Object.keys(out).join(",")} ` +
+              `output_data=${JSON.stringify(out).slice(0, 500)}`,
+          )
+        }
 
         return {
           content: [{ type: "text", text: JSON.stringify({ data }, null, 2) }],
@@ -333,6 +345,9 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
             assetKind,
             jobType: data.job_type,
             completedAt: data.completed_at,
+            // For now also expose the raw output_data so the widget can fall
+            // back to alternate field names if our normalization missed one.
+            outputData: out,
           },
         }
       },
