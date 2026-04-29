@@ -51,13 +51,18 @@ describe("MCP end-to-end auth flow", () => {
     await app.close()
   })
 
-  it("rejects /mcp with 401 when no token is provided", async () => {
+  it("rejects /mcp with 401 + WWW-Authenticate when no token is provided", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/mcp",
       payload: { jsonrpc: "2.0", method: "initialize", id: 1 },
     })
     expect(res.statusCode).toBe(401)
+    // RFC 9728: MCP clients use this header to discover the protected-resource metadata.
+    const wwwAuth = res.headers["www-authenticate"]
+    expect(wwwAuth).toBeTruthy()
+    expect(String(wwwAuth)).toContain("Bearer")
+    expect(String(wwwAuth)).toContain('resource="https://mcp.nodaro.ai/mcp"')
   })
 
   it("DCR registers Claude and returns valid OAuth client metadata", async () => {
