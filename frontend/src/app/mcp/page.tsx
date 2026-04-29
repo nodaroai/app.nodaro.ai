@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { Check, Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -9,11 +9,21 @@ const MCP_URL = "https://mcp.nodaro.ai/mcp"
 
 export default function McpPage() {
   const [copied, setCopied] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  function handleCopy() {
-    navigator.clipboard.writeText(MCP_URL)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+  }, [])
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(MCP_URL)
+      setCopied(true)
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard permission denied or unavailable — silently no-op.
+    }
   }
 
   return (

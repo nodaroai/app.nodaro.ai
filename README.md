@@ -48,7 +48,7 @@ Full guide: [SDK Quickstart](docs/sdk-quickstart.md).
 ## MCP Integration
 
 Drive Nodaro tools from any MCP-compatible AI client. Paste `https://mcp.nodaro.ai/mcp`
-into Claude.ai / Cursor / Cline / Continue.dev / Goose. See [docs/mcp/](./docs/mcp/index.md).
+into Claude.ai / Cursor / Cline / Continue.dev / Goose. See [docs/mcp](./docs/mcp/index.md).
 
 ## Editions
 
