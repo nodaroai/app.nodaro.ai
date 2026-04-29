@@ -106,10 +106,17 @@ export async function oauthRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "invalid_redirect_uri", message: "redirect_uri not registered for this app" } })
     }
 
-    const requested = dApp.scopes_requested as string[]
-    for (const s of scopes) {
-      if (!requested.includes(s)) {
-        return reply.status(400).send({ error: { code: "invalid_scope", message: `Scope ${s} not in app's scopes_requested` } })
+    // For dynamic_mcp (RFC 7591 DCR) clients, scopes_requested is informational —
+    // the client_name is allowlisted at registration, and the user-controlled
+    // consent screen is the actual gate. Allow any valid Nodaro scope regardless
+    // of what was declared at DCR time. For user/dashboard-registered apps, keep
+    // the strict check — the developer explicitly declared which scopes they need.
+    if (dApp.kind !== "dynamic_mcp") {
+      const requested = dApp.scopes_requested as string[]
+      for (const s of scopes) {
+        if (!requested.includes(s)) {
+          return reply.status(400).send({ error: { code: "invalid_scope", message: `Scope ${s} not in app's scopes_requested` } })
+        }
       }
     }
 

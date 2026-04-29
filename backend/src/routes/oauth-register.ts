@@ -48,7 +48,13 @@ function hashSecret(secret: string): string {
 function parseScope(scope?: string): string[] {
   if (!scope) return [...ALL_SCOPES]
   const requested = scope.split(/\s+/).filter(Boolean)
-  return requested.filter((s) => (ALL_SCOPES as readonly string[]).includes(s))
+  const filtered = requested.filter((s) => (ALL_SCOPES as readonly string[]).includes(s))
+  // DCR clients (Claude.ai, etc.) often declare legacy OAuth scopes like
+  // "openid profile email" that don't intersect Nodaro's surface. Falling back
+  // to [] would make the DB row's scopes_requested empty, then every later
+  // authorize call fails with invalid_scope. Treat "no recognized scopes" as
+  // "all scopes" — the consent UI is the actual gate.
+  return filtered.length > 0 ? filtered : [...ALL_SCOPES]
 }
 
 async function countOpenRegistrations(clientName: string, redirectUris: string[]): Promise<number> {
