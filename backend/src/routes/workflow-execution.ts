@@ -15,6 +15,7 @@ import { createSSEStream } from "../lib/sse.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
+import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { CreditsService } from "../billing/credits.js"
 import { invalidateBalanceCache } from "./credits.js"
@@ -198,13 +199,15 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     }
 
     // Create execution record
+    const mcpClient = extractMcpClient(req.body)
     const { data: execution, error: execError } = await supabase
       .from("workflow_executions")
       .insert({
         workflow_id: workflowId,
         user_id: req.userId,
         status: "pending",
-        trigger_type: "manual",
+        trigger_type: mcpClient ? "mcp" : "manual",
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
       .select("id")
       .single()
