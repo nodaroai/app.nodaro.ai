@@ -4,6 +4,8 @@ import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
+import { buildUIResource } from "../widgets/builder.js"
+import { buildGalleryWidget, type GalleryItem } from "../widgets/gallery.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
@@ -81,14 +83,45 @@ function formatRow(row: GalleryRow): string {
 }
 
 /**
+ * Convert a Supabase `jobs` row into a `GalleryItem` shape suitable for the
+ * v1.2 gallery widget. We pull the asset URL from `output_data` (the
+ * kind-specific key — `imageUrl`, `videoUrl`, `audioUrl`) and the prompt +
+ * model from `input_data`.
+ */
+function rowToGalleryItem(row: GalleryRow): GalleryItem | null {
+  const kind = getKind(row.job_type)
+  if (!kind) return null
+  const out = row.output_data ?? {}
+  const assetUrl =
+    (kind === "image" && (out.imageUrl as string | undefined)) ||
+    (kind === "video" && (out.videoUrl as string | undefined)) ||
+    (kind === "audio" && (out.audioUrl as string | undefined)) ||
+    ""
+  if (!assetUrl) return null
+  const thumbnailUrl =
+    (out.thumbnailUrl as string | undefined) ?? (kind === "image" ? assetUrl : "")
+  return {
+    jobId: row.id,
+    kind,
+    prompt: (row.input_data?.prompt as string | undefined) ?? "",
+    model: (row.input_data?.provider as string | undefined) ?? row.provider ?? "?",
+    thumbnailUrl,
+    assetUrl,
+    createdAt: row.completed_at ?? "",
+    favorited: false,
+  }
+}
+
+/**
  * Gallery tools.
  *
  * `browse_gallery` and `list_favorites` are read-only over the public/user
  * gallery. `favorite_asset` toggles a favorite. `get_asset` fetches metadata
  * for a single asset (job).
  *
- * v1.1 returns text content with one line per item; v1.2 will swap in the
- * resource link / widget format the SDK supports for richer UIs.
+ * v1.2: `browse_gallery` and `list_favorites` return both a text summary AND
+ * a `buildGalleryWidget`-built UI resource so Claude.ai renders an inline
+ * grid with fullscreen detail view + Use buttons.
  */
 export function registerGallery({ server, session }: RegisterGalleryOpts): void {
   if (passesGate(session, readGate)) {
@@ -146,8 +179,29 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
           ? `\n(next_cursor: ${nextCursor} — call browse_gallery again with this cursor)`
           : ""
         const text = lines.length > 0 ? lines.join("\n") + cursorLine : "(no items)"
+
+        const items = rows
+          .map(rowToGalleryItem)
+          .filter((item): item is GalleryItem => item !== null)
+        const widgetHtml = buildGalleryWidget({
+          items,
+          nextCursor,
+          totalCount: items.length,
+        })
+        const resource = buildUIResource({
+          uri: "ui://nodaro/gallery",
+          content: { type: "rawHtml", htmlString: widgetHtml },
+          csp: {
+            resourceSrc: ["https://assets.nodaro.ai", "https://*.r2.cloudflarestorage.com"],
+          },
+        }) as {
+          type: "resource"
+          resource: { uri: string; text: string; mimeType?: string }
+          _meta?: Record<string, unknown>
+        }
+
         return {
-          content: [{ type: "text", text }],
+          content: [{ type: "text", text }, resource],
         }
       },
     )
@@ -184,20 +238,46 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
         const last = rows[rows.length - 1]
         const nextCursor =
           rows.length === limit && last?.created_at ? (last.created_at as string) : null
+        const text = JSON.stringify(
+          { data: rows.map((r) => r.job_id), next_cursor: nextCursor },
+          null,
+          2,
+        )
+
+        // Hydrate the favorited job_ids into full gallery items so the widget
+        // can render them. Skips silently if any single fetch fails.
+        const jobIds = rows.map((r) => r.job_id as string)
+        let items: GalleryItem[] = []
+        if (jobIds.length > 0) {
+          const { data: jobsData } = await supabase
+            .from("jobs")
+            .select("id, job_type, input_data, output_data, completed_at, provider")
+            .in("id", jobIds)
+          items = ((jobsData ?? []) as GalleryRow[])
+            .map(rowToGalleryItem)
+            .filter((item): item is GalleryItem => item !== null)
+            .map((item) => ({ ...item, favorited: true }))
+        }
+
+        const widgetHtml = buildGalleryWidget({
+          items,
+          nextCursor,
+          totalCount: items.length,
+        })
+        const resource = buildUIResource({
+          uri: "ui://nodaro/gallery",
+          content: { type: "rawHtml", htmlString: widgetHtml },
+          csp: {
+            resourceSrc: ["https://assets.nodaro.ai", "https://*.r2.cloudflarestorage.com"],
+          },
+        }) as {
+          type: "resource"
+          resource: { uri: string; text: string; mimeType?: string }
+          _meta?: Record<string, unknown>
+        }
+
         return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  data: rows.map((r) => r.job_id),
-                  next_cursor: nextCursor,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
+          content: [{ type: "text", text }, resource],
         }
       },
     )

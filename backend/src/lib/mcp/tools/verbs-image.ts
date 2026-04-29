@@ -6,6 +6,12 @@ import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { config } from "../../config.js"
+import {
+  parseJobId,
+  errorResult,
+  parseFailure,
+  jobResultWithWidget,
+} from "./_verb-helpers.js"
 
 /**
  * Path-1 structured fields shape, mirrored from `@nodaro/shared`'s
@@ -64,52 +70,6 @@ export interface RegisterOpts {
   server: McpServer
   session: McpSession
   fastify: FastifyInstance
-}
-
-interface ParsedJobBody {
-  jobId?: string
-  job_id?: string
-  id?: string
-}
-
-function parseJobId(body: string): string | null {
-  try {
-    const parsed = JSON.parse(body) as ParsedJobBody
-    return parsed.jobId ?? parsed.job_id ?? parsed.id ?? null
-  } catch {
-    return null
-  }
-}
-
-function jobResult(jobId: string, label: string) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: `Submitted ${label} job ${jobId}. Track via tasks/get with task_id=${jobId} or open: https://app.nodaro.ai/library/jobs/${jobId}`,
-      },
-    ],
-    _meta: { task_id: jobId },
-  }
-}
-
-function errorResult(statusCode: number, body: string) {
-  return {
-    content: [{ type: "text" as const, text: `Error from Nodaro: ${statusCode} ${body}` }],
-    isError: true,
-  }
-}
-
-function parseFailure(body: string) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: `Submitted but couldn't parse job_id from response: ${body}`,
-      },
-    ],
-    isError: true,
-  }
 }
 
 export function registerImageVerbs({ server, session, fastify }: RegisterOpts): void {
@@ -179,7 +139,19 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
         const jobId = parseJobId(res.body)
         if (!jobId) return parseFailure(res.body)
-        return jobResult(jobId, "image generation")
+        return jobResultWithWidget({
+          jobId,
+          label: "image generation",
+          session,
+          widgetKind: "image",
+          widgetData: {
+            jobId,
+            prompt: compositePrompt,
+            model: args.model,
+            aspectRatio: args.aspect_ratio,
+            resolution: args.resolution,
+          },
+        })
       },
     )
 
@@ -267,7 +239,19 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
         const jobId = parseJobId(res.body)
         if (!jobId) return parseFailure(res.body)
-        return jobResult(jobId, "image-to-image")
+        return jobResultWithWidget({
+          jobId,
+          label: "image-to-image",
+          session,
+          widgetKind: "image",
+          widgetData: {
+            jobId,
+            prompt: compositePrompt,
+            model: args.model ?? "image-to-image",
+            aspectRatio: args.aspect_ratio,
+            resolution: args.resolution,
+          },
+        })
       },
     )
   }

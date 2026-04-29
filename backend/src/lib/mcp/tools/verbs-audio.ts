@@ -2,54 +2,14 @@ import { z } from "zod"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { config } from "../../config.js"
 import type { RegisterOpts } from "./verbs-image.js"
+import {
+  parseJobId,
+  errorResult,
+  parseFailure,
+  jobResultWithWidget,
+} from "./_verb-helpers.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
-
-interface ParsedJobBody {
-  jobId?: string
-  job_id?: string
-  id?: string
-}
-
-function parseJobId(body: string): string | null {
-  try {
-    const parsed = JSON.parse(body) as ParsedJobBody
-    return parsed.jobId ?? parsed.job_id ?? parsed.id ?? null
-  } catch {
-    return null
-  }
-}
-
-function jobResult(jobId: string, label: string) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: `Submitted ${label} job ${jobId}. Track via tasks/get with task_id=${jobId} or open: https://app.nodaro.ai/library/jobs/${jobId}`,
-      },
-    ],
-    _meta: { task_id: jobId },
-  }
-}
-
-function errorResult(statusCode: number, body: string) {
-  return {
-    content: [{ type: "text" as const, text: `Error from Nodaro: ${statusCode} ${body}` }],
-    isError: true,
-  }
-}
-
-function parseFailure(body: string) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: `Submitted but couldn't parse job_id from response: ${body}`,
-      },
-    ],
-    isError: true,
-  }
-}
 
 export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): void {
   if (!passesGate(session, executeGate)) return
@@ -99,7 +59,18 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) return parseFailure(res.body)
-      return jobResult(jobId, "music generation")
+      return jobResultWithWidget({
+        jobId,
+        label: "music generation",
+        session,
+        widgetKind: "audio",
+        widgetData: {
+          jobId,
+          prompt: args.prompt,
+          model: args.model,
+          duration: args.duration,
+        },
+      })
     },
   )
 
@@ -159,7 +130,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) return parseFailure(res.body)
-      return jobResult(jobId, "text-to-speech")
+      return jobResultWithWidget({
+        jobId,
+        label: "text-to-speech",
+        session,
+        widgetKind: "audio",
+        widgetData: {
+          jobId,
+          prompt: args.text,
+          model: args.model ?? "elevenlabs",
+        },
+      })
     },
   )
 
@@ -196,7 +177,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) return parseFailure(res.body)
-      return jobResult(jobId, "YouTube audio")
+      return jobResultWithWidget({
+        jobId,
+        label: "YouTube audio",
+        session,
+        widgetKind: "audio",
+        widgetData: {
+          jobId,
+          prompt: args.youtube_url,
+          model: "youtube-audio",
+        },
+      })
     },
   )
 }
