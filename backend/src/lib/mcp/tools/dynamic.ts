@@ -120,6 +120,7 @@ function registerComponentTool(
       inputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     _meta: {
+      "ui/resourceUri": "ui://nodaro/widget/workflow",
       ui: {
         resourceUri: "ui://nodaro/widget/workflow",
         visibility: ["model", "app"],
@@ -217,6 +218,7 @@ function registerAppTool(
       inputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     _meta: {
+      "ui/resourceUri": "ui://nodaro/widget/workflow",
       ui: {
         resourceUri: "ui://nodaro/widget/workflow",
         visibility: ["model", "app"],

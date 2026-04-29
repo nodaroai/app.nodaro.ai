@@ -114,6 +114,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           openWorldHint: true,
         },
       _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/job-image",
         ui: {
           resourceUri: "ui://nodaro/widget/job-image",
           visibility: ["model", "app"],
@@ -197,6 +198,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           openWorldHint: true,
         },
       _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/job-image",
         ui: {
           resourceUri: "ui://nodaro/widget/job-image",
           visibility: ["model", "app"],

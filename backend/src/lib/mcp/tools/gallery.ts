@@ -140,6 +140,7 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
         },
         annotations: { readOnlyHint: true },
       _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/gallery",
         ui: {
           resourceUri: "ui://nodaro/widget/gallery",
           visibility: ["model", "app"],
@@ -212,6 +213,7 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
         },
         annotations: { readOnlyHint: true },
       _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/gallery",
         ui: {
           resourceUri: "ui://nodaro/widget/gallery",
           visibility: ["model", "app"],
