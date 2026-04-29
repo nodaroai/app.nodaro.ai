@@ -42,15 +42,15 @@ export async function oauthRoutes(app: FastifyInstance) {
     if (!dApp) {
       return reply.status(404).send({ error: { code: "not_found", message: "Unknown client_id or app suspended" } })
     }
-    // Return only public-safe fields — no secret, no full origin list, no owner_user_id
-    // `kind` lets the consent UI warn for self-claimed dynamic_mcp clients (RFC 7591 DCR)
+    // Return only public-safe fields — no secret, no full origin list, no owner_user_id.
+    // `kind` lets the consent UI warn for self-claimed dynamic_mcp clients (RFC 7591 DCR).
     return reply.send({
-      name: (dApp as Record<string, unknown>).name ?? "Unnamed App",
-      description: (dApp as Record<string, unknown>).description ?? null,
-      logoUrl: (dApp as Record<string, unknown>).logo_url ?? null,
-      homepageUrl: (dApp as Record<string, unknown>).homepage_url ?? null,
+      name: dApp.name ?? "Unnamed App",
+      description: dApp.description ?? null,
+      logoUrl: dApp.logo_url ?? null,
+      homepageUrl: dApp.homepage_url ?? null,
       scopesRequested: dApp.scopes_requested,
-      kind: (dApp as Record<string, unknown>).kind ?? "user",
+      kind: dApp.kind ?? "user",
     })
   })
 

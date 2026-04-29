@@ -3839,9 +3839,12 @@ export interface OAuthAppInfo {
   /**
    * How the app was registered. Defaults to "user" for legacy/dashboard-registered apps.
    * "dynamic_mcp" = registered via RFC 7591 Dynamic Client Registration — the consent
-   * UI should warn the user that the displayed name is self-reported.
+   * UI warns the user that the displayed name is self-reported.
+   *
+   * `& {}` on the fallback string preserves autocomplete for known kinds while
+   * allowing forward-compat with future values.
    */
-  kind?: "user" | "dynamic_mcp" | "first_party_mcp" | string
+  kind?: "user" | "dynamic_mcp" | "first_party_mcp" | (string & {})
 }
 
 /**

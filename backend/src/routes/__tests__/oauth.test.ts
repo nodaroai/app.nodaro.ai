@@ -148,7 +148,7 @@ describe("oauth routes", () => {
       logo_url: null,
       homepage_url: null,
       kind: "dynamic_mcp",
-    } as unknown as ReturnType<typeof findAppByClientId> extends Promise<infer T> ? T : never)
+    } as unknown as Awaited<ReturnType<typeof findAppByClientId>>)
     const res = await app.inject({ method: "GET", url: "/v1/oauth/app-info?client_id=app_dyn_1" })
     expect(res.statusCode).toBe(200)
     expect(res.json().kind).toBe("dynamic_mcp")
@@ -170,7 +170,7 @@ describe("oauth routes", () => {
       logo_url: null,
       homepage_url: null,
       // kind intentionally omitted
-    } as unknown as ReturnType<typeof findAppByClientId> extends Promise<infer T> ? T : never)
+    } as unknown as Awaited<ReturnType<typeof findAppByClientId>>)
     const res = await app.inject({ method: "GET", url: "/v1/oauth/app-info?client_id=app_legacy" })
     expect(res.statusCode).toBe(200)
     expect(res.json().kind).toBe("user")
