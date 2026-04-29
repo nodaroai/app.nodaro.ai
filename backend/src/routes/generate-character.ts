@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildCharacterPrompt } from "@nodaro/shared"
 
@@ -45,6 +46,7 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
 
     const prompt = buildCharacterPrompt({ name, description, gender, style, baseOutfit })
 
+    const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
@@ -53,6 +55,7 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         input_data: { ...buildJobInputData(parsed.data, "generate-character"), prompt },
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
       .select("id")
       .single()

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest"
+import Fastify from "fastify"
 import { buildMcpServer } from "../server.js"
 import { type Scope } from "../../scopes.js"
 
@@ -27,10 +28,12 @@ async function listToolsOnServer(server: ReturnType<typeof buildMcpServer>): Pro
 
 describe("buildMcpServer skeleton", () => {
   it("registers a 'ping' placeholder tool", async () => {
+    const fastify = Fastify()
     const server = buildMcpServer({
       userId: "user-1",
       scopes: ["jobs:read"] as Scope[],
       clientName: "Test",
+      fastify,
     })
     const tools = await listToolsOnServer(server)
     const names = tools.map((t) => t.name)
@@ -38,10 +41,12 @@ describe("buildMcpServer skeleton", () => {
   })
 
   it("registers ping even when no scopes are granted (gate is empty)", async () => {
+    const fastify = Fastify()
     const server = buildMcpServer({
       userId: "user-1",
       scopes: [] as Scope[],
       clientName: "Test",
+      fastify,
     })
     const tools = await listToolsOnServer(server)
     expect(tools.map((t) => t.name)).toContain("ping")

@@ -57,6 +57,7 @@ import { videoUpscaleRoutes } from "./routes/video-upscale.js"
 import { statsRoutes } from "./routes/stats.js"
 import { cancelJobsRoutes } from "./routes/cancel-jobs.js"
 import { creditsRoutes } from "./routes/credits.js"
+import { registerCreditsBalanceRoutes } from "./routes/credits-balance.js"
 import { adminRoutes } from "./routes/admin.js"
 import { libraryRoutes } from "./routes/library.js"
 import { transcribeRoutes } from "./routes/transcribe.js"
@@ -204,6 +205,7 @@ export async function buildApp() {
   await app.register(executionStatsRoutes)
   await app.register(cancelJobsRoutes)
   await app.register(creditsRoutes)
+  await registerCreditsBalanceRoutes(app)
   await app.register(adminRoutes)
   await app.register(libraryRoutes)
   await app.register(transcribeRoutes)
