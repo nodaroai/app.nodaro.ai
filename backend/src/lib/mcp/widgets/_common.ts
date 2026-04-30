@@ -137,9 +137,13 @@ export function uiProtocolShim(): string {
 
       window.NodaroMCP = {
         openLink: function(url) {
-          notify('ui/message', {
-            role: 'user',
-            content: [{ type: 'text', text: 'Open ' + url + ' in a new tab.' }]
+          // ui/open-link is a host REQUEST per the MCP Apps spec — returns
+          // {isError} so we can detect when the host doesn't honor it.
+          // Previously we sent a ui/message notification which Claude.ai
+          // rendered as a plain text user message instead of opening the
+          // tab.
+          send('ui/open-link', { url: url }).catch(function(err) {
+            console.warn('[NodaroMCP.openLink] host rejected open-link:', err && err.message);
           });
         },
         useAsset: function(assetId, kind) {
