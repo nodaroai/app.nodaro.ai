@@ -134,8 +134,8 @@ function registerPresignedUrl(
       title: `Prepare ${meta.kind} upload`,
       description:
         `Bring a local/attached ${meta.kind} file into Nodaro. Returns a ` +
-        `presigned PUT URL the LLM's code-interpreter / bash pipes the file ` +
-        `to directly, plus the public URL to reference downstream.\n\n` +
+        `signed PUT URL the LLM's code-interpreter / bash pipes the file to ` +
+        `directly, plus the public URL to reference downstream.\n\n` +
         `Workflow:\n` +
         `  1. Call \`${toolName}\` with the file's mime_type → ` +
         `{ upload_url, public_url }\n` +
@@ -144,11 +144,17 @@ function registerPresignedUrl(
         `         -H 'Content-Type: <mime_type>' \\\n` +
         `         '<upload_url>'\n` +
         `     curl exits 0 on success.\n` +
-        `  3. Pass \`public_url\` to ${meta.callsiteHint} as ` +
-        `${meta.kind}_url.\n\n` +
+        `  3. Pass \`public_url\` to ${meta.callsiteHint} as ${meta.kind}_url.\n\n` +
         `The file bytes never traverse the LLM context — any file size, no ` +
-        `base64 inflation, no truncation, no token overhead. Presigned URL ` +
-        `valid for 1 hour.`,
+        `base64 inflation, no truncation, no token overhead. URL valid for ` +
+        `1 hour.\n\n` +
+        `**Note for Claude.ai bash sandbox**: if curl returns ` +
+        `"Host not in allowlist / HTTP 403", the user needs to allowlist ` +
+        `mcp.nodaro.ai and cdn.nodaro.ai in their Claude.ai network ` +
+        `settings (Settings → Network → Allowed domains). Surface that ` +
+        `instruction to the user and offer the alternative: ask the user ` +
+        `to upload at https://app.nodaro.ai/library and paste back the ` +
+        `resulting URL.`,
       inputSchema: {
         mime_type: z
           .enum(meta.supportedMime as readonly [string, ...string[]])
