@@ -196,14 +196,12 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "  (a) `image_url` — any publicly fetchable HTTPS URL\n" +
           "  (b) `image_asset_id` — a Nodaro job id whose output is an image\n\n" +
           "**For user-attached photos / local files**, do this:\n" +
-          "  1. Call `upload_image_url` (mime_type) → returns { upload_url, public_url }\n" +
+          "  1. Call `prepare_image_upload` (mime_type) → { upload_url, public_url }\n" +
           "  2. In your code interpreter / bash, PUT the file directly:\n" +
           "       curl -X PUT --data-binary @<path> -H 'Content-Type: <mime>' '<upload_url>'\n" +
           "  3. Pass the returned `public_url` to this tool as `image_url`.\n\n" +
-          "This path streams the file from disk to R2 via curl — the bytes " +
-          "never traverse your context, so file size is unbounded and there's " +
-          "no LLM-output truncation risk. Use this in preference to base64 " +
-          "uploads (`upload_image`) for any user-supplied file.",
+          "This streams the file from disk to R2 via curl — bytes never traverse " +
+          "your context, so any file size works with zero truncation risk.",
         inputSchema: {
           prompt: z.string().min(1).max(2000),
           image_url: z.string().url().optional(),
