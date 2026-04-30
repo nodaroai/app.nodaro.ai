@@ -12,7 +12,11 @@ import {
   parseFailure,
   jobResultWithWidget,
 } from "./_verb-helpers.js"
-import { waitForJob } from "./_wait-for-job.js"
+// _wait-for-job.ts is intentionally retained but unimported. It implements
+// a sync block-on-completion path for tools (used briefly in #1830 to test
+// whether Cursor's tool-call cancellation was async-related — it wasn't,
+// and the sync wait broke Claude.ai's "close app" UX). Kept for a future
+// per-tool opt-in if we ever find a host that genuinely needs sync results.
 
 /**
  * Path-1 structured fields shape, mirrored from `@nodaro/shared`'s
@@ -118,15 +122,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           duration: z.number().optional(),
           outputUrl: z.string().optional(),
         },
-        // NOTE: readOnlyHint:true is technically inaccurate (we mutate state
-        // by enqueuing a job + reserving credits) but Cursor 3.2.16's
-        // approval flow auto-cancels non-readOnly tools after a few
-        // seconds without ever sending tools/call (Claude.ai works fine
-        // either way). The job-mutation isn't user-data-mutating, just
-        // queue-state, so the lie is a controlled trade-off to unblock
-        // Cursor users until upstream fixes the approval bug.
         annotations: {
-          readOnlyHint: true,
+          readOnlyHint: false,
           destructiveHint: false,
           openWorldHint: true,
         },
@@ -163,36 +160,6 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
         const jobId = parseJobId(res.body)
         if (!jobId) return parseFailure(res.body)
-
-        // Block until the worker finishes (or 120s timeout). Cursor and
-        // similar clients cancel tool calls that return only a jobId
-        // without a final result. Claude.ai's widget would still render
-        // the result via tool-result event using the same returned URL.
-        const result = await waitForJob({ jobId, timeoutMs: 120_000 })
-        if (result.status === "timeout") {
-          return jobResultWithWidget({
-            jobId,
-            label: "image generation",
-            session,
-            widgetKind: "image",
-            widgetData: {
-              prompt: compositePrompt,
-              model: args.model,
-              aspectRatio: args.aspect_ratio,
-              resolution: args.resolution,
-            },
-          })
-        }
-        if (result.status !== "completed" || !result.outputUrl) {
-          return errorResult(
-            500,
-            JSON.stringify({
-              jobId,
-              status: result.status,
-              error: result.error ?? "Unknown failure",
-            }),
-          )
-        }
         return jobResultWithWidget({
           jobId,
           label: "image generation",
@@ -203,7 +170,6 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             model: args.model,
             aspectRatio: args.aspect_ratio,
             resolution: args.resolution,
-            outputUrl: result.outputUrl,
           },
         })
       },
@@ -314,32 +280,6 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
         const jobId = parseJobId(res.body)
         if (!jobId) return parseFailure(res.body)
-
-        const result = await waitForJob({ jobId, timeoutMs: 120_000 })
-        if (result.status === "timeout") {
-          return jobResultWithWidget({
-            jobId,
-            label: "image-to-image",
-            session,
-            widgetKind: "image",
-            widgetData: {
-              prompt: compositePrompt,
-              model: args.model ?? "image-to-image",
-              aspectRatio: args.aspect_ratio,
-              resolution: args.resolution,
-            },
-          })
-        }
-        if (result.status !== "completed" || !result.outputUrl) {
-          return errorResult(
-            500,
-            JSON.stringify({
-              jobId,
-              status: result.status,
-              error: result.error ?? "Unknown failure",
-            }),
-          )
-        }
         return jobResultWithWidget({
           jobId,
           label: "image-to-image",
@@ -350,7 +290,6 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             model: args.model ?? "image-to-image",
             aspectRatio: args.aspect_ratio,
             resolution: args.resolution,
-            outputUrl: result.outputUrl,
           },
         })
       },
