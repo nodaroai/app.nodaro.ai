@@ -117,6 +117,12 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { method: "GET", path: "/v1/oauth/authorize" },
   { method: "GET", path: "/.well-known/oauth-authorization-server" },
   { method: "GET", path: "/.well-known/oauth-protected-resource" },
+  // RFC 9728 §3.1 resource-specific variants. Cursor probes these FIRST
+  // for a path-suffixed resource (mcp.nodaro.ai/mcp), and a 401 here causes
+  // Cursor's MCP client to flap into needsAuth state and drop every scoped
+  // tool from the catalog. Must be public for discovery to work.
+  { method: "GET", path: "/.well-known/oauth-protected-resource/mcp" },
+  { method: "GET", path: "/.well-known/oauth-authorization-server/mcp" },
   // /mcp must be "public" so a missing/invalid token falls through to the
   // route handler, which attaches the WWW-Authenticate Bearer challenge with
   // resource="https://mcp.nodaro.ai/mcp" — required by MCP clients (RFC 9728)
