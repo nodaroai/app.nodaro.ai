@@ -31,7 +31,17 @@ const SHARED_CSS = `
      have native click-to-toggle-playback semantics that we shouldn't
      hijack. */
   .preview.image-ready img { cursor: zoom-in; }
-  .actions { display: flex; gap: 8px; }
+  /* Actions row sits below the image as before, but is hidden by default
+     and fades in only when the user hovers the widget. Touch devices
+     (no hover) get them always visible so the affordances stay
+     reachable without a hover gesture. */
+  .actions { display: flex; gap: 8px; opacity: 0; transition: opacity .15s; }
+  @media (hover: hover) {
+    .card:hover .actions { opacity: 1; }
+  }
+  @media (hover: none) {
+    .actions { opacity: 1; }
+  }
   button { padding: 6px 14px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; }
   button:hover { background: rgba(127,127,127,0.1); }
   .status { font-size: 13px; opacity: 0.85; }
