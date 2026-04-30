@@ -172,11 +172,14 @@ function registerPresignedUrl(
         mime: args.mime_type,
         exp: Date.now() + expiresIn * 1000,
       })
-      // Upload via OUR domain (mcp.nodaro.ai). LLM code-interpreter
-      // sandboxes (Claude.ai etc.) allowlist this for OAuth, so curl
-      // PUT through here bypasses the *.r2.cloudflarestorage.com block.
-      // Backend forwards body to R2 with our credentials.
-      const uploadUrl = `${config.PUBLIC_URL || "https://mcp.nodaro.ai"}/v1/upload-proxy/${token}`
+      // Upload via mcp.nodaro.ai specifically. LLM code-interpreter
+      // sandboxes (Claude.ai) only allowlist the MCP resource server
+      // domain (which they discover via /.well-known/oauth-protected-
+      // resource), NOT the OAuth auth server. config.PUBLIC_URL points
+      // to app.nodaro.ai (auth server) and is also blocked. Hardcode
+      // the MCP host — it serves the same Fastify instance via Caddy
+      // host routing.
+      const uploadUrl = `https://mcp.nodaro.ai/v1/upload-proxy/${token}`
       const publicUrl = `${config.R2_PUBLIC_URL}/${key}`
       return {
         content: [
