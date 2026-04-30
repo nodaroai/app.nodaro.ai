@@ -9,7 +9,6 @@ import { registerComponents } from "./tools/components.js"
 import { registerApps } from "./tools/apps.js"
 import { registerModels } from "./tools/models.js"
 import { registerGallery } from "./tools/gallery.js"
-import { registerUploadTools } from "./tools/upload.js"
 import { registerDynamicTools } from "./tools/dynamic.js"
 import { registerTaskHandlers } from "./tasks.js"
 import { startProgressEmitter } from "./progress-emitter.js"
@@ -98,7 +97,6 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerApps({ server, session, fastify: opts.fastify })
   registerModels({ server, session, fastify: opts.fastify })
   registerGallery({ server, session, fastify: opts.fastify })
-  registerUploadTools({ server, session })
 
   // v2.0: per-user dynamic tools (`component_<slug>`, `app_<slug>`). Capped
   // 15 + 15 = 30 dynamic tools per session. Async because it queries
