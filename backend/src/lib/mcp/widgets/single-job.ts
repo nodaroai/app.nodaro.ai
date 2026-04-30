@@ -58,12 +58,14 @@ const SHARED_CSS = `
   body.fullscreen .status,
   body.fullscreen .progress,
   body.fullscreen .actions { display: none; }
-  /* Flex-center the media in the viewport. max-height: 80vh leaves
-     breathing room above/below for the host's chrome (X button, tabs)
-     and avoids the cramped edge-to-edge feel of 100vh. width:auto +
-     max-width:100% preserves intrinsic aspect ratio without needing
-     object-fit. */
-  body.fullscreen .preview { height: 100vh; display: flex; align-items: center; justify-content: center; }
+  /* Flex container for the media. Default (mobile): top-aligned —
+     phones have a fixed-position host chrome at the top so centering
+     pushes the image behind it; top-aligned puts the image right
+     under the chrome where the user can see it. Desktop overrides to
+     vertical-center in the @media block below. max-height: 80vh leaves
+     breathing room. width:auto + max-width:100% preserves intrinsic
+     aspect ratio without needing object-fit. */
+  body.fullscreen .preview { height: 100vh; display: flex; align-items: flex-start; justify-content: center; }
   body.fullscreen .preview img,
   body.fullscreen .preview video {
     width: auto;
@@ -99,6 +101,7 @@ const SHARED_CSS = `
       border-radius: 8px;
       margin: 0 auto;
     }
+    body.fullscreen .preview { align-items: center; }
     .actions.ready { opacity: 0; }
     .card:hover .actions.ready { opacity: 1; }
   }
