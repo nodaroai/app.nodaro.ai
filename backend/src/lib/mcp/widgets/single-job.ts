@@ -25,6 +25,12 @@ const SHARED_CSS = `
   .meta .badge { background: rgba(127,127,127,0.15); padding: 2px 8px; border-radius: 4px; }
   .preview { width: 100%; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.05); }
   .preview img, .preview video, .preview audio { display: block; width: 100%; height: auto; }
+  /* Image kind: clicking the image asks the host to switch to fullscreen
+     display mode (ui/request-display-mode). Cursor cue makes the
+     affordance visible. We restrict to image because <video>/<audio>
+     have native click-to-toggle-playback semantics that we shouldn't
+     hijack. */
+  .preview.image-ready img { cursor: zoom-in; }
   .actions { display: flex; gap: 8px; }
   button { padding: 6px 14px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; }
   button:hover { background: rgba(127,127,127,0.1); }
@@ -96,6 +102,17 @@ ${uiProtocolShim()}
       progEl.hidden = true;
       // Step 1: drop the "Done" label — image presence already signals completion.
       statusEl.style.display = 'none';
+      // Image kind: clicking the image asks the host to switch the iframe
+      // to fullscreen display mode. Skipped for video/audio (their native
+      // controls already use click for play/pause/scrub).
+      if (MEDIA_KIND === 'image') {
+        previewEl.classList.add('image-ready');
+        media.addEventListener('click', function () {
+          if (window.NodaroMCP && window.NodaroMCP.requestDisplayMode) {
+            window.NodaroMCP.requestDisplayMode('fullscreen');
+          }
+        });
+      }
     }
 
     // Tool args arrive BEFORE the result — we know prompt/model up front.
