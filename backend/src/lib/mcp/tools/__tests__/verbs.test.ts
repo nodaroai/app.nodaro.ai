@@ -87,7 +87,7 @@ describe("generate_image verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-123")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-123")
     expect(received.body?.prompt).toBe("a knight Mood: epic.")
     expect(received.body?.mcp_client).toBe("Claude")
     expect(received.body?.userId).toBe("u1")
@@ -133,7 +133,7 @@ describe("modify_image verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-mi")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-mi")
     expect(received.body?.imageUrl).toBe("https://example.com/a.png")
     expect(received.body?.provider).toBe("flux-i2i")
   })
@@ -169,7 +169,7 @@ describe("generate_video verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-tv")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-tv")
     expect(received.body?.aspectRatio).toBe("16:9")
     expect(received.body?.provider).toBe("veo3.1")
   })
@@ -196,7 +196,7 @@ describe("animate_image verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-ai")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-ai")
     expect(received.body?.imageUrl).toBe("https://example.com/x.jpg")
   })
 
@@ -222,7 +222,7 @@ describe("extend_video verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-ex")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-ex")
     expect(received.body?.kieTaskId).toBe("k-1")
     expect(received.body?.provider).toBe("veo-extend")
   })
@@ -247,7 +247,7 @@ describe("combine_videos verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-cv")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-cv")
     expect(Array.isArray(received.body?.videoUrls)).toBe(true)
     expect((received.body?.videoUrls as string[]).length).toBe(2)
   })
@@ -275,7 +275,7 @@ describe("add_captions verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-ac")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-ac")
     expect(received.body?.videoUrl).toBe("https://a/v.mp4")
     expect(received.body?.text).toBe("Hello")
   })
@@ -302,7 +302,7 @@ describe("extract_frame verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-ef")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-ef")
     expect(received.body?.timestamp).toBe(12.5)
     expect(received.body?.mode).toBe("timestamp")
   })
@@ -330,7 +330,7 @@ describe("generate_music verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-gm")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-gm")
     expect(received.body?.provider).toBe("suno")
     expect(received.body?.duration).toBe(20)
   })
@@ -357,7 +357,7 @@ describe("generate_speech verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-tts")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-tts")
     expect(received.body?.voice).toBe("alice")
     expect(received.body?.similarityBoost).toBe(0.5)
   })
@@ -382,7 +382,7 @@ describe("download_youtube_audio verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-yt")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-yt")
     expect(received.body?.youtubeUrl).toBe("https://youtu.be/abc")
   })
 
@@ -408,7 +408,7 @@ describe("generate_character verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-c1")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-c1")
     expect(received.body?.name).toBe("Aria")
     expect(received.body?.style).toBe("anime")
   })
@@ -426,7 +426,7 @@ describe("generate_character verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-c2")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-c2")
     expect(received.body?.assetType).toBe("expressions")
     expect(received.body?.variant).toBe("smile")
   })
@@ -456,7 +456,7 @@ describe("generate_location verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-l1")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-l1")
     expect(received.body?.category).toBe("nature")
   })
 
@@ -482,7 +482,7 @@ describe("generate_object verb", () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-o1")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-o1")
     expect(received.body?.name).toBe("Sword")
   })
 

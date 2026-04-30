@@ -83,12 +83,15 @@ interface JobResultOpts {
 }
 
 /**
- * Build the standard verb-tool result: text + structuredContent + task_id.
+ * Build the standard verb-tool result: text + structuredContent.
  *
- * Returns the canonical MCP Apps shape — the host will look at the tool's
- * `_meta.ui.resourceUri` (declared on tool definition) to fetch the iframe
- * template, then deliver this `structuredContent` to that iframe via
- * `ui/notifications/tool-result`.
+ * Async-friendly: we DO NOT include `_meta.task_id` and we DO NOT mention
+ * `tasks/get` in the text. Some clients (Cursor in particular) interpret
+ * either signal as "this tool is still pending, poll until it finishes" and
+ * cancel the request when the async generation doesn't complete within a
+ * few seconds. The widget (in MCP Apps hosts like Claude.ai) reads the
+ * jobId from `structuredContent` and polls `get_asset` itself; clients
+ * without widget support get a clean sync result with the jobId in text.
  */
 export function jobResultWithWidget(opts: JobResultOpts) {
   const { jobId, label, session, widgetKind, widgetData } = opts
@@ -102,11 +105,11 @@ export function jobResultWithWidget(opts: JobResultOpts) {
 
   const text = {
     type: "text" as const,
-    text: `Submitted ${label} job ${jobId}. Track via tasks/get with task_id=${jobId}. Once it lands you'll find it at the top of https://app.nodaro.ai/library .`,
+    text: `${label} started (id ${jobId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/library`,
   }
 
   if (!widgetKind) {
-    return { content: [text], _meta: { task_id: jobId } }
+    return { content: [text] }
   }
 
   const structuredContent: SingleJobStructuredContent = {
@@ -117,7 +120,6 @@ export function jobResultWithWidget(opts: JobResultOpts) {
   return {
     content: [text],
     structuredContent: structuredContent as unknown as Record<string, unknown>,
-    _meta: { task_id: jobId },
   }
 }
 
@@ -130,9 +132,8 @@ export function jobResult(jobId: string, label: string) {
     content: [
       {
         type: "text" as const,
-        text: `Submitted ${label} job ${jobId}. Track via tasks/get with task_id=${jobId}. Once it lands you'll find it at the top of https://app.nodaro.ai/library .`,
+        text: `${label} started (id ${jobId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/library`,
       },
     ],
-    _meta: { task_id: jobId },
   }
 }

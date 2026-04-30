@@ -99,7 +99,7 @@ describe("run_app tool", () => {
       inputs: { node1: { value: "hello" } },
     })
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("e-app")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("e-app")
     expect(received?.userId).toBe("u1")
     expect((received?.inputOverrides as Record<string, unknown>)?.node1).toEqual({ value: "hello" })
   })

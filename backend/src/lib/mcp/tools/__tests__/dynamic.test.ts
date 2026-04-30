@@ -210,7 +210,7 @@ describe("registerDynamicTools — component dispatch", () => {
       prompt: "puppy on a beach",
     })
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("job-abc")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("job-abc")
     // Per MCP Apps: text + structuredContent (iframe template at
     // ui://nodaro/widget/workflow consumes structuredContent.executionId).
     expect(result.content.length).toBe(1)
@@ -282,7 +282,7 @@ describe("registerDynamicTools — app dispatch", () => {
       inputs: { "n-1": { value: "hello" } },
     })
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("exec-xyz")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("exec-xyz")
     expect(result.content.length).toBe(1)
     const sc = (result as { structuredContent?: Record<string, unknown> }).structuredContent
     expect(sc?.executionId).toBe("exec-xyz")
