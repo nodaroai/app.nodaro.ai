@@ -60,14 +60,18 @@ const SHARED_CSS = `
   body.fullscreen .status,
   body.fullscreen .progress,
   body.fullscreen .actions { display: none; }
-  body.fullscreen .preview { height: 100vh; }
+  /* Flex-center the media in the viewport. max-height: 80vh leaves
+     breathing room above/below for the host's chrome (X button, tabs)
+     and avoids the cramped edge-to-edge feel of 100vh. width:auto +
+     max-width:100% preserves intrinsic aspect ratio without needing
+     object-fit. */
+  body.fullscreen .preview { height: 100vh; display: flex; align-items: center; justify-content: center; }
   body.fullscreen .preview img,
   body.fullscreen .preview video {
-    width: 100%;
-    height: 100%;
-    max-width: none;
-    max-height: none;
-    object-fit: contain;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 80vh;
     border-radius: 0;
     margin: 0;
   }
