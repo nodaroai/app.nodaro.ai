@@ -31,6 +31,21 @@ const SHARED_CSS = `
      have native click-to-toggle-playback semantics that we shouldn't
      hijack. */
   .preview.image-ready img { cursor: zoom-in; }
+  /* Fullscreen mode: the host sizes the iframe to viewport. We strip the
+     16 px body padding (otherwise the image renders 32 px wider/taller than
+     the viewport and produces scrollbars), constrain the image to fit the
+     viewport with object-fit:contain, and hide chrome — the user is here
+     to look at the asset, not the badges/buttons. They click the image to
+     exit (cursor flips to zoom-out) or use the host's X overlay. */
+  body.fullscreen { padding: 0; margin: 0; height: 100vh; overflow: hidden; }
+  body.fullscreen .card { height: 100vh; gap: 0; }
+  body.fullscreen .meta,
+  body.fullscreen .status,
+  body.fullscreen .progress,
+  body.fullscreen .actions { display: none; }
+  body.fullscreen .preview { height: 100vh; border-radius: 0; background: transparent; }
+  body.fullscreen .preview img { width: 100%; height: 100%; object-fit: contain; }
+  body.fullscreen .preview.image-ready img { cursor: zoom-out; }
   /* Two-column actions row: kind-specific text buttons on the left
      (Animate / Edit for image, etc.), Claude-style icon-only utilities
      on the right (Copy / Download / Recreate). The whole row is hidden
@@ -101,7 +116,22 @@ ${uiProtocolShim()}
 <script>
   (function() {
     var MEDIA_KIND = ${JSON.stringify(mediaKind)};
-    var state = { jobId: null, prompt: null, model: null, aspectRatio: null, resolution: null, duration: null, outputUrl: null };
+    var state = { jobId: null, prompt: null, model: null, aspectRatio: null, resolution: null, duration: null, outputUrl: null, displayMode: 'inline' };
+
+    function applyDisplayMode() {
+      document.body.classList.toggle('fullscreen', state.displayMode === 'fullscreen');
+    }
+    // Sync from initial host context (received in ui/initialize handshake) and
+    // any later host-driven changes (e.g. user clicks the host's X overlay,
+    // which switches the iframe back to inline without us asking).
+    window.addEventListener('mcp-ready', function(e) {
+      var ctx = (e && e.detail) || window.__MCP_HOST_CONTEXT__ || {};
+      if (ctx.displayMode) { state.displayMode = ctx.displayMode; applyDisplayMode(); }
+    });
+    window.addEventListener('mcp-host-context-changed', function(e) {
+      var ctx = (e.detail && e.detail.hostContext) || e.detail || {};
+      if (ctx.displayMode) { state.displayMode = ctx.displayMode; applyDisplayMode(); }
+    });
 
     var metaEl = document.getElementById('meta');
     var statusEl = document.getElementById('status');
@@ -141,15 +171,21 @@ ${uiProtocolShim()}
       progEl.hidden = true;
       // Step 1: drop the "Done" label — image presence already signals completion.
       statusEl.style.display = 'none';
-      // Image kind: clicking the image asks the host to switch the iframe
-      // to fullscreen display mode. Skipped for video/audio (their native
-      // controls already use click for play/pause/scrub).
+      // Image kind: clicking the image toggles fullscreen ↔ inline. The host
+      // returns the actual mode it applied (some hosts may reject fullscreen
+      // and stay inline) — trust that response over our requested target.
+      // Skipped for video/audio: their native controls already use click for
+      // play/pause/scrub, so hijacking it would break expected behavior.
       if (MEDIA_KIND === 'image') {
         previewEl.classList.add('image-ready');
         media.addEventListener('click', function () {
-          if (window.NodaroMCP && window.NodaroMCP.requestDisplayMode) {
-            window.NodaroMCP.requestDisplayMode('fullscreen');
-          }
+          if (!window.NodaroMCP || !window.NodaroMCP.requestDisplayMode) return;
+          var target = state.displayMode === 'fullscreen' ? 'inline' : 'fullscreen';
+          window.NodaroMCP.requestDisplayMode(target).then(function(result) {
+            var applied = (result && result.displayMode) || target;
+            state.displayMode = applied;
+            applyDisplayMode();
+          });
         });
       }
       // Reveal the actions row only after the asset is loaded — buttons
