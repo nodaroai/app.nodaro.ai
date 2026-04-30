@@ -36,15 +36,6 @@ vi.mock("@/middleware/credit-guard.js", () => ({
   }),
 }))
 
-// Asset materializer fetches and re-hosts user-provided URLs server-side.
-// In tests we just pass through unchanged so the existing assertions on
-// imageUrl / referenceImageUrls / maskUrl values continue to hold.
-vi.mock("@/lib/asset-materializer.js", () => ({
-  materializeAsset: vi.fn(async ({ url }: { url: string }) => ({ url, rehosted: false })),
-  materializeIfPresent: vi.fn(async (url: string | null | undefined) =>
-    url == null ? null : url,
-  ),
-}))
 
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
