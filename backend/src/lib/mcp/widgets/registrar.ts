@@ -5,7 +5,7 @@
  * `_meta.ui.resourceUri` on the tool definition. The host then fetches that
  * URI via `resources/read` to get the iframe HTML.
  *
- * This module owns the URI scheme `ui://nodaro/widget/v2/{kind}` and keeps the
+ * This module owns the URI scheme `ui://nodaro/widget/v3/{kind}` and keeps the
  * widget HTML on the server side. Per-call data is delivered to the iframe
  * via the host's `ui/notifications/tool-input` and
  * `ui/notifications/tool-result` events (NOT embedded in the HTML).
@@ -16,12 +16,12 @@ import { buildWorkflowWidgetTemplate } from "./workflow.js"
 import { buildGalleryWidgetTemplate } from "./gallery.js"
 
 export const WIDGET_URI = {
-  jobImage: "ui://nodaro/widget/v2/job-image",
-  jobVideo: "ui://nodaro/widget/v2/job-video",
-  jobAudio: "ui://nodaro/widget/v2/job-audio",
-  jobGeneric: "ui://nodaro/widget/v2/job-generic",
-  workflow: "ui://nodaro/widget/v2/workflow",
-  gallery: "ui://nodaro/widget/v2/gallery",
+  jobImage: "ui://nodaro/widget/v3/job-image",
+  jobVideo: "ui://nodaro/widget/v3/job-video",
+  jobAudio: "ui://nodaro/widget/v3/job-audio",
+  jobGeneric: "ui://nodaro/widget/v3/job-generic",
+  workflow: "ui://nodaro/widget/v3/workflow",
+  gallery: "ui://nodaro/widget/v3/gallery",
 } as const
 
 const WIDGETS: Array<{

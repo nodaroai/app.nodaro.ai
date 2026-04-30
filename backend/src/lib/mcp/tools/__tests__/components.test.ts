@@ -94,7 +94,7 @@ describe("run_component tool", () => {
       component_id: "thumbnail-maker",
     })
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("j-comp")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-comp")
     expect(received?.appSlug).toBe("thumbnail-maker")
     expect(received?.mcp_client).toBe("Cursor")
   })

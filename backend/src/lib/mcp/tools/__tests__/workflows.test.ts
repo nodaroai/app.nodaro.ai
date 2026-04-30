@@ -103,7 +103,7 @@ describe("run_workflow tool", () => {
       inputs: { a: { b: 1 } },
     })
     expect(result.isError).toBeUndefined()
-    expect((result._meta as Record<string, unknown>)?.task_id).toBe("e-1")
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("e-1")
     expect(received?.userId).toBe("u1")
     expect(received?.mcp_client).toBe("Claude")
 
