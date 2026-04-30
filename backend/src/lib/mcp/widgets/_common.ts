@@ -112,7 +112,12 @@ export function uiProtocolShim(): string {
       var lastEmittedHeight = 0;
       function maybeEmitSize() {
         var h = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
-        if (Math.abs(h - lastEmittedHeight) >= 8) {
+        // Emit on ANY real size change. ResizeObserver only fires on actual
+        // dimension changes so we won't spam — but the previous 8 px
+        // threshold swallowed the small 1–7 px growth that happens when
+        // an <img> finishes decoding, leaving the iframe a few pixels too
+        // short and producing a thin scrollbar.
+        if (h !== lastEmittedHeight) {
           lastEmittedHeight = h;
           emitSize();
         }
