@@ -26,6 +26,15 @@ export async function handleMcpRequest(
 ): Promise<void> {
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless — each request is independent
+    // Force plain JSON responses (no SSE streaming). With SSE, the transport
+    // keeps the response stream open for ~1s per request waiting for
+    // additional progress events that never come (we don't use async
+    // notifications), which adds 1100ms latency to EVERY tool call. Cursor
+    // in particular is sensitive — it sees the slow responses and gets stuck
+    // in a resources/subscribe loop, never advancing to tools/call. JSON
+    // responses close the connection immediately; Claude.ai handles them
+    // identically.
+    enableJsonResponse: true,
   })
 
   reply.hijack()

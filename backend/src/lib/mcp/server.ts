@@ -73,6 +73,13 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
           cancel: {},
           requests: { tools: { call: {} } },
         },
+        // Explicitly declare resources support without `subscribe`. We
+        // register MCP App widget resources for Claude.ai's iframe
+        // rendering, but we don't push `notifications/resources/updated`,
+        // so subscriptions would dangle forever. Cursor specifically gets
+        // stuck in a resources/subscribe retry loop when this isn't
+        // explicit — declaring `subscribe: false` tells clients not to try.
+        resources: { subscribe: false, listChanged: false },
         experimental: {},
       },
     },
