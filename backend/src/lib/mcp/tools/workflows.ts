@@ -84,7 +84,7 @@ export function registerWorkflows({
       {
         title: "Run Workflow",
         description:
-          "Run a saved workflow. Returns an execution_id; poll via tasks/get with task_id=execution_id.",
+          "Run a saved workflow. Returns an execution_id",
         inputSchema: {
           workflow_id: z.string().uuid(),
           inputs: z
@@ -170,7 +170,7 @@ export function registerWorkflows({
           content: [
             {
               type: "text" as const,
-              text: `Started workflow execution ${executionId}. Track via tasks/get with task_id=${executionId}.`,
+              text: `Started workflow execution ${executionId}.`,
             },
           ],
           structuredContent: { executionId, name: workflowName },
