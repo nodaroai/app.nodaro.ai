@@ -35,19 +35,6 @@ vi.mock("../../supabase.js", () => ({
   },
 }))
 
-// Block-on-completion in generate_image / modify_image polls the jobs row
-// until terminal. The tests fake the route response to return a jobId, but
-// the row is never created in the supabase mock — so without this stub
-// waitForJob spins until 5s test timeout. Resolve as completed instantly.
-vi.mock("../_wait-for-job.js", () => ({
-  waitForJob: vi.fn(async ({ jobId }: { jobId: string }) => ({
-    status: "completed" as const,
-    outputUrl: `https://cdn.nodaro.ai/test-${jobId}.png`,
-    outputData: { imageUrl: `https://cdn.nodaro.ai/test-${jobId}.png` },
-    error: null,
-    jobType: "generate-image",
-  })),
-}))
 
 function executeSession() {
   return newSession({
