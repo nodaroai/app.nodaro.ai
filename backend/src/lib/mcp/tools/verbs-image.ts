@@ -117,8 +117,15 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           duration: z.number().optional(),
           outputUrl: z.string().optional(),
         },
+        // NOTE: readOnlyHint:true is technically inaccurate (we mutate state
+        // by enqueuing a job + reserving credits) but Cursor 3.2.16's
+        // approval flow auto-cancels non-readOnly tools after a few
+        // seconds without ever sending tools/call (Claude.ai works fine
+        // either way). The job-mutation isn't user-data-mutating, just
+        // queue-state, so the lie is a controlled trade-off to unblock
+        // Cursor users until upstream fixes the approval bug.
         annotations: {
-          readOnlyHint: false,
+          readOnlyHint: true,
           destructiveHint: false,
           openWorldHint: true,
         },
