@@ -195,13 +195,18 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "Provide ONE of:\n" +
           "  (a) `image_url` — any publicly fetchable HTTPS URL\n" +
           "  (b) `image_asset_id` — a Nodaro job id whose output is an image\n\n" +
-          "**For user-attached photos / local files**, do this:\n" +
-          "  1. Call `prepare_image_upload` (mime_type) → { upload_url, public_url }\n" +
-          "  2. In your code interpreter / bash, PUT the file directly:\n" +
-          "       curl -X PUT --data-binary @<path> -H 'Content-Type: <mime>' '<upload_url>'\n" +
-          "  3. Pass the returned `public_url` to this tool as `image_url`.\n\n" +
-          "This streams the file from disk to R2 via curl — bytes never traverse " +
-          "your context, so any file size works with zero truncation risk.",
+          "**For user-attached photos / local files**, two upload paths:\n\n" +
+          "Option A (preferred — any file size): `prepare_image_upload` →\n" +
+          "  curl -X PUT --data-binary @<path> -H 'Content-Type: <mime>' '<upload_url>'\n" +
+          "  Bytes stream disk → R2; works in Cursor, Claude Desktop, Cline.\n" +
+          "  On Claude.ai web requires user to allowlist mcp.nodaro.ai\n" +
+          "  (Settings → Network) — if curl returns 403, use Option B instead.\n\n" +
+          "Option B (works everywhere; for files <1 MB raw): `upload_image` →\n" +
+          "  Resize to ~1024 px max edge, JPEG quality 80 (target 200–400 KB).\n" +
+          "  Base64-encode, pass to upload_image, get `public_url`.\n" +
+          "  Goes through the MCP connector (always allowlisted), so works\n" +
+          "  in Claude.ai web without setup.\n\n" +
+          "Pass the returned `public_url` to this tool as `image_url`.",
         inputSchema: {
           prompt: z.string().min(1).max(2000),
           image_url: z.string().url().optional(),
