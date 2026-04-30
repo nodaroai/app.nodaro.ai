@@ -20,7 +20,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Generate Music",
       description:
-        "Generate a music track from a text prompt (Suno or MiniMax). Returns a job_id; poll via tasks/get.",
+        "Generate a music track from a text prompt (Suno or MiniMax). Returns a job_id",
       inputSchema: {
         prompt: z.string().min(1).max(2000),
         model: z.enum(["suno", "minimax"]).default("minimax"),
@@ -95,7 +95,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Generate Speech",
       description:
-        "Generate speech from text using ElevenLabs (v3 supports [audio tags]; v2/turbo route via KIE). Returns a job_id; poll via tasks/get.",
+        "Generate speech from text using ElevenLabs (v3 supports [audio tags]; v2/turbo route via KIE). Returns a job_id",
       inputSchema: {
         text: z.string().min(1).max(5000),
         voice_id: z.string().optional().describe("ElevenLabs voice id (premade or custom)"),
@@ -180,7 +180,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Download YouTube Audio",
       description:
-        "Extract the audio track from a YouTube video. Returns a job_id; poll via tasks/get.",
+        "Extract the audio track from a YouTube video. Returns a job_id",
       inputSchema: {
         youtube_url: z.string().url().describe("YouTube video URL"),
       },

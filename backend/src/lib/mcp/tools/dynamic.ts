@@ -116,7 +116,7 @@ function registerComponentTool(
       title: row.name,
       description:
         row.description ??
-        `Run "${row.name}" component (your saved component). Returns _meta.task_id; track via tasks/get.`,
+        `Run "${row.name}" component (your saved component). `,
       inputSchema,
       outputSchema: {
         executionId: z.string(),
@@ -185,7 +185,7 @@ function registerComponentTool(
         content: [
           {
             type: "text" as const,
-            text: `Started component "${row.name}" (job ${execId}). Track via tasks/get.`,
+            text: `Started component "${row.name}" (job ${execId}).`,
           },
         ],
         structuredContent: { executionId: execId, name: row.name },

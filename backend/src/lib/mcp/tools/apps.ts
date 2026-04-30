@@ -85,7 +85,7 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
       {
         title: "Run App",
         description:
-          "Run a published app by slug. The caller pays for credits. Returns an execution_id; poll via tasks/get.",
+          "Run a published app by slug. The caller pays for credits. Returns an execution_id",
         inputSchema: {
           slug: z.string().min(1).describe("App slug, e.g. 'photo-restoration'"),
           inputs: z
