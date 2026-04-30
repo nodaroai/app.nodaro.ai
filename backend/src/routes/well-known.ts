@@ -46,11 +46,30 @@ function protectedResourceMetadata() {
 }
 
 export async function registerWellKnown(app: FastifyInstance): Promise<void> {
+  // RFC 8414 — base path
   app.get("/.well-known/oauth-authorization-server", async (_req, reply) => {
     return reply.header("Cache-Control", "public, max-age=3600").send(authorizationServerMetadata())
   })
 
+  // RFC 9728 — base path
   app.get("/.well-known/oauth-protected-resource", async (_req, reply) => {
     return reply.header("Cache-Control", "public, max-age=3600").send(protectedResourceMetadata())
+  })
+
+  // RFC 9728 §3.1 — resource-specific variant. When the protected resource
+  // has a path component (here `/mcp` on mcp.nodaro.ai), the metadata MUST
+  // also be exposed at `/.well-known/oauth-protected-resource{resource_path}`.
+  // Cursor (and other strict clients) hit this URL FIRST and treat a 404 or
+  // 401 as a hard auth failure, dropping every scoped tool from the catalog
+  // until the user re-authenticates. Without this route, Cursor flaps between
+  // `connected` and `needsAuth` every few seconds.
+  //
+  // We also mirror the auth-server metadata at the same suffix because some
+  // discovery flows probe both endpoints with the resource path.
+  app.get("/.well-known/oauth-protected-resource/mcp", async (_req, reply) => {
+    return reply.header("Cache-Control", "public, max-age=3600").send(protectedResourceMetadata())
+  })
+  app.get("/.well-known/oauth-authorization-server/mcp", async (_req, reply) => {
+    return reply.header("Cache-Control", "public, max-age=3600").send(authorizationServerMetadata())
   })
 }
