@@ -53,7 +53,69 @@ interface PublishedAppRow {
   publish_type: "app" | "component"
   description: string | null
   component_metadata: ComponentMetadata | null
+  /** snapshot_settings.presentationSettings + nodes — only fetched for apps. */
+  snapshot_settings?: Record<string, unknown> | null
+  snapshot_nodes?: Array<{ id: string; type?: string; data?: Record<string, unknown> }> | null
 }
+
+/**
+ * Brief, LLM-readable summary of the inputs an app accepts. Built from the
+ * app's presentationSettings.inputItems + snapshot_nodes so the LLM knows
+ * which node-id keys to use in `inputs` overrides without guessing.
+ */
+function summarizeAppInputs(row: PublishedAppRow): string {
+  const settings = row.snapshot_settings as
+    | { presentationSettings?: { inputItems?: PresentationItem[] } }
+    | null
+    | undefined
+  const items = settings?.presentationSettings?.inputItems
+  if (!items || items.length === 0) return ""
+
+  const nodesById = new Map<string, { type?: string; data?: Record<string, unknown> }>()
+  for (const n of row.snapshot_nodes ?? []) {
+    nodesById.set(n.id, { type: n.type, data: n.data })
+  }
+
+  const lines: string[] = []
+  for (const item of items) {
+    if (item.type === "node") {
+      const node = nodesById.get(item.nodeId)
+      const label =
+        (node?.data?.label as string | undefined) ?? node?.type ?? item.nodeId
+      lines.push(`  - "${item.nodeId}" (${label})`)
+    } else if (item.type === "field") {
+      const node = nodesById.get(item.nodeId)
+      const label =
+        (node?.data?.label as string | undefined) ?? node?.type ?? item.nodeId
+      lines.push(`  - "${item.nodeId}" / field "${item.field}" (${label})`)
+    }
+    // skip output/richtext/group — not inputs
+  }
+  if (lines.length === 0) return ""
+
+  return (
+    "\n\nInput overrides (pass via `inputs` keyed by node-id):\n" +
+    lines.join("\n") +
+    `\n\nExample: \`{ inputs: { "${
+      lines[0]?.match(/"([^"]+)"/)?.[1] ?? "node-id"
+    }": { "value": "..." } } }\`. ` +
+    "If the user didn't ask for a specific override, omit `inputs` to use the app's defaults."
+  )
+}
+
+// Local type alias to avoid circular imports — mirrors @nodaro/shared.
+type PresentationItem =
+  | { type: "node"; nodeId: string }
+  | {
+      type: "field"
+      id: string
+      nodeId: string
+      field: string
+      allowedValues?: Array<string | number | boolean>
+    }
+  | { type: "output"; id: string; nodeId: string; outputKey: string }
+  | { type: "richtext"; id: string; content: string }
+  | { type: "group"; id: string; title: string; items: PresentationItem[] }
 
 export interface RegisterDynamicOpts {
   server: McpServer
@@ -89,9 +151,18 @@ async function fetchByKind(
   // is_active boolean (not deleted_at). last_run_at + the recency index
   // were added in migration 096; the coalesce keeps ordering stable for
   // never-run rows where last_run_at is null.
+  //
+  // For apps we ALSO fetch snapshot_settings + snapshot_nodes so we can
+  // generate per-app input summaries in the tool description (LLM needs
+  // node-ids to override defaults). Components don't need this — their
+  // typed component_metadata is already authoritative.
+  const cols =
+    kind === "app"
+      ? "id, name, slug, publish_type, description, component_metadata, snapshot_settings, snapshot_nodes"
+      : "id, name, slug, publish_type, description, component_metadata"
   const { data } = await supabase
     .from("published_apps")
-    .select("id, name, slug, publish_type, description, component_metadata")
+    .select(cols)
     .eq("creator_id", userId)
     .eq("publish_type", kind)
     .eq("is_active", true)
@@ -213,12 +284,14 @@ function registerAppTool(
       .describe("Per-node input overrides keyed by node id"),
   }
 
+  const inputSummary = summarizeAppInputs(row)
   server.registerTool(
     toolName,
     {
       title: row.name,
       description:
-        row.description ?? `Run "${row.name}" published app (your published app).`,
+        (row.description ?? `Run "${row.name}" published app (your published app).`) +
+        inputSummary,
       inputSchema,
       outputSchema: {
         executionId: z.string(),
