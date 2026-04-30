@@ -40,6 +40,20 @@
 		request_header -X-Internal-Orchestrator-Secret
 		reverse_proxy 127.0.0.1:9000
 	}
+	# RFC 9728 §3.1 — resource-specific variants. Cursor probes these FIRST
+	# for path-suffixed resources (mcp.nodaro.ai/mcp). Without these handles
+	# Caddy sends them through the SPA fallback, returning HTML, and Cursor
+	# flaps into needsAuth.
+	handle /.well-known/oauth-protected-resource/* {
+		request_header -X-Internal-Orchestrator
+		request_header -X-Internal-Orchestrator-Secret
+		reverse_proxy 127.0.0.1:9000
+	}
+	handle /.well-known/oauth-authorization-server/* {
+		request_header -X-Internal-Orchestrator
+		request_header -X-Internal-Orchestrator-Secret
+		reverse_proxy 127.0.0.1:9000
+	}
 
 	# OG meta tags for social sharing bots (Telegram, WhatsApp, Twitter, Facebook, etc.)
 	@social_bot {
