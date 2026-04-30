@@ -40,6 +40,29 @@ describe("single-job widget template", () => {
     expect(html).toContain("#ff0073")
   })
 
+  it("shows always-on download pill on top of the image", () => {
+    for (const kind of ["image", "video"] as const) {
+      const html = buildSingleJobWidget(kind)
+      expect(html).toContain('id="dl-pill"')
+      expect(html).toContain('class="download-pill"')
+    }
+  })
+
+  it("includes a touch-device fallback that drops hover row out of overlay", () => {
+    const html = buildSingleJobWidget("image")
+    // Desktop: overlay is hover-gated.
+    expect(html).toContain("@media (hover: hover)")
+    // Touch: overlay becomes a static flex row, always visible.
+    expect(html).toContain("@media (hover: none)")
+  })
+
+  it("renders a brand mark + caption row instead of badge pills", () => {
+    const html = buildSingleJobWidget("image")
+    expect(html).toContain('class="brand-mark"')
+    expect(html).toContain('id="caption"')
+    expect(html).not.toContain('class="meta"')
+  })
+
   it("does NOT contain innerHTML usage in runtime JS (safe DOM only)", () => {
     for (const kind of ["image", "video", "audio", "generic"] as const) {
       const html = buildSingleJobWidget(kind)

@@ -19,12 +19,36 @@ const SHARED_CSS = `
     color-scheme: light dark;
     --nodaro-brand: #ff0073;
     --nodaro-brand-hover: #e60068;
+    --card-bg: rgba(127,127,127,0.06);
+    --card-border: rgba(127,127,127,0.18);
+    --caption-fg: rgba(127,127,127,0.85);
   }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 16px; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
-  .card { display: flex; flex-direction: column; gap: 12px; }
-  .meta { font-size: 12px; opacity: 0.7; display: flex; gap: 8px; flex-wrap: wrap; }
-  .meta .badge { background: rgba(127,127,127,0.15); padding: 2px 8px; border-radius: 4px; }
+  body { margin: 0; padding: 12px; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
+  /* Lite card — subtle frame for containment + brand presence, but no
+     heavy chrome inside. Image is the centerpiece; everything else is
+     caption-weight. */
+  .card {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 10px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--caption-fg); font-weight: 500;
+  }
+  .brand-mark {
+    width: 14px; height: 14px; border-radius: 3px;
+    background: var(--nodaro-brand); color: white;
+    font-size: 9px; font-weight: 800; line-height: 14px; text-align: center;
+  }
+  .caption {
+    font-size: 12px; color: var(--caption-fg);
+    display: flex; gap: 6px; flex-wrap: wrap; min-height: 0;
+  }
+  .caption .sep { opacity: 0.5; }
   .preview {
     width: 100%; border-radius: 8px; overflow: hidden;
     background: rgba(127,127,127,0.08); position: relative;
@@ -32,9 +56,8 @@ const SHARED_CSS = `
   }
   .preview.audio { aspect-ratio: auto; height: 56px; }
   .preview img, .preview video, .preview audio { display: block; width: 100%; height: auto; position: relative; z-index: 1; }
-  /* Shimmer placeholder. Diagonal Nodaro-pink sheen sweeps across the empty
-     preview while the worker generates the asset. Kicks in immediately and
-     runs forever until showMedia() removes the .loading class. */
+  /* Shimmer placeholder. Brand-pink sheen sweeps across the empty preview
+     while the worker generates the asset. */
   .preview.loading::before {
     content: '';
     position: absolute; inset: 0;
@@ -52,8 +75,7 @@ const SHARED_CSS = `
     0%   { background-position: 220% 0; }
     100% { background-position: -120% 0; }
   }
-  /* Whole-card breathing + subtle brand glow while the job is in flight.
-     Stops when the asset lands (.card.done). */
+  /* Whole-card breathing + subtle brand glow while the job is in flight. */
   .card.loading {
     animation: breathe 2.4s ease-in-out infinite, glow 2.4s ease-in-out infinite;
   }
@@ -66,11 +88,27 @@ const SHARED_CSS = `
     0%, 100% { filter: drop-shadow(0 0 0 transparent); }
     50%      { filter: drop-shadow(0 0 10px rgba(255, 0, 115, 0.32)); }
   }
-  /* Hover overlay — visible only when the asset is ready and the user
-     hovers the preview. Sits over the bottom of the media with a gradient
-     scrim, fades in/out. Hidden during loading via .preview.loading. */
+  /* Always-on micro-action: small download chip overlaid bottom-right of
+     the image. Visible whenever the asset is ready (hidden during shimmer).
+     Works on touch devices without a hover gesture. */
+  .download-pill {
+    position: absolute; right: 8px; bottom: 8px;
+    width: 32px; height: 32px;
+    border-radius: 50%; border: 0;
+    background: rgba(0,0,0,0.55); color: white;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 3;
+    opacity: 0; transition: opacity .2s, background .15s;
+    font-size: 16px; line-height: 1;
+  }
+  .preview:not(.loading) .download-pill { opacity: 0.9; }
+  .download-pill:hover { background: rgba(0,0,0,0.78); opacity: 1; }
+  .preview.audio .download-pill { right: 8px; bottom: 12px; }
+  /* Hover overlay on the image — desktop-style enhancement when the host
+     supports hover. Sits over the bottom of the media with a gradient
+     scrim, fades in/out. */
   .hover-actions {
-    position: absolute; left: 0; right: 0; bottom: 0;
+    position: absolute; left: 0; right: 48px; bottom: 0;
     display: flex; justify-content: center; gap: 8px;
     padding: 12px 12px 14px;
     background: linear-gradient(to top, rgba(0,0,0,0.55), transparent);
@@ -78,11 +116,38 @@ const SHARED_CSS = `
     transition: opacity .15s;
     z-index: 2;
   }
-  .preview:not(.loading):hover .hover-actions { opacity: 1; pointer-events: auto; }
+  @media (hover: hover) {
+    .preview:not(.loading):hover .hover-actions { opacity: 1; pointer-events: auto; }
+  }
+  /* Touch / coarse-pointer fallback: drop the overlay out of absolute
+     positioning, sit below the image as a regular flex row that's always
+     visible. No scrim, neutral pill style so it doesn't compete with the
+     brand-color Recreate CTA. */
+  @media (hover: none) {
+    .hover-actions {
+      position: static; right: auto;
+      background: transparent; padding: 4px 0;
+      opacity: 1; pointer-events: auto;
+      transition: none; flex-wrap: wrap;
+    }
+    .ha-btn {
+      background: rgba(127,127,127,0.14); color: inherit;
+    }
+    .ha-btn:hover { background: rgba(127,127,127,0.22); border-color: transparent; }
+    /* Hide the small download chip on touch — Download is in the action
+       row already, no need for a duplicate affordance. */
+    .download-pill { display: none; }
+  }
   .preview.audio .hover-actions {
     background: transparent;
-    padding: 4px;
+    padding: 4px; right: 48px;
     bottom: 50%; transform: translateY(50%);
+  }
+  @media (hover: none) {
+    .preview.audio .hover-actions {
+      position: static; transform: none;
+      bottom: auto; right: auto;
+    }
   }
   .ha-btn {
     background: rgba(255,255,255,0.95);
@@ -96,12 +161,12 @@ const SHARED_CSS = `
   }
   .ha-btn:hover { background: white; border-color: var(--nodaro-brand); transform: translateY(-1px); }
   /* Always-visible action row below the preview. */
-  .actions { display: flex; gap: 8px; }
+  .actions { display: flex; gap: 8px; align-items: center; }
   .recreate-btn {
     background: var(--nodaro-brand);
     color: white;
     border: 0;
-    padding: 8px 18px;
+    padding: 7px 16px;
     border-radius: 999px;
     font-size: 13px; font-weight: 600;
     cursor: pointer;
@@ -109,7 +174,10 @@ const SHARED_CSS = `
   }
   .recreate-btn:hover { background: var(--nodaro-brand-hover); transform: translateY(-1px); }
   .recreate-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-  .status { font-size: 13px; opacity: 0.85; }
+  /* Status only shown while loading. Image presence = done; no need for a
+     "Done" label cluttering the post-completion UI. */
+  .status { font-size: 12px; color: var(--caption-fg); }
+  .card.done .status { display: none; }
 `
 
 type MediaKind = "image" | "video" | "audio" | "generic"
@@ -142,10 +210,12 @@ ${uiProtocolShim()}
 </head>
 <body>
 <div class="card loading" id="card">
-  <div class="meta" id="meta"></div>
+  <div class="brand"><span class="brand-mark">N</span> Nodaro</div>
+  <div class="caption" id="caption"></div>
   <div class="status" id="status">Initializing…</div>
   <div class="preview loading${mediaKind === "audio" ? " audio" : ""}" id="preview">
     <div class="hover-actions" id="hover-actions">${hoverButtonsHtml(mediaKind)}</div>
+    <button class="download-pill" id="dl-pill" type="button" title="Download" aria-label="Download">⬇</button>
   </div>
   <div class="actions">
     <button class="recreate-btn" id="btn-recreate" type="button" disabled>🔄 Recreate</button>
@@ -157,10 +227,11 @@ ${uiProtocolShim()}
     var state = { jobId: null, prompt: null, model: null, aspectRatio: null, resolution: null, duration: null, outputUrl: null };
 
     var cardEl = document.getElementById('card');
-    var metaEl = document.getElementById('meta');
+    var captionEl = document.getElementById('caption');
     var statusEl = document.getElementById('status');
     var previewEl = document.getElementById('preview');
     var hoverActionsEl = document.getElementById('hover-actions');
+    var dlPillEl = document.getElementById('dl-pill');
     var recreateBtnEl = document.getElementById('btn-recreate');
 
     function applyAspectRatio() {
@@ -175,15 +246,33 @@ ${uiProtocolShim()}
       previewEl.style.aspectRatio = w + ' / ' + h;
     }
 
-    function renderMeta() {
-      while (metaEl.firstChild) metaEl.removeChild(metaEl.firstChild);
-      var values = [state.model, state.aspectRatio, state.resolution, state.duration ? state.duration + 's' : null];
-      values.forEach(function(v) {
-        if (!v) return;
+    function prettyModel(m) {
+      // "nano-banana-pro" -> "Nano Banana Pro"
+      if (!m) return null;
+      return String(m).split(/[-_]/).map(function (w) {
+        return w.charAt(0).toUpperCase() + w.slice(1);
+      }).join(' ');
+    }
+
+    function renderCaption() {
+      // Caption is "Model · 1:1 · 4s" — single quiet line, not pill badges.
+      while (captionEl.firstChild) captionEl.removeChild(captionEl.firstChild);
+      var parts = [
+        prettyModel(state.model),
+        state.aspectRatio,
+        state.resolution,
+        state.duration ? state.duration + 's' : null,
+      ].filter(function (v) { return v != null && v !== ''; });
+      parts.forEach(function (v, i) {
+        if (i > 0) {
+          var sep = document.createElement('span');
+          sep.className = 'sep';
+          sep.textContent = '·';
+          captionEl.appendChild(sep);
+        }
         var span = document.createElement('span');
-        span.className = 'badge';
         span.textContent = String(v);
-        metaEl.appendChild(span);
+        captionEl.appendChild(span);
       });
     }
 
@@ -227,7 +316,7 @@ ${uiProtocolShim()}
       state.aspectRatio = args.aspect_ratio || args.aspectRatio || state.aspectRatio;
       state.resolution = args.resolution || state.resolution;
       state.duration = args.duration || state.duration;
-      renderMeta();
+      renderCaption();
       applyAspectRatio();
       statusEl.textContent = 'Generating…';
     });
@@ -243,7 +332,7 @@ ${uiProtocolShim()}
       if (sc.aspectRatio) state.aspectRatio = sc.aspectRatio;
       if (sc.resolution) state.resolution = sc.resolution;
       if (sc.duration) state.duration = sc.duration;
-      renderMeta();
+      renderCaption();
       applyAspectRatio();
       if (sc.outputUrl) {
         // Server short-circuited (cache hit / fast worker) — show the image
@@ -392,6 +481,14 @@ ${uiProtocolShim()}
 
     recreateBtnEl.addEventListener('click', function () {
       window.NodaroMCP.injectChatText(buildRecreateMessage());
+    });
+
+    // Always-on download chip on the image (hidden during loading via CSS,
+    // hidden on touch devices via @media (hover: none) — Download is in the
+    // visible action row there).
+    dlPillEl.addEventListener('click', function () {
+      if (!state.outputUrl) return;
+      window.NodaroMCP.openLink(downloadUrl(state.outputUrl));
     });
   })();
 </script>
