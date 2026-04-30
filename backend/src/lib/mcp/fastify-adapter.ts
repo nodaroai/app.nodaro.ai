@@ -30,6 +30,23 @@ export async function handleMcpRequest(
 
   reply.hijack()
 
+  // Log the JSON-RPC method + tool name (if any) before handing off to the
+  // transport. Lets us trace per-client behaviour in Railway when something
+  // breaks (e.g. Cursor cancelling generate_image without a clear cause).
+  try {
+    const body = request.body as Record<string, unknown> | undefined
+    const method = typeof body?.method === "string" ? body.method : undefined
+    const params = body?.params as Record<string, unknown> | undefined
+    const toolName = method === "tools/call" ? (params?.name as string | undefined) : undefined
+    const ua = request.headers["user-agent"]
+    request.log.info(
+      { method, toolName, ua, mcpSession: request.headers["mcp-session-id"] },
+      "[mcp] incoming",
+    )
+  } catch {
+    // Logging is best-effort.
+  }
+
   try {
     await server.connect(transport)
     await transport.handleRequest(request.raw, reply.raw, request.body)
