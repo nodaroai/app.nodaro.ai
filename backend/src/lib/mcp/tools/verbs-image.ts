@@ -195,20 +195,15 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "Provide ONE of:\n" +
           "  (a) `image_url` — any publicly fetchable HTTPS URL\n" +
           "  (b) `image_asset_id` — a Nodaro job id whose output is an image\n\n" +
-          "**For user-attached photos / local files** the recommended path is:\n" +
-          "  1. RESIZE FIRST in your code-interpreter (sharp / PIL / etc.) " +
-          "to a max long edge of ~1024 px and JPEG quality ~80 — target " +
-          "200–400 KB raw. Image-to-image providers don't need 4000×3000 " +
-          "input and the LLM's output context can't carry that much base64 " +
-          "anyway.\n" +
-          "  2. Base64-encode the resized bytes.\n" +
-          "  3. Call `upload_image` with the encoded data + mime_type to get " +
-          "a public URL.\n" +
-          "  4. Pass that URL as `image_url` here.\n\n" +
-          "If the user explicitly wants full-resolution editing (e.g. for " +
-          "print), ask them to upload at https://app.nodaro.ai/library and " +
-          "paste back the resulting URL — that path preserves the original " +
-          "bytes server-side without going through your token budget.",
+          "**For user-attached photos / local files**, do this:\n" +
+          "  1. Call `upload_image_url` (mime_type) → returns { upload_url, public_url }\n" +
+          "  2. In your code interpreter / bash, PUT the file directly:\n" +
+          "       curl -X PUT --data-binary @<path> -H 'Content-Type: <mime>' '<upload_url>'\n" +
+          "  3. Pass the returned `public_url` to this tool as `image_url`.\n\n" +
+          "This path streams the file from disk to R2 via curl — the bytes " +
+          "never traverse your context, so file size is unbounded and there's " +
+          "no LLM-output truncation risk. Use this in preference to base64 " +
+          "uploads (`upload_image`) for any user-supplied file.",
         inputSchema: {
           prompt: z.string().min(1).max(2000),
           image_url: z.string().url().optional(),
