@@ -12,11 +12,13 @@ import {
   parseFailure,
   jobResultWithWidget,
 } from "./_verb-helpers.js"
-// _wait-for-job.ts is intentionally retained but unimported. It implements
-// a sync block-on-completion path for tools (used briefly in #1830 to test
-// whether Cursor's tool-call cancellation was async-related — it wasn't,
-// and the sync wait broke Claude.ai's "close app" UX). Kept for a future
-// per-tool opt-in if we ever find a host that genuinely needs sync results.
+// _wait-for-job.ts is intentionally retained but unimported here. It
+// exports `waitForJob` (sync block-on-completion). Used briefly in #1830
+// to test whether Cursor's tool-call cancellation was async-related — it
+// wasn't, and the sync wait broke Claude.ai's "close app" UX. Kept for a
+// future per-tool opt-in if we ever find a host that needs sync results.
+// Its `peekJob` short-circuit is wired centrally in `jobResultWithWidget`
+// so every verb gets the cache-hit fast path for free.
 
 /**
  * Path-1 structured fields shape, mirrored from `@nodaro/shared`'s

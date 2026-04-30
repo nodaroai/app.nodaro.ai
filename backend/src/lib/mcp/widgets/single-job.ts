@@ -19,12 +19,43 @@ const SHARED_CSS = `
   * { box-sizing: border-box; }
   body { margin: 0; padding: 16px; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
   .card { display: flex; flex-direction: column; gap: 12px; }
-  .progress { height: 4px; background: rgba(127,127,127,0.2); border-radius: 2px; overflow: hidden; }
-  .progress > div { height: 100%; background: linear-gradient(90deg, #5b9dff, #8e6bff); width: 0%; transition: width .3s; }
   .meta { font-size: 12px; opacity: 0.7; display: flex; gap: 8px; flex-wrap: wrap; }
   .meta .badge { background: rgba(127,127,127,0.15); padding: 2px 8px; border-radius: 4px; }
-  .preview { width: 100%; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.05); }
-  .preview img, .preview video, .preview audio { display: block; width: 100%; height: auto; }
+  .preview {
+    width: 100%; border-radius: 8px; overflow: hidden;
+    background: rgba(127,127,127,0.08); position: relative;
+    aspect-ratio: 16 / 9;
+  }
+  .preview.audio { aspect-ratio: auto; height: 56px; }
+  .preview img, .preview video, .preview audio { display: block; width: 100%; height: auto; position: relative; z-index: 1; }
+  /* Shimmer placeholder. Diagonal sheen sweeps across the empty preview while
+     the worker generates the asset. Kicks in immediately and runs forever
+     until showMedia() removes the .loading class. */
+  .preview.loading::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(110deg,
+        transparent 30%,
+        rgba(255,255,255,0.18) 50%,
+        transparent 70%);
+    background-size: 220% 100%;
+    background-repeat: no-repeat;
+    animation: shimmer 1.6s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes shimmer {
+    0%   { background-position: 220% 0; }
+    100% { background-position: -120% 0; }
+  }
+  /* Subtle whole-card breathing while the job is in flight. Stops when the
+     image lands (.card.done). */
+  .card.loading { animation: breathe 2.4s ease-in-out infinite; }
+  .card.loading.done, .card.done { animation: none; }
+  @keyframes breathe {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.78; }
+  }
   .actions { display: flex; gap: 8px; }
   button { padding: 6px 14px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; }
   button:hover { background: rgba(127,127,127,0.1); }
@@ -45,11 +76,10 @@ export function buildSingleJobWidget(mediaKind: MediaKind): string {
 ${uiProtocolShim()}
 </head>
 <body>
-<div class="card">
+<div class="card loading" id="card">
   <div class="meta" id="meta"></div>
   <div class="status" id="status">Initializing…</div>
-  <div class="progress" id="progress"><div id="bar"></div></div>
-  <div class="preview" id="preview" hidden></div>
+  <div class="preview loading${mediaKind === "audio" ? " audio" : ""}" id="preview"></div>
   <div class="actions">
     <button id="btn-open">Open in Nodaro</button>
     <button id="btn-rerun">Re-run</button>
@@ -60,11 +90,22 @@ ${uiProtocolShim()}
     var MEDIA_KIND = ${JSON.stringify(mediaKind)};
     var state = { jobId: null, prompt: null, model: null, aspectRatio: null, resolution: null, duration: null };
 
+    var cardEl = document.getElementById('card');
     var metaEl = document.getElementById('meta');
     var statusEl = document.getElementById('status');
-    var progEl = document.getElementById('progress');
-    var barEl = document.getElementById('bar');
     var previewEl = document.getElementById('preview');
+
+    function applyAspectRatio() {
+      if (MEDIA_KIND === 'audio') return;
+      if (!state.aspectRatio) return;
+      // Accepts "16:9" or "16/9". Normalise both to CSS "16 / 9".
+      var parts = String(state.aspectRatio).split(/[:\\/]/);
+      if (parts.length !== 2) return;
+      var w = parseFloat(parts[0]);
+      var h = parseFloat(parts[1]);
+      if (!isFinite(w) || !isFinite(h) || w <= 0 || h <= 0) return;
+      previewEl.style.aspectRatio = w + ' / ' + h;
+    }
 
     function renderMeta() {
       while (metaEl.firstChild) metaEl.removeChild(metaEl.firstChild);
@@ -92,8 +133,14 @@ ${uiProtocolShim()}
       }
       media.setAttribute('src', url);
       previewEl.appendChild(media);
-      previewEl.hidden = false;
-      progEl.hidden = true;
+      // Stop the shimmer + breathing once we have real content.
+      previewEl.classList.remove('loading');
+      cardEl.classList.remove('loading');
+      cardEl.classList.add('done');
+      // Image kind: the iframe shouldn't hold the placeholder aspect-ratio
+      // once the real image is in — it'll naturally size to the image's
+      // intrinsic ratio.
+      if (MEDIA_KIND === 'image') previewEl.style.aspectRatio = 'auto';
       statusEl.textContent = 'Done';
     }
 
@@ -106,6 +153,7 @@ ${uiProtocolShim()}
       state.resolution = args.resolution || state.resolution;
       state.duration = args.duration || state.duration;
       renderMeta();
+      applyAspectRatio();
       statusEl.textContent = 'Generating…';
     });
 
@@ -120,27 +168,26 @@ ${uiProtocolShim()}
       if (sc.aspectRatio) state.aspectRatio = sc.aspectRatio;
       if (sc.resolution) state.resolution = sc.resolution;
       if (sc.duration) state.duration = sc.duration;
+      renderMeta();
+      applyAspectRatio();
       if (sc.outputUrl) {
+        // Server short-circuited (cache hit / fast worker) — show the image
+        // immediately, no need to start the poll loop.
         showMedia(sc.outputUrl);
       } else if (state.jobId) {
         statusEl.textContent = 'Generating…';
         startPolling();
       }
-      renderMeta();
     });
 
     // Bridged from progress-emitter via host-forwarded notifications/progress.
-    // Currently a no-op for stateless HTTP transport but kept for forward
-    // compatibility (e.g. session-based connections in future MCP clients).
+    // No-op for the visual layer (no progress bar) but we still update the
+    // status text so the user has a sense of activity if the host happens to
+    // forward progress.
     window.addEventListener('mcp-progress', function(e) {
       var p = e.detail || {};
       if (state.jobId && p.progressToken && p.progressToken !== state.jobId) return;
-      var pct = (p.progress || 0);
-      // Spec ambiguity: progress may be 0-1 or 0-100. Normalise.
-      if (pct > 1) pct = pct;
-      else pct = pct * 100;
-      barEl.style.width = pct.toFixed(1) + '%';
-      statusEl.textContent = 'Generating… ' + Math.round(pct) + '%' + (p.message ? ' — ' + p.message : '');
+      if (p.message) statusEl.textContent = 'Generating… ' + p.message;
     });
 
     // ── Poll loop: tools/call get_asset every 2s until terminal ──
@@ -185,7 +232,6 @@ ${uiProtocolShim()}
       var sc = (data.result && data.result.structuredContent) || {};
       if (typeof sc.progress === 'number') {
         var pct = sc.progress > 1 ? sc.progress : sc.progress * 100;
-        barEl.style.width = pct.toFixed(1) + '%';
         statusEl.textContent = 'Generating… ' + Math.round(pct) + '%';
       }
       // Fall back to scanning raw output_data if normalised outputUrl is null.
