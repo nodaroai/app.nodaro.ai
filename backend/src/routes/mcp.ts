@@ -35,14 +35,7 @@ export async function registerMcpRoute(app: FastifyInstance): Promise<void> {
 
   // `app.all()` covers POST (JSON-RPC requests) and GET (SSE upgrade for
   // server-initiated notifications). The SDK transport handles both shapes.
-  //
-  // bodyLimit is bumped to 64 MB for this route specifically so the
-  // upload_image / upload_audio / upload_video tools can accept base64-
-  // encoded media in their args. The global default is 1 MB which is fine
-  // for normal JSON-RPC traffic but rejects any image > ~750 KB after
-  // base64 inflation. 64 MB allows ~48 MB decoded media, which covers
-  // ~99% of chat-host attachment sizes.
-  app.all("/mcp", { bodyLimit: 64 * 1024 * 1024 }, async (req, reply) => {
+  app.all("/mcp", async (req, reply) => {
     if (!req.userId) {
       return reply
         .status(401)
