@@ -56,11 +56,23 @@ describe("single-job widget template", () => {
     expect(html).toContain("@media (hover: none)")
   })
 
-  it("renders a brand mark + caption row instead of badge pills", () => {
+  it("renders a metadata badge row populated from tool args", () => {
     const html = buildSingleJobWidget("image")
-    expect(html).toContain('class="brand-mark"')
-    expect(html).toContain('id="caption"')
-    expect(html).not.toContain('class="meta"')
+    expect(html).toContain('id="meta"')
+    expect(html).toContain('class="meta"')
+    expect(html).toContain("renderMeta")
+    // Ensures the host's chrome-duplicating brand mark + caption row I
+    // briefly added are NOT present — Claude.ai already renders the
+    // "Nodaro · generate_image" header so we don't need a second one.
+    expect(html).not.toContain('class="brand-mark"')
+  })
+
+  it("uses transparent background + zero border on the outer card", () => {
+    const html = buildSingleJobWidget("image")
+    // The widget should not introduce its own card frame — Claude.ai's
+    // host wraps the iframe in its own chrome.
+    expect(html).toContain("background: transparent")
+    expect(html).toContain("border: 0")
   })
 
   it("does NOT contain innerHTML usage in runtime JS (safe DOM only)", () => {
