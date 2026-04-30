@@ -130,10 +130,11 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     // swap_face is intentionally absent — no /v1/swap-face route exists.
     expect(names.has("swap_face")).toBe(false)
 
-    // Sanity: 1 (ping) + 13 verbs + 11 utility + 4 gallery = 29 with all scopes
-    // on cloud edition. Allow a small range to absorb future minor changes.
+    // Sanity: ping + verbs + jobs + workflows + gallery + 3 upload tools
+    // (image/audio/video). Allow a wider range to absorb future additions
+    // and dynamic tool variations.
     expect(tools.length).toBeGreaterThanOrEqual(27)
-    expect(tools.length).toBeLessThanOrEqual(31)
+    expect(tools.length).toBeLessThanOrEqual(36)
   })
 
   it("with only jobs:read, registers ping + jobs tools and nothing else", async () => {
