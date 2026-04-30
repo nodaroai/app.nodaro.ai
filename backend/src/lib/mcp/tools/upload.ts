@@ -35,6 +35,7 @@ import {
   AbortMultipartUploadCommand,
   PutObjectCommand,
 } from "@aws-sdk/client-s3"
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { s3 } from "../../storage.js"
 import { config } from "../../config.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -244,7 +245,103 @@ export function registerUploadTools({ server, session }: RegisterUploadOpts): vo
   for (const meta of Object.values(KIND_META)) {
     registerSingleShot(server, session, meta)
     registerChunkedTrio(server, session, meta)
+    registerPresignedUrl(server, session, meta)
   }
+}
+
+/**
+ * The "escape hatch" upload path. Returns a presigned R2 PUT URL the LLM's
+ * code interpreter can stream the file to via bash/curl, then the public URL
+ * the LLM passes downstream as image_url / video_url / audio_url.
+ *
+ * This is THE recommended path for any user-attached file, because the
+ * file bytes never traverse the LLM context (which truncates at ~16K chars
+ * regardless of the upload tool's accept cap). The LLM reads the file path,
+ * runs `curl -X PUT --data-binary @path PRESIGNED_URL`, then references
+ * `public_url` in subsequent tools.
+ */
+function registerPresignedUrl(
+  server: McpServer,
+  session: McpSession,
+  meta: KindMeta,
+): void {
+  server.registerTool(
+    `${meta.toolPrefix}_url`,
+    {
+      title: `Upload ${meta.kind} (presigned URL — recommended)`,
+      description:
+        `**RECOMMENDED upload path for any user-attached ${meta.description.sourceVerb}.** ` +
+        `Returns a presigned PUT URL the LLM's code interpreter pipes the file ` +
+        `to directly, plus the public URL to use downstream. The bytes NEVER ` +
+        `flow through the LLM context — no base64 inflation, no truncation, ` +
+        `no context-budget overhead, ANY file size.\n\n` +
+        `Workflow:\n` +
+        `  1. Call this tool with mime_type → returns { upload_url, public_url }\n` +
+        `  2. In the code interpreter / bash:\n` +
+        `       curl -X PUT --data-binary @path/to/file \\\n` +
+        `         -H 'Content-Type: <mime_type>' \\\n` +
+        `         '<upload_url>'\n` +
+        `     (curl exits 0 on success.)\n` +
+        `  3. Pass \`public_url\` to ${meta.description.callsiteHint} as ` +
+        `${meta.kind}_url.\n\n` +
+        `URL is valid for 1 hour. Use this in preference to ${meta.toolPrefix} ` +
+        `(base64) and ${meta.toolPrefix}_init (chunked) — those have ` +
+        `LLM-context constraints that this avoids entirely.`,
+      inputSchema: {
+        mime_type: z
+          .enum(meta.supportedMime as readonly [string, ...string[]])
+          .describe("MIME type of the file you intend to PUT."),
+      },
+      outputSchema: {
+        upload_url: z.string(),
+        public_url: z.string(),
+        expires_in_seconds: z.number(),
+        mime_type: z.string(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) => {
+      const ext = meta.mimeToExt[args.mime_type] ?? "bin"
+      const key = `uploads/${meta.kind}/${session.userId}/${randomUUID()}.${ext}`
+      const expiresIn = 60 * 60 // 1 hour
+      let uploadUrl: string
+      try {
+        uploadUrl = await getSignedUrl(
+          s3,
+          new PutObjectCommand({
+            Bucket: config.R2_BUCKET_NAME,
+            Key: key,
+            ContentType: args.mime_type,
+            CacheControl: "public, max-age=31536000, immutable",
+          }),
+          { expiresIn },
+        )
+      } catch (err) {
+        return errorResult(
+          `Failed to generate presigned URL: ${(err as Error).message}`,
+        )
+      }
+      const publicUrl = `${config.R2_PUBLIC_URL}/${key}`
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text:
+              `Presigned upload URL ready for ${meta.kind} (${args.mime_type}).\n` +
+              `1. PUT the file to: ${uploadUrl}\n` +
+              `2. Reference downstream as: ${publicUrl}\n` +
+              `Valid for ${expiresIn / 60} minutes.`,
+          },
+        ],
+        structuredContent: {
+          upload_url: uploadUrl,
+          public_url: publicUrl,
+          expires_in_seconds: expiresIn,
+          mime_type: args.mime_type,
+        },
+      }
+    },
+  )
 }
 
 function registerSingleShot(server: McpServer, session: McpSession, meta: KindMeta): void {
