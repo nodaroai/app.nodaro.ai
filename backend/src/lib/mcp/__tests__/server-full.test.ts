@@ -130,12 +130,11 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     // swap_face is intentionally absent — no /v1/swap-face route exists.
     expect(names.has("swap_face")).toBe(false)
 
-    // Sanity: ping + verbs + jobs + workflows + gallery + 3 upload tools
-    // (prepare_image_upload / prepare_audio_upload / prepare_video_upload —
-    // single presigned-URL flow per kind). Allow range for future additions
-    // + dynamic tool variations.
+    // Sanity: ping + verbs + jobs + workflows + gallery + 6 upload tools
+    // (prepare_*_upload [3] + upload_* [3] — presigned-URL primary path,
+    // inline-base64 fallback for clients with bash-sandbox restrictions).
     expect(tools.length).toBeGreaterThanOrEqual(27)
-    expect(tools.length).toBeLessThanOrEqual(40)
+    expect(tools.length).toBeLessThanOrEqual(42)
   })
 
   it("with only jobs:read, registers ping + jobs tools and nothing else", async () => {
