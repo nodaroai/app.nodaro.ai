@@ -195,13 +195,24 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "Provide ONE of:\n" +
           "  (a) `image_url` — any publicly fetchable HTTPS URL\n" +
           "  (b) `image_asset_id` — a Nodaro job id whose output is an image\n\n" +
-          "**For user-attached photos / local files**, do this:\n" +
-          "  1. Call `prepare_image_upload` (mime_type) → { upload_url, public_url }\n" +
-          "  2. In your code interpreter / bash, PUT the file directly:\n" +
-          "       curl -X PUT --data-binary @<path> -H 'Content-Type: <mime>' '<upload_url>'\n" +
-          "  3. Pass the returned `public_url` to this tool as `image_url`.\n\n" +
-          "This streams the file from disk to R2 via curl — bytes never traverse " +
-          "your context, so any file size works with zero truncation risk.",
+          "**Getting a URL for a user-attached image** (bytes only in chat, no URL yet):\n\n" +
+          "Path A (preferred, works on every host including Claude.ai web): " +
+          "`request_image_upload` → returns `{ upload_page_url, public_url }`. " +
+          "In the same reply to the user, render a download link/button for " +
+          "the attached image AND the `upload_page_url`. The user saves the " +
+          "image to disk, drops it on the upload page (in their own browser, " +
+          "outside any sandbox), and confirms. Then call this tool with " +
+          "`public_url` as `image_url`.\n\n" +
+          "Path B (only for non-sandboxed clients — Cursor, Cline, Claude " +
+          "Desktop, Claude Code CLI): `prepare_image_upload` → " +
+          "`curl -X PUT --data-binary @<path> -H 'Content-Type: <mime>' " +
+          "'<upload_url>'`. Streams disk → R2 directly. Will 403 on " +
+          "Claude.ai web (egress proxy blocks all object-storage hosts), " +
+          "use Path A there.\n\n" +
+          "Path C (last resort, tiny files only — ≤30–50 KB raw after " +
+          "resize): `upload_image` → base64-encode and pass inline. " +
+          "Bypasses sandbox via the MCP connector but is bounded by the " +
+          "LLM's per-tool output token budget.",
         inputSchema: {
           prompt: z.string().min(1).max(2000),
           image_url: z.string().url().optional(),
