@@ -24,13 +24,13 @@ const SHARED_CSS = `
   .meta { font-size: 12px; opacity: 0.7; display: flex; gap: 8px; flex-wrap: wrap; }
   .meta .badge { background: rgba(127,127,127,0.15); padding: 2px 8px; border-radius: 4px; }
   /* Chat-native inline preview: image floats centered with no card chrome
-     (drops the grey background + container radius), capped vertically so
-     tall portrait images don't dominate the chat. The cap scales with
-     viewport — laptops get ~500 px, large monitors hit the 600 cap, small
-     windows shrink gracefully. Width is auto with max 100% so wide
-     landscapes never overflow horizontally. Border-radius lives on the
-     media itself now (not the container) so corners stay rounded
-     regardless of image dimensions. */
+     (drops the grey background + container radius). Width is auto with
+     max 100% so wide landscapes never overflow horizontally.
+     Border-radius lives on the media itself (not the container) so
+     corners stay rounded regardless of image dimensions.
+     The vertical cap is desktop-only (see @media block below) — on
+     mobile, the iframe is already narrow and chat scroll handles tall
+     images naturally, so capping there just makes the image feel small. */
   .preview { width: 100%; }
   .preview img, .preview video {
     display: block;
@@ -38,7 +38,6 @@ const SHARED_CSS = `
     width: auto;
     height: auto;
     max-width: 100%;
-    max-height: min(60vh, 600px);
     border-radius: 8px;
   }
   .preview audio { display: block; width: 100%; }
@@ -80,18 +79,23 @@ const SHARED_CSS = `
      (Animate / Edit for image, etc.), Claude-style icon-only utilities
      on the right (Copy / Download / Recreate). The whole row is hidden
      until the asset is loaded — buttons that need outputUrl have nothing
-     to act on before then. After ready, hover reveals the row; touch
-     devices show it always. */
-  .actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; opacity: 0; visibility: hidden; transition: opacity .15s; }
+     to act on before then. Default: visible after ready (mobile UX).
+     Desktop-only: fade-in on hover for a calmer chat feel (see @media). */
+  .actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; opacity: 1; visibility: hidden; transition: opacity .15s; }
   .actions.ready { visibility: visible; }
   .actions-left, .actions-right { display: flex; align-items: center; }
   .actions-left { gap: 8px; }
   .actions-right { gap: 2px; }
-  @media (hover: hover) {
+  /* Desktop-only refinements (mouse + hover capability). Mobile/tablet
+     skip these and get full-height media + always-visible buttons.
+     pointer:fine excludes touchscreen-only devices that erroneously
+     report hover:hover via simulated hover-on-tap. */
+  @media (hover: hover) and (pointer: fine) {
+    .preview img, .preview video {
+      max-height: min(60vh, 600px);
+    }
+    .actions.ready { opacity: 0; }
     .card:hover .actions.ready { opacity: 1; }
-  }
-  @media (hover: none) {
-    .actions.ready { opacity: 1; }
   }
   button { padding: 6px 14px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; line-height: 1; font-family: inherit; }
   button:hover { background: rgba(127,127,127,0.1); }
