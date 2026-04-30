@@ -19,36 +19,24 @@ const SHARED_CSS = `
     color-scheme: light dark;
     --nodaro-brand: #ff0073;
     --nodaro-brand-hover: #e60068;
-    --card-bg: rgba(127,127,127,0.06);
-    --card-border: rgba(127,127,127,0.18);
     --caption-fg: rgba(127,127,127,0.85);
   }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 12px; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
-  /* Lite card — subtle frame for containment + brand presence, but no
-     heavy chrome inside. Image is the centerpiece; everything else is
-     caption-weight. */
+  body { margin: 0; padding: 0; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
+  /* No card chrome — Claude.ai's host already provides the
+     "N · Nodaro · generate_image · </>" header bar plus the metadata
+     pills (model + aspect ratio). Adding our own card frame and
+     duplicate brand/caption rows just made the widget heavier and
+     competed with the host UI. The widget is now the image + actions
+     only; the host does the framing. */
   .card {
     display: flex; flex-direction: column; gap: 8px;
-    padding: 10px;
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 12px;
+    padding: 0;
+    background: transparent;
+    border: 0;
   }
-  .brand {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 12px; color: var(--caption-fg); font-weight: 500;
-  }
-  .brand-mark {
-    width: 14px; height: 14px; border-radius: 3px;
-    background: var(--nodaro-brand); color: white;
-    font-size: 9px; font-weight: 800; line-height: 14px; text-align: center;
-  }
-  .caption {
-    font-size: 12px; color: var(--caption-fg);
-    display: flex; gap: 6px; flex-wrap: wrap; min-height: 0;
-  }
-  .caption .sep { opacity: 0.5; }
+  .meta { font-size: 12px; opacity: 0.7; display: flex; gap: 8px; flex-wrap: wrap; }
+  .meta .badge { background: rgba(127,127,127,0.15); padding: 2px 8px; border-radius: 4px; }
   .preview {
     width: 100%; border-radius: 8px; overflow: hidden;
     background: rgba(127,127,127,0.08); position: relative;
@@ -210,8 +198,7 @@ ${uiProtocolShim()}
 </head>
 <body>
 <div class="card loading" id="card">
-  <div class="brand"><span class="brand-mark">N</span> Nodaro</div>
-  <div class="caption" id="caption"></div>
+  <div class="meta" id="meta"></div>
   <div class="status" id="status">Initializing…</div>
   <div class="preview loading${mediaKind === "audio" ? " audio" : ""}" id="preview">
     <div class="hover-actions" id="hover-actions">${hoverButtonsHtml(mediaKind)}</div>
@@ -227,7 +214,7 @@ ${uiProtocolShim()}
     var state = { jobId: null, prompt: null, model: null, aspectRatio: null, resolution: null, duration: null, outputUrl: null };
 
     var cardEl = document.getElementById('card');
-    var captionEl = document.getElementById('caption');
+    var metaEl = document.getElementById('meta');
     var statusEl = document.getElementById('status');
     var previewEl = document.getElementById('preview');
     var hoverActionsEl = document.getElementById('hover-actions');
@@ -246,33 +233,15 @@ ${uiProtocolShim()}
       previewEl.style.aspectRatio = w + ' / ' + h;
     }
 
-    function prettyModel(m) {
-      // "nano-banana-pro" -> "Nano Banana Pro"
-      if (!m) return null;
-      return String(m).split(/[-_]/).map(function (w) {
-        return w.charAt(0).toUpperCase() + w.slice(1);
-      }).join(' ');
-    }
-
-    function renderCaption() {
-      // Caption is "Model · 1:1 · 4s" — single quiet line, not pill badges.
-      while (captionEl.firstChild) captionEl.removeChild(captionEl.firstChild);
-      var parts = [
-        prettyModel(state.model),
-        state.aspectRatio,
-        state.resolution,
-        state.duration ? state.duration + 's' : null,
-      ].filter(function (v) { return v != null && v !== ''; });
-      parts.forEach(function (v, i) {
-        if (i > 0) {
-          var sep = document.createElement('span');
-          sep.className = 'sep';
-          sep.textContent = '·';
-          captionEl.appendChild(sep);
-        }
+    function renderMeta() {
+      while (metaEl.firstChild) metaEl.removeChild(metaEl.firstChild);
+      var values = [state.model, state.aspectRatio, state.resolution, state.duration ? state.duration + 's' : null];
+      values.forEach(function(v) {
+        if (!v) return;
         var span = document.createElement('span');
+        span.className = 'badge';
         span.textContent = String(v);
-        captionEl.appendChild(span);
+        metaEl.appendChild(span);
       });
     }
 
@@ -316,7 +285,7 @@ ${uiProtocolShim()}
       state.aspectRatio = args.aspect_ratio || args.aspectRatio || state.aspectRatio;
       state.resolution = args.resolution || state.resolution;
       state.duration = args.duration || state.duration;
-      renderCaption();
+      renderMeta();
       applyAspectRatio();
       statusEl.textContent = 'Generating…';
     });
@@ -332,7 +301,7 @@ ${uiProtocolShim()}
       if (sc.aspectRatio) state.aspectRatio = sc.aspectRatio;
       if (sc.resolution) state.resolution = sc.resolution;
       if (sc.duration) state.duration = sc.duration;
-      renderCaption();
+      renderMeta();
       applyAspectRatio();
       if (sc.outputUrl) {
         // Server short-circuited (cache hit / fast worker) — show the image
