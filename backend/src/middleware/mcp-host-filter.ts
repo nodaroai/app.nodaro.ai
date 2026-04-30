@@ -3,6 +3,11 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 const MCP_ALLOWED_PATHS: RegExp[] = [
   /^\/mcp(?:\/|$)/,
   /^\/\.well-known\/oauth-protected-resource(?:\/|$)/,
+  // Upload proxy: prepare_*_upload tools issue tokens addressed to
+  // mcp.nodaro.ai/v1/upload-proxy/<token>. LLM code-interpreter
+  // sandboxes (Claude.ai etc.) allowlist this domain via OAuth
+  // discovery, so PUTs land here and the route forwards to R2.
+  /^\/v1\/upload-proxy\//,
 ]
 
 function isMcpHost(host: string): boolean {
