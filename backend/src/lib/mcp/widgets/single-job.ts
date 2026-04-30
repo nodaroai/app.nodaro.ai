@@ -23,22 +23,21 @@ const SHARED_CSS = `
   .progress > div { height: 100%; background: linear-gradient(90deg, #5b9dff, #8e6bff); width: 0%; transition: width .3s; }
   .meta { font-size: 12px; opacity: 0.7; display: flex; gap: 8px; flex-wrap: wrap; }
   .meta .badge { background: rgba(127,127,127,0.15); padding: 2px 8px; border-radius: 4px; }
-  /* Chat-native inline preview: image floats centered with no card chrome
-     (drops the grey background + container radius). Width is auto with
-     max 100% so wide landscapes never overflow horizontally.
-     Border-radius lives on the media itself (not the container) so
-     corners stay rounded regardless of image dimensions.
-     The vertical cap is desktop-only (see @media block below) — on
-     mobile, the iframe is already narrow and chat scroll handles tall
-     images naturally, so capping there just makes the image feel small. */
+  /* Mobile/touch default: full-iframe-width image, no chrome — chat
+     scroll handles tall portraits naturally and the iframe is already
+     narrow so capping just feels cramped. Desktop refinements
+     (centered + 60vh cap + rounded corners) live in the @media block
+     below behind hover:hover + pointer:fine. */
   .preview { width: 100%; }
   .preview img, .preview video {
     display: block;
-    margin: 0 auto;
-    width: auto;
-    height: auto;
-    max-width: 100%;
-    border-radius: 8px;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    object-fit: contain;
+    border-radius: 0;
+    margin: 0;
   }
   .preview audio { display: block; width: 100%; }
   /* Image kind: clicking the image asks the host to switch to fullscreen
@@ -59,12 +58,14 @@ const SHARED_CSS = `
   body.fullscreen .status,
   body.fullscreen .progress,
   body.fullscreen .actions { display: none; }
-  /* Flex-center the media in the viewport. max-height: 80vh leaves
-     breathing room above/below for the host's chrome (X button, tabs)
-     and avoids the cramped edge-to-edge feel of 100vh. width:auto +
-     max-width:100% preserves intrinsic aspect ratio without needing
-     object-fit. */
-  body.fullscreen .preview { height: 100vh; display: flex; align-items: center; justify-content: center; }
+  /* Flex container for the media. Default (mobile): top-aligned —
+     phones have a fixed-position host chrome at the top so centering
+     pushes the image behind it; top-aligned puts the image right
+     under the chrome where the user can see it. Desktop overrides to
+     vertical-center in the @media block below. max-height: 80vh leaves
+     breathing room. width:auto + max-width:100% preserves intrinsic
+     aspect ratio without needing object-fit. */
+  body.fullscreen .preview { height: 100vh; display: flex; align-items: flex-start; justify-content: center; }
   body.fullscreen .preview img,
   body.fullscreen .preview video {
     width: auto;
@@ -92,8 +93,15 @@ const SHARED_CSS = `
      report hover:hover via simulated hover-on-tap. */
   @media (hover: hover) and (pointer: fine) {
     .preview img, .preview video {
-      max-height: min(60vh, 600px);
+      width: auto;
+      height: auto;
+      max-width: 100%;
+      max-height: 60vh;
+      object-fit: unset;
+      border-radius: 8px;
+      margin: 0 auto;
     }
+    body.fullscreen .preview { align-items: center; }
     .actions.ready { opacity: 0; }
     .card:hover .actions.ready { opacity: 1; }
   }
