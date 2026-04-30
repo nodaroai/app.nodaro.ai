@@ -131,6 +131,9 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   // (per existing public-route token-handling logic).
   { method: "POST", path: "/mcp" },
   { method: "GET", path: "/mcp" },
+  // Upload proxy: token in URL path is HMAC-signed and authoritative,
+  // route validates internally. No bearer-token needed.
+  { method: "PUT", path: "/v1/upload-proxy/", prefix: true },
   // IMPORTANT: trailing slash is deliberate — "/v1/api/" matches "/v1/api/run", "/v1/api/schema", etc.
   // but NOT "/v1/api-tokens" (CRUD routes that require JWT auth).
   // These routes authenticate via Bearer token (API token), not JWT.

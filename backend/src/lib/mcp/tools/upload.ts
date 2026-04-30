@@ -25,12 +25,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import { randomUUID } from "node:crypto"
-import { PutObjectCommand } from "@aws-sdk/client-s3"
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
-import { s3 } from "../../storage.js"
 import { config } from "../../config.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { McpSession } from "../session.js"
+import { signUploadToken } from "../../../routes/upload-proxy.js"
 
 const writeGate: ToolGate = { required: ["assets:write"] }
 
@@ -168,28 +166,24 @@ function registerPresignedUrl(
       const ext = MIME_TO_EXT[args.mime_type] ?? "bin"
       const key = `uploads/${meta.kind}/${session.userId}/${randomUUID()}.${ext}`
       const expiresIn = 60 * 60 // 1 hour
-      let uploadUrl: string
-      try {
-        uploadUrl = await getSignedUrl(
-          s3,
-          new PutObjectCommand({
-            Bucket: config.R2_BUCKET_NAME,
-            Key: key,
-            ContentType: args.mime_type,
-            CacheControl: "public, max-age=31536000, immutable",
-          }),
-          { expiresIn },
-        )
-      } catch (err) {
-        return errorResult(`Failed to generate presigned URL: ${(err as Error).message}`)
-      }
+      const token = signUploadToken({
+        userId: session.userId,
+        key,
+        mime: args.mime_type,
+        exp: Date.now() + expiresIn * 1000,
+      })
+      // Upload via OUR domain (mcp.nodaro.ai). LLM code-interpreter
+      // sandboxes (Claude.ai etc.) allowlist this for OAuth, so curl
+      // PUT through here bypasses the *.r2.cloudflarestorage.com block.
+      // Backend forwards body to R2 with our credentials.
+      const uploadUrl = `${config.PUBLIC_URL || "https://mcp.nodaro.ai"}/v1/upload-proxy/${token}`
       const publicUrl = `${config.R2_PUBLIC_URL}/${key}`
       return {
         content: [
           {
             type: "text" as const,
             text:
-              `Presigned upload URL ready for ${meta.kind} (${args.mime_type}).\n` +
+              `Upload URL ready for ${meta.kind} (${args.mime_type}).\n` +
               `1. PUT the file to: ${uploadUrl}\n` +
               `2. Reference downstream as: ${publicUrl}\n` +
               `Valid for ${expiresIn / 60} minutes.`,
