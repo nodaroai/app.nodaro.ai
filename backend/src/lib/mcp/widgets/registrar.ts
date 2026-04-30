@@ -86,46 +86,79 @@ const WIDGET_CSP = {
   ],
 }
 
+/**
+ * Historical URI prefixes we register at, in addition to the current `/v3/`.
+ *
+ * Claude.ai caches `tools/list` aggressively — once a connector is paired,
+ * the host may keep using the OLD `_meta.ui.resourceUri` from the cached
+ * tool definition for hours/days, even after the server publishes new
+ * tool registrations. If we don't keep the old resource URIs alive, those
+ * users see "Resource ui://nodaro/widget/job-image not found" errors.
+ *
+ * Each historical prefix maps to the SAME widget HTML — only the URI
+ * differs. Add a new entry if we ever bump the version again.
+ */
+const LEGACY_URI_PREFIXES = [
+  "ui://nodaro/widget/", // v0 (initial release)
+  "ui://nodaro/widget/v2/", // v2 cache-bust
+] as const
+
+const CURRENT_URI_PREFIX = "ui://nodaro/widget/v3/"
+
+const KIND_OF = {
+  jobImage: "job-image",
+  jobVideo: "job-video",
+  jobAudio: "job-audio",
+  jobGeneric: "job-generic",
+  workflow: "workflow",
+  gallery: "gallery",
+} as const
+
 export function registerWidgetResources(server: McpServer): void {
   for (const w of WIDGETS) {
-    server.registerResource(
-      w.name,
+    // Derive the kind suffix from the current URI so we can mirror it on each
+    // legacy prefix.
+    const kind = w.uri.replace(CURRENT_URI_PREFIX, "")
+    const allUris = [
       w.uri,
-      {
-        title: w.name,
-        description: w.description,
-        mimeType: "text/html;profile=mcp-app",
-        // Listing-level _meta as static default (per spec). Hosts may pre-fetch
-        // / audit the security config without calling resources/read first.
-        _meta: {
-          ui: {
-            csp: WIDGET_CSP,
-            prefersBorder: true,
+      ...LEGACY_URI_PREFIXES.map((prefix) => `${prefix}${kind}`),
+    ]
+    for (let i = 0; i < allUris.length; i++) {
+      const uri = allUris[i]!
+      // Resource registration name must be unique within the server — suffix
+      // the legacy entries so they don't collide with the current.
+      const name = i === 0 ? w.name : `${w.name}-legacy${i}`
+      server.registerResource(
+        name,
+        uri,
+        {
+          title: w.name,
+          description: w.description,
+          mimeType: "text/html;profile=mcp-app",
+          _meta: {
+            ui: { csp: WIDGET_CSP, prefersBorder: true },
           },
         },
-      },
-      async (uri) => {
-        // Log so we can verify in Railway whether Claude is actually invoking
-        // resources/read — if these never appear in production logs, the host
-        // isn't opting into MCP Apps for our tools.
-        // eslint-disable-next-line no-console
-        console.log(`[mcp] resources/read ${uri.href}`)
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              mimeType: "text/html;profile=mcp-app",
-              text: w.build(),
-              _meta: {
-                ui: {
-                  csp: WIDGET_CSP,
-                  prefersBorder: true,
+        async (resolvedUri) => {
+          // eslint-disable-next-line no-console
+          console.log(`[mcp] resources/read ${resolvedUri.href}`)
+          return {
+            contents: [
+              {
+                uri: resolvedUri.href,
+                mimeType: "text/html;profile=mcp-app",
+                text: w.build(),
+                _meta: {
+                  ui: { csp: WIDGET_CSP, prefersBorder: true },
                 },
               },
-            },
-          ],
-        }
-      },
-    )
+            ],
+          }
+        },
+      )
+    }
   }
+  // Reference the kind constants so eslint/tsc don't flag them unused; they
+  // exist as documentation of what suffix shape the URI tail uses.
+  void KIND_OF
 }
