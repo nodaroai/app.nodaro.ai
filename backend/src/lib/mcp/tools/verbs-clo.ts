@@ -51,6 +51,15 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
           .optional()
           .describe("Required when kind='asset'. e.g. 'smile', 'walking'."),
       },
+              outputSchema: {
+          jobId: z.string(),
+          prompt: z.string().optional(),
+          model: z.string().optional(),
+          aspectRatio: z.string().optional(),
+          resolution: z.string().optional(),
+          duration: z.number().optional(),
+          outputUrl: z.string().optional(),
+        },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -150,6 +159,15 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
           .optional()
           .describe("Required when kind='asset'. e.g. 'dawn', 'rain', 'aerial'."),
       },
+              outputSchema: {
+          jobId: z.string(),
+          prompt: z.string().optional(),
+          model: z.string().optional(),
+          aspectRatio: z.string().optional(),
+          resolution: z.string().optional(),
+          duration: z.number().optional(),
+          outputUrl: z.string().optional(),
+        },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -249,6 +267,15 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
           .optional()
           .describe("Required when kind='asset'. e.g. 'front', 'wood', 'weathered'."),
       },
+              outputSchema: {
+          jobId: z.string(),
+          prompt: z.string().optional(),
+          model: z.string().optional(),
+          aspectRatio: z.string().optional(),
+          resolution: z.string().optional(),
+          duration: z.number().optional(),
+          outputUrl: z.string().optional(),
+        },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
