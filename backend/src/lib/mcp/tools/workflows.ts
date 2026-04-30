@@ -102,9 +102,9 @@ export function registerWorkflows({
           openWorldHint: true,
         },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/workflow",
+        "ui/resourceUri": "ui://nodaro/widget/v2/workflow",
         ui: {
-          resourceUri: "ui://nodaro/widget/workflow",
+          resourceUri: "ui://nodaro/widget/v2/workflow",
           visibility: ["model", "app"],
         },
       },
@@ -163,7 +163,7 @@ export function registerWorkflows({
 
         registerTask({ taskId: executionId, userId: session.userId, kind: "workflow" })
 
-        // Iframe template lives at ui://nodaro/widget/workflow (declared on
+        // Iframe template lives at ui://nodaro/widget/v2/workflow (declared on
         // tool _meta.ui.resourceUri). Per-call data flows through
         // ui/notifications/tool-result via this structuredContent.
         return {
