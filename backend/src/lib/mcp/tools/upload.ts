@@ -253,23 +253,17 @@ function registerSingleShot(server: McpServer, session: McpSession, meta: KindMe
     {
       title: `Upload ${meta.kind[0]!.toUpperCase()}${meta.kind.slice(1)}`,
       description:
-        `Upload a local/attached ${meta.description.sourceVerb} to Nodaro and ` +
-        `get back a public URL. Use this BEFORE ${meta.description.callsiteHint} ` +
-        `whenever the user provides an attachment (chat-host attachment URLs ` +
-        `are auth-gated and Nodaro can't fetch them). Pass base64-encoded bytes ` +
-        `(no \`data:\` prefix) plus the MIME type.\n\n` +
-        `**IMPORTANT** — if you need to read the file in multiple steps (e.g. ` +
-        `because the file is large, or you can only read partial views), DO NOT ` +
-        `concatenate the parts in your own output and then call this tool. ` +
-        `LLM output is unreliable for long strings — it can silently truncate ` +
-        `or reformat the base64 and corrupt the upload. Use the chunked variant ` +
-        `instead: ${meta.toolPrefix}_init → ${meta.toolPrefix}_chunk (once per ` +
-        `piece, in order) → ${meta.toolPrefix}_complete. Each chunk passes ` +
-        `through a separate tool call with no manual concatenation.\n\n` +
-        `Single-shot cap: ${Math.floor(meta.maxBytes / 1024 / 1024)} MB decoded — ` +
-        `but in practice prefer the chunked variant for anything over ~3 MB raw, ` +
-        `because base64 inflation × LLM truncation risk × MCP request size ` +
-        `compounds quickly.`,
+        `Upload SMALL ${meta.description.sourceVerb} files (icons, thumbnails, ` +
+        `programmatically-generated images <500 KB raw) to Nodaro and get back ` +
+        `a public URL. Pass base64-encoded bytes (no \`data:\` prefix) plus the ` +
+        `MIME type.\n\n` +
+        `**DO NOT use this for user-attached photos / videos / audio recordings**. ` +
+        `LLM context budget can't reliably carry a megabyte of base64 in tool ` +
+        `args — the string truncates silently and the upload corrupts. ` +
+        `Instead ask the user to upload via https://app.nodaro.ai/library and ` +
+        `pass the resulting URL or asset id directly to ${meta.description.callsiteHint}.\n\n` +
+        `Server cap: ${Math.floor(meta.maxBytes / 1024 / 1024)} MB decoded. ` +
+        `Practical cap: ~500 KB before LLM token budget makes this unreliable.`,
       inputSchema: {
         data: z
           .string()
