@@ -134,6 +134,11 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   // Upload proxy: token in URL path is HMAC-signed and authoritative,
   // route validates internally. No bearer-token needed.
   { method: "PUT", path: "/v1/upload-proxy/", prefix: true },
+  // Upload-handoff: a user-facing browser upload page + its multipart
+  // receiver. Token in URL path is HMAC-signed and authoritative; the
+  // user opens this from Claude's chat without being logged into Nodaro.
+  { method: "GET", path: "/v1/upload-page/", prefix: true },
+  { method: "POST", path: "/v1/upload-page/", prefix: true },
   // IMPORTANT: trailing slash is deliberate — "/v1/api/" matches "/v1/api/run", "/v1/api/schema", etc.
   // but NOT "/v1/api-tokens" (CRUD routes that require JWT auth).
   // These routes authenticate via Bearer token (API token), not JWT.

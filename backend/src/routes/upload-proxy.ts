@@ -20,11 +20,17 @@ import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { s3 } from "../lib/storage.js"
 import { config } from "../lib/config.js"
 
-interface TokenPayload {
+export interface TokenPayload {
   userId: string
   key: string
   mime: string
   exp: number
+  // "proxy" (default, back-compat) — curl PUT directly to R2 with a pre-set
+  // content-type. "handoff" — user-facing browser upload page where the
+  // mime isn't known until the file is picked, so we store with whatever
+  // Content-Type the multipart upload reports.
+  purpose?: "proxy" | "handoff"
+  kind?: "image" | "audio" | "video"
 }
 
 function hmac(payload: string): string {
@@ -39,7 +45,7 @@ export function signUploadToken(payload: TokenPayload): string {
   return `${data}.${hmac(data)}`
 }
 
-function verifyUploadToken(token: string): TokenPayload | null {
+export function verifyUploadToken(token: string): TokenPayload | null {
   const dot = token.indexOf(".")
   if (dot < 0) return null
   const data = token.slice(0, dot)
@@ -90,7 +96,7 @@ export async function uploadProxyRoutes(app: FastifyInstance): Promise<void> {
     },
     async (req, reply) => {
       const payload = verifyUploadToken(req.params.token)
-      if (!payload) {
+      if (!payload || (payload.purpose && payload.purpose !== "proxy")) {
         return reply.status(403).send({
           error: { code: "invalid_token", message: "Token invalid or expired." },
         })
