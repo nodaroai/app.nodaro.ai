@@ -9,7 +9,58 @@ describe("single-job widget template", () => {
     expect(html).toContain("mcp-tool-result")
     expect(html).toContain("mcp-tool-input")
     expect(html).toContain("mcp-progress")
-    expect(html).toContain("Open in Nodaro")
+    // Hover-row buttons for image kind: Animate / Edit / Download.
+    expect(html).toContain('data-action="animate"')
+    expect(html).toContain('data-action="edit"')
+    expect(html).toContain('data-action="download"')
+    // Always-visible CTA below.
+    expect(html).toContain('id="btn-recreate"')
+  })
+
+  it("video widget exposes Edit/Download but not Animate", () => {
+    const html = buildSingleJobWidget("video")
+    expect(html).toContain('data-action="edit"')
+    expect(html).toContain('data-action="download"')
+    expect(html).toContain('id="btn-recreate"')
+    expect(html).not.toContain('data-action="animate"')
+  })
+
+  it("audio widget exposes Download + Recreate only", () => {
+    const html = buildSingleJobWidget("audio")
+    expect(html).toContain('data-action="download"')
+    expect(html).toContain('id="btn-recreate"')
+    expect(html).not.toContain('data-action="animate"')
+    // Edit isn't offered for audio (no audio-edit verb in the catalog).
+    expect(html).not.toContain('data-action="edit"')
+  })
+
+  it("uses the Nodaro brand color in the shimmer + Recreate CTA", () => {
+    const html = buildSingleJobWidget("image")
+    expect(html).toContain("--nodaro-brand")
+    expect(html).toContain("#ff0073")
+  })
+
+  it("shows always-on download pill on top of the image", () => {
+    for (const kind of ["image", "video"] as const) {
+      const html = buildSingleJobWidget(kind)
+      expect(html).toContain('id="dl-pill"')
+      expect(html).toContain('class="download-pill"')
+    }
+  })
+
+  it("includes a touch-device fallback that drops hover row out of overlay", () => {
+    const html = buildSingleJobWidget("image")
+    // Desktop: overlay is hover-gated.
+    expect(html).toContain("@media (hover: hover)")
+    // Touch: overlay becomes a static flex row, always visible.
+    expect(html).toContain("@media (hover: none)")
+  })
+
+  it("renders a brand mark + caption row instead of badge pills", () => {
+    const html = buildSingleJobWidget("image")
+    expect(html).toContain('class="brand-mark"')
+    expect(html).toContain('id="caption"')
+    expect(html).not.toContain('class="meta"')
   })
 
   it("does NOT contain innerHTML usage in runtime JS (safe DOM only)", () => {

@@ -13,6 +13,7 @@
  */
 import type { McpSession } from "../session.js"
 import { registerTask } from "../tasks.js"
+import { peekJob } from "./_wait-for-job.js"
 
 interface ParsedJobBody {
   jobId?: string
@@ -92,8 +93,16 @@ interface JobResultOpts {
  * few seconds. The widget (in MCP Apps hosts like Claude.ai) reads the
  * jobId from `structuredContent` and polls `get_asset` itself; clients
  * without widget support get a clean sync result with the jobId in text.
+ *
+ * Short-circuit: before returning, we do ONE non-blocking DB peek. If the
+ * worker happened to finish before this handler returned (cache hit, very
+ * fast provider response, idempotent re-submit, etc.), we include the
+ * resolved URL in the widget payload so the iframe shows the media
+ * instantly without entering its 2 s poll loop. Costs ~1 small Supabase
+ * round-trip per generation tool call. The peek is a no-op when caller
+ * already populated `widgetData.outputUrl`.
  */
-export function jobResultWithWidget(opts: JobResultOpts) {
+export async function jobResultWithWidget(opts: JobResultOpts) {
   const { jobId, label, session, widgetKind, widgetData } = opts
   if (widgetKind) {
     registerTask({
@@ -112,9 +121,16 @@ export function jobResultWithWidget(opts: JobResultOpts) {
     return { content: [text] }
   }
 
+  let resolvedUrl = widgetData?.outputUrl
+  if (!resolvedUrl) {
+    const peek = await peekJob(jobId)
+    if (peek.done && peek.outputUrl) resolvedUrl = peek.outputUrl
+  }
+
   const structuredContent: SingleJobStructuredContent = {
     jobId,
     ...widgetData,
+    ...(resolvedUrl ? { outputUrl: resolvedUrl } : {}),
   }
 
   return {
