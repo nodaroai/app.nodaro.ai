@@ -94,7 +94,8 @@ ${uiProtocolShim()}
       previewEl.appendChild(media);
       previewEl.hidden = false;
       progEl.hidden = true;
-      statusEl.textContent = 'Done';
+      // Step 1: drop the "Done" label — image presence already signals completion.
+      statusEl.style.display = 'none';
     }
 
     // Tool args arrive BEFORE the result — we know prompt/model up front.
