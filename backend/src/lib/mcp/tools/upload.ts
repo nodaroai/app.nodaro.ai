@@ -257,10 +257,19 @@ function registerSingleShot(server: McpServer, session: McpSession, meta: KindMe
         `get back a public URL. Use this BEFORE ${meta.description.callsiteHint} ` +
         `whenever the user provides an attachment (chat-host attachment URLs ` +
         `are auth-gated and Nodaro can't fetch them). Pass base64-encoded bytes ` +
-        `(no \`data:\` prefix) plus the MIME type. ` +
-        `Single-shot upload: max ${Math.floor(meta.maxBytes / 1024 / 1024)} MB ` +
-        `decoded — for larger files use ${meta.toolPrefix}_init / ` +
-        `${meta.toolPrefix}_chunk / ${meta.toolPrefix}_complete.`,
+        `(no \`data:\` prefix) plus the MIME type.\n\n` +
+        `**IMPORTANT** — if you need to read the file in multiple steps (e.g. ` +
+        `because the file is large, or you can only read partial views), DO NOT ` +
+        `concatenate the parts in your own output and then call this tool. ` +
+        `LLM output is unreliable for long strings — it can silently truncate ` +
+        `or reformat the base64 and corrupt the upload. Use the chunked variant ` +
+        `instead: ${meta.toolPrefix}_init → ${meta.toolPrefix}_chunk (once per ` +
+        `piece, in order) → ${meta.toolPrefix}_complete. Each chunk passes ` +
+        `through a separate tool call with no manual concatenation.\n\n` +
+        `Single-shot cap: ${Math.floor(meta.maxBytes / 1024 / 1024)} MB decoded — ` +
+        `but in practice prefer the chunked variant for anything over ~3 MB raw, ` +
+        `because base64 inflation × LLM truncation risk × MCP request size ` +
+        `compounds quickly.`,
       inputSchema: {
         data: z
           .string()
@@ -329,11 +338,18 @@ function registerChunkedTrio(server: McpServer, session: McpSession, meta: KindM
     {
       title: `Upload ${meta.kind} (start chunked)`,
       description:
-        `Start a chunked ${meta.kind} upload. Use this when the source is too ` +
-        `large for ${meta.toolPrefix} (single-shot cap ${Math.floor(meta.maxBytes / 1024 / 1024)} MB). ` +
-        `Returns an upload_id to use with ${meta.toolPrefix}_chunk and ` +
-        `${meta.toolPrefix}_complete. Send chunks of ~5 MB each (R2 multipart ` +
-        `requires every part except the last to be at least 5 MB).`,
+        `Start a chunked ${meta.kind} upload. **Strongly preferred over ` +
+        `${meta.toolPrefix} for any file you need to read in pieces** — each ` +
+        `chunk is a separate tool call so the LLM never has to concatenate ` +
+        `long base64 strings in its own output (which truncates silently).\n\n` +
+        `Workflow:\n` +
+        `  1. Call ${meta.toolPrefix}_init with the mime_type → returns upload_id\n` +
+        `  2. Call ${meta.toolPrefix}_chunk for each piece, in order, ` +
+        `chunk_index starting at 1\n` +
+        `  3. Call ${meta.toolPrefix}_complete to finalize → returns the URL\n\n` +
+        `R2 multipart requires every part except the last to be at least 5 MB ` +
+        `decoded (~7 MB base64). For images / small audio that's typically a ` +
+        `single chunk anyway; the chunked path is mostly a robustness boost.`,
       inputSchema: {
         mime_type: z
           .enum(meta.supportedMime as readonly [string, ...string[]])
