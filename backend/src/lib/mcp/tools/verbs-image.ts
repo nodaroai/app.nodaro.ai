@@ -80,7 +80,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       {
         title: "Generate Image",
         description:
-          "Generate an image from a text prompt and optional Path-1 structured fields (person, styling, setting, camera, mood, lens). Returns a job_id; poll via tasks/get.",
+          "Generate an image from a text prompt and optional Path-1 structured fields (person, styling, setting, camera, mood, lens). Returns a job_id",
         inputSchema: {
           prompt: z.string().min(1).max(4000).describe("Free-text image prompt"),
           model: z

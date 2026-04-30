@@ -33,7 +33,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Generate Video",
       description:
-        "Generate a video from a text prompt (text-to-video). Returns a job_id; poll via tasks/get.",
+        "Generate a video from a text prompt (text-to-video). Returns a job_id",
       inputSchema: {
         prompt: z.string().min(1).max(2500),
         model: z
@@ -128,7 +128,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Animate Image",
       description:
-        "Animate an image into a video (image-to-video). Provide either image_url OR image_asset_id. Returns a job_id; poll via tasks/get.",
+        "Animate an image into a video (image-to-video). Provide either image_url OR image_asset_id. Returns a job_id",
       inputSchema: {
         prompt: z.string().max(2500).optional(),
         image_url: z.string().url().optional(),
