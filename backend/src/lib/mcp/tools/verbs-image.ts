@@ -194,18 +194,21 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "apps marketplace for image editing.\n\n" +
           "Provide ONE of:\n" +
           "  (a) `image_url` — any publicly fetchable HTTPS URL\n" +
-          "  (b) `image_asset_id` — a Nodaro job id whose output is an image " +
-          "(preferred when the user already has assets in their library)\n\n" +
-          "**For user-attached photos / local files**: do NOT try to base64 " +
-          "the file and call `upload_image` — typical photos are megabytes " +
-          "and the encoded string will exceed your output context, " +
-          "truncating silently. Instead, ask the user to:\n" +
-          "  1. Open https://app.nodaro.ai/library\n" +
-          "  2. Drag-drop the image (or click Upload)\n" +
-          "  3. Paste the resulting URL or asset id back into chat\n" +
-          "Then call this tool with that URL/id. The `upload_image` MCP " +
-          "tool only works reliably for SMALL files (icons, thumbnails, " +
-          "generated images <500 KB) — not user-attached photos.",
+          "  (b) `image_asset_id` — a Nodaro job id whose output is an image\n\n" +
+          "**For user-attached photos / local files** the recommended path is:\n" +
+          "  1. RESIZE FIRST in your code-interpreter (sharp / PIL / etc.) " +
+          "to a max long edge of ~1024 px and JPEG quality ~80 — target " +
+          "200–400 KB raw. Image-to-image providers don't need 4000×3000 " +
+          "input and the LLM's output context can't carry that much base64 " +
+          "anyway.\n" +
+          "  2. Base64-encode the resized bytes.\n" +
+          "  3. Call `upload_image` with the encoded data + mime_type to get " +
+          "a public URL.\n" +
+          "  4. Pass that URL as `image_url` here.\n\n" +
+          "If the user explicitly wants full-resolution editing (e.g. for " +
+          "print), ask them to upload at https://app.nodaro.ai/library and " +
+          "paste back the resulting URL — that path preserves the original " +
+          "bytes server-side without going through your token budget.",
         inputSchema: {
           prompt: z.string().min(1).max(2000),
           image_url: z.string().url().optional(),

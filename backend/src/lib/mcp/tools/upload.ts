@@ -253,17 +253,23 @@ function registerSingleShot(server: McpServer, session: McpSession, meta: KindMe
     {
       title: `Upload ${meta.kind[0]!.toUpperCase()}${meta.kind.slice(1)}`,
       description:
-        `Upload SMALL ${meta.description.sourceVerb} files (icons, thumbnails, ` +
-        `programmatically-generated images <500 KB raw) to Nodaro and get back ` +
-        `a public URL. Pass base64-encoded bytes (no \`data:\` prefix) plus the ` +
+        `Upload ${meta.description.sourceVerb} bytes to Nodaro and get back a ` +
+        `public URL. Pass base64-encoded bytes (no \`data:\` prefix) plus the ` +
         `MIME type.\n\n` +
-        `**DO NOT use this for user-attached photos / videos / audio recordings**. ` +
-        `LLM context budget can't reliably carry a megabyte of base64 in tool ` +
-        `args — the string truncates silently and the upload corrupts. ` +
-        `Instead ask the user to upload via https://app.nodaro.ai/library and ` +
-        `pass the resulting URL or asset id directly to ${meta.description.callsiteHint}.\n\n` +
-        `Server cap: ${Math.floor(meta.maxBytes / 1024 / 1024)} MB decoded. ` +
-        `Practical cap: ~500 KB before LLM token budget makes this unreliable.`,
+        (meta.kind === "image"
+          ? `**RESIZE BEFORE ENCODING** if the source is a user attachment. ` +
+            `Use your code-interpreter (sharp / PIL / etc.) to downscale to a ` +
+            `max long edge of ~1024 px at JPEG quality ~80 — target raw size ` +
+            `200–400 KB (~270–540 KB base64). This keeps the call within LLM ` +
+            `output context AND is plenty of resolution for downstream image-` +
+            `to-image providers. Skipping this step on a multi-MB photo will ` +
+            `silently truncate the base64 and corrupt the upload.\n\n`
+          : `**TRIM / COMPRESS** the source first if it's a long recording or ` +
+            `high-bitrate file. Aim for <2 MB raw. LLM output context can't ` +
+            `reliably carry tens of megabytes of base64 in tool args.\n\n`) +
+        `For files that genuinely need full quality (print, archival), ask the ` +
+        `user to upload via https://app.nodaro.ai/library and paste back the ` +
+        `URL. Server cap: ${Math.floor(meta.maxBytes / 1024 / 1024)} MB decoded.`,
       inputSchema: {
         data: z
           .string()
