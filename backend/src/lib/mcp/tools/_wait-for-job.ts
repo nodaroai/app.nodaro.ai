@@ -99,3 +99,42 @@ export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult
     jobType: null,
   }
 }
+
+export interface PeekJobResult {
+  /** True if the job is in a terminal state. */
+  done: boolean
+  /** Resolved output URL if the job completed and produced media. */
+  outputUrl: string | null
+  /** Raw status string from the jobs table ("pending", "processing", "completed", …). */
+  status: string
+}
+
+/**
+ * Single non-blocking status check. Used as a short-circuit at tool-call
+ * time: if the worker happened to finish before this MCP tool handler
+ * returned (cache hit, very fast provider response), the verb passes the
+ * resolved URL straight through to the widget so it shows the image
+ * without entering its 2 s poll loop. Otherwise this is a no-op except
+ * for one DB round-trip.
+ */
+export async function peekJob(jobId: string): Promise<PeekJobResult> {
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("status, output_data")
+    .eq("id", jobId)
+    .maybeSingle()
+  if (error || !data) return { done: false, outputUrl: null, status: "unknown" }
+  const status = (data.status as string) ?? "pending"
+  if (!TERMINAL_STATUSES.has(status)) {
+    return { done: false, outputUrl: null, status }
+  }
+  const out = (data.output_data ?? {}) as Record<string, unknown>
+  const outputUrl =
+    (out.imageUrl as string | undefined) ??
+    (out.videoUrl as string | undefined) ??
+    (out.audioUrl as string | undefined) ??
+    (out.outputUrl as string | undefined) ??
+    (out.url as string | undefined) ??
+    null
+  return { done: true, outputUrl, status }
+}

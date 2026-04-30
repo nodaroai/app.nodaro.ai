@@ -23,7 +23,11 @@ beforeEach(() => {
  * each verb is independently auditable when one fails.
  */
 
-vi.mock("../../supabase.js", () => ({
+// Pre-existing bug: mock path was "../../supabase.js" which resolves to
+// src/lib/mcp/supabase.js (doesn't exist) instead of src/lib/supabase.js.
+// The mock was a no-op until we started exercising the real supabase
+// import via peekJob — now we need the chain to be reachable.
+vi.mock("../../../supabase.js", () => ({
   supabase: {
     from: () => ({
       select: () => ({
