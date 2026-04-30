@@ -142,11 +142,11 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
         return {
           content: [
             {
-              type: "text",
-              text: `Started app '${args.slug}' execution ${executionId}. Track via tasks/get with task_id=${executionId}.`,
+              type: "text" as const,
+              text: `Started app '${args.slug}' (id ${executionId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/library`,
             },
           ],
-          _meta: { task_id: executionId },
+          structuredContent: { executionId, slug: args.slug },
         }
       },
     )

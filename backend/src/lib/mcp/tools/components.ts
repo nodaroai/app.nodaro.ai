@@ -152,11 +152,11 @@ export function registerComponents({
         return {
           content: [
             {
-              type: "text",
-              text: `Started component ${args.component_id} as job ${jobId}. Track via tasks/get with task_id=${jobId}.`,
+              type: "text" as const,
+              text: `Started component '${args.component_id}' (job ${jobId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/library`,
             },
           ],
-          _meta: { task_id: jobId },
+          structuredContent: { jobId, componentId: args.component_id },
         }
       },
     )

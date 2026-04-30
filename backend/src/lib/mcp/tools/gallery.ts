@@ -145,9 +145,9 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
         },
         annotations: { readOnlyHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v2/gallery",
+        "ui/resourceUri": "ui://nodaro/widget/v3/gallery",
         ui: {
-          resourceUri: "ui://nodaro/widget/v2/gallery",
+          resourceUri: "ui://nodaro/widget/v3/gallery",
           visibility: ["model", "app"],
         },
       },
@@ -223,9 +223,9 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
         },
         annotations: { readOnlyHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v2/gallery",
+        "ui/resourceUri": "ui://nodaro/widget/v3/gallery",
         ui: {
-          resourceUri: "ui://nodaro/widget/v2/gallery",
+          resourceUri: "ui://nodaro/widget/v3/gallery",
           visibility: ["model", "app"],
         },
       },

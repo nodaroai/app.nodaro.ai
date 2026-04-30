@@ -99,6 +99,42 @@ export function uiProtocolShim(): string {
         });
       });
 
+      // Auto-resize: emit ui/notifications/size-changed whenever the body
+      // height changes so the host can grow the iframe to fit content.
+      // Without this Claude.ai uses a default small height and the image
+      // preview renders cramped ([redacted-reference]'s bundle does the same — see
+      // setupSizeChangedNotifications).
+      function emitSize() {
+        var h = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
+        var w = document.documentElement.scrollWidth || document.body.scrollWidth || 0;
+        if (h > 0) notify('ui/notifications/size-changed', { width: w, height: h });
+      }
+      var lastEmittedHeight = 0;
+      function maybeEmitSize() {
+        var h = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
+        if (Math.abs(h - lastEmittedHeight) >= 8) {
+          lastEmittedHeight = h;
+          emitSize();
+        }
+      }
+      window.addEventListener('mcp-ready', function() {
+        // Initial size after handshake completes.
+        setTimeout(maybeEmitSize, 0);
+      });
+      // ResizeObserver fires on any element growth (image loads, dynamic
+      // appends). Falls back to load+interval for ancient browsers.
+      try {
+        var ro = new ResizeObserver(maybeEmitSize);
+        document.addEventListener('DOMContentLoaded', function() {
+          ro.observe(document.body);
+        });
+      } catch (_) {
+        window.addEventListener('load', maybeEmitSize);
+        setInterval(maybeEmitSize, 1000);
+      }
+      // Image/video element load events bump the height when media decodes.
+      window.addEventListener('load', maybeEmitSize, true);
+
       window.NodaroMCP = {
         openLink: function(url) {
           notify('ui/message', {
