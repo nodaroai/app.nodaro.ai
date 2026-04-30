@@ -15,7 +15,11 @@
 import { uiProtocolShim } from "./_common.js"
 
 const SHARED_CSS = `
-  :root { color-scheme: light dark; }
+  :root {
+    color-scheme: light dark;
+    --nodaro-brand: #ff0073;
+    --nodaro-brand-hover: #e60068;
+  }
   * { box-sizing: border-box; }
   body { margin: 0; padding: 16px; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
   .card { display: flex; flex-direction: column; gap: 12px; }
@@ -28,16 +32,16 @@ const SHARED_CSS = `
   }
   .preview.audio { aspect-ratio: auto; height: 56px; }
   .preview img, .preview video, .preview audio { display: block; width: 100%; height: auto; position: relative; z-index: 1; }
-  /* Shimmer placeholder. Diagonal sheen sweeps across the empty preview while
-     the worker generates the asset. Kicks in immediately and runs forever
-     until showMedia() removes the .loading class. */
+  /* Shimmer placeholder. Diagonal Nodaro-pink sheen sweeps across the empty
+     preview while the worker generates the asset. Kicks in immediately and
+     runs forever until showMedia() removes the .loading class. */
   .preview.loading::before {
     content: '';
     position: absolute; inset: 0;
     background:
       linear-gradient(110deg,
         transparent 30%,
-        rgba(255,255,255,0.18) 50%,
+        rgba(255, 0, 115, 0.20) 50%,
         transparent 70%);
     background-size: 220% 100%;
     background-repeat: no-repeat;
@@ -48,21 +52,82 @@ const SHARED_CSS = `
     0%   { background-position: 220% 0; }
     100% { background-position: -120% 0; }
   }
-  /* Subtle whole-card breathing while the job is in flight. Stops when the
-     image lands (.card.done). */
-  .card.loading { animation: breathe 2.4s ease-in-out infinite; }
-  .card.loading.done, .card.done { animation: none; }
+  /* Whole-card breathing + subtle brand glow while the job is in flight.
+     Stops when the asset lands (.card.done). */
+  .card.loading {
+    animation: breathe 2.4s ease-in-out infinite, glow 2.4s ease-in-out infinite;
+  }
+  .card.done, .card.loading.done { animation: none; }
   @keyframes breathe {
     0%, 100% { opacity: 1; }
-    50%      { opacity: 0.78; }
+    50%      { opacity: 0.82; }
   }
+  @keyframes glow {
+    0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+    50%      { filter: drop-shadow(0 0 10px rgba(255, 0, 115, 0.32)); }
+  }
+  /* Hover overlay — visible only when the asset is ready and the user
+     hovers the preview. Sits over the bottom of the media with a gradient
+     scrim, fades in/out. Hidden during loading via .preview.loading. */
+  .hover-actions {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    display: flex; justify-content: center; gap: 8px;
+    padding: 12px 12px 14px;
+    background: linear-gradient(to top, rgba(0,0,0,0.55), transparent);
+    opacity: 0; pointer-events: none;
+    transition: opacity .15s;
+    z-index: 2;
+  }
+  .preview:not(.loading):hover .hover-actions { opacity: 1; pointer-events: auto; }
+  .preview.audio .hover-actions {
+    background: transparent;
+    padding: 4px;
+    bottom: 50%; transform: translateY(50%);
+  }
+  .ha-btn {
+    background: rgba(255,255,255,0.95);
+    color: var(--nodaro-brand);
+    border: 1px solid transparent;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+    transition: background .15s, border-color .15s, transform .15s;
+  }
+  .ha-btn:hover { background: white; border-color: var(--nodaro-brand); transform: translateY(-1px); }
+  /* Always-visible action row below the preview. */
   .actions { display: flex; gap: 8px; }
-  button { padding: 6px 14px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; }
-  button:hover { background: rgba(127,127,127,0.1); }
+  .recreate-btn {
+    background: var(--nodaro-brand);
+    color: white;
+    border: 0;
+    padding: 8px 18px;
+    border-radius: 999px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, transform .15s;
+  }
+  .recreate-btn:hover { background: var(--nodaro-brand-hover); transform: translateY(-1px); }
+  .recreate-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
   .status { font-size: 13px; opacity: 0.85; }
 `
 
 type MediaKind = "image" | "video" | "audio" | "generic"
+
+/**
+ * Hover-overlay buttons per media kind. Image gets the full set
+ * (Animate / Edit / Download); video drops Animate (already a video);
+ * audio just gets Download. Each action's behaviour is wired in the
+ * client JS by `data-action` attribute.
+ */
+function hoverButtonsHtml(kind: MediaKind): string {
+  const animate = `<button class="ha-btn" data-action="animate" type="button">🎬 Animate</button>`
+  const edit = `<button class="ha-btn" data-action="edit" type="button">🪄 Edit</button>`
+  const download = `<button class="ha-btn" data-action="download" type="button">⬇ Download</button>`
+  if (kind === "image") return `${animate}${edit}${download}`
+  if (kind === "video") return `${edit}${download}`
+  return download
+}
 
 /**
  * Builds the static widget HTML for a given media kind. Called once per kind
@@ -79,21 +144,24 @@ ${uiProtocolShim()}
 <div class="card loading" id="card">
   <div class="meta" id="meta"></div>
   <div class="status" id="status">Initializing…</div>
-  <div class="preview loading${mediaKind === "audio" ? " audio" : ""}" id="preview"></div>
+  <div class="preview loading${mediaKind === "audio" ? " audio" : ""}" id="preview">
+    <div class="hover-actions" id="hover-actions">${hoverButtonsHtml(mediaKind)}</div>
+  </div>
   <div class="actions">
-    <button id="btn-open">Open in Nodaro</button>
-    <button id="btn-rerun">Re-run</button>
+    <button class="recreate-btn" id="btn-recreate" type="button" disabled>🔄 Recreate</button>
   </div>
 </div>
 <script>
   (function() {
     var MEDIA_KIND = ${JSON.stringify(mediaKind)};
-    var state = { jobId: null, prompt: null, model: null, aspectRatio: null, resolution: null, duration: null };
+    var state = { jobId: null, prompt: null, model: null, aspectRatio: null, resolution: null, duration: null, outputUrl: null };
 
     var cardEl = document.getElementById('card');
     var metaEl = document.getElementById('meta');
     var statusEl = document.getElementById('status');
     var previewEl = document.getElementById('preview');
+    var hoverActionsEl = document.getElementById('hover-actions');
+    var recreateBtnEl = document.getElementById('btn-recreate');
 
     function applyAspectRatio() {
       if (MEDIA_KIND === 'audio') return;
@@ -120,7 +188,10 @@ ${uiProtocolShim()}
     }
 
     function showMedia(url) {
-      while (previewEl.firstChild) previewEl.removeChild(previewEl.firstChild);
+      // Clear previous children but preserve the hover-actions overlay
+      // (it's the action bar that fades in on hover).
+      var children = Array.prototype.slice.call(previewEl.children);
+      children.forEach(function (n) { if (n !== hoverActionsEl) previewEl.removeChild(n); });
       var media;
       if (MEDIA_KIND === 'video') { media = document.createElement('video'); media.controls = true; }
       else if (MEDIA_KIND === 'audio') { media = document.createElement('audio'); media.controls = true; }
@@ -132,7 +203,9 @@ ${uiProtocolShim()}
         media.textContent = 'View output';
       }
       media.setAttribute('src', url);
-      previewEl.appendChild(media);
+      // Insert the media BEFORE the hover-actions so the overlay stays on top.
+      previewEl.insertBefore(media, hoverActionsEl);
+      state.outputUrl = url;
       // Stop the shimmer + breathing once we have real content.
       previewEl.classList.remove('loading');
       cardEl.classList.remove('loading');
@@ -141,6 +214,8 @@ ${uiProtocolShim()}
       // once the real image is in — it'll naturally size to the image's
       // intrinsic ratio.
       if (MEDIA_KIND === 'image') previewEl.style.aspectRatio = 'auto';
+      // Enable the Recreate CTA now that we have something to recreate.
+      recreateBtnEl.disabled = false;
       statusEl.textContent = 'Done';
     }
 
@@ -267,17 +342,56 @@ ${uiProtocolShim()}
       }
     });
 
-    // Re-run: orchestrator path is to push a chat message asking Claude to
-    // call the tool again with the same args. (App-callable tool variants are
-    // a future enhancement.)
-    document.getElementById('btn-open').addEventListener('click', function() {
-      window.NodaroMCP.openLink('https://app.nodaro.ai/library');
+    // ── Action buttons ──
+    // Hover row (animate / edit / download) and the always-visible Recreate
+    // button below all push natural-language messages into chat (or open a
+    // download URL) — [redacted-reference]-style. The LLM picks up the message and
+    // calls the appropriate tool with the URL we already know.
+    function buildAnimateMessage(url) {
+      return 'Animate this reference image into a short video📹  Model: Auto🌠  Reference image: ' + url + '~Prompt:';
+    }
+    function buildEditMessage(url, model) {
+      var m = model || 'Auto';
+      return 'Edit this reference image🪄  Model: ' + m + '🌠  Reference image: ' + url + '~Prompt:';
+    }
+    function buildRecreateMessage() {
+      var lines = ['Regenerate with same params:'];
+      if (state.prompt) lines.push('prompt: ' + state.prompt);
+      lines.push('type: ' + MEDIA_KIND);
+      if (state.model) lines.push('model: ' + state.model);
+      if (state.aspectRatio && MEDIA_KIND !== 'audio') lines.push('aspect_ratio: ' + state.aspectRatio);
+      if (state.resolution) lines.push('resolution: ' + state.resolution);
+      if (state.duration) lines.push('duration: ' + state.duration);
+      return lines.join('\\n');
+    }
+    function downloadUrl(url) {
+      // /v1/download is a same-origin proxy that streams R2 objects with
+      // Content-Disposition: attachment, so the browser saves the file
+      // instead of previewing it inline.
+      return 'https://app.nodaro.ai/v1/download?url=' + encodeURIComponent(url);
+    }
+
+    hoverActionsEl.addEventListener('click', function (ev) {
+      var t = ev.target;
+      if (!t || !t.getAttribute) return;
+      var action = t.getAttribute('data-action');
+      if (!action || !state.outputUrl) return;
+      if (action === 'download') {
+        window.NodaroMCP.openLink(downloadUrl(state.outputUrl));
+        return;
+      }
+      if (action === 'animate') {
+        window.NodaroMCP.injectChatText(buildAnimateMessage(state.outputUrl));
+        return;
+      }
+      if (action === 'edit') {
+        window.NodaroMCP.injectChatText(buildEditMessage(state.outputUrl, state.model));
+        return;
+      }
     });
-    document.getElementById('btn-rerun').addEventListener('click', function() {
-      var toolName = MEDIA_KIND === 'video' ? 'generate_video' :
-                     MEDIA_KIND === 'audio' ? 'generate_music' :
-                     'generate_image';
-      window.NodaroMCP.suggestTool(toolName, { prompt: state.prompt || '', model: state.model || undefined });
+
+    recreateBtnEl.addEventListener('click', function () {
+      window.NodaroMCP.injectChatText(buildRecreateMessage());
     });
   })();
 </script>

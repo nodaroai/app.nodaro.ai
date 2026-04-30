@@ -9,7 +9,35 @@ describe("single-job widget template", () => {
     expect(html).toContain("mcp-tool-result")
     expect(html).toContain("mcp-tool-input")
     expect(html).toContain("mcp-progress")
-    expect(html).toContain("Open in Nodaro")
+    // Hover-row buttons for image kind: Animate / Edit / Download.
+    expect(html).toContain('data-action="animate"')
+    expect(html).toContain('data-action="edit"')
+    expect(html).toContain('data-action="download"')
+    // Always-visible CTA below.
+    expect(html).toContain('id="btn-recreate"')
+  })
+
+  it("video widget exposes Edit/Download but not Animate", () => {
+    const html = buildSingleJobWidget("video")
+    expect(html).toContain('data-action="edit"')
+    expect(html).toContain('data-action="download"')
+    expect(html).toContain('id="btn-recreate"')
+    expect(html).not.toContain('data-action="animate"')
+  })
+
+  it("audio widget exposes Download + Recreate only", () => {
+    const html = buildSingleJobWidget("audio")
+    expect(html).toContain('data-action="download"')
+    expect(html).toContain('id="btn-recreate"')
+    expect(html).not.toContain('data-action="animate"')
+    // Edit isn't offered for audio (no audio-edit verb in the catalog).
+    expect(html).not.toContain('data-action="edit"')
+  })
+
+  it("uses the Nodaro brand color in the shimmer + Recreate CTA", () => {
+    const html = buildSingleJobWidget("image")
+    expect(html).toContain("--nodaro-brand")
+    expect(html).toContain("#ff0073")
   })
 
   it("does NOT contain innerHTML usage in runtime JS (safe DOM only)", () => {
