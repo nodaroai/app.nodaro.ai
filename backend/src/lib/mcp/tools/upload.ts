@@ -253,23 +253,23 @@ function registerSingleShot(server: McpServer, session: McpSession, meta: KindMe
     {
       title: `Upload ${meta.kind[0]!.toUpperCase()}${meta.kind.slice(1)}`,
       description:
-        `Upload a local/attached ${meta.description.sourceVerb} to Nodaro and ` +
-        `get back a public URL. Use this BEFORE ${meta.description.callsiteHint} ` +
-        `whenever the user provides an attachment (chat-host attachment URLs ` +
-        `are auth-gated and Nodaro can't fetch them). Pass base64-encoded bytes ` +
-        `(no \`data:\` prefix) plus the MIME type.\n\n` +
-        `**IMPORTANT** — if you need to read the file in multiple steps (e.g. ` +
-        `because the file is large, or you can only read partial views), DO NOT ` +
-        `concatenate the parts in your own output and then call this tool. ` +
-        `LLM output is unreliable for long strings — it can silently truncate ` +
-        `or reformat the base64 and corrupt the upload. Use the chunked variant ` +
-        `instead: ${meta.toolPrefix}_init → ${meta.toolPrefix}_chunk (once per ` +
-        `piece, in order) → ${meta.toolPrefix}_complete. Each chunk passes ` +
-        `through a separate tool call with no manual concatenation.\n\n` +
-        `Single-shot cap: ${Math.floor(meta.maxBytes / 1024 / 1024)} MB decoded — ` +
-        `but in practice prefer the chunked variant for anything over ~3 MB raw, ` +
-        `because base64 inflation × LLM truncation risk × MCP request size ` +
-        `compounds quickly.`,
+        `Upload ${meta.description.sourceVerb} bytes to Nodaro and get back a ` +
+        `public URL. Pass base64-encoded bytes (no \`data:\` prefix) plus the ` +
+        `MIME type.\n\n` +
+        (meta.kind === "image"
+          ? `**RESIZE BEFORE ENCODING** if the source is a user attachment. ` +
+            `Use your code-interpreter (sharp / PIL / etc.) to downscale to a ` +
+            `max long edge of ~1024 px at JPEG quality ~80 — target raw size ` +
+            `200–400 KB (~270–540 KB base64). This keeps the call within LLM ` +
+            `output context AND is plenty of resolution for downstream image-` +
+            `to-image providers. Skipping this step on a multi-MB photo will ` +
+            `silently truncate the base64 and corrupt the upload.\n\n`
+          : `**TRIM / COMPRESS** the source first if it's a long recording or ` +
+            `high-bitrate file. Aim for <2 MB raw. LLM output context can't ` +
+            `reliably carry tens of megabytes of base64 in tool args.\n\n`) +
+        `For files that genuinely need full quality (print, archival), ask the ` +
+        `user to upload via https://app.nodaro.ai/library and paste back the ` +
+        `URL. Server cap: ${Math.floor(meta.maxBytes / 1024 / 1024)} MB decoded.`,
       inputSchema: {
         data: z
           .string()
