@@ -176,7 +176,12 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       {
         title: "Modify Image",
         description:
-          "Transform an existing image using a text prompt (image-to-image). Provide either `image_url` (must be a publicly fetchable HTTPS URL — claude.ai/chatgpt.com file previews are auth-gated and will NOT work) OR `image_asset_id` (a Nodaro job id whose output is an image; preferred). To use a local image, upload it to Nodaro at https://app.nodaro.ai/library first, then pass the resulting asset id.",
+          "Transform an existing image using a text prompt (image-to-image). " +
+          "Provide either `image_url` (a publicly fetchable HTTPS URL the " +
+          "downstream provider can fetch) OR `image_asset_id` (a Nodaro job " +
+          "id whose output is an image). For user-attached images whose URLs " +
+          "are auth-gated (claude.ai / chatgpt.com previews), call " +
+          "`upload_image` first to get a public URL and pass that.",
         inputSchema: {
           prompt: z.string().min(1).max(2000),
           image_url: z.string().url().optional(),

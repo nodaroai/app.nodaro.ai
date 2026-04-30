@@ -7,7 +7,6 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { materializeAsset, materializeIfPresent } from "../lib/asset-materializer.js"
 import { IMAGE_I2I_PROVIDERS } from "@nodaro/shared"
 import { buildCreditModelIdentifier } from "@nodaro/shared"
 
@@ -63,34 +62,6 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
-    // Server-side asset materialization: if the user-provided URL points
-    // outside our R2 bucket, fetch it once and re-host on R2 so the
-    // downstream provider (KIE/Replicate) reliably gets a fast, allowlisted
-    // URL pointing at the ORIGINAL bytes (no quality loss). Pass through
-    // unchanged when already on cdn.nodaro.ai. Auth-gated hosts (claude.ai
-    // etc.) raise a clear error at this point.
-    let materializedImageUrl: string
-    let materializedRefs: string[] | undefined = referenceImageUrls
-    let materializedMaskUrl: string | null | undefined = maskUrl
-    try {
-      const main = await materializeAsset({ url: imageUrl, userId, kind: "image" })
-      materializedImageUrl = main.url
-      if (referenceImageUrls && referenceImageUrls.length > 0) {
-        materializedRefs = await Promise.all(
-          referenceImageUrls.map(async (ref) => {
-            const r = await materializeAsset({ url: ref, userId, kind: "image" })
-            return r.url
-          }),
-        )
-      }
-      const m = await materializeIfPresent(maskUrl, userId, "image")
-      materializedMaskUrl = m
-    } catch (err) {
-      return reply.status(400).send({
-        error: { code: "asset_unfetchable", message: (err as Error).message },
-      })
-    }
-
     const modelIdentifier = buildCreditModelIdentifier(provider ?? "nano-banana", quality, resolution, renderingSpeed)
 
     const mcpClient = extractMcpClient(req.body)
@@ -101,17 +72,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(
-          {
-            ...parsed.data,
-            imageUrl: materializedImageUrl,
-            ...(materializedRefs ? { referenceImageUrls: materializedRefs } : {}),
-            ...(materializedMaskUrl !== undefined && materializedMaskUrl !== null
-              ? { maskUrl: materializedMaskUrl }
-              : {}),
-          },
-          "image-to-image",
-        ),
+        input_data: buildJobInputData(parsed.data, "image-to-image"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
       .select("id")
@@ -129,8 +90,8 @@ export async function imageToImageRoutes(app: FastifyInstance) {
 
     await videoQueue.add("image-to-image", {
       jobId: job.id,
-      imageUrl: materializedImageUrl,
-      referenceImageUrls: materializedRefs,
+      imageUrl,
+      referenceImageUrls,
       prompt,
       provider,
       resolution,
@@ -141,7 +102,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       seed,
       renderingSpeed,
       guidanceScale,
-      maskUrl: materializedMaskUrl ?? undefined,
+      maskUrl,
       usageLogId,
     })
 
