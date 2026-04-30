@@ -136,7 +136,7 @@ export function registerWidgetResources(server: McpServer): void {
           description: w.description,
           mimeType: "text/html;profile=mcp-app",
           _meta: {
-            ui: { csp: WIDGET_CSP, prefersBorder: true },
+            ui: { csp: WIDGET_CSP, prefersBorder: false },
           },
         },
         async (resolvedUri) => {
@@ -149,7 +149,7 @@ export function registerWidgetResources(server: McpServer): void {
                 mimeType: "text/html;profile=mcp-app",
                 text: w.build(),
                 _meta: {
-                  ui: { csp: WIDGET_CSP, prefersBorder: true },
+                  ui: { csp: WIDGET_CSP, prefersBorder: false },
                 },
               },
             ],
