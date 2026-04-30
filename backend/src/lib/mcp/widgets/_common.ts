@@ -141,6 +141,16 @@ export function uiProtocolShim(): string {
       window.addEventListener('load', maybeEmitSize, true);
 
       window.NodaroMCP = {
+        // Ask the host to switch the iframe display mode. Per MCP Apps spec
+        // (SEP-1865), the ui/request-display-mode method with
+        // mode="fullscreen" tells the host to expand the widget. The host
+        // returns the actual mode it ended up applying.
+        requestDisplayMode: function(mode) {
+          return send('ui/request-display-mode', { mode: mode }).catch(function(err) {
+            console.warn('[NodaroMCP.requestDisplayMode] host rejected:', err && err.message);
+            return null;
+          });
+        },
         openLink: function(url) {
           // ui/open-link is a host REQUEST per the MCP Apps spec — returns
           // {isError} so we can detect when the host doesn't honor it.
