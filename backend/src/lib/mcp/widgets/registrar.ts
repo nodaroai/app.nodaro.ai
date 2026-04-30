@@ -69,12 +69,21 @@ const WIDGETS: Array<{
 ]
 
 /**
- * CSP allowlist for our widgets — they may load images/videos from R2 and
- * the public assets bucket. No outbound fetch/XHR/WebSocket needed since
- * the iframe only talks to the host via postMessage.
+ * CSP allowlist for our widgets — they load images/videos/audio from our
+ * Cloudflare-fronted CDN domain (cdn.nodaro.ai) and from the raw R2 bucket
+ * URL we sometimes use. No outbound fetch/XHR/WebSocket needed since the
+ * iframe only talks to the host via postMessage.
+ *
+ * NOTE: the widget's <img>/<video> elements load from `cdn.nodaro.ai`, not
+ * `assets.nodaro.ai`. Getting that domain wrong here causes Claude.ai to
+ * block image rendering with "Refused to load — violates img-src directive."
  */
 const WIDGET_CSP = {
-  resourceDomains: ["https://assets.nodaro.ai", "https://*.r2.cloudflarestorage.com"],
+  resourceDomains: [
+    "https://cdn.nodaro.ai",
+    "https://assets.nodaro.ai",
+    "https://*.r2.cloudflarestorage.com",
+  ],
 }
 
 export function registerWidgetResources(server: McpServer): void {
