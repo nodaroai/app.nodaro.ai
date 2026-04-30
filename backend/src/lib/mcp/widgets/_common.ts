@@ -172,6 +172,16 @@ export function uiProtocolShim(): string {
             role: 'user',
             content: [{ type: 'text', text: 'Run ' + toolName + ' with these parameters: ' + JSON.stringify(paramsHint) }]
           });
+        },
+        // Push the prompt back into chat as a fresh user message — [redacted-reference]-style
+        // "Recreate". The host (Claude.ai) treats it as a new turn and the assistant
+        // re-derives which tool to call. Bypasses the "Run X with these parameters"
+        // wrapper used by suggestTool, which is too explicit for a recreate flow.
+        pushUserMessage: function(text) {
+          notify('ui/message', {
+            role: 'user',
+            content: [{ type: 'text', text: text }]
+          });
         }
       };
     })();

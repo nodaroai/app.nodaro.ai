@@ -31,21 +31,39 @@ const SHARED_CSS = `
      have native click-to-toggle-playback semantics that we shouldn't
      hijack. */
   .preview.image-ready img { cursor: zoom-in; }
-  /* Actions row sits below the image as before, but is hidden by default
-     and fades in only when the user hovers the widget. Touch devices
-     (no hover) get them always visible so the affordances stay
-     reachable without a hover gesture. */
-  .actions { display: flex; gap: 8px; opacity: 0; transition: opacity .15s; }
+  /* Two-column actions row: kind-specific text buttons on the left
+     (Animate / Edit for image, etc.), Claude-style icon-only utilities
+     on the right (Copy / Download / Recreate). The whole row is hidden
+     until the asset is loaded — buttons that need outputUrl have nothing
+     to act on before then. After ready, hover reveals the row; touch
+     devices show it always. */
+  .actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; opacity: 0; visibility: hidden; transition: opacity .15s; }
+  .actions.ready { visibility: visible; }
+  .actions-left, .actions-right { display: flex; align-items: center; }
+  .actions-left { gap: 8px; }
+  .actions-right { gap: 2px; }
   @media (hover: hover) {
-    .card:hover .actions { opacity: 1; }
+    .card:hover .actions.ready { opacity: 1; }
   }
   @media (hover: none) {
-    .actions { opacity: 1; }
+    .actions.ready { opacity: 1; }
   }
-  button { padding: 6px 14px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  button { padding: 6px 14px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; line-height: 1; font-family: inherit; }
   button:hover { background: rgba(127,127,127,0.1); }
+  /* Icon-only utilities — minimal Claude-style: no border, subtle hover.
+     Distinct from the bordered text buttons on the left so the visual
+     hierarchy reads "primary actions | secondary utilities". */
+  .icon-btn { padding: 6px; border: none; border-radius: 6px; opacity: 0.6; gap: 0; }
+  .icon-btn:hover { opacity: 1; background: rgba(127,127,127,0.1); }
+  .icon-btn svg { display: block; }
   .status { font-size: 13px; opacity: 0.85; }
 `
+
+const COPY_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`
+const DOWNLOAD_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`
+const RECREATE_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>`
+const ANIMATE_ICON = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>`
+const EDIT_ICON = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`
 
 type MediaKind = "image" | "video" | "audio" | "generic"
 
@@ -66,21 +84,31 @@ ${uiProtocolShim()}
   <div class="status" id="status">Initializing…</div>
   <div class="progress" id="progress"><div id="bar"></div></div>
   <div class="preview" id="preview" hidden></div>
-  <div class="actions">
-    <button id="btn-open">Open in Nodaro</button>
-    <button id="btn-rerun">Re-run</button>
+  <div class="actions" id="actions">
+    <div class="actions-left">${
+      mediaKind === "image"
+        ? `<button id="btn-animate" title="Animate this image">${ANIMATE_ICON}<span>Animate</span></button>
+      <button id="btn-edit" title="Edit this image">${EDIT_ICON}<span>Edit</span></button>`
+        : ""
+    }</div>
+    <div class="actions-right">
+      <button class="icon-btn" id="btn-copy" title="Copy prompt" aria-label="Copy prompt">${COPY_ICON}</button>
+      <button class="icon-btn" id="btn-download" title="Download" aria-label="Download">${DOWNLOAD_ICON}</button>
+      <button class="icon-btn" id="btn-recreate" title="Recreate" aria-label="Recreate">${RECREATE_ICON}</button>
+    </div>
   </div>
 </div>
 <script>
   (function() {
     var MEDIA_KIND = ${JSON.stringify(mediaKind)};
-    var state = { jobId: null, prompt: null, model: null, aspectRatio: null, resolution: null, duration: null };
+    var state = { jobId: null, prompt: null, model: null, aspectRatio: null, resolution: null, duration: null, outputUrl: null };
 
     var metaEl = document.getElementById('meta');
     var statusEl = document.getElementById('status');
     var progEl = document.getElementById('progress');
     var barEl = document.getElementById('bar');
     var previewEl = document.getElementById('preview');
+    var actionsEl = document.getElementById('actions');
 
     function renderMeta() {
       while (metaEl.firstChild) metaEl.removeChild(metaEl.firstChild);
@@ -95,6 +123,7 @@ ${uiProtocolShim()}
     }
 
     function showMedia(url) {
+      state.outputUrl = url;
       while (previewEl.firstChild) previewEl.removeChild(previewEl.firstChild);
       var media;
       if (MEDIA_KIND === 'video') { media = document.createElement('video'); media.controls = true; }
@@ -123,6 +152,10 @@ ${uiProtocolShim()}
           }
         });
       }
+      // Reveal the actions row only after the asset is loaded — buttons
+      // that need outputUrl (Download / Animate / Edit) have nothing to
+      // act on before this point.
+      if (actionsEl) actionsEl.classList.add('ready');
     }
 
     // Tool args arrive BEFORE the result — we know prompt/model up front.
@@ -249,17 +282,46 @@ ${uiProtocolShim()}
       }
     });
 
-    // Re-run: orchestrator path is to push a chat message asking Claude to
-    // call the tool again with the same args. (App-callable tool variants are
-    // a future enhancement.)
-    document.getElementById('btn-open').addEventListener('click', function() {
-      window.NodaroMCP.openLink('https://app.nodaro.ai/library');
+    function wire(id, handler) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('click', handler);
+    }
+
+    // Right side — Claude-style icon utilities, universal across kinds.
+    wire('btn-copy', function() {
+      if (!state.prompt) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(state.prompt).catch(function() {});
+      }
     });
-    document.getElementById('btn-rerun').addEventListener('click', function() {
-      var toolName = MEDIA_KIND === 'video' ? 'generate_video' :
-                     MEDIA_KIND === 'audio' ? 'generate_music' :
-                     'generate_image';
-      window.NodaroMCP.suggestTool(toolName, { prompt: state.prompt || '', model: state.model || undefined });
+    wire('btn-download', function() {
+      if (!state.outputUrl) return;
+      window.NodaroMCP.openLink(state.outputUrl);
+    });
+    wire('btn-recreate', function() {
+      // [redacted-reference]-style recreate: push the prompt back into chat as a
+      // fresh user turn. The host re-derives which tool to call.
+      if (!state.prompt) return;
+      if (window.NodaroMCP.pushUserMessage) {
+        window.NodaroMCP.pushUserMessage(state.prompt);
+      }
+    });
+
+    // Left side — kind-specific text buttons. Image gets Animate + Edit;
+    // other kinds will gain their own buttons here (extend, captions, etc.).
+    wire('btn-animate', function() {
+      if (!state.outputUrl) return;
+      window.NodaroMCP.suggestTool('animate_image', {
+        image_url: state.outputUrl,
+        prompt: state.prompt || undefined
+      });
+    });
+    wire('btn-edit', function() {
+      if (!state.outputUrl) return;
+      window.NodaroMCP.suggestTool('modify_image', {
+        image_url: state.outputUrl,
+        prompt: state.prompt || undefined
+      });
     });
   })();
 </script>
