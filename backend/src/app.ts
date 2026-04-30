@@ -32,6 +32,7 @@ import { combineAudioRoutes } from "./routes/combine-audio.js"
 import { splitMediaRoutes } from "./routes/split-media.js"
 import { generateMusicRoutes } from "./routes/generate-music.js"
 import { uploadRoutes } from "./routes/upload.js"
+import { uploadProxyRoutes } from "./routes/upload-proxy.js"
 import { mediaProcessRoutes } from "./routes/media-process.js"
 import { youtubeAudioRoutes } from "./routes/youtube-audio.js"
 import { developerAppRoutes } from "./routes/developer-apps.js"
@@ -212,6 +213,7 @@ export async function buildApp() {
   await app.register(splitMediaRoutes)
   await app.register(generateMusicRoutes)
   await app.register(uploadRoutes)
+  await app.register(uploadProxyRoutes)
   await app.register(mediaProcessRoutes)
   await app.register(youtubeAudioRoutes)
   await app.register(developerAppRoutes)
