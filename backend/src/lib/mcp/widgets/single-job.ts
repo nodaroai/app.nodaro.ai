@@ -96,7 +96,11 @@ const SHARED_CSS = `
       width: auto;
       height: auto;
       max-width: 100%;
-      max-height: 60vh;
+      /* Fixed-px cap on desktop. Earlier 60vh tracked the viewport, which
+         made the widget tower over short viewports and disappear in tall
+         ones — vh is unreliable for chat-embedded widgets where the
+         iframe height is host-controlled. */
+      max-height: 500px;
       object-fit: unset;
       border-radius: 8px;
       margin: 0 auto;
