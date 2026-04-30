@@ -157,17 +157,6 @@ export function uiProtocolShim(): string {
             role: 'user',
             content: [{ type: 'text', text: 'Run ' + toolName + ' with these parameters: ' + JSON.stringify(paramsHint) }]
           });
-        },
-        // Push raw natural-language text into the chat. The host renders it
-        // as a draft user message so the user can edit before sending. Used
-        // by widget action buttons (Animate / Edit / Recreate) where we want
-        // the LLM to see a [redacted-reference]-style prompt rather than a stiff
-        // "Run X with: {json}" line.
-        injectChatText: function(text) {
-          notify('ui/message', {
-            role: 'user',
-            content: [{ type: 'text', text: text }]
-          });
         }
       };
     })();
