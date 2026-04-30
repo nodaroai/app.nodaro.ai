@@ -124,9 +124,9 @@ function registerComponentTool(
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/workflow",
+      "ui/resourceUri": "ui://nodaro/widget/v2/workflow",
       ui: {
-        resourceUri: "ui://nodaro/widget/workflow",
+        resourceUri: "ui://nodaro/widget/v2/workflow",
         visibility: ["model", "app"],
       },
     },
@@ -180,7 +180,7 @@ function registerComponentTool(
       }
       registerTask({ taskId: execId, userId: session.userId, kind: "component" })
 
-      // Iframe template at ui://nodaro/widget/workflow consumes structuredContent.
+      // Iframe template at ui://nodaro/widget/v2/workflow consumes structuredContent.
       return {
         content: [
           {
@@ -226,9 +226,9 @@ function registerAppTool(
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/workflow",
+      "ui/resourceUri": "ui://nodaro/widget/v2/workflow",
       ui: {
-        resourceUri: "ui://nodaro/widget/workflow",
+        resourceUri: "ui://nodaro/widget/v2/workflow",
         visibility: ["model", "app"],
       },
     },
