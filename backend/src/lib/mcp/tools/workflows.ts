@@ -92,6 +92,10 @@ export function registerWorkflows({
             .optional()
             .describe("Optional per-node input overrides (keyed by node id)"),
         },
+        outputSchema: {
+          executionId: z.string(),
+          name: z.string().optional(),
+        },
         annotations: {
           readOnlyHint: false,
           destructiveHint: false,

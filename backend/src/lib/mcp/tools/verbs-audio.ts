@@ -30,6 +30,15 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         genre: z.string().optional(),
         mood: z.string().optional(),
       },
+              outputSchema: {
+          jobId: z.string(),
+          prompt: z.string().optional(),
+          model: z.string().optional(),
+          aspectRatio: z.string().optional(),
+          resolution: z.string().optional(),
+          duration: z.number().optional(),
+          outputUrl: z.string().optional(),
+        },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -105,6 +114,15 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         speed: z.number().min(0.7).max(1.2).optional(),
         language_code: z.string().optional(),
       },
+              outputSchema: {
+          jobId: z.string(),
+          prompt: z.string().optional(),
+          model: z.string().optional(),
+          aspectRatio: z.string().optional(),
+          resolution: z.string().optional(),
+          duration: z.number().optional(),
+          outputUrl: z.string().optional(),
+        },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -166,6 +184,15 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       inputSchema: {
         youtube_url: z.string().url().describe("YouTube video URL"),
       },
+              outputSchema: {
+          jobId: z.string(),
+          prompt: z.string().optional(),
+          model: z.string().optional(),
+          aspectRatio: z.string().optional(),
+          resolution: z.string().optional(),
+          duration: z.number().optional(),
+          outputUrl: z.string().optional(),
+        },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

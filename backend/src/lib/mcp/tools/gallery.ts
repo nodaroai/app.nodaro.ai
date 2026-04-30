@@ -138,6 +138,11 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
             .describe("ISO `completed_at` timestamp from a prior result's next_cursor"),
           kind: z.enum(["image", "video", "audio"]).optional(),
         },
+        outputSchema: {
+          items: z.array(z.object({}).passthrough()).optional(),
+          nextCursor: z.string().nullable().optional(),
+          totalCount: z.number().optional(),
+        },
         annotations: { readOnlyHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/gallery",
@@ -211,6 +216,11 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
           limit: z.number().int().min(1).max(100).optional(),
           cursor: z.string().optional(),
         },
+        outputSchema: {
+          items: z.array(z.object({}).passthrough()).optional(),
+          nextCursor: z.string().nullable().optional(),
+          totalCount: z.number().optional(),
+        },
         annotations: { readOnlyHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/gallery",
@@ -280,6 +290,16 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
           "Fetch metadata for a single asset (job) by id, including its output URL, prompt, and provider.",
         inputSchema: {
           job_id: z.string().min(1),
+        },
+        outputSchema: {
+          jobId: z.string(),
+          status: z.string(),
+          progress: z.number().optional(),
+          outputUrl: z.string().nullable().optional(),
+          assetKind: z.string().nullable().optional(),
+          jobType: z.string().nullable().optional(),
+          completedAt: z.string().nullable().optional(),
+          outputData: z.record(z.string(), z.unknown()).optional(),
         },
         annotations: { readOnlyHint: true },
       },

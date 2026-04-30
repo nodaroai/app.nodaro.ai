@@ -118,6 +118,10 @@ function registerComponentTool(
         row.description ??
         `Run "${row.name}" component (your saved component). Returns _meta.task_id; track via tasks/get.`,
       inputSchema,
+      outputSchema: {
+        executionId: z.string(),
+        name: z.string().optional(),
+      },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     _meta: {
       "ui/resourceUri": "ui://nodaro/widget/workflow",
@@ -216,6 +220,10 @@ function registerAppTool(
       description:
         row.description ?? `Run "${row.name}" published app (your published app).`,
       inputSchema,
+      outputSchema: {
+        executionId: z.string(),
+        name: z.string().optional(),
+      },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     _meta: {
       "ui/resourceUri": "ui://nodaro/widget/workflow",

@@ -108,6 +108,15 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             "Path-1 structured fields composed into the final prompt.",
           ),
         },
+                outputSchema: {
+          jobId: z.string(),
+          prompt: z.string().optional(),
+          model: z.string().optional(),
+          aspectRatio: z.string().optional(),
+          resolution: z.string().optional(),
+          duration: z.number().optional(),
+          outputUrl: z.string().optional(),
+        },
         annotations: {
           readOnlyHint: false,
           destructiveHint: false,
@@ -191,6 +200,15 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             .optional(),
           negative_prompt: z.string().max(2000).optional(),
           structured: StructuredFields.optional(),
+        },
+                outputSchema: {
+          jobId: z.string(),
+          prompt: z.string().optional(),
+          model: z.string().optional(),
+          aspectRatio: z.string().optional(),
+          resolution: z.string().optional(),
+          duration: z.number().optional(),
+          outputUrl: z.string().optional(),
         },
         annotations: {
           readOnlyHint: false,
