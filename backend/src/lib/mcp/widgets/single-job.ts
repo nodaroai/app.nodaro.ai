@@ -23,8 +23,25 @@ const SHARED_CSS = `
   .progress > div { height: 100%; background: linear-gradient(90deg, #5b9dff, #8e6bff); width: 0%; transition: width .3s; }
   .meta { font-size: 12px; opacity: 0.7; display: flex; gap: 8px; flex-wrap: wrap; }
   .meta .badge { background: rgba(127,127,127,0.15); padding: 2px 8px; border-radius: 4px; }
-  .preview { width: 100%; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.05); }
-  .preview img, .preview video, .preview audio { display: block; width: 100%; height: auto; }
+  /* Chat-native inline preview: image floats centered with no card chrome
+     (drops the grey background + container radius), capped vertically so
+     tall portrait images don't dominate the chat. The cap scales with
+     viewport — laptops get ~500 px, large monitors hit the 600 cap, small
+     windows shrink gracefully. Width is auto with max 100% so wide
+     landscapes never overflow horizontally. Border-radius lives on the
+     media itself now (not the container) so corners stay rounded
+     regardless of image dimensions. */
+  .preview { width: 100%; }
+  .preview img, .preview video {
+    display: block;
+    margin: 0 auto;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: min(60vh, 600px);
+    border-radius: 8px;
+  }
+  .preview audio { display: block; width: 100%; }
   /* Image kind: clicking the image asks the host to switch to fullscreen
      display mode (ui/request-display-mode). Cursor cue makes the
      affordance visible. We restrict to image because <video>/<audio>
@@ -43,8 +60,17 @@ const SHARED_CSS = `
   body.fullscreen .status,
   body.fullscreen .progress,
   body.fullscreen .actions { display: none; }
-  body.fullscreen .preview { height: 100vh; border-radius: 0; background: transparent; }
-  body.fullscreen .preview img { width: 100%; height: 100%; object-fit: contain; }
+  body.fullscreen .preview { height: 100vh; }
+  body.fullscreen .preview img,
+  body.fullscreen .preview video {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    object-fit: contain;
+    border-radius: 0;
+    margin: 0;
+  }
   body.fullscreen .preview.image-ready img { cursor: zoom-out; }
   /* Two-column actions row: kind-specific text buttons on the left
      (Animate / Edit for image, etc.), Claude-style icon-only utilities
