@@ -639,6 +639,23 @@ export type { Weapon, WeaponSubcategory } from "./weapons.js"
 // Multi-pick utilities
 export { pickIds, togglePick } from "./multi-pick.js"
 
+// Model catalog (single source of truth for MCP `list_models` and the
+// future frontend config-panel migration).
+export {
+  MODEL_CATALOG,
+  MODEL_RECOMMENDATIONS,
+  listModels,
+  groupByFamily,
+  getModel,
+} from "./model-catalog.js"
+export type {
+  ModelCatalogEntry,
+  ModelKind,
+  ModelMode,
+  ModelRecommendation,
+  PriceVariant,
+} from "./model-catalog.js"
+
 // i18n
 export {
   LANGUAGES,

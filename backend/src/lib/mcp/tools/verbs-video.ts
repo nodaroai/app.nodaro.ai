@@ -33,7 +33,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Generate Video",
       description:
-        "Generate a video from a text prompt (text-to-video). Returns a job_id",
+        "Generate a video from a text prompt (text-to-video). Returns a job_id.\n\n" +
+        "**Picking a model**: call `list_models { kind: \"video\", mode: \"t2v\" }` " +
+        "first when the user hasn't specified a model. The recommendations " +
+        "array tells you which is best for cinematic / cheap-batch / audio-" +
+        "synced. Pricing is duration-tiered for most providers — check the " +
+        "`pricing` array of the chosen model so cost matches what the user " +
+        "expects.",
       inputSchema: {
         prompt: z.string().min(1).max(2500),
         model: z
@@ -128,7 +134,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Animate Image",
       description:
-        "Animate an image into a video (image-to-video). Provide either image_url OR image_asset_id. Returns a job_id",
+        "Animate an image into a video (image-to-video). Provide either " +
+        "image_url OR image_asset_id. Returns a job_id.\n\n" +
+        "**Picking a model**: call `list_models { kind: \"video\", mode: \"i2v\" }` " +
+        "for capability sheets and recommendations. If the user supplied a start " +
+        "AND end frame, pick a model whose `features` includes `end-frame` (VEO, " +
+        "MiniMax, Hailuo Standard, Bytedance Lite, Kling Turbo, Seedance). " +
+        "Default `veo3.1` is the best price/quality balance with native audio.",
       inputSchema: {
         prompt: z.string().max(2500).optional(),
         image_url: z.string().url().optional(),
