@@ -307,7 +307,8 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
         const { data, error } = await supabase
           .from("jobs")
           .select(
-            "id, status, progress, job_type, input_data, output_data, created_at, completed_at, credits, display_cost, user_id",
+            // display_cost (USD) excluded — MCP surfaces credits only.
+            "id, status, progress, job_type, input_data, output_data, created_at, completed_at, credits, user_id",
           )
           .eq("id", args.job_id)
           .eq("user_id", session.userId)
