@@ -32,6 +32,43 @@ async function setJobProgress(
     })
 }
 
+/**
+ * Animated progress ramp during long-running provider calls. Image
+ * providers don't expose an `onProgress` callback (the API call returns
+ * the result directly with no intermediate signals), so without an
+ * animated ramp the widget sees `progress: <start>` for the entire
+ * call and the bar appears stuck. This bumps progress every `tickMs`
+ * by `tickStep`, capped at `cap`, until `stop()` is invoked.
+ *
+ * Rough heuristic: from 10% → 80% over ~30s feels close to right for
+ * typical 5-30s image generations. Generations that finish in 1-2s
+ * never see the ramp move much; longer ones get a smooth fill.
+ */
+function startProgressRamp(
+  job: { updateProgress: (p: number) => Promise<void> },
+  jobId: string,
+  opts: { start: number; cap: number; tickMs?: number; tickStep?: number } = {
+    start: 10,
+    cap: 80,
+  },
+): { stop: () => void } {
+  const tickMs = opts.tickMs ?? 1500
+  const tickStep = opts.tickStep ?? 4
+  let current = opts.start
+  let stopped = false
+  const handle = setInterval(() => {
+    if (stopped || current >= opts.cap) return
+    current = Math.min(current + tickStep, opts.cap)
+    void setJobProgress(job, jobId, current)
+  }, tickMs)
+  return {
+    stop() {
+      stopped = true
+      clearInterval(handle)
+    },
+  }
+}
+
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
   const { prompt, referenceImageUrls, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt } = job.data as {
     jobId: string
@@ -64,8 +101,14 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
   }
   const hasExtraParams = Object.keys(extraParams).length > 0
   await setJobProgress(job, ctx.jobId, 10)
-  const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls, hasExtraParams ? extraParams : undefined)
-  await setJobProgress(job, ctx.jobId, 60)
+  const ramp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 80 })
+  let result
+  try {
+    result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls, hasExtraParams ? extraParams : undefined)
+  } finally {
+    ramp.stop()
+  }
+  await setJobProgress(job, ctx.jobId, 85)
 
   const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await setJobProgress(job, ctx.jobId, 100)
