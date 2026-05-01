@@ -431,7 +431,13 @@ ${uiProtocolShim()}
     var defaultChipEl = document.getElementById('default-chip');
     function computeDefaultDiff() {
       if (MEDIA_KIND !== 'image' || !defaultChipEl) return null;
-      var saved = state.userDefaults || {};
+      // The chip is hidden by default when the server doesn't send
+      // userDefaults in the tool result. Older client schemas (Cursor)
+      // reject undeclared structuredContent fields, so we don't ship
+      // userDefaults right now — re-enable via _meta or a separate
+      // get_user_prefs poll once schema-cache hygiene is in place.
+      if (!state.userDefaults) return null;
+      var saved = state.userDefaults;
       var diff = {};
       var hasDiff = false;
       // Only compare fields the tool actually populated — undefined values

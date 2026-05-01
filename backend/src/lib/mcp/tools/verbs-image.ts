@@ -156,18 +156,6 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           resolution: z.string().optional(),
           duration: z.number().optional(),
           outputUrl: z.string().optional(),
-          // Saved-pref snapshot the widget reads to render the "Save as
-          // default" chip when used vs saved diverge. Must be declared in
-          // outputSchema or the MCP SDK rejects the tool result with
-          // "Structured content does not match the tool's output schema".
-          userDefaults: z
-            .object({
-              model: z.string().optional(),
-              aspectRatio: z.string().optional(),
-              resolution: z.string().optional(),
-              quality: z.string().optional(),
-            })
-            .optional(),
         },
         annotations: {
           readOnlyHint: false,
@@ -246,14 +234,6 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             model,
             aspectRatio,
             resolution,
-            // Saved prefs flow to the widget so it can show "Save as default"
-            // when the resolved values differ.
-            userDefaults: {
-              model: userImg.model,
-              aspectRatio: userImg.aspectRatio,
-              resolution: userImg.resolution,
-              quality: userImg.quality,
-            },
           },
         })
       },
@@ -321,18 +301,6 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           resolution: z.string().optional(),
           duration: z.number().optional(),
           outputUrl: z.string().optional(),
-          // Saved-pref snapshot the widget reads to render the "Save as
-          // default" chip when used vs saved diverge. Must be declared in
-          // outputSchema or the MCP SDK rejects the tool result with
-          // "Structured content does not match the tool's output schema".
-          userDefaults: z
-            .object({
-              model: z.string().optional(),
-              aspectRatio: z.string().optional(),
-              resolution: z.string().optional(),
-              quality: z.string().optional(),
-            })
-            .optional(),
         },
         annotations: {
           readOnlyHint: false,
@@ -427,12 +395,6 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             model,
             aspectRatio,
             resolution,
-            userDefaults: {
-              model: userImg.model,
-              aspectRatio: userImg.aspectRatio,
-              resolution: userImg.resolution,
-              quality: userImg.quality,
-            },
           },
         })
       },
