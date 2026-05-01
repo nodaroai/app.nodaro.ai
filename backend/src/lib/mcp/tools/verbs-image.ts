@@ -13,13 +13,33 @@ import {
   jobResultWithWidget,
   checkModelLevers,
 } from "./_verb-helpers.js"
-import { modelIdsByKindMode } from "@nodaro/shared"
+import { modelIdsByKindMode, MODEL_CATALOG } from "@nodaro/shared"
 import { getUserMcpPreferences } from "../user-preferences.js"
 
 // Derive the model enums from MODEL_CATALOG so the MCP tool schemas can't
 // drift from `list_models`. Adding a new model = one catalog edit.
-const T2I_MODEL_IDS = modelIdsByKindMode("image", ["t2i"])
-const I2I_MODEL_IDS = modelIdsByKindMode("image", ["i2i", "edit"])
+//
+// `includeHidden: true` keeps legacy ids (nano-banana V1, gpt-image V1.5,
+// etc.) in the Zod enum so cached Claude.ai sessions that still reference
+// them don't fail validation. They're filtered out of `list_models` output
+// so fresh sessions only see current-gen models.
+const T2I_MODEL_IDS = modelIdsByKindMode("image", ["t2i"], { includeHidden: true })
+const I2I_MODEL_IDS = modelIdsByKindMode("image", ["i2i", "edit"], { includeHidden: true })
+
+/**
+ * Filter a saved user-pref value against the resolved model — drop any
+ * value the model doesn't support. Prevents stale prefs (e.g. user saved
+ * `quality: "high"` while on gpt-image, then Claude switches to
+ * nano-banana-2 which has no quality lever) from breaking generation.
+ */
+function pickValidPref<T extends string | number>(
+  saved: T | undefined,
+  supported: readonly T[] | undefined,
+): T | undefined {
+  if (saved === undefined) return undefined
+  if (!supported || !supported.includes(saved)) return undefined
+  return saved
+}
 // _wait-for-job.ts is intentionally retained but unimported. It implements
 // a sync block-on-completion path for tools (used briefly in #1830 to test
 // whether Cursor's tool-call cancellation was async-related — it wasn't,
@@ -159,23 +179,37 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
       },
       async (args) => {
-        // Resolve each lever: explicit arg > user's saved pref > catalog default.
-        // Zod doesn't apply `.default()` here so undefined means "caller didn't say"
-        // — we honor user prefs only in that case, never overriding an explicit
-        // value (e.g. Claude says "use nano-banana-pro for this" — respect it).
+        // Validate explicit args FIRST. Lever rules only apply to what
+        // Claude/the user explicitly passed — derived (user-pref) values
+        // get filtered against the resolved model below, never error out.
+        if (args.model) {
+          const explicitIssue = checkModelLevers(args.model, {
+            aspectRatio: args.aspect_ratio,
+            resolution: args.resolution,
+            quality: args.quality,
+          })
+          if (explicitIssue) return explicitIssue
+        }
+
+        // Resolve each lever: explicit arg > compatible saved pref > catalog default.
+        // Saved prefs are filtered through `pickValidPref` so stale values from
+        // a different model (e.g. quality:"high" saved while on gpt-image, now
+        // generating with nano-banana-2 which has no quality lever) silently
+        // drop out instead of breaking the call.
         const userPrefs = await getUserMcpPreferences(session.userId)
         const userImg = userPrefs.image ?? {}
-        const model = args.model ?? userImg.model ?? "nano-banana-2"
-        const aspectRatio = args.aspect_ratio ?? userImg.aspectRatio ?? "16:9"
-        const resolution = args.resolution ?? userImg.resolution
-        const quality = args.quality ?? userImg.quality
-
-        const leverIssue = checkModelLevers(model, {
-          aspectRatio,
-          resolution,
-          quality,
-        })
-        if (leverIssue) return leverIssue
+        const savedModel =
+          userImg.model && MODEL_CATALOG[userImg.model] ? userImg.model : undefined
+        const model = args.model ?? savedModel ?? "nano-banana-2"
+        const modelEntry = MODEL_CATALOG[model]
+        const aspectRatio =
+          args.aspect_ratio
+          ?? pickValidPref(userImg.aspectRatio, modelEntry?.aspectRatios)
+          ?? "16:9"
+        const resolution =
+          args.resolution ?? pickValidPref(userImg.resolution, modelEntry?.resolutions)
+        const quality =
+          args.quality ?? pickValidPref(userImg.quality, modelEntry?.qualities)
 
         const compositePrompt = buildCompositePrompt(args.prompt, args.structured)
         const payload = {
@@ -303,19 +337,27 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
       },
       async (args) => {
+        if (args.model) {
+          const explicitIssue = checkModelLevers(args.model, {
+            aspectRatio: args.aspect_ratio,
+            resolution: args.resolution,
+            quality: args.quality,
+          })
+          if (explicitIssue) return explicitIssue
+        }
+
         const userPrefs = await getUserMcpPreferences(session.userId)
         const userImg = userPrefs.image ?? {}
-        const model = args.model ?? userImg.model ?? "nano-banana-2"
-        const aspectRatio = args.aspect_ratio ?? userImg.aspectRatio
-        const resolution = args.resolution ?? userImg.resolution
-        const quality = args.quality ?? userImg.quality
-
-        const leverIssue = checkModelLevers(model, {
-          aspectRatio,
-          resolution,
-          quality,
-        })
-        if (leverIssue) return leverIssue
+        const savedModel =
+          userImg.model && MODEL_CATALOG[userImg.model] ? userImg.model : undefined
+        const model = args.model ?? savedModel ?? "nano-banana-2"
+        const modelEntry = MODEL_CATALOG[model]
+        const aspectRatio =
+          args.aspect_ratio ?? pickValidPref(userImg.aspectRatio, modelEntry?.aspectRatios)
+        const resolution =
+          args.resolution ?? pickValidPref(userImg.resolution, modelEntry?.resolutions)
+        const quality =
+          args.quality ?? pickValidPref(userImg.quality, modelEntry?.qualities)
 
         const imageUrl =
           args.image_url ??
