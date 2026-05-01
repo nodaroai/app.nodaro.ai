@@ -220,7 +220,18 @@ ${uiProtocolShim()}
 
     function renderMeta() {
       while (metaEl.firstChild) metaEl.removeChild(metaEl.firstChild);
-      var values = [state.model, state.aspectRatio, state.resolution, state.duration ? state.duration + 's' : null];
+      // Duration intentionally omitted for AUDIO — the requested-duration
+      // arg (e.g. 30s) is just a hint Suno may ignore (a song can run
+      // 6+ minutes regardless), and the embedded <audio> player already
+      // surfaces actual duration via its scrubber. Showing a misleading
+      // "30s" alongside a 6:19 track confused users.
+      var showDuration = MEDIA_KIND !== 'audio';
+      var values = [
+        state.model,
+        state.aspectRatio,
+        state.resolution,
+        showDuration && state.duration ? state.duration + 's' : null,
+      ];
       values.forEach(function(v) {
         if (!v) return;
         var span = document.createElement('span');
