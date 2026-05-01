@@ -176,15 +176,16 @@ ${uiProtocolShim()}
       useBtn.className = 'primary';
       useBtn.textContent = 'Use as reference';
       useBtn.addEventListener('click', function() {
-        // Same conversational pattern as Edit / Animate on the single-job
-        // widget: push a user message with full context + an editable
-        // [ask me N q/a] trailer. Use defaults to 2 questions because the
-        // user's already named the asset by clicking — we just need the
-        // intent (what to do with it) and one or two minor levers.
+        // Two-stage trailer: first ask what action the user wants
+        // (animate, modify, variation, …) then drill into parameters
+        // via 3 Q&A. Splits intent from configuration — the user's
+        // already named the asset by clicking, but we don't yet know
+        // what to DO with it. Both placeholders are editable.
         if (window.NodaroMCP.pushUserMessage) {
           window.NodaroMCP.pushUserMessage(
             'Use the ' + item.kind + ' with id ' + item.jobId +
-            ' as a reference. The user clicked the Use button.\n[ask me 2 q/a]'
+            ' as a reference. The user clicked the Use button.' +
+            '[ask me action] then [ask me 3 q/a]'
           );
         }
       });
