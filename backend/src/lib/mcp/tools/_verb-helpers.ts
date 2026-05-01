@@ -89,6 +89,24 @@ export interface SingleJobStructuredContent {
   resolution?: string
   duration?: number
   outputUrl?: string
+  /**
+   * Snapshot of the user's currently-saved MCP image preferences. The
+   * widget reads it to render the favorite-settings star next to the
+   * metadata badges — filled when the values used for this generation
+   * match the saved defaults, empty when they diverge.
+   *
+   * NOTE on schema cache: this field is declared in each verb tool's
+   * `outputSchema`; strict clients (Cursor) cache schemas via
+   * `tools/list` and reject results containing fields the cached
+   * version doesn't know about. Refresh / reconnect the client after
+   * any change here.
+   */
+  userDefaults?: {
+    model?: string
+    aspectRatio?: string
+    resolution?: string
+    quality?: string
+  }
 }
 
 interface JobResultOpts {

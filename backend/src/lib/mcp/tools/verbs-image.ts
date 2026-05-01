@@ -156,6 +156,19 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           resolution: z.string().optional(),
           duration: z.number().optional(),
           outputUrl: z.string().optional(),
+          // Saved-pref snapshot the widget reads to render the favorite-
+          // settings star next to the metadata badges. Strict clients
+          // (Cursor) cache outputSchema via tools/list — re-fetch the tool
+          // list (refresh Cursor / reconnect) after this field is added or
+          // the cached schema rejects the new property as "additional".
+          userDefaults: z
+            .object({
+              model: z.string().optional(),
+              aspectRatio: z.string().optional(),
+              resolution: z.string().optional(),
+              quality: z.string().optional(),
+            })
+            .optional(),
         },
         annotations: {
           readOnlyHint: false,
@@ -234,6 +247,12 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             model,
             aspectRatio,
             resolution,
+            userDefaults: {
+              model: userImg.model,
+              aspectRatio: userImg.aspectRatio,
+              resolution: userImg.resolution,
+              quality: userImg.quality,
+            },
           },
         })
       },
@@ -301,6 +320,19 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           resolution: z.string().optional(),
           duration: z.number().optional(),
           outputUrl: z.string().optional(),
+          // Saved-pref snapshot the widget reads to render the favorite-
+          // settings star next to the metadata badges. Strict clients
+          // (Cursor) cache outputSchema via tools/list — re-fetch the tool
+          // list (refresh Cursor / reconnect) after this field is added or
+          // the cached schema rejects the new property as "additional".
+          userDefaults: z
+            .object({
+              model: z.string().optional(),
+              aspectRatio: z.string().optional(),
+              resolution: z.string().optional(),
+              quality: z.string().optional(),
+            })
+            .optional(),
         },
         annotations: {
           readOnlyHint: false,
@@ -395,6 +427,12 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             model,
             aspectRatio,
             resolution,
+            userDefaults: {
+              model: userImg.model,
+              aspectRatio: userImg.aspectRatio,
+              resolution: userImg.resolution,
+              quality: userImg.quality,
+            },
           },
         })
       },
