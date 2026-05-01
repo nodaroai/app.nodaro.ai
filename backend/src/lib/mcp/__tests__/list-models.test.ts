@@ -51,7 +51,7 @@ describe("Model catalog ↔ STATIC_CREDIT_COSTS", () => {
     expect(images.length).toBeGreaterThan(0)
 
     const i2v = listModels({ kind: "video", mode: "i2v" })
-    expect(i2v.every((m) => m.mode === "i2v")).toBe(true)
+    expect(i2v.every((m) => m.modes.includes("i2v"))).toBe(true)
     expect(i2v.length).toBeGreaterThan(0)
 
     const google = listModels({ family: "google" })

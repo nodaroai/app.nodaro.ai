@@ -1,4 +1,13 @@
 import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, TextToVideoProvider, VideoToVideoProvider } from "@nodaro/shared"
+import {
+  aspectRatioOptionsByKind,
+  resolutionOptionsByKind,
+  qualityOptionsByKind,
+  durationsByMode,
+  creditRangesAll,
+  modelsWithFeature,
+  type LabeledOption,
+} from "@nodaro/shared"
 
 export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string; desc: string }[] = [
   { value: "flux", label: "Flux", desc: "Photorealistic, highest quality output" },
@@ -128,176 +137,30 @@ export const V2V_ALEPH_ASPECT_RATIOS = [
 ] as const
 
 // =============================================================================
-// VARIABLE CREDIT RANGES — for displaying price ranges in model dropdowns
+// VARIABLE CREDIT RANGES — derived from MODEL_CATALOG.pricing[]
 // Models with variable pricing (quality/resolution) show "min-max CR" instead of a single value.
 // =============================================================================
 
-export const MODEL_CREDIT_RANGES: Record<string, { min: number; max: number }> = {
-  "gpt-image": { min: 2, max: 7 },
-  "gpt-image-i2i": { min: 2, max: 7 },
-  "gpt-image-2": { min: 2, max: 7 },
-  "gpt-image-2-i2i": { min: 2, max: 7 },
-  "nano-banana-pro": { min: 6, max: 8 },
-  "flux": { min: 2, max: 3 },
-  "flux-flex": { min: 5, max: 8 },
-  "flux-i2i": { min: 5, max: 8 },
-  "flux-pro-i2i": { min: 2, max: 3 },
-  "ideogram-edit": { min: 4, max: 8 },
-  "ideogram-remix": { min: 4, max: 8 },
-  "ideogram-reframe": { min: 4, max: 8 },
-  "ideogram-v3": { min: 1, max: 3 },
-  "nano-banana-2": { min: 2, max: 5 },
-  "seedream": { min: 3, max: 4 },
-  "seedream-edit": { min: 3, max: 4 },
-  "seedream-5-lite": { min: 3, max: 5 },
-  "seedream-5-lite-i2i": { min: 3, max: 5 },
-  "topaz-image-upscale": { min: 4, max: 13 },
-}
+export const MODEL_CREDIT_RANGES: Record<string, { min: number; max: number }> =
+  creditRangesAll()
 
 // =============================================================================
-// IMAGE MODEL ASPECT RATIOS (per KIE.ai API docs)
+// IMAGE MODEL ASPECT RATIOS — derived from MODEL_CATALOG (single source of
+// truth). When you add a new model, update its `aspectRatios` in
+// `packages/shared/src/model-catalog.ts` and both this map AND the MCP
+// `list_models` output update automatically.
 // =============================================================================
-const NANO_BANANA_RATIOS = [
-  { value: "1:1", label: "1:1 (Square)" },
-  { value: "16:9", label: "16:9 (Landscape)" },
-  { value: "9:16", label: "9:16 (Portrait)" },
-  { value: "4:3", label: "4:3" },
-  { value: "3:4", label: "3:4" },
-  { value: "3:2", label: "3:2" },
-  { value: "2:3", label: "2:3" },
-  { value: "5:4", label: "5:4" },
-  { value: "4:5", label: "4:5" },
-  { value: "21:9", label: "21:9 (Ultra-wide)" },
-] as const
-
-const FLUX_RATIOS = [
-  { value: "1:1", label: "1:1 (Square)" },
-  { value: "16:9", label: "16:9 (Landscape)" },
-  { value: "9:16", label: "9:16 (Portrait)" },
-  { value: "4:3", label: "4:3" },
-  { value: "3:4", label: "3:4" },
-  { value: "3:2", label: "3:2" },
-  { value: "2:3", label: "2:3" },
-] as const
-
-const GROK_RATIOS = [
-  { value: "1:1", label: "1:1 (Square)" },
-  { value: "16:9", label: "16:9 (Landscape)" },
-  { value: "9:16", label: "9:16 (Portrait)" },
-  { value: "3:2", label: "3:2" },
-  { value: "2:3", label: "2:3" },
-] as const
-
-// GPT Image 1.5 only supports these 3 aspect ratios (NOT 16:9, 9:16, or 4:3)
-const GPT_IMAGE_RATIOS = [
-  { value: "1:1", label: "1:1 (Square)" },
-  { value: "3:2", label: "3:2 (Landscape)" },
-  { value: "2:3", label: "2:3 (Portrait)" },
-] as const
-
-// GPT Image 2 supports: auto, 1:1, 9:16, 16:9, 4:3, 3:4
-// (per https://docs.kie.ai/market/gpt/gpt-image-2-text-to-image.md)
-// Constraints — enforced via the resolution fail-safe in image-configs.tsx:
-//   • aspect_ratio = auto → resolution must be 1K
-//   • aspect_ratio = 1:1  → resolution cannot be 4K
-const GPT_IMAGE_2_RATIOS = [
-  { value: "auto", label: "Auto" },
-  { value: "1:1", label: "1:1 (Square)" },
-  { value: "16:9", label: "16:9 (Landscape)" },
-  { value: "9:16", label: "9:16 (Portrait)" },
-  { value: "4:3", label: "4:3" },
-  { value: "3:4", label: "3:4" },
-] as const
-
-const DEFAULT_RATIOS = [
+const DEFAULT_RATIOS: readonly LabeledOption[] = [
   { value: "1:1", label: "1:1 (Square)" },
   { value: "16:9", label: "16:9 (Landscape)" },
   { value: "9:16", label: "9:16 (Portrait)" },
   { value: "4:3", label: "4:3" },
 ] as const
 
-// Imagen4 family: 1:1, 16:9, 9:16, 3:4, 4:3
-const IMAGEN4_RATIOS = [
-  { value: "1:1", label: "1:1 (Square)" },
-  { value: "16:9", label: "16:9 (Landscape)" },
-  { value: "9:16", label: "9:16 (Portrait)" },
-  { value: "4:3", label: "4:3" },
-  { value: "3:4", label: "3:4" },
-] as const
+export const IMAGE_ASPECT_RATIOS: Record<string, readonly LabeledOption[]> =
+  aspectRatioOptionsByKind("image")
 
-// Ideogram/Qwen: uses named sizes, but we display as ratios (backend converts)
-const IDEOGRAM_RATIOS = [
-  { value: "1:1", label: "1:1 (Square)" },
-  { value: "16:9", label: "16:9 (Landscape)" },
-  { value: "9:16", label: "9:16 (Portrait)" },
-  { value: "4:3", label: "4:3" },
-  { value: "3:4", label: "3:4" },
-] as const
-
-// Seedream 4.5: 1:1, 4:3, 3:4, 16:9, 9:16, 2:3, 3:2, 21:9
-const SEEDREAM_RATIOS = [
-  { value: "1:1", label: "1:1 (Square)" },
-  { value: "16:9", label: "16:9 (Landscape)" },
-  { value: "9:16", label: "9:16 (Portrait)" },
-  { value: "4:3", label: "4:3" },
-  { value: "3:4", label: "3:4" },
-  { value: "3:2", label: "3:2" },
-  { value: "2:3", label: "2:3" },
-  { value: "21:9", label: "21:9 (Ultra-wide)" },
-] as const
-
-// Z-Image: 1:1, 4:3, 3:4, 16:9, 9:16
-const Z_IMAGE_RATIOS = [
-  { value: "1:1", label: "1:1 (Square)" },
-  { value: "16:9", label: "16:9 (Landscape)" },
-  { value: "9:16", label: "9:16 (Portrait)" },
-  { value: "4:3", label: "4:3" },
-  { value: "3:4", label: "3:4" },
-] as const
-
-// Flux Kontext: 21:9, 16:9, 4:3, 1:1, 3:4, 9:16
-const KONTEXT_RATIOS = [
-  { value: "1:1", label: "1:1 (Square)" },
-  { value: "16:9", label: "16:9 (Landscape)" },
-  { value: "9:16", label: "9:16 (Portrait)" },
-  { value: "4:3", label: "4:3" },
-  { value: "3:4", label: "3:4" },
-  { value: "21:9", label: "21:9 (Ultra-wide)" },
-] as const
-
-export const IMAGE_ASPECT_RATIOS: Record<string, readonly { value: string; label: string }[]> = {
-  "nano-banana": NANO_BANANA_RATIOS,
-  "nano-banana-pro": NANO_BANANA_RATIOS,
-  "flux": FLUX_RATIOS,
-  "flux-flex": FLUX_RATIOS,
-  "flux-i2i": FLUX_RATIOS,
-  "flux-pro-i2i": FLUX_RATIOS,
-  "flux-kontext": KONTEXT_RATIOS,
-  "flux-kontext-max": KONTEXT_RATIOS,
-  "grok": GROK_RATIOS,
-  "gpt-image": GPT_IMAGE_RATIOS,
-  "gpt-image-i2i": GPT_IMAGE_RATIOS,
-  "gpt-image-2": GPT_IMAGE_2_RATIOS,
-  "gpt-image-2-i2i": GPT_IMAGE_2_RATIOS,
-  "imagen4": IMAGEN4_RATIOS,
-  "imagen4-fast": IMAGEN4_RATIOS,
-  "imagen4-ultra": IMAGEN4_RATIOS,
-  "ideogram-v3": IDEOGRAM_RATIOS,
-  "ideogram-remix": IDEOGRAM_RATIOS,
-  "ideogram-reframe": IDEOGRAM_RATIOS,
-  "qwen": IDEOGRAM_RATIOS,
-  "qwen-i2i": IDEOGRAM_RATIOS,
-  "qwen-edit": IDEOGRAM_RATIOS,
-  "seedream": SEEDREAM_RATIOS,
-  "seedream-edit": SEEDREAM_RATIOS,
-  "seedream-5-lite": SEEDREAM_RATIOS,
-  "seedream-5-lite-i2i": SEEDREAM_RATIOS,
-  "nano-banana-2": NANO_BANANA_RATIOS,
-  "nano-banana-edit": NANO_BANANA_RATIOS,
-  "z-image": Z_IMAGE_RATIOS,
-}
-
-export function getAspectRatiosForModel(provider: string): readonly { value: string; label: string }[] {
+export function getAspectRatiosForModel(provider: string): readonly LabeledOption[] {
   return IMAGE_ASPECT_RATIOS[provider] ?? DEFAULT_RATIOS
 }
 
@@ -317,133 +180,48 @@ export const COMPOSITION_RATIOS = [
   { value: "4:5", label: "4:5 (Social)" },
 ] as const
 
-// Models that support resolution selection
-// Note: Base Nano Banana does NOT support resolution. Nano Banana Pro and v2 DO (1K/2K/4K).
-const NANO_BANANA_RESOLUTIONS = [
-  { value: "1K", label: "1K (Standard)" },
-  { value: "2K", label: "2K (High)" },
-  { value: "4K", label: "4K (Ultra)" },
-] as const
+// Image resolutions — derived from MODEL_CATALOG. Add new entries to the
+// catalog's `resolutions` field, not here.
+export const IMAGE_RESOLUTION_OPTIONS: Record<string, readonly LabeledOption[]> =
+  resolutionOptionsByKind("image")
 
-const FLUX_RESOLUTIONS = [
-  { value: "1K", label: "1K (Standard)" },
-  { value: "2K", label: "2K (High)" },
-] as const
-
-export const TOPAZ_IMAGE_RESOLUTIONS = [
-  { value: "2K", label: "2K (Standard)" },
-  { value: "4K", label: "4K (High)" },
-  { value: "8K", label: "8K (Ultra)" },
-] as const
-
-export const IMAGE_RESOLUTION_OPTIONS: Record<string, readonly { value: string; label: string }[]> = {
-  "nano-banana-pro": NANO_BANANA_RESOLUTIONS,
-  "nano-banana-2": NANO_BANANA_RESOLUTIONS,
-  "flux": FLUX_RESOLUTIONS,
-  "flux-flex": FLUX_RESOLUTIONS,
-  "flux-i2i": FLUX_RESOLUTIONS,
-  "flux-pro-i2i": FLUX_RESOLUTIONS,
-  "gpt-image-2": NANO_BANANA_RESOLUTIONS,    // 1K/2K/4K
-  "gpt-image-2-i2i": NANO_BANANA_RESOLUTIONS,
-}
+// Topaz image upscale isn't generation — it's a post-processing utility — so
+// its resolution dropdown lives separately. Derived from the catalog so it
+// stays in sync with the pricing tiers.
+export const TOPAZ_IMAGE_RESOLUTIONS: readonly LabeledOption[] =
+  IMAGE_RESOLUTION_OPTIONS["topaz-image-upscale"] ?? [
+    { value: "2K", label: "2K (Standard)" },
+    { value: "4K", label: "4K (High)" },
+    { value: "8K", label: "8K (Ultra)" },
+  ]
 
 // =============================================================================
-// VIDEO MODEL RESOLUTIONS (must match the hardcoded options in video-configs.tsx)
+// VIDEO MODEL RESOLUTIONS — derived from MODEL_CATALOG.
 // Providers with no entry have no resolution lever — `data.resolution` should
 // be cleared when the user lands on them so backend Zod doesn't see stale
-// values. Case-sensitive: hailuo uses uppercase ("768P", "1080P"), everything
-// else is lowercase ("720p", "1080p").
+// values. Hailuo's "1080P (6s max)" decoration lives on the catalog entry's
+// `valueLabels` field. Case-sensitive: hailuo uses uppercase ("768P",
+// "1080P"), everything else is lowercase ("720p", "1080p").
 // =============================================================================
-const VIDEO_480_720 = [
-  { value: "480p", label: "480p" },
-  { value: "720p", label: "720p" },
-] as const
-const VIDEO_720_1080 = [
-  { value: "720p", label: "720p" },
-  { value: "1080p", label: "1080p" },
-] as const
-const VIDEO_480_720_1080 = [
-  { value: "480p", label: "480p" },
-  { value: "720p", label: "720p" },
-  { value: "1080p", label: "1080p" },
-] as const
-const HAILUO_PRO_RESOLUTIONS = [
-  { value: "768P", label: "768P" },
-  { value: "1080P", label: "1080P (6s max)" },
-] as const
-const HAILUO_STANDARD_RESOLUTIONS = [
-  { value: "512P", label: "512P" },
-  { value: "768P", label: "768P" },
-] as const
-
-export const VIDEO_RESOLUTION_OPTIONS: Record<string, readonly { value: string; label: string }[]> = {
-  "grok-i2v": VIDEO_480_720,
-  "seedance": VIDEO_480_720_1080,
-  "seedance-2": VIDEO_480_720,
-  "seedance-2-fast": VIDEO_480_720,
-  "wan-i2v": VIDEO_720_1080,
-  "wan": VIDEO_720_1080,
-  "wan-turbo": VIDEO_480_720,
-  "hailuo-2.3-pro": HAILUO_PRO_RESOLUTIONS,
-  "hailuo-2.3": HAILUO_PRO_RESOLUTIONS,
-  "hailuo-standard": HAILUO_STANDARD_RESOLUTIONS,
-  "bytedance-lite": VIDEO_480_720_1080,
-  "bytedance-pro": VIDEO_480_720_1080,
-  "bytedance-pro-fast": VIDEO_720_1080,
-}
+export const VIDEO_RESOLUTION_OPTIONS: Record<string, readonly LabeledOption[]> =
+  resolutionOptionsByKind("video")
 
 export function getVideoResolutionOptions(
   provider: string,
-): readonly { value: string; label: string }[] | undefined {
+): readonly LabeledOption[] | undefined {
   return VIDEO_RESOLUTION_OPTIONS[provider]
 }
 
-// Models that support quality selection
-const GPT_IMAGE_QUALITY = [
-  { value: "medium", label: "Medium (Balanced)" },
-  { value: "high", label: "High (Detailed)" },
-] as const
+// Image qualities — derived from MODEL_CATALOG.
+export const IMAGE_QUALITY_OPTIONS: Record<string, readonly LabeledOption[]> =
+  qualityOptionsByKind("image")
 
-const SEEDREAM_QUALITY = [
-  { value: "basic", label: "Basic (2K)" },
-  { value: "high", label: "High (4K)" },
-] as const
-
-export const IMAGE_QUALITY_OPTIONS: Record<string, readonly { value: string; label: string }[]> = {
-  "gpt-image": GPT_IMAGE_QUALITY,
-  "gpt-image-i2i": GPT_IMAGE_QUALITY,
-  "seedream": SEEDREAM_QUALITY,
-  "seedream-edit": SEEDREAM_QUALITY,
-  "seedream-5-lite": SEEDREAM_QUALITY,
-  "seedream-5-lite-i2i": SEEDREAM_QUALITY,
-}
-
-// Kling 3.0 supports continuous durations from 3s to 15s
+// Kling 3.0 supports continuous durations from 3s to 15s.
+// Kept as a named export for the few callers that iterate this directly.
 export const KLING3_DURATIONS = Array.from({ length: 13 }, (_, i) => i + 3)
 
-// KIE.ai allowed durations per video provider
-export const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
-  "minimax": [5],
-  "veo3": [8],
-  "veo3.1": [8],
-  "kling": [5, 10],
-  "kling-turbo": [5, 10],
-  "kling-3.0": KLING3_DURATIONS,
-  "kling-master": [5, 10],
-  "grok-i2v": [6, 10],
-  "seedance": [4, 8, 12],
-  "seedance-2": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-  "seedance-2-fast": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-  "wan-i2v": [5, 10, 15],
-  "wan-turbo": [5],
-  "hailuo-2.3-pro": [6, 10],
-  "hailuo-2.3": [6, 10],
-  "hailuo-standard": [6, 10],
-  "bytedance-lite": [5, 10],
-  "bytedance-pro": [5, 10],
-  "bytedance-pro-fast": [5, 10],
-  "runway-kie": [5, 10],
-}
+// KIE.ai allowed durations per i2v provider — derived from MODEL_CATALOG.
+export const KIE_VIDEO_DURATIONS: Record<string, number[]> = durationsByMode("i2v")
 
 // Model capability constants — re-exported from shared package (single source of truth)
 export {
@@ -465,31 +243,20 @@ import { STYLES } from "@nodaro/shared"
 export const IMAGE_STYLE_PRESETS: ReadonlyArray<{ value: string; label: string }> =
   STYLES.map((s) => ({ value: s.id, label: s.label }))
 
-// Providers that support start + end frame (2 images -> video)
-export const PROVIDERS_WITH_END_FRAME: string[] = [
-  "minimax",
-  "veo3",
-  "veo3.1",
-  "kling-turbo",
-  "kling-3.0",
-  "hailuo-standard",
-  "bytedance-lite",
-  "seedance",
-  "seedance-2",
-  "seedance-2-fast",
-  // Replicate disabled
-  // "runway",
-  // "pika",
-]
+// Providers that support start + end frame (2 images -> video) —
+// derived from MODEL_CATALOG.features.includes("end-frame").
+export const PROVIDERS_WITH_END_FRAME: string[] = modelsWithFeature("end-frame")
 
-// Providers that support additional reference images beyond start frame
-export const PROVIDERS_WITH_REFERENCES: string[] = [
-  "grok-i2v",
-  "veo3",
-  "veo3.1",
-  "seedance-2",
-  "seedance-2-fast",
-]
+// Providers that accept reference images beyond the start frame —
+// derived from MODEL_CATALOG.features.includes("reference-image"),
+// filtered to video models so image-side reference flags don't leak in.
+export const PROVIDERS_WITH_REFERENCES: string[] = modelsWithFeature("reference-image")
+  .filter((id) => {
+    // Avoid pulling image-only models (every i2i model has reference-image)
+    // by intersecting with the i2v duration map — only video providers
+    // appear there.
+    return id in KIE_VIDEO_DURATIONS
+  })
 
 /** Fallback credit cost per video provider — shown in node badge until `useModelCredits` resolves. */
 export const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
@@ -512,24 +279,15 @@ export const SEEDANCE_2_VIDEO_RATIOS = [
   { value: "adaptive", label: "Adaptive" },
 ] as const
 
-// KIE.ai allowed durations per text-to-video provider
+// KIE.ai allowed durations per text-to-video provider — derived from
+// MODEL_CATALOG. The "grok" key here is special: image-mode "grok" also
+// supports t2v under the same id, so we read its durations from the
+// i2v "grok-i2v" entry (same KIE underlying durations).
 export const KIE_T2V_DURATIONS: Record<string, number[]> = {
-  "minimax": [5],
-  "veo3": [8],
-  "veo3.1": [8],
-  "kling": [5, 10],
-  "kling-turbo": [5, 10],
-  "grok": [6, 10],
-  "kling-3.0": KLING3_DURATIONS,
-  "seedance": [4, 8, 12],
-  "seedance-2": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-  "seedance-2-fast": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-  "wan": [5, 10, 15],
-  "hailuo-standard": [6, 10],
-  "bytedance-lite": [5, 10],
-  "bytedance-pro": [5, 10],
-  "wan-turbo": [5],
-  "runway-kie": [5, 10],
+  ...durationsByMode("t2v"),
+  // grok image model serves t2v under id "grok" but the catalog tracks
+  // its t2v durations on the separate "grok-i2v" entry.
+  grok: durationsByMode("i2v")["grok-i2v"] ?? [6, 10],
 }
 
 // =============================================================================

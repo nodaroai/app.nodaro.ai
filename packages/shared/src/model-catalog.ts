@@ -66,7 +66,14 @@ export interface PriceVariant {
 export interface ModelCatalogEntry {
   id: string
   kind: ModelKind
-  mode: ModelMode
+  /**
+   * Operations this model supports. Many video models (minimax, veo3,
+   * seedance) support BOTH i2v AND t2v under the same id — the route handler
+   * picks which KIE endpoint to hit based on whether an image was supplied.
+   * For those, list both modes here so MCP filters and frontend pickers see
+   * the model in either context.
+   */
+  modes: readonly ModelMode[]
   /** Vendor / lab that produced the model. Used for UI grouping. */
   family: string
   /** Display name (NOT the id — the id is the API enum value). */
@@ -84,6 +91,13 @@ export interface ModelCatalogEntry {
   pricing: readonly PriceVariant[]
   /** Editorial highlight — "best in tier". Surfaces in MCP output as a ⭐. */
   featured?: boolean
+  /**
+   * Per-model overrides for the global value label decorations (e.g. Hailuo
+   * 2.3 Pro labels its 1080P resolution as "1080P (6s max)" because the
+   * model caps long durations at lower resolution). Falls back to
+   * `MODEL_VALUE_LABELS` for values not listed here.
+   */
+  valueLabels?: Record<string, string>
 }
 
 /**
@@ -121,15 +135,19 @@ export const MODEL_RECOMMENDATIONS: readonly ModelRecommendation[] = [
 // can consume them. Keep in sync when adding a new ratio set.)
 // =============================================================================
 const NANO_BANANA_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9"] as const
-const FLUX_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
-const KONTEXT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9", "9:21"] as const
-const GROK_RATIOS = ["1:1", "16:9", "9:16"] as const
-const GPT_IMAGE_RATIOS = ["1:1", "3:2", "2:3", "auto"] as const
-const GPT_IMAGE_2_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "auto"] as const
+// Note: these arrays are synchronized with the frontend's
+// `model-options.ts` constants of the same names. The frontend now imports
+// them via the `getAspectRatioOptions(modelId)` helper; if you update one
+// you no longer need to touch the other.
+const FLUX_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"] as const
+const KONTEXT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9"] as const
+const GROK_RATIOS = ["1:1", "16:9", "9:16", "3:2", "2:3"] as const
+const GPT_IMAGE_RATIOS = ["1:1", "3:2", "2:3"] as const
+const GPT_IMAGE_2_RATIOS = ["auto", "1:1", "16:9", "9:16", "4:3", "3:4"] as const
 const IMAGEN4_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 const IDEOGRAM_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
-const SEEDREAM_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9"] as const
-const Z_IMAGE_RATIOS = ["1:1", "16:9", "9:16"] as const
+const SEEDREAM_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"] as const
+const Z_IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 
 const VIDEO_RATIOS_HV = ["16:9", "9:16"] as const
 const VIDEO_RATIOS_HVS = ["16:9", "9:16", "1:1"] as const
@@ -142,7 +160,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "nano-banana": {
     id: "nano-banana",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "Google",
     label: "Nano Banana",
     description: "Budget-friendly realistic generation. Wide aspect-ratio support up to 21:9.",
@@ -154,7 +172,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "nano-banana-2": {
     id: "nano-banana-2",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "Google",
     label: "Nano Banana 2",
     description: "Newer Nano Banana with native resolution control (1K/2K/4K) and Google Search context.",
@@ -171,7 +189,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "nano-banana-pro": {
     id: "nano-banana-pro",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "Google",
     label: "Nano Banana Pro",
     description: "Top-tier Nano Banana — best for text rendering, diagrams, and complex compositions.",
@@ -188,7 +206,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "nano-banana-edit": {
     id: "nano-banana-edit",
     kind: "image",
-    mode: "edit",
+    modes: ["edit"] as const,
     family: "Google",
     label: "Nano Banana Edit",
     description: "Image-to-image edits via Google's Nano Banana family. Good general-purpose editor.",
@@ -201,7 +219,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "flux": {
     id: "flux",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "Black Forest Labs",
     label: "Flux 2 Pro",
     description: "Flux 2 Pro text-to-image. Strong realism, fast. Resolution lever to 2K.",
@@ -216,7 +234,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "flux-flex": {
     id: "flux-flex",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "Black Forest Labs",
     label: "Flux 2 Flex",
     description: "Flux 2 Flex — premium fidelity, more flexible composition. Pricier than Pro.",
@@ -231,7 +249,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "flux-i2i": {
     id: "flux-i2i",
     kind: "image",
-    mode: "i2i",
+    modes: ["i2i"] as const,
     family: "Black Forest Labs",
     label: "Flux 2 Flex (I2I)",
     description: "Image-to-image with Flux Flex. Honors source image structure while applying prompt.",
@@ -247,7 +265,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "flux-pro-i2i": {
     id: "flux-pro-i2i",
     kind: "image",
-    mode: "i2i",
+    modes: ["i2i"] as const,
     family: "Black Forest Labs",
     label: "Flux 2 Pro (I2I)",
     description: "Image-to-image with Flux Pro. Cheaper than Flex variant, good general edits.",
@@ -263,7 +281,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "flux-kontext": {
     id: "flux-kontext",
     kind: "image",
-    mode: "edit",
+    modes: ["edit"] as const,
     family: "Black Forest Labs",
     label: "Flux Kontext Pro",
     description: "Context-aware editing and style transfer. Strong at preserving subject identity through edits.",
@@ -275,7 +293,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "flux-kontext-max": {
     id: "flux-kontext-max",
     kind: "image",
-    mode: "edit",
+    modes: ["edit"] as const,
     family: "Black Forest Labs",
     label: "Flux Kontext Max",
     description: "Premium Kontext — highest fidelity context-aware edits.",
@@ -289,7 +307,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "gpt-image": {
     id: "gpt-image",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "OpenAI",
     label: "GPT Image 1.5",
     description: "Best for text rendering, typography, logos, and graphic design. Limited aspect ratios.",
@@ -300,11 +318,12 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "gpt-image", credits: 4, note: "medium default" },
       { identifier: "gpt-image:high", credits: 7, note: "high quality" },
     ],
+    valueLabels: { "3:2": "3:2 (Landscape)", "2:3": "2:3 (Portrait)" },
   },
   "gpt-image-i2i": {
     id: "gpt-image-i2i",
     kind: "image",
-    mode: "i2i",
+    modes: ["i2i"] as const,
     family: "OpenAI",
     label: "GPT Image 1.5 (I2I)",
     description: "Image-to-image with GPT Image 1.5. Good text-aware edits.",
@@ -316,11 +335,12 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "gpt-image-i2i", credits: 4, note: "medium default" },
       { identifier: "gpt-image-i2i:high", credits: 7, note: "high quality" },
     ],
+    valueLabels: { "3:2": "3:2 (Landscape)", "2:3": "2:3 (Portrait)" },
   },
   "gpt-image-2": {
     id: "gpt-image-2",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "OpenAI",
     label: "GPT Image 2",
     description: "Next-gen GPT Image — broader aspect ratios, resolution-based pricing (1K/2K/4K).",
@@ -336,7 +356,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "gpt-image-2-i2i": {
     id: "gpt-image-2-i2i",
     kind: "image",
-    mode: "i2i",
+    modes: ["i2i"] as const,
     family: "OpenAI",
     label: "GPT Image 2 (I2I)",
     description: "Image-to-image with GPT Image 2.",
@@ -352,16 +372,21 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   },
 
   // ── Ideogram ──
+  // Ideogram models use a `rendering_speed` (TURBO / BALANCED / QUALITY)
+  // dimension that's distinct from the `quality` lever — frontend exposes
+  // it via a separate dropdown — so we don't model it under `qualities`.
+  // The composite pricing identifiers (`ideogram-v3:TURBO`, etc.) capture
+  // the per-tier credit cost without claiming Claude can pick it from
+  // the MCP tool's `quality` enum.
   "ideogram-v3": {
     id: "ideogram-v3",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "Ideogram",
     label: "Ideogram V3",
-    description: "Strong typography and stylized illustration. Speed/quality lever (TURBO/BALANCED/QUALITY).",
+    description: "Strong typography and stylized illustration. Speed/quality tiered (TURBO/BALANCED/QUALITY).",
     useCases: ["typography", "illustration", "stylized"],
     aspectRatios: IDEOGRAM_RATIOS,
-    qualities: ["TURBO", "BALANCED", "QUALITY"],
     pricing: [
       { identifier: "ideogram-v3", credits: 2, note: "BALANCED default" },
       { identifier: "ideogram-v3:TURBO", credits: 1, note: "fastest" },
@@ -371,14 +396,14 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "ideogram-edit": {
     id: "ideogram-edit",
     kind: "image",
-    mode: "edit",
+    modes: ["edit"] as const,
     family: "Ideogram",
     label: "Ideogram Edit",
     description: "Inpainting / mask-based editing with Ideogram. Pair with a mask URL.",
     useCases: ["edit", "inpaint", "typography"],
     features: ["reference-image", "mask"],
-    aspectRatios: IDEOGRAM_RATIOS,
-    qualities: ["TURBO", "BALANCED", "QUALITY"],
+    // No aspectRatios — Ideogram Edit takes output dimensions from the input
+    // image + mask. Backend strips aspect_ratio for this provider.
     pricing: [
       { identifier: "ideogram-edit", credits: 6, note: "BALANCED default" },
       { identifier: "ideogram-edit:TURBO", credits: 4, note: "fastest" },
@@ -388,14 +413,13 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "ideogram-remix": {
     id: "ideogram-remix",
     kind: "image",
-    mode: "i2i",
+    modes: ["i2i"] as const,
     family: "Ideogram",
     label: "Ideogram Remix",
     description: "Ideogram remix — character-aware restyling driven by reference images.",
     useCases: ["remix", "character", "stylized"],
     features: ["reference-image"],
     aspectRatios: IDEOGRAM_RATIOS,
-    qualities: ["TURBO", "BALANCED", "QUALITY"],
     pricing: [
       { identifier: "ideogram-remix", credits: 6, note: "BALANCED default" },
       { identifier: "ideogram-remix:TURBO", credits: 4, note: "fastest" },
@@ -405,14 +429,13 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "ideogram-reframe": {
     id: "ideogram-reframe",
     kind: "image",
-    mode: "edit",
+    modes: ["edit"] as const,
     family: "Ideogram",
     label: "Ideogram Reframe",
     description: "Outpaint / reframe to a new aspect ratio while preserving subject.",
     useCases: ["outpaint", "reframe"],
     features: ["reference-image"],
     aspectRatios: IDEOGRAM_RATIOS,
-    qualities: ["TURBO", "BALANCED", "QUALITY"],
     pricing: [
       { identifier: "ideogram-reframe", credits: 3, note: "BALANCED default" },
       { identifier: "ideogram-reframe:TURBO", credits: 2, note: "fastest" },
@@ -424,7 +447,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "imagen4": {
     id: "imagen4",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "Google",
     label: "Imagen 4",
     description: "Google's Imagen 4 — strong photographic quality and prompt fidelity.",
@@ -435,7 +458,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "imagen4-fast": {
     id: "imagen4-fast",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "Google",
     label: "Imagen 4 Fast",
     description: "Cheaper / quicker Imagen 4 tier.",
@@ -446,7 +469,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "imagen4-ultra": {
     id: "imagen4-ultra",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "Google",
     label: "Imagen 4 Ultra",
     description: "Premium Imagen 4 — highest fidelity, slower / more credits.",
@@ -459,7 +482,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "seedream": {
     id: "seedream",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "Bytedance",
     label: "Seedream 4.5",
     description: "Bytedance's Seedream 4.5 — precise control, high resolution at 4K via :high.",
@@ -474,7 +497,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "seedream-edit": {
     id: "seedream-edit",
     kind: "image",
-    mode: "edit",
+    modes: ["edit"] as const,
     family: "Bytedance",
     label: "Seedream 4.5 Edit",
     description: "Image editing / transforms via Seedream 4.5.",
@@ -490,7 +513,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "seedream-5-lite": {
     id: "seedream-5-lite",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "Bytedance",
     label: "Seedream 5 Lite",
     description: "Newer Seedream 5 Lite — instruction-based generation, visual reasoning.",
@@ -505,7 +528,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "seedream-5-lite-i2i": {
     id: "seedream-5-lite-i2i",
     kind: "image",
-    mode: "i2i",
+    modes: ["i2i"] as const,
     family: "Bytedance",
     label: "Seedream 5 Lite (I2I)",
     description: "Image-to-image with Seedream 5 Lite.",
@@ -523,7 +546,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "qwen": {
     id: "qwen",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "Alibaba",
     label: "Qwen",
     description: "Cheap, fast, decent quality. Native negative-prompt support.",
@@ -534,7 +557,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "qwen-i2i": {
     id: "qwen-i2i",
     kind: "image",
-    mode: "i2i",
+    modes: ["i2i"] as const,
     family: "Alibaba",
     label: "Qwen (I2I)",
     description: "Image-to-image with Qwen.",
@@ -546,7 +569,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "qwen-edit": {
     id: "qwen-edit",
     kind: "image",
-    mode: "edit",
+    modes: ["edit"] as const,
     family: "Alibaba",
     label: "Qwen Edit",
     description: "Qwen image edit endpoint with native negative prompt.",
@@ -560,7 +583,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "z-image": {
     id: "z-image",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "Tongyi-MAI",
     label: "Z-Image",
     description: "Cheapest model in catalog. Fast, stylized output. Limited aspect ratios.",
@@ -574,7 +597,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "grok": {
     id: "grok",
     kind: "image",
-    mode: "t2i",
+    modes: ["t2i"] as const,
     family: "xAI",
     label: "Grok Imagine",
     description: "Expressive, high-contrast output from xAI's Grok.",
@@ -585,7 +608,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "grok-i2i": {
     id: "grok-i2i",
     kind: "image",
-    mode: "i2i",
+    modes: ["i2i"] as const,
     family: "xAI",
     label: "Grok Imagine (I2I)",
     description: "Image-to-image with Grok.",
@@ -596,7 +619,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "grok-upscale": {
     id: "grok-upscale",
     kind: "image",
-    mode: "upscale",
+    modes: ["upscale"] as const,
     family: "xAI",
     label: "Grok Upscale",
     description: "Upscale a previously-generated Grok image. Requires the prior task id.",
@@ -608,7 +631,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "recraft-remove-bg": {
     id: "recraft-remove-bg",
     kind: "image",
-    mode: "remove-bg",
+    modes: ["remove-bg"] as const,
     family: "Recraft",
     label: "Recraft Remove BG",
     description: "Remove image background. Cheap utility.",
@@ -618,7 +641,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "recraft-upscale": {
     id: "recraft-upscale",
     kind: "image",
-    mode: "upscale",
+    modes: ["upscale"] as const,
     family: "Recraft",
     label: "Recraft Crisp Upscale",
     description: "Light-weight image upscale (Recraft Crisp).",
@@ -628,7 +651,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "topaz-image-upscale": {
     id: "topaz-image-upscale",
     kind: "image",
-    mode: "upscale",
+    modes: ["upscale"] as const,
     family: "Topaz",
     label: "Topaz Image Upscale",
     description: "High-quality image upscale up to 8K. Best for production-ready output.",
@@ -650,7 +673,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "minimax": {
     id: "minimax",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v", "t2v"] as const,
     family: "MiniMax",
     label: "Hailuo 02 I2V Pro",
     description: "Hailuo 02 Pro — strong photoreal motion, fixed 5-second clips. Supports end frame.",
@@ -662,8 +685,9 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "hailuo-2.3-pro": {
     id: "hailuo-2.3-pro",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v"] as const,
     family: "MiniMax",
+    valueLabels: { "1080P": "1080P (6s max)" },
     label: "Hailuo 2.3 Pro",
     description: "Hailuo 2.3 Pro — newer Hailuo with 768P / 1080P resolutions.",
     useCases: ["realistic", "motion"],
@@ -678,8 +702,10 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "hailuo-2.3": {
     id: "hailuo-2.3",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v"] as const,
     family: "MiniMax",
+    resolutions: ["768P", "1080P"],
+    valueLabels: { "1080P": "1080P (6s max)" },
     label: "Hailuo 2.3 Standard",
     description: "Cheaper Hailuo 2.3 tier — good baseline quality.",
     useCases: ["realistic", "cheap"],
@@ -693,13 +719,14 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "hailuo-standard": {
     id: "hailuo-standard",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v", "t2v"] as const,
     family: "MiniMax",
     label: "Hailuo 02 Standard",
     description: "Hailuo 02 Standard — economical option with end-frame support.",
     useCases: ["cheap", "motion"],
     features: ["end-frame"],
     durations: [6, 10],
+    resolutions: ["512P", "768P"],
     pricing: [
       { identifier: "hailuo-standard", credits: 10, note: "6s default" },
       { identifier: "hailuo-standard:6s", credits: 8, note: "6s" },
@@ -711,12 +738,12 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "veo3": {
     id: "veo3",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v", "t2v"] as const,
     family: "Google",
     label: "VEO 3 Quality",
     description: "Google VEO 3 Quality — premium cinematic video. 8s clips, optional end frame, native audio.",
     useCases: ["cinematic", "premium", "narrative"],
-    features: ["end-frame", "audio"],
+    features: ["end-frame", "audio", "reference-image"],
     durations: [8],
     aspectRatios: VIDEO_RATIOS_HV,
     pricing: [{ identifier: "veo3", credits: 79, note: "8s with audio" }],
@@ -725,12 +752,12 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "veo3.1": {
     id: "veo3.1",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v", "t2v"] as const,
     family: "Google",
     label: "VEO 3.1 Fast",
     description: "VEO 3.1 Fast — cheaper VEO tier, still 8s with audio. Good balance for most uses.",
     useCases: ["cinematic", "fast", "general"],
-    features: ["end-frame", "audio"],
+    features: ["end-frame", "audio", "reference-image"],
     durations: [8],
     aspectRatios: VIDEO_RATIOS_HV,
     pricing: [{ identifier: "veo3.1", credits: 19, note: "8s with audio" }],
@@ -741,7 +768,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "kling": {
     id: "kling",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v", "t2v"] as const,
     family: "Kuaishou",
     label: "Kling 2.6",
     description: "Kling 2.6 I2V — strong motion realism. 5s/10s, optional native audio.",
@@ -759,7 +786,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "kling-turbo": {
     id: "kling-turbo",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v", "t2v"] as const,
     family: "Kuaishou",
     label: "Kling 2.5 Turbo Pro",
     description: "Faster Kling — good quality at lower cost. Supports end frame.",
@@ -775,7 +802,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "kling-3.0": {
     id: "kling-3.0",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v", "t2v"] as const,
     family: "Kuaishou",
     label: "Kling 3.0",
     description: "Premium Kling 3.0 — variable 3-15s duration, native audio, 720P/1080P.",
@@ -797,7 +824,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "kling-master": {
     id: "kling-master",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v"] as const,
     family: "Kuaishou",
     label: "Kling 2.1 Master",
     description: "Master tier I2V — strong cinematic quality.",
@@ -814,7 +841,8 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "grok-i2v": {
     id: "grok-i2v",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v"] as const,
+    features: ["reference-image"],
     family: "xAI",
     label: "Grok Imagine (I2V)",
     description: "Grok image-to-video — stylized motion. Up to 15s.",
@@ -833,13 +861,14 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "seedance": {
     id: "seedance",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v", "t2v"] as const,
     family: "Bytedance",
     label: "Seedance 1.5 Pro",
     description: "Bytedance Seedance 1.5 Pro — flexible duration (4/8/12s) with end-frame support.",
     useCases: ["motion", "narrative"],
     features: ["end-frame"],
     durations: [4, 8, 12],
+    resolutions: ["480p", "720p", "1080p"],
     pricing: [
       { identifier: "seedance", credits: 7, note: "8s default" },
       { identifier: "seedance:4s", credits: 4 },
@@ -850,12 +879,12 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "seedance-2": {
     id: "seedance-2",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v", "t2v"] as const,
     family: "Bytedance",
     label: "Seedance 2",
     description: "Seedance 2 — premium tier with native audio. Per-second pricing by resolution.",
     useCases: ["premium", "narrative"],
-    features: ["end-frame", "audio"],
+    features: ["end-frame", "audio", "reference-image"],
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     resolutions: ["480p", "720p"],
     pricing: [
@@ -869,12 +898,12 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "seedance-2-fast": {
     id: "seedance-2-fast",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v", "t2v"] as const,
     family: "Bytedance",
     label: "Seedance 2 Fast",
     description: "Cheaper / quicker Seedance 2 tier.",
     useCases: ["fast", "motion"],
-    features: ["end-frame", "audio"],
+    features: ["end-frame", "audio", "reference-image"],
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     resolutions: ["480p", "720p"],
     pricing: [
@@ -890,7 +919,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "wan-i2v": {
     id: "wan-i2v",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v"] as const,
     family: "Alibaba",
     label: "Wan 2.6 I2V",
     description: "Wan 2.6 image-to-video — 5/10/15s at 720p/1080p.",
@@ -907,7 +936,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "wan-turbo": {
     id: "wan-turbo",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v", "t2v"] as const,
     family: "Alibaba",
     label: "Wan 2.2 Turbo I2V",
     description: "Cheap, fast Wan turbo — 5s 480p.",
@@ -919,7 +948,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "wan": {
     id: "wan",
     kind: "video",
-    mode: "v2v",
+    modes: ["v2v"] as const,
     family: "Alibaba",
     label: "Wan 2.6 V2V",
     description: "Wan 2.6 video-to-video — restyle/transform existing clips.",
@@ -931,7 +960,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "wan-flash": {
     id: "wan-flash",
     kind: "video",
-    mode: "v2v",
+    modes: ["v2v"] as const,
     family: "Alibaba",
     label: "Wan Flash V2V",
     description: "Faster Wan V2V variant.",
@@ -941,7 +970,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "wan-t2v": {
     id: "wan-t2v",
     kind: "video",
-    mode: "t2v",
+    modes: ["t2v"] as const,
     family: "Alibaba",
     label: "Wan 2.6 T2V",
     description: "Wan 2.6 text-to-video.",
@@ -953,7 +982,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "wan-turbo-t2v": {
     id: "wan-turbo-t2v",
     kind: "video",
-    mode: "t2v",
+    modes: ["t2v"] as const,
     family: "Alibaba",
     label: "Wan 2.2 Turbo T2V",
     description: "Cheap, fast Wan turbo text-to-video.",
@@ -967,35 +996,38 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "bytedance-lite": {
     id: "bytedance-lite",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v", "t2v"] as const,
     family: "Bytedance",
     label: "Bytedance Lite I2V",
     description: "Cheapest Bytedance video tier with end-frame support.",
     useCases: ["cheap", "motion"],
     features: ["end-frame"],
     durations: [5, 10],
+    resolutions: ["480p", "720p", "1080p"],
     pricing: [{ identifier: "bytedance-lite", credits: 6 }],
   },
   "bytedance-pro": {
     id: "bytedance-pro",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v", "t2v"] as const,
     family: "Bytedance",
     label: "Bytedance Pro I2V",
     description: "Pro Bytedance video tier — better quality.",
     useCases: ["motion", "narrative"],
     durations: [5, 10],
+    resolutions: ["480p", "720p", "1080p"],
     pricing: [{ identifier: "bytedance-pro", credits: 18 }],
   },
   "bytedance-pro-fast": {
     id: "bytedance-pro-fast",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v"] as const,
     family: "Bytedance",
     label: "Bytedance Pro Fast I2V",
     description: "Faster Bytedance Pro variant.",
     useCases: ["fast", "motion"],
     durations: [5, 10],
+    resolutions: ["720p", "1080p"],
     pricing: [{ identifier: "bytedance-pro-fast", credits: 9 }],
   },
 
@@ -1009,19 +1041,19 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "runway-kie": {
     id: "runway-kie",
     kind: "video",
-    mode: "i2v",
+    modes: ["i2v", "t2v"] as const,
     family: "Runway",
     label: "Runway (via KIE)",
-    description: "Runway Gen-3 routed through KIE. 5s clips at 720p.",
+    description: "Runway Gen-3 routed through KIE. 5/10s at 720p/1080p.",
     useCases: ["motion", "narrative"],
-    durations: [5],
-    resolutions: ["720p"],
+    durations: [5, 10],
+    resolutions: ["720p", "1080p"],
     pricing: [{ identifier: "runway-kie", credits: 4, note: "5s 720p" }],
   },
   "runway-aleph": {
     id: "runway-aleph",
     kind: "video",
-    mode: "v2v",
+    modes: ["v2v"] as const,
     family: "Runway",
     label: "Runway Aleph V2V",
     description: "Runway Aleph — video-to-video conversion.",
@@ -1033,7 +1065,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "veo-extend": {
     id: "veo-extend",
     kind: "video",
-    mode: "extend",
+    modes: ["extend"] as const,
     family: "Google",
     label: "VEO Extend",
     description: "Extend an existing VEO 3.1 clip by another segment.",
@@ -1046,7 +1078,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "runway-extend": {
     id: "runway-extend",
     kind: "video",
-    mode: "extend",
+    modes: ["extend"] as const,
     family: "Runway",
     label: "Runway Extend",
     description: "Extend a Runway video by another clip.",
@@ -1056,7 +1088,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "veo-1080p": {
     id: "veo-1080p",
     kind: "video",
-    mode: "video-upscale",
+    modes: ["video-upscale"] as const,
     family: "Google",
     label: "VEO 1080p Upscale",
     description: "Upscale VEO output to 1080p.",
@@ -1066,7 +1098,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "veo-4k": {
     id: "veo-4k",
     kind: "video",
-    mode: "video-upscale",
+    modes: ["video-upscale"] as const,
     family: "Google",
     label: "VEO 4K Upscale",
     description: "Upscale VEO output to 4K.",
@@ -1076,7 +1108,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "topaz-video": {
     id: "topaz-video",
     kind: "video",
-    mode: "video-upscale",
+    modes: ["video-upscale"] as const,
     family: "Topaz",
     label: "Topaz Video Upscale",
     description: "High-quality video upscale and enhancement.",
@@ -1088,7 +1120,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "motion-transfer": {
     id: "motion-transfer",
     kind: "video",
-    mode: "motion-transfer",
+    modes: ["motion-transfer"] as const,
     family: "Kuaishou",
     label: "Kling 2.6 Motion Transfer",
     description: "Transfer the motion from a driving video onto a still subject. Kling 2.6 base.",
@@ -1107,7 +1139,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "kling-3.0-motion": {
     id: "kling-3.0-motion",
     kind: "video",
-    mode: "motion-transfer",
+    modes: ["motion-transfer"] as const,
     family: "Kuaishou",
     label: "Kling 3.0 Motion Transfer",
     description: "Premium motion transfer via Kling 3.0.",
@@ -1126,7 +1158,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "kling-avatar": {
     id: "kling-avatar",
     kind: "video",
-    mode: "lip-sync",
+    modes: ["lip-sync"] as const,
     family: "Kuaishou",
     label: "Kling Avatar Standard",
     description: "Lip-sync a still portrait to driving audio. Standard quality.",
@@ -1136,7 +1168,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "kling-avatar-pro": {
     id: "kling-avatar-pro",
     kind: "video",
-    mode: "lip-sync",
+    modes: ["lip-sync"] as const,
     family: "Kuaishou",
     label: "Kling Avatar Pro",
     description: "Premium lip-sync — better mouth shape and timing.",
@@ -1146,7 +1178,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "infinitalk": {
     id: "infinitalk",
     kind: "video",
-    mode: "lip-sync",
+    modes: ["lip-sync"] as const,
     family: "InfiniTalk",
     label: "InfiniTalk",
     description: "Audio-driven talking-head from a still image. 480p / 720p.",
@@ -1161,7 +1193,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "hailuo-avatar": {
     id: "hailuo-avatar",
     kind: "video",
-    mode: "lip-sync",
+    modes: ["lip-sync"] as const,
     family: "MiniMax",
     label: "Hailuo Avatar",
     description: "MiniMax avatar lip-sync.",
@@ -1178,7 +1210,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "elevenlabs-v3": {
     id: "elevenlabs-v3",
     kind: "audio",
-    mode: "tts",
+    modes: ["tts"] as const,
     family: "ElevenLabs",
     label: "ElevenLabs v3",
     description: "Latest ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API.",
@@ -1190,7 +1222,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "elevenlabs-turbo": {
     id: "elevenlabs-turbo",
     kind: "audio",
-    mode: "tts",
+    modes: ["tts"] as const,
     family: "ElevenLabs",
     label: "ElevenLabs Turbo v2.5",
     description: "Fast, cheap ElevenLabs TTS via KIE. Good for narration.",
@@ -1200,7 +1232,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "elevenlabs-multilingual": {
     id: "elevenlabs-multilingual",
     kind: "audio",
-    mode: "tts",
+    modes: ["tts"] as const,
     family: "ElevenLabs",
     label: "ElevenLabs Multilingual v2",
     description: "Multi-language ElevenLabs TTS via KIE.",
@@ -1210,7 +1242,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "elevenlabs-dialogue": {
     id: "elevenlabs-dialogue",
     kind: "audio",
-    mode: "tts",
+    modes: ["tts"] as const,
     family: "ElevenLabs",
     label: "ElevenLabs Dialogue v3",
     description: "Multi-speaker dialogue TTS — give it a script, it voices each role.",
@@ -1222,7 +1254,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "voice-clone": {
     id: "voice-clone",
     kind: "audio",
-    mode: "voice-clone",
+    modes: ["voice-clone"] as const,
     family: "ElevenLabs",
     label: "Voice Clone (Instant)",
     description: "Clone a voice from a short reference clip. Instant clone via direct ElevenLabs API.",
@@ -1232,7 +1264,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "elevenlabs-voice-design": {
     id: "elevenlabs-voice-design",
     kind: "audio",
-    mode: "voice-design",
+    modes: ["voice-design"] as const,
     family: "ElevenLabs",
     label: "ElevenLabs Voice Design",
     description: "Design a synthetic voice from a description (no reference clip needed).",
@@ -1242,7 +1274,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "elevenlabs-voice-changer": {
     id: "elevenlabs-voice-changer",
     kind: "audio",
-    mode: "voice-changer",
+    modes: ["voice-changer"] as const,
     family: "ElevenLabs",
     label: "ElevenLabs Voice Changer",
     description: "Speech-to-speech: convert one voice to another while preserving prosody.",
@@ -1252,7 +1284,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "elevenlabs-stt": {
     id: "elevenlabs-stt",
     kind: "audio",
-    mode: "stt",
+    modes: ["stt"] as const,
     family: "ElevenLabs",
     label: "ElevenLabs STT",
     description: "Speech-to-text — transcribe audio with timestamps.",
@@ -1262,7 +1294,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "elevenlabs-isolation": {
     id: "elevenlabs-isolation",
     kind: "audio",
-    mode: "isolation",
+    modes: ["isolation"] as const,
     family: "ElevenLabs",
     label: "ElevenLabs Voice Isolation",
     description: "Strip background noise / music from a vocal track.",
@@ -1272,7 +1304,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "elevenlabs-dubbing": {
     id: "elevenlabs-dubbing",
     kind: "audio",
-    mode: "dubbing",
+    modes: ["dubbing"] as const,
     family: "ElevenLabs",
     label: "ElevenLabs Dubbing",
     description: "Translate + dub a video into a new language. Async.",
@@ -1282,7 +1314,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "elevenlabs-forced-alignment": {
     id: "elevenlabs-forced-alignment",
     kind: "audio",
-    mode: "forced-alignment",
+    modes: ["forced-alignment"] as const,
     family: "ElevenLabs",
     label: "ElevenLabs Forced Alignment",
     description: "Align an existing transcript to audio with word-level timestamps.",
@@ -1294,7 +1326,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "elevenlabs-sfx": {
     id: "elevenlabs-sfx",
     kind: "audio",
-    mode: "sfx",
+    modes: ["sfx"] as const,
     family: "ElevenLabs",
     label: "ElevenLabs Sound Effects",
     description: "Generate short sound effects from a text prompt.",
@@ -1306,7 +1338,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "suno": {
     id: "suno",
     kind: "audio",
-    mode: "music",
+    modes: ["music"] as const,
     family: "Suno",
     label: "Suno v4",
     description: "Suno v4 music generation — full songs with vocals, multiple genres.",
@@ -1316,7 +1348,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "suno-v5": {
     id: "suno-v5",
     kind: "audio",
-    mode: "music",
+    modes: ["music"] as const,
     family: "Suno",
     label: "Suno v5",
     description: "Newer Suno v5 — better vocal quality, more genres. Same price as v4.",
@@ -1347,7 +1379,7 @@ export function listModels(filter?: {
   if (!filter) return all
   return all.filter((m) => {
     if (filter.kind && m.kind !== filter.kind) return false
-    if (filter.mode && m.mode !== filter.mode) return false
+    if (filter.mode && !m.modes.includes(filter.mode)) return false
     if (filter.family && m.family.toLowerCase() !== filter.family.toLowerCase()) return false
     return true
   })
@@ -1486,4 +1518,176 @@ export function validateModelInput(
   }
 
   return null
+}
+
+// =============================================================================
+// Frontend picker helpers — return `{value, label}[]` shapes that the
+// existing config-panel components expect, derived from the catalog so we
+// don't duplicate registries between backend and frontend.
+// =============================================================================
+
+/**
+ * Global value-label decorations. Per-model overrides live on
+ * `ModelCatalogEntry.valueLabels` (e.g. Hailuo's "1080P (6s max)").
+ *
+ * Add entries here when a value should render with a richer human label.
+ * Plain values (3:2, 4:3, 720p, etc.) can stay undecorated — the value
+ * itself is the label and we fall back to `value` automatically.
+ */
+const MODEL_VALUE_LABELS: Record<string, string> = {
+  // aspect ratios
+  "1:1": "1:1 (Square)",
+  "16:9": "16:9 (Landscape)",
+  "9:16": "9:16 (Portrait)",
+  "21:9": "21:9 (Ultra-wide)",
+  "9:21": "9:21 (Tall ultra-wide)",
+  "auto": "Auto",
+  "adaptive": "Adaptive",
+  // image resolutions
+  "1K": "1K (Standard)",
+  "2K": "2K (High)",
+  "4K": "4K (Ultra)",
+  "8K": "8K (Ultra)",
+  // qualities
+  "medium": "Medium (Balanced)",
+  "high": "High (Detailed)",
+  "basic": "Basic (2K)",
+  "TURBO": "Turbo (fast)",
+  "BALANCED": "Balanced",
+  "QUALITY": "Quality (best)",
+}
+
+function decorateLabel(model: ModelCatalogEntry, value: string): string {
+  return model.valueLabels?.[value] ?? MODEL_VALUE_LABELS[value] ?? value
+}
+
+export interface LabeledOption {
+  value: string
+  label: string
+}
+
+/** Return `{value, label}[]` for the model's aspect ratios, or `null` if none. */
+export function getAspectRatioOptions(modelId: string): LabeledOption[] | null {
+  const m = MODEL_CATALOG[modelId]
+  if (!m?.aspectRatios) return null
+  return m.aspectRatios.map((v) => ({ value: v, label: decorateLabel(m, v) }))
+}
+
+/** Return `{value, label}[]` for the model's resolution lever, or `null` if none. */
+export function getResolutionOptions(modelId: string): LabeledOption[] | null {
+  const m = MODEL_CATALOG[modelId]
+  if (!m?.resolutions) return null
+  return m.resolutions.map((v) => ({ value: v, label: decorateLabel(m, v) }))
+}
+
+/** Return `{value, label}[]` for the model's quality lever, or `null` if none. */
+export function getQualityOptions(modelId: string): LabeledOption[] | null {
+  const m = MODEL_CATALOG[modelId]
+  if (!m?.qualities) return null
+  return m.qualities.map((v) => ({ value: v, label: decorateLabel(m, v) }))
+}
+
+/** Return the model's allowed durations (in seconds), or `null` if none. */
+export function getDurationsForModel(modelId: string): number[] | null {
+  const m = MODEL_CATALOG[modelId]
+  if (!m?.durations) return null
+  return [...m.durations]
+}
+
+/**
+ * Min/max credits across all pricing variants — used by the frontend's
+ * "5–8 cr" range badge in the model dropdown. `null` for models with a
+ * single price point.
+ */
+export function getCreditRange(modelId: string): { min: number; max: number } | null {
+  const m = MODEL_CATALOG[modelId]
+  if (!m || m.pricing.length < 2) return null
+  let min = Infinity
+  let max = -Infinity
+  for (const p of m.pricing) {
+    if (p.credits < min) min = p.credits
+    if (p.credits > max) max = p.credits
+  }
+  return { min, max }
+}
+
+/** Whether the model declares a given capability flag in its `features` array. */
+export function hasFeature(modelId: string, feature: string): boolean {
+  return MODEL_CATALOG[modelId]?.features?.includes(feature) ?? false
+}
+
+/**
+ * All ids in the catalog whose `features` includes the given flag. Used by
+ * frontend to build PROVIDERS_WITH_END_FRAME / PROVIDERS_WITH_REFERENCES
+ * lists derived from the catalog.
+ */
+export function modelsWithFeature(feature: string): string[] {
+  return Object.values(MODEL_CATALOG)
+    .filter((m) => m.features?.includes(feature))
+    .map((m) => m.id)
+}
+
+/**
+ * Map of `{modelId: durations[]}` for every catalog entry whose `modes`
+ * includes the given mode. Used to derive KIE_VIDEO_DURATIONS (mode i2v)
+ * and KIE_T2V_DURATIONS (mode t2v) on the frontend.
+ */
+export function durationsByMode(mode: ModelMode): Record<string, number[]> {
+  const out: Record<string, number[]> = {}
+  for (const m of Object.values(MODEL_CATALOG)) {
+    if (!m.modes.includes(mode)) continue
+    if (!m.durations) continue
+    out[m.id] = [...m.durations]
+  }
+  return out
+}
+
+/**
+ * Map of `{modelId: LabeledOption[]}` for every catalog entry of the given
+ * kind that exposes a resolution lever. Used to derive
+ * IMAGE_RESOLUTION_OPTIONS / VIDEO_RESOLUTION_OPTIONS on the frontend.
+ */
+export function resolutionOptionsByKind(kind: ModelKind): Record<string, LabeledOption[]> {
+  const out: Record<string, LabeledOption[]> = {}
+  for (const m of Object.values(MODEL_CATALOG)) {
+    if (m.kind !== kind) continue
+    if (!m.resolutions) continue
+    out[m.id] = m.resolutions.map((v) => ({ value: v, label: decorateLabel(m, v) }))
+  }
+  return out
+}
+
+/**
+ * Map of `{modelId: LabeledOption[]}` for every catalog entry of the given
+ * kind that exposes an aspect_ratio lever.
+ */
+export function aspectRatioOptionsByKind(kind: ModelKind): Record<string, LabeledOption[]> {
+  const out: Record<string, LabeledOption[]> = {}
+  for (const m of Object.values(MODEL_CATALOG)) {
+    if (m.kind !== kind) continue
+    if (!m.aspectRatios) continue
+    out[m.id] = m.aspectRatios.map((v) => ({ value: v, label: decorateLabel(m, v) }))
+  }
+  return out
+}
+
+/** Same shape as `aspectRatioOptionsByKind` but for `qualities`. */
+export function qualityOptionsByKind(kind: ModelKind): Record<string, LabeledOption[]> {
+  const out: Record<string, LabeledOption[]> = {}
+  for (const m of Object.values(MODEL_CATALOG)) {
+    if (m.kind !== kind) continue
+    if (!m.qualities) continue
+    out[m.id] = m.qualities.map((v) => ({ value: v, label: decorateLabel(m, v) }))
+  }
+  return out
+}
+
+/** All `{modelId: {min, max}}` entries that have variable pricing (>1 variant). */
+export function creditRangesAll(): Record<string, { min: number; max: number }> {
+  const out: Record<string, { min: number; max: number }> = {}
+  for (const m of Object.values(MODEL_CATALOG)) {
+    const range = getCreditRange(m.id)
+    if (range) out[m.id] = range
+  }
+  return out
 }
