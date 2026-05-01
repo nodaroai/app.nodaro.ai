@@ -20,7 +20,11 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Generate Music",
       description:
-        "Generate a music track from a text prompt (Suno or MiniMax). Returns a job_id",
+        "Generate a music track from a text prompt (Suno or MiniMax). Returns a job_id.\n\n" +
+        "**Picking a model**: Suno v5 has better vocal quality at the same " +
+        "price as v4. Call `list_models { kind: \"audio\", mode: \"music\" }` " +
+        "to see capabilities. For instrumental tracks set `instrumental: true`; " +
+        "for songs with vocals provide `lyrics`.",
       inputSchema: {
         prompt: z.string().min(1).max(2000),
         model: z.enum(["suno", "minimax"]).default("minimax"),
@@ -95,7 +99,12 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Generate Speech",
       description:
-        "Generate speech from text using ElevenLabs (v3 supports [audio tags]; v2/turbo route via KIE). Returns a job_id",
+        "Generate speech from text using ElevenLabs. Returns a job_id.\n\n" +
+        "**Picking a model**: `elevenlabs-v3` (default) supports `[audio tags]` " +
+        "like `[laughs]`, `[whispers]`, `[sighs]` for emotion / pacing — best " +
+        "for expressive narration. `elevenlabs-turbo` is cheaper for plain " +
+        "narration. `elevenlabs-multilingual` for non-English. Call " +
+        "`list_models { kind: \"audio\", mode: \"tts\" }` for the full sheet.",
       inputSchema: {
         text: z.string().min(1).max(5000),
         voice_id: z.string().optional().describe("ElevenLabs voice id (premade or custom)"),
