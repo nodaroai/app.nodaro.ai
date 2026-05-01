@@ -12,7 +12,10 @@ import { registerGallery } from "./tools/gallery.js"
 import { registerUploadTools } from "./tools/upload.js"
 import { registerDynamicTools } from "./tools/dynamic.js"
 import { registerTaskHandlers } from "./tasks.js"
-import { startProgressEmitter } from "./progress-emitter.js"
+// Progress emitter intentionally not invoked — see comment in buildMcpServer.
+// Import kept so the future re-enable is one line, not a re-import.
+import { startProgressEmitter as _startProgressEmitter } from "./progress-emitter.js"
+void _startProgressEmitter
 import { registerWidgetResources } from "./widgets/registrar.js"
 import type { Scope } from "../scopes.js"
 
@@ -107,12 +110,18 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   // the very first request.
   await registerDynamicTools({ server, session, fastify: opts.fastify })
 
-  // v1.2: tasks/* + notifications/progress wiring. Tasks are registered
-  // against the session's userId (via a thunk so the closure stays
-  // consistent), and the emitter polls Supabase every second to bridge
-  // BullMQ progress writes onto MCP `notifications/progress`.
+  // v1.2: tasks/* request handlers stay wired (they're spec-mandated and
+  // respond to client-initiated polls). The proactive progress-emitter
+  // however is intentionally NOT started — it sends `notifications/progress`
+  // with the job id as the progressToken, but per MCP spec those tokens
+  // must match a `_meta.progressToken` the client sent in the originating
+  // tool call. Cursor (and other strict clients) log "Received a progress
+  // notification for an unknown token" when we emit unsolicited ones.
+  // Both widgets (single-job and workflow) now poll get_asset / get_app_run
+  // explicitly via tools/call so they don't depend on push notifications;
+  // re-enable the emitter once the client→server progressToken negotiation
+  // is wired correctly.
   registerTaskHandlers(server, () => session.userId)
-  startProgressEmitter(server)
 
   return server
 }
