@@ -509,16 +509,16 @@ ${uiProtocolShim()}
       ctx.action = action;
       return JSON.stringify(ctx);
     }
-    // Trailer asks Claude to drive a Q&A loop, one round per relevant
-    // aspect (model, AR, duration, …). Better than a fixed N because
-    // the right question count varies by action — Edit needs prompt +
-    // maybe model; Animate needs model + duration + audio toggle. The
-    // loop ends when Claude has all it needs to call the verb tool.
+    // Trailer drives a Q&A loop until Claude has everything it needs
+    // to call the verb tool. "as needed" lets the loop self-terminate
+    // — Edit might be one question (the change), Animate might be
+    // three (model + duration + audio). User-tested format that
+    // works better than fixed counts or "different aspects" framings.
     //
     // NOTE: square brackets, NOT angle brackets. The host chat-input
     // renderer treats angle brackets as opening tags and throws
     // "Invalid or unexpected token" the moment it sees a placeholder.
-    var ASK_TRAILER = ' loop for different aspects [ask me q/a]';
+    var ASK_TRAILER = ' as follows: Prompt: [loop ask me q/a as needed]';
     wire('btn-animate', function() {
       if (!state.outputUrl || !window.NodaroMCP.pushUserMessage) return;
       window.NodaroMCP.pushUserMessage(
