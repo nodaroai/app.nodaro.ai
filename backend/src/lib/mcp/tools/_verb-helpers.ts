@@ -89,18 +89,6 @@ export interface SingleJobStructuredContent {
   resolution?: string
   duration?: number
   outputUrl?: string
-  /**
-   * The user's currently-saved MCP preferences for this kind. Surfaced to
-   * the widget so it can render a "Save as default" chip when the values
-   * actually used (model / aspectRatio / resolution / quality) diverge.
-   * Empty object when the user has no saved prefs yet.
-   */
-  userDefaults?: {
-    model?: string
-    aspectRatio?: string
-    resolution?: string
-    quality?: string
-  }
 }
 
 interface JobResultOpts {
