@@ -42,43 +42,80 @@ export function normalizeModel(
 }
 
 /**
+ * Parse a ratio string ("16:9", "16x9", "1.78:1", "1.78") into a numeric
+ * width/height value. Returns null if it can't be parsed.
+ */
+function parseRatio(input: string): number | null {
+  const trimmed = input.trim()
+  // "16:9" / "16x9" / "16/9" — separator + two numeric parts.
+  const parts = trimmed.split(/[:xX×\-_/\s]+/).filter((s) => s.length > 0)
+  if (parts.length === 2) {
+    const a = parseFloat(parts[0]!)
+    const b = parseFloat(parts[1]!)
+    if (Number.isFinite(a) && Number.isFinite(b) && b !== 0) return a / b
+  }
+  // Bare decimal — treat as the ratio directly.
+  const decimal = parseFloat(trimmed)
+  if (Number.isFinite(decimal) && decimal > 0) return decimal
+  return null
+}
+
+/**
  * Normalize an aspect-ratio string against a model's supported set.
- * Accepts variations: "16x9", "16-9", "1.78:1" → "16:9" if supported.
- * Returns the closest supported value, or `fallback` (or first supported
- * if `fallback` itself isn't in the set).
+ *
+ * Resolution order (each step falls through if no match):
+ * 1. Exact match in `supported` (`"16:9"` against `["16:9", ...]`).
+ * 2. Separator-normalized exact match (`"16x9"` → `"16:9"`).
+ * 3. Numeric-nearest: parse the request as a ratio, pick the supported
+ *    value whose width/height is closest. Handles `"21:9"` against a
+ *    16:9-only model (→ 16:9), `"1.78:1"` (→ 16:9), `"1x9"` typo
+ *    (→ 9:16), etc.
+ * 4. Hard fallback to `fallback` (or the first supported if `fallback`
+ *    isn't in the set). Only reached when the input couldn't be parsed
+ *    as a ratio at all.
+ *
+ * Returns `undefined` when the model doesn't expose aspect_ratio.
  */
 export function normalizeAspectRatio(
   input: string | undefined | null,
   supported: readonly string[] | undefined,
   fallback = "16:9",
 ): string | undefined {
-  // No supported set means the model doesn't expose aspect_ratio (e.g. base
-  // nano-banana family routes use image_size internally). Return undefined
-  // so the route doesn't get a parameter the provider can't handle.
   if (!supported || supported.length === 0) return undefined
   const safeFallback = supported.includes(fallback) ? fallback : supported[0]!
   if (!input) return safeFallback
   const trimmed = String(input).trim()
+  if (!trimmed) return safeFallback
+
+  // Step 1: exact hit.
   if (supported.includes(trimmed)) return trimmed
-  // Common separator typos: "16x9" / "16-9" / "16/9" → "16:9".
+
+  // Step 2: separator typos ("16x9" / "16-9" / "16/9") collapse to ":".
   const colonized = trimmed.replace(/[xX×\-_/\s]+/, ":")
   if (supported.includes(colonized)) return colonized
-  // Decimal ratios: "1.78:1" / "1.78" → 16:9 by lookup.
-  const decimal = parseFloat(trimmed)
-  if (Number.isFinite(decimal)) {
-    const decimalMap: Record<string, string> = {
-      "0.56": "9:16", "0.5625": "9:16",
-      "1": "1:1", "1.0": "1:1",
-      "1.33": "4:3",
-      "0.75": "3:4",
-      "1.5": "3:2", "0.67": "2:3",
-      "1.78": "16:9", "1.7778": "16:9",
-      "2.33": "21:9", "2.39": "21:9", "2.4": "21:9",
+
+  // Step 3: numeric-nearest match. Parse the requested ratio AND each
+  // supported one, pick the smallest absolute difference. "21:9" with
+  // [16:9, 4:3, 1:1] → 16:9 because 1.78 is closest to 2.33.
+  const requested = parseRatio(trimmed) ?? parseRatio(colonized)
+  if (requested !== null) {
+    let best: string | undefined
+    let bestDiff = Infinity
+    for (const v of supported) {
+      // Skip non-ratio values like "auto" / "adaptive" — they have no
+      // numeric representation, so we can't compare them.
+      const r = parseRatio(v)
+      if (r === null) continue
+      const diff = Math.abs(requested - r)
+      if (diff < bestDiff) {
+        best = v
+        bestDiff = diff
+      }
     }
-    const key = decimal.toFixed(2)
-    const mapped = decimalMap[key]
-    if (mapped && supported.includes(mapped)) return mapped
+    if (best) return best
   }
+
+  // Step 4: couldn't parse — fall back to default.
   return safeFallback
 }
 
