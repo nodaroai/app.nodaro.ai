@@ -11,35 +11,17 @@ import {
   errorResult,
   parseFailure,
   jobResultWithWidget,
-  checkModelLevers,
 } from "./_verb-helpers.js"
-import { modelIdsByKindMode, MODEL_CATALOG } from "@nodaro/shared"
+import { modelIdsByKindMode } from "@nodaro/shared"
 import { getUserMcpPreferences } from "../user-preferences.js"
+import { normalizeImageInput } from "../normalize.js"
 
-// Derive the model enums from MODEL_CATALOG so the MCP tool schemas can't
-// drift from `list_models`. Adding a new model = one catalog edit.
-//
-// `includeHidden: true` keeps legacy ids (nano-banana V1, gpt-image V1.5,
-// etc.) in the Zod enum so cached Claude.ai sessions that still reference
-// them don't fail validation. They're filtered out of `list_models` output
-// so fresh sessions only see current-gen models.
+// Used only as `description` hints in the schema below — the actual model
+// validation runs through `normalizeImageInput` which silently maps unknown
+// ids to the catalog default. Keeping these for autocomplete-style guidance
+// to Claude without locking the schema down.
 const T2I_MODEL_IDS = modelIdsByKindMode("image", ["t2i"], { includeHidden: true })
 const I2I_MODEL_IDS = modelIdsByKindMode("image", ["i2i", "edit"], { includeHidden: true })
-
-/**
- * Filter a saved user-pref value against the resolved model — drop any
- * value the model doesn't support. Prevents stale prefs (e.g. user saved
- * `quality: "high"` while on gpt-image, then Claude switches to
- * nano-banana-2 which has no quality lever) from breaking generation.
- */
-function pickValidPref<T extends string | number>(
-  saved: T | undefined,
-  supported: readonly T[] | undefined,
-): T | undefined {
-  if (saved === undefined) return undefined
-  if (!supported || !supported.includes(saved)) return undefined
-  return saved
-}
 // _wait-for-job.ts is intentionally retained but unimported. It implements
 // a sync block-on-completion path for tools (used briefly in #1830 to test
 // whether Cursor's tool-call cancellation was async-related — it wasn't,
@@ -135,22 +117,32 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "the iframe widget will surface the final image automatically.",
         inputSchema: {
           prompt: z.string().min(1).max(4000).describe("Free-text image prompt"),
+          // Schemas are intentionally permissive — handler normalizes
+          // anything unknown to the closest valid value (silent fallback).
+          // Description carries the recommended set so Claude has guidance.
           model: z
-            .enum(T2I_MODEL_IDS)
+            .string()
             .optional()
             .describe(
-              "Image model. Default `nano-banana-2` (or the user's saved " +
-              "preference if they've set one). nano-banana-2 is the newest " +
-              "Nano Banana — native resolution (1K/2K/4K), Google Search " +
-              "context, broad ARs incl. 21:9. Call list_models for the full " +
-              "sheet.",
+              `Image model. Default nano-banana-2. Recommended: ${T2I_MODEL_IDS.join(", ")}. ` +
+              `Unknown values silently fall back to the default. ` +
+              `Call list_models for capability details.`,
             ),
-          resolution: z.enum(["1K", "2K", "4K"]).optional(),
-          quality: z.enum(["medium", "high"]).optional(),
-          aspect_ratio: z
-            .enum(["1:1", "16:9", "9:16", "4:3", "3:4", "21:9"])
+          resolution: z
+            .string()
             .optional()
-            .describe("Aspect ratio. Default `16:9` (or user's saved preference)."),
+            .describe("Resolution: 1K / 2K / 4K. Falls back to nearest supported value."),
+          quality: z
+            .string()
+            .optional()
+            .describe("Quality: medium / high (model-dependent). Synonyms accepted."),
+          aspect_ratio: z
+            .string()
+            .optional()
+            .describe(
+              "Aspect ratio (e.g. 16:9, 9:16, 1:1, 4:3, 3:4, 21:9). Default 16:9. " +
+              "Variations like 16x9 / 16-9 are accepted; unsupported values fall back.",
+            ),
           negative_prompt: z.string().max(2000).optional(),
           structured: StructuredFields.optional().describe(
             "Path-1 structured fields composed into the final prompt.",
@@ -179,37 +171,34 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
       },
       async (args) => {
-        // Validate explicit args FIRST. Lever rules only apply to what
-        // Claude/the user explicitly passed — derived (user-pref) values
-        // get filtered against the resolved model below, never error out.
-        if (args.model) {
-          const explicitIssue = checkModelLevers(args.model, {
-            aspectRatio: args.aspect_ratio,
-            resolution: args.resolution,
-            quality: args.quality,
-          })
-          if (explicitIssue) return explicitIssue
+        // Silent normalization — never reject on bad params. Anything
+        // Claude sends (typos, wrong-tier values, made-up model ids) gets
+        // mapped to the closest valid alternative or the catalog default.
+        // The user said: tool calls should never fail because of param
+        // values; they should always run with sensible substitutes.
+        let userImg: Record<string, string | undefined> = {}
+        try {
+          const userPrefs = await getUserMcpPreferences(session.userId)
+          userImg = (userPrefs.image as Record<string, string | undefined>) ?? {}
+        } catch {
+          // Pref read failed (DB blip, missing column) → proceed with no saved prefs.
         }
-
-        // Resolve each lever: explicit arg > compatible saved pref > catalog default.
-        // Saved prefs are filtered through `pickValidPref` so stale values from
-        // a different model (e.g. quality:"high" saved while on gpt-image, now
-        // generating with nano-banana-2 which has no quality lever) silently
-        // drop out instead of breaking the call.
-        const userPrefs = await getUserMcpPreferences(session.userId)
-        const userImg = userPrefs.image ?? {}
-        const savedModel =
-          userImg.model && MODEL_CATALOG[userImg.model] ? userImg.model : undefined
-        const model = args.model ?? savedModel ?? "nano-banana-2"
-        const modelEntry = MODEL_CATALOG[model]
-        const aspectRatio =
-          args.aspect_ratio
-          ?? pickValidPref(userImg.aspectRatio, modelEntry?.aspectRatios)
-          ?? "16:9"
-        const resolution =
-          args.resolution ?? pickValidPref(userImg.resolution, modelEntry?.resolutions)
-        const quality =
-          args.quality ?? pickValidPref(userImg.quality, modelEntry?.qualities)
+        const { model, aspectRatio, resolution, quality, modelEntry: _modelEntry } =
+          normalizeImageInput(
+            {
+              model: args.model,
+              aspect_ratio: args.aspect_ratio,
+              resolution: args.resolution,
+              quality: args.quality,
+            },
+            {
+              model: userImg.model,
+              aspectRatio: userImg.aspectRatio,
+              resolution: userImg.resolution,
+              quality: userImg.quality,
+            },
+            "nano-banana-2",
+          )
 
         const compositePrompt = buildCompositePrompt(args.prompt, args.structured)
         const payload = {
@@ -299,18 +288,16 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           image_url: z.string().url().optional(),
           image_asset_id: z.string().optional(),
           model: z
-            .enum(I2I_MODEL_IDS)
+            .string()
             .optional()
             .describe(
-              "I2I / edit model. Default `nano-banana-2` (or the user's saved " +
-              "preference). For identity-preserving edits use `flux-kontext`. " +
-              "Call list_models for the full sheet.",
+              `I2I / edit model. Default nano-banana-2. Recommended: ${I2I_MODEL_IDS.join(", ")}. ` +
+              `For identity-preserving edits use flux-kontext. Unknown values fall back. ` +
+              `Call list_models for capability details.`,
             ),
-          resolution: z.enum(["1K", "2K", "4K"]).optional(),
-          quality: z.enum(["medium", "high", "basic"]).optional(),
-          aspect_ratio: z
-            .enum(["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"])
-            .optional(),
+          resolution: z.string().optional().describe("Resolution: falls back to nearest supported."),
+          quality: z.string().optional().describe("Quality: medium/high/basic. Synonyms accepted."),
+          aspect_ratio: z.string().optional().describe("Aspect ratio. Variations and unsupported values fall back."),
           negative_prompt: z.string().max(2000).optional(),
           structured: StructuredFields.optional(),
         },
@@ -337,27 +324,28 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
       },
       async (args) => {
-        if (args.model) {
-          const explicitIssue = checkModelLevers(args.model, {
-            aspectRatio: args.aspect_ratio,
+        let userImg: Record<string, string | undefined> = {}
+        try {
+          const userPrefs = await getUserMcpPreferences(session.userId)
+          userImg = (userPrefs.image as Record<string, string | undefined>) ?? {}
+        } catch {
+          /* swallow */
+        }
+        const { model, aspectRatio, resolution, quality } = normalizeImageInput(
+          {
+            model: args.model,
+            aspect_ratio: args.aspect_ratio,
             resolution: args.resolution,
             quality: args.quality,
-          })
-          if (explicitIssue) return explicitIssue
-        }
-
-        const userPrefs = await getUserMcpPreferences(session.userId)
-        const userImg = userPrefs.image ?? {}
-        const savedModel =
-          userImg.model && MODEL_CATALOG[userImg.model] ? userImg.model : undefined
-        const model = args.model ?? savedModel ?? "nano-banana-2"
-        const modelEntry = MODEL_CATALOG[model]
-        const aspectRatio =
-          args.aspect_ratio ?? pickValidPref(userImg.aspectRatio, modelEntry?.aspectRatios)
-        const resolution =
-          args.resolution ?? pickValidPref(userImg.resolution, modelEntry?.resolutions)
-        const quality =
-          args.quality ?? pickValidPref(userImg.quality, modelEntry?.qualities)
+          },
+          {
+            model: userImg.model,
+            aspectRatio: userImg.aspectRatio,
+            resolution: userImg.resolution,
+            quality: userImg.quality,
+          },
+          "nano-banana-2",
+        )
 
         const imageUrl =
           args.image_url ??
