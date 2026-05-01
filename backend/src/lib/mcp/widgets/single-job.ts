@@ -298,6 +298,14 @@ ${uiProtocolShim()}
     }
 
     // Tool args arrive BEFORE the result — we know prompt/model up front.
+    // Status text stays "Loading…" here (not "Generating…") because we
+    // don't yet know whether this is a fresh tool call (real generation
+    // about to start) OR the host re-rendering an already-completed job
+    // (where the result is moments away and was never re-generated).
+    // Showing "Generating…" before tool-result misleads users opening
+    // older chats — the image lands almost instantly and the status
+    // flashes briefly. Switch to "Generating…" only once tool-result
+    // confirms we need to poll.
     window.addEventListener('mcp-tool-input', function(e) {
       var args = (e.detail && e.detail.arguments) || {};
       state.prompt = args.prompt || state.prompt;
@@ -306,7 +314,7 @@ ${uiProtocolShim()}
       state.resolution = args.resolution || state.resolution;
       state.duration = args.duration || state.duration;
       renderMeta();
-      statusEl.textContent = 'Generating…';
+      statusEl.textContent = 'Loading…';
     });
 
     // Tool result arrives once the server has created the job and returned
