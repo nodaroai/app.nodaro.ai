@@ -661,6 +661,7 @@ export {
   aspectRatioOptionsByKind,
   qualityOptionsByKind,
   creditRangesAll,
+  modelIdsByKindMode,
 } from "./model-catalog.js"
 export type {
   ModelCatalogEntry,
