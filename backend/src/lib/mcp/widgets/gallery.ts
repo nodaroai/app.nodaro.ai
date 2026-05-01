@@ -19,7 +19,11 @@ const GALLERY_CSS = `
   .tile { position: relative; aspect-ratio: 1/1; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.05); cursor: pointer; }
   .tile img, .tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
   .tile:hover .use { opacity: 1; }
-  .use { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 4px 12px; background: #c4ff00; color: #000; border-radius: 999px; font-weight: 600; font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: auto; }
+  /* Brand pink (#ff0073) on white text — matches the "Use as reference"
+     button in the detail view, the favorite-settings star, and other
+     primary affordances across the MCP widget set. */
+  .use { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 4px 12px; background: #ff0073; color: #fff; border-radius: 999px; font-weight: 600; font-size: 12px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: auto; }
+  .use:hover { transform: translate(-50%, -50%) scale(1.05); }
   .pagination { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(127,127,127,0.3); cursor: pointer; }
   .dot.active { background: currentColor; }
