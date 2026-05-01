@@ -68,7 +68,7 @@ describe("sanitizeJobForPublic", () => {
     expect("credits_actual" in result).toBe(true)
   })
 
-  it("strips provider and cost details for regular users", () => {
+  it("strips provider and ALL USD cost details for regular users", () => {
     const result = sanitizeJobForPublic(sampleJob, false)
 
     // Sensitive fields should be removed
@@ -76,10 +76,9 @@ describe("sanitizeJobForPublic", () => {
     expect("provider_cost" in result).toBe(false)
     expect("display_cost" in result).toBe(false)
     expect("credits_actual" in result).toBe(false)
-
-    // Public cost field should be present with display_cost value
-    expect("cost" in result).toBe(true)
-    expect((result as unknown as Record<string, unknown>).cost).toBe(0.025)
+    // Per the api-wide policy, USD `cost` (formerly renamed from
+    // display_cost) is also gone. Non-admins see only `credits`.
+    expect("cost" in result).toBe(false)
 
     // Other fields should be preserved
     expect(result.id).toBe("job-1")
@@ -87,13 +86,15 @@ describe("sanitizeJobForPublic", () => {
     expect(result.credits).toBe(1)
   })
 
-  it("handles null display_cost correctly for regular users", () => {
+  it("preserves credits when display_cost is null", () => {
     const jobWithNullCost: JobRecord = {
       ...sampleJob,
       display_cost: null,
     }
 
     const result = sanitizeJobForPublic(jobWithNullCost, false)
-    expect((result as unknown as Record<string, unknown>).cost).toBeNull()
+    expect("cost" in result).toBe(false)
+    expect("display_cost" in result).toBe(false)
+    expect(result.credits).toBe(1)
   })
 })

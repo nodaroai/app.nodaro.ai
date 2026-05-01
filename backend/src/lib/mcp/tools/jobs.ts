@@ -45,9 +45,30 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
         "יצרתי\"; Spanish: \"mi galería\"; etc.). Returns the user's " +
         "Nodaro jobs most recent first with media kind, status, output " +
         "URL, prompt, model, and timestamps. Cursor-based pagination via " +
-        "`next_cursor`.",
+        "`next_cursor`.\n\n" +
+        "Set `scope: \"public\"` when the user explicitly asks for the " +
+        "PUBLIC gallery (\"show me the public gallery\", \"what are " +
+        "others making\", \"trending\"); default scope is the user's " +
+        "own library.",
       inputSchema: {
-        limit: z.number().int().min(1).max(100).optional(),
+        scope: z
+          .enum(["mine", "public"])
+          .optional()
+          .describe(
+            "`mine` (default) returns the authenticated user's own " +
+            "library. `public` returns recent public outputs from " +
+            "OTHER users (excludes the caller's own items, mirroring " +
+            "the web app's public gallery) — only use when the user " +
+            "explicitly asks for the public gallery / trending / what " +
+            "others are making.",
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe("Max items to return (default 50, max 200)."),
         cursor: z
           .string()
           .optional()
@@ -55,31 +76,46 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
         status: z
           .enum(["pending", "queued", "processing", "completed", "failed", "cancelled"])
           .optional(),
-        kind: z
-          .enum(["image", "video", "audio"])
+        kinds: z
+          .array(z.enum(["image", "video", "audio"]))
+          .min(1)
           .optional()
           .describe(
-            "Filter by media kind. 'image' covers generate-image, image-to-image, etc.",
+            "Media kinds to include. Default: `[\"image\", \"video\"]` " +
+            "— skips audio because most users browse visual generations. " +
+            "Pass any combination explicitly: `[\"audio\"]` for music / " +
+            "TTS only, `[\"image\", \"video\", \"audio\"]` for " +
+            "everything, etc.",
           ),
       },
       annotations: { readOnlyHint: true },
     },
     async (args) => {
-      const limit = args.limit ?? 20
-      let query = supabase
-        .from("jobs")
-        .select(
-          // display_cost (USD) intentionally excluded — MCP surfaces only
-          // the credits abstraction; raw $ pricing is internal/admin and
-          // distracts the agent's response (Claude was rendering "$0.09"
-          // in chat for every job).
-          "id, status, progress, input_data, output_data, error_message, created_at, completed_at, job_type, credits",
-        )
-        .eq("user_id", session.userId)
-        .order("created_at", { ascending: false })
-        .limit(limit)
-      if (args.cursor) query = query.lt("created_at", args.cursor)
-      if (args.status) query = query.eq("status", args.status)
+      const limit = args.limit ?? 50
+      const scope = args.scope ?? "mine"
+      // display_cost (USD) intentionally excluded — MCP surfaces only the
+      // credits abstraction; raw $ pricing is internal/admin and distracts
+      ***REDACTED-OSS-SCRUB***
+      // every job before this was stripped).
+      const baseSelect =
+        "id, status, progress, input_data, output_data, error_message, created_at, completed_at, job_type, credits"
+      // Build the filter chain BEFORE order/limit so the supabase mock
+      // chain in tests (.from().select().eq().order().limit()) matches.
+      // For the public gallery, force is_public=true, status=completed,
+      // AND user_id != caller — same as the web app's public gallery
+      // which never shows the caller their own items.
+      let filtered =
+        scope === "mine"
+          ? supabase.from("jobs").select(baseSelect).eq("user_id", session.userId)
+          : supabase
+              .from("jobs")
+              .select(baseSelect)
+              .eq("is_public", true)
+              .eq("status", "completed")
+              .neq("user_id", session.userId)
+      if (args.cursor) filtered = filtered.lt("created_at", args.cursor)
+      if (scope === "mine" && args.status) filtered = filtered.eq("status", args.status)
+      const query = filtered.order("created_at", { ascending: false }).limit(limit)
       const { data, error } = await query
       if (error) {
         return {
@@ -88,40 +124,47 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
         }
       }
       let rows = data ?? []
-      if (args.kind) {
-        const setForKind: Record<string, string[]> = {
-          image: [
-            "generate-image",
-            "image-to-image",
-            "edit-image",
-            "generate-character",
-            "generate-character-asset",
-            "generate-location",
-            "generate-location-asset",
-            "generate-object",
-            "generate-object-asset",
-          ],
-          video: [
-            "image-to-video",
-            "text-to-video",
-            "video-to-video",
-            "lip-sync",
-            "motion-transfer",
-            "extend-video",
-            "combine-videos",
-            "add-captions",
-            "extract-frame",
-          ],
-          audio: [
-            "text-to-speech",
-            "generate-music",
-            "text-to-audio",
-            "extract-youtube-audio",
-          ],
-        }
-        const allowed = new Set(setForKind[args.kind] ?? [])
-        rows = rows.filter((r) => r.job_type && allowed.has(r.job_type as string))
+      // Map of media kind → set of job_type strings that produce that
+      // media. Filtering happens in JS rather than in the SQL query so a
+      // multi-kind selection (e.g. ["image", "video"]) is just a set
+      // union — keeps the query simple and avoids a giant `.in(...)`.
+      const setForKind: Record<string, string[]> = {
+        image: [
+          "generate-image",
+          "image-to-image",
+          "edit-image",
+          "generate-character",
+          "generate-character-asset",
+          "generate-location",
+          "generate-location-asset",
+          "generate-object",
+          "generate-object-asset",
+        ],
+        video: [
+          "image-to-video",
+          "text-to-video",
+          "video-to-video",
+          "lip-sync",
+          "motion-transfer",
+          "extend-video",
+          "combine-videos",
+          "add-captions",
+          "extract-frame",
+        ],
+        audio: [
+          "text-to-speech",
+          "generate-music",
+          "text-to-audio",
+          "extract-youtube-audio",
+        ],
       }
+      // Default kinds: image + video. Audio is opt-in because most users
+      // browse for visual generations; surfacing TTS / music outputs by
+      // default clutters the gallery view. Caller can pass `["audio"]`
+      // or `["image","video","audio"]` etc. for any combination.
+      const kinds = args.kinds ?? ["image", "video"]
+      const allowed = new Set(kinds.flatMap((k) => setForKind[k] ?? []))
+      rows = rows.filter((r) => r.job_type && allowed.has(r.job_type as string))
       const last = rows[rows.length - 1]
       const nextCursor =
         rows.length === limit && last?.created_at ? (last.created_at as string) : null
