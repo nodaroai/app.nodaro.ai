@@ -51,10 +51,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         prompt: z.string().min(1).max(2500),
         model: z
           .enum(T2V_MODEL_IDS)
-          .optional()
+          .default("seedance-2-fast")
           .describe(
-            "Video model. Call list_models { kind: \"video\", mode: \"t2v\" } " +
-            "for capabilities + recommendations.",
+            "Video model. Default `seedance-2-fast` is the lighter Seedance 2 " +
+            "tier — newest architecture, 4–15s flexible, native audio, reference-" +
+            "image support, broad aspect ratios. For cheap batch use `wan-turbo` " +
+            "or `bytedance-lite`; for premium cinematic use `veo3` or `kling-3.0`. " +
+            "Call list_models { kind: \"video\", mode: \"t2v\" } for the full sheet.",
           ),
         duration: z.number().int().min(1).max(60).optional(),
         aspect_ratio: z.enum(["16:9", "9:16", "1:1"]).optional(),
@@ -151,10 +154,11 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         image_asset_id: z.string().optional(),
         model: z
           .enum(I2V_MODEL_IDS)
-          .optional()
+          .default("seedance-2-fast")
           .describe(
-            "Video model. Call list_models { kind: \"video\", mode: \"i2v\" } " +
-            "for capabilities + recommendations.",
+            "Video model. Default `seedance-2-fast` — newest, supports end-frame " +
+            "via reference images, native audio, 4–15s. Call list_models " +
+            "{ kind: \"video\", mode: \"i2v\" } for capabilities + recommendations.",
           ),
         duration: z.number().int().min(1).max(60).optional(),
         aspect_ratio: z.enum(["16:9", "9:16", "1:1"]).optional(),

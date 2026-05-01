@@ -89,7 +89,11 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
         kind: args.kind as ModelKind | undefined,
         mode: args.mode as ModelMode | undefined,
         family: args.family,
-      }).filter((m) => (args.featuredOnly ? m.featured === true : true))
+      })
+        // Drop legacy versions from MCP output — keeps Claude focused on the
+        // current generation. Frontend pickers ignore mcpHidden.
+        .filter((m) => !m.mcpHidden)
+        .filter((m) => (args.featuredOnly ? m.featured === true : true))
 
       const grouped = groupByFamily(filtered)
       // Group again by kind for the outer envelope so output mirrors

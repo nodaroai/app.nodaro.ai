@@ -116,10 +116,12 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           prompt: z.string().min(1).max(4000).describe("Free-text image prompt"),
           model: z
             .enum(T2I_MODEL_IDS)
-            .default("nano-banana")
+            .default("nano-banana-2")
             .describe(
-              "Image model. Each has different price/quality tradeoffs — call " +
-              "list_models { kind: \"image\", mode: \"t2i\" } for the full sheet.",
+              "Image model. Default `nano-banana-2` is the newest Nano Banana " +
+              "with native resolution control (1K/2K/4K), Google Search context, " +
+              "and broad aspect-ratio support — middle ground of speed and quality. " +
+              "Call list_models { kind: \"image\", mode: \"t2i\" } for the full sheet.",
             ),
           resolution: z.enum(["1K", "2K", "4K"]).optional(),
           quality: z.enum(["medium", "high"]).optional(),
@@ -242,10 +244,11 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           image_asset_id: z.string().optional(),
           model: z
             .enum(I2I_MODEL_IDS)
-            .optional()
+            .default("nano-banana-2")
             .describe(
-              "I2I / edit model. Call list_models { kind: \"image\", mode: \"i2i\" } " +
-              "or mode: \"edit\" for the full sheet.",
+              "I2I / edit model. Default `nano-banana-2` matches the t2i default. " +
+              "For identity-preserving edits use `flux-kontext`. Call " +
+              "list_models { kind: \"image\", mode: \"i2i\" } for the full sheet.",
             ),
           resolution: z.enum(["1K", "2K", "4K"]).optional(),
           quality: z.enum(["medium", "high", "basic"]).optional(),

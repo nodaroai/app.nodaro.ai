@@ -83,7 +83,7 @@ describe("generate_image verb", () => {
 
     const result = await callTool(server, "generate_image", {
       prompt: "a knight",
-      model: "nano-banana",
+      model: "nano-banana-2",
       structured: { mood: "epic" },
     })
 
@@ -318,22 +318,49 @@ describe("extract_frame verb", () => {
 })
 
 describe("generate_music verb", () => {
-  it("calls /v1/generate-music with prompt + model", async () => {
+  it("dispatches model=minimax to /v1/generate-music", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/generate-music", { jobId: "j-gm" })
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify })
 
     const result = await callTool(server, "generate_music", {
       prompt: "lofi beat",
-      model: "suno",
+      model: "minimax",
       duration: 20,
       instrumental: true,
     })
 
     expect(result.isError).toBeUndefined()
     expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-gm")
-    expect(received.body?.provider).toBe("suno")
+    expect(received.body?.provider).toBe("minimax")
     expect(received.body?.duration).toBe(20)
+  })
+
+  it("dispatches model=suno-v5 to /v1/suno/generate with model=V5", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/suno/generate", { jobId: "j-suno" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_music", {
+      prompt: "uplifting indie pop",
+      model: "suno-v5",
+      lyrics: "verse one",
+      genre: "indie pop",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.model).toBe("V5")
+    expect(received.body?.lyrics).toBe("verse one")
+    expect(received.body?.style).toBe("indie pop")
+  })
+
+  it("dispatches model=suno (v4) to /v1/suno/generate with model=V4", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/suno/generate", { jobId: "j-suno-v4" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    await callTool(server, "generate_music", { prompt: "ambient", model: "suno" })
+    expect(received.body?.model).toBe("V4")
   })
 
   it("does NOT register without workflows:execute scope", async () => {

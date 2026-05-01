@@ -98,6 +98,16 @@ export interface ModelCatalogEntry {
    * `MODEL_VALUE_LABELS` for values not listed here.
    */
   valueLabels?: Record<string, string>
+  /**
+   * Hide from MCP `list_models` output and tool model enums. Used for legacy
+   * model versions superseded by newer entries — they remain in the catalog
+   * (and accessible via direct API / frontend pickers for back-compat) but
+   * stop showing up in Claude.ai's model picker, which keeps the surface
+   * tight and steers the agent to the current generation.
+   *
+   * Frontend pickers ignore this flag.
+   */
+  mcpHidden?: boolean
 }
 
 /**
@@ -113,16 +123,16 @@ export interface ModelRecommendation {
 
 export const MODEL_RECOMMENDATIONS: readonly ModelRecommendation[] = [
   // image
-  { intent: "best for typography / logos / text-heavy", modelIds: ["nano-banana-pro", "gpt-image"], note: "Nano Banana Pro for diagrams / complex text; GPT Image 1.5 for logos and short copy." },
+  { intent: "best for typography / logos / text-heavy", modelIds: ["nano-banana-pro", "gpt-image-2"], note: "Nano Banana Pro for diagrams / complex text; GPT Image 2 for logos and short copy." },
   { intent: "cheapest realistic image", modelIds: ["z-image", "qwen", "imagen4-fast"], note: "Z-Image is the cheapest at 1 credit. Qwen / Imagen4 Fast for slightly higher quality." },
   { intent: "highest fidelity image", modelIds: ["nano-banana-pro", "imagen4-ultra", "flux-flex"], note: "Pick by family preference; all three are premium tiers." },
-  { intent: "image edit / restyle", modelIds: ["flux-kontext", "ideogram-remix", "seedream-edit"], note: "Flux Kontext preserves identity; Ideogram Remix is character-aware; Seedream Edit for high-res output." },
+  { intent: "image edit / restyle", modelIds: ["flux-kontext", "ideogram-remix", "seedream-5-lite-i2i"], note: "Flux Kontext preserves identity; Ideogram Remix is character-aware; Seedream 5 Lite for instruction-based edits." },
   { intent: "highest-resolution image (4K / 8K)", modelIds: ["topaz-image-upscale", "nano-banana-pro", "gpt-image-2"], note: "Generate at native then Topaz upscale for 8K." },
   { intent: "background removal / cutout", modelIds: ["recraft-remove-bg"], note: "1 credit, no prompt needed." },
   // video
-  { intent: "best cinematic video", modelIds: ["veo3", "kling-3.0"], note: "VEO 3 Quality for premium narrative; Kling 3.0 for music-synced motion." },
+  { intent: "best cinematic video", modelIds: ["veo3", "kling-3.0", "seedance-2"], note: "VEO 3 Quality for premium narrative; Kling 3.0 for music-synced motion; Seedance 2 for reference-driven consistency." },
   { intent: "cheap batch video clips", modelIds: ["veo3.1", "wan-turbo", "bytedance-lite"], note: "VEO 3.1 Fast is the best price/quality balance with native audio." },
-  { intent: "video with start + end frame", modelIds: ["veo3", "veo3.1", "kling-turbo", "minimax", "hailuo-standard", "seedance"], note: "All listed support an end frame; VEO uses imageUrls[start, end]." },
+  { intent: "video with start + end frame", modelIds: ["veo3", "veo3.1", "kling-turbo", "minimax", "hailuo-standard", "seedance-2"], note: "All listed support an end frame; VEO uses imageUrls[start, end]." },
   { intent: "music / song generation", modelIds: ["suno-v5", "suno"], note: "Suno v5 has better vocal quality at the same price." },
   { intent: "voice over / narration", modelIds: ["elevenlabs-v3", "elevenlabs-turbo"], note: "v3 supports [audio tags] for emotion; Turbo is cheaper for plain narration." },
   { intent: "lip-sync a portrait to audio", modelIds: ["kling-avatar-pro", "kling-avatar", "infinitalk"], note: "Pro for best mouth shape; InfiniTalk for resolution control." },
@@ -170,11 +180,14 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: NANO_BANANA_RATIOS,
     pricing: [{ identifier: "nano-banana", credits: 2, note: "1K" }],
+    mcpHidden: true,
   },
   "nano-banana-2": {
     id: "nano-banana-2",
     kind: "image",
-    modes: ["t2i"] as const,
+    // Accepts reference images via image_input — same as the rest of the
+    // Nano Banana family — so reachable for both t2i and i2i.
+    modes: ["t2i", "i2i"] as const,
     family: "Google",
     label: "Nano Banana 2",
     description: "Newer Nano Banana with native resolution control (1K/2K/4K) and Google Search context.",
@@ -322,6 +335,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "gpt-image:high", credits: 7, note: "high quality" },
     ],
     valueLabels: { "3:2": "3:2 (Landscape)", "2:3": "2:3 (Portrait)" },
+    mcpHidden: true,
   },
   "gpt-image-i2i": {
     id: "gpt-image-i2i",
@@ -339,6 +353,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "gpt-image-i2i:high", credits: 7, note: "high quality" },
     ],
     valueLabels: { "3:2": "3:2 (Landscape)", "2:3": "2:3 (Portrait)" },
+    mcpHidden: true,
   },
   "gpt-image-2": {
     id: "gpt-image-2",
@@ -496,6 +511,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedream", credits: 3, note: "basic / 2K default" },
       { identifier: "seedream:high", credits: 4, note: "high / 4K" },
     ],
+    mcpHidden: true,
   },
   "seedream-edit": {
     id: "seedream-edit",
@@ -512,6 +528,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedream-edit", credits: 3, note: "basic default" },
       { identifier: "seedream-edit:high", credits: 4, note: "high quality" },
     ],
+    mcpHidden: true,
   },
   "seedream-5-lite": {
     id: "seedream-5-lite",
@@ -882,6 +899,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedance:8s", credits: 7 },
       { identifier: "seedance:12s", credits: 15 },
     ],
+    mcpHidden: true,
   },
   "seedance-2": {
     id: "seedance-2",
@@ -1689,8 +1707,9 @@ export function creditRangesAll(): Record<string, { min: number; max: number }> 
  * a Zod `z.enum()` argument so MCP tool input schemas stay in sync with the
  * catalog without manual maintenance.
  *
- * Returns sorted ids so the schema (and OpenAPI / tools/list output) is
- * stable across runs.
+ * Filters out `mcpHidden: true` entries by default — pass `includeHidden`
+ * to surface legacy versions (used internally by validators that still need
+ * to recognize older ids forwarded by direct API callers).
  *
  * Pass `kind: null` to skip the kind filter — useful for cross-kind ids
  * like "grok" (catalog kind=image, modes include both t2i and t2v).
@@ -1698,10 +1717,13 @@ export function creditRangesAll(): Record<string, { min: number; max: number }> 
 export function modelIdsByKindMode(
   kind: ModelKind | null,
   modes: readonly ModelMode[],
+  opts: { includeHidden?: boolean } = {},
 ): [string, ...string[]] {
+  const includeHidden = opts.includeHidden === true
   const ids = Object.values(MODEL_CATALOG)
     .filter((m) => (kind === null ? true : m.kind === kind))
     .filter((m) => m.modes.some((md) => modes.includes(md)))
+    .filter((m) => includeHidden || !m.mcpHidden)
     .map((m) => m.id)
     .sort()
   if (ids.length === 0) {
