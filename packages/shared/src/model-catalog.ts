@@ -160,7 +160,9 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "nano-banana": {
     id: "nano-banana",
     kind: "image",
-    modes: ["t2i"] as const,
+    // Accepts a reference image via image_input — works as both t2i (no
+    // ref) and i2i (with ref) under the same id, so list in both modes.
+    modes: ["t2i", "i2i"] as const,
     family: "Google",
     label: "Nano Banana",
     description: "Budget-friendly realistic generation. Wide aspect-ratio support up to 21:9.",
@@ -189,7 +191,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "nano-banana-pro": {
     id: "nano-banana-pro",
     kind: "image",
-    modes: ["t2i"] as const,
+    modes: ["t2i", "i2i"] as const,
     family: "Google",
     label: "Nano Banana Pro",
     description: "Top-tier Nano Banana — best for text rendering, diagrams, and complex compositions.",
@@ -281,7 +283,8 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "flux-kontext": {
     id: "flux-kontext",
     kind: "image",
-    modes: ["edit"] as const,
+    // Kontext supports both pure t2i (no input image) and edit (with input).
+    modes: ["t2i", "edit"] as const,
     family: "Black Forest Labs",
     label: "Flux Kontext Pro",
     description: "Context-aware editing and style transfer. Strong at preserving subject identity through edits.",
@@ -293,7 +296,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   "flux-kontext-max": {
     id: "flux-kontext-max",
     kind: "image",
-    modes: ["edit"] as const,
+    modes: ["t2i", "edit"] as const,
     family: "Black Forest Labs",
     label: "Flux Kontext Max",
     description: "Premium Kontext — highest fidelity context-aware edits.",
@@ -596,11 +599,15 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
   // ── xAI Grok ──
   "grok": {
     id: "grok",
+    // Grok serves both t2i (image) and t2v (video) under the same id —
+    // backend route resolves which by entry point. We classify the catalog
+    // entry by primary kind (image) but list both modes so MCP filters and
+    // frontend pickers find it under either context.
     kind: "image",
-    modes: ["t2i"] as const,
+    modes: ["t2i", "t2v"] as const,
     family: "xAI",
     label: "Grok Imagine",
-    description: "Expressive, high-contrast output from xAI's Grok.",
+    description: "Expressive, high-contrast output. Supports both image and video.",
     useCases: ["stylized", "expressive", "general"],
     aspectRatios: GROK_RATIOS,
     pricing: [{ identifier: "grok", credits: 2 }],
@@ -938,24 +945,34 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     kind: "video",
     modes: ["i2v", "t2v"] as const,
     family: "Alibaba",
-    label: "Wan 2.2 Turbo I2V",
-    description: "Cheap, fast Wan turbo — 5s 480p.",
+    label: "Wan 2.2 Turbo",
+    description: "Cheap, fast Wan turbo — 5s. Serves both i2v and t2v under one id.",
     useCases: ["cheap", "fast"],
     durations: [5],
     resolutions: ["480p", "720p"],
-    pricing: [{ identifier: "wan-turbo", credits: 13, note: "5s 480p" }],
+    // Different KIE endpoints (i2v vs t2v) → different costs under
+    // composite ids. Route picks endpoint based on whether image was supplied.
+    pricing: [
+      { identifier: "wan-turbo", credits: 13, note: "i2v 5s 480p" },
+      { identifier: "wan-turbo-t2v", credits: 25, note: "t2v 5s 720p" },
+    ],
   },
   "wan": {
     id: "wan",
     kind: "video",
-    modes: ["v2v"] as const,
+    // "wan" id covers v2v AND t2v under different KIE endpoints; the
+    // pricing variants tag which mode each cost belongs to.
+    modes: ["v2v", "t2v"] as const,
     family: "Alibaba",
-    label: "Wan 2.6 V2V",
-    description: "Wan 2.6 video-to-video — restyle/transform existing clips.",
-    useCases: ["v2v", "restyle"],
+    label: "Wan 2.6",
+    description: "Wan 2.6 — text-to-video and video-to-video under a single id.",
+    useCases: ["v2v", "t2v", "restyle"],
     durations: [5],
     resolutions: ["720p", "1080p"],
-    pricing: [{ identifier: "wan", credits: 22, note: "5s 720p" }],
+    pricing: [
+      { identifier: "wan", credits: 22, note: "v2v 5s 720p" },
+      { identifier: "wan-t2v", credits: 33, note: "t2v 5s 1080p" },
+    ],
   },
   "wan-flash": {
     id: "wan-flash",
@@ -967,31 +984,6 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["v2v", "fast"],
     pricing: [{ identifier: "wan-flash", credits: 13 }],
   },
-  "wan-t2v": {
-    id: "wan-t2v",
-    kind: "video",
-    modes: ["t2v"] as const,
-    family: "Alibaba",
-    label: "Wan 2.6 T2V",
-    description: "Wan 2.6 text-to-video.",
-    useCases: ["t2v"],
-    durations: [5],
-    resolutions: ["720p", "1080p"],
-    pricing: [{ identifier: "wan-t2v", credits: 33, note: "5s 1080p default" }],
-  },
-  "wan-turbo-t2v": {
-    id: "wan-turbo-t2v",
-    kind: "video",
-    modes: ["t2v"] as const,
-    family: "Alibaba",
-    label: "Wan 2.2 Turbo T2V",
-    description: "Cheap, fast Wan turbo text-to-video.",
-    useCases: ["t2v", "fast", "cheap"],
-    durations: [5],
-    resolutions: ["480p", "720p"],
-    pricing: [{ identifier: "wan-turbo-t2v", credits: 25, note: "5s 720p" }],
-  },
-
   // ── Bytedance video lite/pro ──
   "bytedance-lite": {
     id: "bytedance-lite",
@@ -1690,4 +1682,32 @@ export function creditRangesAll(): Record<string, { min: number; max: number }> 
     if (range) out[m.id] = range
   }
   return out
+}
+
+/**
+ * Tuple of model ids for a given kind + one or more modes. Built for use as
+ * a Zod `z.enum()` argument so MCP tool input schemas stay in sync with the
+ * catalog without manual maintenance.
+ *
+ * Returns sorted ids so the schema (and OpenAPI / tools/list output) is
+ * stable across runs.
+ *
+ * Pass `kind: null` to skip the kind filter — useful for cross-kind ids
+ * like "grok" (catalog kind=image, modes include both t2i and t2v).
+ */
+export function modelIdsByKindMode(
+  kind: ModelKind | null,
+  modes: readonly ModelMode[],
+): [string, ...string[]] {
+  const ids = Object.values(MODEL_CATALOG)
+    .filter((m) => (kind === null ? true : m.kind === kind))
+    .filter((m) => m.modes.some((md) => modes.includes(md)))
+    .map((m) => m.id)
+    .sort()
+  if (ids.length === 0) {
+    throw new Error(
+      `modelIdsByKindMode: no models match kind=${kind ?? "*"} modes=[${modes.join(",")}]`,
+    )
+  }
+  return ids as [string, ...string[]]
 }

@@ -13,6 +13,12 @@ import {
   jobResultWithWidget,
   checkModelLevers,
 } from "./_verb-helpers.js"
+import { modelIdsByKindMode } from "@nodaro/shared"
+
+// Derive the model enums from MODEL_CATALOG so the MCP tool schemas can't
+// drift from `list_models`. Adding a new model = one catalog edit.
+const T2I_MODEL_IDS = modelIdsByKindMode("image", ["t2i"])
+const I2I_MODEL_IDS = modelIdsByKindMode("image", ["i2i", "edit"])
 // _wait-for-job.ts is intentionally retained but unimported. It implements
 // a sync block-on-completion path for tools (used briefly in #1830 to test
 // whether Cursor's tool-call cancellation was async-related — it wasn't,
@@ -109,20 +115,12 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         inputSchema: {
           prompt: z.string().min(1).max(4000).describe("Free-text image prompt"),
           model: z
-            .enum([
-              "nano-banana",
-              "nano-banana-pro",
-              "flux",
-              "flux-flex",
-              "ideogram-v3",
-              "imagen4",
-              "qwen",
-              "gpt-image",
-              "z-image",
-              "grok",
-            ])
+            .enum(T2I_MODEL_IDS)
             .default("nano-banana")
-            .describe("Image model. Each has different price/quality tradeoffs."),
+            .describe(
+              "Image model. Each has different price/quality tradeoffs — call " +
+              "list_models { kind: \"image\", mode: \"t2i\" } for the full sheet.",
+            ),
           resolution: z.enum(["1K", "2K", "4K"]).optional(),
           quality: z.enum(["medium", "high"]).optional(),
           aspect_ratio: z
@@ -243,17 +241,12 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           image_url: z.string().url().optional(),
           image_asset_id: z.string().optional(),
           model: z
-            .enum([
-              "nano-banana",
-              "nano-banana-pro",
-              "flux-i2i",
-              "flux-pro-i2i",
-              "gpt-image-i2i",
-              "ideogram-edit",
-              "ideogram-remix",
-              "qwen-i2i",
-            ])
-            .optional(),
+            .enum(I2I_MODEL_IDS)
+            .optional()
+            .describe(
+              "I2I / edit model. Call list_models { kind: \"image\", mode: \"i2i\" } " +
+              "or mode: \"edit\" for the full sheet.",
+            ),
           resolution: z.enum(["1K", "2K", "4K"]).optional(),
           quality: z.enum(["medium", "high", "basic"]).optional(),
           aspect_ratio: z
