@@ -24,9 +24,8 @@ function isAllowedOnMcpHost(path: string): boolean {
  * The MCP server shares a backend with the main API (`app.nodaro.ai`) for ops
  * simplicity, but exposing every `/v1/*` route on `mcp.*` would be confusing
  * and broaden the visible attack surface. This onRequest hook returns 404 for
- * any request to `mcp.*.nodaro.ai/<not-mcp-path>` — matching [redacted-reference]'s
- * `mcp.[redacted-reference].ai` behaviour where only `/mcp` and the protected-resource
- * discovery path resolve.
+ * any request to `mcp.*.nodaro.ai/<not-mcp-path>`. Only `/mcp` and the
+ * protected-resource discovery path resolve.
  *
  * Allowed on `mcp.*`:
  *   - `/mcp` (and any subpath, in case the MCP spec adds them)

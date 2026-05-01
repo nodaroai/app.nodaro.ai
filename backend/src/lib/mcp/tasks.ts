@@ -2,10 +2,10 @@
  * MCP `tasks/*` API — task lifecycle registry + JSON-RPC handlers.
  *
  * The MCP spec defines `tasks/list`, `tasks/get`, `tasks/result`, and
- * `tasks/cancel` as a side-channel for long-running tool calls (per the
- * [redacted-reference] reference review). v1.2 adds these so widgets running inside
- * Claude.ai's `<hash>.claudemcpcontent.com` iframe can poll/cancel/await
- * the BullMQ jobs we kick off on tool invocation.
+ * `tasks/cancel` as a side-channel for long-running tool calls. v1.2 adds
+ * these so widgets running inside Claude.ai's `<hash>.claudemcpcontent.com`
+ * iframe can poll/cancel/await the BullMQ jobs we kick off on tool
+ * invocation.
  *
  * Architecture notes:
  * - The registry is in-process: each tool call (e.g. `generate_image`) calls

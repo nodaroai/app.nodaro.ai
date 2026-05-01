@@ -77,7 +77,7 @@ export function uiProtocolShim(): string {
       // tear the iframe down before tool-result arrives.
       window.addEventListener('DOMContentLoaded', function() {
         send('ui/initialize', {
-          // Stable spec version (matches [redacted-reference] + canonical examples).
+          // Stable spec version (matches the canonical MCP Apps examples).
           // Older 2025-* versions cause Claude.ai web to drop the handshake.
           protocolVersion: '2026-01-26',
           // Only declare what we actually support. We do NOT expose app-side
@@ -102,8 +102,7 @@ export function uiProtocolShim(): string {
       // Auto-resize: emit ui/notifications/size-changed whenever the body
       // height changes so the host can grow the iframe to fit content.
       // Without this Claude.ai uses a default small height and the image
-      // preview renders cramped ([redacted-reference]'s bundle does the same — see
-      // setupSizeChangedNotifications).
+      // preview renders cramped.
       function emitSize() {
         var h = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
         var w = document.documentElement.scrollWidth || document.body.scrollWidth || 0;
@@ -161,26 +160,42 @@ export function uiProtocolShim(): string {
             console.warn('[NodaroMCP.openLink] host rejected open-link:', err && err.message);
           });
         },
+        // ── ui/message ──
+        // CRITICAL: Use send (JSON-RPC request) NOT notify. Per the
+        // MCP Apps spec, ui/message is a host REQUEST — the widget asks
+        // the host to inject the content into chat input, and the host
+        // returns success/failure. Claude.ai only honors the request
+        // form; notifications get silently dropped (which is why the
+        // Animate / Edit / Recreate buttons appeared to do nothing
+        // before — the messages went out as notifications and Claude.ai
+        // ignored them).
         useAsset: function(assetId, kind) {
-          notify('ui/message', {
+          send('ui/message', {
             role: 'user',
             content: [{ type: 'text', text: 'Use the ' + kind + ' with id ' + assetId + ' as a reference. The user clicked the Use button.' }]
+          }).catch(function(err) {
+            console.warn('[NodaroMCP.useAsset] host rejected ui/message:', err && err.message);
           });
         },
         suggestTool: function(toolName, paramsHint) {
-          notify('ui/message', {
+          send('ui/message', {
             role: 'user',
             content: [{ type: 'text', text: 'Run ' + toolName + ' with these parameters: ' + JSON.stringify(paramsHint) }]
+          }).catch(function(err) {
+            console.warn('[NodaroMCP.suggestTool] host rejected ui/message:', err && err.message);
           });
         },
-        // Push the prompt back into chat as a fresh user message — [redacted-reference]-style
-        // "Recreate". The host (Claude.ai) treats it as a new turn and the assistant
-        // re-derives which tool to call. Bypasses the "Run X with these parameters"
-        // wrapper used by suggestTool, which is too explicit for a recreate flow.
+        // Push text into chat as a fresh user message (used by the Recreate
+        // button and the form-trigger paths). The host treats it as a new
+        // turn and the assistant re-derives which tool to call. Bypasses
+        // the "Run X with these parameters" wrapper used by suggestTool,
+        // which is too explicit for a recreate / open-ended flow.
         pushUserMessage: function(text) {
-          notify('ui/message', {
+          send('ui/message', {
             role: 'user',
             content: [{ type: 'text', text: text }]
+          }).catch(function(err) {
+            console.warn('[NodaroMCP.pushUserMessage] host rejected ui/message:', err && err.message);
           });
         }
       };

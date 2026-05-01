@@ -3,8 +3,8 @@
  * is, who made it, what it's good for, and which knobs it accepts.
  *
  * Consumed by:
- * - Backend MCP `list_models` tool (renders [redacted-reference]-style nested response
- *   so Claude can pick the right model for a user's intent)
+ * - Backend MCP `list_models` tool (renders the nested per-kind / per-family
+ *   response so Claude can pick the right model for a user's intent)
  * - (future) Frontend config panels — today they read parallel registries
  *   in `frontend/src/components/editor/config-panels/model-options.ts`; a
  *   follow-up will migrate them to import from here.
@@ -112,8 +112,8 @@ export interface ModelCatalogEntry {
 
 /**
  * Editorial recommendations — short "best for X" picks Claude can echo back
- * to the user when they don't know which model to use. Mirrors [redacted-reference]'s
- * "Quick recommendations" footer.
+ * to the user when they don't know which model to use. Surfaces as a "Quick
+ * recommendations" footer in MCP `list_models` output.
  */
 export interface ModelRecommendation {
   intent: string
