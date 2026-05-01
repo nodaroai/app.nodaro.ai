@@ -31,38 +31,48 @@ function writeSession() {
   })
 }
 
+/**
+ * Chain-agnostic supabase mock: returns a Proxy that pretends every
+ * method (select / eq / neq / not / in / order / limit / lt / ilike /
+ * etc.) is itself a chainable noop, AND is also a thenable resolving
+ * to `{ data, error: null }` when `await`-ed at any point. Lets handler
+ * code reorder its query chain without breaking tests.
+ */
+function makeChainable(rows: unknown[]) {
+  const result = { data: rows, error: null }
+  let chain: unknown
+  const promise: Promise<typeof result> = Promise.resolve(result)
+  // eslint-disable-next-line prefer-const
+  chain = new Proxy(function () {}, {
+    get(_target, prop) {
+      if (prop === "then") return promise.then.bind(promise)
+      if (prop === "catch") return promise.catch.bind(promise)
+      if (prop === "finally") return promise.finally.bind(promise)
+      return () => chain
+    },
+    apply() {
+      return chain
+    },
+  })
+  return chain
+}
+
 describe("browse_gallery tool", () => {
   it("formats rows as one line per item with cursor footer", async () => {
-    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            not: vi.fn().mockReturnValue({
-              order: vi.fn().mockReturnValue({
-                limit: vi.fn().mockReturnValue({
-                  in: vi.fn().mockResolvedValue({
-                    data: [
-                      {
-                        id: "g1",
-                        job_type: "generate-image",
-                        input_data: {
-                          prompt: "knight",
-                          provider: "nano-banana",
-                        },
-                        output_data: { imageUrl: "https://r2/x.png" },
-                        completed_at: "2026-04-29T12:00:00Z",
-                        provider: "nano-banana",
-                      },
-                    ],
-                    error: null,
-                  }),
-                }),
-              }),
-            }),
-          }),
-        }),
-      }),
-    })
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainable([
+        {
+          id: "g1",
+          job_type: "generate-image",
+          input_data: { prompt: "knight", provider: "nano-banana" },
+          output_data: { imageUrl: "https://r2/x.png" },
+          completed_at: "2026-04-29T12:00:00Z",
+          created_at: "2026-04-29T12:00:00Z",
+          provider: "nano-banana",
+          status: "completed",
+        },
+      ]),
+    )
     const server = buildServer()
     registerGallery({ server, session: readSession(), fastify: Fastify() })
     const result = await callTool(server, "browse_gallery", { limit: 1 })
