@@ -42,7 +42,7 @@ describe("mcp host filter", () => {
     expect(res.json().error.message).toMatch(/mcp\.nodaro\.ai/)
   })
 
-  it("404s root path on mcp.nodaro.ai (matches [redacted-reference] behaviour)", async () => {
+  it("404s root path on mcp.nodaro.ai (only /mcp and protected-resource discovery resolve)", async () => {
     const app = await makeApp()
     const res = await app.inject({ method: "GET", url: "/", headers: { host: "mcp.nodaro.ai" } })
     expect(res.statusCode).toBe(404)
