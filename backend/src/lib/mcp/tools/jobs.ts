@@ -62,7 +62,11 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       let query = supabase
         .from("jobs")
         .select(
-          "id, status, progress, input_data, output_data, error_message, created_at, completed_at, job_type, credits, display_cost",
+          // display_cost (USD) intentionally excluded — MCP surfaces only
+          // the credits abstraction; raw $ pricing is internal/admin and
+          // distracts the agent's response (Claude was rendering "$0.09"
+          // in chat for every job).
+          "id, status, progress, input_data, output_data, error_message, created_at, completed_at, job_type, credits",
         )
         .eq("user_id", session.userId)
         .order("created_at", { ascending: false })
@@ -140,7 +144,8 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       const { data, error } = await supabase
         .from("jobs")
         .select(
-          "id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, job_type, credits, display_cost, user_id",
+          // display_cost (USD) excluded — see list_jobs comment above.
+          "id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, job_type, credits, user_id",
         )
         .eq("id", args.job_id)
         .eq("user_id", session.userId)
