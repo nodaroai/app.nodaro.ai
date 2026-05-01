@@ -104,7 +104,7 @@ ${uiProtocolShim()}
     }
 
     document.getElementById('btn-open').addEventListener('click', function() {
-      window.NodaroMCP.openLink('https://app.nodaro.ai/library');
+      window.NodaroMCP.openLink('https://app.nodaro.ai/gallery');
     });
 
     window.addEventListener('mcp-tool-result', function(e) {
