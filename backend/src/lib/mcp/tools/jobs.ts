@@ -36,9 +36,16 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
   server.registerTool(
     "list_jobs",
     {
-      title: "List Jobs",
+      title: "List My Gallery / Recent Generations",
       description:
-        "List the authenticated user's recent jobs (most recent first). Cursor-based pagination via the returned `next_cursor` field.",
+        "PRIMARY tool when the user asks: \"show my gallery\", \"my " +
+        "recent images\", \"my generations\", \"my videos\", \"my " +
+        "library\", \"what have I made\", \"my work\", or any synonym " +
+        "in any language (Hebrew: \"תראה לי את הגלריה שלי\" / \"מה " +
+        "יצרתי\"; Spanish: \"mi galería\"; etc.). Returns the user's " +
+        "Nodaro jobs most recent first with media kind, status, output " +
+        "URL, prompt, model, and timestamps. Cursor-based pagination via " +
+        "`next_cursor`.",
       inputSchema: {
         limit: z.number().int().min(1).max(100).optional(),
         cursor: z
