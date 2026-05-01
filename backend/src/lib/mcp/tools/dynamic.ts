@@ -181,13 +181,23 @@ function registerComponentTool(
 ): void {
   const inputSchema = componentInputsToZod(row.component_metadata)
 
+  // Same verb-preference nudge as registerAppTool (see the comment there).
+  // Components are reusable sub-graphs the user has saved — they should
+  // run only when the user explicitly names the component or needs the
+  // exact pipeline it defines, not as a competitor to the verb tools.
+  const componentPrefix =
+    "[Saved Nodaro component] Run ONLY when the user explicitly asks for " +
+    `THIS component ("${row.name}"), OR needs the exact reusable pipeline ` +
+    "this component defines. For ad-hoc generation (image / video / audio), " +
+    "ALWAYS prefer the verb tools (generate_image, modify_image, " +
+    "generate_video, animate_image, generate_speech, generate_music).\n\n"
   server.registerTool(
     toolName,
     {
       title: row.name,
       description:
-        row.description ??
-        `Run "${row.name}" component (your saved component). `,
+        componentPrefix +
+        (row.description ?? `Run "${row.name}" component.`),
       inputSchema,
       outputSchema: {
         executionId: z.string(),
@@ -285,12 +295,25 @@ function registerAppTool(
   }
 
   const inputSummary = summarizeAppInputs(row)
+  // Strong nudge to prefer the canonical verb tools (`generate_image`,
+  // `modify_image`, `generate_video`, etc.) for ad-hoc requests. Custom
+  // apps are user-published workflows — they should run only when the
+  // user explicitly names the workflow or needs a multi-step pipeline,
+  // not as a competitor to the verbs for "make me an image" prompts.
+  const verbPreferencePrefix =
+    "[Saved Nodaro workflow] Run ONLY when the user explicitly asks for " +
+    `THIS specific workflow ("${row.name}"), OR needs a multi-step pipeline ` +
+    "this workflow defines. For ad-hoc image / video / audio generation, " +
+    "ALWAYS prefer the verb tools (generate_image, modify_image, " +
+    "generate_video, animate_image, generate_speech, generate_music) — " +
+    "they're the canonical, billing-aware, model-flexible entry points.\n\n"
   server.registerTool(
     toolName,
     {
       title: row.name,
       description:
-        (row.description ?? `Run "${row.name}" published app (your published app).`) +
+        verbPreferencePrefix +
+        (row.description ?? `Run "${row.name}" published app.`) +
         inputSummary,
       inputSchema,
       outputSchema: {
