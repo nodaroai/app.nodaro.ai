@@ -177,7 +177,11 @@ ${uiProtocolShim()}
   <div class="progress" id="progress"><div id="bar"></div></div>
   <div class="preview" id="preview" hidden></div>
   <div class="actions" id="actions">
-    <div class="actions-left">${
+    <!-- Image gets Animate / Edit baked into the template (no provider
+         branching needed). Audio's left buttons are populated at runtime
+         from state.model — Suno songs surface Stems / Extend / Cover;
+         ElevenLabs TTS surfaces Change Voice; etc. See populateAudioActions(). -->
+    <div class="actions-left" id="actions-left">${
       mediaKind === "image"
         ? `<button id="btn-animate" title="Animate this image">${ANIMATE_ICON}<span>Animate</span></button>
       <button id="btn-edit" title="Edit this image">${EDIT_ICON}<span>Edit</span></button>`
@@ -336,6 +340,10 @@ ${uiProtocolShim()}
         startPolling();
       }
       renderMeta();
+      // Now that we know the model id, surface the audio follow-up buttons
+      // (Stems / Extend / Cover for Suno, Change voice / Dub for ElevenLabs
+      // TTS, none for minimax / SFX). No-op for non-audio kinds.
+      populateAudioActions();
     });
 
     // Bridged from progress-emitter via host-forwarded notifications/progress.
@@ -550,6 +558,71 @@ ${uiProtocolShim()}
         'modify this image: ' + buildContextJson('modify_image') + ASK_TRAILER
       );
     });
+
+    // ── Audio kind: provider-specific follow-ups ──
+    // Different audio models support different next-step actions:
+    //   Suno (music): stems, extend, cover, music video
+    //   ElevenLabs (voice): voice-change, dubbing
+    //   minimax / SFX / etc.: nothing (single-shot generators)
+    // Each button pushes a conversational ui/message — same pattern as
+    // image Edit / Animate. Claude routes the resulting tool call.
+    function buildAudioContextJson(action) {
+      var ctx = { audio_url: state.outputUrl };
+      if (state.prompt) ctx['original prompt'] = state.prompt;
+      if (state.model) ctx.model = state.model;
+      ctx.action = action;
+      return JSON.stringify(ctx);
+    }
+    function pushAudioFollowup(verbPrefix, actionId) {
+      if (!state.outputUrl || !window.NodaroMCP.pushUserMessage) return;
+      window.NodaroMCP.pushUserMessage(
+        verbPrefix + ': ' + buildAudioContextJson(actionId) + ASK_TRAILER
+      );
+    }
+    function makeAudioBtn(label, title, onClick) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.title = title;
+      b.textContent = label;
+      b.addEventListener('click', onClick);
+      return b;
+    }
+    function populateAudioActions() {
+      if (MEDIA_KIND !== 'audio') return;
+      var leftEl = document.getElementById('actions-left');
+      if (!leftEl) return;
+      while (leftEl.firstChild) leftEl.removeChild(leftEl.firstChild);
+      var model = state.model || '';
+      // Suno (V4 / V5) — full music follow-up suite.
+      if (model === 'suno' || model === 'suno-v5') {
+        leftEl.appendChild(makeAudioBtn('Stems', 'Separate vocal + instrumental stems', function() {
+          pushAudioFollowup('separate stems from this Suno track', 'suno_separate_stem');
+        }));
+        leftEl.appendChild(makeAudioBtn('Extend', 'Extend this song', function() {
+          pushAudioFollowup('extend this Suno track', 'suno_extend');
+        }));
+        leftEl.appendChild(makeAudioBtn('Cover', 'Re-record this song in a new style', function() {
+          pushAudioFollowup('cover this Suno track', 'suno_cover');
+        }));
+        leftEl.appendChild(makeAudioBtn('Music video', 'Generate a music video for this track', function() {
+          pushAudioFollowup('generate a music video for this Suno track', 'suno_music_video');
+        }));
+        return;
+      }
+      // ElevenLabs voice (TTS). SFX / dialogue / dubbing models are not
+      // covered here — they each have their own follow-up sets we'll add
+      // when we wire those verb tools.
+      if (model.indexOf('elevenlabs-') === 0 && model !== 'elevenlabs-sfx') {
+        leftEl.appendChild(makeAudioBtn('Change voice', 'Convert to a different voice (speech-to-speech)', function() {
+          pushAudioFollowup('change the voice on this audio', 'voice_changer');
+        }));
+        leftEl.appendChild(makeAudioBtn('Dub', 'Translate + dub into another language', function() {
+          pushAudioFollowup('dub this audio into another language', 'dubbing');
+        }));
+        return;
+      }
+      // No follow-ups for the rest (minimax music, simple SFX, etc.).
+    }
   })();
 </script>
 </body></html>`
