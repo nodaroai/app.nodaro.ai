@@ -113,6 +113,89 @@ ${uiProtocolShim()}
       if (sc.name) headerEl.textContent = sc.name;
       ingestInitialNodeStates(sc.nodeStates);
       if (Array.isArray(sc.outputs)) sc.outputs.forEach(function(o) { addOutput(o.kind, o.url); });
+      // Stateless HTTP MCP can't deliver async progress notifications —
+      // the orchestrator runs in BullMQ AFTER the tool call returns and
+      // the server tears down before its events can flow back via
+      // ui/message. Polling get_app_run every 2s is the only reliable
+      // way to surface live progress to the widget.
+      if (state.executionId) startPolling();
+    });
+
+    // ── Poll loop ──
+    var pollTimer = null;
+    var pollAttempt = 0;
+    var POLL_MS = 2000;
+    var MAX_POLL_MS = 10 * 60 * 1000; // give up after 10 minutes
+    var seenOutputs = {};
+
+    function startPolling() {
+      if (pollTimer) return;
+      pollAttempt = 0;
+      pollOnce();
+      pollTimer = setInterval(pollOnce, POLL_MS);
+    }
+    function stopPolling() {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    }
+    function pollOnce() {
+      pollAttempt++;
+      if (pollAttempt * POLL_MS > MAX_POLL_MS) {
+        stopPolling();
+        progressEl.textContent = 'Still working — check Nodaro library.';
+        return;
+      }
+      if (!state.executionId) return;
+      var reqId = 'wf-poll-' + state.executionId + '-' + pollAttempt;
+      window.parent.postMessage({
+        jsonrpc: '2.0', id: reqId,
+        method: 'tools/call',
+        params: { name: 'get_app_run', arguments: { execution_id: state.executionId } }
+      }, '*');
+    }
+    window.addEventListener('message', function(ev) {
+      var data = ev.data;
+      if (!data || data.jsonrpc !== '2.0' || !data.id) return;
+      if (typeof data.id !== 'string' || data.id.indexOf('wf-poll-') !== 0) return;
+      if (data.error) return;
+      var sc = (data.result && data.result.structuredContent) || {};
+
+      // Update node pills from polled state.
+      if (Array.isArray(sc.nodeStates)) {
+        sc.nodeStates.forEach(function(n) {
+          if (!n || !n.id) return;
+          if (!state.nodeMap[n.id]) state.nodeOrder.push(n.id);
+          // Map orchestrator statuses (pending/running/completed/failed/skipped)
+          // onto the widget's CSS classes (queued/running/done/failed).
+          var s = n.status;
+          var ws = s === 'pending' ? 'queued'
+                 : s === 'completed' || s === 'skipped' ? 'done'
+                 : s === 'running' ? 'running'
+                 : s === 'failed' ? 'failed' : 'queued';
+          state.nodeMap[n.id] = { id: n.id, label: n.label || n.id, status: ws };
+        });
+        renderNodes();
+      }
+
+      // Add any newly-produced outputs we haven't already rendered.
+      if (Array.isArray(sc.outputs)) {
+        sc.outputs.forEach(function(o) {
+          var key = (o.kind || '') + '|' + (o.url || '');
+          if (!o.url || seenOutputs[key]) return;
+          seenOutputs[key] = true;
+          addOutput(o.kind, o.url);
+        });
+      }
+
+      // Stop polling on terminal status; show a short summary.
+      if (sc.status === 'completed') {
+        progressEl.textContent = 'Done';
+        stopPolling();
+      } else if (sc.status === 'failed' || sc.status === 'cancelled') {
+        progressEl.textContent = 'Run ' + sc.status;
+        stopPolling();
+      } else if (sc.status === 'running') {
+        progressEl.textContent = 'Running…';
+      }
     });
 
     // Live updates from progress-emitter bridged into the iframe via
