@@ -67,7 +67,10 @@ export interface JobRecord {
   job_type: string | null
 }
 
-// Public job type (for regular users)
+// Public job type (for regular users). USD-denominated `cost` removed
+// per the api/sdk/mcp-wide policy: regular callers see only `credits`.
+// Admins keep the full JobRecord shape (with provider / provider_cost /
+// display_cost / credits_actual).
 export interface PublicJob {
   id: string
   status: string
@@ -79,17 +82,21 @@ export interface PublicJob {
   started_at: string | null
   completed_at: string | null
   user_id: string
-  cost: number | null
   credits: number | null
   job_type: string | null
 }
 
 /**
  * Sanitize job data for public API response.
- * Hide provider details from regular (non-admin) users:
- * - Remove `provider` field (internal implementation detail)
- * - Remove `provider_cost` field (our actual cost - sensitive)
- * - Rename `display_cost` to `cost` (what the user pays)
+ *
+ * Non-admin callers see only the credits abstraction — USD pricing
+ * (display_cost / provider_cost) is admin-only, same pattern as the
+ * frontend's `sanitizeJobForPublic` filter. Provider id is also hidden
+ * (internal implementation detail; the user only knows the model id
+ * they picked, which is preserved in input_data).
+ *
+ * Admins (req.userRole === 'admin') see the full record including
+ * provider, provider_cost, display_cost, and credits_actual.
  */
 export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecord | PublicJob {
   // Admin users: return full data
@@ -97,8 +104,17 @@ export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecor
     return job
   }
 
-  // Regular users: hide sensitive provider/cost details
-  const { provider, provider_cost, display_cost, credits_actual, ...rest } = job
+  // Regular users: strip ALL USD-denominated cost fields. Credits stay
+  // (that's the abstraction the user is billed in). The previous
+  // version renamed display_cost → cost, which still leaked USD; user
+  // explicitly asked for USD to be admin-only across api/sdk/mcp.
+  const {
+    provider: _provider,
+    provider_cost: _providerCost,
+    display_cost: _displayCost,
+    credits_actual: _creditsActual,
+    ...rest
+  } = job
 
   // Also strip internal fields from input_data (orchestrator stores full payload)
   if (rest.input_data && typeof rest.input_data === "object") {
@@ -111,10 +127,7 @@ export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecor
     rest.input_data = cleaned
   }
 
-  return {
-    ...rest,
-    cost: display_cost,
-  }
+  return rest
 }
 
 export async function jobRoutes(app: FastifyInstance) {
