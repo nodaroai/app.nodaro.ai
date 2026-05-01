@@ -5,7 +5,16 @@ import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { hasCredits } from "../../config.js"
 import { supabase } from "../../supabase.js"
-import { CreditsService, STATIC_CREDIT_COSTS } from "../../../billing/credits.js"
+import { CreditsService } from "../../../billing/credits.js"
+import {
+  MODEL_CATALOG,
+  MODEL_RECOMMENDATIONS,
+  listModels,
+  groupByFamily,
+  type ModelCatalogEntry,
+  type ModelKind,
+  type ModelMode,
+} from "@nodaro/shared"
 
 const creditsReadGate: ToolGate = { required: ["credits:read"] }
 
@@ -16,35 +25,25 @@ export interface RegisterModelsOpts {
 }
 
 /**
- * Classify a model identifier as image / video / audio / other.
- * Heuristic matches the verb-name conventions, not exact: "video" / "vid"
- * substrings or known-video provider prefixes route to `video`, etc.
- *
- * Composite identifiers like `nano-banana-pro:4K` keep the base classifier.
+ * Strip undefined fields so the JSON output stays compact when a model
+ * doesn't expose a particular lever (e.g., audio models have no aspectRatios).
  */
-function classifyModel(id: string): "image" | "video" | "audio" | "other" {
-  const base = id.split(":")[0] ?? id
-  const isImage =
-    /^(nano-banana|flux|grok$|gpt-image|imagen|qwen|seedream|z-image|recraft|topaz-image|ideogram|flux-kontext|flux-pro)/.test(
-      base,
-    )
-  if (isImage) return "image"
-  const isVideo =
-    /^(minimax|veo|kling|grok-i2v|seedance|wan|hailuo|bytedance|sora|kling-avatar|infinitalk|kling-master|runway|topaz-vid)/.test(
-      base,
-    ) ||
-    /(^|-)i2v($|:)/.test(base) ||
-    base === "lip-sync" ||
-    base === "extend-video" ||
-    base === "combine-videos" ||
-    base === "add-captions" ||
-    base === "extract-frame"
-  if (isVideo) return "video"
-  const isAudio =
-    /^(elevenlabs|suno|generate-music|text-to-speech|text-to-audio|music)/.test(base) ||
-    base === "extract-youtube-audio"
-  if (isAudio) return "audio"
-  return "other"
+function projectModel(m: ModelCatalogEntry): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    id: m.id,
+    label: m.label,
+    description: m.description,
+    mode: m.mode,
+    useCases: m.useCases,
+    pricing: m.pricing,
+  }
+  if (m.featured) out.featured = true
+  if (m.features?.length) out.features = m.features
+  if (m.aspectRatios?.length) out.aspectRatios = m.aspectRatios
+  if (m.resolutions?.length) out.resolutions = m.resolutions
+  if (m.qualities?.length) out.qualities = m.qualities
+  if (m.durations?.length) out.durations = m.durations
+  return out
 }
 
 /**
@@ -59,25 +58,75 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
     {
       title: "List Models",
       description:
-        "List the AI models available on this Nodaro instance with their credit costs and media kind. Output is a JSON array of `{ id, kind, credits }` rows.",
+        "Browse the AI models available on this Nodaro instance. Returns [redacted-reference]-" +
+        "style nested JSON: per-kind groups, families, and per-model capability sheets " +
+        "(aspect ratios, resolutions, qualities, durations, features, per-variant " +
+        "credit pricing). Includes a `recommendations` array — short 'best for X' " +
+        "picks Claude can echo back when the user is undecided. Use this BEFORE " +
+        "calling generate_image / generate_video / etc. to pick the right model + " +
+        "settings for the user's intent.",
       inputSchema: {
-        kind: z.enum(["image", "video", "audio"]).optional().describe("Filter by media kind"),
+        kind: z
+          .enum(["image", "video", "audio"])
+          .optional()
+          .describe("Filter to a single media kind."),
+        mode: z
+          .enum([
+            "t2i", "i2i", "edit", "upscale", "remove-bg",
+            "i2v", "t2v", "v2v", "extend", "motion-transfer", "lip-sync", "video-upscale",
+            "tts", "music", "sfx", "stt", "voice-clone", "voice-design",
+            "voice-changer", "isolation", "dubbing", "forced-alignment",
+          ])
+          .optional()
+          .describe("Filter to a specific operation (e.g. 't2i' = text-to-image, 'i2v' = image-to-video)."),
+        family: z.string().optional().describe("Filter by vendor / lab name (e.g. 'Google', 'OpenAI', 'Bytedance')."),
+        featuredOnly: z.boolean().optional().describe("Return only editor-picked best-in-tier models."),
       },
       annotations: { readOnlyHint: true },
     },
     async (args) => {
-      const rows: Array<{ id: string; kind: string; credits: number }> = []
-      for (const [id, credits] of Object.entries(STATIC_CREDIT_COSTS)) {
-        const kind = classifyModel(id)
-        if (args.kind && kind !== args.kind) continue
-        rows.push({ id, kind, credits })
+      const filtered = listModels({
+        kind: args.kind as ModelKind | undefined,
+        mode: args.mode as ModelMode | undefined,
+        family: args.family,
+      }).filter((m) => (args.featuredOnly ? m.featured === true : true))
+
+      const grouped = groupByFamily(filtered)
+      // Group again by kind for the outer envelope so output mirrors
+      // [redacted-reference]'s "Image / Video / Audio" sectioning.
+      const byKind: Record<ModelKind, Array<{ family: string; models: Record<string, unknown>[] }>> = {
+        image: [],
+        video: [],
+        audio: [],
       }
-      rows.sort((a, b) => a.id.localeCompare(b.id))
+      for (const { family, models } of grouped) {
+        const kind = models[0]!.kind
+        byKind[kind].push({ family, models: models.map(projectModel) })
+      }
+
+      const sections = (["image", "video", "audio"] as const)
+        .filter((k) => byKind[k].length > 0)
+        .map((k) => ({ kind: k, families: byKind[k] }))
+
+      // Trim recommendations to those whose target intent matches the kind
+      // filter (otherwise audio recs leak into a "kind=image" call).
+      const allRecs = [...MODEL_RECOMMENDATIONS]
+      const recs = args.kind
+        ? allRecs.filter((r) =>
+            r.modelIds.some((id) => MODEL_CATALOG[id]?.kind === args.kind),
+          )
+        : allRecs
+
+      const totalModels = filtered.length
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify({ data: rows, total: rows.length }, null, 2),
+            text: JSON.stringify(
+              { sections, recommendations: recs, totalModels },
+              null,
+              2,
+            ),
           },
         ],
       }
