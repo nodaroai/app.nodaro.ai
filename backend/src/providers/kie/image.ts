@@ -131,14 +131,15 @@ export class KieImageProvider
       input.output_format = "png"
     }
 
-    // Base Nano Banana uses `image_size` for aspect ratio (NOT `aspect_ratio`)
-    // and does NOT support `resolution` — see docs.kie.ai/market/google/nano-banana.md
-    // NOTE: nano-banana-pro uses `aspect_ratio` and DOES support `resolution` (1K/2K/4K)
+    // Nodaro `nano-banana` is routed to KIE's `nano-banana-pro` model (see
+    // models.ts) so we can offer `image_input` reference images at the cheaper
+    // 4-KIE-credit price tier. The Pro endpoint accepts `aspect_ratio`
+    // natively — no field-rename needed. We DO strip `resolution` so KIE
+    // defaults to 1K; 2K/4K live under the explicit `nano-banana-pro` provider
+    // which prices them via composite credit identifiers. Without this,
+    // callers asking for 9:16 silently got 1:1 because we used to rewrite the
+    // field to `image_size`, which the Pro endpoint ignores.
     if (provider === "nano-banana") {
-      if (input.aspect_ratio) {
-        input.image_size = input.aspect_ratio
-        delete input.aspect_ratio
-      }
       delete input.resolution
     }
 
