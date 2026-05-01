@@ -640,7 +640,7 @@ export type { Weapon, WeaponSubcategory } from "./weapons.js"
 export { pickIds, togglePick } from "./multi-pick.js"
 
 // Model catalog (single source of truth for MCP `list_models` and the
-// future frontend config-panel migration).
+// frontend config-panel registries).
 export {
   MODEL_CATALOG,
   MODEL_RECOMMENDATIONS,
@@ -648,6 +648,19 @@ export {
   groupByFamily,
   getModel,
   validateModelInput,
+  // Frontend picker derivers
+  getAspectRatioOptions,
+  getResolutionOptions,
+  getQualityOptions,
+  getDurationsForModel,
+  getCreditRange,
+  hasFeature,
+  modelsWithFeature,
+  durationsByMode,
+  resolutionOptionsByKind,
+  aspectRatioOptionsByKind,
+  qualityOptionsByKind,
+  creditRangesAll,
 } from "./model-catalog.js"
 export type {
   ModelCatalogEntry,
@@ -657,6 +670,7 @@ export type {
   ModelValidationIssue,
   PriceVariant,
   ValidationField,
+  LabeledOption,
 } from "./model-catalog.js"
 
 // i18n

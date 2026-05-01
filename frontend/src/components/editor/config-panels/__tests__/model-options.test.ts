@@ -110,7 +110,7 @@ describe("KIE_VIDEO_DURATIONS", () => {
   })
 
   it("kling-3.0 uses KLING3_DURATIONS (3-15)", () => {
-    expect(KIE_VIDEO_DURATIONS["kling-3.0"]).toBe(KLING3_DURATIONS)
+    expect(KIE_VIDEO_DURATIONS["kling-3.0"]).toEqual([...KLING3_DURATIONS])
   })
 
   it("every provider has at least one duration", () => {
@@ -126,7 +126,7 @@ describe("KIE_T2V_DURATIONS", () => {
   })
 
   it("kling-3.0 uses KLING3_DURATIONS", () => {
-    expect(KIE_T2V_DURATIONS["kling-3.0"]).toBe(KLING3_DURATIONS)
+    expect(KIE_T2V_DURATIONS["kling-3.0"]).toEqual([...KLING3_DURATIONS])
   })
 
   it("every provider has at least one duration", () => {

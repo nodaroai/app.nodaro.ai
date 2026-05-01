@@ -33,7 +33,7 @@ function projectModel(m: ModelCatalogEntry): Record<string, unknown> {
     id: m.id,
     label: m.label,
     description: m.description,
-    mode: m.mode,
+    modes: m.modes,
     useCases: m.useCases,
     pricing: m.pricing,
   }
