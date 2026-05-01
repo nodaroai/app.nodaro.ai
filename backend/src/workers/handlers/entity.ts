@@ -6,6 +6,7 @@ import {
   shouldSaveJobResult,
   markJobCompleted,
   uploadImageMaybeWatermark,
+  setJobProgress,
   type HandlerFn,
   type JobContext,
 } from "../shared.js"
@@ -35,10 +36,10 @@ function makeEntityImageHandler(
     const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
     const extraParams = opts?.aspectRatio ? { aspect_ratio: opts.aspectRatio } : undefined
     const result = await generateImage(prompt, resolvedProvider, referenceImageUrls, extraParams)
-    await job.updateProgress(50)
+    await setJobProgress(job, ctx.jobId, 50)
 
     const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-    await job.updateProgress(100)
+    await setJobProgress(job, ctx.jobId, 100)
 
     if (!await shouldSaveJobResult(ctx.jobId)) return
 
@@ -73,7 +74,7 @@ const handleGenerateScript: HandlerFn = async function handleGenerateScript(job,
   console.log(`[worker] generate-script ${ctx.jobId} (model: ${llmModel ?? provider ?? "default"})`)
 
   const script = await generateScript(prompt, sceneCount, tone, targetDuration, provider, llmModel)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 

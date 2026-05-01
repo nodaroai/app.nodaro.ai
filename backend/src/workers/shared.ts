@@ -470,3 +470,58 @@ export async function createAssetFromJob(
     console.error(`[worker] Failed to create asset records for job ${jobId}:`, err)
   }
 }
+
+// ============================================================================
+// Progress reporting
+// ============================================================================
+//
+// Workers must call `setJobProgress(job, jobId, n)` instead of just
+// `job.updateProgress(n)` because the MCP widget polls the `jobs.progress`
+// (Postgres) column for its bar — not BullMQ / Redis state. Calling only
+// `job.updateProgress(...)` updates Redis, which the widget can't see, so
+// the bar appears stuck at 0% (or whatever the last DB write was) for the
+// entire run.
+//
+// `startProgressRamp` complements the manual writes for long-running
+// provider calls that don't expose an `onProgress` callback (image / Suno
+// / TTS APIs that return a result directly). It ramps progress every
+// `tickMs` by `tickStep`, capped at `cap`, while the call is in flight.
+
+export async function setJobProgress(
+  job: { updateProgress: (p: number) => Promise<void> },
+  jobId: string,
+  progress: number,
+): Promise<void> {
+  await job.updateProgress(progress)
+  // Best-effort DB write — failures shouldn't fail the generation.
+  await supabase
+    .from("jobs")
+    .update({ progress })
+    .eq("id", jobId)
+    .then(() => undefined, (err) => {
+      // eslint-disable-next-line no-console
+      console.warn(`[worker] progress DB update failed for ${jobId}:`, err)
+    })
+}
+
+export function startProgressRamp(
+  job: { updateProgress: (p: number) => Promise<void> },
+  jobId: string,
+  opts: { start: number; cap: number; tickMs?: number; tickStep?: number },
+): { stop: () => void } {
+  const tickMs = opts.tickMs ?? 1500
+  const tickStep = opts.tickStep ?? 4
+  let current = opts.start
+  let stopped = false
+  const handle = setInterval(() => {
+    if (stopped || current >= opts.cap) return
+    current = Math.min(current + tickStep, opts.cap)
+    void setJobProgress(job, jobId, current)
+  }, tickMs)
+  return {
+    stop() {
+      stopped = true
+      clearInterval(handle)
+    },
+  }
+}
