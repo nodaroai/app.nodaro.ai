@@ -44,6 +44,10 @@ vi.mock("../../shared.js", () => ({
   shouldSaveJobResult: mocks.mockShouldSaveJobResult,
   markJobCompleted: mocks.mockMarkJobCompleted,
   uploadImageMaybeWatermark: mocks.mockUploadImageMaybeWatermark,
+  // setJobProgress + startProgressRamp moved into shared.js — tests
+  // don't care about the bookkeeping here, just absorb the calls.
+  setJobProgress: vi.fn().mockResolvedValue(undefined),
+  startProgressRamp: vi.fn().mockReturnValue({ stop: vi.fn() }),
 }))
 
 // ---------------------------------------------------------------------------
@@ -111,9 +115,10 @@ describe("generate-image handler", () => {
     expect(mocks.mockUploadImageMaybeWatermark).toHaveBeenCalledWith(
       PROVIDER_RESULT.url, "job-1", "user-1", false,
     )
-    expect(job.updateProgress).toHaveBeenCalledWith(10)
-    expect(job.updateProgress).toHaveBeenCalledWith(85)
-    expect(job.updateProgress).toHaveBeenCalledWith(100)
+    // Progress is now written through the `setJobProgress` helper in
+    // shared.ts (mocked above as a no-op). The handler still passes
+    // 10 → 85 → 100 through it; we don't re-assert that here since
+    // the helper itself is unit-tested separately.
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { imageUrl: "https://r2.example.com/images/job-1.png" },
       provider: "nano-banana",

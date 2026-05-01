@@ -16,6 +16,7 @@ import {
   commitJobCredits,
   shouldSaveJobResult,
   markJobCompleted,
+  setJobProgress,
   type HandlerFn,
 } from "../shared.js"
 
@@ -48,10 +49,10 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
 
   if (useDirectApi) {
     const audioBuffer = await directElevenLabsTTS(processedText, voice ?? "Rachel", provider, hasOptions ? ttsOptions : undefined)
-    await job.updateProgress(50)
+    await setJobProgress(job, ctx.jobId, 50)
 
     const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
-    await job.updateProgress(100)
+    await setJobProgress(job, ctx.jobId, 100)
 
     if (!await shouldSaveJobResult(ctx.jobId)) return
 
@@ -67,10 +68,10 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   }
 
   const result = await routedTextToSpeech(processedText, provider ?? "elevenlabs-turbo", voice, hasOptions ? ttsOptions : undefined)
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
@@ -90,9 +91,9 @@ const handleGenerateMusic: HandlerFn = async function handleGenerateMusic(job, c
   const { prompt, provider, duration, modelVersion, lyrics, referenceAudioUrl } = job.data as { jobId: string; prompt: string; provider?: MusicProvider; duration?: number; modelVersion?: string; lyrics?: string; referenceAudioUrl?: string }
   console.log(`[worker] generate-music ${ctx.jobId} (provider: ${provider ?? "musicgen"})`)
   const replicateUrl = await generateMusic(prompt, provider, duration, modelVersion, lyrics, referenceAudioUrl)
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(replicateUrl, ctx.jobId, "audio", ctx.jobUserId)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, { output_data: { audioUrl: r2Url } })
   if (!ok) return
@@ -120,9 +121,9 @@ const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) 
     audioUrl = await textToAudio(prompt, provider as AudioProvider | undefined, duration)
   }
 
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(audioUrl, ctx.jobId, "audio", ctx.jobUserId)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, { output_data: { audioUrl: r2Url } })
   if (!ok) return
@@ -145,11 +146,11 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
   if (SOCIAL_VIDEO_URL_RE.test(audioUrl)) {
     console.log(`[worker] transcribe ${ctx.jobId}: extracting audio from social video URL`)
     audioUrl = await extractYouTubeAudio(audioUrl)
-    await job.updateProgress(20)
+    await setJobProgress(job, ctx.jobId, 20)
   }
 
   const result = await transcribe(audioUrl, provider, language, { diarize, tagAudioEvents })
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { text: result.text, language: result.language, segments: result.segments },
@@ -163,7 +164,7 @@ const handleExtractYoutubeAudio: HandlerFn = async function handleExtractYoutube
   const { youtubeUrl } = job.data as { jobId: string; youtubeUrl: string }
   console.log(`[worker] extract-youtube-audio ${ctx.jobId}`)
   const audioUrl = await extractYouTubeAudio(youtubeUrl)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, { output_data: { audioUrl } })
   if (!ok) return
@@ -176,9 +177,9 @@ const handleAudioIsolation: HandlerFn = async function handleAudioIsolation(job,
   console.log(`[worker] audio-isolation ${ctx.jobId}`)
   const kieAudio = new KieAudioProvider()
   const result = await kieAudio.isolateAudio(audioUrl)
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url },
@@ -202,9 +203,9 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
     stability,
     languageCode,
   })
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url },
@@ -222,9 +223,9 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
   }
   console.log(`[worker] voice-changer ${ctx.jobId}`)
   const audioBuffer = await voiceChangerFromUrl(audioUrl, voiceId, { stability, similarityBoost, removeBackgroundNoise })
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url },
@@ -242,17 +243,17 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
   }
   console.log(`[worker] dubbing ${ctx.jobId} (target: ${targetLanguage})`)
   const { dubbingId } = await startDubbing(audioUrl, targetLanguage, { sourceLang: sourceLanguage, numSpeakers })
-  await job.updateProgress(20)
+  await setJobProgress(job, ctx.jobId, 20)
 
   await waitForDubbing(dubbingId, (status) => {
     if (status === "dubbing") void job.updateProgress(50)
   })
-  await job.updateProgress(70)
+  await setJobProgress(job, ctx.jobId, 70)
 
   const audioBuffer = await downloadDubbedAudio(dubbingId, targetLanguage)
-  await job.updateProgress(85)
+  await setJobProgress(job, ctx.jobId, 85)
   const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url },
@@ -267,9 +268,9 @@ const handleVoiceRemix: HandlerFn = async function handleVoiceRemix(job, ctx) {
   const { text, voiceDescription } = job.data as { jobId: string; text: string; voiceDescription: string }
   console.log(`[worker] voice-remix ${ctx.jobId}`)
   const audioBuffer = await remixVoice(text, voiceDescription)
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url },
@@ -288,9 +289,9 @@ const handleVoiceDesign: HandlerFn = async function handleVoiceDesign(job, ctx) 
   }
   console.log(`[worker] voice-design ${ctx.jobId}`)
   const result = await designVoice(text, voiceDescription, { model, loudness, guidanceScale, seed, quality, shouldEnhance })
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadBufferToR2(result.audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: r2Url, generatedVoiceId: result.generatedVoiceId },
@@ -305,7 +306,7 @@ const handleForcedAlignment: HandlerFn = async function handleForcedAlignment(jo
   const { audioUrl, transcript } = job.data as { jobId: string; audioUrl: string; transcript: string }
   console.log(`[worker] forced-alignment ${ctx.jobId}`)
   const result = await forcedAlignment(audioUrl, transcript)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { alignment: result.alignment, text: transcript },

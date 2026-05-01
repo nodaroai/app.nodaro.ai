@@ -33,6 +33,8 @@ vi.mock("../../shared.js", () => ({
   shouldSaveJobResult: mocks.mockShouldSaveJobResult,
   markJobCompleted: mocks.mockMarkJobCompleted,
   uploadImageMaybeWatermark: mocks.mockUploadImageMaybeWatermark,
+  setJobProgress: vi.fn().mockResolvedValue(undefined),
+  startProgressRamp: vi.fn().mockReturnValue({ stop: vi.fn() }),
 }))
 
 import { entityHandlers } from "../entity.js"

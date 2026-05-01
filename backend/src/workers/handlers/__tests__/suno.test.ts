@@ -58,6 +58,8 @@ vi.mock("../../shared.js", () => ({
   generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
   isSocialUrl: mocks.mockIsSocialUrl,
   downloadAudioToR2: mocks.mockDownloadAudioToR2,
+  setJobProgress: vi.fn().mockResolvedValue(undefined),
+  startProgressRamp: vi.fn().mockReturnValue({ stop: vi.fn() }),
 }))
 
 import { sunoHandlers } from "../suno.js"
