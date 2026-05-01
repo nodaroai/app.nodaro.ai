@@ -14,6 +14,7 @@ import {
   checkModelLevers,
 } from "./_verb-helpers.js"
 import { modelIdsByKindMode } from "@nodaro/shared"
+import { getUserMcpPreferences } from "../user-preferences.js"
 
 // Derive the model enums from MODEL_CATALOG so the MCP tool schemas can't
 // drift from `list_models`. Adding a new model = one catalog edit.
@@ -116,18 +117,20 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           prompt: z.string().min(1).max(4000).describe("Free-text image prompt"),
           model: z
             .enum(T2I_MODEL_IDS)
-            .default("nano-banana-2")
+            .optional()
             .describe(
-              "Image model. Default `nano-banana-2` is the newest Nano Banana " +
-              "with native resolution control (1K/2K/4K), Google Search context, " +
-              "and broad aspect-ratio support — middle ground of speed and quality. " +
-              "Call list_models { kind: \"image\", mode: \"t2i\" } for the full sheet.",
+              "Image model. Default `nano-banana-2` (or the user's saved " +
+              "preference if they've set one). nano-banana-2 is the newest " +
+              "Nano Banana — native resolution (1K/2K/4K), Google Search " +
+              "context, broad ARs incl. 21:9. Call list_models for the full " +
+              "sheet.",
             ),
           resolution: z.enum(["1K", "2K", "4K"]).optional(),
           quality: z.enum(["medium", "high"]).optional(),
           aspect_ratio: z
             .enum(["1:1", "16:9", "9:16", "4:3", "3:4", "21:9"])
-            .default("16:9"),
+            .optional()
+            .describe("Aspect ratio. Default `16:9` (or user's saved preference)."),
           negative_prompt: z.string().max(2000).optional(),
           structured: StructuredFields.optional().describe(
             "Path-1 structured fields composed into the final prompt.",
@@ -156,20 +159,31 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
       },
       async (args) => {
-        const leverIssue = checkModelLevers(args.model, {
-          aspectRatio: args.aspect_ratio,
-          resolution: args.resolution,
-          quality: args.quality,
+        // Resolve each lever: explicit arg > user's saved pref > catalog default.
+        // Zod doesn't apply `.default()` here so undefined means "caller didn't say"
+        // — we honor user prefs only in that case, never overriding an explicit
+        // value (e.g. Claude says "use nano-banana-pro for this" — respect it).
+        const userPrefs = await getUserMcpPreferences(session.userId)
+        const userImg = userPrefs.image ?? {}
+        const model = args.model ?? userImg.model ?? "nano-banana-2"
+        const aspectRatio = args.aspect_ratio ?? userImg.aspectRatio ?? "16:9"
+        const resolution = args.resolution ?? userImg.resolution
+        const quality = args.quality ?? userImg.quality
+
+        const leverIssue = checkModelLevers(model, {
+          aspectRatio,
+          resolution,
+          quality,
         })
         if (leverIssue) return leverIssue
 
         const compositePrompt = buildCompositePrompt(args.prompt, args.structured)
         const payload = {
           prompt: compositePrompt,
-          provider: args.model,
-          aspectRatio: args.aspect_ratio,
-          resolution: args.resolution,
-          quality: args.quality,
+          provider: model,
+          aspectRatio,
+          resolution,
+          quality,
           negativePrompt: args.negative_prompt,
           mcp_client: session.clientName,
           userId: session.userId,
@@ -194,9 +208,17 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           widgetKind: "image",
           widgetData: {
             prompt: compositePrompt,
-            model: args.model,
-            aspectRatio: args.aspect_ratio,
-            resolution: args.resolution,
+            model,
+            aspectRatio,
+            resolution,
+            // Saved prefs flow to the widget so it can show "Save as default"
+            // when the resolved values differ.
+            userDefaults: {
+              model: userImg.model,
+              aspectRatio: userImg.aspectRatio,
+              resolution: userImg.resolution,
+              quality: userImg.quality,
+            },
           },
         })
       },
@@ -244,11 +266,11 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           image_asset_id: z.string().optional(),
           model: z
             .enum(I2I_MODEL_IDS)
-            .default("nano-banana-2")
+            .optional()
             .describe(
-              "I2I / edit model. Default `nano-banana-2` matches the t2i default. " +
-              "For identity-preserving edits use `flux-kontext`. Call " +
-              "list_models { kind: \"image\", mode: \"i2i\" } for the full sheet.",
+              "I2I / edit model. Default `nano-banana-2` (or the user's saved " +
+              "preference). For identity-preserving edits use `flux-kontext`. " +
+              "Call list_models for the full sheet.",
             ),
           resolution: z.enum(["1K", "2K", "4K"]).optional(),
           quality: z.enum(["medium", "high", "basic"]).optional(),
@@ -281,14 +303,19 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
       },
       async (args) => {
-        if (args.model) {
-          const leverIssue = checkModelLevers(args.model, {
-            aspectRatio: args.aspect_ratio,
-            resolution: args.resolution,
-            quality: args.quality,
-          })
-          if (leverIssue) return leverIssue
-        }
+        const userPrefs = await getUserMcpPreferences(session.userId)
+        const userImg = userPrefs.image ?? {}
+        const model = args.model ?? userImg.model ?? "nano-banana-2"
+        const aspectRatio = args.aspect_ratio ?? userImg.aspectRatio
+        const resolution = args.resolution ?? userImg.resolution
+        const quality = args.quality ?? userImg.quality
+
+        const leverIssue = checkModelLevers(model, {
+          aspectRatio,
+          resolution,
+          quality,
+        })
+        if (leverIssue) return leverIssue
 
         const imageUrl =
           args.image_url ??
@@ -315,10 +342,10 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         const payload = {
           imageUrl,
           prompt: compositePrompt,
-          provider: args.model,
-          aspectRatio: args.aspect_ratio,
-          resolution: args.resolution,
-          quality: args.quality,
+          provider: model,
+          aspectRatio,
+          resolution,
+          quality,
           negativePrompt: args.negative_prompt,
           mcp_client: session.clientName,
           userId: session.userId,
@@ -343,11 +370,85 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           widgetKind: "image",
           widgetData: {
             prompt: compositePrompt,
-            model: args.model ?? "image-to-image",
-            aspectRatio: args.aspect_ratio,
-            resolution: args.resolution,
+            model,
+            aspectRatio,
+            resolution,
+            userDefaults: {
+              model: userImg.model,
+              aspectRatio: userImg.aspectRatio,
+              resolution: userImg.resolution,
+              quality: userImg.quality,
+            },
           },
         })
+      },
+    )
+
+    // ── save_image_defaults ──
+    // Persist sticky picks for image generation. Triggered by the widget's
+    // "Save as default" chip via NodaroMCP.suggestTool — Claude relays the
+    // call here, we PATCH /v1/user/settings, and the next image tool call
+    // reads from the updated user preferences.
+    server.registerTool(
+      "save_image_defaults",
+      {
+        title: "Save as image default",
+        description:
+          "Save the user's preferred image-generation settings (model, " +
+          "aspect ratio, resolution, quality). Sparse — only saves the " +
+          "fields you pass, leaving others untouched. Pass `null` for a " +
+          "field to clear that preference and fall back to the catalog " +
+          "default. Triggered by the in-widget \"Save as default\" chip; " +
+          "you can also call this directly when the user explicitly says " +
+          "\"always use X for images\".",
+        inputSchema: {
+          model: z.string().nullable().optional(),
+          aspect_ratio: z.string().nullable().optional(),
+          resolution: z.string().nullable().optional(),
+          quality: z.string().nullable().optional(),
+        },
+        annotations: { readOnlyHint: false },
+      },
+      async (args) => {
+        const image: Record<string, string | null> = {}
+        if (args.model !== undefined) image.model = args.model
+        if (args.aspect_ratio !== undefined) image.aspectRatio = args.aspect_ratio
+        if (args.resolution !== undefined) image.resolution = args.resolution
+        if (args.quality !== undefined) image.quality = args.quality
+
+        if (Object.keys(image).length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Nothing to save — pass at least one of model / aspect_ratio / resolution / quality.",
+              },
+            ],
+            isError: true,
+          }
+        }
+
+        const res = await fastify.inject({
+          method: "PATCH",
+          url: "/v1/user/settings",
+          headers: {
+            "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+          },
+          // userId in body is how the internal-secret auth path resolves
+          // req.userId — see middleware/auth.ts.
+          payload: { mcpPreferences: { image }, userId: session.userId },
+        })
+
+        if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+
+        const summary = Object.entries(image)
+          .map(([k, v]) => (v === null ? `${k} cleared` : `${k}=${v}`))
+          .join(", ")
+        return {
+          content: [
+            { type: "text" as const, text: `Saved image defaults: ${summary}.` },
+          ],
+        }
       },
     )
   }

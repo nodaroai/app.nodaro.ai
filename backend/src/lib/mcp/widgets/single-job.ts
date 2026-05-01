@@ -91,6 +91,25 @@ const SHARED_CSS = `
   .actions-left, .actions-right { display: flex; align-items: center; }
   .actions-left { gap: 8px; }
   .actions-right { gap: 2px; }
+  /* "Save as default" — surfaces only when the values used differ from the
+     user's saved prefs. Subtle text button below the actions row. */
+  .default-chip {
+    display: none;
+    margin: 6px auto 0;
+    background: transparent;
+    border: 0;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: color .15s;
+    font-family: inherit;
+  }
+  .default-chip.active { display: inline-flex; align-items: center; gap: 6px; }
+  .default-chip .star { color: #ff0073; }
+  .default-chip:hover { color: #fff; }
+  .default-chip.saved { color: rgba(255, 255, 255, 0.4); pointer-events: none; }
+  .default-chip .summary { font-weight: 500; }
   /* Desktop-only refinements (mouse + hover capability). Mobile/tablet
      skip these and get full-height media + always-visible buttons.
      pointer:fine excludes touchscreen-only devices that erroneously
@@ -166,11 +185,16 @@ ${uiProtocolShim()}
       <button class="icon-btn" id="btn-recreate" title="Recreate" aria-label="Recreate">${RECREATE_ICON}</button>
     </div>
   </div>
+  ${
+    mediaKind === "image"
+      ? `<div style="text-align:center"><button class="default-chip" id="default-chip" title="Make these settings the default for future image generations"><span class="star">★</span><span class="chip-text">Save as default</span></button></div>`
+      : ""
+  }
 </div>
 <script>
   (function() {
     var MEDIA_KIND = ${JSON.stringify(mediaKind)};
-    var state = { jobId: null, prompt: null, model: null, aspectRatio: null, resolution: null, duration: null, outputUrl: null, displayMode: 'inline' };
+    var state = { jobId: null, prompt: null, model: null, aspectRatio: null, resolution: null, quality: null, duration: null, outputUrl: null, displayMode: 'inline', userDefaults: null };
 
     function applyDisplayMode() {
       document.body.classList.toggle('fullscreen', state.displayMode === 'fullscreen');
@@ -271,6 +295,7 @@ ${uiProtocolShim()}
       if (sc.aspectRatio) state.aspectRatio = sc.aspectRatio;
       if (sc.resolution) state.resolution = sc.resolution;
       if (sc.duration) state.duration = sc.duration;
+      if (sc.userDefaults) state.userDefaults = sc.userDefaults;
       if (sc.outputUrl) {
         showMedia(sc.outputUrl);
       } else if (state.jobId) {
@@ -278,6 +303,7 @@ ${uiProtocolShim()}
         startPolling();
       }
       renderMeta();
+      maybeShowDefaultChip();
     });
 
     // Bridged from progress-emitter via host-forwarded notifications/progress.
@@ -396,6 +422,84 @@ ${uiProtocolShim()}
         window.NodaroMCP.pushUserMessage(state.prompt);
       }
     });
+
+    // ── Save-as-default chip (image kind only for Phase 1) ──
+    // Compares the values used for this generation against the user's
+    // currently-saved MCP preferences. When they differ, surface a chip
+    // that batches all the divergent axes into one save action. The user
+    // clicks once and all the diffs persist — no per-axis micromanagement.
+    var defaultChipEl = document.getElementById('default-chip');
+    function computeDefaultDiff() {
+      if (MEDIA_KIND !== 'image' || !defaultChipEl) return null;
+      var saved = state.userDefaults || {};
+      var diff = {};
+      var hasDiff = false;
+      // Only compare fields the tool actually populated — undefined values
+      // mean "lever didn't apply for this generation" (e.g. nano-banana has
+      // no resolution lever), so they shouldn't show up as a diff.
+      if (state.model && state.model !== saved.model) {
+        diff.model = state.model; hasDiff = true;
+      }
+      if (state.aspectRatio && state.aspectRatio !== saved.aspectRatio) {
+        diff.aspectRatio = state.aspectRatio; hasDiff = true;
+      }
+      if (state.resolution && state.resolution !== saved.resolution) {
+        diff.resolution = state.resolution; hasDiff = true;
+      }
+      if (state.quality && state.quality !== saved.quality) {
+        diff.quality = state.quality; hasDiff = true;
+      }
+      return hasDiff ? diff : null;
+    }
+    function maybeShowDefaultChip() {
+      if (!defaultChipEl) return;
+      var diff = computeDefaultDiff();
+      if (!diff) {
+        defaultChipEl.classList.remove('active');
+        return;
+      }
+      var summary = [];
+      if (diff.model) summary.push(diff.model);
+      if (diff.aspectRatio) summary.push(diff.aspectRatio);
+      if (diff.resolution) summary.push(diff.resolution);
+      if (diff.quality) summary.push(diff.quality);
+      var textEl = defaultChipEl.querySelector('.chip-text');
+      if (textEl) {
+        // Build inner safely without innerHTML (snapshot tests forbid it).
+        while (textEl.firstChild) textEl.removeChild(textEl.firstChild);
+        var leadingText = document.createTextNode('Save ');
+        var summarySpan = document.createElement('span');
+        summarySpan.className = 'summary';
+        summarySpan.textContent = summary.join(' · ');
+        var trailingText = document.createTextNode(' as default');
+        textEl.appendChild(leadingText);
+        textEl.appendChild(summarySpan);
+        textEl.appendChild(trailingText);
+      }
+      defaultChipEl.classList.add('active');
+      defaultChipEl.classList.remove('saved');
+    }
+    if (defaultChipEl) {
+      defaultChipEl.addEventListener('click', function() {
+        var diff = computeDefaultDiff();
+        if (!diff) return;
+        // suggestTool pushes "Run save_image_defaults with these params:..."
+        // as a fresh user message. Claude reads it and calls the tool — the
+        // tool persists prefs via PATCH /v1/user/settings.
+        var payload = {};
+        if (diff.model) payload.model = diff.model;
+        if (diff.aspectRatio) payload.aspect_ratio = diff.aspectRatio;
+        if (diff.resolution) payload.resolution = diff.resolution;
+        if (diff.quality) payload.quality = diff.quality;
+        if (window.NodaroMCP && window.NodaroMCP.suggestTool) {
+          window.NodaroMCP.suggestTool('save_image_defaults', payload);
+        }
+        // Optimistic UI: show "Saved ✓" until next tool-result re-evaluates.
+        defaultChipEl.classList.add('saved');
+        var textEl = defaultChipEl.querySelector('.chip-text');
+        if (textEl) textEl.textContent = 'Saved ✓';
+      });
+    }
 
     // Left side — kind-specific text buttons. Image gets Animate + Edit;
     // other kinds will gain their own buttons here (extend, captions, etc.).
