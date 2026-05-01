@@ -29,6 +29,9 @@ vi.mock("../../supabase.js", () => ({
       select: () => ({
         eq: () => ({
           maybeSingle: async () => ({ data: null, error: null }),
+          // getUserMcpPreferences uses .single() — return empty so callers
+          // fall through to catalog defaults.
+          single: async () => ({ data: { mcp_preferences: {} }, error: null }),
         }),
       }),
     }),
