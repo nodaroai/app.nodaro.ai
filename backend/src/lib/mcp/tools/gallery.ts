@@ -127,16 +127,63 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
     server.registerTool(
       "browse_gallery",
       {
-        title: "Browse Gallery",
+        title: "Show My Gallery / Browse Gallery",
         description:
-          "Browse the public Nodaro gallery (most-recent first). Returns one line per item with id, kind, prompt, model, and date.",
+          "PRIMARY tool when the user asks to SEE their gallery / library / " +
+          "recent work — \"show me my gallery\", \"my recent images\", \"my " +
+          "library\", \"what have I made\", \"my work\", or any synonym in " +
+          "any language (Hebrew: \"תראה לי את הגלריה שלי\" / \"מה יצרתי\"; " +
+          "Spanish: \"mi galería\"; etc.). Renders an INTERACTIVE GRID " +
+          "WIDGET with thumbnails the user can click to view, copy, or " +
+          "feed into edits — preferred over `list_jobs` (which returns " +
+          "raw text data).\n\n" +
+          "Default scope is the user's own library. Set `scope: \"public\"` " +
+          "when the user explicitly asks for the PUBLIC gallery (\"what are " +
+          "others making\", \"trending\"). Default kinds are image+video " +
+          "(skips audio); pass `kinds: [\"audio\"]` etc. to opt in.",
         inputSchema: {
-          limit: z.number().int().min(1).max(50).optional(),
+          scope: z
+            .enum(["mine", "public"])
+            .optional()
+            .describe(
+              "`mine` (default) = the user's own library. `public` = recent " +
+              "public outputs from OTHER users (excludes the caller, mirrors " +
+              "the web app's public gallery).",
+            ),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(200)
+            .optional()
+            .describe("Max items to return (default 50, max 200)."),
           cursor: z
             .string()
             .optional()
             .describe("ISO `completed_at` timestamp from a prior result's next_cursor"),
+          kinds: z
+            .array(z.enum(["image", "video", "audio"]))
+            .min(1)
+            .optional()
+            .describe(
+              "Media kinds to include. Default `[\"image\", \"video\"]`. " +
+              "Pass any combination — `[\"audio\"]` for music / TTS only, " +
+              "`[\"image\", \"video\", \"audio\"]` for everything.",
+            ),
+          // Backward-compat: keep the single-kind shape so cached client
+          // schemas don't reject calls with `kind: "image"`. Handler reads
+          // `kinds ?? (kind ? [kind] : default)`.
           kind: z.enum(["image", "video", "audio"]).optional(),
+          query: z
+            .string()
+            .max(200)
+            .optional()
+            .describe(
+              "Optional prompt search — case-insensitive substring match " +
+              "against each item's prompt text. Use when the user asks for " +
+              "a topic (\"show me all the rabbit images\", \"find my " +
+              "moonlit scenes\"). Pass just the keyword (e.g. \"rabbit\").",
+            ),
         },
         outputSchema: {
           items: z.array(z.object({}).passthrough()).optional(),
@@ -153,27 +200,52 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
       },
       },
       async (args) => {
-        const limit = args.limit ?? 20
-        let query = supabase
-          .from("jobs")
-          .select(
-            "id, job_type, input_data, output_data, completed_at, provider",
-          )
-          .eq("is_public", true)
-          .eq("status", "completed")
-          .not("output_data", "is", null)
-          .order("completed_at", { ascending: false })
-          .limit(limit)
-        if (args.cursor) query = query.lt("completed_at", args.cursor)
-        if (args.kind) {
-          query = query.in("job_type", jobNamesForKind(args.kind))
-        } else {
-          query = query.in("job_type", [
-            ...IMAGE_JOBS,
-            ...VIDEO_JOBS,
-            ...AUDIO_JOBS,
-          ])
+        const limit = args.limit ?? 50
+        const scope = args.scope ?? "mine"
+        const cursorCol = scope === "mine" ? "created_at" : "completed_at"
+        // kinds (array, preferred) > kind (legacy single-value, kept for
+        // cached-schema compat) > default [image, video].
+        const kinds: ("image" | "video" | "audio")[] =
+          args.kinds && args.kinds.length > 0
+            ? args.kinds
+            : args.kind
+              ? [args.kind]
+              : ["image", "video"]
+        const allowedJobTypes = kinds.flatMap((k) => jobNamesForKind(k))
+
+        // Chain filters first, then order, then limit — keeps the test
+        // mock chain readable and matches Supabase's typical pattern.
+        // "mine" (default) shows the user's own library including
+        // in-progress runs; "public" mirrors the web app's public
+        // gallery (completed + is_public + NOT caller).
+        let query =
+          scope === "mine"
+            ? supabase
+                .from("jobs")
+                .select("id, job_type, input_data, output_data, completed_at, created_at, provider, status")
+                .eq("user_id", session.userId)
+            : supabase
+                .from("jobs")
+                .select("id, job_type, input_data, output_data, completed_at, created_at, provider, status")
+                .eq("is_public", true)
+                .eq("status", "completed")
+                .neq("user_id", session.userId)
+        query = query.not("output_data", "is", null)
+        if (args.cursor) query = query.lt(cursorCol, args.cursor)
+        if (args.query) {
+          // input_data is JSONB; ->> coerces the prompt key to text so we
+          // can ilike it. ilike with %…% is a partial substring match,
+          // case-insensitive. Trim + escape % / _ so a literal "20%" in
+          // the user's request doesn't widen the wildcard.
+          const safe = args.query.replace(/[%_\\]/g, (c) => "\\" + c).trim()
+          if (safe.length > 0) {
+            query = query.ilike("input_data->>prompt", `%${safe}%`)
+          }
         }
+        query = query
+          .in("job_type", allowedJobTypes)
+          .order(cursorCol, { ascending: false })
+          .limit(limit)
         const { data, error } = await query
         if (error) {
           return {
@@ -183,8 +255,15 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
         }
         const rows = (data ?? []) as GalleryRow[]
         const last = rows[rows.length - 1]
+        // Cursor matches the column we ordered by (created_at for mine,
+        // completed_at for public). For "mine" some rows may not yet
+        // have completed_at (still processing) so we explicitly fall back.
+        const lastCursorVal =
+          scope === "mine"
+            ? (last as unknown as { created_at?: string })?.created_at ?? last?.completed_at
+            : last?.completed_at
         const nextCursor =
-          rows.length === limit && last?.completed_at ? last.completed_at : null
+          rows.length === limit && lastCursorVal ? lastCursorVal : null
         const lines = rows.map(formatRow)
         const cursorLine = nextCursor
           ? `\n(next_cursor: ${nextCursor} — call browse_gallery again with this cursor)`

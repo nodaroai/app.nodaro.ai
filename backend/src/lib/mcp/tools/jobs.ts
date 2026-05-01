@@ -36,20 +36,15 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
   server.registerTool(
     "list_jobs",
     {
-      title: "List My Gallery / Recent Generations",
+      title: "List Jobs (raw data)",
       description:
-        "PRIMARY tool when the user asks: \"show my gallery\", \"my " +
-        "recent images\", \"my generations\", \"my videos\", \"my " +
-        "library\", \"what have I made\", \"my work\", or any synonym " +
-        "in any language (Hebrew: \"תראה לי את הגלריה שלי\" / \"מה " +
-        "יצרתי\"; Spanish: \"mi galería\"; etc.). Returns the user's " +
-        "Nodaro jobs most recent first with media kind, status, output " +
-        "URL, prompt, model, and timestamps. Cursor-based pagination via " +
-        "`next_cursor`.\n\n" +
-        "Set `scope: \"public\"` when the user explicitly asks for the " +
-        "PUBLIC gallery (\"show me the public gallery\", \"what are " +
-        "others making\", \"trending\"); default scope is the user's " +
-        "own library.",
+        "Raw structured listing of the user's jobs. Returns JSON only — " +
+        "no widget, no thumbnails. Use `browse_gallery` instead when the " +
+        "user wants to SEE their gallery / library (renders a clickable " +
+        "image grid). Use this tool only when the agent needs structured " +
+        "fields (status, error_message, credits, timestamps) for " +
+        "programmatic logic — e.g. \"how many failed yesterday\", \"how " +
+        "many credits did I burn this week\".",
       inputSchema: {
         scope: z
           .enum(["mine", "public"])
