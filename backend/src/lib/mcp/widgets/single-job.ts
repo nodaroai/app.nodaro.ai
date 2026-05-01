@@ -426,8 +426,8 @@ ${uiProtocolShim()}
       window.NodaroMCP.openLink(state.outputUrl);
     });
     wire('btn-recreate', function() {
-      // [redacted-reference]-style recreate: push the prompt back into chat as a
-      // fresh user turn. The host re-derives which tool to call.
+      // Recreate: push the prompt back into chat as a fresh user turn.
+      // The host re-derives which tool to call.
       if (!state.prompt) return;
       if (window.NodaroMCP.pushUserMessage) {
         window.NodaroMCP.pushUserMessage(state.prompt);

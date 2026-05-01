@@ -58,8 +58,8 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
     {
       title: "List Models",
       description:
-        "Browse the AI models available on this Nodaro instance. Returns [redacted-reference]-" +
-        "style nested JSON: per-kind groups, families, and per-model capability sheets " +
+        "Browse the AI models available on this Nodaro instance. Returns " +
+        "nested JSON: per-kind groups, families, and per-model capability sheets " +
         "(aspect ratios, resolutions, qualities, durations, features, per-variant " +
         "credit pricing). Includes a `recommendations` array — short 'best for X' " +
         "picks Claude can echo back when the user is undecided. Use this BEFORE " +
@@ -96,8 +96,8 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
         .filter((m) => (args.featuredOnly ? m.featured === true : true))
 
       const grouped = groupByFamily(filtered)
-      // Group again by kind for the outer envelope so output mirrors
-      // [redacted-reference]'s "Image / Video / Audio" sectioning.
+      // Group again by kind for the outer envelope — Image / Video / Audio
+      // sectioning so the agent can scan one media kind at a time.
       const byKind: Record<ModelKind, Array<{ family: string; models: Record<string, unknown>[] }>> = {
         image: [],
         video: [],
