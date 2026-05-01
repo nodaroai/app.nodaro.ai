@@ -271,3 +271,53 @@ function normalizeModelStrict(input: string | undefined | null): string | undefi
   }
   return undefined
 }
+
+export interface NormalizedVideoParams {
+  model: string
+  aspectRatio?: string
+  resolution?: string
+  duration?: number
+  modelEntry: ModelCatalogEntry | undefined
+}
+
+/**
+ * Compose video-tool normalizations. Mirrors `normalizeImageInput` but
+ * with `duration` instead of `quality` since that's the lever video
+ * models care about. `aspectRatio` defaults to `16:9`; `resolution` and
+ * `duration` fall through to the model's natural default if not picked.
+ */
+export function normalizeVideoInput(
+  raw: {
+    model?: string | null
+    aspect_ratio?: string | null
+    resolution?: string | null
+    duration?: number | string | null
+  },
+  saved: {
+    model?: string
+    aspectRatio?: string
+    resolution?: string
+    duration?: number
+  },
+  fallbackModel: string,
+): NormalizedVideoParams {
+  const explicitModel = normalizeModelStrict(raw.model)
+  const savedModel =
+    saved.model && MODEL_CATALOG[saved.model] ? saved.model : undefined
+  const model = explicitModel ?? savedModel ?? fallbackModel
+  const modelEntry = MODEL_CATALOG[model]
+
+  const aspectRatio =
+    normalizeAspectRatio(raw.aspect_ratio, modelEntry?.aspectRatios, "16:9")
+    ?? normalizeAspectRatio(saved.aspectRatio, modelEntry?.aspectRatios, "16:9")
+
+  const resolution =
+    normalizeResolution(raw.resolution, modelEntry?.resolutions)
+    ?? normalizeResolution(saved.resolution, modelEntry?.resolutions)
+
+  const duration =
+    normalizeDuration(raw.duration, modelEntry?.durations)
+    ?? normalizeDuration(saved.duration, modelEntry?.durations)
+
+  return { model, aspectRatio, resolution, duration, modelEntry }
+}

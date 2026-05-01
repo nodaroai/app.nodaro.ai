@@ -9,14 +9,20 @@ import {
   errorResult,
   parseFailure,
   jobResultWithWidget,
-  checkModelLevers,
 } from "./_verb-helpers.js"
 import { modelIdsByKindMode } from "@nodaro/shared"
+import { normalizeVideoInput } from "../normalize.js"
+import { getUserMcpPreferences } from "../user-preferences.js"
 
-// Derive video model enums from MODEL_CATALOG. Pass null for kind to pick
-// up cross-kind ids like "grok" (catalog kind=image, modes include t2v).
-const T2V_MODEL_IDS = modelIdsByKindMode(null, ["t2v"])
-const I2V_MODEL_IDS = modelIdsByKindMode("video", ["i2v"])
+// Derive video model enums from MODEL_CATALOG. `includeHidden: true` keeps
+// legacy ids (seedance V1.5 etc.) accepted for cached Claude.ai sessions —
+// they're filtered out of `list_models` output but the schema is permissive.
+//
+// These are kept for description hints; the actual schema is `z.string()`
+// so unknown values silently normalize to the catalog default in the
+// handler (per the "tool calls should never reject" principle).
+const T2V_MODEL_IDS = modelIdsByKindMode(null, ["t2v"], { includeHidden: true })
+const I2V_MODEL_IDS = modelIdsByKindMode("video", ["i2v"], { includeHidden: true })
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -49,18 +55,24 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "expects.",
       inputSchema: {
         prompt: z.string().min(1).max(2500),
+        // Schemas are permissive — handler normalizes to closest valid value.
+        // Description carries the recommended set for Claude's guidance.
         model: z
-          .enum(T2V_MODEL_IDS)
-          .default("seedance-2-fast")
+          .string()
+          .optional()
           .describe(
-            "Video model. Default `seedance-2-fast` is the lighter Seedance 2 " +
-            "tier — newest architecture, 4–15s flexible, native audio, reference-" +
-            "image support, broad aspect ratios. For cheap batch use `wan-turbo` " +
-            "or `bytedance-lite`; for premium cinematic use `veo3` or `kling-3.0`. " +
-            "Call list_models { kind: \"video\", mode: \"t2v\" } for the full sheet.",
+            `Video model. Default seedance-2-fast. Recommended: ${T2V_MODEL_IDS.join(", ")}. ` +
+            `Unknown values silently fall back to the default. Call list_models ` +
+            `{ kind: "video", mode: "t2v" } for capability details.`,
           ),
-        duration: z.number().int().min(1).max(60).optional(),
-        aspect_ratio: z.enum(["16:9", "9:16", "1:1"]).optional(),
+        duration: z
+          .number()
+          .optional()
+          .describe("Duration (seconds). Snaps to nearest supported value."),
+        aspect_ratio: z
+          .string()
+          .optional()
+          .describe("Aspect ratio (16:9, 9:16, 1:1, etc.). Variations and unsupported values fall back."),
         sound: z.boolean().optional(),
         negative_prompt: z.string().max(2500).optional(),
         seed: z.number().int().min(10000).max(99999).optional(),
@@ -89,20 +101,38 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
     },
     async (args) => {
-      if (args.model) {
-        const leverIssue = checkModelLevers(args.model, {
-          aspectRatio: args.aspect_ratio,
+      // Silent normalization. Anything Claude sends gets mapped to the
+      // closest valid value or the catalog default — never reject on
+      // bad params. Saved video prefs are filtered against the resolved
+      // model so stale picks don't break new generations.
+      let userVid: Record<string, string | number | undefined> = {}
+      try {
+        const userPrefs = await getUserMcpPreferences(session.userId)
+        userVid = (userPrefs.video as Record<string, string | number | undefined>) ?? {}
+      } catch { /* swallow */ }
+      const { model, aspectRatio, resolution, duration } = normalizeVideoInput(
+        {
+          model: args.model,
+          aspect_ratio: args.aspect_ratio,
+          resolution: undefined,
           duration: args.duration,
-        })
-        if (leverIssue) return leverIssue
-      }
+        },
+        {
+          model: userVid.model as string | undefined,
+          aspectRatio: userVid.aspectRatio as string | undefined,
+          resolution: userVid.resolution as string | undefined,
+          duration: userVid.duration as number | undefined,
+        },
+        "seedance-2-fast",
+      )
 
       const compositePrompt = buildCompositePrompt(args.prompt, args.structured)
       const payload = {
         prompt: compositePrompt,
-        provider: args.model,
-        duration: args.duration,
-        aspectRatio: args.aspect_ratio,
+        provider: model,
+        duration,
+        aspectRatio,
+        resolution,
         sound: args.sound,
         negativePrompt: args.negative_prompt,
         seed: args.seed,
@@ -153,15 +183,15 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         image_url: z.string().url().optional(),
         image_asset_id: z.string().optional(),
         model: z
-          .enum(I2V_MODEL_IDS)
-          .default("seedance-2-fast")
+          .string()
+          .optional()
           .describe(
-            "Video model. Default `seedance-2-fast` — newest, supports end-frame " +
-            "via reference images, native audio, 4–15s. Call list_models " +
-            "{ kind: \"video\", mode: \"i2v\" } for capabilities + recommendations.",
+            `Video model. Default seedance-2-fast. Recommended: ${I2V_MODEL_IDS.join(", ")}. ` +
+            `Unknown values silently fall back. Call list_models ` +
+            `{ kind: "video", mode: "i2v" } for capabilities + recommendations.`,
           ),
-        duration: z.number().int().min(1).max(60).optional(),
-        aspect_ratio: z.enum(["16:9", "9:16", "1:1"]).optional(),
+        duration: z.number().optional().describe("Duration (seconds). Snaps to nearest supported."),
+        aspect_ratio: z.string().optional().describe("Aspect ratio. Variations / unsupported fall back."),
         sound: z.boolean().optional(),
         end_frame_url: z.string().url().optional(),
       },
@@ -188,13 +218,26 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
     },
     async (args) => {
-      if (args.model) {
-        const leverIssue = checkModelLevers(args.model, {
-          aspectRatio: args.aspect_ratio,
+      let userVid: Record<string, string | number | undefined> = {}
+      try {
+        const userPrefs = await getUserMcpPreferences(session.userId)
+        userVid = (userPrefs.video as Record<string, string | number | undefined>) ?? {}
+      } catch { /* swallow */ }
+      const { model, aspectRatio, resolution, duration } = normalizeVideoInput(
+        {
+          model: args.model,
+          aspect_ratio: args.aspect_ratio,
+          resolution: undefined,
           duration: args.duration,
-        })
-        if (leverIssue) return leverIssue
-      }
+        },
+        {
+          model: userVid.model as string | undefined,
+          aspectRatio: userVid.aspectRatio as string | undefined,
+          resolution: userVid.resolution as string | undefined,
+          duration: userVid.duration as number | undefined,
+        },
+        "seedance-2-fast",
+      )
 
       const imageUrl =
         args.image_url ??
@@ -217,9 +260,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         imageUrl,
         endFrameUrl: args.end_frame_url,
         prompt: args.prompt,
-        provider: args.model,
-        duration: args.duration,
-        aspectRatio: args.aspect_ratio,
+        provider: model,
+        duration,
+        aspectRatio,
+        resolution,
         sound: args.sound,
         mcp_client: session.clientName,
         userId: session.userId,
