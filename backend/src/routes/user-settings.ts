@@ -2,8 +2,22 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { SYSTEM_PROMPT_TEMPLATES } from "../config/prompt-templates.js"
+import { invalidateUserPreferences } from "../lib/mcp/user-preferences.js"
 
 const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
+
+/**
+ * Drop keys whose value is `null` or `undefined`. Used by the
+ * `mcpPreferences` deep-merge so callers can clear individual axes by
+ * sending `{ image: { model: null } }`.
+ */
+function pruneNulls<T extends Record<string, unknown>>(obj: T): T {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== null && v !== undefined) out[k] = v
+  }
+  return out as T
+}
 
 const SUPPORTED_LOCALES = [
   "en",
@@ -20,10 +34,52 @@ const SUPPORTED_LOCALES = [
   "ar",
 ] as const
 
+/**
+ * Per-user MCP defaults schema. Sparse — every field is optional, missing
+ * keys preserve existing values via deep-merge in the PATCH handler.
+ *
+ * Validation here is intentionally loose: we don't enum-check model ids
+ * because the catalog (and thus the valid set) evolves frequently, and the
+ * MCP tool's own Zod gate catches stale picks at call time. We only enforce
+ * type-shape so the JSONB payload stays sane.
+ */
+const McpPreferencesPatch = z
+  .object({
+    image: z
+      .object({
+        model: z.string().max(64).optional(),
+        aspectRatio: z.string().max(16).optional(),
+        resolution: z.string().max(8).optional(),
+        quality: z.string().max(16).optional(),
+      })
+      .partial()
+      .optional(),
+    video: z
+      .object({
+        model: z.string().max(64).optional(),
+        aspectRatio: z.string().max(16).optional(),
+        duration: z.number().int().min(1).max(60).optional(),
+        resolution: z.string().max(8).optional(),
+      })
+      .partial()
+      .optional(),
+    audio: z
+      .object({
+        ttsModel: z.string().max(64).optional(),
+        musicModel: z.string().max(64).optional(),
+      })
+      .partial()
+      .optional(),
+  })
+  .partial()
+
+export type McpPreferences = z.infer<typeof McpPreferencesPatch>
+
 const updateSettingsBody = z.object({
   publicOutputs: z.boolean().optional(),
   promptTemplates: z.record(z.string(), z.string()).optional(),
   preferredLocale: z.enum(SUPPORTED_LOCALES).nullable().optional(),
+  mcpPreferences: McpPreferencesPatch.optional(),
 })
 
 export async function userSettingsRoutes(app: FastifyInstance) {
@@ -39,7 +95,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
 
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("tier, public_outputs, prompt_templates, preferred_locale")
+      .select("tier, public_outputs, prompt_templates, preferred_locale, mcp_preferences")
       .eq("id", userId)
       .single()
 
@@ -53,6 +109,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
         publicOutputs: profile.public_outputs ?? true,
         promptTemplates: (profile.prompt_templates as Record<string, string>) ?? {},
         preferredLocale: profile.preferred_locale ?? null,
+        mcpPreferences: (profile.mcp_preferences as McpPreferences) ?? {},
       },
     })
   })
@@ -73,7 +130,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     }
 
     const userId = req.userId
-    const { publicOutputs, promptTemplates, preferredLocale } = parsed.data
+    const { publicOutputs, promptTemplates, preferredLocale, mcpPreferences } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({ error: "Authentication required" })
@@ -82,7 +139,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     // Fetch current profile (include public_outputs for response accuracy)
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("tier, public_outputs, prompt_templates, preferred_locale")
+      .select("tier, public_outputs, prompt_templates, preferred_locale, mcp_preferences")
       .eq("id", userId)
       .single()
 
@@ -127,6 +184,27 @@ export async function userSettingsRoutes(app: FastifyInstance) {
       updates.preferred_locale = preferredLocale
     }
 
+    // mcpPreferences: deep-merge so users can update one axis at a time
+    // (e.g. only `image.model` without losing their `image.aspectRatio`).
+    // To CLEAR a key, send `null` for it; the merger drops null/undefined
+    // values from the saved object so the catalog default takes over again.
+    if (mcpPreferences !== undefined) {
+      const current = (profile.mcp_preferences as McpPreferences) ?? {}
+      const merged: McpPreferences = {
+        ...current,
+        ...(mcpPreferences.image
+          ? { image: pruneNulls({ ...(current.image ?? {}), ...mcpPreferences.image }) }
+          : {}),
+        ...(mcpPreferences.video
+          ? { video: pruneNulls({ ...(current.video ?? {}), ...mcpPreferences.video }) }
+          : {}),
+        ...(mcpPreferences.audio
+          ? { audio: pruneNulls({ ...(current.audio ?? {}), ...mcpPreferences.audio }) }
+          : {}),
+      }
+      updates.mcp_preferences = merged
+    }
+
     if (Object.keys(updates).length === 0) {
       return reply.status(400).send({ error: "No valid fields to update" })
     }
@@ -141,17 +219,26 @@ export async function userSettingsRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: "Failed to update settings" })
     }
 
+    // Drop the MCP-side preference cache so the next tool call reads fresh.
+    if (mcpPreferences !== undefined) invalidateUserPreferences(userId)
+
     // Gallery visibility setting only affects NEW jobs — existing items keep their current visibility
     const confirmedPublicOutputs = publicOutputs ?? (profile.public_outputs ?? true)
 
     const confirmedPreferredLocale =
       preferredLocale !== undefined ? preferredLocale : (profile.preferred_locale ?? null)
 
+    const confirmedMcpPreferences: McpPreferences =
+      (updates.mcp_preferences as McpPreferences) ??
+      (profile.mcp_preferences as McpPreferences) ??
+      {}
+
     return reply.send({
       data: {
         publicOutputs: confirmedPublicOutputs,
         promptTemplates: (updates.prompt_templates as Record<string, string>) ?? (profile.prompt_templates as Record<string, string>) ?? {},
         preferredLocale: confirmedPreferredLocale,
+        mcpPreferences: confirmedMcpPreferences,
       },
     })
   })
