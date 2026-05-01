@@ -4,6 +4,7 @@ import {
   MODEL_RECOMMENDATIONS,
   listModels,
   groupByFamily,
+  validateModelInput,
 } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS } from "../../../billing/credits.js"
 
@@ -63,5 +64,39 @@ describe("Model catalog ↔ STATIC_CREDIT_COSTS", () => {
     for (const g of grouped) {
       expect(g.models.length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe("validateModelInput", () => {
+  it("returns null when input is empty or matches the model", () => {
+    expect(validateModelInput("nano-banana-pro", {})).toBeNull()
+    expect(
+      validateModelInput("nano-banana-pro", { aspectRatio: "9:16", resolution: "4K" }),
+    ).toBeNull()
+  })
+
+  it("flags an aspect_ratio the model doesn't support", () => {
+    const issue = validateModelInput("gpt-image", { aspectRatio: "21:9" })
+    expect(issue?.field).toBe("aspectRatio")
+    expect(issue?.message).toMatch(/does not support aspect_ratio "21:9"/)
+    expect(issue?.allowed).toContain("3:2")
+  })
+
+  it("flags a resolution on a model that has no resolution lever", () => {
+    // Base nano-banana doesn't expose resolution.
+    const issue = validateModelInput("nano-banana", { resolution: "4K" })
+    expect(issue?.field).toBe("resolution")
+    expect(issue?.message).toMatch(/does not have a resolution lever/)
+  })
+
+  it("flags a duration the video model doesn't support", () => {
+    // VEO 3 is fixed 8s.
+    const issue = validateModelInput("veo3", { duration: 5 })
+    expect(issue?.field).toBe("duration")
+    expect(issue?.allowed).toContain(8)
+  })
+
+  it("ignores unknown model ids (route handler catches those)", () => {
+    expect(validateModelInput("totally-fake-model", { aspectRatio: "21:9" })).toBeNull()
   })
 })

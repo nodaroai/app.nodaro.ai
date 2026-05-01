@@ -9,6 +9,7 @@ import {
   errorResult,
   parseFailure,
   jobResultWithWidget,
+  checkModelLevers,
 } from "./_verb-helpers.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -90,6 +91,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
     },
     async (args) => {
+      if (args.model) {
+        const leverIssue = checkModelLevers(args.model, {
+          aspectRatio: args.aspect_ratio,
+          duration: args.duration,
+        })
+        if (leverIssue) return leverIssue
+      }
+
       const compositePrompt = buildCompositePrompt(args.prompt, args.structured)
       const payload = {
         prompt: compositePrompt,
@@ -194,6 +203,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
     },
     async (args) => {
+      if (args.model) {
+        const leverIssue = checkModelLevers(args.model, {
+          aspectRatio: args.aspect_ratio,
+          duration: args.duration,
+        })
+        if (leverIssue) return leverIssue
+      }
+
       const imageUrl =
         args.image_url ??
         (args.image_asset_id
