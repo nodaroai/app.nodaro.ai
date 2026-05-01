@@ -8,6 +8,11 @@ import {
   parseFailure,
   jobResultWithWidget,
 } from "./_verb-helpers.js"
+// Audio enums stay hardcoded for now — Suno music + ElevenLabs dialogue
+// route through different backends than the standard /v1/generate-music
+// and /v1/text-to-speech endpoints, so the catalog's audio set is broader
+// than what any single MCP tool can dispatch. Migrate when those routes
+// unify.
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -115,7 +120,11 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             "elevenlabs-multilingual",
             "elevenlabs",
           ])
-          .optional(),
+          .optional()
+          .describe(
+            "TTS model. v3 supports [audio tags] for emotion. Call " +
+            "list_models { kind: \"audio\", mode: \"tts\" } for the full sheet.",
+          ),
         voice_type: z.enum(["premade", "custom", "library"]).optional(),
         stability: z.number().min(0).max(1).optional(),
         similarity_boost: z.number().min(0).max(1).optional(),

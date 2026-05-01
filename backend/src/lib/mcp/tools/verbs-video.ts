@@ -11,6 +11,12 @@ import {
   jobResultWithWidget,
   checkModelLevers,
 } from "./_verb-helpers.js"
+import { modelIdsByKindMode } from "@nodaro/shared"
+
+// Derive video model enums from MODEL_CATALOG. Pass null for kind to pick
+// up cross-kind ids like "grok" (catalog kind=image, modes include t2v).
+const T2V_MODEL_IDS = modelIdsByKindMode(null, ["t2v"])
+const I2V_MODEL_IDS = modelIdsByKindMode("video", ["i2v"])
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -44,23 +50,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       inputSchema: {
         prompt: z.string().min(1).max(2500),
         model: z
-          .enum([
-            "minimax",
-            "veo3",
-            "veo3.1",
-            "kling",
-            "kling-turbo",
-            "kling-3.0",
-            "grok",
-            "seedance",
-            "seedance-2",
-            "wan",
-            "wan-turbo",
-            "hailuo-standard",
-            "bytedance-lite",
-            "bytedance-pro",
-          ])
-          .optional(),
+          .enum(T2V_MODEL_IDS)
+          .optional()
+          .describe(
+            "Video model. Call list_models { kind: \"video\", mode: \"t2v\" } " +
+            "for capabilities + recommendations.",
+          ),
         duration: z.number().int().min(1).max(60).optional(),
         aspect_ratio: z.enum(["16:9", "9:16", "1:1"]).optional(),
         sound: z.boolean().optional(),
@@ -155,26 +150,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         image_url: z.string().url().optional(),
         image_asset_id: z.string().optional(),
         model: z
-          .enum([
-            "minimax",
-            "veo3",
-            "veo3.1",
-            "kling",
-            "kling-turbo",
-            "kling-3.0",
-            "kling-master",
-            "seedance",
-            "seedance-2",
-            "hailuo-2.3-pro",
-            "hailuo-2.3",
-            "hailuo-standard",
-            "wan-i2v",
-            "wan-turbo",
-            "bytedance-lite",
-            "bytedance-pro",
-            "grok-i2v",
-          ])
-          .optional(),
+          .enum(I2V_MODEL_IDS)
+          .optional()
+          .describe(
+            "Video model. Call list_models { kind: \"video\", mode: \"i2v\" } " +
+            "for capabilities + recommendations.",
+          ),
         duration: z.number().int().min(1).max(60).optional(),
         aspect_ratio: z.enum(["16:9", "9:16", "1:1"]).optional(),
         sound: z.boolean().optional(),
