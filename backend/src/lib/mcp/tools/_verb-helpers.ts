@@ -145,7 +145,7 @@ export function jobResultWithWidget(opts: JobResultOpts) {
 
   const text = {
     type: "text" as const,
-    text: `${label} started (id ${jobId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/library`,
+    text: `${label} started (id ${jobId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/gallery`,
   }
 
   if (!widgetKind) {
@@ -172,7 +172,7 @@ export function jobResult(jobId: string, label: string) {
     content: [
       {
         type: "text" as const,
-        text: `${label} started (id ${jobId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/library`,
+        text: `${label} started (id ${jobId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/gallery`,
       },
     ],
   }

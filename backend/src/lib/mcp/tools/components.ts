@@ -153,7 +153,7 @@ export function registerComponents({
           content: [
             {
               type: "text" as const,
-              text: `Started component '${args.component_id}' (job ${jobId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/library`,
+              text: `Started component '${args.component_id}' (job ${jobId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/gallery`,
             },
           ],
           structuredContent: { jobId, componentId: args.component_id },
