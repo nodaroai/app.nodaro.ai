@@ -138,12 +138,14 @@ const SHARED_CSS = `
     .actions.ready { opacity: 0; }
     .card:hover .actions.ready { opacity: 1; }
   }
-  button { padding: 6px 14px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; line-height: 1; font-family: inherit; }
-  button:hover { background: rgba(127,127,127,0.1); }
-  /* Icon-only utilities — minimal Claude-style: no border, subtle hover.
-     Distinct from the bordered text buttons on the left so the visual
-     hierarchy reads "primary actions | secondary utilities". */
-  .icon-btn { padding: 6px; border: none; border-radius: 6px; opacity: 0.6; gap: 0; }
+  /* Borderless action buttons throughout — keeps the widget visually
+     calm and matches the host's minimal Claude-style affordance. The
+     left text buttons (Animate, Edit) and the right icon buttons (Copy,
+     Download, Recreate) all share the same dimmed → bright hover. */
+  button { padding: 6px 12px; border: none; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; line-height: 1; font-family: inherit; opacity: 0.7; transition: opacity .15s, background .15s; }
+  button:hover { background: rgba(127,127,127,0.1); opacity: 1; }
+  /* Icon-only utilities tighten the padding since they have no label. */
+  .icon-btn { padding: 6px; gap: 0; opacity: 0.6; }
   .icon-btn:hover { opacity: 1; background: rgba(127,127,127,0.1); }
   .icon-btn svg { display: block; }
   .status { font-size: 13px; opacity: 0.85; }

@@ -111,7 +111,8 @@ describe("generate-image handler", () => {
     expect(mocks.mockUploadImageMaybeWatermark).toHaveBeenCalledWith(
       PROVIDER_RESULT.url, "job-1", "user-1", false,
     )
-    expect(job.updateProgress).toHaveBeenCalledWith(50)
+    expect(job.updateProgress).toHaveBeenCalledWith(10)
+    expect(job.updateProgress).toHaveBeenCalledWith(60)
     expect(job.updateProgress).toHaveBeenCalledWith(100)
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { imageUrl: "https://r2.example.com/images/job-1.png" },
