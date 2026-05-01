@@ -647,13 +647,16 @@ export {
   listModels,
   groupByFamily,
   getModel,
+  validateModelInput,
 } from "./model-catalog.js"
 export type {
   ModelCatalogEntry,
   ModelKind,
   ModelMode,
   ModelRecommendation,
+  ModelValidationIssue,
   PriceVariant,
+  ValidationField,
 } from "./model-catalog.js"
 
 // i18n

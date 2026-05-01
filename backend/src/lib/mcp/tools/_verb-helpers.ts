@@ -13,6 +13,7 @@
  */
 import type { McpSession } from "../session.js"
 import { registerTask } from "../tasks.js"
+import { validateModelInput } from "@nodaro/shared"
 
 interface ParsedJobBody {
   jobId?: string
@@ -47,6 +48,27 @@ export function parseFailure(body: string) {
       },
     ],
     isError: true,
+  }
+}
+
+/**
+ * Cross-check the user's lever values against the chosen model's catalog
+ * entry. Returns an MCP error result if the combo is invalid; null if OK.
+ *
+ * Surfaces the allowed values in the error so Claude can self-correct on
+ * retry instead of guessing. Without this gate, sending an unsupported
+ * aspect_ratio (e.g. 21:9 to GPT Image, which only allows 1:1/3:2/2:3) was
+ * silently dropped by the provider and the user got a 1:1 back.
+ */
+export function checkModelLevers(
+  modelId: string,
+  input: { aspectRatio?: string; resolution?: string; quality?: string; duration?: number },
+) {
+  const issue = validateModelInput(modelId, input)
+  if (!issue) return null
+  return {
+    content: [{ type: "text" as const, text: `Invalid input: ${issue.message}` }],
+    isError: true as const,
   }
 }
 

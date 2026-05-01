@@ -11,6 +11,7 @@ import {
   errorResult,
   parseFailure,
   jobResultWithWidget,
+  checkModelLevers,
 } from "./_verb-helpers.js"
 // _wait-for-job.ts is intentionally retained but unimported. It implements
 // a sync block-on-completion path for tools (used briefly in #1830 to test
@@ -155,6 +156,13 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
       },
       async (args) => {
+        const leverIssue = checkModelLevers(args.model, {
+          aspectRatio: args.aspect_ratio,
+          resolution: args.resolution,
+          quality: args.quality,
+        })
+        if (leverIssue) return leverIssue
+
         const compositePrompt = buildCompositePrompt(args.prompt, args.structured)
         const payload = {
           prompt: compositePrompt,
@@ -277,6 +285,15 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
       },
       async (args) => {
+        if (args.model) {
+          const leverIssue = checkModelLevers(args.model, {
+            aspectRatio: args.aspect_ratio,
+            resolution: args.resolution,
+            quality: args.quality,
+          })
+          if (leverIssue) return leverIssue
+        }
+
         const imageUrl =
           args.image_url ??
           (args.image_asset_id
