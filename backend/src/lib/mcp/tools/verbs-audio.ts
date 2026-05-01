@@ -25,14 +25,21 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Generate Music",
       description:
-        "Generate a music track from a text prompt (Suno or MiniMax). Returns a job_id.\n\n" +
-        "**Picking a model**: Suno v5 has better vocal quality at the same " +
-        "price as v4. Call `list_models { kind: \"audio\", mode: \"music\" }` " +
-        "to see capabilities. For instrumental tracks set `instrumental: true`; " +
-        "for songs with vocals provide `lyrics`.",
+        "Generate a music track from a text prompt. Returns a job_id.\n\n" +
+        "**Picking a model**: Default `suno-v5` is the latest — best vocal " +
+        "quality, full songs with lyrics. `suno` is the v4 alias (same price). " +
+        "`minimax` is an alternative for short instrumental loops. For " +
+        "instrumental tracks set `instrumental: true`; for songs with vocals " +
+        "provide `lyrics`.",
       inputSchema: {
         prompt: z.string().min(1).max(2000),
-        model: z.enum(["suno", "minimax"]).default("minimax"),
+        model: z
+          .enum(["suno-v5", "suno", "minimax"])
+          .default("suno-v5")
+          .describe(
+            "Music model. Suno v5 (default) is latest with best vocal quality; " +
+            "Suno v4 (id `suno`) is the prior generation; MiniMax for short loops.",
+          ),
         duration: z.number().min(1).max(30).optional(),
         instrumental: z.boolean().optional(),
         lyrics: z.string().max(2000).optional(),
@@ -62,20 +69,37 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     },
     },
     async (args) => {
-      const payload = {
-        prompt: args.prompt,
-        provider: args.model,
-        duration: args.duration,
-        instrumental: args.instrumental,
-        lyrics: args.lyrics,
-        genre: args.genre,
-        mood: args.mood,
-        mcp_client: session.clientName,
-        userId: session.userId,
-      }
+      // Suno and MiniMax live behind different backend routes — Suno has
+      // its own /v1/suno/generate (with internal version select) while
+      // MiniMax goes through /v1/generate-music. Dispatch by model id.
+      const isSuno = args.model === "suno" || args.model === "suno-v5"
+      const url = isSuno ? "/v1/suno/generate" : "/v1/generate-music"
+      const sunoVersion = args.model === "suno-v5" ? "V5" : "V4"
+      const payload = isSuno
+        ? {
+            prompt: args.prompt,
+            model: sunoVersion,
+            instrumental: args.instrumental,
+            lyrics: args.lyrics,
+            // Map mcp's generic `genre` to suno's `style` — same intent.
+            style: args.genre,
+            mcp_client: session.clientName,
+            userId: session.userId,
+          }
+        : {
+            prompt: args.prompt,
+            provider: args.model,
+            duration: args.duration,
+            instrumental: args.instrumental,
+            lyrics: args.lyrics,
+            genre: args.genre,
+            mood: args.mood,
+            mcp_client: session.clientName,
+            userId: session.userId,
+          }
       const res = await fastify.inject({
         method: "POST",
-        url: "/v1/generate-music",
+        url,
         headers: {
           "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
         },
@@ -120,9 +144,11 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             "elevenlabs-multilingual",
             "elevenlabs",
           ])
-          .optional()
+          .default("elevenlabs-v3")
           .describe(
-            "TTS model. v3 supports [audio tags] for emotion. Call " +
+            "TTS model. Default `elevenlabs-v3` (newest) supports `[audio tags]` " +
+            "like `[laughs]`, `[whispers]`, `[sighs]` for emotion. " +
+            "`elevenlabs-turbo` is cheaper for plain narration. Call " +
             "list_models { kind: \"audio\", mode: \"tts\" } for the full sheet.",
           ),
         voice_type: z.enum(["premade", "custom", "library"]).optional(),

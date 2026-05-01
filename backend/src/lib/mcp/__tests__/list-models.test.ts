@@ -36,11 +36,15 @@ describe("Model catalog ↔ STATIC_CREDIT_COSTS", () => {
     }
   })
 
-  it("every recommendation references a real catalog id", () => {
+  it("every recommendation references a real catalog id that isn't mcpHidden", () => {
     const ids = new Set(Object.keys(MODEL_CATALOG))
     for (const rec of MODEL_RECOMMENDATIONS) {
       for (const id of rec.modelIds) {
         expect(ids.has(id), `recommendation references unknown id: ${id}`).toBe(true)
+        expect(
+          MODEL_CATALOG[id]?.mcpHidden,
+          `recommendation references hidden id: ${id}`,
+        ).not.toBe(true)
       }
     }
   })

@@ -198,6 +198,7 @@ export const IMAGE_GEN_PROVIDERS = [
 /** Image-to-image providers (require input image) */
 export const IMAGE_I2I_PROVIDERS = [
   "nano-banana",
+  "nano-banana-2",
   "nano-banana-pro",
   "grok-i2i",
   "flux-i2i",
