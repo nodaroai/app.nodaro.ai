@@ -493,21 +493,35 @@ ${uiProtocolShim()}
       star.title = 'These settings are your default';
     }
 
-    // Left side — kind-specific text buttons. Image gets Animate + Edit;
-    // other kinds will gain their own buttons here (extend, captions, etc.).
+    // Left side — kind-specific text buttons. Image gets Animate + Edit.
+    //
+    // Both buttons push a conversational message into the chat input
+    // (NOT a direct tool call). The user can hit Enter to send as-is —
+    // Claude will then ask what to change — or replace the placeholder
+    // (literal text "ask me" inside angle brackets) with their actual
+    // instruction first. Carries the source image + prior prompt +
+    // model + action as JSON so the agent has full context for the
+    // follow-up call without having to re-derive it from chat history.
+    function buildContextJson(action) {
+      var ctx = { image_url: state.outputUrl };
+      if (state.prompt) ctx['original prompt'] = state.prompt;
+      if (state.model) ctx.model = state.model;
+      ctx.action = action;
+      return JSON.stringify(ctx);
+    }
     wire('btn-animate', function() {
-      if (!state.outputUrl) return;
-      window.NodaroMCP.suggestTool('animate_image', {
-        image_url: state.outputUrl,
-        prompt: state.prompt || undefined
-      });
+      if (!state.outputUrl || !window.NodaroMCP.pushUserMessage) return;
+      window.NodaroMCP.pushUserMessage(
+        'animate this image: ' + buildContextJson('animate_image') +
+        ' as follows:\nPrompt: <ask me>'
+      );
     });
     wire('btn-edit', function() {
-      if (!state.outputUrl) return;
-      window.NodaroMCP.suggestTool('modify_image', {
-        image_url: state.outputUrl,
-        prompt: state.prompt || undefined
-      });
+      if (!state.outputUrl || !window.NodaroMCP.pushUserMessage) return;
+      window.NodaroMCP.pushUserMessage(
+        'modify this image: ' + buildContextJson('modify_image') +
+        ' as follows:\nPrompt: <ask me>'
+      );
     });
   })();
 </script>
