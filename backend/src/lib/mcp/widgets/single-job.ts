@@ -71,7 +71,11 @@ const SHARED_CSS = `
     width: auto;
     height: auto;
     max-width: 100%;
-    max-height: 86vh;
+    /* No max-height on mobile fullscreen — portrait images use their
+       natural height and the host fullscreen container scrolls. The
+       desktop refinements block below adds an 86vh cap so wide screens
+       don't blow the image up to absurd height. */
+    max-height: none;
     border-radius: 0;
     margin: 0;
   }
@@ -106,6 +110,10 @@ const SHARED_CSS = `
       margin: 0 auto;
     }
     body.fullscreen .preview { align-items: start; }
+    body.fullscreen .preview img,
+    body.fullscreen .preview video {
+      max-height: 86vh;
+    }
     .actions.ready { opacity: 0; }
     .card:hover .actions.ready { opacity: 1; }
   }
