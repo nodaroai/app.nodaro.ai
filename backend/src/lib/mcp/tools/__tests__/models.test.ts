@@ -58,7 +58,8 @@ describe("list_models tool (always available)", () => {
     })
     const result = await callTool(server, "list_models", {})
     expect(result.isError).toBeUndefined()
-    expect(result.content[0]?.text).toContain("\"nano-banana\"")
+    // Use a non-hidden image model — nano-banana is now mcpHidden.
+    expect(result.content[0]?.text).toContain("\"nano-banana-2\"")
     expect(result.content[0]?.text).toContain("\"image\"")
   })
 
@@ -77,7 +78,7 @@ describe("list_models tool (always available)", () => {
     expect(result.isError).toBeUndefined()
     const text = result.content[0]?.text ?? ""
     expect(text).toContain("\"veo3\"")
-    expect(text).not.toContain("\"nano-banana\"")
+    expect(text).not.toContain("\"nano-banana-2\"")
   })
 })
 
