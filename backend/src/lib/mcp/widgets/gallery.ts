@@ -29,8 +29,14 @@ const GALLERY_CSS = `
   .detail .preview { width: 100%; max-height: 70vh; }
   .detail .preview img, .detail .preview video, .detail .preview audio { width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
   .detail .meta { margin-top: 12px; }
-  .detail .actions { display: flex; gap: 8px; margin-top: 12px; }
-  button { padding: 6px 14px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .detail .actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
+  /* Borderless action buttons — same calm Claude-style affordance the
+     single-job widget uses. Subtle dim → bright on hover. */
+  button { padding: 6px 12px; border: none; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; opacity: 0.7; transition: opacity .15s, background .15s, color .15s; font-family: inherit; line-height: 1; }
+  button:hover { background: rgba(127,127,127,0.1); opacity: 1; }
+  /* Use-as-reference is the primary action — brand pink, slightly stronger. */
+  button.primary { color: #ff0073; opacity: 0.9; font-weight: 500; }
+  button.primary:hover { background: rgba(255, 0, 115, 0.1); opacity: 1; }
 `
 
 export function buildGalleryWidgetTemplate(): string {
@@ -167,8 +173,21 @@ ${uiProtocolShim()}
       var actions = document.createElement('div');
       actions.className = 'actions';
       var useBtn = document.createElement('button');
+      useBtn.className = 'primary';
       useBtn.textContent = 'Use as reference';
-      useBtn.addEventListener('click', function() { window.NodaroMCP.useAsset(item.jobId, item.kind); });
+      useBtn.addEventListener('click', function() {
+        // Same conversational pattern as Edit / Animate on the single-job
+        // widget: push a user message with full context + an editable
+        // [ask me N q/a] trailer. Use defaults to 2 questions because the
+        // user's already named the asset by clicking — we just need the
+        // intent (what to do with it) and one or two minor levers.
+        if (window.NodaroMCP.pushUserMessage) {
+          window.NodaroMCP.pushUserMessage(
+            'Use the ' + item.kind + ' with id ' + item.jobId +
+            ' as a reference. The user clicked the Use button.\n[ask me 2 q/a]'
+          );
+        }
+      });
       actions.appendChild(useBtn);
       var openBtn = document.createElement('button');
       openBtn.textContent = 'Open in Nodaro';
