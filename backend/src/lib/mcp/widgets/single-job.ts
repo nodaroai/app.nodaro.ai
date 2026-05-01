@@ -71,7 +71,7 @@ const SHARED_CSS = `
     width: auto;
     height: auto;
     max-width: 100%;
-    max-height: 80vh;
+    max-height: 86vh;
     border-radius: 0;
     margin: 0;
   }
@@ -105,7 +105,7 @@ const SHARED_CSS = `
       border-radius: 8px;
       margin: 0 auto;
     }
-    body.fullscreen .preview { align-items: center; }
+    body.fullscreen .preview { align-items: start; }
     .actions.ready { opacity: 0; }
     .card:hover .actions.ready { opacity: 1; }
   }
