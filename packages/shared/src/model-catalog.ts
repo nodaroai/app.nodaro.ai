@@ -1372,3 +1372,118 @@ export function groupByFamily(
 export function getModel(id: string): ModelCatalogEntry | undefined {
   return MODEL_CATALOG[id]
 }
+
+// =============================================================================
+// Per-model input validation
+// =============================================================================
+export type ValidationField =
+  | "aspectRatio"
+  | "resolution"
+  | "quality"
+  | "duration"
+
+export interface ModelValidationIssue {
+  field: ValidationField
+  message: string
+  allowed: readonly (string | number)[] | null
+}
+
+/**
+ * Validate that the user's lever values are supported by the chosen model.
+ *
+ * Returns null on success or the FIRST issue found. We surface a single issue
+ * rather than collecting all so the agent doesn't get a wall of complaints —
+ * fix one thing, retry. Order: aspectRatio → resolution → quality → duration.
+ *
+ * Semantics:
+ * - If the field is undefined, it's never an issue.
+ * - If the catalog entry doesn't list a corresponding lever (e.g. base
+ *   nano-banana has no `resolutions`), passing that field IS an issue —
+ *   silently dropping it has caused two bugs already.
+ * - If the value is in the allow list, it's valid.
+ *
+ * Unknown model ids are NOT flagged here — the route handler / Zod model
+ * enum is the right gate for that. We just skip validation.
+ */
+export function validateModelInput(
+  modelId: string,
+  input: {
+    aspectRatio?: string
+    resolution?: string
+    quality?: string
+    duration?: number
+  },
+): ModelValidationIssue | null {
+  const m = MODEL_CATALOG[modelId]
+  if (!m) return null
+
+  if (input.aspectRatio !== undefined) {
+    if (!m.aspectRatios) {
+      return {
+        field: "aspectRatio",
+        message: `Model "${modelId}" does not have an aspect_ratio lever — omit it.`,
+        allowed: null,
+      }
+    }
+    if (!m.aspectRatios.includes(input.aspectRatio)) {
+      return {
+        field: "aspectRatio",
+        message: `Model "${modelId}" does not support aspect_ratio "${input.aspectRatio}". Supported: ${m.aspectRatios.join(", ")}.`,
+        allowed: m.aspectRatios,
+      }
+    }
+  }
+
+  if (input.resolution !== undefined) {
+    if (!m.resolutions) {
+      return {
+        field: "resolution",
+        message: `Model "${modelId}" does not have a resolution lever — omit it.`,
+        allowed: null,
+      }
+    }
+    if (!m.resolutions.includes(input.resolution)) {
+      return {
+        field: "resolution",
+        message: `Model "${modelId}" does not support resolution "${input.resolution}". Supported: ${m.resolutions.join(", ")}.`,
+        allowed: m.resolutions,
+      }
+    }
+  }
+
+  if (input.quality !== undefined) {
+    if (!m.qualities) {
+      return {
+        field: "quality",
+        message: `Model "${modelId}" does not have a quality lever — omit it.`,
+        allowed: null,
+      }
+    }
+    if (!m.qualities.includes(input.quality)) {
+      return {
+        field: "quality",
+        message: `Model "${modelId}" does not support quality "${input.quality}". Supported: ${m.qualities.join(", ")}.`,
+        allowed: m.qualities,
+      }
+    }
+  }
+
+  if (input.duration !== undefined) {
+    if (!m.durations) {
+      return {
+        field: "duration",
+        message: `Model "${modelId}" does not have a duration lever — omit it.`,
+        allowed: null,
+      }
+    }
+    if (!m.durations.includes(input.duration)) {
+      return {
+        field: "duration",
+        message: `Model "${modelId}" does not support duration ${input.duration}s. Supported: ${m.durations.join(", ")}s.`,
+        allowed: m.durations,
+      }
+    }
+  }
+
+  return null
+}
