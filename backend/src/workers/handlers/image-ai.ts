@@ -6,6 +6,31 @@ import {
   uploadImageMaybeWatermark,
   type HandlerFn,
 } from "../shared.js"
+import { supabase } from "../../lib/supabase.js"
+
+/**
+ * Write the worker's progress to BOTH BullMQ (Redis) and the `jobs.progress`
+ * column (Postgres). The MCP widget polls the DB column for its progress
+ * bar, while internal cancellation / monitoring reads BullMQ state. Without
+ * the DB write the widget sees `progress: 0` for the entire run and the
+ * percentage never moves — only the spinner / status label changes.
+ */
+async function setJobProgress(
+  job: { updateProgress: (p: number) => Promise<void> },
+  jobId: string,
+  progress: number,
+): Promise<void> {
+  await job.updateProgress(progress)
+  // Best-effort DB write — failures shouldn't fail the generation.
+  await supabase
+    .from("jobs")
+    .update({ progress })
+    .eq("id", jobId)
+    .then(() => undefined, (err) => {
+      // eslint-disable-next-line no-console
+      console.warn(`[worker] progress DB update failed for ${jobId}:`, err)
+    })
+}
 
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
   const { prompt, referenceImageUrls, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt } = job.data as {
@@ -38,11 +63,12 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     ...(expandPrompt != null && { expand_prompt: expandPrompt }),
   }
   const hasExtraParams = Object.keys(extraParams).length > 0
+  await setJobProgress(job, ctx.jobId, 10)
   const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls, hasExtraParams ? extraParams : undefined)
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 60)
 
   const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
@@ -83,11 +109,12 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
   }
   const hasExtraParams = Object.keys(extraParams).length > 0
 
+  await setJobProgress(job, ctx.jobId, 10)
   const result = await editImage(imageUrl, resolvedProvider, effectivePrompt, hasExtraParams ? extraParams : undefined)
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 60)
 
   const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
@@ -137,11 +164,12 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
     ...(maskUrl && { mask_url: maskUrl }),
   }
   const hasExtraParams = Object.keys(extraParams).length > 0
+  await setJobProgress(job, ctx.jobId, 10)
   const result = await generateImage(prompt, resolvedProvider, allImages, hasExtraParams ? extraParams : undefined)
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 60)
 
   const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
