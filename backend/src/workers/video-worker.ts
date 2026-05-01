@@ -38,7 +38,7 @@ export function createVideoWorker() {
       // Fetch job record (with should_watermark from reservation) + user profile for public_outputs
       const { data: jobRecord } = await supabase
         .from("jobs")
-        .select("usage_log_id, user_id, should_watermark, force_private, profiles!user_id(public_outputs)")
+        .select("usage_log_id, user_id, should_watermark, force_private, mcp_client, workflow_execution_id, profiles!user_id(public_outputs)")
         .eq("id", jobId)
         .single()
       const usageLogId = jobRecord?.usage_log_id
@@ -65,6 +65,34 @@ export function createVideoWorker() {
       // Force private when job uses uploaded/private input content
       if (isPublicOutput && jobRecord?.force_private === true) {
         isPublicOutput = false
+      }
+
+      // Force private for MCP-generated content. The user is generating
+      // through an external client (Claude.ai, Cursor) — that's a private
+      // surface, NOT the public web app where they consciously opted in
+      // to gallery sharing. Free/Basic tiers can't disable public_outputs
+      // in the profile, so without this clause every MCP generation would
+      // leak to the public gallery.
+      //
+      // Two paths to detect MCP origin:
+      //   (a) Direct generate_image / modify_image / animate_image / etc.
+      //       — `mcp_client` populated on the job row itself by the route.
+      //   (b) Workflow / app run — the parent workflow_execution carries
+      //       `mcp_client`; per-node child jobs don't (the orchestrator
+      //       calls the same internal routes which don't see the MCP
+      //       header on each per-node call). Look up the parent.
+      if (isPublicOutput && jobRecord?.mcp_client) {
+        isPublicOutput = false
+      }
+      if (isPublicOutput && jobRecord?.workflow_execution_id) {
+        const { data: parent } = await supabase
+          .from("workflow_executions")
+          .select("mcp_client")
+          .eq("id", jobRecord.workflow_execution_id as string)
+          .maybeSingle()
+        if (parent?.mcp_client) {
+          isPublicOutput = false
+        }
       }
 
       const ctx: JobContext = { jobId, jobUserId, usageLogId, shouldWatermark }

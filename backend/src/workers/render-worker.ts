@@ -734,7 +734,7 @@ export function createRenderWorker() {
       // Fetch job + user profile
       const { data: jobRecord } = await supabase
         .from("jobs")
-        .select("usage_log_id, user_id, force_private, profiles!user_id(tier, public_outputs)")
+        .select("usage_log_id, user_id, force_private, mcp_client, workflow_execution_id, profiles!user_id(tier, public_outputs)")
         .eq("id", jobId)
         .single()
 
@@ -749,6 +749,27 @@ export function createRenderWorker() {
       // Force private when job uses uploaded/private input content
       if (isPublic && jobRecord?.force_private === true) {
         isPublic = false
+      }
+
+      // Force private for MCP-generated content (Claude.ai / Cursor / etc.) —
+      // those are external private surfaces, not the public web app where
+      // the user opted into gallery sharing. Mirrors video-worker.ts.
+      // Two detection paths: direct (`mcp_client` on the job row) or
+      // workflow-driven (parent workflow_execution's `mcp_client`).
+      const jobMcpClient = (jobRecord as Record<string, unknown>)?.mcp_client
+      const jobWfExecId = (jobRecord as Record<string, unknown>)?.workflow_execution_id
+      if (isPublic && jobMcpClient) {
+        isPublic = false
+      }
+      if (isPublic && jobWfExecId) {
+        const { data: parent } = await supabase
+          .from("workflow_executions")
+          .select("mcp_client")
+          .eq("id", jobWfExecId as string)
+          .maybeSingle()
+        if (parent?.mcp_client) {
+          isPublic = false
+        }
       }
 
       console.log(`[render-worker] Job ${jobId} picked up (tier=${userTier})`)
