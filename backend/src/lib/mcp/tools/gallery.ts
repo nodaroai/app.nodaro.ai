@@ -372,6 +372,112 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
         }
       },
     )
+
+    // ── get_app_run ──
+    // Workflow / app runs live in `workflow_executions` (not `jobs`). The
+    // workflow widget polls this every 2s to update its node-status pill
+    // list and surface output URLs once available, since stateless HTTP
+    // MCP can't deliver the orchestrator's executionEvents asynchronously
+    // (server tears down after the tool call returns).
+    server.registerTool(
+      "get_app_run",
+      {
+        title: "Get App Run",
+        description:
+          "Fetch status of a workflow / published-app execution by id. " +
+          "Returns the execution's status, per-node states, and any output " +
+          "URLs the run has produced so far. Used by the workflow widget to " +
+          "poll progress.",
+        inputSchema: {
+          execution_id: z.string().min(1),
+        },
+        outputSchema: {
+          executionId: z.string(),
+          status: z.string(),
+          nodeStates: z
+            .array(
+              z.object({
+                id: z.string(),
+                label: z.string().optional(),
+                status: z.string(),
+              }),
+            )
+            .optional(),
+          outputs: z
+            .array(z.object({ kind: z.string(), url: z.string() }))
+            .optional(),
+        },
+        annotations: { readOnlyHint: true },
+      },
+      async (args) => {
+        const { data, error } = await supabase
+          .from("workflow_executions")
+          .select("id, status, node_states, created_at, completed_at, user_id")
+          .eq("id", args.execution_id)
+          .eq("user_id", session.userId)
+          .maybeSingle()
+        if (error) {
+          return {
+            content: [{ type: "text", text: `Error: ${error.message}` }],
+            isError: true,
+          }
+        }
+        if (!data) {
+          return {
+            content: [{ type: "text", text: `Execution ${args.execution_id} not found` }],
+            isError: true,
+          }
+        }
+
+        // node_states is JSONB keyed by node id with at least
+        // `{ status, output?: { imageUrl?|videoUrl?|audioUrl? }, nodeType? }`.
+        // We flatten into the widget-friendly shapes — { id, label, status }
+        // for the pill list, plus a separate { kind, url } array for
+        // outputs grid rendering.
+        const ns = (data.node_states ?? {}) as Record<
+          string,
+          {
+            status?: string
+            output?: { imageUrl?: string; videoUrl?: string; audioUrl?: string; outputUrl?: string }
+            nodeType?: string
+          }
+        >
+        const nodeStates: Array<{ id: string; label?: string; status: string }> = []
+        const outputs: Array<{ kind: string; url: string }> = []
+        for (const [nodeId, state] of Object.entries(ns)) {
+          nodeStates.push({
+            id: nodeId,
+            label: state.nodeType ?? nodeId,
+            status: state.status ?? "queued",
+          })
+          if (state.output) {
+            const url =
+              state.output.imageUrl ??
+              state.output.videoUrl ??
+              state.output.audioUrl ??
+              state.output.outputUrl
+            const kind = state.output.imageUrl
+              ? "image"
+              : state.output.videoUrl
+                ? "video"
+                : state.output.audioUrl
+                  ? "audio"
+                  : null
+            if (url && kind) outputs.push({ kind, url })
+          }
+        }
+
+        return {
+          content: [{ type: "text", text: JSON.stringify({ data: { id: data.id, status: data.status, nodeStates, outputs } }, null, 2) }],
+          structuredContent: {
+            executionId: data.id,
+            status: data.status,
+            nodeStates,
+            outputs,
+          },
+        }
+      },
+    )
   }
 
   if (passesGate(session, writeGate)) {
