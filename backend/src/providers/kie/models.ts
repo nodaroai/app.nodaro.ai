@@ -34,13 +34,16 @@ export interface KieModelConfig {
 // =============================================================================
 export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Google Nano Banana family
-  // Nano Banana uses `image_size` param (NOT `aspect_ratio`) and does NOT support `resolution`
-  // See: docs.kie.ai/market/google/nano-banana.md
+  // Routed to KIE's `nano-banana-pro` model id (NOT base nano-banana) so we get
+  // `image_input` reference-image support. The Pro endpoint uses `aspect_ratio`
+  // (NOT `image_size`) — see docs.kie.ai/market/google/pro-image-to-image.md.
+  // We strip `resolution` in image.ts so KIE defaults to 1K and the cheaper
+  // 4-KIE-credit price stays accurate (2K/4K live under `nano-banana-pro`).
   "nano-banana": {
-    model: "nano-banana-pro",   // Pro version supports image_input for reference images
+    model: "nano-banana-pro",
     credits: 4,
     ***REDACTED-OSS-SCRUB***
-    extraParams: { image_size: "16:9" },
+    extraParams: { aspect_ratio: "16:9" },
   },
   "nano-banana-pro": {
     model: "nano-banana-pro",

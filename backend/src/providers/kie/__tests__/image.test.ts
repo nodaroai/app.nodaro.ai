@@ -83,12 +83,13 @@ describe("KieImageProvider.generateImage", () => {
     await expect(provider.generateImage("test")).rejects.toThrow()
   })
 
-  it("passes extraParams from caller", async () => {
-    await provider.generateImage("wide shot", undefined, "nano-banana", { aspect_ratio: "16:9" })
-    expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
-      "nano-banana-pro",
-      expect.objectContaining({ image_size: "16:9" }),
-    )
+  it("passes aspect_ratio through to KIE for nano-banana (Pro endpoint accepts aspect_ratio, not image_size)", async () => {
+    await provider.generateImage("wide shot", undefined, "nano-banana", { aspect_ratio: "9:16" })
+    const callArgs = mocks.mockRunKieTask.mock.calls[0]
+    expect(callArgs[0]).toBe("nano-banana-pro")
+    expect(callArgs[1]).toMatchObject({ aspect_ratio: "9:16" })
+    expect(callArgs[1]).not.toHaveProperty("image_size")
+    expect(callArgs[1]).not.toHaveProperty("resolution")
   })
 })
 
