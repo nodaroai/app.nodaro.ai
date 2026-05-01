@@ -514,7 +514,12 @@ ${uiProtocolShim()}
     // can swap "3" for 1 / 2 / 5 etc. depending on how much hand-holding
     // they want for this particular edit, or replace the placeholder with
     // an explicit instruction to skip the Q&A entirely.
-    var ASK_TRAILER = ' as follows: Prompt: <ask me 3 q/a>';
+    //
+    // NOTE: square brackets, NOT angle brackets. The host chat-input
+    // renderer treats angle brackets as opening tags and throws
+    // "Invalid or unexpected token" the moment it sees a placeholder
+    // like "ask me 3 q/a" inside angle brackets.
+    var ASK_TRAILER = ' as follows: Prompt: [ask me 3 q/a]';
     wire('btn-animate', function() {
       if (!state.outputUrl || !window.NodaroMCP.pushUserMessage) return;
       window.NodaroMCP.pushUserMessage(
