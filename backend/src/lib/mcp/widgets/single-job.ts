@@ -509,17 +509,16 @@ ${uiProtocolShim()}
       ctx.action = action;
       return JSON.stringify(ctx);
     }
-    // Default trailer asks Claude to walk the user through a short Q&A
-    // before generating. The number is editable in the chat input — user
-    // can swap "3" for 1 / 2 / 5 etc. depending on how much hand-holding
-    // they want for this particular edit, or replace the placeholder with
-    // an explicit instruction to skip the Q&A entirely.
+    // Trailer asks Claude to drive a Q&A loop, one round per relevant
+    // aspect (model, AR, duration, …). Better than a fixed N because
+    // the right question count varies by action — Edit needs prompt +
+    // maybe model; Animate needs model + duration + audio toggle. The
+    // loop ends when Claude has all it needs to call the verb tool.
     //
     // NOTE: square brackets, NOT angle brackets. The host chat-input
     // renderer treats angle brackets as opening tags and throws
-    // "Invalid or unexpected token" the moment it sees a placeholder
-    // like "ask me 3 q/a" inside angle brackets.
-    var ASK_TRAILER = ' as follows: Prompt: [ask me 3 q/a]';
+    // "Invalid or unexpected token" the moment it sees a placeholder.
+    var ASK_TRAILER = ' loop for different aspects [ask me q/a]';
     wire('btn-animate', function() {
       if (!state.outputUrl || !window.NodaroMCP.pushUserMessage) return;
       window.NodaroMCP.pushUserMessage(
