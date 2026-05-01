@@ -176,16 +176,16 @@ ${uiProtocolShim()}
       useBtn.className = 'primary';
       useBtn.textContent = 'Use as reference';
       useBtn.addEventListener('click', function() {
-        // Two-stage trailer: first ask what action the user wants
-        // (animate, modify, variation, …) then drill into parameters
-        // via 3 Q&A. Splits intent from configuration — the user's
-        // already named the asset by clicking, but we don't yet know
-        // what to DO with it. Both placeholders are editable.
+        // Two-stage trailer: first ask the action (animate / modify /
+        // variation / …), then loop one Q&A per aspect (model, AR,
+        // duration, …) until Claude has everything to call the verb
+        // tool. The aspect-loop pattern adapts the question count to
+        // the chosen action — Edit needs few, Animate needs more.
         if (window.NodaroMCP.pushUserMessage) {
           window.NodaroMCP.pushUserMessage(
             'Use the ' + item.kind + ' with id ' + item.jobId +
             ' as a reference. The user clicked the Use button.' +
-            '[ask me action] then [ask me 3 q/a]'
+            '[ask me action] then loop for different aspects [ask me q/a]'
           );
         }
       });
