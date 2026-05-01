@@ -509,18 +509,22 @@ ${uiProtocolShim()}
       ctx.action = action;
       return JSON.stringify(ctx);
     }
+    // Default trailer asks Claude to walk the user through a short Q&A
+    // before generating. The number is editable in the chat input — user
+    // can swap "3" for 1 / 2 / 5 etc. depending on how much hand-holding
+    // they want for this particular edit, or replace the placeholder with
+    // an explicit instruction to skip the Q&A entirely.
+    var ASK_TRAILER = ' as follows: Prompt: <ask me 3 q/a>';
     wire('btn-animate', function() {
       if (!state.outputUrl || !window.NodaroMCP.pushUserMessage) return;
       window.NodaroMCP.pushUserMessage(
-        'animate this image: ' + buildContextJson('animate_image') +
-        ' as follows:\nPrompt: <ask me>'
+        'animate this image: ' + buildContextJson('animate_image') + ASK_TRAILER
       );
     });
     wire('btn-edit', function() {
       if (!state.outputUrl || !window.NodaroMCP.pushUserMessage) return;
       window.NodaroMCP.pushUserMessage(
-        'modify this image: ' + buildContextJson('modify_image') +
-        ' as follows:\nPrompt: <ask me>'
+        'modify this image: ' + buildContextJson('modify_image') + ASK_TRAILER
       );
     });
   })();
