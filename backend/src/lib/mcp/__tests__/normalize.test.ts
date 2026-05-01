@@ -21,16 +21,37 @@ describe("normalizeAspectRatio", () => {
     expect(normalizeAspectRatio("16/9", supported)).toBe("16:9")
   })
 
-  it("falls back to 16:9 for unsupported / unknown", () => {
+  it("snaps unsupported numeric ratios to the nearest supported", () => {
+    // 21:9 = 2.33 → nearest in [1.78, 0.56, 1.0, 1.33, 0.75] is 1.78 (16:9).
     expect(normalizeAspectRatio("21:9", supported)).toBe("16:9")
+    // 9:21 = 0.43 → nearest is 0.56 (9:16).
+    expect(normalizeAspectRatio("9:21", supported)).toBe("9:16")
+    // 1.78:1 (cinematic) → 16:9.
+    expect(normalizeAspectRatio("1.78:1", supported)).toBe("16:9")
+    // Bare decimal — same logic.
+    expect(normalizeAspectRatio("1.78", supported)).toBe("16:9")
+    // "1x9" typo is parseable as 1/9 ≈ 0.111 → nearest is 0.56 (9:16).
+    expect(normalizeAspectRatio("1x9", supported)).toBe("9:16")
+  })
+
+  it("falls back to 16:9 for unparseable / empty input", () => {
     expect(normalizeAspectRatio("nonsense", supported)).toBe("16:9")
     expect(normalizeAspectRatio("", supported)).toBe("16:9")
     expect(normalizeAspectRatio(undefined, supported)).toBe("16:9")
   })
 
-  it("returns first supported when 16:9 isn't in the set", () => {
+  it("returns first supported when 16:9 isn't in the set and input is unparseable", () => {
     const narrow = ["1:1", "4:3"] as const
     expect(normalizeAspectRatio("nonsense", narrow)).toBe("1:1")
+  })
+
+  it("skips non-numeric supported values during nearest-match", () => {
+    // 'auto' has no numeric representation — it should be passed through
+    // as exact-match but not used as a candidate for numeric snapping.
+    const withAuto = ["auto", "1:1", "16:9", "9:16"] as const
+    expect(normalizeAspectRatio("auto", withAuto)).toBe("auto")
+    // 21:9 still snaps to 16:9, doesn't pick "auto".
+    expect(normalizeAspectRatio("21:9", withAuto)).toBe("16:9")
   })
 
   it("returns undefined when the model has no aspect-ratio lever", () => {
