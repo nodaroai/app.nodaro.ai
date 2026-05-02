@@ -17,27 +17,38 @@ import { uiProtocolShim } from "./_common.js"
 const SHARED_CSS = `
   :root { color-scheme: light dark; }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 16px; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
-  .card { display: flex; flex-direction: column; gap: 12px; }
+  body { margin: 0; padding: 12px; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
+  /* Card shell — subtle border + tinted background + rounded corners
+     frame the result so it reads as a discrete widget against the host
+     chat (matches [redacted-reference]'s grid-shell pattern). Applies on mobile
+     AND desktop; fullscreen mode strips it back to bare media. */
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border: 1px solid rgba(127,127,127,0.18);
+    background: rgba(127,127,127,0.04);
+    border-radius: 14px;
+    padding: 12px;
+  }
   .progress { height: 4px; background: rgba(127,127,127,0.2); border-radius: 2px; overflow: hidden; }
   .progress > div { height: 100%; background: linear-gradient(90deg, #5b9dff, #8e6bff); width: 0%; transition: width .3s; }
   .meta { font-size: 12px; opacity: 0.7; display: flex; gap: 8px; flex-wrap: wrap; }
   .meta .badge { background: rgba(127,127,127,0.15); padding: 2px 8px; border-radius: 4px; }
-  /* Mobile/touch default: full-iframe-width image, no chrome — chat
-     scroll handles tall portraits naturally and the iframe is already
-     narrow so capping just feels cramped. Desktop refinements
-     (centered + 60vh cap + rounded corners) live in the @media block
-     below behind hover:hover + pointer:fine. */
+  /* Mobile/touch default: image renders at intrinsic ratio, capped at
+     80vh so portrait results don't dominate the entire chat viewport.
+     Desktop refinements (fixed 500px cap, mouse hover affordances)
+     live in the @media block below behind hover:hover + pointer:fine. */
   .preview { width: 100%; }
   .preview img, .preview video {
     display: block;
-    width: 100%;
-    height: 100%;
-    max-width: none;
-    max-height: none;
-    object-fit: contain;
-    border-radius: 0;
-    margin: 0;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 80vh;
+    object-fit: unset;
+    border-radius: 8px;
+    margin: 0 auto;
   }
   .preview audio { display: block; width: 100%; }
   /* Image kind: clicking the image asks the host to switch to fullscreen
@@ -53,7 +64,10 @@ const SHARED_CSS = `
      to look at the asset, not the badges/buttons. They click the image to
      exit (cursor flips to zoom-out) or use the host's X overlay. */
   body.fullscreen { padding: 0; margin: 0; height: 100vh; overflow: hidden; }
-  body.fullscreen .card { height: 100vh; gap: 0; }
+  /* Strip the card chrome in fullscreen — the iframe IS the viewport now,
+     so border / tinted bg / radius / padding just create a frame around
+     a frame. Matches the bare-media intent of fullscreen mode. */
+  body.fullscreen .card { height: 100vh; gap: 0; border: 0; background: transparent; padding: 0; border-radius: 0; }
   body.fullscreen .meta,
   body.fullscreen .status,
   body.fullscreen .progress,
