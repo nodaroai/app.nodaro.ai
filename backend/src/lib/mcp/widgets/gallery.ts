@@ -99,9 +99,28 @@ ${uiProtocolShim()}
 
         var media;
         if (item.kind === 'video') {
-          media = document.createElement('video');
-          media.muted = true;
-          media.setAttribute('src', item.assetUrl);
+          // If the backend has a thumbnail URL, render it as an <img>
+          // (cleanest result — no play-button overlay, no decoder cost).
+          // Otherwise fall back to a <video> element with preload metadata
+          // and a forced seek to the first frame so the tile shows the
+          // actual frame instead of the browser's blank/play-button
+          // poster. playsinline keeps iOS Safari from auto-launching the
+          // native fullscreen player when the iframe scrolls into view.
+          if (item.thumbnailUrl) {
+            media = document.createElement('img');
+            media.setAttribute('src', item.thumbnailUrl);
+            media.setAttribute('alt', '');
+            media.setAttribute('loading', 'lazy');
+          } else {
+            media = document.createElement('video');
+            media.muted = true;
+            media.setAttribute('preload', 'metadata');
+            media.setAttribute('playsinline', '');
+            media.setAttribute('src', item.assetUrl);
+            media.addEventListener('loadedmetadata', function() {
+              try { media.currentTime = 0.001; } catch (e) {}
+            });
+          }
         } else {
           media = document.createElement('img');
           media.setAttribute('src', item.thumbnailUrl || item.assetUrl);
