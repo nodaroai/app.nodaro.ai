@@ -366,7 +366,10 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
       {
         title: "Get Asset",
         description:
-          "Fetch metadata for a single asset (job) by id, including its output URL, prompt, and provider.",
+          "Fetch metadata for a single asset (job) by id, including its output URL, prompt, and provider. " +
+          "Returns the user's OWN jobs (any status) AND any other user's PUBLIC + COMPLETED jobs " +
+          "— the same visibility surface as `browse_gallery` so anything the user can see they can also " +
+          "fetch and reuse (e.g. the LLM passes the URL into a verb tool as image_url / video_url).",
         inputSchema: {
           job_id: z.string().min(1),
         },
@@ -383,6 +386,11 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
         annotations: { readOnlyHint: true },
       },
       async (args) => {
+        // Visibility: caller's own jobs (any status) OR any user's public +
+        // completed jobs. Mirrors browse_gallery's public-scope filter so a
+        // user can `get_asset` whatever they can see in the public gallery.
+        // PostgREST .or() parses comma at the top level; nested AND uses
+        // and(...). user_id stays unquoted since it's a UUID-shaped string.
         const { data, error } = await supabase
           .from("jobs")
           .select(
@@ -390,7 +398,9 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
             "id, status, progress, job_type, input_data, output_data, created_at, completed_at, credits, user_id",
           )
           .eq("id", args.job_id)
-          .eq("user_id", session.userId)
+          .or(
+            `user_id.eq.${session.userId},and(is_public.eq.true,status.eq.completed)`,
+          )
           .maybeSingle()
         if (error) {
           return {
