@@ -229,6 +229,125 @@ describe("get_asset tool", () => {
   })
 })
 
+describe("display_asset tool", () => {
+  it("returns image widget content for an image asset (own)", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainableSingle({
+        id: "img1",
+        user_id: "u1",
+        status: "completed",
+        job_type: "generate-image",
+        input_data: {
+          prompt: "a knight",
+          provider: "nano-banana-pro",
+          aspect_ratio: "16:9",
+          resolution: "2K",
+        },
+        output_data: { imageUrl: "https://r2/img1.png" },
+      }),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "display_asset", { job_id: "img1" })
+    expect(result.isError).toBeUndefined()
+    const sc = (result as { structuredContent?: Record<string, unknown> })
+      .structuredContent
+    expect(sc?.jobId).toBe("img1")
+    expect(sc?.outputUrl).toBe("https://r2/img1.png")
+    expect(sc?.assetKind).toBe("image")
+    expect(sc?.model).toBe("nano-banana-pro")
+    expect(sc?.aspectRatio).toBe("16:9")
+  })
+
+  it("returns text-only (no widget) for video assets", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainableSingle({
+        id: "vid1",
+        user_id: "u1",
+        status: "completed",
+        job_type: "image-to-video",
+        input_data: { prompt: "knight on horse" },
+        output_data: { videoUrl: "https://r2/vid1.mp4" },
+      }),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "display_asset", { job_id: "vid1" })
+    expect(result.isError).toBeUndefined()
+    expect(result.content[0]?.text).toContain("vid1")
+    expect(result.content[0]?.text).toContain("https://r2/vid1.mp4")
+    // Video falls back to text — no widget structuredContent.
+    const sc = (result as { structuredContent?: Record<string, unknown> })
+      .structuredContent
+    expect(sc).toBeUndefined()
+  })
+
+  it("returns asset owned by another user when public + completed", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainableSingle({
+        id: "pub1",
+        user_id: "u2",
+        status: "completed",
+        is_public: true,
+        job_type: "generate-image",
+        input_data: { prompt: "shared", provider: "flux" },
+        output_data: { imageUrl: "https://r2/pub1.png" },
+      }),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "display_asset", { job_id: "pub1" })
+    expect(result.isError).toBeUndefined()
+    const sc = (result as { structuredContent?: Record<string, unknown> })
+      .structuredContent
+    expect(sc?.outputUrl).toBe("https://r2/pub1.png")
+  })
+
+  it("returns isError when asset has no output URL yet", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainableSingle({
+        id: "pending1",
+        user_id: "u1",
+        status: "processing",
+        job_type: "generate-image",
+        input_data: { prompt: "a knight" },
+        output_data: {},
+      }),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "display_asset", { job_id: "pending1" })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toMatch(/not viewable/)
+  })
+
+  it("returns isError when asset not found", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainableSingle(null),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "display_asset", { job_id: "missing" })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toMatch(/not found/)
+  })
+
+  it("does NOT register without assets:read scope", async () => {
+    const server = buildServer()
+    registerGallery({
+      server,
+      session: newSession({
+        userId: "u1",
+        scopes: [] as Scope[],
+        clientName: "Claude",
+      }),
+      fastify: Fastify(),
+    })
+    const tools = await listTools(server)
+    expect(tools.map((t) => t.name)).not.toContain("display_asset")
+  })
+})
+
 describe("favorite_asset tool", () => {
   it("inserts a favorite when favorited=true", async () => {
     const insertMock = vi.fn().mockResolvedValue({ error: null })

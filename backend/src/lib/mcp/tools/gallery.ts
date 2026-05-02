@@ -463,6 +463,148 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
       },
     )
 
+    // ── display_asset ──
+    // Like `get_asset` but renders the asset visually in chat via the
+    // single-job widget (so the user actually SEES the image instead of
+    // getting a JSON dump). Use when the user asks "show me <id>" or
+    // "display this", or after browse_gallery when the user wants to look
+    // at a specific item full-size in chat.
+    //
+    // Visibility mirrors get_asset / browse_gallery: caller's own jobs OR
+    // any user's public+completed jobs.
+    //
+    // The bound widget is the image variant (most gallery assets are
+    // images). For video/audio assets, the tool returns text-only with a
+    // direct link (no widget) — rendering a video URL through an <img>
+    // tag would just show a broken-image icon.
+    server.registerTool(
+      "display_asset",
+      {
+        title: "Show / Display Asset",
+        description:
+          "Render an asset visually in chat (the user sees the image, not JSON). " +
+          "Use when the user asks to SEE / SHOW / DISPLAY a specific asset by id, " +
+          "or after `browse_gallery` when they want to look at one item full-size. " +
+          "Visibility = caller's own jobs (any status) OR any user's public+completed " +
+          "jobs (same surface as `browse_gallery` and `get_asset`). " +
+          "Best for IMAGE assets — the bound widget renders the image inline with " +
+          "metadata badges and Edit / Animate / Use-as-reference buttons. " +
+          "For video/audio assets the tool returns a direct link instead (no widget); " +
+          "for purely-programmatic metadata (no rendering) prefer `get_asset`.",
+        inputSchema: {
+          job_id: z.string().min(1),
+        },
+        // No outputSchema — the SDK enforces "every response must include
+        // structuredContent" when one is declared, but our video/audio
+        // branch returns text-only (the bound image widget can't render
+        // those URLs). Text-only is valid without an outputSchema.
+        annotations: { readOnlyHint: true },
+        _meta: {
+          "ui/resourceUri": "ui://nodaro/widget/v3/job-image",
+          ui: {
+            resourceUri: "ui://nodaro/widget/v3/job-image",
+            visibility: ["model", "app"],
+          },
+        },
+      },
+      async (args) => {
+        // Same OR query as get_asset — caller's own job OR any public+completed.
+        const { data, error } = await supabase
+          .from("jobs")
+          .select(
+            "id, status, job_type, input_data, output_data, completed_at, user_id",
+          )
+          .eq("id", args.job_id)
+          .or(
+            `user_id.eq.${session.userId},and(is_public.eq.true,status.eq.completed)`,
+          )
+          .maybeSingle()
+        if (error) {
+          return {
+            content: [{ type: "text", text: `Error: ${error.message}` }],
+            isError: true,
+          }
+        }
+        if (!data) {
+          return {
+            content: [{ type: "text", text: `Asset ${args.job_id} not found` }],
+            isError: true,
+          }
+        }
+
+        const out = (data.output_data ?? {}) as Record<string, unknown>
+        const input = (data.input_data ?? {}) as Record<string, unknown>
+        const outputUrl =
+          (out.imageUrl as string | undefined) ??
+          (out.videoUrl as string | undefined) ??
+          (out.audioUrl as string | undefined) ??
+          (out.outputUrl as string | undefined) ??
+          (out.url as string | undefined) ??
+          null
+        const assetKind = getKind(data.job_type)
+
+        if (!outputUrl) {
+          return {
+            content: [
+              {
+                type: "text",
+                text:
+                  `Asset ${args.job_id} is not viewable (status=${data.status}` +
+                  `${data.job_type ? `, job_type=${data.job_type}` : ""}). No output URL yet.`,
+              },
+            ],
+            isError: true,
+          }
+        }
+
+        // For non-image kinds, skip the widget — image widget would render
+        // a video/audio URL through <img> and break. Text result with the
+        // direct URL is more useful.
+        if (assetKind !== "image") {
+          const label = assetKind ?? "Asset"
+          const note = assetKind
+            ? `\n(In-chat preview rendering is image-only right now; ` +
+              `open the URL above to view this ${assetKind}.)`
+            : ""
+          return {
+            content: [
+              {
+                type: "text",
+                text: `${label} ${args.job_id}: ${outputUrl}${note}`,
+              },
+            ],
+          }
+        }
+
+        // Image kind — full widget render. Shape matches the
+        // SingleJobStructuredContent the single-job widget consumes.
+        const prompt = (input.prompt as string | undefined) ?? undefined
+        const model =
+          (input.provider as string | undefined) ??
+          (input.model as string | undefined) ??
+          undefined
+        const aspectRatio = (input.aspect_ratio as string | undefined) ?? undefined
+        const resolution = (input.resolution as string | undefined) ?? undefined
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Image ${args.job_id}: ${outputUrl}`,
+            },
+          ],
+          structuredContent: {
+            jobId: data.id,
+            prompt,
+            model,
+            aspectRatio,
+            resolution,
+            outputUrl,
+            assetKind,
+          },
+        }
+      },
+    )
+
     // ── get_app_run ──
     // Workflow / app runs live in `workflow_executions` (not `jobs`). The
     // workflow widget polls this every 2s to update its node-status pill
