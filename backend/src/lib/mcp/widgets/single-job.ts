@@ -16,11 +16,10 @@ import { uiProtocolShim } from "./_common.js"
 
 const SHARED_CSS = `
   /* --fs-top-pad: top inset for fullscreen mode so the image clears the
-     host's mobile chrome (top menu + title bar, ~40px on Claude.ai
-     mobile). Reset to 0 on desktop in the hover:hover block below
-     because desktop hosts overlay the X button rather than fixing a
-     header bar. */
-  :root { color-scheme: light dark; --fs-top-pad: 40px; }
+     host's mobile chrome (menu + title bar + safe-area). Reset to 0 on
+     desktop in the hover:hover block below because desktop hosts
+     overlay the X button rather than fixing a header bar. */
+  :root { color-scheme: light dark; --fs-top-pad: 80px; }
   * { box-sizing: border-box; }
   body { margin: 0; padding: 12px; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
   /* Card shell — subtle border + tinted background + rounded corners
@@ -567,13 +566,14 @@ ${uiProtocolShim()}
     // Trailer drives a Q&A loop until Claude has everything it needs
     // to call the verb tool. "as needed" lets the loop self-terminate
     // — Edit might be one question (the change), Animate might be
-    // three (model + duration + audio). User-tested format that
-    // works better than fixed counts or "different aspects" framings.
+    // three (model + duration + audio). "using" reads more naturally
+    // than the bare "q/a"; placing the trailer on its own line makes
+    // the instruction land harder than burying it after a colon.
     //
     // NOTE: square brackets, NOT angle brackets. The host chat-input
     // renderer treats angle brackets as opening tags and throws
     // "Invalid or unexpected token" the moment it sees a placeholder.
-    var ASK_TRAILER = ' as follows: Prompt: [loop ask me q/a as needed]';
+    var ASK_TRAILER = '\n\n[loop ask me using q/a as needed]';
     wire('btn-animate', function() {
       if (!state.outputUrl || !window.NodaroMCP.pushUserMessage) return;
       window.NodaroMCP.pushUserMessage(
