@@ -70,11 +70,15 @@ const SHARED_CSS = `
      viewport with object-fit:contain, and hide chrome — the user is here
      to look at the asset, not the badges/buttons. They click the image to
      exit (cursor flips to zoom-out) or use the host's X overlay. */
-  body.fullscreen { padding: var(--fs-top-pad) 0 0 0; margin: 0; height: 100vh; overflow: hidden; }
+  /* 100dvh (dynamic viewport height) instead of 100vh — on iOS Safari /
+     Chrome mobile, vh includes the dynamically-collapsing address bar so
+     a 100vh element gets clipped under the bar when it expands. dvh
+     tracks the visible viewport. Identical to vh on desktop. */
+  body.fullscreen { padding: var(--fs-top-pad) 0 0 0; margin: 0; height: 100dvh; overflow: hidden; }
   /* Strip the card chrome in fullscreen — the iframe IS the viewport now,
      so border / tinted bg / radius / padding just create a frame around
      a frame. Matches the bare-media intent of fullscreen mode. */
-  body.fullscreen .card { height: calc(100vh - var(--fs-top-pad)); gap: 0; border: 0; background: transparent; padding: 0; border-radius: 0; }
+  body.fullscreen .card { height: calc(100dvh - var(--fs-top-pad)); gap: 0; border: 0; background: transparent; padding: 0; border-radius: 0; }
   body.fullscreen .meta,
   body.fullscreen .status,
   body.fullscreen .progress,
@@ -86,7 +90,7 @@ const SHARED_CSS = `
      vertical-center in the @media block below. max-height: 80vh leaves
      breathing room. width:auto + max-width:100% preserves intrinsic
      aspect ratio without needing object-fit. */
-  body.fullscreen .preview { height: calc(100vh - var(--fs-top-pad)); display: flex; align-items: flex-start; justify-content: center; }
+  body.fullscreen .preview { height: calc(100dvh - var(--fs-top-pad)); display: flex; align-items: flex-start; justify-content: center; }
   body.fullscreen .preview img,
   body.fullscreen .preview video {
     width: auto;
