@@ -126,6 +126,7 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names.has("list_favorites")).toBe(true)
     expect(names.has("favorite_asset")).toBe(true)
     expect(names.has("get_asset")).toBe(true)
+    expect(names.has("display_asset")).toBe(true)
 
     // swap_face is intentionally absent — no /v1/swap-face route exists.
     expect(names.has("swap_face")).toBe(false)
