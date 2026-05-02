@@ -268,11 +268,19 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "outpaint / inpaint workflows. Use this directly — do NOT search the " +
           "apps marketplace for image editing.\n\n" +
           "**Picking a model**: call `list_models { kind: \"image\", mode: \"i2i\" }` " +
-          "or `mode: \"edit\"` to see capability sheets. `flux-kontext` preserves " +
-          "subject identity across edits; `ideogram-remix` is character-aware; " +
-          "`seedream-edit` for high-res output; `nano-banana-pro` for the best " +
-          "general edits with text/typography. For background removal use " +
-          "`recraft-remove-bg` (1 credit, no prompt).\n\n" +
+          "or `mode: \"edit\"` to see capability sheets. **Identity preservation " +
+          "across edits (face / character consistency, multi-turn coherence)**: " +
+          "`nano-banana-pro` is the strongest choice — handles up to 14 reference " +
+          "images and ~5 distinct characters with the most stable identity across " +
+          "iterations. `nano-banana-2` (default) is a faster cost-effective runner-up " +
+          "with very good consistency. `flux-kontext` is competitive on a SINGLE edit " +
+          "and excels at texture realism / local precision (masking, relighting), " +
+          "but identity drifts across 3+ iterations. Avoid `gpt-image` for " +
+          "identity-critical edits — it tends to paste rather than integrate " +
+          "subjects. Other useful picks: `ideogram-remix` is character-aware, " +
+          "`seedream-edit` for high-res output, `nano-banana-pro` also leads on " +
+          "text/typography. For background removal use `recraft-remove-bg` (1 " +
+          "credit, no prompt).\n\n" +
           "Provide ONE of:\n" +
           "  (a) `image_url` — any publicly fetchable HTTPS URL\n" +
           "  (b) `image_asset_id` — a Nodaro job id whose output is an image\n\n" +
