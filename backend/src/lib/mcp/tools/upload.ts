@@ -120,10 +120,17 @@ function errorResult(text: string) {
 
 export function registerUploadTools({ server, session }: RegisterUploadOpts): void {
   if (!passesGate(session, writeGate)) return
+  // Registration order matters: tools/list returns tools in this order
+  // and LLMs weight earlier-listed tools more heavily when the
+  // descriptions are otherwise comparable. Handoff first because it's
+  // the only path that works in EVERY client (Claude.ai web/Android
+  // sandbox, Cursor, Cline, Claude Desktop, Claude Code). Presigned
+  // (curl PUT) second — only works in clients with unrestricted bash.
+  // Inline base64 last — last-resort fallback for tiny files.
   for (const meta of Object.values(KIND_META)) {
+    registerHandoffUpload(server, session, meta)
     registerPresignedUrl(server, session, meta)
     registerInlineUpload(server, session, meta)
-    registerHandoffUpload(server, session, meta)
   }
 }
 
@@ -153,23 +160,22 @@ function registerInlineUpload(
   server.registerTool(
     toolName,
     {
-      title: `Upload ${meta.kind} (inline base64)`,
+      title: `Upload ${meta.kind} (inline base64 — last resort)`,
       description:
-        `Upload a ${meta.kind} by passing base64-encoded bytes inline. The file ` +
-        `flows through the MCP tool call (allowlisted on every MCP host), ` +
-        `bypassing the bash-sandbox egress restriction that blocks ` +
-        `\`prepare_${meta.kind}_upload\` + curl on Claude.ai web.\n\n` +
-        `**When to use this** vs the alternatives:\n` +
-        `  - \`request_${meta.kind}_upload\` (handoff via user's browser) — ` +
-        `preferred on Claude.ai web; bypasses every sandbox by routing the ` +
-        `upload through the user's own browser.\n` +
-        `  - \`prepare_${meta.kind}_upload\` (curl PUT) — preferred on ` +
-        `Cursor / Cline / Claude Desktop / Claude Code CLI (their bash isn't ` +
-        `sandboxed); any file size, streams disk → R2.\n` +
-        `  - \`${toolName}\` (this tool) — last-resort fallback for tiny ` +
-        `files when neither of the above is suitable. Practical limit is ` +
-        `~30–50 KB raw because the base64 payload travels through the LLM's ` +
-        `per-tool output token budget. ` +
+        `**LAST-RESORT FALLBACK — do NOT use for user-attached ${meta.kind} files.** ` +
+        `Hard size cap ~30–50 KB raw because the base64 payload flows through ` +
+        `the LLM's per-tool output token budget; anything larger truncates ` +
+        `silently and corrupts the upload.\n\n` +
+        `**Try these FIRST instead** (both have no size limit):\n` +
+        `  1. \`request_${meta.kind}_upload\` — universal default, works in ` +
+        `EVERY client (Claude.ai web/Android, Cursor, Cline, Desktop, Code). ` +
+        `Hands the upload off to the user's own browser via a Nodaro page.\n` +
+        `  2. \`prepare_${meta.kind}_upload\` — automation path for clients ` +
+        `with unrestricted bash egress (Cursor / Cline / Desktop / Code). ` +
+        `Will FAIL silently on Claude.ai web/Android (sandbox blocks egress).\n\n` +
+        `Only fall back to THIS tool if the user has a programmatically- ` +
+        `generated tiny ${meta.kind} (a thumbnail, an icon, ` +
+        `a sub-50KB clip) AND the other two tools have failed. ` +
         (meta.kind === "image"
           ? `**Resize first**: max long edge ~512–1024 px, JPEG quality 80, ` +
             `target 30–50 KB raw.`
@@ -319,28 +325,34 @@ function registerHandoffUpload(
   server.registerTool(
     toolName,
     {
-      title: `Request ${meta.kind} upload (handoff)`,
+      title: `Upload ${meta.kind} (browser handoff — preferred)`,
       description:
-        `Hand off a ${meta.kind} upload to the user's own browser, ` +
-        `bypassing every sandbox/egress restriction in the host LLM ` +
-        `client. Returns a Nodaro-hosted upload page URL plus the ` +
-        `deterministic public URL the file will land at.\n\n` +
-        `**Use this when** the user-attached ${meta.kind} bytes only ` +
-        `live inside chat context (no public URL yet) and ` +
-        `\`prepare_${meta.kind}_upload\` curl is unavailable (Claude.ai ` +
-        `web sandbox blocks all object-storage egress).\n\n` +
-        `**Required response shape after calling this tool**: in the ` +
-        `same response back to the user, you MUST present both of:\n` +
-        `  1. A download button/link for the ${meta.kind} the user ` +
-        `attached, so they can save it to their device.\n` +
+        `**PREFERRED upload path for user-attached ${meta.kind} files.** Works ` +
+        `in EVERY MCP client (Claude.ai web/Android, Cursor, Cline, Claude ` +
+        `Desktop, Claude Code) at any file size by routing the upload through ` +
+        `the user's OWN browser instead of any LLM-side bash sandbox.\n\n` +
+        `**Use this whenever** the user attached a ${meta.kind} (or asked you ` +
+        `to use one they have locally) and there is no public URL for it yet. ` +
+        `Don't try \`prepare_${meta.kind}_upload\` first — it FAILS on Claude.ai ` +
+        `web/Android (sandbox blocks egress). Don't try \`upload_${meta.kind}\` ` +
+        `first either — its ~30 KB cap will silently truncate user photos.\n\n` +
+        `Returns:\n` +
+        `  - \`upload_page_url\` — short Nodaro link the user opens in any ` +
+        `browser to drop the file.\n` +
+        `  - \`public_url\` — the eventual R2 URL (deterministic from the ` +
+        `token, known up front so you can reference it in the next tool call).\n\n` +
+        `**After calling this tool**, in your same response back to the user ` +
+        `you MUST present both of:\n` +
+        `  1. A download button/link for the ${meta.kind} the user attached ` +
+        `(so they can save it to their device).\n` +
         `  2. The \`upload_page_url\` as a clearly-labeled link, with ` +
         `instructions to drop the saved file on that page.\n` +
         `Then wait for the user to confirm completion before calling ` +
         `${meta.callsiteHint} with \`public_url\` (passed as ` +
         `${meta.kind}_url).\n\n` +
-        `If the ${meta.kind} already has a public URL — either from a ` +
-        `prior generation job (\`outputUrl\`) or because the user ` +
-        `pasted a URL directly — skip this tool and call ` +
+        `**Skip this tool only when** the ${meta.kind} already has a public ` +
+        `URL — either from a prior generation job (\`outputUrl\`) or because ` +
+        `the user pasted a URL directly. In that case call ` +
         `${meta.callsiteHint} with that URL.`,
       inputSchema: {},
       outputSchema: {
@@ -407,12 +419,24 @@ function registerPresignedUrl(
   server.registerTool(
     toolName,
     {
-      title: `Prepare ${meta.kind} upload`,
+      title: `Upload ${meta.kind} (autonomous curl — restricted clients only)`,
       description:
-        `Bring a local/attached ${meta.kind} file into Nodaro. Returns a ` +
-        `signed PUT URL the LLM's code-interpreter / bash pipes the file to ` +
-        `directly, plus the public URL to reference downstream.\n\n` +
-        `Workflow:\n` +
+        `**AUTOMATION upload path** — only works in MCP clients with ` +
+        `unrestricted bash egress: Cursor / Cline / Claude Desktop / Claude ` +
+        `Code CLI. Returns a presigned R2 PUT URL the LLM's code-interpreter ` +
+        `pipes the file to directly via curl.\n\n` +
+        `**WILL FAIL on Claude.ai web AND Claude for Android** — their bash ` +
+        `sandboxes block egress to every object-storage host (HTTP 403 / ` +
+        `"Host not in allowlist"). The "Additional allowed domains" UI at ` +
+        `claude.ai/settings/capabilities is broken (Anthropic issue #19087) ` +
+        `so the user can't whitelist us either.\n\n` +
+        `**If you're not certain which environment you're in**, prefer ` +
+        `\`request_${meta.kind}_upload\` — that path works EVERYWHERE by ` +
+        `routing through the user's browser. Only use this tool when you've ` +
+        `already confirmed the LLM has unrestricted curl egress (e.g. you're ` +
+        `inside a Cursor / Cline / Desktop / Code session and a prior network ` +
+        `call to a non-Anthropic host succeeded).\n\n` +
+        `Workflow when applicable:\n` +
         `  1. Call \`${toolName}\` with the file's mime_type → ` +
         `{ upload_url, public_url }\n` +
         `  2. In the code-interpreter / bash, stream the file:\n` +
@@ -421,16 +445,8 @@ function registerPresignedUrl(
         `         '<upload_url>'\n` +
         `     curl exits 0 on success.\n` +
         `  3. Pass \`public_url\` to ${meta.callsiteHint} as ${meta.kind}_url.\n\n` +
-        `The file bytes never traverse the LLM context — any file size, no ` +
-        `base64 inflation, no truncation, no token overhead. URL valid for ` +
-        `1 hour.\n\n` +
-        `**Note for Claude.ai bash sandbox**: this curl PUT will fail ` +
-        `with "Host not in allowlist / HTTP 403" — Anthropic's egress ` +
-        `proxy blocks every object-storage host (including ours), and the ` +
-        `"Additional allowed domains" UI at claude.ai/settings/capabilities ` +
-        `is broken (Anthropic issue #19087). Use ` +
-        `\`request_${meta.kind}_upload\` instead — it routes the upload ` +
-        `through the user's own browser, skipping the sandbox entirely.`,
+        `URL valid for 1 hour. The file bytes never traverse the LLM context ` +
+        `— any file size, no base64 inflation, no truncation.`,
       inputSchema: {
         mime_type: z
           .enum(meta.supportedMime as readonly [string, ...string[]])
