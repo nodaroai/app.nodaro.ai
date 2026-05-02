@@ -130,18 +130,29 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     // swap_face is intentionally absent — no /v1/swap-face route exists.
     expect(names.has("swap_face")).toBe(false)
 
-    // 9 upload tools — three paths × three media kinds:
-    //   prepare_*_upload  — presigned PUT, curl from non-sandboxed clients
-    //   upload_*          — inline base64, MCP-connector fallback for tiny files
-    //   request_*_upload  — handoff via user's own browser; bypasses Claude.ai's
-    //                       bash sandbox by routing the upload outside it
+    // 18 upload tools — four paths × three media kinds:
+    //   request_*_upload         — handoff via user's own browser; bypasses
+    //                              Claude.ai's bash sandbox by routing the
+    //                              upload outside it
+    //   prepare_*_upload         — presigned PUT, curl from non-sandboxed clients
+    //   upload_*_init / _chunk / _complete — chunked, server-side stitching
+    //                              via Redis. Works in sandbox-restricted
+    //                              clients because chunks flow through the
+    //                              MCP channel (allowlisted), not bash egress
+    //   upload_*                 — inline base64, last-resort tiny-file fallback
     expect(names.has("request_image_upload")).toBe(true)
     expect(names.has("request_audio_upload")).toBe(true)
     expect(names.has("request_video_upload")).toBe(true)
+    expect(names.has("upload_image_init")).toBe(true)
+    expect(names.has("upload_image_chunk")).toBe(true)
+    expect(names.has("upload_image_complete")).toBe(true)
+    expect(names.has("upload_audio_init")).toBe(true)
+    expect(names.has("upload_video_init")).toBe(true)
 
-    // Sanity: ping + verbs + jobs + workflows + gallery + 9 upload tools.
-    expect(tools.length).toBeGreaterThanOrEqual(27)
-    expect(tools.length).toBeLessThanOrEqual(48)
+    // Sanity: ping + verbs + jobs + workflows + gallery + 12 upload tools
+    // (4 paths × 3 kinds). Allow range for future additions + dynamic tools.
+    expect(tools.length).toBeGreaterThanOrEqual(30)
+    expect(tools.length).toBeLessThanOrEqual(60)
   })
 
   it("with only jobs:read, registers ping + jobs tools and nothing else", async () => {
