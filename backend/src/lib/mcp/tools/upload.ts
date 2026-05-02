@@ -32,6 +32,7 @@ import { config } from "../../config.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { McpSession } from "../session.js"
 import { signUploadToken } from "../../../routes/upload-proxy.js"
+import { redis } from "../../queue.js"
 
 const writeGate: ToolGate = { required: ["assets:write"] }
 
@@ -130,8 +131,348 @@ export function registerUploadTools({ server, session }: RegisterUploadOpts): vo
   for (const meta of Object.values(KIND_META)) {
     registerHandoffUpload(server, session, meta)
     registerPresignedUrl(server, session, meta)
+    registerChunkedUpload(server, session, meta)
     registerInlineUpload(server, session, meta)
   }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Chunked upload (server-side stitching, Redis-backed)
+// ────────────────────────────────────────────────────────────────────
+//
+// Three tools per kind: upload_*_init / _chunk / _complete. The LLM
+// streams base64-encoded chunks through the MCP channel (which is
+// allowlisted on every host — no sandbox concerns), the server buffers
+// them in Redis, and on _complete writes a single PutObject to R2.
+//
+// Why server-side stitching instead of R2 multipart: R2 multipart
+// requires ≥ 5 MB per non-final part. 5 MB raw = ~6.7 MB base64 ≈ 1.7M
+// output tokens — way over any reasonable per-call output budget for
+// modern LLMs. Server-side stitching lets us use small chunks
+// (~64–256 KB raw, ~21–85K tokens base64) that fit comfortably.
+//
+// Why Redis instead of in-memory Map: lets us scale to multiple Railway
+// instances without losing chunks if a request load-balances to a
+// different node mid-upload, AND the chunks survive a single instance
+// restart (unlikely to matter for a 10-min session, but cheap insurance).
+const CHUNK_TTL_SECONDS = 10 * 60 // 10 min from last activity
+const MAX_TOTAL_BYTES = 100 * 1024 * 1024 // 100 MB total per upload
+const MAX_CHUNKS = 1000 // sanity cap on chunk count
+// Per-chunk hard cap: 1 MB base64 ≈ 768 KB raw ≈ 256K tokens. Recommend
+// callers stay below ~256 KB raw / 85K tokens; this is the upper bound
+// for clients with large output budgets (Gemini, GPT, etc.).
+const MAX_CHUNK_BASE64_CHARS = 1_500_000
+
+const META_KEY = (uploadId: string): string => `mcp:chunked:${uploadId}:meta`
+const CHUNKS_KEY = (uploadId: string): string => `mcp:chunked:${uploadId}:chunks`
+
+interface ChunkSessionMeta {
+  userId: string
+  kind: "image" | "audio" | "video"
+  mime: string
+  key: string
+  bytesUploaded: number
+  chunkCount: number
+}
+
+async function readMeta(uploadId: string): Promise<ChunkSessionMeta | null> {
+  const raw = await redis.hgetall(META_KEY(uploadId))
+  if (!raw || !raw["userId"]) return null
+  return {
+    userId: raw["userId"]!,
+    kind: raw["kind"] as ChunkSessionMeta["kind"],
+    mime: raw["mime"]!,
+    key: raw["key"]!,
+    bytesUploaded: Number(raw["bytesUploaded"] ?? "0"),
+    chunkCount: Number(raw["chunkCount"] ?? "0"),
+  }
+}
+
+async function bumpTtl(uploadId: string): Promise<void> {
+  await Promise.all([
+    redis.expire(META_KEY(uploadId), CHUNK_TTL_SECONDS),
+    redis.expire(CHUNKS_KEY(uploadId), CHUNK_TTL_SECONDS),
+  ])
+}
+
+async function dropSession(uploadId: string): Promise<void> {
+  await redis.del(META_KEY(uploadId), CHUNKS_KEY(uploadId))
+}
+
+function registerChunkedUpload(
+  server: McpServer,
+  session: McpSession,
+  meta: KindMeta,
+): void {
+  // ─── _init ──────────────────────────────────────────────────────
+  server.registerTool(
+    `upload_${meta.kind}_init`,
+    {
+      title: `Upload ${meta.kind} (chunked — start)`,
+      description:
+        `Start a chunked ${meta.kind} upload. Use this when the file ` +
+        `bytes are accessible to the LLM (e.g. attached to chat) AND ` +
+        `\`request_${meta.kind}_upload\` (browser handoff) isn't viable, ` +
+        `e.g. autonomous pipelines that can't pause for user interaction.\n\n` +
+        `**Workflow:**\n` +
+        `  1. Call \`upload_${meta.kind}_init\` with mime_type → ` +
+        `{ upload_id, public_url }. The public_url is deterministic and ` +
+        `safe to use in subsequent tool calls AFTER \`_complete\` succeeds.\n` +
+        `  2. For each chunk, call \`upload_${meta.kind}_chunk\` with ` +
+        `the upload_id, sequential chunk_index (1-based), and base64 data.\n` +
+        `  3. Call \`upload_${meta.kind}_complete\` with the upload_id ` +
+        `to assemble + upload to R2.\n\n` +
+        `**Recommended chunk size:** 64–256 KB of raw bytes (encoded base64 ` +
+        `~85–340 KB ≈ 21–85K output tokens). Smaller chunks = more round-` +
+        `trips but safer for clients with tight output budgets. Hard cap: ` +
+        `1.5 MB of base64 chars per chunk, 100 MB total, 1000 chunks max.\n\n` +
+        `Session expires 10 minutes after the last chunk activity.`,
+      inputSchema: {
+        mime_type: z
+          .enum(meta.supportedMime as readonly [string, ...string[]])
+          .describe("MIME type of the source media."),
+      },
+      outputSchema: {
+        upload_id: z.string(),
+        public_url: z.string(),
+        expires_in_seconds: z.number(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) => {
+      const uploadId = randomUUID()
+      const ext = MIME_TO_EXT[args.mime_type] ?? "bin"
+      const key = `uploads/${meta.kind}/${session.userId}/${randomUUID()}.${ext}`
+      const fields: Record<string, string> = {
+        userId: session.userId,
+        kind: meta.kind,
+        mime: args.mime_type,
+        key,
+        bytesUploaded: "0",
+        chunkCount: "0",
+      }
+      await redis.hset(META_KEY(uploadId), fields)
+      await redis.expire(META_KEY(uploadId), CHUNK_TTL_SECONDS)
+      const publicUrl = `${config.R2_PUBLIC_URL}/${key}`
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text:
+              `Chunked upload started. Send chunks to upload_${meta.kind}_chunk ` +
+              `with upload_id=${uploadId}, then call upload_${meta.kind}_complete. ` +
+              `Final URL (after _complete): ${publicUrl}`,
+          },
+        ],
+        structuredContent: {
+          upload_id: uploadId,
+          public_url: publicUrl,
+          expires_in_seconds: CHUNK_TTL_SECONDS,
+        },
+      }
+    },
+  )
+
+  // ─── _chunk ─────────────────────────────────────────────────────
+  server.registerTool(
+    `upload_${meta.kind}_chunk`,
+    {
+      title: `Upload ${meta.kind} (chunked — send chunk)`,
+      description:
+        `Send one base64-encoded chunk of a chunked ${meta.kind} upload. ` +
+        `chunk_index is 1-based and MUST be sent in order (first chunk = 1, ` +
+        `second = 2, etc.). After all chunks are sent, call ` +
+        `upload_${meta.kind}_complete. Recommended raw chunk size: 64–256 KB.`,
+      inputSchema: {
+        upload_id: z
+          .string()
+          .min(1)
+          .describe("Returned by upload_*_init."),
+        chunk_index: z
+          .number()
+          .int()
+          .min(1)
+          .max(MAX_CHUNKS)
+          .describe("1-based, sequential."),
+        data: z
+          .string()
+          .min(1)
+          .max(MAX_CHUNK_BASE64_CHARS)
+          .describe("Base64-encoded chunk bytes (no `data:` prefix)."),
+      },
+      outputSchema: {
+        accepted: z.boolean(),
+        chunk_index: z.number(),
+        bytes: z.number(),
+        bytes_uploaded_total: z.number(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) => {
+      const sessionMeta = await readMeta(args.upload_id)
+      if (!sessionMeta) return errorResult("Unknown or expired upload_id.")
+      if (sessionMeta.userId !== session.userId)
+        return errorResult("upload_id belongs to a different user.")
+      if (sessionMeta.kind !== meta.kind)
+        return errorResult(
+          `upload_id was opened for kind=${sessionMeta.kind}; this tool handles ${meta.kind}.`,
+        )
+      const expectedNext = sessionMeta.chunkCount + 1
+      if (args.chunk_index !== expectedNext)
+        return errorResult(
+          `Out-of-order chunk: expected chunk_index=${expectedNext}, got ${args.chunk_index}.`,
+        )
+
+      // Decode to validate + measure raw bytes. Cheap (max 1 MB raw ≈ no-op).
+      const cleaned = args.data.replace(/^data:[^;]+;base64,/, "")
+      let buf: Buffer
+      try {
+        buf = Buffer.from(cleaned, "base64")
+      } catch (err) {
+        return errorResult(`Invalid base64: ${(err as Error).message}`)
+      }
+      if (buf.length === 0) return errorResult("Decoded chunk is empty.")
+      const newTotal = sessionMeta.bytesUploaded + buf.length
+      if (newTotal > MAX_TOTAL_BYTES)
+        return errorResult(
+          `Total upload would exceed ${MAX_TOTAL_BYTES} bytes (${newTotal} attempted).`,
+        )
+
+      // Persist the base64 string (decoder runs again on _complete; storing
+      // strings keeps the Redis path simple and inspectable). Keys are
+      // 1-based; HSET overwrites are idempotent for duplicate-send safety.
+      await redis.hset(CHUNKS_KEY(args.upload_id), String(args.chunk_index), cleaned)
+      await redis.hset(META_KEY(args.upload_id), {
+        bytesUploaded: String(newTotal),
+        chunkCount: String(args.chunk_index),
+      })
+      await bumpTtl(args.upload_id)
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Accepted chunk ${args.chunk_index} (${buf.length} bytes). ` +
+              `Total so far: ${newTotal} bytes.`,
+          },
+        ],
+        structuredContent: {
+          accepted: true,
+          chunk_index: args.chunk_index,
+          bytes: buf.length,
+          bytes_uploaded_total: newTotal,
+        },
+      }
+    },
+  )
+
+  // ─── _complete ──────────────────────────────────────────────────
+  server.registerTool(
+    `upload_${meta.kind}_complete`,
+    {
+      title: `Upload ${meta.kind} (chunked — finalize)`,
+      description:
+        `Finalize a chunked ${meta.kind} upload. Reads all chunks from the ` +
+        `server buffer in order, assembles them, ${meta.kind === "image" ? "transcodes HEIC/HEIF to JPEG, " : ""}` +
+        `writes a single PutObject to R2, and returns the public_url. ` +
+        `Pass that URL to ${meta.callsiteHint} as ${meta.kind}_url.`,
+      inputSchema: {
+        upload_id: z.string().min(1).describe("Returned by upload_*_init."),
+      },
+      outputSchema: {
+        public_url: z.string(),
+        bytes: z.number(),
+        mime_type: z.string(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) => {
+      const sessionMeta = await readMeta(args.upload_id)
+      if (!sessionMeta) return errorResult("Unknown or expired upload_id.")
+      if (sessionMeta.userId !== session.userId)
+        return errorResult("upload_id belongs to a different user.")
+      if (sessionMeta.kind !== meta.kind)
+        return errorResult(
+          `upload_id was opened for kind=${sessionMeta.kind}; this tool handles ${meta.kind}.`,
+        )
+      if (sessionMeta.chunkCount === 0)
+        return errorResult("No chunks received — call upload_*_chunk first.")
+
+      const chunkMap = await redis.hgetall(CHUNKS_KEY(args.upload_id))
+      const buffers: Buffer[] = []
+      for (let i = 1; i <= sessionMeta.chunkCount; i++) {
+        const b64 = chunkMap[String(i)]
+        if (!b64) {
+          await dropSession(args.upload_id)
+          return errorResult(
+            `Missing chunk ${i} (received ${sessionMeta.chunkCount} chunks but #${i} is absent).`,
+          )
+        }
+        buffers.push(Buffer.from(b64, "base64"))
+      }
+      // Explicit type widening — Buffer.concat returns Buffer<ArrayBufferLike>
+      // but sharp's toBuffer returns Buffer<ArrayBuffer>; the wider type
+      // accepts both reassignments without TS complaining.
+      let buffer: Buffer = Buffer.concat(buffers)
+      if (buffer.length === 0) {
+        await dropSession(args.upload_id)
+        return errorResult("Assembled buffer is empty.")
+      }
+
+      // HEIC/HEIF → JPEG (downstream image providers don't accept HEIC).
+      // Public URL is already known to the LLM (extension was set at _init
+      // from mime_type), so we keep the same R2 key. Mime/Content-Type
+      // updates to image/jpeg even if the URL still ends in .heic.
+      let finalMime = sessionMeta.mime
+      if (
+        meta.kind === "image" &&
+        (finalMime === "image/heic" || finalMime === "image/heif")
+      ) {
+        try {
+          buffer = await sharp(buffer).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
+          finalMime = "image/jpeg"
+        } catch (err) {
+          await dropSession(args.upload_id)
+          return errorResult(
+            `Failed to decode HEIC/HEIF: ${(err as Error).message}`,
+          )
+        }
+      }
+
+      try {
+        await s3.send(
+          new PutObjectCommand({
+            Bucket: config.R2_BUCKET_NAME,
+            Key: sessionMeta.key,
+            Body: buffer,
+            ContentType: finalMime,
+            CacheControl: "public, max-age=31536000, immutable",
+          }),
+        )
+      } catch (err) {
+        // Don't drop the session on R2 failure — caller can retry _complete.
+        return errorResult(`Storage upload failed: ${(err as Error).message}`)
+      }
+
+      await dropSession(args.upload_id)
+      const publicUrl = `${config.R2_PUBLIC_URL}/${sessionMeta.key}`
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text:
+              `Uploaded ${buffer.length}-byte ${finalMime} ${meta.kind}. ` +
+              `Pass this URL to ${meta.callsiteHint} as ${meta.kind}_url: ${publicUrl}`,
+          },
+        ],
+        structuredContent: {
+          public_url: publicUrl,
+          bytes: buffer.length,
+          mime_type: finalMime,
+        },
+      }
+    },
+  )
 }
 
 /**
@@ -166,16 +507,21 @@ function registerInlineUpload(
         `Hard size cap ~30–50 KB raw because the base64 payload flows through ` +
         `the LLM's per-tool output token budget; anything larger truncates ` +
         `silently and corrupts the upload.\n\n` +
-        `**Try these FIRST instead** (both have no size limit):\n` +
+        `**Try these FIRST instead** (none have meaningful size limits):\n` +
         `  1. \`request_${meta.kind}_upload\` — universal default, works in ` +
         `EVERY client (Claude.ai web/Android, Cursor, Cline, Desktop, Code). ` +
         `Hands the upload off to the user's own browser via a Nodaro page.\n` +
-        `  2. \`prepare_${meta.kind}_upload\` — automation path for clients ` +
+        `  2. \`upload_${meta.kind}_init\` / \`_chunk\` / \`_complete\` — ` +
+        `chunked, autonomous (no user action). Works in EVERY client because ` +
+        `chunks flow through the MCP channel (allowlisted), not the bash ` +
+        `egress sandbox. Slower than the others (many round-trips) but no ` +
+        `user interaction needed.\n` +
+        `  3. \`prepare_${meta.kind}_upload\` — automation path for clients ` +
         `with unrestricted bash egress (Cursor / Cline / Desktop / Code). ` +
         `Will FAIL silently on Claude.ai web/Android (sandbox blocks egress).\n\n` +
         `Only fall back to THIS tool if the user has a programmatically- ` +
         `generated tiny ${meta.kind} (a thumbnail, an icon, ` +
-        `a sub-50KB clip) AND the other two tools have failed. ` +
+        `a sub-50KB clip) AND the other tools have failed. ` +
         (meta.kind === "image"
           ? `**Resize first**: max long edge ~512–1024 px, JPEG quality 80, ` +
             `target 30–50 KB raw.`
@@ -431,11 +777,12 @@ function registerPresignedUrl(
         `claude.ai/settings/capabilities is broken (Anthropic issue #19087) ` +
         `so the user can't whitelist us either.\n\n` +
         `**If you're not certain which environment you're in**, prefer ` +
-        `\`request_${meta.kind}_upload\` — that path works EVERYWHERE by ` +
-        `routing through the user's browser. Only use this tool when you've ` +
-        `already confirmed the LLM has unrestricted curl egress (e.g. you're ` +
-        `inside a Cursor / Cline / Desktop / Code session and a prior network ` +
-        `call to a non-Anthropic host succeeded).\n\n` +
+        `\`request_${meta.kind}_upload\` (browser handoff — interactive) or ` +
+        `\`upload_${meta.kind}_init\` / \`_chunk\` / \`_complete\` (chunked ` +
+        `via MCP channel — fully autonomous). Both work EVERYWHERE. Only use ` +
+        `THIS tool when you've already confirmed the LLM has unrestricted ` +
+        `curl egress (e.g. inside a Cursor / Cline / Desktop / Code session ` +
+        `and a prior network call to a non-Anthropic host succeeded).\n\n` +
         `Workflow when applicable:\n` +
         `  1. Call \`${toolName}\` with the file's mime_type → ` +
         `{ upload_url, public_url }\n` +
