@@ -153,25 +153,42 @@ describe("list_favorites tool", () => {
   })
 })
 
+/**
+ * Chain-agnostic supabase mock used for `get_asset`. The query chain is
+ * `.from().select().eq().or().maybeSingle()` — refactor-friendly to use
+ * the same Proxy pattern as `browse_gallery` so adding/reordering filters
+ * doesn't break tests. `maybeSingle()` resolves to `{data: rows[0]|null, error: null}`.
+ */
+function makeChainableSingle(row: unknown) {
+  const result = { data: row, error: null }
+  let chain: unknown
+  const promise: Promise<typeof result> = Promise.resolve(result)
+  // eslint-disable-next-line prefer-const
+  chain = new Proxy(function () {}, {
+    get(_target, prop) {
+      if (prop === "then") return promise.then.bind(promise)
+      if (prop === "catch") return promise.catch.bind(promise)
+      if (prop === "finally") return promise.finally.bind(promise)
+      if (prop === "maybeSingle") return () => promise
+      return () => chain
+    },
+    apply() {
+      return chain
+    },
+  })
+  return chain
+}
+
 describe("get_asset tool", () => {
   it("returns asset data when owned", async () => {
-    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: {
-                id: "g1",
-                user_id: "u1",
-                status: "completed",
-                output_data: { imageUrl: "https://r2/x.png" },
-              },
-              error: null,
-            }),
-          }),
-        }),
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainableSingle({
+        id: "g1",
+        user_id: "u1",
+        status: "completed",
+        output_data: { imageUrl: "https://r2/x.png" },
       }),
-    })
+    )
     const server = buildServer()
     registerGallery({ server, session: readSession(), fastify: Fastify() })
     const result = await callTool(server, "get_asset", { job_id: "g1" })
@@ -179,16 +196,32 @@ describe("get_asset tool", () => {
     expect(result.content[0]?.text).toContain("\"g1\"")
   })
 
-  it("returns isError when not found", async () => {
-    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-          }),
-        }),
+  it("returns asset when owned by another user but public + completed", async () => {
+    // Visibility now mirrors browse_gallery: any user's public-completed
+    // job is fetchable. Caller is u1; row's user_id is u2.
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainableSingle({
+        id: "pub1",
+        user_id: "u2",
+        status: "completed",
+        is_public: true,
+        output_data: { imageUrl: "https://r2/pub.png" },
       }),
-    })
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_asset", { job_id: "pub1" })
+    expect(result.isError).toBeUndefined()
+    expect(result.content[0]?.text).toContain("\"pub1\"")
+    const sc = (result as { structuredContent?: Record<string, unknown> })
+      .structuredContent
+    expect(sc?.outputUrl).toBe("https://r2/pub.png")
+  })
+
+  it("returns isError when not found", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainableSingle(null),
+    )
     const server = buildServer()
     registerGallery({ server, session: readSession(), fastify: Fastify() })
     const result = await callTool(server, "get_asset", { job_id: "missing" })
