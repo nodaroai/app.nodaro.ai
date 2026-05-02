@@ -188,7 +188,11 @@ ${uiProtocolShim()}
           window.NodaroMCP.pushUserMessage(
             'Use the ' + item.kind + ' with id ' + item.jobId +
             ' as a reference. The user clicked the Use button.' +
-            '\n\n[loop ask me using q/a as needed]'
+            // \\n in source — TS template literal collapses one level
+            // before this script reaches the browser, so the rendered JS
+            // gets a literal \n escape sequence (a raw newline would
+            // break the single-quoted string).
+            '\\n[loop ask me using q/a as needed]'
           );
         }
       });
