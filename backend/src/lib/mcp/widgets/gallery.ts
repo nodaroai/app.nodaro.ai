@@ -188,10 +188,10 @@ ${uiProtocolShim()}
           window.NodaroMCP.pushUserMessage(
             'Use the ' + item.kind + ' with id ' + item.jobId +
             ' as a reference. The user clicked the Use button.' +
-            // \\n in source — TS template literal collapses one level
-            // before this script reaches the browser, so the rendered JS
-            // gets a literal \n escape sequence (a raw newline would
-            // break the single-quoted string).
+            // Source uses double-backslash-n; the TS template literal
+            // collapses it to single-backslash-n in the rendered JS, so
+            // the inner string carries a real escape sequence (a raw
+            // newline would break the single-quoted JS string).
             '\\n[loop ask me using q/a as needed]'
           );
         }
