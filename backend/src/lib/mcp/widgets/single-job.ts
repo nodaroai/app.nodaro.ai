@@ -19,7 +19,7 @@ const SHARED_CSS = `
      host's mobile chrome (menu + title bar + safe-area). Reset to 0 on
      desktop in the hover:hover block below because desktop hosts
      overlay the X button rather than fixing a header bar. */
-  :root { color-scheme: light dark; --fs-top-pad: 80px; }
+  :root { color-scheme: light dark; --fs-top-pad: 90px; }
   * { box-sizing: border-box; }
   body { margin: 0; padding: 12px; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
   /* Card shell — subtle border + tinted background + rounded corners
