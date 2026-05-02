@@ -9,6 +9,9 @@ async function makeApp() {
   app.get("/.well-known/oauth-protected-resource", async (_req, reply) => reply.send({ ok: "oauth-pr" }))
   app.get("/.well-known/oauth-authorization-server", async (_req, reply) => reply.send({ ok: "oauth-as" }))
   app.get("/v1/credits/balance", async (_req, reply) => reply.send({ ok: "credits" }))
+  app.put("/v1/upload-proxy/:token", async (_req, reply) => reply.send({ ok: "upload-proxy" }))
+  app.get("/v1/upload-page/:token", async (_req, reply) => reply.send({ ok: "upload-page-get" }))
+  app.post("/v1/upload-page/:token", async (_req, reply) => reply.send({ ok: "upload-page-post" }))
   app.get("/", async (_req, reply) => reply.send({ ok: "root" }))
   return app
 }
@@ -32,6 +35,27 @@ describe("mcp host filter", () => {
     const res = await app.inject({ method: "GET", url: "/.well-known/oauth-protected-resource", headers: { host: "mcp.nodaro.ai" } })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ ok: "oauth-pr" })
+  })
+
+  it("allows /v1/upload-proxy/<token> on mcp.nodaro.ai (prepare_*_upload curl path)", async () => {
+    const app = await makeApp()
+    const res = await app.inject({ method: "PUT", url: "/v1/upload-proxy/abc", headers: { host: "mcp.nodaro.ai" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ ok: "upload-proxy" })
+  })
+
+  it("allows GET /v1/upload-page/<token> on mcp.nodaro.ai (request_*_upload page render)", async () => {
+    const app = await makeApp()
+    const res = await app.inject({ method: "GET", url: "/v1/upload-page/abc", headers: { host: "mcp.nodaro.ai" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ ok: "upload-page-get" })
+  })
+
+  it("allows POST /v1/upload-page/<token> on mcp.nodaro.ai (multipart receive)", async () => {
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: "/v1/upload-page/abc", headers: { host: "mcp.nodaro.ai" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ ok: "upload-page-post" })
   })
 
   it("404s arbitrary /v1/* paths on mcp.nodaro.ai", async () => {
