@@ -36,16 +36,18 @@ const SHARED_CSS = `
   .meta { font-size: 12px; opacity: 0.7; display: flex; gap: 8px; flex-wrap: wrap; }
   .meta .badge { background: rgba(127,127,127,0.15); padding: 2px 8px; border-radius: 4px; }
   /* Mobile/touch default: image renders at intrinsic ratio, capped at
-     80vh so portrait results don't dominate the entire chat viewport.
-     Desktop refinements (fixed 500px cap, mouse hover affordances)
-     live in the @media block below behind hover:hover + pointer:fine. */
+     360px so portrait results don't dominate the chat viewport. Fixed
+     px (not vh) because vh is unreliable for chat-embedded widgets
+     where the iframe height is host-controlled — [redacted-reference] uses fixed
+     px for the same reason. Desktop refinements (500px cap, mouse hover
+     affordances) live in the @media block below. */
   .preview { width: 100%; }
   .preview img, .preview video {
     display: block;
     width: auto;
     height: auto;
     max-width: 100%;
-    max-height: 80vh;
+    max-height: 360px;
     object-fit: unset;
     border-radius: 8px;
     margin: 0 auto;
