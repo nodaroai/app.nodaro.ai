@@ -188,7 +188,7 @@ ${uiProtocolShim()}
           window.NodaroMCP.pushUserMessage(
             'Use the ' + item.kind + ' with id ' + item.jobId +
             ' as a reference. The user clicked the Use button.' +
-            ' [loop ask me q/a as needed]'
+            '\n\n[loop ask me using q/a as needed]'
           );
         }
       });
