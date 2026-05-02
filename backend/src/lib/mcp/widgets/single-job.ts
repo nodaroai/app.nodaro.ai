@@ -15,7 +15,12 @@
 import { uiProtocolShim } from "./_common.js"
 
 const SHARED_CSS = `
-  :root { color-scheme: light dark; }
+  /* --fs-top-pad: top inset for fullscreen mode so the image clears the
+     host's mobile chrome (top menu + title bar, ~40px on Claude.ai
+     mobile). Reset to 0 on desktop in the hover:hover block below
+     because desktop hosts overlay the X button rather than fixing a
+     header bar. */
+  :root { color-scheme: light dark; --fs-top-pad: 40px; }
   * { box-sizing: border-box; }
   body { margin: 0; padding: 12px; font: 14px system-ui, sans-serif; background: transparent; color: inherit; }
   /* Card shell — subtle border + tinted background + rounded corners
@@ -65,11 +70,11 @@ const SHARED_CSS = `
      viewport with object-fit:contain, and hide chrome — the user is here
      to look at the asset, not the badges/buttons. They click the image to
      exit (cursor flips to zoom-out) or use the host's X overlay. */
-  body.fullscreen { padding: 0; margin: 0; height: 100vh; overflow: hidden; }
+  body.fullscreen { padding: var(--fs-top-pad) 0 0 0; margin: 0; height: 100vh; overflow: hidden; }
   /* Strip the card chrome in fullscreen — the iframe IS the viewport now,
      so border / tinted bg / radius / padding just create a frame around
      a frame. Matches the bare-media intent of fullscreen mode. */
-  body.fullscreen .card { height: 100vh; gap: 0; border: 0; background: transparent; padding: 0; border-radius: 0; }
+  body.fullscreen .card { height: calc(100vh - var(--fs-top-pad)); gap: 0; border: 0; background: transparent; padding: 0; border-radius: 0; }
   body.fullscreen .meta,
   body.fullscreen .status,
   body.fullscreen .progress,
@@ -81,7 +86,7 @@ const SHARED_CSS = `
      vertical-center in the @media block below. max-height: 80vh leaves
      breathing room. width:auto + max-width:100% preserves intrinsic
      aspect ratio without needing object-fit. */
-  body.fullscreen .preview { height: 100vh; display: flex; align-items: flex-start; justify-content: center; }
+  body.fullscreen .preview { height: calc(100vh - var(--fs-top-pad)); display: flex; align-items: flex-start; justify-content: center; }
   body.fullscreen .preview img,
   body.fullscreen .preview video {
     width: auto;
@@ -133,6 +138,9 @@ const SHARED_CSS = `
      pointer:fine excludes touchscreen-only devices that erroneously
      report hover:hover via simulated hover-on-tap. */
   @media (hover: hover) and (pointer: fine) {
+    /* Desktop hosts overlay the close affordance on top of the iframe
+       rather than fixing a header bar — drop the mobile top inset. */
+    :root { --fs-top-pad: 0px; }
     .preview img, .preview video {
       width: auto;
       height: auto;
