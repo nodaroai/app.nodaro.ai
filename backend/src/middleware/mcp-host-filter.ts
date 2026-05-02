@@ -8,6 +8,12 @@ const MCP_ALLOWED_PATHS: RegExp[] = [
   // sandboxes (Claude.ai etc.) allowlist this domain via OAuth
   // discovery, so PUTs land here and the route forwards to R2.
   /^\/v1\/upload-proxy\//,
+  // Upload-handoff page: request_*_upload mints a token and gives the
+  // user a https://${PUBLIC_URL}/v1/upload-page/<token> URL to open in
+  // their own browser. PUBLIC_URL on the MCP server is mcp.nodaro.ai,
+  // so without this entry the user clicks the link and lands on a
+  // host-filter 404. Both GET (page render) and POST (multipart receive).
+  /^\/v1\/upload-page\//,
 ]
 
 function isMcpHost(host: string): boolean {
