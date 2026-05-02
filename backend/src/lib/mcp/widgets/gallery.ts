@@ -109,7 +109,21 @@ ${uiProtocolShim()}
         useBtn.textContent = 'Use';
         useBtn.addEventListener('click', function(ev) {
           ev.stopPropagation();
-          window.NodaroMCP.useAsset(item.jobId, item.kind);
+          // Same wording + Q&A trailer as the detail-view "Use as
+          // reference" button. Bypasses the shim's useAsset() helper
+          // (which has no trailer) so both Use paths land an identical
+          // message in chat.
+          if (window.NodaroMCP.pushUserMessage) {
+            window.NodaroMCP.pushUserMessage(
+              'Use the ' + item.kind + ' with id ' + item.jobId +
+              ' as a reference. The user clicked the Use button.' +
+              // Source double-backslash-n; the TS template literal
+              // collapses it so the rendered JS gets a literal \\n
+              // escape inside the single-quoted string. (Raw newline
+              // would break the string; see widgets/_common.ts notes.)
+              '\\n[loop ask me using q/a as needed]'
+            );
+          }
         });
         tile.appendChild(useBtn);
 
