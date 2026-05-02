@@ -573,7 +573,13 @@ ${uiProtocolShim()}
     // NOTE: square brackets, NOT angle brackets. The host chat-input
     // renderer treats angle brackets as opening tags and throws
     // "Invalid or unexpected token" the moment it sees a placeholder.
-    var ASK_TRAILER = '\n\n[loop ask me using q/a as needed]';
+    //
+    // ESCAPE NOTE: this whole script is inside a TS template literal,
+    // so a single \n in source becomes a raw newline in the rendered
+    // JS — which then breaks single-quoted JS string literals (a real
+    // newline inside '...' is a syntax error). Double-escape so the
+    // rendered JS contains literal \n escape sequences.
+    var ASK_TRAILER = '\\n[loop ask me using q/a as needed]';
     wire('btn-animate', function() {
       if (!state.outputUrl || !window.NodaroMCP.pushUserMessage) return;
       window.NodaroMCP.pushUserMessage(
