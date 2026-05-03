@@ -14,7 +14,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { buildSingleJobWidget } from "./single-job.js"
 import { buildWorkflowWidgetTemplate } from "./workflow.js"
 import { buildGalleryWidgetTemplate } from "./gallery.js"
-import { buildUploadImageWidget } from "./upload-image.js"
+import { buildUploadWidget } from "./upload.js"
 import { config } from "../../config.js"
 
 export const WIDGET_URI = {
@@ -25,6 +25,8 @@ export const WIDGET_URI = {
   workflow: "ui://nodaro/widget/v3/workflow",
   gallery: "ui://nodaro/widget/v3/gallery",
   uploadImage: "ui://nodaro/widget/v3/upload-image",
+  uploadAudio: "ui://nodaro/widget/v3/upload-audio",
+  uploadVideo: "ui://nodaro/widget/v3/upload-video",
 } as const
 
 const WIDGETS: Array<{
@@ -72,8 +74,20 @@ const WIDGETS: Array<{
   {
     name: "widget-upload-image",
     uri: WIDGET_URI.uploadImage,
-    description: "In-iframe image upload: file picker + drop-zone + auto-announce URL on success",
-    build: () => buildUploadImageWidget(),
+    description: "In-iframe image upload: file picker + drop-zone + auto-announce URL(s) on success",
+    build: () => buildUploadWidget("image"),
+  },
+  {
+    name: "widget-upload-audio",
+    uri: WIDGET_URI.uploadAudio,
+    description: "In-iframe audio upload: file picker + drop-zone + auto-announce URL(s) on success",
+    build: () => buildUploadWidget("audio"),
+  },
+  {
+    name: "widget-upload-video",
+    uri: WIDGET_URI.uploadVideo,
+    description: "In-iframe video upload: file picker + drop-zone + auto-announce URL(s) on success",
+    build: () => buildUploadWidget("video"),
   },
 ]
 
