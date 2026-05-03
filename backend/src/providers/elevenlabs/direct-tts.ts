@@ -40,8 +40,20 @@ const PREMADE_VOICE_IDS: Record<string, string> = {
 
 /** Resolve a voice name → ElevenLabs UUID. UUIDs pass through unchanged. */
 export function resolveDirectVoiceId(voice: string | undefined): string {
-  if (!voice) return PREMADE_VOICE_IDS.Rachel
+  if (!voice) return PREMADE_VOICE_IDS.Rachel!
   return PREMADE_VOICE_IDS[voice] ?? voice
+}
+
+/** Set of all known-good premade UUIDs. Used to distinguish a known
+ *  premade pass-through from an unknown UUID we shouldn't trust. */
+const KNOWN_PREMADE_UUIDS = new Set(Object.values(PREMADE_VOICE_IDS))
+
+/** Heuristic: ElevenLabs UUIDs are 20 alphanumeric chars. Anything
+ *  matching the shape but NOT in our known list is either a custom
+ *  voice (might be valid) or LLM hallucination (definitely invalid).
+ *  We pass it through but the caller should fall back if it 404s. */
+function looksLikeUuid(s: string): boolean {
+  return /^[A-Za-z0-9]{20}$/.test(s)
 }
 
 /** Strip [audio tags] from text — v2 models speak them as literal text */
@@ -92,15 +104,42 @@ export async function directElevenLabsTTS(
   }
 
   const resolvedVoiceId = resolveDirectVoiceId(voiceId)
-  const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/text-to-speech/${resolvedVoiceId}`, {
-    method: "POST",
-    headers: {
-      "xi-api-key": apiKey,
-      "Content-Type": "application/json",
-      Accept: "audio/mpeg",
-    },
-    body: JSON.stringify(body),
-  })
+
+  async function attempt(vid: string): Promise<Response> {
+    return fetch(`${ELEVENLABS_BASE_URL}/v1/text-to-speech/${vid}`, {
+      method: "POST",
+      headers: {
+        "xi-api-key": apiKey,
+        "Content-Type": "application/json",
+        Accept: "audio/mpeg",
+      },
+      body: JSON.stringify(body),
+    })
+  }
+
+  let response = await attempt(resolvedVoiceId)
+
+  // Defensive fallback: LLMs sometimes hallucinate UUIDs that look
+  // valid (20-char alphanumeric) but aren't real voices. If we passed
+  // an unrecognized UUID-shape and ElevenLabs 404'd with
+  // voice_not_found, retry with Rachel (the safe default) so the user
+  // gets audio back instead of a hard error. Logged so we can spot
+  // hallucinations and update the tool description if needed.
+  if (
+    response.status === 404 &&
+    looksLikeUuid(resolvedVoiceId) &&
+    !KNOWN_PREMADE_UUIDS.has(resolvedVoiceId)
+  ) {
+    const errPreview = await response.clone().text().catch(() => "")
+    if (errPreview.includes("voice_not_found")) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[elevenlabs] voice_not_found for "${resolvedVoiceId}" (likely ` +
+          `LLM hallucination); falling back to Rachel`,
+      )
+      response = await attempt(PREMADE_VOICE_IDS.Rachel!)
+    }
+  }
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error")
