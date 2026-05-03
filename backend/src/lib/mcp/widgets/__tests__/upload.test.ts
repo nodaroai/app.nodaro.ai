@@ -16,9 +16,12 @@ describe("upload widget template (per-kind)", () => {
         expect(html).toContain("multiple")
       })
 
-      it("includes capture attribute for camera/mic on mobile", () => {
-        // capture=environment opens the rear camera / mic on phones
-        expect(html).toContain('capture="environment"')
+      it("does NOT use capture attribute (forces camera-only on Android)", () => {
+        // capture="environment" was removed — Android Chrome and the
+        // Claude Android app's WebView interpret it as "open camera
+        // directly", skipping the gallery picker. Without it, mobile
+        // users get the standard picker with both options.
+        expect(html).not.toContain("capture=")
       })
 
       it("listens for mcp-tool-result and reads BOTH uploads array AND legacy single-file shape", () => {
