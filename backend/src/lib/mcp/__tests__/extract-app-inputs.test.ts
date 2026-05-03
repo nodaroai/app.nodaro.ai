@@ -106,6 +106,41 @@ describe("extractAppInputSchema", () => {
     expect(schema.fields[0]!.options).toEqual(["calm", "energetic"])
   })
 
+  it("falls back to legacy inputOrder when inputItems is missing", () => {
+    const schema = extractAppInputSchema({
+      snapshotSettings: {
+        presentationSettings: {
+          // Legacy shape — string[] of node-ids
+          inputOrder: ["n1", "n2"],
+        },
+      },
+      snapshotNodes: [
+        { id: "n1", type: "upload-image", data: { label: "Photo" } },
+        { id: "n2", type: "text-prompt", data: { label: "Style" } },
+      ],
+    })
+    expect(schema.fields).toHaveLength(2)
+    expect(schema.fields[0]!.type).toBe("image")
+    expect(schema.fields[1]!.type).toBe("text")
+  })
+
+  it("auto-derives inputs from source nodes when no presentation settings exist (Zebrify-style)", () => {
+    // Apps with no presentationSettings should still surface their
+    // source-type nodes (upload-* / text-prompt) as implicit inputs.
+    const schema = extractAppInputSchema({
+      snapshotSettings: null,
+      snapshotNodes: [
+        { id: "n1", type: "upload-image", data: { label: "Subject" } },
+        // Non-source nodes are ignored — only source-type nodes become inputs.
+        { id: "n2", type: "generate-image", data: { label: "AI step" } },
+        { id: "n3", type: "text-prompt", data: { label: "Style" } },
+      ],
+    })
+    expect(schema.fields).toHaveLength(2)
+    expect(schema.fields[0]!.type).toBe("image")
+    expect(schema.fields[1]!.type).toBe("text")
+  })
+
   it("ignores output and richtext items (only node + field surface as inputs)", () => {
     const schema = extractAppInputSchema({
       snapshotSettings: {
