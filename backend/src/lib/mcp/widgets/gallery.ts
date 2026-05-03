@@ -212,8 +212,29 @@ const GALLERY_CSS = `
     color: rgba(127,127,127,0.85);
     font-size: 14px;
   }
-  .detail .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; opacity: 0.75; flex-shrink: 0; }
+  /* Detail meta: model/config (left) + date (right). Flex justify
+     space-between pushes the date to the far right; left group wraps
+     to a second line if many badges, but date stays right-aligned. */
+  .detail .meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    opacity: 0.85;
+    flex-shrink: 0;
+    min-height: 22px;
+  }
+  .detail .meta .meta-left {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+    flex: 1;
+  }
   .detail .meta .badge { background: rgba(127,127,127,0.15); padding: 2px 8px; border-radius: 4px; flex-shrink: 0; }
+  .detail .meta .meta-date { opacity: 0.7; }
   /* Prompt clamped to 2 lines so meta block has predictable height —
      keeps the preview's vertical space stable across items, prevents
      nav arrows from shifting when switching to a long-prompt item. */
@@ -841,6 +862,36 @@ ${uiProtocolShim()}
       }
       media.setAttribute('src', item.assetUrl);
       preview.appendChild(media);
+
+      // Touch swipe — drag left/right on the preview navigates between
+      // items. Only on touch devices (mouse wheel + nav arrows on
+      // desktop). Threshold is 50px horizontal travel + horizontal-
+      // dominant motion (so vertical scroll on a tall image still works).
+      var touchStartX = 0, touchStartY = 0, touchActive = false;
+      preview.addEventListener('touchstart', function(ev) {
+        if (data.items.length <= 1) return;
+        var t = ev.changedTouches && ev.changedTouches[0];
+        if (!t) return;
+        touchActive = true;
+        touchStartX = t.clientX;
+        touchStartY = t.clientY;
+      }, { passive: true });
+      preview.addEventListener('touchend', function(ev) {
+        if (!touchActive || data.items.length <= 1) { touchActive = false; return; }
+        touchActive = false;
+        var t = ev.changedTouches && ev.changedTouches[0];
+        if (!t) return;
+        var dx = t.clientX - touchStartX;
+        var dy = t.clientY - touchStartY;
+        if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+        var n = data.items.length;
+        var nextIdx = dx > 0
+          ? (idx - 1 + n) % n   // swipe right → previous
+          : (idx + 1) % n;      // swipe left → next
+        state.selectedId = data.items[nextIdx].jobId;
+        render();
+      }, { passive: true });
+
       card.appendChild(preview);
 
       // Filmstrip — horizontal-scrolling row of all gallery items so the
@@ -897,26 +948,37 @@ ${uiProtocolShim()}
         }, 0);
       }
 
-      // Compact metadata badges — model + aspect (best-effort) + date.
-      // Replaces the previous prose lines with the same shape as
-      // single-job widget badges.
+      // Meta row — model + config badges on the LEFT, date on the
+      // RIGHT. Sits directly under the image (added to the card BEFORE
+      // the filmstrip for the image → meta → strip → actions order).
       var meta = document.createElement('div');
       meta.className = 'meta';
+      var metaLeft = document.createElement('div');
+      metaLeft.className = 'meta-left';
       var modelBadge = document.createElement('span');
       modelBadge.className = 'badge';
       modelBadge.textContent = item.model || 'unknown model';
-      meta.appendChild(modelBadge);
+      metaLeft.appendChild(modelBadge);
+      if (item.aspectRatio) {
+        var arBadge = document.createElement('span');
+        arBadge.className = 'badge';
+        arBadge.textContent = item.aspectRatio;
+        metaLeft.appendChild(arBadge);
+      }
+      if (item.resolution) {
+        var resBadge = document.createElement('span');
+        resBadge.className = 'badge';
+        resBadge.textContent = item.resolution;
+        metaLeft.appendChild(resBadge);
+      }
+      meta.appendChild(metaLeft);
       if (item.createdAt) {
         var dateBadge = document.createElement('span');
-        dateBadge.className = 'badge';
+        dateBadge.className = 'badge meta-date';
         var d = (item.createdAt || '').slice(0, 10);
         dateBadge.textContent = d;
         meta.appendChild(dateBadge);
       }
-      // Prompt intentionally omitted from detail-view meta — keeps the
-      // bottom rows compact (image | filmstrip | model+date badges |
-      // action buttons). The prompt is still copyable via the Copy
-      // icon in the action row.
       card.appendChild(meta);
 
       // Action row — mirrors the single-job widget exactly: kind-
@@ -1085,6 +1147,10 @@ export interface GalleryItem {
   assetUrl: string
   createdAt: string
   favorited: boolean
+  /** Aspect ratio used for this generation (e.g. "16:9"). */
+  aspectRatio?: string
+  /** Resolution / quality bucket used (e.g. "2K", "high"). */
+  resolution?: string
   /**
    * Reference asset URLs that fed this generation (start frame, end frame,
    * source image for an edit, etc.). The widget renders the first 1-2 as

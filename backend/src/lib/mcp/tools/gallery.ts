@@ -145,15 +145,26 @@ function rowToGalleryItem(row: GalleryRow): GalleryItem | null {
   if (!assetUrl) return null
   const thumbnailUrl =
     (out.thumbnailUrl as string | undefined) ?? (kind === "image" ? assetUrl : "")
+  const input = row.input_data ?? {}
+  const aspectRatio =
+    (input.aspect_ratio as string | undefined) ??
+    (input.aspectRatio as string | undefined) ??
+    undefined
+  const resolution =
+    (input.resolution as string | undefined) ??
+    (input.quality as string | undefined) ??
+    undefined
   return {
     jobId: row.id,
     kind,
-    prompt: (row.input_data?.prompt as string | undefined) ?? "",
-    model: (row.input_data?.provider as string | undefined) ?? row.provider ?? "?",
+    prompt: (input.prompt as string | undefined) ?? "",
+    model: (input.provider as string | undefined) ?? row.provider ?? "?",
     thumbnailUrl,
     assetUrl,
     createdAt: row.completed_at ?? "",
     favorited: false,
+    aspectRatio,
+    resolution,
     references: extractReferences(row.input_data),
   }
 }
