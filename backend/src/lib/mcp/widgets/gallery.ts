@@ -199,17 +199,65 @@ const GALLERY_CSS = `
   button.icon-btn svg { display: block; width: 14px; height: 14px; }
   button svg.lead { display: block; width: 12px; height: 12px; }
   /* Fullscreen mode — when the host promotes the iframe to fullscreen
-     (after a tile tap), strip card chrome and expand the detail to fill
-     the viewport. Mobile gets a top inset so the host's title bar
-     doesn't overlap the preview (same trick as single-job widget). */
-  :root { --fs-top-pad: 90px; }
-  body.fullscreen { padding: var(--fs-top-pad) 0 0 0; margin: 0; height: 100dvh; overflow-y: auto; overflow-x: hidden; }
-  body.fullscreen .card { height: calc(100dvh - var(--fs-top-pad)); border: 0; background: transparent; padding: 12px; border-radius: 0; gap: 12px; }
+     (after a tile tap), strip card chrome and use flex layout so the
+     preview auto-fills available space while the bottom rows
+     (filmstrip + meta + actions) keep their natural height. No
+     scrolling — everything fits in the viewport.
+     Top padding clears the host's mobile chrome (menu bar). 40px is
+     enough on Claude.ai mobile (90px earlier was overkill and pushed
+     the bottom rows below the chat input). Desktop drops to 0 via
+     the hover:hover override. */
+  :root { --fs-top-pad: 40px; }
+  body.fullscreen { padding: var(--fs-top-pad) 0 0 0; margin: 0; height: 100dvh; overflow: hidden; }
+  body.fullscreen .card {
+    height: calc(100dvh - var(--fs-top-pad));
+    display: flex;
+    flex-direction: column;
+    border: 0;
+    background: transparent;
+    padding: 8px 12px;
+    border-radius: 0;
+    gap: 8px;
+  }
+  body.fullscreen .preview {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
   body.fullscreen .preview img,
   body.fullscreen .preview video {
-    max-height: calc(100dvh - var(--fs-top-pad) - 200px);
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
     border-radius: 0;
   }
+  /* Prev/Next nav arrows OVERLAYING the preview on left/right edges.
+     Only visible in fullscreen detail view. */
+  .nav-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.4);
+    color: #fff;
+    border: 0;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0.8;
+    transition: opacity .15s, background .15s;
+    z-index: 5;
+  }
+  .nav-arrow:hover:not(:disabled) { opacity: 1; background: rgba(0,0,0,0.6); }
+  .nav-arrow:disabled { opacity: 0.2; cursor: default; }
+  .nav-arrow.prev { left: 8px; }
+  .nav-arrow.next { right: 8px; }
+  .nav-arrow svg { display: block; width: 18px; height: 18px; stroke-width: 2.5; }
   @media (hover: hover) and (pointer: fine) {
     /* Desktop hosts overlay the close affordance instead of fixing a
        header bar — drop the mobile top inset. */
@@ -295,7 +343,60 @@ ${uiProtocolShim()}
     // inline (user closes via X overlay), selectedId clears and we render
     // the grid again.
     var state = { page: 0, displayMode: 'inline', selectedId: null };
+    var loadingMore = false;
+    var loadMoreReqCounter = 0;
     var root = document.getElementById('root');
+
+    // Fetch the next page of older items using the cursor returned by
+    // a prior browse_gallery result. Fires a widget-initiated
+    // tools/call (matched by id prefix loadmore-), appends fresh items
+    // to data.items (deduped), advances state.page so the user lands on
+    // the new content. Same self-driven postMessage trick the
+    // single-job widget uses for its get_asset polling loop.
+    function loadMoreItems() {
+      if (loadingMore || !data.nextCursor) return;
+      loadingMore = true;
+      var reqId = 'loadmore-' + (++loadMoreReqCounter);
+      var to = setTimeout(function() {
+        window.removeEventListener('message', handler);
+        loadingMore = false;
+        render();
+      }, 30000);
+      function handler(ev) {
+        var msg = ev.data;
+        if (!msg || msg.jsonrpc !== '2.0' || msg.id !== reqId) return;
+        clearTimeout(to);
+        window.removeEventListener('message', handler);
+        loadingMore = false;
+        if (msg.error) { render(); return; }
+        var sc = (msg.result && msg.result.structuredContent) || {};
+        if (Array.isArray(sc.items) && sc.items.length > 0) {
+          // Dedupe by jobId — server might overlap if cursor is a
+          // timestamp and multiple jobs share completed_at.
+          var existing = new Set();
+          for (var i = 0; i < data.items.length; i++) existing.add(data.items[i].jobId);
+          var fresh = [];
+          for (var j = 0; j < sc.items.length; j++) {
+            if (!existing.has(sc.items[j].jobId)) fresh.push(sc.items[j]);
+          }
+          data.items = data.items.concat(fresh);
+        }
+        // nextCursor may be undefined (no more) or a new value.
+        data.nextCursor = (typeof sc.nextCursor !== 'undefined') ? sc.nextCursor : null;
+        if (typeof sc.totalCount === 'number') data.totalCount = sc.totalCount;
+        // Advance into the newly-loaded page (capped to last page).
+        var newTotalPages = Math.max(1, Math.ceil(data.items.length / ITEMS_PER_PAGE));
+        state.page = Math.min(state.page + 1, newTotalPages - 1);
+        render();
+      }
+      window.addEventListener('message', handler);
+      window.parent.postMessage({
+        jsonrpc: '2.0', id: reqId,
+        method: 'tools/call',
+        params: { name: 'browse_gallery', arguments: { cursor: data.nextCursor } }
+      }, '*');
+      render(); // re-render to show "loading" disabled state
+    }
 
     function applyDisplayMode() {
       document.body.classList.toggle('fullscreen', state.displayMode === 'fullscreen');
@@ -567,13 +668,23 @@ ${uiProtocolShim()}
 
         var next = document.createElement('button');
         next.className = 'pag-btn';
-        next.title = 'Next page';
-        next.setAttribute('aria-label', 'Next page');
-        next.disabled = state.page === totalPages - 1;
+        next.title = data.nextCursor && state.page === totalPages - 1
+          ? 'Load older items'
+          : 'Next page';
+        next.setAttribute('aria-label', next.title);
+        // Enabled when there's another local page OR a server cursor
+        // pointing to older items we haven't fetched yet.
+        var canNext = state.page < totalPages - 1 || !!data.nextCursor;
+        next.disabled = !canNext || loadingMore;
         var nextIcon = document.getElementById('tpl-chev-right');
         if (nextIcon && nextIcon.content) next.appendChild(nextIcon.content.cloneNode(true));
         next.addEventListener('click', function() {
-          if (state.page < totalPages - 1) { state.page++; render(); }
+          if (state.page < totalPages - 1) {
+            state.page++;
+            render();
+          } else if (data.nextCursor) {
+            loadMoreItems();
+          }
         });
         pagination.appendChild(next);
 
@@ -592,51 +703,53 @@ ${uiProtocolShim()}
     }
 
     function renderDetail() {
-      var item = data.items.find(function(it) { return it.jobId === state.selectedId; });
+      var idx = data.items.findIndex(function(it) { return it.jobId === state.selectedId; });
+      var item = idx >= 0 ? data.items[idx] : null;
       if (!item) { state.selectedId = null; render(); return; }
 
-      // Wrap the detail view in the same card shell as the grid view —
-      // visual continuity when toggling between modes.
+      // No back-row header — the host already shows its own brand+X
+      // close above the iframe in fullscreen mode ([redacted-reference] matches
+      // this; we mirror). Detail starts directly with the preview.
       var card = document.createElement('div');
       card.className = 'card';
 
-      // Header: Back button on the left, kind title centered. The back
-      // button asks the host to drop back to inline mode, which our
-      // displayMode-changed listener catches → clears selectedId →
-      // re-renders the grid. Hosts that don't support requestDisplayMode
-      // get the local fallback (manual state reset).
-      var header = document.createElement('div');
-      header.className = 'header';
-      var backBtn = document.createElement('button');
-      backBtn.className = 'icon-btn';
-      backBtn.title = 'Back to grid';
-      backBtn.setAttribute('aria-label', 'Back to grid');
-      var backIcon = document.getElementById('tpl-chev-left');
-      if (backIcon && backIcon.content) backBtn.appendChild(backIcon.content.cloneNode(true));
-      backBtn.addEventListener('click', function() {
-        if (window.NodaroMCP && window.NodaroMCP.requestDisplayMode) {
-          window.NodaroMCP.requestDisplayMode('inline').then(function() {
-            // displayMode-changed listener handles state reset + render.
-          });
-        } else {
-          state.displayMode = 'inline';
-          state.selectedId = null;
-          applyDisplayMode();
-          render();
-        }
-      });
-      header.appendChild(backBtn);
-      var headTitle = document.createElement('div');
-      headTitle.className = 'title';
-      headTitle.textContent = item.kind.charAt(0).toUpperCase() + item.kind.slice(1);
-      header.appendChild(headTitle);
-      var spacer = document.createElement('div');
-      spacer.style.flex = '1';
-      header.appendChild(spacer);
-      card.appendChild(header);
-
       var preview = document.createElement('div');
       preview.className = 'preview';
+
+      // Prev/Next nav arrows overlaying the preview — switch the
+      // selected item. Wrap-around at the ends (matches asset
+      // browsers / [redacted-reference] filmstrip behavior).
+      var navPrev = document.createElement('button');
+      navPrev.className = 'nav-arrow prev';
+      navPrev.title = 'Previous';
+      navPrev.setAttribute('aria-label', 'Previous');
+      var prevIconN = document.getElementById('tpl-chev-left');
+      if (prevIconN && prevIconN.content) navPrev.appendChild(prevIconN.content.cloneNode(true));
+      navPrev.disabled = data.items.length <= 1;
+      navPrev.addEventListener('click', function() {
+        var n = data.items.length;
+        if (n <= 1) return;
+        var nextIdx = (idx - 1 + n) % n;
+        state.selectedId = data.items[nextIdx].jobId;
+        render();
+      });
+      preview.appendChild(navPrev);
+
+      var navNext = document.createElement('button');
+      navNext.className = 'nav-arrow next';
+      navNext.title = 'Next';
+      navNext.setAttribute('aria-label', 'Next');
+      var nextIconN = document.getElementById('tpl-chev-right');
+      if (nextIconN && nextIconN.content) navNext.appendChild(nextIconN.content.cloneNode(true));
+      navNext.disabled = data.items.length <= 1;
+      navNext.addEventListener('click', function() {
+        var n = data.items.length;
+        if (n <= 1) return;
+        var nextIdx = (idx + 1) % n;
+        state.selectedId = data.items[nextIdx].jobId;
+        render();
+      });
+      preview.appendChild(navNext);
       var media;
       if (item.kind === 'video') {
         media = document.createElement('video');
