@@ -259,10 +259,10 @@ const GALLERY_CSS = `
   :root { --fs-top-pad: 40px; }
   body.fullscreen { padding: var(--fs-top-pad) 0 0 0; margin: 0; height: 100dvh; overflow: hidden; }
   body.fullscreen .card {
-    /* Cap total at 86dvh so the chat input + gestures below have
+    /* Cap total at 80dvh so the chat input + gestures below have
        breathing room. The available height is also constrained by
        the top inset, so use the smaller of the two. */
-    height: 86dvh;
+    height: 80dvh;
     max-height: calc(100dvh - var(--fs-top-pad));
     display: flex;
     flex-direction: column;
@@ -913,16 +913,10 @@ ${uiProtocolShim()}
         dateBadge.textContent = d;
         meta.appendChild(dateBadge);
       }
-      if (item.prompt) {
-        var promptLine = document.createElement('div');
-        // Class .prompt clamps to 2 lines so meta height stays stable
-        // across items (long prompts no longer push the bottom rows
-        // up/down → nav arrows stay put across navigation).
-        promptLine.className = 'prompt';
-        promptLine.title = item.prompt;
-        promptLine.textContent = item.prompt;
-        meta.appendChild(promptLine);
-      }
+      // Prompt intentionally omitted from detail-view meta — keeps the
+      // bottom rows compact (image | filmstrip | model+date badges |
+      // action buttons). The prompt is still copyable via the Copy
+      // icon in the action row.
       card.appendChild(meta);
 
       // Action row — mirrors the single-job widget exactly: kind-
