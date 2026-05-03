@@ -228,9 +228,24 @@ ${uiProtocolShim()}
       };
     }
 
-    /** Replace the whole card with a final preview grid + replace button. */
+    // Track DOM nodes appended in renderFinal so the Replace button can
+    // remove them without nuking the original drop zone (window.reload
+    // wiped the slot data delivered via mcp-tool-result, leaving the
+    // user with a non-functional widget — the "hides image and does
+    // nothing" symptom).
+    var finalNodes = [];
+
+    /** Append a preview grid + Replace button beneath the existing
+     *  drop zone. Hides the drop zone + status while the post-upload
+     *  state is shown. Replace restores the initial state in-place
+     *  (no iframe reload — slots are still valid for a re-upload). */
     function renderFinal() {
-      while (card.firstChild) card.removeChild(card.firstChild);
+      // Hide the drop zone + the in-progress file-list + the status
+      // line. We KEEP them in the DOM so Replace can show them again
+      // without rebuilding from scratch.
+      dropEl.style.display = 'none';
+      listEl.hidden = true;
+      statusEl.style.display = 'none';
 
       var grid = document.createElement('div');
       grid.className = 'preview-grid';
@@ -251,18 +266,45 @@ ${uiProtocolShim()}
         grid.appendChild(cell);
       });
       card.appendChild(grid);
+      finalNodes.push(grid);
 
-      var status = document.createElement('div');
-      status.className = 'status';
-      status.textContent = 'Uploaded ' + rows.length + ' ' + (rows.length === 1 ? NOUN : NOUN_PLURAL) + ' — ready for the next step.';
-      card.appendChild(status);
+      var doneStatus = document.createElement('div');
+      doneStatus.className = 'status';
+      doneStatus.textContent = 'Uploaded ' + rows.length + ' ' + (rows.length === 1 ? NOUN : NOUN_PLURAL) + ' — ready for the next step.';
+      card.appendChild(doneStatus);
+      finalNodes.push(doneStatus);
 
       var replace = document.createElement('button');
       replace.type = 'button';
       replace.className = 'replace';
       replace.textContent = 'Replace';
-      replace.addEventListener('click', function() { window.location.reload(); });
+      replace.addEventListener('click', resetToDropZone);
       card.appendChild(replace);
+      finalNodes.push(replace);
+    }
+
+    function resetToDropZone() {
+      // Tear down the post-upload nodes.
+      finalNodes.forEach(function(n) { if (n.parentNode) n.parentNode.removeChild(n); });
+      finalNodes = [];
+      // Reset local state — the slots themselves stay valid (their
+      // tokens are still good, R2 will overwrite on the next upload).
+      // The user gets the same public_url as before; we re-announce
+      // it to chat after the new upload completes, which Claude
+      // treats as a fresh "use this URL" instruction.
+      rows = [];
+      uploading = false;
+      slots.forEach(function(s) { s.taken = false; });
+      // Clear the in-progress file-list rows so a Replace doesn't
+      // show stale per-file progress bars.
+      while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
+      // Reset the file input so picking the SAME file fires the change
+      // event again (browsers skip the event if value didn't change).
+      fileEl.value = '';
+      // Restore visibility of the original drop zone.
+      dropEl.style.display = '';
+      statusEl.style.display = '';
+      setStatus('');
     }
 
     /** Compose the announcement message Claude sees after all uploads succeed. */
