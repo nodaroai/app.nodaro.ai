@@ -39,17 +39,19 @@ const GALLERY_CSS = `
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
   .tile { position: relative; aspect-ratio: 1/1; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.05); cursor: pointer; }
   .tile img, .tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
-  /* Hover overlay — TWO affordances aligned to the BOTTOM of the tile
-     (matches [redacted-reference]), so the buttons sit over the dark gradient and
-     don't obscure the image content. Hidden on touch devices (no hover)
-     because the invisible-but-clickable overlay was grabbing taps meant
-     to open the tile. */
+  /* Hover overlay — Use pill stretches to fill the bottom width, with
+     a fixed-size Download icon hugging the right edge (matches
+     [redacted-reference]'s hover layout). Aligned to the BOTTOM of the tile so
+     the buttons sit over the dark gradient and don't obscure the
+     image content. Hidden on touch devices (no hover) because the
+     invisible-but-clickable overlay was grabbing taps meant to open
+     the tile. */
   .hover-overlay {
     display: none;
     position: absolute;
     inset: 0;
     align-items: flex-end;
-    justify-content: center;
+    justify-content: stretch;
     gap: 6px;
     padding: 8px;
     opacity: 0;
@@ -58,11 +60,31 @@ const GALLERY_CSS = `
     pointer-events: none;
   }
   .hover-overlay > * { pointer-events: auto; }
-  .use { padding: 4px 14px; background: #ff0073; color: #fff; border-radius: 999px; font-weight: 600; font-size: 12px; transition: transform .15s; cursor: pointer; line-height: 1.4; }
-  .use:hover { transform: scale(1.05); }
+  /* Use takes all the remaining width — [redacted-reference]'s full-width Use
+     pill. Centered text. Subtle bg-darken on hover (no scale — would
+     look weird on a stretched button). */
+  .use {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 12px;
+    text-align: center;
+    background: #ff0073;
+    color: #fff;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 12px;
+    cursor: pointer;
+    line-height: 1.4;
+    transition: background .15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .use:hover { background: #d6005f; }
   .tile-download {
+    flex: 0 0 28px;
     display: flex; align-items: center; justify-content: center;
-    width: 28px; height: 28px;
+    height: 28px;
     background: rgba(0,0,0,0.55); color: #fff;
     border-radius: 999px; cursor: pointer; transition: background .15s;
   }
