@@ -176,9 +176,10 @@ const GALLERY_CSS = `
   .detail { display: flex; flex-direction: column; gap: 12px; }
   .detail .preview { width: 100%; max-height: 60vh; display: flex; align-items: center; justify-content: center; }
   .detail .preview img, .detail .preview video, .detail .preview audio { width: 100%; height: auto; max-height: 60vh; object-fit: contain; border-radius: 8px; }
-  /* Filmstrip — horizontal-scrolling row of small thumbnails to
-     navigate between generations without going back to the grid.
-     Active item bordered in brand pink. */
+  /* Filmstrip — horizontal-scrolling row of small thumbnails. Fixed
+     height so the bottom rows below it stay in a stable position
+     when navigating between items (otherwise the preview area would
+     reflow and the nav arrows shift visibly). */
   .filmstrip {
     display: flex;
     gap: 6px;
@@ -186,6 +187,7 @@ const GALLERY_CSS = `
     overflow-y: hidden;
     padding: 4px 2px;
     scrollbar-width: thin;
+    flex: 0 0 52px;
   }
   .filmstrip::-webkit-scrollbar { height: 6px; }
   .filmstrip::-webkit-scrollbar-thumb { background: rgba(127,127,127,0.3); border-radius: 3px; }
@@ -210,8 +212,24 @@ const GALLERY_CSS = `
     color: rgba(127,127,127,0.85);
     font-size: 14px;
   }
-  .detail .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; opacity: 0.75; }
-  .detail .meta .badge { background: rgba(127,127,127,0.15); padding: 2px 8px; border-radius: 4px; }
+  .detail .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; opacity: 0.75; flex-shrink: 0; }
+  .detail .meta .badge { background: rgba(127,127,127,0.15); padding: 2px 8px; border-radius: 4px; flex-shrink: 0; }
+  /* Prompt clamped to 2 lines so meta block has predictable height —
+     keeps the preview's vertical space stable across items, prevents
+     nav arrows from shifting when switching to a long-prompt item. */
+  .detail .meta .prompt {
+    width: 100%;
+    font-size: 12px;
+    opacity: 0.75;
+    margin-top: 2px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .detail .actions { flex-shrink: 0; }
   /* Action row — left text buttons (Animate / Edit / Suno follow-ups),
      right icon-only utilities (Copy / Download / Recreate). Mirrors the
      single-job widget shape exactly so detail view feels like the same
@@ -241,7 +259,11 @@ const GALLERY_CSS = `
   :root { --fs-top-pad: 40px; }
   body.fullscreen { padding: var(--fs-top-pad) 0 0 0; margin: 0; height: 100dvh; overflow: hidden; }
   body.fullscreen .card {
-    height: calc(100dvh - var(--fs-top-pad));
+    /* Cap total at 86dvh so the chat input + gestures below have
+       breathing room. The available height is also constrained by
+       the top inset, so use the smaller of the two. */
+    height: 86dvh;
+    max-height: calc(100dvh - var(--fs-top-pad));
     display: flex;
     flex-direction: column;
     border: 0;
@@ -249,6 +271,7 @@ const GALLERY_CSS = `
     padding: 8px 12px;
     border-radius: 0;
     gap: 8px;
+    overflow: hidden;
   }
   body.fullscreen .preview {
     flex: 1;
@@ -462,7 +485,17 @@ ${uiProtocolShim()}
       return state.displayMode === 'fullscreen' && state.selectedId !== null;
     }
 
+    // Filmstrip scroll position is preserved across renders so
+    // tapping a thumbnail (which triggers a full re-render) doesn't
+    // snap the strip back to the start. null means "use the active
+    // item as the anchor" (initial open of detail view); a number
+    // means restore that scrollLeft.
+    var savedFilmstripScroll = null;
+
     function render() {
+      // Snapshot filmstrip scrollLeft before we tear down the DOM.
+      var existingStrip = root.querySelector('.filmstrip');
+      if (existingStrip) savedFilmstripScroll = existingStrip.scrollLeft;
       clear(root);
       if (!data.items.length) {
         var empty = document.createElement('div');
@@ -688,12 +721,27 @@ ${uiProtocolShim()}
 
         var dotsWrap = document.createElement('div');
         dotsWrap.className = 'dots';
-        for (var i = 0; i < totalPages; i++) {
-          var dot = document.createElement('div');
-          dot.className = 'dot' + (i === state.page ? ' active' : '');
-          dot.dataset.page = String(i);
-          ;(function(idx) { dot.addEventListener('click', function() { state.page = idx; render(); }); })(i);
-          dotsWrap.appendChild(dot);
+        // Cap dots at MAX_DOTS — beyond that show a compact "X / Y"
+        // counter (load-more was bloating the dot count to 30+ which
+        // wrapped the pagination row and looked broken).
+        var MAX_DOTS = 7;
+        if (totalPages <= MAX_DOTS) {
+          for (var i = 0; i < totalPages; i++) {
+            var dot = document.createElement('div');
+            dot.className = 'dot' + (i === state.page ? ' active' : '');
+            dot.dataset.page = String(i);
+            ;(function(idx) { dot.addEventListener('click', function() { state.page = idx; render(); }); })(i);
+            dotsWrap.appendChild(dot);
+          }
+        } else {
+          // Compact: numeric "page N of M". Less visual fluff but
+          // the user gets exact context.
+          var counter = document.createElement('div');
+          counter.style.fontSize = '12px';
+          counter.style.opacity = '0.7';
+          counter.style.padding = '0 4px';
+          counter.textContent = (state.page + 1) + ' / ' + totalPages;
+          dotsWrap.appendChild(counter);
         }
         pagination.appendChild(dotsWrap);
 
@@ -722,13 +770,9 @@ ${uiProtocolShim()}
         card.appendChild(pagination);
       }
 
-      // Footer kept for the "more available" hint on cursor pages.
-      if (data.nextCursor) {
-        var footer = document.createElement('div');
-        footer.className = 'footer';
-        footer.textContent = 'More available — refine the search to load older items';
-        card.appendChild(footer);
-      }
+      // No footer text — the next-chevron auto-loads more (its tooltip
+      // becomes "Load older items" when at last page with a cursor),
+      // and the page counter shows position. Footer text was redundant.
 
       root.appendChild(card);
     }
@@ -828,11 +872,27 @@ ${uiProtocolShim()}
           strip.appendChild(stripItem);
         });
         card.appendChild(strip);
-        // Auto-scroll the active item into view (centered) after mount.
+        // Filmstrip scroll: preserve user's scroll position across
+        // re-renders. savedFilmstripScroll is captured at the top of
+        // render() before the DOM is torn down, so tapping a
+        // thumbnail (which triggers a full re-render) doesn't snap
+        // back to the start. Only auto-center the active item if we
+        // had no prior scroll (first time entering detail) OR if
+        // the active is now off-screen.
         setTimeout(function() {
+          if (savedFilmstripScroll !== null) {
+            strip.scrollLeft = savedFilmstripScroll;
+          }
           var active = strip.querySelector('.strip-item.active');
-          if (active && active.scrollIntoView) {
-            active.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          if (!active || !active.scrollIntoView) return;
+          // Only scroll if active isn't already in view (block:nearest
+          // + inline:nearest means scrollIntoView is a no-op when the
+          // element is fully visible).
+          var stripRect = strip.getBoundingClientRect();
+          var activeRect = active.getBoundingClientRect();
+          var visible = activeRect.left >= stripRect.left && activeRect.right <= stripRect.right;
+          if (!visible) {
+            active.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
           }
         }, 0);
       }
@@ -855,10 +915,11 @@ ${uiProtocolShim()}
       }
       if (item.prompt) {
         var promptLine = document.createElement('div');
-        promptLine.style.fontSize = '12px';
-        promptLine.style.opacity = '0.75';
-        promptLine.style.marginTop = '4px';
-        promptLine.style.lineHeight = '1.4';
+        // Class .prompt clamps to 2 lines so meta height stays stable
+        // across items (long prompts no longer push the bottom rows
+        // up/down → nav arrows stay put across navigation).
+        promptLine.className = 'prompt';
+        promptLine.title = item.prompt;
         promptLine.textContent = item.prompt;
         meta.appendChild(promptLine);
       }
@@ -994,6 +1055,26 @@ ${uiProtocolShim()}
       state.page = 0;
       state.view = 'grid';
       state.selectedId = null;
+      render();
+    });
+
+    // Keyboard arrow navigation in fullscreen detail view. Skips when
+    // the user is typing somewhere (input/textarea/contenteditable)
+    // so the arrows don't hijack normal text editing.
+    document.addEventListener('keydown', function(ev) {
+      if (!isDetailView()) return;
+      var t = ev.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || (t.isContentEditable))) return;
+      if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+      ev.preventDefault();
+      var n = data.items.length;
+      if (n <= 1) return;
+      var idx = data.items.findIndex(function(it) { return it.jobId === state.selectedId; });
+      if (idx < 0) return;
+      var nextIdx = ev.key === 'ArrowLeft'
+        ? (idx - 1 + n) % n
+        : (idx + 1) % n;
+      state.selectedId = data.items[nextIdx].jobId;
       render();
     });
   })();
