@@ -27,9 +27,11 @@
  *      user typing anything.
  *
  * UX choices:
- *   - Native `<input type="file" accept="<kind>/*" capture="environment">`
- *     — opens the gallery on desktop and the camera on phones (great for
- *     "snap your face for a headshot" flows).
+ *   - Native `<input type="file" accept="<kind>/*">` (no `capture` attr —
+ *     Android Chrome and the Claude Android app's WebView interpret
+ *     `capture="environment"` as "open the camera DIRECTLY", skipping
+ *     the gallery/picker entirely. Without `capture`, mobile users get
+ *     the standard chooser with both camera AND gallery options).
  *   - Drag-drop zone for desktop, with hover styling.
  *   - Per-file row with progress bar while uploading; final preview grid
  *     after all files complete.
@@ -142,7 +144,7 @@ ${uiProtocolShim()}
 <body>
 <div class="card" id="card">
   <div class="drop" id="drop">
-    <input id="file" type="file" accept="${copy.acceptMime}" capture="environment" multiple aria-label="Choose ${copy.nounPlural}" />
+    <input id="file" type="file" accept="${copy.acceptMime}" multiple aria-label="Choose ${copy.nounPlural}" />
     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
       <polyline points="17 8 12 3 7 8"/>
