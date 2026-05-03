@@ -337,6 +337,14 @@ const GALLERY_CSS = `
     /* Desktop hosts overlay the close affordance instead of fixing a
        header bar — drop the mobile top inset. */
     :root { --fs-top-pad: 0px; }
+    /* Desktop fullscreen — center the content with side margins so
+       the filmstrip + actions don't span edge-to-edge across a wide
+       monitor. Matches [redacted-reference]'s centered-column layout. */
+    body.fullscreen .card {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 8px 0;
+    }
   }
 `
 
@@ -894,6 +902,39 @@ ${uiProtocolShim()}
 
       card.appendChild(preview);
 
+      // Meta row — model + config badges on the LEFT, date on the
+      // RIGHT. Sits DIRECTLY under the image, ABOVE the filmstrip.
+      // Order: image → meta → filmstrip → actions.
+      var meta = document.createElement('div');
+      meta.className = 'meta';
+      var metaLeft = document.createElement('div');
+      metaLeft.className = 'meta-left';
+      var modelBadge = document.createElement('span');
+      modelBadge.className = 'badge';
+      modelBadge.textContent = item.model || 'unknown model';
+      metaLeft.appendChild(modelBadge);
+      if (item.aspectRatio) {
+        var arBadge = document.createElement('span');
+        arBadge.className = 'badge';
+        arBadge.textContent = item.aspectRatio;
+        metaLeft.appendChild(arBadge);
+      }
+      if (item.resolution) {
+        var resBadge = document.createElement('span');
+        resBadge.className = 'badge';
+        resBadge.textContent = item.resolution;
+        metaLeft.appendChild(resBadge);
+      }
+      meta.appendChild(metaLeft);
+      if (item.createdAt) {
+        var dateBadge = document.createElement('span');
+        dateBadge.className = 'badge meta-date';
+        var d = (item.createdAt || '').slice(0, 10);
+        dateBadge.textContent = d;
+        meta.appendChild(dateBadge);
+      }
+      card.appendChild(meta);
+
       // Filmstrip — horizontal-scrolling row of all gallery items so the
       // user can switch between assets without going back to grid.
       // Only render when there's more than one item (otherwise it's a
@@ -948,38 +989,7 @@ ${uiProtocolShim()}
         }, 0);
       }
 
-      // Meta row — model + config badges on the LEFT, date on the
-      // RIGHT. Sits directly under the image (added to the card BEFORE
-      // the filmstrip for the image → meta → strip → actions order).
-      var meta = document.createElement('div');
-      meta.className = 'meta';
-      var metaLeft = document.createElement('div');
-      metaLeft.className = 'meta-left';
-      var modelBadge = document.createElement('span');
-      modelBadge.className = 'badge';
-      modelBadge.textContent = item.model || 'unknown model';
-      metaLeft.appendChild(modelBadge);
-      if (item.aspectRatio) {
-        var arBadge = document.createElement('span');
-        arBadge.className = 'badge';
-        arBadge.textContent = item.aspectRatio;
-        metaLeft.appendChild(arBadge);
-      }
-      if (item.resolution) {
-        var resBadge = document.createElement('span');
-        resBadge.className = 'badge';
-        resBadge.textContent = item.resolution;
-        metaLeft.appendChild(resBadge);
-      }
-      meta.appendChild(metaLeft);
-      if (item.createdAt) {
-        var dateBadge = document.createElement('span');
-        dateBadge.className = 'badge meta-date';
-        var d = (item.createdAt || '').slice(0, 10);
-        dateBadge.textContent = d;
-        meta.appendChild(dateBadge);
-      }
-      card.appendChild(meta);
+      // (meta moved above — see "Meta row" block right after preview.)
 
       // Action row — mirrors the single-job widget exactly: kind-
       // specific text buttons on the left (Animate / Edit for image,
