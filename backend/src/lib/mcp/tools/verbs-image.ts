@@ -108,10 +108,15 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "the `recommendations` array.\n\n" +
           "**Aspect ratios are model-specific** — not every provider supports " +
           "every ratio. If the user asks for 21:9, use a model whose " +
-          "`aspectRatios` includes `21:9` (Nano Banana family, Seedream, Kontext). " +
-          "Default `nano-banana` is realistic but limited; pick `nano-banana-pro` " +
-          "for typography, `gpt-image` for logos, `z-image` for the cheapest " +
-          "stylized output.\n\n" +
+          "`aspectRatios` includes `21:9` (Nano Banana family, Seedream).\n\n" +
+          "**Quick model picks** (depends on what you want):\n" +
+          "  • `nano-banana-pro` — best overall, best for typography / logos / " +
+          "text-heavy, multi-character scenes\n" +
+          "  • `nano-banana-2` (default) — very good consistency, faster + cheaper\n" +
+          "  • `gpt-image-2` — strong for logos / short copy / prompt-adherence\n" +
+          "  • `z-image` — cheapest stylized output\n" +
+          "  • **AVOID `flux`** for general use — degrades in multi-turn workflows; " +
+          "use one of the above instead.\n\n" +
           "Accepts a text prompt and optional Path-1 structured fields " +
           "(person, styling, setting, camera, mood, lens). Returns a job_id; " +
           "the iframe widget will surface the final image automatically.",
@@ -267,20 +272,24 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "PRIMARY tool for image-to-image / edit / transform / restyle / " +
           "outpaint / inpaint workflows. Use this directly — do NOT search the " +
           "apps marketplace for image editing.\n\n" +
-          "**Picking a model**: call `list_models { kind: \"image\", mode: \"i2i\" }` " +
-          "or `mode: \"edit\"` to see capability sheets. **Identity preservation " +
-          "across edits (face / character consistency, multi-turn coherence)**: " +
-          "`nano-banana-pro` is the strongest choice — handles up to 14 reference " +
-          "images and ~5 distinct characters with the most stable identity across " +
-          "iterations. `nano-banana-2` (default) is a faster cost-effective runner-up " +
-          "with very good consistency. `flux-kontext` is competitive on a SINGLE edit " +
-          "and excels at texture realism / local precision (masking, relighting), " +
-          "but identity drifts across 3+ iterations. Avoid `gpt-image` for " +
-          "identity-critical edits — it tends to paste rather than integrate " +
-          "subjects. Other useful picks: `ideogram-remix` is character-aware, " +
-          "`seedream-edit` for high-res output, `nano-banana-pro` also leads on " +
-          "text/typography. For background removal use `recraft-remove-bg` (1 " +
-          "credit, no prompt).\n\n" +
+          "**Picking a model** — depends on the task. Call " +
+          "`list_models { kind: \"image\", mode: \"i2i\" }` or `mode: \"edit\"` for " +
+          "the full capability sheets. Quick guidance:\n" +
+          "  • **`nano-banana-pro`** — best overall + best for face/character " +
+          "identity preservation across multi-turn edits. Handles up to 14 " +
+          "reference images and ~5 distinct characters. Also leads on text/" +
+          "typography. First pick when in doubt.\n" +
+          "  • **`nano-banana-2`** (default) — very good consistency, faster " +
+          "and cheaper than Pro. Good cost-effective default.\n" +
+          "  • **`gpt-image-2`** — strong for typography / logos / text-heavy " +
+          "edits and prompt-adherence-critical work. Solid alternative when " +
+          "Nano Banana family doesn't nail a specific case.\n" +
+          "  • **`ideogram-remix`** — character-aware, good for stylized remix.\n" +
+          "  • **`seedream-edit`** — high-res output for instruction-style edits.\n" +
+          "  • **`recraft-remove-bg`** — background removal (1 credit, no prompt).\n" +
+          "  • **AVOID `flux-kontext`** for general use — degrades quickly across " +
+          "multi-turn edits in practice. Only consider for one-shot texture-heavy " +
+          "edits, and even then prefer Nano Banana Pro.\n\n" +
           "Provide ONE of:\n" +
           "  (a) `image_url` — any publicly fetchable HTTPS URL\n" +
           "  (b) `image_asset_id` — a Nodaro job id whose output is an image\n\n" +
