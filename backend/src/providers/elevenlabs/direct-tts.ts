@@ -8,6 +8,42 @@ function resolveModel(provider?: string): string {
   return "eleven_turbo_v2_5"
 }
 
+// 21 ElevenLabs premade voices — name → voice_id. KIE's TTS proxy accepts
+// these names directly, so the rest of the codebase passes names around.
+// The direct ElevenLabs API (/v1/text-to-speech/{voice_id}) requires UUIDs,
+// though, so we resolve names → IDs here before the request fires.
+// Without this, v3 jobs (which always use the direct API) 404 because
+// "Rachel" isn't a valid voice_id path segment.
+const PREMADE_VOICE_IDS: Record<string, string> = {
+  Rachel: "21m00Tcm4TlvDq8ikWAM",
+  Aria: "9BWtsMINqrJLrRacOk9x",
+  Roger: "CwhRBWXzGAHq8TQ4Fs17",
+  Sarah: "EXAVITQu4vr4xnSDxMaL",
+  Laura: "FGY2WhTYpPnrIDTdsKH5",
+  Charlie: "IKne3meq5aSn9XLyUdCD",
+  George: "JBFqnCBsd6RMkjVDRZzb",
+  Callum: "N2lVS1w4EtoT3dr4eOWO",
+  River: "SAz9YHcvj6GT2YYXdXww",
+  Liam: "TX3LPaxmHKxFdv7VOQHJ",
+  Charlotte: "XB0fDUnXU5powFXDhCwa",
+  Alice: "Xb7hH8MSUJpSbSDYk0k2",
+  Matilda: "XrExE9yKIg1WjnnlVkGX",
+  Will: "bIHbv24MWmeRgasZH58o",
+  Jessica: "cgSgspJ2msm6clMCkdW9",
+  Eric: "cjVigY5qzO86Huf0OWal",
+  Chris: "iP95p4xoKVk53GoZ742B",
+  Brian: "nPczCjzI2devNBz1zQrb",
+  Daniel: "onwK4e9ZLuTAKqWW03F9",
+  Lily: "pFZP5JQG7iQjIQuC4Bku",
+  Bill: "pqHfZKP75CvOlQylNhV4",
+}
+
+/** Resolve a voice name → ElevenLabs UUID. UUIDs pass through unchanged. */
+export function resolveDirectVoiceId(voice: string | undefined): string {
+  if (!voice) return PREMADE_VOICE_IDS.Rachel
+  return PREMADE_VOICE_IDS[voice] ?? voice
+}
+
 /** Strip [audio tags] from text — v2 models speak them as literal text */
 export function stripAudioTags(text: string): string {
   return text.replace(/\[[^\]]+\]/g, "").replace(/\s{2,}/g, " ").trim()
@@ -55,7 +91,8 @@ export async function directElevenLabsTTS(
     body.language_code = options.languageCode
   }
 
-  const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/text-to-speech/${voiceId}`, {
+  const resolvedVoiceId = resolveDirectVoiceId(voiceId)
+  const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/text-to-speech/${resolvedVoiceId}`, {
     method: "POST",
     headers: {
       "xi-api-key": apiKey,
