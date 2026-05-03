@@ -145,6 +145,10 @@ vi.mock("../../shared.js", () => ({
   generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
   completeFfmpegVideoJob: mocks.mockCompleteFfmpegVideoJob,
   completeFfmpegAudioJob: mocks.mockCompleteFfmpegAudioJob,
+  // setJobProgress writes progress to BOTH BullMQ + the jobs.progress
+  // DB column. Tests don't care about the side-effects, so a no-op
+  // mock is fine.
+  setJobProgress: vi.fn(async () => {}),
 }))
 
 // ---------------------------------------------------------------------------
