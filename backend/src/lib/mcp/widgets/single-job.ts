@@ -290,7 +290,18 @@ ${uiProtocolShim()}
       state.outputUrl = url;
       while (previewEl.firstChild) previewEl.removeChild(previewEl.firstChild);
       var media;
-      if (MEDIA_KIND === 'video') { media = document.createElement('video'); media.controls = true; }
+      if (MEDIA_KIND === 'video') {
+        media = document.createElement('video');
+        media.controls = true;
+        // Defer the multi-MB video file until the user clicks play.
+        // 'metadata' loads ~100 KB to render the first frame as a poster
+        // — full file streams in only on user interaction. Saves real
+        // bandwidth on phones. playsinline prevents iOS Safari from
+        // hijacking into native fullscreen on play (we manage fullscreen
+        // ourselves via the host's display-mode protocol).
+        media.setAttribute('preload', 'metadata');
+        media.setAttribute('playsinline', '');
+      }
       else if (MEDIA_KIND === 'audio') { media = document.createElement('audio'); media.controls = true; }
       else if (MEDIA_KIND === 'image') { media = document.createElement('img'); media.setAttribute('alt', ''); }
       else {
