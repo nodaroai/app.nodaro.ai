@@ -1032,6 +1032,23 @@ ${uiProtocolShim()}
       //   video → Edit
       //   audio → provider-specific (Suno: Stems/Extend/Cover/Music
       //           video; ElevenLabs: Change voice / Dub)
+      // Helper: close the fullscreen detail view back to the inline
+      // grid. Used by every action that hands work back to Claude —
+      // the user shouldn't be staring at the asset detail while
+      // Claude starts the next task; the gallery context is what
+      // matters then.
+      function closeFullscreen() {
+        if (window.NodaroMCP && window.NodaroMCP.requestDisplayMode) {
+          window.NodaroMCP.requestDisplayMode('inline');
+          // displayMode-changed listener clears selectedId + re-renders.
+        } else {
+          state.displayMode = 'inline';
+          state.selectedId = null;
+          applyDisplayMode();
+          render();
+        }
+      }
+
       function pushFollowup(prefix, action) {
         if (!window.NodaroMCP || !window.NodaroMCP.pushUserMessage) return;
         var ctx = {
@@ -1044,6 +1061,7 @@ ${uiProtocolShim()}
           prefix + ': ' + JSON.stringify(ctx) +
           '\\n[loop ask me using q/a as needed]'
         );
+        closeFullscreen();
       }
 
       if (item.kind === 'image') {
@@ -1113,6 +1131,7 @@ ${uiProtocolShim()}
       actionsRight.appendChild(makeIconBtn('Recreate', 'tpl-icon-recreate', function() {
         if (item.prompt && window.NodaroMCP && window.NodaroMCP.pushUserMessage) {
           window.NodaroMCP.pushUserMessage(item.prompt);
+          closeFullscreen();
         }
       }));
 
