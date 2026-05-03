@@ -136,7 +136,22 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "`list_models { kind: \"audio\", mode: \"tts\" }` for the full sheet.",
       inputSchema: {
         text: z.string().min(1).max(5000),
-        voice_id: z.string().optional().describe("ElevenLabs voice id (premade or custom)"),
+        voice_id: z
+          .string()
+          .optional()
+          .describe(
+            "Voice — pass a premade voice NAME (recommended) or an " +
+            "ElevenLabs UUID (only for custom voices the user has " +
+            "explicitly cloned). DO NOT invent UUIDs — passing an " +
+            "unknown UUID fails with 'voice_not_found'.\n\n" +
+            "Premade names: Rachel, Aria, Roger, Sarah, Laura, Charlie, " +
+            "George, Callum, River, Liam, Charlotte, Alice, Matilda, " +
+            "Will, Jessica, Eric, Chris, Brian, Daniel, Lily, Bill.\n\n" +
+            "If unsure pick by character: female warm = Rachel; female " +
+            "young = Aria / Lily; male deep = Roger / Brian; male " +
+            "neutral = George / Daniel; British = Charlie / Charlotte. " +
+            "Defaults to Rachel.",
+          ),
         model: z
           .enum([
             "elevenlabs-v3",
