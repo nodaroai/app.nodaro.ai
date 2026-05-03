@@ -14,6 +14,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { buildSingleJobWidget } from "./single-job.js"
 import { buildWorkflowWidgetTemplate } from "./workflow.js"
 import { buildGalleryWidgetTemplate } from "./gallery.js"
+import { buildUploadImageWidget } from "./upload-image.js"
+import { config } from "../../config.js"
 
 export const WIDGET_URI = {
   jobImage: "ui://nodaro/widget/v3/job-image",
@@ -22,6 +24,7 @@ export const WIDGET_URI = {
   jobGeneric: "ui://nodaro/widget/v3/job-generic",
   workflow: "ui://nodaro/widget/v3/workflow",
   gallery: "ui://nodaro/widget/v3/gallery",
+  uploadImage: "ui://nodaro/widget/v3/upload-image",
 } as const
 
 const WIDGETS: Array<{
@@ -66,6 +69,12 @@ const WIDGETS: Array<{
     description: "Asset gallery: paginated grid + detail view + Use button",
     build: () => buildGalleryWidgetTemplate(),
   },
+  {
+    name: "widget-upload-image",
+    uri: WIDGET_URI.uploadImage,
+    description: "In-iframe image upload: file picker + drop-zone + auto-announce URL on success",
+    build: () => buildUploadImageWidget(),
+  },
 ]
 
 /**
@@ -78,12 +87,19 @@ const WIDGETS: Array<{
  * `assets.nodaro.ai`. Getting that domain wrong here causes Claude.ai to
  * block image rendering with "Refused to load — violates img-src directive."
  */
+// PUBLIC_URL is the host the upload widget POSTs the picked file to
+// (`/v1/upload-page/:token`). connectDomains feeds the iframe's
+// connect-src CSP — without it the host blocks the fetch with a CSP
+// violation. Other widgets don't use connect, so the extra entry is
+// harmless for them. Stripping the trailing slash so the entry parses
+// cleanly into a CSP source.
 const WIDGET_CSP = {
   resourceDomains: [
     "https://cdn.nodaro.ai",
     "https://assets.nodaro.ai",
     "https://*.r2.cloudflarestorage.com",
   ],
+  connectDomains: [config.PUBLIC_URL.replace(/\/+$/, "")],
 }
 
 /**

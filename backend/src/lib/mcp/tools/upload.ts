@@ -121,9 +121,16 @@ function errorResult(text: string) {
 
 export function registerUploadTools({ server, session }: RegisterUploadOpts): void {
   if (!passesGate(session, writeGate)) return
+  // upload_image_widget first — for hosts that render MCP UI resources
+  // (Claude.ai web), this is the lowest-friction path: file picker
+  // inside the chat iframe, no leave-tab dance, auto-announces the URL
+  // to the LLM on success. Falls back gracefully — if the host doesn't
+  // render widgets, the structuredContent still carries upload_url +
+  // public_url so the LLM can present them as plain links.
+  registerWidgetImageUpload(server, session)
   // Registration order matters: tools/list returns tools in this order
   // and LLMs weight earlier-listed tools more heavily when the
-  // descriptions are otherwise comparable. Handoff first because it's
+  // descriptions are otherwise comparable. Handoff next because it's
   // the only path that works in EVERY client (Claude.ai web/Android
   // sandbox, Cursor, Cline, Claude Desktop, Claude Code). Presigned
   // (curl PUT) second — only works in clients with unrestricted bash.
@@ -134,6 +141,98 @@ export function registerUploadTools({ server, session }: RegisterUploadOpts): vo
     registerChunkedUpload(server, session, meta)
     registerInlineUpload(server, session, meta)
   }
+}
+
+/**
+ * `upload_image_widget` — opens the in-iframe upload UI. Mints the same
+ * handoff token the static upload page uses, so the existing `POST
+ * /v1/upload-page/:token` endpoint receives the multipart from the
+ * widget without any new route. Once the upload lands, the widget
+ * itself calls `pushUserMessage("...uploaded at <url>...")` so the LLM
+ * picks the URL up on the next turn — no manual "done" needed.
+ */
+function registerWidgetImageUpload(server: McpServer, session: McpSession): void {
+  server.registerTool(
+    "upload_image_widget",
+    {
+      title: "Upload Image (in-chat widget)",
+      description:
+        "**PREFERRED for Claude.ai web** when the user needs to supply a photo. " +
+        "Opens an in-iframe file picker (works on phones — opens the camera or " +
+        "gallery natively). The widget uploads the file to Nodaro and announces " +
+        "the resulting public URL back to the chat automatically — the user only " +
+        "taps the picker once. Returns `upload_url` + `public_url` via " +
+        "structuredContent so the LLM can also present them as plain links if " +
+        "the host doesn't render the widget.\n\n" +
+        "Pass `purpose` to label the upload card (e.g. \"for the headshot app\") " +
+        "and to seed the announcement message — helps the LLM remember which " +
+        "downstream call this image was meant for.",
+      inputSchema: {
+        purpose: z
+          .string()
+          .max(120)
+          .optional()
+          .describe(
+            "Short hint shown on the upload card (e.g. 'product photo for catalog app').",
+          ),
+      },
+      outputSchema: {
+        upload_url: z.string(),
+        public_url: z.string(),
+        expires_in_seconds: z.number(),
+        prompt: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/upload-image",
+        ui: {
+          resourceUri: "ui://nodaro/widget/v3/upload-image",
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      const key = `uploads/handoff/image/${session.userId}/${randomUUID()}`
+      const expiresIn = 60 * 60 // 1 hour
+      const token = signUploadToken({
+        userId: session.userId,
+        key,
+        // Browser-handoff tokens don't bake the mime — the widget sends
+        // multipart and the server uses the form's reported Content-Type.
+        mime: "",
+        exp: Date.now() + expiresIn * 1000,
+        purpose: "handoff",
+        kind: "image",
+      })
+      const uploadUrl = `${config.PUBLIC_URL.replace(/\/+$/, "")}/v1/upload-page/${token}`
+      const publicUrl = `${config.R2_PUBLIC_URL}/${key}`
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text:
+              "Opened the upload widget for the user.\n\n" +
+              "When they pick a file the widget will upload it and post a " +
+              "follow-up chat message with this URL:\n  " +
+              publicUrl +
+              "\n\nWait for that announcement, then use the URL as the image " +
+              "input for the next step (modify_image / animate_image / " +
+              "run_app / etc.).",
+          },
+        ],
+        structuredContent: {
+          upload_url: uploadUrl,
+          public_url: publicUrl,
+          expires_in_seconds: expiresIn,
+          ...(args.purpose ? { prompt: args.purpose } : {}),
+        },
+      }
+    },
+  )
 }
 
 // ────────────────────────────────────────────────────────────────────
