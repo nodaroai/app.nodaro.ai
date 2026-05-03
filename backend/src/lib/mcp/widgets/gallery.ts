@@ -33,25 +33,28 @@ const GALLERY_CSS = `
   .header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .header .title { font-size: 13px; font-weight: 600; opacity: 0.85; }
   .header .count { font-size: 11px; opacity: 0.6; }
-  /* Denser grid — auto-fill at 100px so 4 columns fit comfortably on
-     phone (was 120px = 3 cols). [redacted-reference]'s gallery is 4-up. */
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
+  /* Grid density — minmax(140px, 1fr). 100px was too small (tiles
+     squished, ref overlays barely visible). 140 lets 3-up fit on a
+     standard 480px chat width with comfortable thumb-tap targets. */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
   .tile { position: relative; aspect-ratio: 1/1; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.05); cursor: pointer; }
   .tile img, .tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
-  /* Hover overlay — TWO affordances side-by-side: brand-pink Use pill
-     + dim Download icon. Mirrors [redacted-reference]'s hover state. Hidden on
-     touch devices (no hover) because the invisible-but-clickable
-     overlay was grabbing taps meant to open the tile. */
+  /* Hover overlay — TWO affordances aligned to the BOTTOM of the tile
+     (matches [redacted-reference]), so the buttons sit over the dark gradient and
+     don't obscure the image content. Hidden on touch devices (no hover)
+     because the invisible-but-clickable overlay was grabbing taps meant
+     to open the tile. */
   .hover-overlay {
     display: none;
     position: absolute;
     inset: 0;
-    align-items: center;
+    align-items: flex-end;
     justify-content: center;
     gap: 6px;
+    padding: 8px;
     opacity: 0;
     transition: opacity .15s;
-    background: linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(0,0,0,0.35) 100%);
+    background: linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(0,0,0,0.45) 100%);
     pointer-events: none;
   }
   .hover-overlay > * { pointer-events: auto; }
@@ -81,14 +84,14 @@ const GALLERY_CSS = `
   .dot.active { background: currentColor; transform: scale(1.4); }
   .pag-btn {
     display: flex; align-items: center; justify-content: center;
-    width: 24px; height: 24px;
-    border: 0; background: transparent; color: inherit;
-    border-radius: 50%; cursor: pointer; opacity: 0.6;
+    width: 30px; height: 30px;
+    border: 0; background: rgba(127,127,127,0.08); color: inherit;
+    border-radius: 50%; cursor: pointer; opacity: 0.85;
     transition: opacity .15s, background .15s;
   }
-  .pag-btn:hover:not(:disabled) { opacity: 1; background: rgba(127,127,127,0.12); }
-  .pag-btn:disabled { opacity: 0.25; cursor: default; }
-  .pag-btn svg { display: block; width: 12px; height: 12px; }
+  .pag-btn:hover:not(:disabled) { opacity: 1; background: rgba(127,127,127,0.18); }
+  .pag-btn:disabled { opacity: 0.35; cursor: default; background: transparent; }
+  .pag-btn svg { display: block; width: 16px; height: 16px; stroke-width: 2.5; }
   .footer { opacity: 0.6; font-size: 11px; text-align: center; }
   .empty { text-align: center; padding: 32px 0; opacity: 0.7; }
   /* Reference-asset overlay — small chained thumbnails in the tile's
@@ -178,32 +181,40 @@ const GALLERY_CSS = `
   }
   .detail .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; opacity: 0.75; }
   .detail .meta .badge { background: rgba(127,127,127,0.15); padding: 2px 8px; border-radius: 4px; }
-  .detail .actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .detail .actions .spacer { flex: 1; }
+  /* Action row — left text buttons (Animate / Edit / Suno follow-ups),
+     right icon-only utilities (Copy / Download / Recreate). Mirrors the
+     single-job widget shape exactly so detail view feels like the same
+     surface as a freshly-generated asset. */
+  .detail .actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .actions-left, .actions-right { display: flex; align-items: center; }
+  .actions-left { gap: 8px; }
+  .actions-right { gap: 2px; }
   /* Borderless action buttons — same calm Claude-style affordance the
      single-job widget uses. Subtle dim → bright on hover. */
-  button { padding: 6px 12px; border: none; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; opacity: 0.7; transition: opacity .15s, background .15s, color .15s; font-family: inherit; line-height: 1; }
+  button { padding: 6px 12px; border: none; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; opacity: 0.7; transition: opacity .15s, background .15s, color .15s; font-family: inherit; line-height: 1; display: inline-flex; align-items: center; gap: 6px; }
   button:hover { background: rgba(127,127,127,0.1); opacity: 1; }
-  /* Primary action — solid brand-pink fill (matches [redacted-reference]'s
-     lime-green Animate). Stands out clearly from the borderless
-     secondary buttons. */
-  button.primary {
-    background: #ff0073;
-    color: #fff;
-    font-weight: 600;
-    opacity: 1;
-    padding: 7px 14px;
-  }
-  button.primary:hover { background: #d6005f; }
-  /* Use-as-reference (now a secondary action since Animate/Edit are
-     primary): brand-pink TEXT only, slightly stronger than borderless. */
-  button.accent { color: #ff0073; opacity: 0.9; font-weight: 500; }
-  button.accent:hover { background: rgba(255, 0, 115, 0.1); opacity: 1; }
-  /* Icon-only utility buttons (download / open-in-app). Tighter padding. */
-  button.icon-btn { padding: 6px; opacity: 0.6; }
+  /* Icon-only utility buttons (copy / download / recreate). Tighter padding. */
+  button.icon-btn { padding: 6px; gap: 0; opacity: 0.6; }
   button.icon-btn:hover { opacity: 1; }
   button.icon-btn svg { display: block; width: 14px; height: 14px; }
   button svg.lead { display: block; width: 12px; height: 12px; }
+  /* Fullscreen mode — when the host promotes the iframe to fullscreen
+     (after a tile tap), strip card chrome and expand the detail to fill
+     the viewport. Mobile gets a top inset so the host's title bar
+     doesn't overlap the preview (same trick as single-job widget). */
+  :root { --fs-top-pad: 90px; }
+  body.fullscreen { padding: var(--fs-top-pad) 0 0 0; margin: 0; height: 100dvh; overflow-y: auto; overflow-x: hidden; }
+  body.fullscreen .card { height: calc(100dvh - var(--fs-top-pad)); border: 0; background: transparent; padding: 12px; border-radius: 0; gap: 12px; }
+  body.fullscreen .preview img,
+  body.fullscreen .preview video {
+    max-height: calc(100dvh - var(--fs-top-pad) - 200px);
+    border-radius: 0;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    /* Desktop hosts overlay the close affordance instead of fixing a
+       header bar — drop the mobile top inset. */
+    :root { --fs-top-pad: 0px; }
+  }
 `
 
 export function buildGalleryWidgetTemplate(): string {
@@ -254,14 +265,70 @@ ${uiProtocolShim()}
     <line x1="10" y1="14" x2="21" y2="3"/>
   </svg>
 </template>
+<template id="tpl-icon-edit">
+  <svg class="lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+</template>
+<template id="tpl-icon-copy">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <rect x="9" y="9" width="13" height="13" rx="2"/>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+  </svg>
+</template>
+<template id="tpl-icon-recreate">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+    <path d="M21 3v5h-5"/>
+    <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+    <path d="M3 21v-5h5"/>
+  </svg>
+</template>
 <script>
   (function() {
     var ITEMS_PER_PAGE = 12;
     var data = { items: [], nextCursor: null, totalCount: 0 };
-    var state = { page: 0, view: 'grid', selectedId: null };
+    // displayMode tracks the host iframe's current size mode (inline vs
+    // fullscreen). The detail view is FULLSCREEN-ONLY (matches [redacted-reference]
+    // and our single-job widget). When the host returns the iframe to
+    // inline (user closes via X overlay), selectedId clears and we render
+    // the grid again.
+    var state = { page: 0, displayMode: 'inline', selectedId: null };
     var root = document.getElementById('root');
 
+    function applyDisplayMode() {
+      document.body.classList.toggle('fullscreen', state.displayMode === 'fullscreen');
+    }
+    // Initial host context (from the ui/initialize handshake).
+    window.addEventListener('mcp-ready', function(e) {
+      var ctx = (e && e.detail) || window.__MCP_HOST_CONTEXT__ || {};
+      if (ctx.displayMode) state.displayMode = ctx.displayMode;
+      applyDisplayMode();
+    });
+    // Host-driven changes (user closes fullscreen via the host's X overlay).
+    window.addEventListener('mcp-host-context-changed', function(e) {
+      var ctx = (e.detail && e.detail.hostContext) || e.detail || {};
+      if (ctx.displayMode) {
+        var was = state.displayMode;
+        state.displayMode = ctx.displayMode;
+        // Closing fullscreen returns us to the grid — clear the selection.
+        if (was === 'fullscreen' && ctx.displayMode === 'inline') {
+          state.selectedId = null;
+        }
+        applyDisplayMode();
+        render();
+      }
+    });
+
     function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+
+    // Detail view shows ONLY when fullscreen mode is active AND a tile
+    // has been selected. Anywhere else (inline mode, no selection)
+    // shows the grid.
+    function isDetailView() {
+      return state.displayMode === 'fullscreen' && state.selectedId !== null;
+    }
 
     function render() {
       clear(root);
@@ -270,7 +337,7 @@ ${uiProtocolShim()}
         empty.className = 'empty';
         empty.textContent = 'No items yet.';
         root.appendChild(empty);
-      } else if (state.view === 'detail') {
+      } else if (isDetailView()) {
         renderDetail();
       } else {
         renderGrid();
@@ -316,9 +383,24 @@ ${uiProtocolShim()}
         tile.className = 'tile';
         tile.dataset.id = item.jobId;
         tile.addEventListener('click', function() {
-          state.view = 'detail';
           state.selectedId = item.jobId;
-          render();
+          // Promote to fullscreen — detail view is fullscreen-only,
+          // matching [redacted-reference] + our single-job widget. Trust the host's
+          // applied mode (some hosts may reject fullscreen and stay
+          // inline; the displayMode-changed listener catches that).
+          if (window.NodaroMCP && window.NodaroMCP.requestDisplayMode) {
+            window.NodaroMCP.requestDisplayMode('fullscreen').then(function(result) {
+              var applied = (result && result.displayMode) || 'fullscreen';
+              state.displayMode = applied;
+              applyDisplayMode();
+              render();
+            });
+          } else {
+            // Standalone / non-Apps client — render the detail inline.
+            state.displayMode = 'fullscreen';
+            applyDisplayMode();
+            render();
+          }
         });
 
         if (item.kind === 'video') {
@@ -440,6 +522,19 @@ ${uiProtocolShim()}
         tile.appendChild(overlay);
         grid.appendChild(tile);
       });
+      // Pad incomplete final page with invisible placeholder tiles so
+      // the grid keeps the same height across pages — without this the
+      // last page (e.g. 4 items in a 12-slot grid) shrinks vertically
+      // and the pagination row jumps up. Placeholders are aria-hidden +
+      // pointer-events:none so they don't capture taps or trip a11y.
+      for (var pad = pageItems.length; pad < ITEMS_PER_PAGE; pad++) {
+        var placeholder = document.createElement('div');
+        placeholder.className = 'tile';
+        placeholder.style.visibility = 'hidden';
+        placeholder.style.pointerEvents = 'none';
+        placeholder.setAttribute('aria-hidden', 'true');
+        grid.appendChild(placeholder);
+      }
       card.appendChild(grid);
 
       // Pagination — only render when more than one page. Single-page
@@ -498,15 +593,18 @@ ${uiProtocolShim()}
 
     function renderDetail() {
       var item = data.items.find(function(it) { return it.jobId === state.selectedId; });
-      if (!item) { state.view = 'grid'; render(); return; }
+      if (!item) { state.selectedId = null; render(); return; }
 
       // Wrap the detail view in the same card shell as the grid view —
       // visual continuity when toggling between modes.
       var card = document.createElement('div');
       card.className = 'card';
 
-      // Header: Back button on the left, model/aspect-style title on
-      // the right. Mirrors [redacted-reference]'s "Generations" → asset header.
+      // Header: Back button on the left, kind title centered. The back
+      // button asks the host to drop back to inline mode, which our
+      // displayMode-changed listener catches → clears selectedId →
+      // re-renders the grid. Hosts that don't support requestDisplayMode
+      // get the local fallback (manual state reset).
       var header = document.createElement('div');
       header.className = 'header';
       var backBtn = document.createElement('button');
@@ -515,7 +613,18 @@ ${uiProtocolShim()}
       backBtn.setAttribute('aria-label', 'Back to grid');
       var backIcon = document.getElementById('tpl-chev-left');
       if (backIcon && backIcon.content) backBtn.appendChild(backIcon.content.cloneNode(true));
-      backBtn.addEventListener('click', function() { state.view = 'grid'; state.selectedId = null; render(); });
+      backBtn.addEventListener('click', function() {
+        if (window.NodaroMCP && window.NodaroMCP.requestDisplayMode) {
+          window.NodaroMCP.requestDisplayMode('inline').then(function() {
+            // displayMode-changed listener handles state reset + render.
+          });
+        } else {
+          state.displayMode = 'inline';
+          state.selectedId = null;
+          applyDisplayMode();
+          render();
+        }
+      });
       header.appendChild(backBtn);
       var headTitle = document.createElement('div');
       headTitle.className = 'title';
@@ -611,103 +720,123 @@ ${uiProtocolShim()}
       }
       card.appendChild(meta);
 
-      // Action row — primary CTA on the left (kind-aware), utility
-      // buttons (Download / Use / Open) on the right.
+      // Action row — mirrors the single-job widget exactly: kind-
+      // specific text buttons on the left (Animate / Edit for image,
+      // provider-specific follow-ups for audio), icon-only utilities
+      // on the right (Copy / Download / Recreate). No solid-fill
+      // primary — calm Claude-style borderless throughout.
       var actions = document.createElement('div');
       actions.className = 'actions';
 
-      // Primary CTA depends on kind:
-      //   image → Animate (most common follow-up)
-      //   video → Edit (extend / modify)
-      //   audio → Use as reference (fallback — provider-specific
-      //           follow-ups happen in the single-job widget after
-      //           generation, not here)
-      var primary = document.createElement('button');
-      primary.className = 'primary';
-      var primaryIcon = document.getElementById('tpl-icon-play');
-      if (primaryIcon && primaryIcon.content) {
-        var leadSvg = primaryIcon.content.cloneNode(true);
-        primary.appendChild(leadSvg);
+      var actionsLeft = document.createElement('div');
+      actionsLeft.className = 'actions-left';
+      actions.appendChild(actionsLeft);
+
+      // Helper: build a text+icon button with the same shape as the
+      // single-job widget's Animate / Edit buttons.
+      function makeTextBtn(label, iconTplId, onClick) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.title = label;
+        if (iconTplId) {
+          var tpl = document.getElementById(iconTplId);
+          if (tpl && tpl.content) b.appendChild(tpl.content.cloneNode(true));
+        }
+        var span = document.createElement('span');
+        span.textContent = label;
+        b.appendChild(span);
+        b.addEventListener('click', onClick);
+        return b;
       }
-      var primaryLabel = document.createElement('span');
-      var primaryAction;
+
+      // Kind-specific left-side text buttons. Mirrors single-job:
+      //   image → Animate + Edit
+      //   video → Edit
+      //   audio → provider-specific (Suno: Stems/Extend/Cover/Music
+      //           video; ElevenLabs: Change voice / Dub)
+      function pushFollowup(prefix, action) {
+        if (!window.NodaroMCP || !window.NodaroMCP.pushUserMessage) return;
+        var ctx = {
+          asset_url: item.assetUrl,
+          'original prompt': item.prompt,
+          model: item.model,
+          action: action,
+        };
+        window.NodaroMCP.pushUserMessage(
+          prefix + ': ' + JSON.stringify(ctx) +
+          '\\n[loop ask me using q/a as needed]'
+        );
+      }
+
       if (item.kind === 'image') {
-        primaryLabel.textContent = 'Animate';
-        primaryAction = 'animate this image: ';
+        actionsLeft.appendChild(makeTextBtn('Animate', 'tpl-icon-play', function() {
+          pushFollowup('animate this image', 'animate_image');
+        }));
+        actionsLeft.appendChild(makeTextBtn('Edit', 'tpl-icon-edit', function() {
+          pushFollowup('modify this image', 'modify_image');
+        }));
       } else if (item.kind === 'video') {
-        primaryLabel.textContent = 'Edit';
-        primaryAction = 'edit this video: ';
-      } else {
-        primaryLabel.textContent = 'Use';
-        primaryAction = 'use this audio: ';
+        actionsLeft.appendChild(makeTextBtn('Edit', 'tpl-icon-edit', function() {
+          pushFollowup('edit this video', 'modify_video');
+        }));
+      } else if (item.kind === 'audio') {
+        var model = item.model || '';
+        if (model === 'suno' || model === 'suno-v5') {
+          actionsLeft.appendChild(makeTextBtn('Stems', null, function() {
+            pushFollowup('separate stems from this Suno track', 'suno_separate_stem');
+          }));
+          actionsLeft.appendChild(makeTextBtn('Extend', null, function() {
+            pushFollowup('extend this Suno track', 'suno_extend');
+          }));
+          actionsLeft.appendChild(makeTextBtn('Cover', null, function() {
+            pushFollowup('cover this Suno track', 'suno_cover');
+          }));
+        } else if (model.indexOf('elevenlabs-') === 0 && model !== 'elevenlabs-sfx') {
+          actionsLeft.appendChild(makeTextBtn('Change voice', null, function() {
+            pushFollowup('change the voice on this audio', 'voice_changer');
+          }));
+          actionsLeft.appendChild(makeTextBtn('Dub', null, function() {
+            pushFollowup('dub this audio into another language', 'dubbing');
+          }));
+        }
+        // Other audio kinds (minimax music, simple SFX) get no
+        // left-side actions — same as single-job widget.
       }
-      primary.appendChild(primaryLabel);
-      primary.addEventListener('click', function() {
-        if (window.NodaroMCP && window.NodaroMCP.pushUserMessage) {
-          window.NodaroMCP.pushUserMessage(
-            primaryAction + JSON.stringify({
-              asset_id: item.jobId,
-              asset_url: item.assetUrl,
-              model: item.model,
-              kind: item.kind,
-            }) +
-            '\\n[loop ask me using q/a as needed]'
-          );
+
+      // Right-side icon utilities — Copy prompt / Download / Recreate.
+      // Same icon set + behavior as the single-job widget.
+      var actionsRight = document.createElement('div');
+      actionsRight.className = 'actions-right';
+      actions.appendChild(actionsRight);
+
+      function makeIconBtn(title, tplId, onClick) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'icon-btn';
+        b.title = title;
+        b.setAttribute('aria-label', title);
+        var tpl = document.getElementById(tplId);
+        if (tpl && tpl.content) b.appendChild(tpl.content.cloneNode(true));
+        b.addEventListener('click', onClick);
+        return b;
+      }
+
+      actionsRight.appendChild(makeIconBtn('Copy prompt', 'tpl-icon-copy', function() {
+        if (!item.prompt) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(item.prompt).catch(function() {});
         }
-      });
-      actions.appendChild(primary);
-
-      // "Use as reference" — accent (pink-text) secondary. Different
-      // semantic from primary: passes the asset as REFERENCE input for
-      // the next op, not as the subject.
-      var useBtn = document.createElement('button');
-      useBtn.className = 'accent';
-      useBtn.textContent = 'Use as reference';
-      useBtn.addEventListener('click', function() {
-        if (window.NodaroMCP.pushUserMessage) {
-          window.NodaroMCP.pushUserMessage(
-            'Use the ' + item.kind + ' with id ' + item.jobId +
-            ' as a reference. The user clicked the Use button.' +
-            // Source uses double-backslash-n; the TS template literal
-            // collapses it to single-backslash-n in the rendered JS, so
-            // the inner string carries a real escape sequence (a raw
-            // newline would break the single-quoted JS string).
-            '\\n[loop ask me using q/a as needed]'
-          );
-        }
-      });
-      actions.appendChild(useBtn);
-
-      var spacer2 = document.createElement('div');
-      spacer2.className = 'spacer';
-      actions.appendChild(spacer2);
-
-      // Right-side icon utilities — Download, Open in Nodaro.
-      var dlBtn = document.createElement('button');
-      dlBtn.className = 'icon-btn';
-      dlBtn.title = 'Download';
-      dlBtn.setAttribute('aria-label', 'Download');
-      var dlTpl2 = document.getElementById('tpl-download-icon');
-      if (dlTpl2 && dlTpl2.content) dlBtn.appendChild(dlTpl2.content.cloneNode(true));
-      dlBtn.addEventListener('click', function() {
+      }));
+      actionsRight.appendChild(makeIconBtn('Download', 'tpl-download-icon', function() {
         if (window.NodaroMCP && window.NodaroMCP.openLink) {
           window.NodaroMCP.openLink(item.assetUrl);
         }
-      });
-      actions.appendChild(dlBtn);
-
-      var openBtn = document.createElement('button');
-      openBtn.className = 'icon-btn';
-      openBtn.title = 'Open in Nodaro gallery';
-      openBtn.setAttribute('aria-label', 'Open in Nodaro');
-      var openTpl = document.getElementById('tpl-icon-external');
-      if (openTpl && openTpl.content) openBtn.appendChild(openTpl.content.cloneNode(true));
-      openBtn.addEventListener('click', function() {
-        if (window.NodaroMCP && window.NodaroMCP.openLink) {
-          window.NodaroMCP.openLink('https://app.nodaro.ai/gallery');
+      }));
+      actionsRight.appendChild(makeIconBtn('Recreate', 'tpl-icon-recreate', function() {
+        if (item.prompt && window.NodaroMCP && window.NodaroMCP.pushUserMessage) {
+          window.NodaroMCP.pushUserMessage(item.prompt);
         }
-      });
-      actions.appendChild(openBtn);
+      }));
 
       card.appendChild(actions);
       root.appendChild(card);
