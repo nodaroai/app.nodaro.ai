@@ -197,6 +197,13 @@ export function uiProtocolShim(): string {
           }).catch(function(err) {
             console.warn('[NodaroMCP.pushUserMessage] host rejected ui/message:', err && err.message);
           });
+        },
+        // Force a ui/notifications/size-changed emission. Use after view
+        // transitions (e.g. gallery grid → detail) where the body height
+        // changes but ResizeObserver may not fire fast enough for the host
+        // to repaint at the new size before the user notices the lag.
+        notifySizeChange: function() {
+          setTimeout(maybeEmitSize, 0);
         }
       };
     })();

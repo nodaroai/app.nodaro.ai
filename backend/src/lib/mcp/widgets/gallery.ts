@@ -35,6 +35,21 @@ const GALLERY_CSS = `
   .dot.active { background: currentColor; }
   .footer { margin-top: 12px; opacity: 0.7; font-size: 12px; text-align: center; }
   .empty { text-align: center; padding: 32px 0; opacity: 0.7; }
+  /* Audio tile: <audio> has no visual thumbnail and <img src=mp3> renders
+     a broken-image glyph. Replace with an icon + clamped label tile so
+     the kind reads at-a-glance and the prompt hint shows underneath. */
+  .audio-tile {
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; padding: 8px; text-align: center;
+    background: linear-gradient(135deg, rgba(91,157,255,0.18), rgba(142,107,255,0.18));
+  }
+  .audio-tile .audio-icon { width: 28px; height: 28px; opacity: 0.75; }
+  .audio-tile .audio-label {
+    font-size: 11px; line-height: 1.2; opacity: 0.85;
+    overflow: hidden; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word;
+  }
   .detail { padding: 16px; }
   .detail .preview { width: 100%; max-height: 70vh; }
   .detail .preview img, .detail .preview video, .detail .preview audio { width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
@@ -58,6 +73,16 @@ ${uiProtocolShim()}
 </head>
 <body>
 <div id="root"><div class="empty">Loading…</div></div>
+<!-- Static SVG template so the per-tile script can clone .content
+     instead of using createElementNS or innerHTML. -->
+<template id="tpl-audio-tile">
+  <div class="audio-tile">
+    <svg class="audio-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+    </svg>
+    <span class="audio-label"></span>
+  </div>
+</template>
 <script>
   (function() {
     var ITEMS_PER_PAGE = 12;
@@ -74,10 +99,17 @@ ${uiProtocolShim()}
         empty.className = 'empty';
         empty.textContent = 'No items yet.';
         root.appendChild(empty);
-        return;
+      } else if (state.view === 'detail') {
+        renderDetail();
+      } else {
+        renderGrid();
       }
-      if (state.view === 'detail') renderDetail();
-      else renderGrid();
+      // View transitions (grid → detail and back) change body height
+      // significantly. Force a size emit so the host shrinks/grows the
+      // iframe to fit the new content instead of leaving stale chrome.
+      if (window.NodaroMCP && window.NodaroMCP.notifySizeChange) {
+        window.NodaroMCP.notifySizeChange();
+      }
     }
 
     function renderGrid() {
@@ -97,7 +129,6 @@ ${uiProtocolShim()}
           render();
         });
 
-        var media;
         if (item.kind === 'video') {
           // If the backend has a thumbnail URL, render it as an <img>
           // (cleanest result — no play-button overlay, no decoder cost).
@@ -106,6 +137,7 @@ ${uiProtocolShim()}
           // actual frame instead of the browser's blank/play-button
           // poster. playsinline keeps iOS Safari from auto-launching the
           // native fullscreen player when the iframe scrolls into view.
+          var media;
           if (item.thumbnailUrl) {
             media = document.createElement('img');
             media.setAttribute('src', item.thumbnailUrl);
@@ -121,13 +153,25 @@ ${uiProtocolShim()}
               try { media.currentTime = 0.001; } catch (e) {}
             });
           }
+          tile.appendChild(media);
+        } else if (item.kind === 'audio') {
+          // Audio has no visual thumbnail; previously fell through to
+          // <img src=audio.mp3> which rendered as a broken image glyph.
+          // Render an icon + prompt-label tile instead.
+          var audioTpl = document.getElementById('tpl-audio-tile');
+          if (audioTpl && audioTpl.content) {
+            var node = audioTpl.content.cloneNode(true);
+            var label = node.querySelector('.audio-label');
+            if (label) label.textContent = item.prompt || item.model || 'Audio';
+            tile.appendChild(node);
+          }
         } else {
-          media = document.createElement('img');
-          media.setAttribute('src', item.thumbnailUrl || item.assetUrl);
-          media.setAttribute('alt', '');
-          media.setAttribute('loading', 'lazy');
+          var img = document.createElement('img');
+          img.setAttribute('src', item.thumbnailUrl || item.assetUrl);
+          img.setAttribute('alt', '');
+          img.setAttribute('loading', 'lazy');
+          tile.appendChild(img);
         }
-        tile.appendChild(media);
 
         var useBtn = document.createElement('div');
         useBtn.className = 'use';
@@ -190,9 +234,19 @@ ${uiProtocolShim()}
       preview.className = 'preview';
       preview.style.marginTop = '12px';
       var media;
-      if (item.kind === 'video') { media = document.createElement('video'); media.controls = true; }
-      else if (item.kind === 'audio') { media = document.createElement('audio'); media.controls = true; }
-      else { media = document.createElement('img'); media.setAttribute('alt', ''); }
+      if (item.kind === 'video') {
+        media = document.createElement('video');
+        media.controls = true;
+        media.setAttribute('preload', 'metadata');
+        media.setAttribute('playsinline', '');
+      } else if (item.kind === 'audio') {
+        media = document.createElement('audio');
+        media.controls = true;
+        media.setAttribute('preload', 'metadata');
+      } else {
+        media = document.createElement('img');
+        media.setAttribute('alt', '');
+      }
       media.setAttribute('src', item.assetUrl);
       preview.appendChild(media);
       detail.appendChild(preview);
