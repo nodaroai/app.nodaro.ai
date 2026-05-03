@@ -144,6 +144,15 @@ const SHARED_CSS = `
     /* Desktop hosts overlay the close affordance on top of the iframe
        rather than fixing a header bar — drop the mobile top inset. */
     :root { --fs-top-pad: 0px; }
+    /* Card shell is mobile-only — on desktop the image sits flush in
+       the chat without the tinted box (was eating image width and
+       added unwanted chrome that didn't exist before #1961). */
+    .card {
+      border: 0;
+      background: transparent;
+      border-radius: 0;
+      padding: 0;
+    }
     .preview img, .preview video {
       width: auto;
       height: auto;
