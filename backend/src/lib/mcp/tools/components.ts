@@ -42,7 +42,16 @@ export function registerComponents({
       {
         title: "List Components",
         description:
-          'Browse Nodaro components (reusable workflow snippets). Set `scope: "public"` (default) for the marketplace, or `scope: "mine"` for the caller\'s own components.',
+          'Browse Nodaro components — reusable workflow snippets users have ' +
+          'published as building blocks (vs `list_apps` which is end-user ' +
+          'workflows). Components compose with other workflows; apps are ' +
+          'standalone runs.\n\n' +
+          '**When to call this tool:** if the user references a specific ' +
+          'component by name, or asks for a multi-step pipeline that maps to a ' +
+          'known component (face-prep, prompt-rewriter, etc.). For one-off ' +
+          'requests prefer `list_apps` first — apps are the user-facing surface.\n\n' +
+          'Set `scope: "public"` (default) for the marketplace, or `scope: "mine"` ' +
+          'for the caller\'s own components.',
         inputSchema: {
           scope: z
             .enum(["public", "mine"])

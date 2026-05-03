@@ -42,7 +42,21 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
       {
         title: "List Apps",
         description:
-          'Browse Nodaro apps. Set `scope: "public"` (default) for the public marketplace, or `scope: "mine"` for the caller\'s own published apps. Apps are end-user workflows that can be run with `run_app`.',
+          'Browse Nodaro apps — user-published workflows that do things the verb ' +
+          'tools (generate_image / modify_image / etc.) don\'t cover on their own. ' +
+          'Examples of apps live on the marketplace: "zebrify" (dress a subject as ' +
+          'a zebra), "draw-me" (turn a photo into a sketch), "photo-shoot" ' +
+          '(studio-lit portrait), "tidy-up" (clean up a room), "traveler" (place ' +
+          'subject in a new location), "storyboard", "hair-styler", "jump", ' +
+          '"dance", "material-letters". The full list grows over time — search by ' +
+          'topic to find more.\n\n' +
+          '**When to call this tool:** if the user asks for ANYTHING that doesn\'t ' +
+          'match a direct verb tool — especially novel transformations, themed ' +
+          'edits, or composite pipelines — search apps first with the relevant ' +
+          'term before answering "I can\'t do that". Then call `get_app_inputs` ' +
+          'on the chosen slug to learn what it needs, and `run_app` to execute.\n\n' +
+          'Set `scope: "public"` (default) for the marketplace, or `scope: "mine"` ' +
+          'for the caller\'s own published apps.',
         inputSchema: {
           scope: z
             .enum(["public", "mine"])
