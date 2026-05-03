@@ -89,11 +89,24 @@ const UPLOAD_CSS = `
     padding: 28px 16px;
     text-align: center;
     cursor: pointer;
-    transition: border-color .15s, background .15s;
+    transition: border-color .15s, background .15s, opacity .15s;
   }
-  .drop:hover, .drop.over {
+  .drop:not(.loading):hover, .drop:not(.loading).over {
     border-color: #ff0073;
     background: rgba(255, 0, 115, 0.04);
+  }
+  /* Loading state — drop zone is dimmed and not clickable until the
+     tool's structuredContent (slot URLs) arrives. Without a clear
+     visual the user could tap, get a silent "Not ready" status, and
+     think the widget is broken. */
+  .drop.loading {
+    opacity: 0.5;
+    cursor: wait;
+    border-style: solid;
+    border-color: rgba(127,127,127,0.25);
+  }
+  .drop.loading input[type="file"] {
+    pointer-events: none;
   }
   .drop input[type="file"] {
     position: absolute; inset: 0;
@@ -176,6 +189,23 @@ ${uiProtocolShim()}
     var fileEl = document.getElementById('file');
     var statusEl = document.getElementById('status');
     var listEl = document.getElementById('file-list');
+
+    // Drop zone starts in "loading" state — dimmed + not clickable —
+    // until the host delivers structuredContent (slot URLs) via the
+    // mcp-tool-result event. Without this the user could tap the
+    // active-looking drop zone, get a tiny "Not ready" status text
+    // they easily miss, and think the widget is broken (this happens
+    // in the Claude Android app where mcp-tool-result delivery has
+    // slightly different timing / mechanism).
+    dropEl.classList.add('loading');
+    var dropTitleEl = dropEl.querySelector('.title');
+    var initialTitle = dropTitleEl ? dropTitleEl.textContent : '';
+    if (dropTitleEl) dropTitleEl.textContent = 'Loading…';
+
+    function markReady() {
+      dropEl.classList.remove('loading');
+      if (dropTitleEl) dropTitleEl.textContent = initialTitle;
+    }
 
     function setStatus(text, isError) {
       statusEl.textContent = text || '';
@@ -450,7 +480,21 @@ ${uiProtocolShim()}
         slots = [{ upload_url: sc.upload_url, public_url: sc.public_url, taken: false }];
       }
       if (sc.prompt) prompt = sc.prompt;
+      if (slots.length > 0) markReady();
     });
+
+    // Defensive: if the host doesn't fire mcp-tool-result for some
+    // reason (Claude Android app's WebView has been observed dropping
+    // it), the drop zone would stay locked forever. After 8 seconds
+    // unlock it anyway and surface the issue — the user will then see
+    // a clear "Upload failed" if they pick a file with no slots, vs
+    // the silent "Loading…" forever.
+    setTimeout(function() {
+      if (slots.length === 0) {
+        markReady();
+        setStatus('Upload widget did not receive its credentials from the host. Pick a file to retry.', true);
+      }
+    }, 8000);
   })();
 </script>
 </body></html>`
