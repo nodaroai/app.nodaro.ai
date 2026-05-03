@@ -15,25 +15,81 @@ const GALLERY_CSS = `
   :root { color-scheme: light dark; }
   * { box-sizing: border-box; }
   body { margin: 0; padding: 12px; font: 13px system-ui, sans-serif; background: transparent; color: inherit; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+  /* Card shell — subtle border + tinted bg + rounded corners frame
+     the gallery as a discrete widget against the host chat (matches
+     [redacted-reference]'s grid-shell pattern + our single-job widget). */
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border: 1px solid rgba(127,127,127,0.18);
+    background: rgba(127,127,127,0.04);
+    border-radius: 14px;
+    padding: 12px;
+  }
+  /* Header row — small label + count on left, the count helps the
+     user gauge how much they have ([redacted-reference]'s "Generations" title
+     pattern, but with a count). */
+  .header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .header .title { font-size: 13px; font-weight: 600; opacity: 0.85; }
+  .header .count { font-size: 11px; opacity: 0.6; }
+  /* Denser grid — auto-fill at 100px so 4 columns fit comfortably on
+     phone (was 120px = 3 cols). [redacted-reference]'s gallery is 4-up. */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
   .tile { position: relative; aspect-ratio: 1/1; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.05); cursor: pointer; }
   .tile img, .tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
-  /* Tile Use pill — hover-only affordance. Hidden on touch devices
-     (no hover) because the invisible-but-clickable pill was grabbing
-     taps meant for opening the tile in detail view. Mobile users get
-     the prominent "Use as reference" button inside the detail view
-     instead. Brand pink (#ff0073) matches the detail-view primary
-     button + favorite star. */
-  .use { display: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 4px 12px; background: #ff0073; color: #fff; border-radius: 999px; font-weight: 600; font-size: 12px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: auto; }
-  @media (hover: hover) and (pointer: fine) {
-    .use { display: block; }
-    .tile:hover .use { opacity: 1; }
-    .use:hover { transform: translate(-50%, -50%) scale(1.05); }
+  /* Hover overlay — TWO affordances side-by-side: brand-pink Use pill
+     + dim Download icon. Mirrors [redacted-reference]'s hover state. Hidden on
+     touch devices (no hover) because the invisible-but-clickable
+     overlay was grabbing taps meant to open the tile. */
+  .hover-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity .15s;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(0,0,0,0.35) 100%);
+    pointer-events: none;
   }
-  .pagination { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(127,127,127,0.3); cursor: pointer; }
-  .dot.active { background: currentColor; }
-  .footer { margin-top: 12px; opacity: 0.7; font-size: 12px; text-align: center; }
+  .hover-overlay > * { pointer-events: auto; }
+  .use { padding: 4px 14px; background: #ff0073; color: #fff; border-radius: 999px; font-weight: 600; font-size: 12px; transition: transform .15s; cursor: pointer; line-height: 1.4; }
+  .use:hover { transform: scale(1.05); }
+  .tile-download {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px;
+    background: rgba(0,0,0,0.55); color: #fff;
+    border-radius: 999px; cursor: pointer; transition: background .15s;
+  }
+  .tile-download:hover { background: rgba(0,0,0,0.75); }
+  .tile-download svg { display: block; width: 14px; height: 14px; }
+  @media (hover: hover) and (pointer: fine) {
+    .hover-overlay { display: flex; }
+    .tile:hover .hover-overlay { opacity: 1; }
+  }
+  /* Pagination — [redacted-reference]-style pill: prev chevron, dots, next chevron.
+     Whole control sits in a single rounded shell so it reads as ONE
+     widget instead of three. */
+  .pagination {
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    margin-top: 4px;
+  }
+  .pagination .dots { display: flex; gap: 6px; padding: 4px 6px; align-items: center; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(127,127,127,0.35); cursor: pointer; transition: background .15s, transform .15s; }
+  .dot.active { background: currentColor; transform: scale(1.4); }
+  .pag-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px;
+    border: 0; background: transparent; color: inherit;
+    border-radius: 50%; cursor: pointer; opacity: 0.6;
+    transition: opacity .15s, background .15s;
+  }
+  .pag-btn:hover:not(:disabled) { opacity: 1; background: rgba(127,127,127,0.12); }
+  .pag-btn:disabled { opacity: 0.25; cursor: default; }
+  .pag-btn svg { display: block; width: 12px; height: 12px; }
+  .footer { opacity: 0.6; font-size: 11px; text-align: center; }
   .empty { text-align: center; padding: 32px 0; opacity: 0.7; }
   /* Audio tile: <audio> has no visual thumbnail and <img src=mp3> renders
      a broken-image glyph. Replace with an icon + clamped label tile so
@@ -83,6 +139,23 @@ ${uiProtocolShim()}
     <span class="audio-label"></span>
   </div>
 </template>
+<template id="tpl-download-icon">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="7 10 12 15 17 10"/>
+    <line x1="12" y1="15" x2="12" y2="3"/>
+  </svg>
+</template>
+<template id="tpl-chev-left">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="15 18 9 12 15 6"/>
+  </svg>
+</template>
+<template id="tpl-chev-right">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="9 18 15 12 9 6"/>
+  </svg>
+</template>
 <script>
   (function() {
     var ITEMS_PER_PAGE = 12;
@@ -116,6 +189,27 @@ ${uiProtocolShim()}
       var totalPages = Math.max(1, Math.ceil(data.items.length / ITEMS_PER_PAGE));
       var start = state.page * ITEMS_PER_PAGE;
       var pageItems = data.items.slice(start, start + ITEMS_PER_PAGE);
+
+      // Card shell — wraps everything (header + grid + pagination + footer).
+      var card = document.createElement('div');
+      card.className = 'card';
+
+      // Header row: "Gallery" title + item-count subtitle. Establishes
+      // the widget identity inside the host chat ([redacted-reference] uses the
+      // same pattern with a "Generations" title).
+      var header = document.createElement('div');
+      header.className = 'header';
+      var title = document.createElement('div');
+      title.className = 'title';
+      title.textContent = 'Gallery';
+      var count = document.createElement('div');
+      count.className = 'count';
+      count.textContent =
+        data.items.length +
+        (data.nextCursor ? ' shown · ' + data.totalCount + '+ total' : ' total');
+      header.appendChild(title);
+      header.appendChild(count);
+      card.appendChild(header);
 
       var grid = document.createElement('div');
       grid.className = 'grid';
@@ -173,6 +267,12 @@ ${uiProtocolShim()}
           tile.appendChild(img);
         }
 
+        // Hover overlay: gradient at bottom + Use pill (centered) +
+        // Download icon (right). Both stop propagation so a tap on the
+        // overlay doesn't open the detail view.
+        var overlay = document.createElement('div');
+        overlay.className = 'hover-overlay';
+
         var useBtn = document.createElement('div');
         useBtn.className = 'use';
         useBtn.textContent = 'Use';
@@ -194,28 +294,79 @@ ${uiProtocolShim()}
             );
           }
         });
-        tile.appendChild(useBtn);
+        overlay.appendChild(useBtn);
 
+        var dlBtn = document.createElement('div');
+        dlBtn.className = 'tile-download';
+        dlBtn.title = 'Download';
+        dlBtn.setAttribute('aria-label', 'Download');
+        var dlTpl = document.getElementById('tpl-download-icon');
+        if (dlTpl && dlTpl.content) dlBtn.appendChild(dlTpl.content.cloneNode(true));
+        dlBtn.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          if (window.NodaroMCP && window.NodaroMCP.openLink) {
+            window.NodaroMCP.openLink(item.assetUrl);
+          }
+        });
+        overlay.appendChild(dlBtn);
+
+        tile.appendChild(overlay);
         grid.appendChild(tile);
       });
-      root.appendChild(grid);
+      card.appendChild(grid);
 
-      var pagination = document.createElement('div');
-      pagination.className = 'pagination';
-      for (var i = 0; i < totalPages; i++) {
-        var dot = document.createElement('div');
-        dot.className = 'dot' + (i === state.page ? ' active' : '');
-        dot.dataset.page = String(i);
-        ;(function(idx) { dot.addEventListener('click', function() { state.page = idx; render(); }); })(i);
-        pagination.appendChild(dot);
+      // Pagination — only render when more than one page. Single-page
+      // gallery doesn't need the chrome (was just a single dot).
+      if (totalPages > 1) {
+        var pagination = document.createElement('div');
+        pagination.className = 'pagination';
+        var prev = document.createElement('button');
+        prev.className = 'pag-btn';
+        prev.title = 'Previous page';
+        prev.setAttribute('aria-label', 'Previous page');
+        prev.disabled = state.page === 0;
+        var prevIcon = document.getElementById('tpl-chev-left');
+        if (prevIcon && prevIcon.content) prev.appendChild(prevIcon.content.cloneNode(true));
+        prev.addEventListener('click', function() {
+          if (state.page > 0) { state.page--; render(); }
+        });
+        pagination.appendChild(prev);
+
+        var dotsWrap = document.createElement('div');
+        dotsWrap.className = 'dots';
+        for (var i = 0; i < totalPages; i++) {
+          var dot = document.createElement('div');
+          dot.className = 'dot' + (i === state.page ? ' active' : '');
+          dot.dataset.page = String(i);
+          ;(function(idx) { dot.addEventListener('click', function() { state.page = idx; render(); }); })(i);
+          dotsWrap.appendChild(dot);
+        }
+        pagination.appendChild(dotsWrap);
+
+        var next = document.createElement('button');
+        next.className = 'pag-btn';
+        next.title = 'Next page';
+        next.setAttribute('aria-label', 'Next page');
+        next.disabled = state.page === totalPages - 1;
+        var nextIcon = document.getElementById('tpl-chev-right');
+        if (nextIcon && nextIcon.content) next.appendChild(nextIcon.content.cloneNode(true));
+        next.addEventListener('click', function() {
+          if (state.page < totalPages - 1) { state.page++; render(); }
+        });
+        pagination.appendChild(next);
+
+        card.appendChild(pagination);
       }
-      root.appendChild(pagination);
 
-      var footer = document.createElement('div');
-      footer.className = 'footer';
-      var more = data.nextCursor ? ', ' + data.totalCount + ' total — more available' : '';
-      footer.textContent = data.items.length + ' shown' + more;
-      root.appendChild(footer);
+      // Footer kept for the "more available" hint on cursor pages.
+      if (data.nextCursor) {
+        var footer = document.createElement('div');
+        footer.className = 'footer';
+        footer.textContent = 'More available — refine the search to load older items';
+        card.appendChild(footer);
+      }
+
+      root.appendChild(card);
     }
 
     function renderDetail() {
