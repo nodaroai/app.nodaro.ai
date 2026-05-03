@@ -93,6 +93,15 @@ const GALLERY_CSS = `
   @media (hover: hover) and (pointer: fine) {
     .hover-overlay { display: flex; }
     .tile:hover .hover-overlay { opacity: 1; }
+    /* Card shell is mobile-only — on desktop the gallery sits flush
+       in the chat without the tinted box. Matches the single-job
+       widget's desktop treatment. */
+    .card {
+      border: 0;
+      background: transparent;
+      border-radius: 0;
+      padding: 0;
+    }
   }
   /* Pagination — [redacted-reference]-style pill: prev chevron, dots, next chevron.
      Whole control sits in a single rounded shell so it reads as ONE
