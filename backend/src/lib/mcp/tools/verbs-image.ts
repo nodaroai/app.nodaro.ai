@@ -285,23 +285,23 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "  (a) `image_url` — any publicly fetchable HTTPS URL\n" +
           "  (b) `image_asset_id` — a Nodaro job id whose output is an image\n\n" +
           "**Getting a URL for a user-attached image** (bytes only in chat, no URL yet):\n\n" +
-          "Path A (preferred, works on every host including Claude.ai web): " +
-          "`request_image_upload` → returns `{ upload_page_url, public_url }`. " +
-          "In the same reply to the user, render a download link/button for " +
-          "the attached image AND the `upload_page_url`. The user saves the " +
-          "image to disk, drops it on the upload page (in their own browser, " +
-          "outside any sandbox), and confirms. Then call this tool with " +
-          "`public_url` as `image_url`.\n\n" +
-          "Path B (only for non-sandboxed clients — Cursor, Cline, Claude " +
-          "Desktop, Claude Code CLI): `prepare_image_upload` → " +
+          "Path A (preferred — Claude.ai web/Android with widget rendering): " +
+          "`upload_image_widget` → opens an in-chat file picker. Supports " +
+          "multi-file via `max_files` (e.g. character training, headshot " +
+          "sets). The widget uploads the file(s) and auto-announces the " +
+          "resulting URL(s) in chat — wait for that announcement, then call " +
+          "this tool with `public_url` as `image_url`.\n\n" +
+          "Path B (Apps clients without widget UI): `request_image_upload` " +
+          "→ returns `{ upload_page_url, public_url }`. Render a download " +
+          "link/button for the attached image AND the `upload_page_url`. " +
+          "The user saves the image to disk, drops it on the upload page " +
+          "(in their own browser, outside any sandbox), confirms.\n\n" +
+          "Path C (only for non-sandboxed CLI clients — Cursor, Cline, " +
+          "Claude Desktop, Claude Code CLI): `prepare_image_upload` → " +
           "`curl -X PUT --data-binary @<path> -H 'Content-Type: <mime>' " +
           "'<upload_url>'`. Streams disk → R2 directly. Will 403 on " +
           "Claude.ai web (egress proxy blocks all object-storage hosts), " +
-          "use Path A there.\n\n" +
-          "Path C (last resort, tiny files only — ≤30–50 KB raw after " +
-          "resize): `upload_image` → base64-encode and pass inline. " +
-          "Bypasses sandbox via the MCP connector but is bounded by the " +
-          "LLM's per-tool output token budget.",
+          "use Path A or B there.",
         inputSchema: {
           prompt: z.string().min(1).max(2000),
           image_url: z.string().url().optional(),
