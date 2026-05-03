@@ -280,7 +280,12 @@ ${uiProtocolShim()}
           '. URLs (in pick order):\\n  - ' + urls.join('\\n  - ') +
           '\\nUse these as the ' + KIND + ' inputs for the next step.';
       }
-      window.NodaroMCP.pushUserMessage(head);
+      // Same Q&A trailer the gallery / single-job action buttons use —
+      // tells Claude to drive the next-step parameters interactively
+      // ("what model? what aspect ratio?") instead of guessing.
+      window.NodaroMCP.pushUserMessage(
+        head + '\\n[loop ask me using q/a as needed]'
+      );
     }
 
     function uploadOne(slot, file, ctrl) {
