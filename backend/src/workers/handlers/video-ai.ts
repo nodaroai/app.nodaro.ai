@@ -24,6 +24,7 @@ import {
   uploadVideoMaybeWatermark,
   watermarkLocalVideoAndUpload,
   generateAndUploadThumbnail,
+  setJobProgress,
   type HandlerFn,
 } from "../shared.js"
 
@@ -76,14 +77,14 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
 
   const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType })
 
-  await job.updateProgress(40)
+  await setJobProgress(job, ctx.jobId, 40)
 
   // Upload the generated video to R2
   // If audio merge follows, upload without watermark (watermark applied to final)
   let finalVideoUrl = audioUrl
     ? await uploadToR2(result.url, ctx.jobId, "video", ctx.jobUserId)
     : await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-  await job.updateProgress(70)
+  await setJobProgress(job, ctx.jobId, 70)
 
   // If audio URL is provided, merge it with the video
   if (audioUrl) {
@@ -95,14 +96,14 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
       backgroundVolume: 30,
       keepOriginalAudio: generateAudio ?? false,
     })
-    await job.updateProgress(90)
+    await setJobProgress(job, ctx.jobId, 90)
 
     // Upload merged video (with watermark if applicable)
     finalVideoUrl = await watermarkLocalVideoAndUpload(mergedPath, `${ctx.jobId}-merged`, ctx.jobUserId, ctx.shouldWatermark)
     await cleanupWorkDir(dirname(mergedPath))
   }
 
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(finalVideoUrl, ctx.jobId, ctx.jobUserId)
 
@@ -149,10 +150,10 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
     seed,
     referenceImageUrl,
   })
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
@@ -207,10 +208,10 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
 
   const result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker })
 
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
@@ -292,10 +293,10 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     resultProviderUsed = result.providerUsed
   }
 
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadVideoMaybeWatermark(resultUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
@@ -341,10 +342,10 @@ const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, c
     guidanceScale,
     shift,
   })
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
@@ -393,10 +394,10 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
       backgroundSource,
     }
   )
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
@@ -445,10 +446,10 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
     const result = await videoUpscale(videoUrl, "topaz", upscaleFactor ?? "2", { onProgress })
     outputUrl = result.url
   }
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadVideoMaybeWatermark(outputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
@@ -494,10 +495,10 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     videoUrl = url
     newTaskId = taskId
   }
-  await job.updateProgress(50)
+  await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadVideoMaybeWatermark(videoUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 

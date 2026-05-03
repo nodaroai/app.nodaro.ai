@@ -246,7 +246,7 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
   await setJobProgress(job, ctx.jobId, 20)
 
   await waitForDubbing(dubbingId, (status) => {
-    if (status === "dubbing") void job.updateProgress(50)
+    if (status === "dubbing") void setJobProgress(job, ctx.jobId, 50)
   })
   await setJobProgress(job, ctx.jobId, 70)
 

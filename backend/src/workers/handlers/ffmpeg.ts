@@ -24,6 +24,7 @@ import {
   generateAndUploadThumbnail,
   completeFfmpegVideoJob,
   completeFfmpegAudioJob,
+  setJobProgress,
   type HandlerFn,
 } from "../shared.js"
 
@@ -40,10 +41,10 @@ const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, c
   console.log(`[worker] combine-videos ${ctx.jobId}: ${videoUrls.length} videos, transition=${transition}, audio=${audioMode ?? "crossfade"}, trimStart=${trimStartFrames ?? 0}, trimEnd=${trimEndFrames ?? 0}`)
 
   const outputPath = await combineVideos({ videoUrls, transition, transitionDuration, audioMode: audioMode ?? "crossfade", trimStartFrames: trimStartFrames ?? 0, trimEndFrames: trimEndFrames ?? 0 })
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
 
   const r2Url = await uploadFileToR2(outputPath, ctx.jobId, "video", ctx.jobUserId)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
 
   // combineVideos uses its own temp dir structure (not cleanupWorkDir-compatible)
   await fs.rm(dirname(outputPath), { recursive: true, force: true }).catch(() => {})
@@ -69,7 +70,7 @@ const handleMergeVideoAudio: HandlerFn = async function handleMergeVideoAudio(jo
   }
   console.log(`[worker] merge-video-audio ${ctx.jobId}`)
   const outputPath = await mergeVideoAudio({ videoUrl, audioUrl, audioTracks, voiceoverVolume, backgroundVolume, keepOriginalAudio })
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegVideoJob(outputPath, ctx)
 }
 
@@ -79,10 +80,10 @@ const handleTrimAudio: HandlerFn = async function handleTrimAudio(job, ctx) {
   }
   console.log(`[worker] trim-audio ${ctx.jobId}`)
   const result = await trimAudio({ videoUrl, audioFormat, startTime, endTime })
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
   const audioR2Url = await uploadFileToR2(result.audioPath, ctx.jobId, "audio", ctx.jobUserId)
   await cleanupWorkDir(dirname(result.audioPath))
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { audioUrl: audioR2Url },
@@ -98,7 +99,7 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
   }
   console.log(`[worker] trim-video ${ctx.jobId}`)
   const result = await trimVideo({ videoUrl, startTime, endTime, outputSilentVideo })
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
   const r2Url = await uploadFileToR2(result.videoPath, ctx.jobId, "video", ctx.jobUserId)
   let silentVideoR2Url: string | undefined
   if (result.silentVideoPath) {
@@ -106,7 +107,7 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
   }
   await cleanupWorkDir(dirname(result.videoPath))
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...(silentVideoR2Url ? { videoUrlSilent: silentVideoR2Url } : {}) },
@@ -122,10 +123,10 @@ const handleExtractFrame: HandlerFn = async function handleExtractFrame(job, ctx
   }
   console.log(`[worker] extract-frame ${ctx.jobId}`)
   const result = await extractFrame({ videoUrl, mode, timestamp })
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
   const r2Url = await uploadFileToR2(result.imagePath, ctx.jobId, "image", ctx.jobUserId)
   await cleanupWorkDir(dirname(result.imagePath))
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { imageUrl: r2Url, thumbnailUrl: r2Url },
@@ -141,7 +142,7 @@ const handleSpeedRamp: HandlerFn = async function handleSpeedRamp(job, ctx) {
   }
   console.log(`[worker] speed-ramp ${ctx.jobId}`)
   const outputPath = await speedRamp({ videoUrl, speed, adjustAudio })
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegVideoJob(outputPath, ctx)
 }
 
@@ -151,7 +152,7 @@ const handleLoopVideo: HandlerFn = async function handleLoopVideo(job, ctx) {
   }
   console.log(`[worker] loop-video ${ctx.jobId}`)
   const outputPath = await loopVideo({ videoUrl, mode, repeatCount, targetDuration })
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegVideoJob(outputPath, ctx)
 }
 
@@ -161,7 +162,7 @@ const handleFadeVideo: HandlerFn = async function handleFadeVideo(job, ctx) {
   }
   console.log(`[worker] fade-video ${ctx.jobId}`)
   const outputPath = await fadeVideo({ videoUrl, fadeIn, fadeInDuration, fadeOut, fadeOutDuration, color })
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegVideoJob(outputPath, ctx)
 }
 
@@ -171,7 +172,7 @@ const handleResizeVideo: HandlerFn = async function handleResizeVideo(job, ctx) 
   }
   console.log(`[worker] resize-video ${ctx.jobId}`)
   const outputPath = await resizeVideo({ videoUrl, targetAspect, method, padColor })
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegVideoJob(outputPath, ctx)
 }
 
@@ -181,10 +182,10 @@ const handleAdjustVolume: HandlerFn = async function handleAdjustVolume(job, ctx
   }
   console.log(`[worker] adjust-volume ${ctx.jobId} (${videoUrl ? "video" : "audio"} input)`)
   const { outputPath, inputType } = await adjustVolume({ audioUrl, videoUrl, volume, normalize, fadeIn, fadeOut })
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
   const r2Url = await uploadFileToR2(outputPath, ctx.jobId, inputType, ctx.jobUserId)
   await cleanupWorkDir(dirname(outputPath))
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   const thumbUrl = inputType === "video" ? await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId) : null
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const outputData = inputType === "video" ? { videoUrl: r2Url, thumbnailUrl: thumbUrl } : { audioUrl: r2Url }
@@ -202,7 +203,7 @@ const handleAddCaptions: HandlerFn = async function handleAddCaptions(job, ctx) 
   }
   console.log(`[worker] add-captions ${ctx.jobId}`)
   const outputPath = await addCaptions({ videoUrl, text, style: style as "subtitle" | "word-highlight" | "karaoke" | undefined, position: position as "bottom" | "top" | "center" | undefined, fontSize, color, backgroundColor })
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegVideoJob(outputPath, ctx)
 }
 
@@ -210,7 +211,7 @@ const handleCombineAudio: HandlerFn = async function handleCombineAudio(job, ctx
   const { segments } = job.data as { segments: Array<{ url: string; startTime?: number; endTime?: number }> }
   console.log(`[worker] combine-audio ${ctx.jobId}: ${segments.length} segments`)
   const outputPath = await combineAudio({ segments })
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegAudioJob(outputPath, ctx)
 }
 
@@ -218,7 +219,7 @@ const handleMixAudio: HandlerFn = async function handleMixAudio(job, ctx) {
   const { audioUrls, trackVolumes } = job.data as { jobId: string; audioUrls: string[]; trackVolumes?: number[] }
   console.log(`[worker] mix-audio ${ctx.jobId}: ${audioUrls.length} tracks`)
   const outputPath = await mixAudio({ audioUrls, trackVolumes })
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegAudioJob(outputPath, ctx)
 }
 
@@ -239,7 +240,7 @@ const handleTranscodeVideo: HandlerFn = async function handleTranscodeVideo(job,
   const inputPath = join(workDir, "input.mp4")
   const outputPath = join(workDir, "output.mp4")
   await downloadFile(videoUrl, inputPath)
-  await job.updateProgress(30)
+  await setJobProgress(job, ctx.jobId, 30)
 
   if (isDefault) {
     // Use the standard browser-safe args
@@ -257,7 +258,7 @@ const handleTranscodeVideo: HandlerFn = async function handleTranscodeVideo(job,
     args.push("-movflags", "+faststart", "-c:a", "aac", "-b:a", audioBitrate ?? "128k", outputPath)
     await runFfmpeg(args)
   }
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegVideoJob(outputPath, ctx)
 }
 
@@ -268,11 +269,11 @@ const handleSocialMediaFormat: HandlerFn = async function handleSocialMediaForma
   }
   console.log(`[worker] social-media-format ${ctx.jobId}: ${mediaType} → ${width}×${height}`)
   const outputPath = await socialMediaFormat({ mediaUrl, mediaType, width, height, method, padColor })
-  await job.updateProgress(80)
+  await setJobProgress(job, ctx.jobId, 80)
   if (mediaType === "image") {
     const r2Url = await uploadFileToR2(outputPath, ctx.jobId, "image", ctx.jobUserId)
     await cleanupWorkDir(dirname(outputPath))
-    await job.updateProgress(100)
+    await setJobProgress(job, ctx.jobId, 100)
     if (!await shouldSaveJobResult(ctx.jobId)) return
     const ok = await markJobCompleted(ctx.jobId, {
       output_data: { videoUrl: r2Url, imageUrl: r2Url, mediaType: "image" },
@@ -291,7 +292,7 @@ const handleSplitMedia: HandlerFn = async function handleSplitMedia(job, ctx) {
   }
   console.log(`[worker] split-media ${ctx.jobId} (chunkDuration: ${chunkDuration}s)`)
   const result = await splitMedia({ videoUrl, audioUrl, chunkDuration, audioFormat })
-  await job.updateProgress(70)
+  await setJobProgress(job, ctx.jobId, 70)
 
   const videoUrls: string[] = []
   const audioUrls: string[] = []
@@ -313,7 +314,7 @@ const handleSplitMedia: HandlerFn = async function handleSplitMedia(job, ctx) {
   const firstPath = result.videoPaths?.[0] ?? result.audioPaths?.[0]
   if (firstPath) await cleanupWorkDir(dirname(firstPath))
 
-  await job.updateProgress(100)
+  await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: {

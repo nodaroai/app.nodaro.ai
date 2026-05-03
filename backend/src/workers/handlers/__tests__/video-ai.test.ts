@@ -85,6 +85,10 @@ vi.mock("../../shared.js", () => ({
   uploadVideoMaybeWatermark: mocks.mockUploadVideoMaybeWatermark,
   watermarkLocalVideoAndUpload: mocks.mockWatermarkLocalVideoAndUpload,
   generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
+  // setJobProgress writes progress to BOTH BullMQ + the jobs.progress
+  // DB column. Tests don't care about the side-effects, so a no-op
+  // mock is fine.
+  setJobProgress: vi.fn(async () => {}),
 }))
 
 vi.mock("@/providers/kie/video.js", () => ({
