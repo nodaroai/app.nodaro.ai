@@ -337,9 +337,16 @@ const GALLERY_CSS = `
     /* Desktop hosts overlay the close affordance instead of fixing a
        header bar — drop the mobile top inset. */
     :root { --fs-top-pad: 0px; }
-    /* Desktop fullscreen — center the content with side margins so
-       the filmstrip + actions don't span edge-to-edge across a wide
-       monitor. Matches [redacted-reference]'s centered-column layout. */
+    /* Desktop fullscreen — center the content with ALWAYS-VISIBLE side
+       margins so the filmstrip + actions don't span edge-to-edge.
+       Padding (32px each side) guarantees a minimum gutter even when
+       the viewport is narrower than max-width; max-width caps the
+       total content column on wide monitors. [redacted-reference]-style centered
+       column. */
+    body.fullscreen {
+      padding-left: 32px;
+      padding-right: 32px;
+    }
     body.fullscreen .card {
       max-width: 800px;
       margin: 0 auto;
@@ -1124,13 +1131,30 @@ ${uiProtocolShim()}
       render();
     });
 
-    // Keyboard arrow navigation in fullscreen detail view. Skips when
-    // the user is typing somewhere (input/textarea/contenteditable)
-    // so the arrows don't hijack normal text editing.
+    // Keyboard navigation in fullscreen detail view:
+    //   ArrowLeft  → previous item (wrap)
+    //   ArrowRight → next item (wrap)
+    //   Escape     → close fullscreen, back to grid
+    // Skips when the user is typing somewhere (input/textarea/
+    // contenteditable) so the keys don't hijack normal text editing.
     document.addEventListener('keydown', function(ev) {
       if (!isDetailView()) return;
       var t = ev.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || (t.isContentEditable))) return;
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        if (window.NodaroMCP && window.NodaroMCP.requestDisplayMode) {
+          window.NodaroMCP.requestDisplayMode('inline');
+          // The displayMode-changed listener will clear selectedId
+          // and re-render the grid.
+        } else {
+          state.displayMode = 'inline';
+          state.selectedId = null;
+          applyDisplayMode();
+          render();
+        }
+        return;
+      }
       if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
       ev.preventDefault();
       var n = data.items.length;
