@@ -91,6 +91,36 @@ const GALLERY_CSS = `
   .pag-btn svg { display: block; width: 12px; height: 12px; }
   .footer { opacity: 0.6; font-size: 11px; text-align: center; }
   .empty { text-align: center; padding: 32px 0; opacity: 0.7; }
+  /* Reference-asset overlay — small chained thumbnails in the tile's
+     top-right showing what fed this generation ([redacted-reference]'s lineage
+     pattern). Up to 2 visible; if more exist a "+N" pill caps them. */
+  .refs {
+    position: absolute;
+    top: 4px; right: 4px;
+    display: flex;
+    gap: 2px;
+    pointer-events: none;
+  }
+  .refs > .ref {
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.6);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    background: rgba(0,0,0,0.2);
+  }
+  .refs > .ref img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .refs > .ref-more {
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(255,255,255,0.6);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
   /* Audio tile: <audio> has no visual thumbnail and <img src=mp3> renders
      a broken-image glyph. Replace with an icon + clamped label tile so
      the kind reads at-a-glance and the prompt hint shows underneath. */
@@ -106,18 +136,74 @@ const GALLERY_CSS = `
     overflow: hidden; display: -webkit-box;
     -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word;
   }
-  .detail { padding: 16px; }
-  .detail .preview { width: 100%; max-height: 70vh; }
-  .detail .preview img, .detail .preview video, .detail .preview audio { width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
-  .detail .meta { margin-top: 12px; }
-  .detail .actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
+  /* Detail view — wraps inside the same card shell as the grid view.
+     Padding is on the inner stack so the back button hugs the top-left
+     of the card, no extra inset. */
+  .detail { display: flex; flex-direction: column; gap: 12px; }
+  .detail .preview { width: 100%; max-height: 60vh; display: flex; align-items: center; justify-content: center; }
+  .detail .preview img, .detail .preview video, .detail .preview audio { width: 100%; height: auto; max-height: 60vh; object-fit: contain; border-radius: 8px; }
+  /* Filmstrip — horizontal-scrolling row of small thumbnails to
+     navigate between generations without going back to the grid.
+     Active item bordered in brand pink. */
+  .filmstrip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 2px;
+    scrollbar-width: thin;
+  }
+  .filmstrip::-webkit-scrollbar { height: 6px; }
+  .filmstrip::-webkit-scrollbar-thumb { background: rgba(127,127,127,0.3); border-radius: 3px; }
+  .filmstrip .strip-item {
+    flex: 0 0 auto;
+    width: 40px; height: 40px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(0,0,0,0.05);
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color .15s, transform .15s;
+  }
+  .filmstrip .strip-item:hover { transform: scale(1.05); }
+  .filmstrip .strip-item.active { border-color: #ff0073; }
+  .filmstrip .strip-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* Audio strip-item: same visual treatment as the grid audio tile. */
+  .filmstrip .strip-audio {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, rgba(91,157,255,0.18), rgba(142,107,255,0.18));
+    color: rgba(127,127,127,0.85);
+    font-size: 14px;
+  }
+  .detail .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; opacity: 0.75; }
+  .detail .meta .badge { background: rgba(127,127,127,0.15); padding: 2px 8px; border-radius: 4px; }
+  .detail .actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .detail .actions .spacer { flex: 1; }
   /* Borderless action buttons — same calm Claude-style affordance the
      single-job widget uses. Subtle dim → bright on hover. */
   button { padding: 6px 12px; border: none; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; opacity: 0.7; transition: opacity .15s, background .15s, color .15s; font-family: inherit; line-height: 1; }
   button:hover { background: rgba(127,127,127,0.1); opacity: 1; }
-  /* Use-as-reference is the primary action — brand pink, slightly stronger. */
-  button.primary { color: #ff0073; opacity: 0.9; font-weight: 500; }
-  button.primary:hover { background: rgba(255, 0, 115, 0.1); opacity: 1; }
+  /* Primary action — solid brand-pink fill (matches [redacted-reference]'s
+     lime-green Animate). Stands out clearly from the borderless
+     secondary buttons. */
+  button.primary {
+    background: #ff0073;
+    color: #fff;
+    font-weight: 600;
+    opacity: 1;
+    padding: 7px 14px;
+  }
+  button.primary:hover { background: #d6005f; }
+  /* Use-as-reference (now a secondary action since Animate/Edit are
+     primary): brand-pink TEXT only, slightly stronger than borderless. */
+  button.accent { color: #ff0073; opacity: 0.9; font-weight: 500; }
+  button.accent:hover { background: rgba(255, 0, 115, 0.1); opacity: 1; }
+  /* Icon-only utility buttons (download / open-in-app). Tighter padding. */
+  button.icon-btn { padding: 6px; opacity: 0.6; }
+  button.icon-btn:hover { opacity: 1; }
+  button.icon-btn svg { display: block; width: 14px; height: 14px; }
+  button svg.lead { display: block; width: 12px; height: 12px; }
 `
 
 export function buildGalleryWidgetTemplate(): string {
@@ -154,6 +240,18 @@ ${uiProtocolShim()}
 <template id="tpl-chev-right">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <polyline points="9 18 15 12 9 6"/>
+  </svg>
+</template>
+<template id="tpl-icon-play">
+  <svg class="lead" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+    <polygon points="6 4 20 12 6 20 6 4"/>
+  </svg>
+</template>
+<template id="tpl-icon-external">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+    <polyline points="15 3 21 3 21 9"/>
+    <line x1="10" y1="14" x2="21" y2="3"/>
   </svg>
 </template>
 <script>
@@ -267,6 +365,35 @@ ${uiProtocolShim()}
           tile.appendChild(img);
         }
 
+        // Reference-asset overlay: small chained thumbnails in the
+        // top-right showing what fed this generation. Up to 2 visible;
+        // a "+N" pill caps the rest. Skips when there are no refs (e.g.
+        // text-to-image with no reference). Pointer-events:none so it
+        // doesn't intercept the tile tap.
+        if (Array.isArray(item.references) && item.references.length > 0) {
+          var refsWrap = document.createElement('div');
+          refsWrap.className = 'refs';
+          var visible = item.references.slice(0, 2);
+          var extra = item.references.length - visible.length;
+          visible.forEach(function(refUrl) {
+            var ref = document.createElement('div');
+            ref.className = 'ref';
+            var refImg = document.createElement('img');
+            refImg.setAttribute('src', refUrl);
+            refImg.setAttribute('alt', '');
+            refImg.setAttribute('loading', 'lazy');
+            ref.appendChild(refImg);
+            refsWrap.appendChild(ref);
+          });
+          if (extra > 0) {
+            var more = document.createElement('div');
+            more.className = 'ref-more';
+            more.textContent = '+' + extra;
+            refsWrap.appendChild(more);
+          }
+          tile.appendChild(refsWrap);
+        }
+
         // Hover overlay: gradient at bottom + Use pill (centered) +
         // Download icon (right). Both stop propagation so a tap on the
         // overlay doesn't open the detail view.
@@ -373,17 +500,34 @@ ${uiProtocolShim()}
       var item = data.items.find(function(it) { return it.jobId === state.selectedId; });
       if (!item) { state.view = 'grid'; render(); return; }
 
-      var detail = document.createElement('div');
-      detail.className = 'detail';
+      // Wrap the detail view in the same card shell as the grid view —
+      // visual continuity when toggling between modes.
+      var card = document.createElement('div');
+      card.className = 'card';
 
+      // Header: Back button on the left, model/aspect-style title on
+      // the right. Mirrors [redacted-reference]'s "Generations" → asset header.
+      var header = document.createElement('div');
+      header.className = 'header';
       var backBtn = document.createElement('button');
-      backBtn.textContent = '← Back to grid';
+      backBtn.className = 'icon-btn';
+      backBtn.title = 'Back to grid';
+      backBtn.setAttribute('aria-label', 'Back to grid');
+      var backIcon = document.getElementById('tpl-chev-left');
+      if (backIcon && backIcon.content) backBtn.appendChild(backIcon.content.cloneNode(true));
       backBtn.addEventListener('click', function() { state.view = 'grid'; state.selectedId = null; render(); });
-      detail.appendChild(backBtn);
+      header.appendChild(backBtn);
+      var headTitle = document.createElement('div');
+      headTitle.className = 'title';
+      headTitle.textContent = item.kind.charAt(0).toUpperCase() + item.kind.slice(1);
+      header.appendChild(headTitle);
+      var spacer = document.createElement('div');
+      spacer.style.flex = '1';
+      header.appendChild(spacer);
+      card.appendChild(header);
 
       var preview = document.createElement('div');
       preview.className = 'preview';
-      preview.style.marginTop = '12px';
       var media;
       if (item.kind === 'video') {
         media = document.createElement('video');
@@ -400,34 +544,126 @@ ${uiProtocolShim()}
       }
       media.setAttribute('src', item.assetUrl);
       preview.appendChild(media);
-      detail.appendChild(preview);
+      card.appendChild(preview);
 
+      // Filmstrip — horizontal-scrolling row of all gallery items so the
+      // user can switch between assets without going back to grid.
+      // Only render when there's more than one item (otherwise it's a
+      // sad little 1-thumb sliver).
+      if (data.items.length > 1) {
+        var strip = document.createElement('div');
+        strip.className = 'filmstrip';
+        data.items.forEach(function(it) {
+          var stripItem = document.createElement('div');
+          stripItem.className = 'strip-item' + (it.jobId === item.jobId ? ' active' : '');
+          if (it.kind === 'audio' || (!it.thumbnailUrl && !it.assetUrl)) {
+            var glyph = document.createElement('div');
+            glyph.className = 'strip-audio';
+            glyph.textContent = it.kind === 'audio' ? '♫' : '▶';
+            stripItem.appendChild(glyph);
+          } else {
+            var sImg = document.createElement('img');
+            sImg.setAttribute('src', it.thumbnailUrl || it.assetUrl);
+            sImg.setAttribute('alt', '');
+            sImg.setAttribute('loading', 'lazy');
+            stripItem.appendChild(sImg);
+          }
+          stripItem.addEventListener('click', function() {
+            state.selectedId = it.jobId;
+            render();
+          });
+          strip.appendChild(stripItem);
+        });
+        card.appendChild(strip);
+        // Auto-scroll the active item into view (centered) after mount.
+        setTimeout(function() {
+          var active = strip.querySelector('.strip-item.active');
+          if (active && active.scrollIntoView) {
+            active.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          }
+        }, 0);
+      }
+
+      // Compact metadata badges — model + aspect (best-effort) + date.
+      // Replaces the previous prose lines with the same shape as
+      // single-job widget badges.
       var meta = document.createElement('div');
       meta.className = 'meta';
-      [
-        ['Prompt: ', item.prompt],
-        ['Model: ', item.model],
-        ['Created: ', item.createdAt],
-      ].forEach(function(pair) {
-        var line = document.createElement('div');
-        var label = document.createElement('strong');
-        label.textContent = pair[0];
-        line.appendChild(label);
-        line.appendChild(document.createTextNode(pair[1] || ''));
-        meta.appendChild(line);
-      });
-      detail.appendChild(meta);
+      var modelBadge = document.createElement('span');
+      modelBadge.className = 'badge';
+      modelBadge.textContent = item.model || 'unknown model';
+      meta.appendChild(modelBadge);
+      if (item.createdAt) {
+        var dateBadge = document.createElement('span');
+        dateBadge.className = 'badge';
+        var d = (item.createdAt || '').slice(0, 10);
+        dateBadge.textContent = d;
+        meta.appendChild(dateBadge);
+      }
+      if (item.prompt) {
+        var promptLine = document.createElement('div');
+        promptLine.style.fontSize = '12px';
+        promptLine.style.opacity = '0.75';
+        promptLine.style.marginTop = '4px';
+        promptLine.style.lineHeight = '1.4';
+        promptLine.textContent = item.prompt;
+        meta.appendChild(promptLine);
+      }
+      card.appendChild(meta);
 
+      // Action row — primary CTA on the left (kind-aware), utility
+      // buttons (Download / Use / Open) on the right.
       var actions = document.createElement('div');
       actions.className = 'actions';
+
+      // Primary CTA depends on kind:
+      //   image → Animate (most common follow-up)
+      //   video → Edit (extend / modify)
+      //   audio → Use as reference (fallback — provider-specific
+      //           follow-ups happen in the single-job widget after
+      //           generation, not here)
+      var primary = document.createElement('button');
+      primary.className = 'primary';
+      var primaryIcon = document.getElementById('tpl-icon-play');
+      if (primaryIcon && primaryIcon.content) {
+        var leadSvg = primaryIcon.content.cloneNode(true);
+        primary.appendChild(leadSvg);
+      }
+      var primaryLabel = document.createElement('span');
+      var primaryAction;
+      if (item.kind === 'image') {
+        primaryLabel.textContent = 'Animate';
+        primaryAction = 'animate this image: ';
+      } else if (item.kind === 'video') {
+        primaryLabel.textContent = 'Edit';
+        primaryAction = 'edit this video: ';
+      } else {
+        primaryLabel.textContent = 'Use';
+        primaryAction = 'use this audio: ';
+      }
+      primary.appendChild(primaryLabel);
+      primary.addEventListener('click', function() {
+        if (window.NodaroMCP && window.NodaroMCP.pushUserMessage) {
+          window.NodaroMCP.pushUserMessage(
+            primaryAction + JSON.stringify({
+              asset_id: item.jobId,
+              asset_url: item.assetUrl,
+              model: item.model,
+              kind: item.kind,
+            }) +
+            '\\n[loop ask me using q/a as needed]'
+          );
+        }
+      });
+      actions.appendChild(primary);
+
+      // "Use as reference" — accent (pink-text) secondary. Different
+      // semantic from primary: passes the asset as REFERENCE input for
+      // the next op, not as the subject.
       var useBtn = document.createElement('button');
-      useBtn.className = 'primary';
+      useBtn.className = 'accent';
       useBtn.textContent = 'Use as reference';
       useBtn.addEventListener('click', function() {
-        // Same self-driving Q&A loop the single-job Edit/Animate buttons
-        // use. The loop covers everything — first the action (modify /
-        // animate / variation / …), then whatever parameters the chosen
-        // verb needs. "as needed" terminates when Claude has enough.
         if (window.NodaroMCP.pushUserMessage) {
           window.NodaroMCP.pushUserMessage(
             'Use the ' + item.kind + ' with id ' + item.jobId +
@@ -441,12 +677,40 @@ ${uiProtocolShim()}
         }
       });
       actions.appendChild(useBtn);
+
+      var spacer2 = document.createElement('div');
+      spacer2.className = 'spacer';
+      actions.appendChild(spacer2);
+
+      // Right-side icon utilities — Download, Open in Nodaro.
+      var dlBtn = document.createElement('button');
+      dlBtn.className = 'icon-btn';
+      dlBtn.title = 'Download';
+      dlBtn.setAttribute('aria-label', 'Download');
+      var dlTpl2 = document.getElementById('tpl-download-icon');
+      if (dlTpl2 && dlTpl2.content) dlBtn.appendChild(dlTpl2.content.cloneNode(true));
+      dlBtn.addEventListener('click', function() {
+        if (window.NodaroMCP && window.NodaroMCP.openLink) {
+          window.NodaroMCP.openLink(item.assetUrl);
+        }
+      });
+      actions.appendChild(dlBtn);
+
       var openBtn = document.createElement('button');
-      openBtn.textContent = 'Open in Nodaro';
-      openBtn.addEventListener('click', function() { window.NodaroMCP.openLink('https://app.nodaro.ai/gallery'); });
+      openBtn.className = 'icon-btn';
+      openBtn.title = 'Open in Nodaro gallery';
+      openBtn.setAttribute('aria-label', 'Open in Nodaro');
+      var openTpl = document.getElementById('tpl-icon-external');
+      if (openTpl && openTpl.content) openBtn.appendChild(openTpl.content.cloneNode(true));
+      openBtn.addEventListener('click', function() {
+        if (window.NodaroMCP && window.NodaroMCP.openLink) {
+          window.NodaroMCP.openLink('https://app.nodaro.ai/gallery');
+        }
+      });
       actions.appendChild(openBtn);
-      detail.appendChild(actions);
-      root.appendChild(detail);
+
+      card.appendChild(actions);
+      root.appendChild(card);
     }
 
     window.addEventListener('mcp-tool-result', function(e) {
@@ -473,6 +737,13 @@ export interface GalleryItem {
   assetUrl: string
   createdAt: string
   favorited: boolean
+  /**
+   * Reference asset URLs that fed this generation (start frame, end frame,
+   * source image for an edit, etc.). The widget renders the first 1-2 as
+   * small overlay thumbnails on the tile so the visual lineage reads
+   * at-a-glance. Empty array if the job had no inputs (text-to-image).
+   */
+  references?: string[]
 }
 
 export interface GalleryInitData {

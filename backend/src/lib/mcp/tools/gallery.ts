@@ -82,6 +82,52 @@ function formatRow(row: GalleryRow): string {
 }
 
 /**
+ * Pull reference-asset URLs from a job's input_data. Different job types
+ * carry their inputs under different keys — image_url for edits, start +
+ * end image for video transitions, audio_url for lip-sync, etc. We collect
+ * all of them in pick-order so the widget can render up to ~2 as overlay
+ * thumbnails on the tile (visual lineage). Bare strings only — no asset
+ * IDs (the widget needs a URL to render).
+ */
+function extractReferences(input: Record<string, unknown> | null): string[] {
+  if (!input) return []
+  const refs: string[] = []
+  const single = [
+    "image_url",
+    "imageUrl",
+    "start_image_url",
+    "startImageUrl",
+    "end_image_url",
+    "endImageUrl",
+    "tail_image_url",
+    "audio_url",
+    "audioUrl",
+    "video_url",
+    "videoUrl",
+    "reference_image_url",
+    "referenceImageUrl",
+  ] as const
+  for (const k of single) {
+    const v = input[k]
+    if (typeof v === "string" && v.startsWith("http")) refs.push(v)
+  }
+  // Array forms — generate-character / multi-ref edits sometimes pass an
+  // array under image_urls / imageUrls / reference_images.
+  const arrays = ["image_urls", "imageUrls", "reference_images", "referenceImages"] as const
+  for (const k of arrays) {
+    const v = input[k]
+    if (Array.isArray(v)) {
+      for (const u of v) {
+        if (typeof u === "string" && u.startsWith("http")) refs.push(u)
+      }
+    }
+  }
+  // De-dup while preserving order; cap at 4 so we don't ship a huge payload
+  // for jobs with lots of references (the widget renders at most 2 anyway).
+  return Array.from(new Set(refs)).slice(0, 4)
+}
+
+/**
  * Convert a Supabase `jobs` row into a `GalleryItem` shape suitable for the
  * v1.2 gallery widget. We pull the asset URL from `output_data` (the
  * kind-specific key — `imageUrl`, `videoUrl`, `audioUrl`) and the prompt +
@@ -108,6 +154,7 @@ function rowToGalleryItem(row: GalleryRow): GalleryItem | null {
     assetUrl,
     createdAt: row.completed_at ?? "",
     favorited: false,
+    references: extractReferences(row.input_data),
   }
 }
 
