@@ -2,38 +2,11 @@ import { describe, it, expect, vi } from "vitest"
 import Fastify from "fastify"
 import { type Scope } from "../../scopes.js"
 
-// Stub supabase so dynamic-tool factory queries return empty rows by default,
-// keeping tool counts deterministic. Individual tests override this via
-// `setDynamicRows` for the dynamic-tools assertion below.
-const dynamicRowsByKind = vi.hoisted(() => ({
-  app: [] as Array<Record<string, unknown>>,
-  component: [] as Array<Record<string, unknown>>,
-}))
-
+// Stub supabase so any DB-touching tools (list_apps, list_components, etc.)
+// return empty rows. tools/list itself never executes a tool body; this is
+// only here in case a registration codepath touches the client.
 vi.mock("../../supabase.js", () => ({
-  supabase: {
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockImplementation(() => ({
-          eq: vi.fn().mockImplementation((_col: string, kindVal: string) => ({
-            eq: vi.fn().mockReturnValue({
-              order: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit: vi.fn(async (n: number) => ({
-                    data: (kindVal === "component"
-                      ? dynamicRowsByKind.component
-                      : dynamicRowsByKind.app
-                    ).slice(0, n),
-                    error: null,
-                  })),
-                }),
-              }),
-            }),
-          })),
-        })),
-      }),
-    }),
-  },
+  supabase: { from: vi.fn() },
 }))
 
 const { buildMcpServer } = await import("../server.js")
@@ -210,35 +183,25 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(tools).toHaveLength(2)
   })
 
-  it("v2.0: surfaces dynamic per-user tools (component_<slug>, app_<slug>) in tools/list", async () => {
-    dynamicRowsByKind.component = [
-      {
-        id: "c1",
-        name: "Marketing Video",
-        slug: "marketing-video",
-        publish_type: "component",
-        description: "x",
-        component_metadata: { inputs: [], outputs: [], exposedSettings: [] },
-      },
-    ]
-    dynamicRowsByKind.app = [
-      { id: "a1", name: "Photo Editor", slug: "photo-editor", publish_type: "app" },
-    ]
-    try {
-      const fastify = Fastify()
-      const server = await buildMcpServer({
-        userId: "u1",
-        scopes: ALL_GRANTED,
-        clientName: "Claude",
-        fastify,
-      })
-      const tools = await listTools(server)
-      const names = tools.map((t) => t.name)
-      expect(names).toContain("component_marketing_video")
-      expect(names).toContain("app_photo_editor")
-    } finally {
-      dynamicRowsByKind.component = []
-      dynamicRowsByKind.app = []
-    }
+  it("v3.0: dynamic per-user tools dropped — list_apps + get_app_inputs + run_app cover the same surface", async () => {
+    const fastify = Fastify()
+    const server = await buildMcpServer({
+      userId: "u1",
+      scopes: ALL_GRANTED,
+      clientName: "Claude",
+      fastify,
+    })
+    const tools = await listTools(server)
+    const names = tools.map((t) => t.name)
+    // The discovery trio replaces N per-user tools.
+    expect(names).toContain("list_apps")
+    expect(names).toContain("get_app_inputs")
+    expect(names).toContain("run_app")
+    expect(names).toContain("list_components")
+    expect(names).toContain("get_component_inputs")
+    expect(names).toContain("run_component")
+    // Per-user dynamic tools must NOT show up anymore.
+    expect(names.some((n) => n.startsWith("app_"))).toBe(false)
+    expect(names.some((n) => n.startsWith("component_"))).toBe(false)
   })
 })

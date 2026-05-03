@@ -5,6 +5,11 @@ import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { config } from "../../config.js"
+import type { ComponentMetadata } from "@nodaro/shared"
+import {
+  extractComponentInputSchema,
+  flatInputsToOverrides,
+} from "../extract-app-inputs.js"
 
 const readGate: ToolGate = { required: ["workflows:read"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -17,10 +22,14 @@ export interface RegisterComponentsOpts {
 
 /**
  * Components — published workflow snippets that other workflows can call.
- * `list_components` browses the marketplace (public, no auth needed —
- * `published_apps` rows are world-readable when `is_listed=true`).
- * `run_component` calls `/v1/component/execute`, which creates a wrapper
- * job and runs the inner workflow asynchronously (returns 202 + jobId).
+ *
+ * Same pure-discovery pattern as apps:
+ *   1. `list_components({ scope })` — find by intent (public marketplace
+ *      or "mine").
+ *   2. `get_component_inputs({ slug })` — typed input schema (uses the
+ *      already-typed `component_metadata.inputs` directly, no
+ *      presentation-layer parsing needed).
+ *   3. `run_component({ component_id, inputs })` — flat keyed inputs.
  */
 export function registerComponents({
   server,
@@ -33,8 +42,12 @@ export function registerComponents({
       {
         title: "List Components",
         description:
-          "Browse published components (reusable workflow snippets) on the Nodaro marketplace.",
+          'Browse Nodaro components (reusable workflow snippets). Set `scope: "public"` (default) for the marketplace, or `scope: "mine"` for the caller\'s own components.',
         inputSchema: {
+          scope: z
+            .enum(["public", "mine"])
+            .optional()
+            .describe('"public" = marketplace (default); "mine" = caller\'s own components'),
           limit: z.number().int().min(1).max(50).optional(),
           cursor: z.string().optional().describe("Cursor from a prior call"),
           search: z.string().max(100).optional(),
@@ -43,16 +56,27 @@ export function registerComponents({
       },
       async (args) => {
         const limit = args.limit ?? 20
+        const scope = args.scope ?? "public"
         let query = supabase
           .from("published_apps")
           .select(
             "id, slug, name, description, icon_url, estimated_credits, category, tags, total_run_count, created_at",
           )
-          .eq("is_listed", true)
           .eq("is_active", true)
           .eq("publish_type", "component")
           .order("created_at", { ascending: false })
           .limit(limit)
+        if (scope === "mine") {
+          if (!session.userId) {
+            return {
+              content: [{ type: "text", text: 'scope="mine" requires authentication.' }],
+              isError: true,
+            }
+          }
+          query = query.eq("creator_id", session.userId)
+        } else {
+          query = query.eq("is_listed", true)
+        }
         if (args.cursor) query = query.lt("created_at", args.cursor)
         if (args.search) {
           const tsQuery = args.search.trim().split(/\s+/).join(" & ")
@@ -73,7 +97,78 @@ export function registerComponents({
           content: [
             {
               type: "text",
-              text: JSON.stringify({ data: rows, next_cursor: nextCursor }, null, 2),
+              text: JSON.stringify(
+                { data: rows, scope, next_cursor: nextCursor },
+                null,
+                2,
+              ),
+            },
+          ],
+        }
+      },
+    )
+
+    server.registerTool(
+      "get_component_inputs",
+      {
+        title: "Get Component Inputs",
+        description:
+          "Return the typed input schema for a component. Each entry has `key`, `label`, `type`, `required`. Pass these `key`s to `run_component({ component_id, inputs })`.",
+        inputSchema: {
+          component_id: z
+            .string()
+            .min(1)
+            .describe("Component slug (matches the published_apps.slug)"),
+        },
+        annotations: { readOnlyHint: true },
+      },
+      async (args) => {
+        const { data, error } = await supabase
+          .from("published_apps")
+          .select(
+            "id, slug, name, description, component_metadata, is_listed, creator_id, is_active, publish_type",
+          )
+          .eq("slug", args.component_id)
+          .eq("publish_type", "component")
+          .eq("is_active", true)
+          .limit(1)
+          .single()
+        if (error || !data) {
+          return {
+            content: [
+              { type: "text", text: `Component "${args.component_id}" not found.` },
+            ],
+            isError: true,
+          }
+        }
+        if (
+          !data.is_listed &&
+          (!session.userId || data.creator_id !== session.userId)
+        ) {
+          return {
+            content: [
+              { type: "text", text: `Component "${args.component_id}" not found.` },
+            ],
+            isError: true,
+          }
+        }
+        const schema = extractComponentInputSchema(
+          data.component_metadata as ComponentMetadata | null,
+        )
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  slug: data.slug,
+                  name: data.name,
+                  description: data.description,
+                  inputs: schema.fields,
+                },
+                null,
+                2,
+              ),
             },
           ],
         }
@@ -87,16 +182,18 @@ export function registerComponents({
       {
         title: "Run Component",
         description:
-          "Execute a published component by slug. Returns a job_id; the wrapper job's output_data carries the component's outputs once complete.",
+          "Execute a published component by slug. `inputs` is a FLAT object keyed by the schema's input keys (call `get_component_inputs` first). Returns a job_id; the wrapper job's output_data carries the component's outputs once complete.",
         inputSchema: {
           component_id: z
             .string()
             .min(1)
             .describe("Component slug (matches the published_apps.slug)"),
           inputs: z
-            .record(z.string(), z.record(z.string(), z.unknown()))
+            .record(z.string(), z.unknown())
             .optional()
-            .describe("Per-node input overrides keyed by node id"),
+            .describe(
+              "Flat input map keyed by schema key (from get_component_inputs). Omit to use defaults.",
+            ),
         },
         annotations: {
           readOnlyHint: false,
@@ -105,9 +202,28 @@ export function registerComponents({
         },
       },
       async (args) => {
+        let inputOverrides:
+          | Record<string, Record<string, unknown>>
+          | undefined
+        if (args.inputs && Object.keys(args.inputs).length) {
+          const { data: row } = await supabase
+            .from("published_apps")
+            .select("component_metadata")
+            .eq("slug", args.component_id)
+            .eq("publish_type", "component")
+            .eq("is_active", true)
+            .limit(1)
+            .single()
+          if (row) {
+            const schema = extractComponentInputSchema(
+              row.component_metadata as ComponentMetadata | null,
+            )
+            inputOverrides = flatInputsToOverrides(args.inputs, schema.keyMap)
+          }
+        }
         const payload = {
           appSlug: args.component_id,
-          inputOverrides: args.inputs,
+          inputOverrides,
           mcp_client: session.clientName,
           userId: session.userId,
         }

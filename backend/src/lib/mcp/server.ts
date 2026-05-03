@@ -10,7 +10,10 @@ import { registerApps } from "./tools/apps.js"
 import { registerModels } from "./tools/models.js"
 import { registerGallery } from "./tools/gallery.js"
 import { registerUploadTools } from "./tools/upload.js"
-import { registerDynamicTools } from "./tools/dynamic.js"
+// v3.0: dynamic per-user app_<slug> / component_<slug> tools dropped in
+// favor of the pure-discovery model (list_* / get_*_inputs / run_*).
+// They didn't scale past ~15 saved apps and the prefer-verbs nudge in
+// their descriptions admitted they didn't belong as first-class tools.
 import { registerTaskHandlers } from "./tasks.js"
 // Progress emitter intentionally not invoked — see comment in buildMcpServer.
 // Import kept so the future re-enable is one line, not a re-import.
@@ -103,12 +106,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerGallery({ server, session, fastify: opts.fastify })
   registerUploadTools({ server, session })
 
-  // v2.0: per-user dynamic tools (`component_<slug>`, `app_<slug>`). Capped
-  // 15 + 15 = 30 dynamic tools per session. Async because it queries
-  // published_apps before tools/list responds; making buildMcpServer
-  // async lets the caller await registration so tools/list is correct on
-  // the very first request.
-  await registerDynamicTools({ server, session, fastify: opts.fastify })
+  // v3.0: dynamic per-user tools dropped — see import comment above.
 
   // v1.2: tasks/* request handlers stay wired (they're spec-mandated and
   // respond to client-initiated polls). The proactive progress-emitter

@@ -5,6 +5,10 @@ import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { config } from "../../config.js"
+import {
+  extractAppInputSchema,
+  flatInputsToOverrides,
+} from "../extract-app-inputs.js"
 
 const appsReadGate: ToolGate = { required: ["apps:read"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -18,9 +22,18 @@ export interface RegisterAppsOpts {
 /**
  * Apps tools.
  *
- * `list_apps` browses the marketplace (public). `run_app` runs a published
- * app by slug via `/v1/app/:slug/run` — the runner pays for credits, and
- * the route returns 202 + executionId.
+ * The pure-discovery model:
+ *   1. `list_apps({ scope: "public" | "mine" })` — find apps by intent.
+ *   2. `get_app_inputs({ slug })` — read the typed input schema before
+ *      planning the call.
+ *   3. `run_app({ slug, inputs })` — execute. `inputs` is FLAT keyed by
+ *      the schema keys (not node-id) — server translates back via the
+ *      schema's keyMap before sending to /v1/app/:slug/run.
+ *
+ * Per-user dynamic `app_<slug>` tools were dropped: they didn't scale,
+ * they competed with the verb tools, and the prefer-verbs nudge in
+ * their descriptions was a sign they didn't belong as first-class
+ * tools.
  */
 export function registerApps({ server, session, fastify }: RegisterAppsOpts): void {
   if (passesGate(session, appsReadGate)) {
@@ -29,8 +42,12 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
       {
         title: "List Apps",
         description:
-          "Browse published apps on the Nodaro marketplace. Apps are end-user workflows that can be run by anyone with credits.",
+          'Browse Nodaro apps. Set `scope: "public"` (default) for the public marketplace, or `scope: "mine"` for the caller\'s own published apps. Apps are end-user workflows that can be run with `run_app`.',
         inputSchema: {
+          scope: z
+            .enum(["public", "mine"])
+            .optional()
+            .describe('"public" = marketplace (default); "mine" = caller\'s own apps'),
           limit: z.number().int().min(1).max(50).optional(),
           cursor: z.string().optional(),
           search: z.string().max(100).optional(),
@@ -40,16 +57,27 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
       },
       async (args) => {
         const limit = args.limit ?? 20
+        const scope = args.scope ?? "public"
         let query = supabase
           .from("published_apps")
           .select(
             "id, slug, name, description, icon_url, estimated_credits, category, output_types, tags, total_run_count, favorite_count, created_at",
           )
-          .eq("is_listed", true)
           .eq("is_active", true)
           .eq("publish_type", "app")
           .order("created_at", { ascending: false })
           .limit(limit)
+        if (scope === "mine") {
+          if (!session.userId) {
+            return {
+              content: [{ type: "text", text: 'scope="mine" requires authentication.' }],
+              isError: true,
+            }
+          }
+          query = query.eq("creator_id", session.userId)
+        } else {
+          query = query.eq("is_listed", true)
+        }
         if (args.cursor) query = query.lt("created_at", args.cursor)
         if (args.category) query = query.eq("category", args.category)
         if (args.search) {
@@ -71,7 +99,76 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           content: [
             {
               type: "text",
-              text: JSON.stringify({ data: rows, next_cursor: nextCursor }, null, 2),
+              text: JSON.stringify(
+                { data: rows, scope, next_cursor: nextCursor },
+                null,
+                2,
+              ),
+            },
+          ],
+        }
+      },
+    )
+
+    server.registerTool(
+      "get_app_inputs",
+      {
+        title: "Get App Inputs",
+        description:
+          "Return the typed input schema for an app. Each entry has a `key`, `label`, `type` (image / video / audio / text / select / number / boolean / list), `required`, and optional `options` for selects. Pass these `key`s to `run_app({ slug, inputs })`.",
+        inputSchema: {
+          slug: z.string().min(1).describe("App slug, e.g. 'photo-restoration'"),
+        },
+        annotations: { readOnlyHint: true },
+      },
+      async (args) => {
+        const { data, error } = await supabase
+          .from("published_apps")
+          .select(
+            "id, slug, name, description, snapshot_settings, snapshot_nodes, is_listed, creator_id, is_active, publish_type",
+          )
+          .eq("slug", args.slug)
+          .eq("publish_type", "app")
+          .eq("is_active", true)
+          .limit(1)
+          .single()
+        if (error || !data) {
+          return {
+            content: [{ type: "text", text: `App "${args.slug}" not found.` }],
+            isError: true,
+          }
+        }
+        // Auth check: public apps are world-readable; private apps only the creator.
+        if (
+          !data.is_listed &&
+          (!session.userId || data.creator_id !== session.userId)
+        ) {
+          return {
+            content: [{ type: "text", text: `App "${args.slug}" not found.` }],
+            isError: true,
+          }
+        }
+        const schema = extractAppInputSchema({
+          snapshotSettings: data.snapshot_settings as Record<string, unknown> | null,
+          snapshotNodes: data.snapshot_nodes as
+            | Array<{ id: string; type?: string; data?: Record<string, unknown> }>
+            | null,
+        })
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  slug: data.slug,
+                  name: data.name,
+                  description: data.description,
+                  // Don't leak the keyMap (internal node-id mapping).
+                  inputs: schema.fields,
+                },
+                null,
+                2,
+              ),
             },
           ],
         }
@@ -85,13 +182,15 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
       {
         title: "Run App",
         description:
-          "Run a published app by slug. The caller pays for credits. Returns an execution_id",
+          "Run a published app by slug. The caller pays for credits. `inputs` is a FLAT object keyed by the schema's input keys (call `get_app_inputs` first to learn them). Returns an execution_id.",
         inputSchema: {
           slug: z.string().min(1).describe("App slug, e.g. 'photo-restoration'"),
           inputs: z
-            .record(z.string(), z.record(z.string(), z.unknown()))
+            .record(z.string(), z.unknown())
             .optional()
-            .describe("Per-node input overrides keyed by node id"),
+            .describe(
+              "Flat input map keyed by schema key (from get_app_inputs). Omit to use defaults.",
+            ),
         },
         annotations: {
           readOnlyHint: false,
@@ -100,8 +199,32 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
         },
       },
       async (args) => {
+        // Re-derive the schema so we can translate flat → nested overrides.
+        // This is one DB read per run; acceptable for the simplification it
+        // buys (no cache invalidation / no schema-drift bugs).
+        let inputOverrides: Record<string, Record<string, unknown>> | undefined
+        if (args.inputs && Object.keys(args.inputs).length) {
+          const { data: appRow } = await supabase
+            .from("published_apps")
+            .select("snapshot_settings, snapshot_nodes")
+            .eq("slug", args.slug)
+            .eq("publish_type", "app")
+            .eq("is_active", true)
+            .limit(1)
+            .single()
+          if (appRow) {
+            const schema = extractAppInputSchema({
+              snapshotSettings: appRow.snapshot_settings as Record<string, unknown> | null,
+              snapshotNodes: appRow.snapshot_nodes as
+                | Array<{ id: string; type?: string; data?: Record<string, unknown> }>
+                | null,
+            })
+            inputOverrides = flatInputsToOverrides(args.inputs, schema.keyMap)
+          }
+        }
+
         const payload = {
-          inputOverrides: args.inputs,
+          inputOverrides,
           mcp_client: session.clientName,
           userId: session.userId,
         }
