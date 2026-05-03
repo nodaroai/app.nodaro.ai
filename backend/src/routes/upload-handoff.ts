@@ -218,21 +218,12 @@ export async function uploadHandoffRoutes(app: FastifyInstance): Promise<void> {
     },
   )
 
-  // Permissive CORS for cross-origin POSTs from MCP UI widgets (the
-  // upload-image iframe runs at the host's origin — Claude.ai's web
-  // client — and POSTs the picked file here). Token IS the auth, so
-  // origin doesn't gate access. Browsers send Origin: null when the
-  // iframe is sandboxed without allow-same-origin, and that's also
-  // covered by `*`. The `cors` route-config key is read at runtime by
-  // @fastify/cors but isn't typed on FastifyContextConfig — cast
-  // through Record<string, unknown> to satisfy TS.
-  const widgetCors = { cors: { origin: "*", methods: ["POST", "OPTIONS"] } } as Record<
-    string,
-    unknown
-  >
+  // CORS for cross-origin POSTs from MCP UI widgets (Claude.ai iframe at
+  // <hash>.claudemcpcontent.com) is handled by the global origin
+  // allowlist in app.ts via the CLAUDE_MCP_IFRAME_RE pattern — per-route
+  // config.cors overrides aren't honored by @fastify/cors v11.
   app.post<{ Params: { token: string } }>(
     "/v1/upload-page/:token",
-    { config: widgetCors },
     async (req, reply) => {
       const payload = verifyUploadToken(req.params.token)
       if (!payload || payload.purpose !== "handoff" || !payload.kind) {

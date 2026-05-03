@@ -21,6 +21,7 @@
  * one translation function.
  */
 import type { ComponentMetadata, PresentationItem } from "@nodaro/shared"
+import { migrateToItems } from "@nodaro/shared"
 import { sanitizeSlug } from "./slug-sanitizer.js"
 
 /** Public schema entry surfaced to the LLM. No node-id leak. */
@@ -107,10 +108,34 @@ export function extractAppInputSchema({
   snapshotSettings,
   snapshotNodes,
 }: ExtractFromAppArgs): NormalizedInputSchema {
+  // Apps store presentation in one of two shapes:
+  //  - Modern: presentationSettings.inputItems (PresentationItem[])
+  //  - Legacy: presentationSettings.inputOrder (string[] of node-ids)
+  // The frontend migrates legacy → modern at render time via
+  // resolveInputItems(); we mirror that fallback here so older apps
+  // (Zebrify and friends) still surface their inputs to the LLM
+  // instead of returning an empty schema.
   const presSettings = (snapshotSettings ?? {}) as {
-    presentationSettings?: { inputItems?: PresentationItem[] }
+    presentationSettings?: {
+      inputItems?: PresentationItem[]
+      inputOrder?: string[]
+    }
   }
-  const items = presSettings.presentationSettings?.inputItems
+  let items =
+    presSettings.presentationSettings?.inputItems ??
+    migrateToItems(presSettings.presentationSettings?.inputOrder)
+  // Deepest fallback: app has no presentationSettings at all (e.g. apps
+  // published before the presentation system existed, or apps that just
+  // expose every source node by default — like "Zebrify" which has a
+  // single upload-image node as its only input). Auto-derive: every
+  // source-type node in the workflow becomes an implicit input. The
+  // frontend's app-runner does the same when settings.inputItems is
+  // empty, so this matches how users see the app today.
+  if (!items?.length && snapshotNodes?.length) {
+    items = snapshotNodes
+      .filter((n) => n.type && NODE_TYPE_INFO[n.type])
+      .map((n) => ({ type: "node" as const, nodeId: n.id }))
+  }
   if (!items?.length) return { fields: [], keyMap: {} }
 
   const nodesById = new Map<

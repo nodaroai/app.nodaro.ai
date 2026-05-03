@@ -144,12 +144,23 @@ export async function buildApp() {
   // drops the body and Zod sees undefined fields.
   await app.register(formbody)
 
+  // Claude.ai MCP UI iframes get a per-instance sandbox subdomain on
+  // claudemcpcontent.com. Origins look like
+  // `https://d603a1e129f461a456764f10cd89c6fb.claudemcpcontent.com` —
+  // 32-char hex prefix. Match the whole family with one regex so widgets
+  // (e.g. upload-image) can fetch our backend without each iframe origin
+  // being separately allowlisted. Only pages served from this domain are
+  // legit MCP widgets, so granting CORS broadly is safe — Bearer auth /
+  // upload tokens still gate protected routes.
+  const CLAUDE_MCP_IFRAME_RE = /^https:\/\/[a-f0-9]+\.claudemcpcontent\.com$/
+
   await app.register(cors, {
     // Same-origin / curl requests have no Origin header — allow them.
     // Use the async-promise form (NOT callback form) — @fastify/cors invokes
     // both the cb and resolves the promise if you return one, double-firing.
     origin: async (origin: string | undefined) => {
       if (!origin) return true
+      if (CLAUDE_MCP_IFRAME_RE.test(origin)) return true
       return isOriginAllowedDynamic(origin)
     },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
