@@ -87,6 +87,13 @@ WORKDIR /app
 COPY --from=shared-build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=shared-build /app/packages/shared/package.json ./packages/shared/package.json
 
+# i18n sidecars: frontend/src/lib/i18n-bootstrap.ts uses
+# import.meta.glob("../../../packages/shared/src/i18n/*.*.ts") so Vite can
+# code-split each locale into its own chunk. tsup bundles everything into
+# dist/index.js without preserving the per-file split, so the source files
+# must be present here for the glob to match.
+COPY packages/shared/src/i18n ./packages/shared/src/i18n
+
 # Client dist (Vite imports @nodaro/client via workspace symlink → dist).
 COPY --from=client-build /app/packages/client/dist ./packages/client/dist
 COPY --from=client-build /app/packages/client/package.json ./packages/client/package.json
