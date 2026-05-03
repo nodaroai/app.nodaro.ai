@@ -176,25 +176,25 @@ const GALLERY_CSS = `
   .detail { display: flex; flex-direction: column; gap: 12px; }
   .detail .preview { width: 100%; max-height: 60vh; display: flex; align-items: center; justify-content: center; }
   .detail .preview img, .detail .preview video, .detail .preview audio { width: 100%; height: auto; max-height: 60vh; object-fit: contain; border-radius: 8px; }
-  /* Filmstrip — horizontal-scrolling row of small thumbnails. Fixed
-     height so the bottom rows below it stay in a stable position
-     when navigating between items (otherwise the preview area would
+  /* Filmstrip — horizontal-scrolling row of thumbnails. Fixed height
+     so the bottom rows below it stay in a stable position when
+     navigating between items (otherwise the preview area would
      reflow and the nav arrows shift visibly). */
   .filmstrip {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     overflow-x: auto;
     overflow-y: hidden;
     padding: 4px 2px;
     scrollbar-width: thin;
-    flex: 0 0 52px;
+    flex: 0 0 72px;
   }
   .filmstrip::-webkit-scrollbar { height: 6px; }
   .filmstrip::-webkit-scrollbar-thumb { background: rgba(127,127,127,0.3); border-radius: 3px; }
   .filmstrip .strip-item {
     flex: 0 0 auto;
-    width: 40px; height: 40px;
-    border-radius: 6px;
+    width: 60px; height: 60px;
+    border-radius: 8px;
     overflow: hidden;
     background: rgba(0,0,0,0.05);
     cursor: pointer;
