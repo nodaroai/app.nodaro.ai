@@ -136,7 +136,17 @@ import rateLimit from "@fastify/rate-limit"
 import formbody from "@fastify/formbody"
 
 export async function buildApp() {
-  const app = Fastify({ logger: true, bodyLimit: 1_048_576 }) // 1 MB for JSON endpoints
+  const app = Fastify({
+    logger: true,
+    bodyLimit: 1_048_576, // 1 MB for JSON endpoints
+    // Default is 100 chars per path param. Our HMAC-signed upload-page
+    // tokens (`/v1/upload-page/:token`) are ~330 chars (base64url-encoded
+    // JSON payload + signature), and routes with longer params 404 as
+    // "Route not found" with the default. Bump to a generous 4 KB so any
+    // signed-token route works. Same applies to `:token` in upload-proxy
+    // and any future signed-token URLs.
+    maxParamLength: 4096,
+  })
 
   // application/x-www-form-urlencoded body parser — required by OAuth-spec
   // clients (Claude.ai etc.) that POST to /v1/oauth/token with form-encoded
