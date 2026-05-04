@@ -320,6 +320,57 @@ describe("extract_frame verb", () => {
   })
 })
 
+describe("lip_sync verb", () => {
+  it("calls /v1/lip-sync with image + audio", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/lip-sync", { jobId: "j-ls" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "lip_sync", {
+      image_url: "https://example.com/face.jpg",
+      audio_url: "https://example.com/voice.mp3",
+      model: "kling-avatar-pro",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-ls")
+    expect(received.body?.imageUrl).toBe("https://example.com/face.jpg")
+    expect(received.body?.audioUrl).toBe("https://example.com/voice.mp3")
+    expect(received.body?.provider).toBe("kling-avatar-pro")
+  })
+
+  it("defaults provider to kling-avatar", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/lip-sync", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "lip_sync", {
+      image_url: "https://a/face.jpg",
+      audio_url: "https://a/v.mp3",
+    })
+    expect(received.body?.provider).toBe("kling-avatar")
+  })
+
+  it("returns isError without face source", async () => {
+    const { fastify } = stubRoute("POST", "/v1/lip-sync", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "lip_sync", {
+      audio_url: "https://a/v.mp3",
+    })
+    expect(result.isError).toBe(true)
+  })
+
+  it("returns isError without audio", async () => {
+    const { fastify } = stubRoute("POST", "/v1/lip-sync", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "lip_sync", {
+      image_url: "https://a/face.jpg",
+    })
+    expect(result.isError).toBe(true)
+  })
+})
+
 describe("generate_music verb", () => {
   it("dispatches model=minimax to /v1/generate-music", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/generate-music", { jobId: "j-gm" })
