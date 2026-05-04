@@ -975,6 +975,148 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
   )
 
+  // ── merge_video_audio ──
+  // FFmpeg compose: take a video + one or more audio sources, mix them,
+  // and produce a new video. PRIMARY tool for "add this voiceover to my
+  // video" / "swap the audio" / "duck the music under the dialogue" /
+  // "combine these tracks onto this clip" flows.
+  server.registerTool(
+    "merge_video_audio",
+    {
+      title: "Merge Video + Audio",
+      description:
+        "Combine a video with one or more audio tracks (FFmpeg). Use this " +
+        "for voiceovers, soundtracks, dubbing handoffs, or replacing the " +
+        "audio on a generated clip.\n\n" +
+        "**Inputs:**\n" +
+        "  • Video — `video_url` OR `video_asset_id` (a Nodaro video job id " +
+        "    or upload asset id).\n" +
+        "  • Audio — pass `audio_url` / `audio_asset_id` for the simple " +
+        "    one-track case, OR `audio_tracks` for multi-track mixing with " +
+        "    per-track start time + volume.\n\n" +
+        "**Levers:**\n" +
+        "  • `voiceover_volume` (0–200, default 100) — volume for the new " +
+        "    audio track relative to original.\n" +
+        "  • `background_volume` (0–200, default 30) — volume for the source " +
+        "    video's original audio (when `keep_original_audio: true`).\n" +
+        "  • `keep_original_audio` (default true) — when false, the source " +
+        "    video's audio is muted entirely.\n\n" +
+        "Returns a job_id; widget renders the merged video.",
+      inputSchema: {
+        video_url: z.string().url().optional(),
+        video_asset_id: z.string().optional(),
+        audio_url: z.string().url().optional(),
+        audio_asset_id: z.string().optional(),
+        audio_tracks: z
+          .array(
+            z.object({
+              url: z.string().url(),
+              start_time: z.number().min(0).optional().describe("Seconds into the video where this track begins. Default 0."),
+              volume: z.number().min(0).max(200).optional().describe("0-200, where 100 = original volume."),
+            }),
+          )
+          .optional()
+          .describe("Multi-track mode. When omitted, audio_url / audio_asset_id is used as the single track."),
+        voiceover_volume: z.number().min(0).max(200).optional(),
+        background_volume: z.number().min(0).max(200).optional(),
+        keep_original_audio: z.boolean().optional(),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        prompt: z.string().optional(),
+        model: z.string().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-video",
+        ui: {
+          resourceUri: "ui://nodaro/widget/v3/job-video",
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({
+              assetId: args.video_asset_id,
+              userId: session.userId,
+              expectedKind: "video",
+            })
+          : null)
+      if (!videoUrl) {
+        return {
+          content: [{ type: "text", text: "Pass video_url or video_asset_id." }],
+          isError: true,
+        }
+      }
+      const singleAudioUrl =
+        args.audio_url ??
+        (args.audio_asset_id
+          ? await resolveAssetId({
+              assetId: args.audio_asset_id,
+              userId: session.userId,
+              expectedKind: "audio",
+            })
+          : null)
+      const hasMultiTracks = args.audio_tracks && args.audio_tracks.length > 0
+      if (!singleAudioUrl && !hasMultiTracks) {
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                "Pass audio_url / audio_asset_id (single track) or audio_tracks (multi-track).",
+            },
+          ],
+          isError: true,
+        }
+      }
+      const payload: Record<string, unknown> = {
+        videoUrl,
+        ...(singleAudioUrl ? { audioUrl: singleAudioUrl } : {}),
+        ...(hasMultiTracks
+          ? {
+              audioTracks: args.audio_tracks!.map((t) => ({
+                url: t.url,
+                startTime: t.start_time ?? 0,
+                volume: t.volume,
+              })),
+            }
+          : {}),
+        ...(args.voiceover_volume !== undefined ? { voiceoverVolume: args.voiceover_volume } : {}),
+        ...(args.background_volume !== undefined ? { backgroundVolume: args.background_volume } : {}),
+        ...(args.keep_original_audio !== undefined ? { keepOriginalAudio: args.keep_original_audio } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/merge-video-audio",
+        headers: {
+          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({
+        jobId,
+        label: "merge video + audio",
+        session,
+        widgetKind: "video",
+        widgetData: { prompt: "(merge video + audio)", model: "merge-video-audio" },
+      })
+    },
+  )
+
   // ── motion_transfer ──
   // Drives a character image with the motion of a driver video. KIE provides
   // multiple providers; default `kling` matches the route default.
