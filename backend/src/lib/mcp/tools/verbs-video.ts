@@ -832,4 +832,276 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       })
     },
   )
+
+  // ── modify_video (video-to-video) ──
+  // Wan 2.6 / Wan Flash for KIE-side restyles, Runway Aleph for stylised
+  // edits with reference-image guidance. Mirrors modify_image for the video
+  // domain — gallery widget already pushes "edit this video" follow-ups.
+  server.registerTool(
+    "modify_video",
+    {
+      title: "Modify Video",
+      description:
+        "PRIMARY tool for video-to-video / restyle / clip-edit workflows. Use " +
+        "this directly — do NOT search the apps marketplace for video editing.\n\n" +
+        "Provide ONE of:\n" +
+        "  (a) `video_url` — public HTTPS URL\n" +
+        "  (b) `video_asset_id` — a Nodaro job id whose output is a video\n\n" +
+        "Plus a `prompt` describing the change.\n\n" +
+        "**Picking a model**:\n" +
+        "  • **`wan`** (default, Wan 2.6) — KIE restyle / transformation. " +
+        "5s or 10s; 720p or 1080p. Best general-purpose choice.\n" +
+        "  • **`wan-flash`** — faster Wan variant. Supports `audio: true` " +
+        "to keep / regenerate audio, and `multiShots: true` for multi-shot " +
+        "scene changes.\n" +
+        "  • **`runway-aleph`** — stylised edits guided by an optional " +
+        "`reference_image_url`. More aspect-ratio options (16:9, 9:16, 4:3, " +
+        "3:4, 1:1, 21:9).",
+      inputSchema: {
+        prompt: z.string().min(1).max(2000),
+        video_url: z.string().url().optional(),
+        video_asset_id: z.string().optional(),
+        model: z
+          .string()
+          .optional()
+          .describe(
+            "v2v model. Default `wan`. Options: wan, wan-flash, runway-aleph. " +
+            "Unknown values fall back to wan.",
+          ),
+        duration: z.enum(["5", "10"]).optional().describe("Wan / Wan Flash only — 5s or 10s output."),
+        resolution: z.enum(["720p", "1080p"]).optional().describe("Wan / Wan Flash only."),
+        aspect_ratio: z
+          .enum(["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"])
+          .optional()
+          .describe("Runway Aleph only."),
+        audio: z.boolean().optional().describe("Wan Flash only — preserve/regenerate audio."),
+        multi_shots: z.boolean().optional().describe("Wan Flash only — allow multi-shot scene changes."),
+        reference_image_url: z.string().url().optional().describe("Runway Aleph only — style reference image."),
+        seed: z.number().int().min(0).optional(),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        prompt: z.string().optional(),
+        model: z.string().optional(),
+        aspectRatio: z.string().optional(),
+        resolution: z.string().optional(),
+        duration: z.number().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-video",
+        ui: {
+          resourceUri: "ui://nodaro/widget/v3/job-video",
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({
+              assetId: args.video_asset_id,
+              userId: session.userId,
+              expectedKind: "video",
+            })
+          : null)
+      if (!videoUrl) {
+        return {
+          content: [
+            { type: "text", text: "Pass video_url or video_asset_id." },
+          ],
+          isError: true,
+        }
+      }
+      const provider = args.model ?? "wan"
+      const payload: Record<string, unknown> = {
+        videoUrl,
+        prompt: args.prompt,
+        provider,
+        ...(args.duration ? { duration: args.duration } : {}),
+        ...(args.resolution ? { resolution: args.resolution } : {}),
+        ...(args.aspect_ratio ? { aspectRatio: args.aspect_ratio } : {}),
+        ...(args.audio !== undefined ? { audio: args.audio } : {}),
+        ...(args.multi_shots !== undefined ? { multiShots: args.multi_shots } : {}),
+        ...(args.reference_image_url ? { referenceImageUrl: args.reference_image_url } : {}),
+        ...(args.seed !== undefined ? { seed: args.seed } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/video-to-video",
+        headers: {
+          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({
+        jobId,
+        label: "video-to-video",
+        session,
+        widgetKind: "video",
+        widgetData: {
+          prompt: args.prompt,
+          model: provider,
+          aspectRatio: args.aspect_ratio,
+          resolution: args.resolution,
+        },
+      })
+    },
+  )
+
+  // ── motion_transfer ──
+  // Drives a character image with the motion of a driver video. KIE provides
+  // multiple providers; default `kling` matches the route default.
+  server.registerTool(
+    "motion_transfer",
+    {
+      title: "Motion Transfer",
+      description:
+        "Transfer the motion from a driver video onto a character image. " +
+        "Provide BOTH a character (image_url / image_asset_id) AND a driver " +
+        "video (video_url / video_asset_id). Optionally describe the desired " +
+        "result via `prompt`.\n\n" +
+        "**Provider**: default `kling` (KIE). Resolution lever 480p / 580p / " +
+        "720p / 1080p (default 720p). `character_orientation` controls " +
+        "whether the image's pose or the video's pose drives framing " +
+        "(default `image`).",
+      inputSchema: {
+        image_url: z.string().url().optional(),
+        image_asset_id: z.string().optional(),
+        video_url: z.string().url().optional(),
+        video_asset_id: z.string().optional(),
+        prompt: z.string().max(2500).optional(),
+        character_orientation: z
+          .enum(["image", "video"])
+          .optional()
+          .describe("Which source's framing wins. Default `image`."),
+        resolution: z
+          .enum(["480p", "580p", "720p", "1080p"])
+          .optional()
+          .describe("Output resolution. Default 720p."),
+        provider: z
+          .string()
+          .optional()
+          .describe("Motion transfer provider. Default kling."),
+        background_source: z
+          .enum(["input_video", "input_image"])
+          .optional()
+          .describe("Which source provides the background. Provider-dependent."),
+        video_duration: z
+          .number()
+          .min(1)
+          .max(60)
+          .optional()
+          .describe("Output duration in seconds. Provider-dependent."),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        prompt: z.string().optional(),
+        model: z.string().optional(),
+        resolution: z.string().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-video",
+        ui: {
+          resourceUri: "ui://nodaro/widget/v3/job-video",
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      const imageUrl =
+        args.image_url ??
+        (args.image_asset_id
+          ? await resolveAssetId({
+              assetId: args.image_asset_id,
+              userId: session.userId,
+              expectedKind: "image",
+            })
+          : null)
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({
+              assetId: args.video_asset_id,
+              userId: session.userId,
+              expectedKind: "video",
+            })
+          : null)
+      if (!imageUrl) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Motion transfer needs a character image — pass image_url or image_asset_id.",
+            },
+          ],
+          isError: true,
+        }
+      }
+      if (!videoUrl) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Motion transfer needs a driver video — pass video_url or video_asset_id.",
+            },
+          ],
+          isError: true,
+        }
+      }
+      const provider = args.provider ?? "kling"
+      const resolution = args.resolution ?? "720p"
+      const payload: Record<string, unknown> = {
+        imageUrl,
+        videoUrl,
+        prompt: args.prompt,
+        provider,
+        resolution,
+        characterOrientation: args.character_orientation ?? "image",
+        ...(args.background_source ? { backgroundSource: args.background_source } : {}),
+        ...(args.video_duration !== undefined ? { videoDuration: args.video_duration } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/motion-transfer",
+        headers: {
+          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({
+        jobId,
+        label: "motion transfer",
+        session,
+        widgetKind: "video",
+        widgetData: {
+          prompt: args.prompt ?? "(motion transfer)",
+          model: provider,
+          resolution,
+        },
+      })
+    },
+  )
 }

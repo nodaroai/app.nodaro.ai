@@ -7,6 +7,12 @@ import { supabase } from "../lib/supabase.js"
 import { uploadBufferToR2 } from "../lib/storage.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { safeUrlSchema } from "../lib/url-validator.js"
+
+const fromUrlBody = z.object({
+  audioUrl: safeUrlSchema,
+  name: z.string().min(1).max(200),
+})
 
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io"
 const MAX_AUDIO_SIZE = 10 * 1024 * 1024 // 10 MB
@@ -180,6 +186,139 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       }
 
       return {
+        id: voiceClone.id,
+        name: voiceClone.name,
+        elevenlabsVoiceId: voiceClone.elevenlabs_voice_id,
+        sampleAudioUrl: voiceClone.sample_audio_url,
+        createdAt: voiceClone.created_at,
+      }
+    } catch (err) {
+      await supabase
+        .from("jobs")
+        .update({
+          status: "failed",
+          error_message: err instanceof Error ? err.message : "Unknown error",
+        })
+        .eq("id", job.id)
+
+      return reply.status(500).send({
+        error: { code: "clone_failed", message: err instanceof Error ? err.message : "Voice cloning failed" },
+      })
+    }
+  })
+
+  // JSON variant for callers that already have an audio URL (MCP, dev API).
+  // Mirrors the multipart path's job lifecycle + ElevenLabs flow.
+  app.post("/v1/voice-clones/from-url", {
+    preHandler: creditGuard(() => "voice-clone"),
+  }, async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+    if (!config.ELEVENLABS_API_KEY) {
+      return reply.status(503).send({
+        error: { code: "service_unavailable", message: "Voice cloning is not available — ElevenLabs API key not configured" },
+      })
+    }
+    const parsed = fromUrlBody.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+      })
+    }
+    const { audioUrl, name } = parsed.data
+
+    const fetched = await fetch(audioUrl)
+    if (!fetched.ok) {
+      return reply.status(400).send({
+        error: { code: "fetch_failed", message: `Could not fetch audioUrl (${fetched.status})` },
+      })
+    }
+    const arrayBuf = await fetched.arrayBuffer()
+    const buffer = Buffer.from(arrayBuf)
+    if (buffer.byteLength > MAX_AUDIO_SIZE) {
+      return reply.status(413).send({
+        error: { code: "too_large", message: `Audio sample exceeds ${MAX_AUDIO_SIZE / 1024 / 1024}MB cap` },
+      })
+    }
+    const mimeType = fetched.headers.get("content-type")?.split(";")[0]?.trim() || "audio/mpeg"
+
+    const { data: job, error: jobError } = await supabase
+      .from("jobs")
+      .insert({
+        workflow_id: extractWorkflowId(req.body),
+        force_private: extractForcePrivate(req.body) || undefined,
+        user_id: userId,
+        status: "pending",
+        input_data: { type: "voice-clone", name },
+      })
+      .select("id")
+      .single()
+    if (jobError) {
+      return reply.status(500).send({
+        error: { code: "internal_error", message: jobError.message },
+      })
+    }
+    const reservation = await reserveCreditsForJob(req, reply, job.id, "voice-clone")
+    if (reply.sent) return
+
+    try {
+      const ext = audioExtensionFromMime(mimeType)
+      const r2Key = `voice-samples/${userId}/${randomUUID()}.${ext}`
+      const sampleAudioUrl = await uploadBufferToR2(buffer, r2Key, mimeType, userId)
+
+      const formData = new FormData()
+      formData.append("name", name)
+      formData.append("remove_background_noise", "true")
+      const blob = new Blob([buffer as BlobPart], { type: mimeType })
+      formData.append("files", blob, `sample.${ext}`)
+
+      const cloneResponse = await fetch(`${ELEVENLABS_BASE_URL}/v1/voices/add`, {
+        method: "POST",
+        headers: { "xi-api-key": config.ELEVENLABS_API_KEY },
+        body: formData,
+      })
+      if (!cloneResponse.ok) {
+        const errorText = await cloneResponse.text().catch(() => "Unknown error")
+        throw new Error(`ElevenLabs voice clone failed (${cloneResponse.status}): ${errorText}`)
+      }
+      const cloneResult = (await cloneResponse.json()) as { voice_id: string }
+
+      const { data: voiceClone, error: insertError } = await supabase
+        .from("voice_clones")
+        .insert({
+          user_id: userId,
+          name,
+          elevenlabs_voice_id: cloneResult.voice_id,
+          sample_audio_url: sampleAudioUrl,
+        })
+        .select("id, name, elevenlabs_voice_id, sample_audio_url, created_at")
+        .single()
+      if (insertError) {
+        throw new Error(`Failed to save voice clone: ${insertError.message}`)
+      }
+
+      await supabase
+        .from("jobs")
+        .update({
+          status: "completed",
+          progress: 100,
+          output_data: { voiceCloneId: voiceClone.id, elevenlabsVoiceId: cloneResult.voice_id },
+          completed_at: new Date().toISOString(),
+          provider: "elevenlabs-direct",
+        })
+        .eq("id", job.id)
+
+      if (reservation?.usageLogId) {
+        const { commitJobCredits } = await import("../workers/shared.js")
+        await commitJobCredits(reservation.usageLogId, job.id)
+      }
+
+      return {
+        jobId: job.id,
         id: voiceClone.id,
         name: voiceClone.name,
         elevenlabsVoiceId: voiceClone.elevenlabs_voice_id,
