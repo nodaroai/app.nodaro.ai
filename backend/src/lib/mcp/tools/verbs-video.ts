@@ -643,4 +643,178 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       })
     },
   )
+
+  // ── lip_sync ──
+  // Drives a face image (or face video) with an audio track to produce a
+  // talking-head video. Default model is kling-avatar (good quality, half
+  // the cost of kling-avatar-pro). InfiniTalk is the cheapest option and
+  // supports 480p/720p resolution control.
+  server.registerTool(
+    "lip_sync",
+    {
+      title: "Lip Sync",
+      description:
+        "Make a face talk to an audio track. PRIMARY tool for lip-sync / " +
+        "talking-head / dub-onto-character workflows. Use this directly — do " +
+        "NOT search the apps marketplace for lip-sync.\n\n" +
+        "Provide ONE face source — image_url / image_asset_id (a portrait), " +
+        "OR video_url / video_asset_id (an existing clip whose mouth gets " +
+        "re-driven) — and ONE audio source: audio_url / audio_asset_id.\n\n" +
+        "**Picking a model**:\n" +
+        "  • **`kling-avatar`** (default, ~28 credits) — best balance of " +
+        "quality + cost. Use for most cases.\n" +
+        "  • **`kling-avatar-pro`** (~56 credits) — sharper mouth sync + " +
+        "better facial micro-expressions. Use when the user explicitly " +
+        "asks for top quality or a hero shot.\n" +
+        "  • **`infinitalk`** (~11 credits at 480p, ~42 at 720p) — cheapest, " +
+        "tunable resolution. Good for batch / iterating.\n\n" +
+        "Returns a job_id. The widget renders the resulting video inline.",
+      inputSchema: {
+        image_url: z
+          .string()
+          .url()
+          .optional()
+          .describe("Portrait/face image. Use this for kling-avatar(-pro) and infinitalk."),
+        image_asset_id: z.string().optional(),
+        video_url: z
+          .string()
+          .url()
+          .optional()
+          .describe("Face video (for video-input providers like latentsync / video-retalking). Most users want image_url."),
+        video_asset_id: z.string().optional(),
+        audio_url: z.string().url().optional(),
+        audio_asset_id: z.string().optional(),
+        prompt: z
+          .string()
+          .max(500)
+          .optional()
+          .describe("Optional performance hint (e.g. 'a confident TED speaker'). Some models use it; others ignore."),
+        model: z
+          .string()
+          .optional()
+          .describe(
+            "Lip-sync model. Default kling-avatar. Options: " +
+            "kling-avatar, kling-avatar-pro, infinitalk, latentsync, " +
+            "wav2lip, video-retalking, sadtalker. Unknown values fall back.",
+          ),
+        resolution: z
+          .enum(["480p", "720p"])
+          .optional()
+          .describe("InfiniTalk-only resolution lever. 720p costs ~4x more than 480p."),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        prompt: z.string().optional(),
+        model: z.string().optional(),
+        aspectRatio: z.string().optional(),
+        resolution: z.string().optional(),
+        duration: z.number().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-video",
+        ui: {
+          resourceUri: "ui://nodaro/widget/v3/job-video",
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      // Resolve face source — prefer image, fall back to video. The route
+      // handles validation that the chosen provider supports the kind of
+      // input it received (image vs video).
+      const imageUrl =
+        args.image_url ??
+        (args.image_asset_id
+          ? await resolveAssetId({
+              assetId: args.image_asset_id,
+              userId: session.userId,
+              expectedKind: "image",
+            })
+          : null)
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({
+              assetId: args.video_asset_id,
+              userId: session.userId,
+              expectedKind: "video",
+            })
+          : null)
+      if (!imageUrl && !videoUrl) {
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                "Lip-sync needs a face source — pass image_url / image_asset_id " +
+                "(portrait) OR video_url / video_asset_id (existing clip).",
+            },
+          ],
+          isError: true,
+        }
+      }
+      const audioUrl =
+        args.audio_url ??
+        (args.audio_asset_id
+          ? await resolveAssetId({
+              assetId: args.audio_asset_id,
+              userId: session.userId,
+              expectedKind: "audio",
+            })
+          : null)
+      if (!audioUrl) {
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                "Lip-sync needs audio — pass audio_url or audio_asset_id (the " +
+                "voice line that drives the mouth).",
+            },
+          ],
+          isError: true,
+        }
+      }
+
+      const provider = args.model ?? "kling-avatar"
+      const payload: Record<string, unknown> = {
+        ...(imageUrl ? { imageUrl } : {}),
+        ...(videoUrl ? { videoUrl } : {}),
+        audioUrl,
+        provider,
+        ...(args.prompt ? { prompt: args.prompt } : {}),
+        ...(args.resolution ? { resolution: args.resolution } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/lip-sync",
+        headers: {
+          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({
+        jobId,
+        label: "lip sync",
+        session,
+        widgetKind: "video",
+        widgetData: {
+          prompt: args.prompt ?? "(lip sync)",
+          model: provider,
+          resolution: args.resolution,
+        },
+      })
+    },
+  )
 }
