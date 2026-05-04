@@ -1,3 +1,8 @@
+---
+title: Contributing
+layout: default
+---
+
 # Contributing to Nodaro
 
 Thanks for your interest in contributing. Nodaro is a source-available
