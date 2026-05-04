@@ -44,6 +44,7 @@ export const TEXT_SOURCE_TYPES: ReadonlyArray<string> = [
   "lighting",
   "color-look",
   "atmosphere",
+  "action-fx",
   "style",
   "setting",
   "person",

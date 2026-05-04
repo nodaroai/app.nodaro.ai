@@ -23,6 +23,7 @@ import { getLensPromptHint } from "./lens.js"
 import { getCameraFormatPromptHint } from "./camera-format.js"
 import { getColorLookPromptHint } from "./color-look.js"
 import { buildAtmosphereHints } from "./atmosphere.js"
+import { buildActionFxHints } from "./action-fx.js"
 import { getStylePromptHint } from "./style.js"
 import { getSettingPromptHint } from "./setting.js"
 import { buildPersonHints } from "./person.js"
@@ -113,6 +114,8 @@ export function getParameterPromptHint(
       return getColorLookPromptHint(asStr(data.colorLook))
     case "atmosphere":
       return buildAtmosphereHints(data.atmosphere).join(", ")
+    case "action-fx":
+      return buildActionFxHints(data.actionFx).join(", ")
     case "style":
       return getStylePromptHint(asStr(data.style))
     case "setting":

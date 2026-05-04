@@ -62,3 +62,25 @@ describe("getParameterValue", () => {
     expect(getParameterValue({ shotSize: "  close-up  " }, "framing")).toBe("close-up")
   })
 })
+
+describe("parameter-node-value — action-fx", () => {
+  it("includes action-fx in PARAMETER_NODE_TYPES", () => {
+    expect(PARAMETER_NODE_TYPES.has("action-fx")).toBe(true)
+  })
+
+  it("returns the single id for a single-string value", () => {
+    expect(getParameterValue({ actionFx: "lightning-bolt" }, "action-fx")).toBe("lightning-bolt")
+  })
+
+  it("returns the first id for an array value", () => {
+    expect(getParameterValue({ actionFx: ["explosion-large", "shockwave-ground"] }, "action-fx")).toBe("explosion-large")
+  })
+
+  it("returns undefined when actionFx is empty string", () => {
+    expect(getParameterValue({ actionFx: "" }, "action-fx")).toBeUndefined()
+  })
+
+  it("returns undefined when actionFx is missing", () => {
+    expect(getParameterValue({}, "action-fx")).toBeUndefined()
+  })
+})

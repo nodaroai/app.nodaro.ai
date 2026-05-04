@@ -42,6 +42,7 @@ export const PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
   "render-quality",
   "composition-effects",
   "post-process-effects",
+  "action-fx",
   "scene-count",
   "duration",
   "aspect-ratio",
@@ -92,6 +93,8 @@ export function getParameterValue(
       return trim(data.colorLook)
     case "atmosphere":
       return trim(data.atmosphere)
+    case "action-fx":
+      return trim(data.actionFx)
     case "style":
       return trim(data.style)
     case "setting":

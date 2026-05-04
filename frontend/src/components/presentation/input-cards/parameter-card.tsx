@@ -37,6 +37,7 @@ function getValueField(nodeType: SceneNodeType): string {
     case "lighting": return "lighting"
     case "color-look": return "colorLook"
     case "atmosphere": return "atmosphere"
+    case "action-fx": return "actionFx"
     case "temporal": return "temporal"
     default: return "value"
   }

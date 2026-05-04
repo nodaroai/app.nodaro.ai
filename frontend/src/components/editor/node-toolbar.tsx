@@ -7,7 +7,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server, Brush, Mountain,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge, ArrowUpDown, Smile, PersonStanding, PawPrint, Car, Swords, Camera, LayoutDashboard, HandMetal, Hourglass, Cpu,
+  SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge, ArrowUpDown, Smile, PersonStanding, PawPrint, Car, Swords, Camera, LayoutDashboard, HandMetal, Hourglass, Cpu, Zap,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -69,6 +69,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "lighting", label: "Lighting", icon: <Lightbulb className="h-4 w-4" />, category: "Look", keywords: ["light", "rembrandt", "chiaroscuro", "golden hour", "key", "rim", "shot"] },
   { type: "color-look", label: "Color / Look", icon: <SwatchBook className="h-4 w-4" />, category: "Look", keywords: ["color", "grade", "palette", "lut", "kodak", "fuji", "teal orange", "shot"] },
   { type: "atmosphere", label: "Atmosphere", icon: <CloudFog className="h-4 w-4" />, category: "Look", keywords: ["weather", "fog", "rain", "snow", "smoke", "god rays", "particles", "shot"] },
+  { type: "action-fx", label: "Action FX", icon: <Zap className="h-4 w-4" />, category: "Look", keywords: ["explosion", "lightning", "storm", "earthquake", "fire", "laser", "magic", "blast", "fx", "vfx", "action", "shockwave", "force field", "sci-fi"] },
   { type: "style", label: "Style", icon: <Brush className="h-4 w-4" />, category: "Look", keywords: ["anime", "oil painting", "watercolor", "cinematic", "photorealistic", "comic", "pixel art", "pop art", "noir", "illustration", "rendering"] },
   { type: "setting", label: "Setting", icon: <Mountain className="h-4 w-4" />, category: "Look", keywords: ["place", "environment", "location", "scene", "forest", "cafe", "alley", "cathedral", "desert", "cyberpunk", "fantasy", "indoor", "urban", "nature"] },
   { type: "person", label: "Person", icon: <UserRound className="h-4 w-4" />, category: "Subject", keywords: ["subject", "character", "people", "human", "gender", "age", "ethnicity", "hair", "skin", "eyes", "build", "man", "woman", "child", "beard", "mustache"] },

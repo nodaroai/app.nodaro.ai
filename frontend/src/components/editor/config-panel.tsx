@@ -55,6 +55,7 @@ import {
   LightingConfig,
   ColorLookConfig,
   AtmosphereConfig,
+  ActionFxConfig,
   StyleConfig,
   SettingConfig,
   PersonConfig,
@@ -202,6 +203,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "lighting": "Lighting",
   "color-look": "Color / Look",
   "atmosphere": "Atmosphere",
+  "action-fx": "Action FX",
   "style": "Style",
   "setting": "Setting",
   "person": "Person",
@@ -401,6 +403,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "lighting": return <LightingConfig {...configProps} />
     case "color-look": return <ColorLookConfig {...configProps} />
     case "atmosphere": return <AtmosphereConfig {...configProps} />
+    case "action-fx": return <ActionFxConfig {...configProps} />
     case "style": return <StyleConfig {...configProps} />
     case "setting": return <SettingConfig {...configProps} />
     case "person": return <PersonConfig {...configProps} />
